@@ -1,0 +1,62 @@
+name: Build and Deploy Flutter Web to Vercel
+
+on:
+  push:
+    branches:
+      - main
+      - test
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build Flutter web
+        run: flutter build web --release
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Select Vercel project for test
+        if: github.ref_name == 'test'
+        run: |
+          mkdir -p .vercel
+          cat > .vercel/project.json <<EOF
+          {
+            "orgId": "${{ secrets.VERCEL_ORG_ID }}",
+            "projectId": "${{ secrets.VERCEL_PROJECT_ID_TEST }}"
+          }
+          EOF
+
+      - name: Select Vercel project for production
+        if: github.ref_name == 'main'
+        run: |
+          mkdir -p .vercel
+          cat > .vercel/project.json <<EOF
+          {
+            "orgId": "${{ secrets.VERCEL_ORG_ID }}",
+            "projectId": "${{ secrets.VERCEL_PROJECT_ID_PROD }}"
+          }
+          EOF
+
+      - name: Deploy preview/test
+        if: github.ref_name == 'test'
+        run: vercel deploy build/web --token=${{ secrets.VERCEL_TOKEN }} --yes
+
+      - name: Deploy production
+        if: github.ref_name == 'main'
+        run: vercel deploy build/web --token=${{ secrets.VERCEL_TOKEN }} --prod --yes
