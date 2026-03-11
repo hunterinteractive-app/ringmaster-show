@@ -126,10 +126,22 @@ class _AdminEntryManagementScreenState extends State<AdminEntryManagementScreen>
     return (id ?? '').toString();
   }
 
-  String _exhibitorName(Map<String, dynamic> e) {
+  String _exhibitorDisplayName(Map<String, dynamic> e) {
     final label = (e['exhibitor_label'] ?? '').toString().trim();
     if (label.isNotEmpty) return label;
-    return '(Unknown Exhibitor)';
+
+    final ex = e['exhibitors'];
+    if (ex is Map<String, dynamic>) {
+      final dn = (ex['display_name'] ?? '').toString().trim();
+      if (dn.isNotEmpty) return dn;
+
+      final first = (ex['first_name'] ?? '').toString().trim();
+      final last = (ex['last_name'] ?? '').toString().trim();
+      final combined = '$first $last'.trim();
+      if (combined.isNotEmpty) return combined;
+    }
+
+    return '(Unknown exhibitor)';
   }
 
   bool _matchesSearch(Map<String, dynamic> e, String query) {
