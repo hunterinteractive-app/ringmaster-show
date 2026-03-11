@@ -3,8 +3,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'variety_editor_screen.dart';
-
 final supabase = Supabase.instance.client;
 
 class BreedEditorScreen extends StatefulWidget {
@@ -68,7 +66,10 @@ class _BreedEditorScreenState extends State<BreedEditorScreen> {
       };
 
       if (_isEdit) {
-        await supabase.from('breeds').update(payload).eq('id', widget.existing!['id']);
+        await supabase
+            .from('breeds')
+            .update(payload)
+            .eq('id', widget.existing!['id']);
       } else {
         await supabase.from('breeds').insert(payload);
       }
@@ -78,33 +79,17 @@ class _BreedEditorScreenState extends State<BreedEditorScreen> {
     } catch (e) {
       setState(() => _msg = 'Save failed: $e');
     } finally {
-      setState(() => _saving = false);
+      if (mounted) {
+        setState(() => _saving = false);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final breedId = widget.existing?['id']?.toString();
-
     return Scaffold(
       appBar: AppBar(
         title: Text(_isEdit ? 'Edit Breed' : 'Add Breed'),
-        actions: [
-          if (_isEdit)
-            IconButton(
-              tooltip: 'Edit varieties',
-              icon: const Icon(Icons.list),
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => VarietyEditorScreen(
-                    breedId: breedId!,
-                    breedName: _name.text.trim().isEmpty ? '(breed)' : _name.text.trim(),
-                  ),
-                ),
-              ),
-            ),
-        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
@@ -112,15 +97,23 @@ class _BreedEditorScreenState extends State<BreedEditorScreen> {
           children: [
             TextField(
               controller: _name,
-              decoration: const InputDecoration(labelText: 'Breed name (required)'),
+              decoration: const InputDecoration(
+                labelText: 'Breed name (required)',
+              ),
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
               value: _classSystem,
               decoration: const InputDecoration(labelText: 'Class system'),
               items: const [
-                DropdownMenuItem(value: 'four', child: Text('Four-class (Jr/Sr)')),
-                DropdownMenuItem(value: 'six', child: Text('Six-class (Jr/Int/Sr)')),
+                DropdownMenuItem(
+                  value: 'four',
+                  child: Text('Four-class (Jr/Sr)'),
+                ),
+                DropdownMenuItem(
+                  value: 'six',
+                  child: Text('Six-class (Jr/Int/Sr)'),
+                ),
               ],
               onChanged: (v) => setState(() => _classSystem = v ?? 'four'),
             ),
@@ -131,7 +124,10 @@ class _BreedEditorScreenState extends State<BreedEditorScreen> {
             ),
             if (_msg != null) ...[
               const SizedBox(height: 8),
-              Text(_msg!, style: const TextStyle(color: Colors.red)),
+              Text(
+                _msg!,
+                style: const TextStyle(color: Colors.red),
+              ),
             ],
             const Spacer(),
             SizedBox(

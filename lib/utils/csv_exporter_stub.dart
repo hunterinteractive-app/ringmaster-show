@@ -1,4 +1,5 @@
 // lib/utils/csv_exporter_stub.dart
+import 'dart:typed_data';
 import 'package:file_selector/file_selector.dart';
 
 Future<String?> exportCsvBytesImpl({
@@ -15,7 +16,7 @@ Future<String?> exportCsvBytesImpl({
   if (location == null) return null; // user cancelled
 
   final file = XFile.fromData(
-    bytes,
+    Uint8List.fromList(bytes), // <-- FIX
     mimeType: 'text/csv',
     name: suggestedName,
   );

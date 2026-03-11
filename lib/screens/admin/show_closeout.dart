@@ -1,9 +1,12 @@
-//lib/screens/admin/show_closeout.dart
+// lib/screens/admin/show_closeout.dart
 
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'edit_show_settings_screen.dart';
+import 'results/admin_results_entry_screen.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -153,6 +156,154 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     }
   }
 
+  Future<void> _openIssueFix(ValidationIssue issue) async {
+    switch (issue.issueCode) {
+      case 'no_judges_assigned':
+      case 'missing_secretary_email':
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => EditShowSettingsScreen(showId: widget.showId),
+          ),
+        );
+        await _loadData();
+        return;
+
+      case 'points_skipped_entry':
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => AdminResultsEntryScreen(
+              showId: widget.showId,
+              showName: widget.showName,
+            ),
+          ),
+        );
+        await _loadData();
+        return;
+
+      default:
+        _showIssueDetails(issue);
+        return;
+    }
+  }
+
+  void _showIssueDetails(ValidationIssue issue) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  issue.issueMessage,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _IssueLevelChip(level: issue.level),
+                    Chip(label: Text(_friendlyReportName(issue.reportName))),
+                    Chip(label: Text(issue.issueCode)),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                if (issue.entryId != null && issue.entryId!.isNotEmpty)
+                  Text('Entry ID: ${issue.entryId}'),
+                if (issue.rawPlacement != null && issue.rawPlacement!.isNotEmpty)
+                  Text('Raw placement: ${issue.rawPlacement}'),
+                if (issue.classKey != null && issue.classKey!.isNotEmpty)
+                  Text('Class: ${issue.classKey}'),
+                if (issue.exhibitorId != null && issue.exhibitorId!.isNotEmpty)
+                  Text('Exhibitor ID: ${issue.exhibitorId}'),
+                if (issue.animalId != null && issue.animalId!.isNotEmpty)
+                  Text('Animal ID: ${issue.animalId}'),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _openIssueFix(issue);
+                    },
+                    icon: const Icon(Icons.build_circle_outlined),
+                    label: const Text('Fix Issue'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showAllIssuesSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          child: Column(
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'All Validation Issues',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  _validationIssues.isEmpty
+                      ? 'No validation issues found.'
+                      : '${_validationIssues.length} issue${_validationIssues.length == 1 ? '' : 's'} found.',
+                ),
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: _validationIssues.isEmpty
+                    ? const Align(
+                        alignment: Alignment.topLeft,
+                        child: Text('Everything looks good so far.'),
+                      )
+                    : ListView.separated(
+                        itemCount: _validationIssues.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, index) {
+                          final issue = _validationIssues[index];
+                          return _IssueTile(
+                            issue: issue,
+                            onTap: () {
+                              Navigator.pop(context);
+                              _openIssueFix(issue);
+                            },
+                            onFix: () {
+                              Navigator.pop(context);
+                              _openIssueFix(issue);
+                            },
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showFinalizeSummary() {
     final blocking =
         _validationIssues.where((i) => i.level == 'blocking').length;
@@ -176,6 +327,14 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           ],
         ),
         actions: [
+          if (_validationIssues.isNotEmpty)
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _showAllIssuesSheet();
+              },
+              child: const Text('View Issues'),
+            ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('Close'),
@@ -213,7 +372,13 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                         finalizing: _finalizing,
                       ),
                       const SizedBox(height: 16),
-                      _ValidationSummaryCard(issues: _validationIssues),
+                      _ValidationSummaryCard(
+                        issues: _validationIssues,
+                        onIssueTap: _openIssueFix,
+                        onViewAll: _validationIssues.isEmpty
+                            ? null
+                            : _showAllIssuesSheet,
+                      ),
                       const SizedBox(height: 16),
                       _GeneratedReportsCard(reports: _dashboard!.reports),
                     ],
@@ -369,14 +534,23 @@ class _CloseoutStatusCard extends StatelessWidget {
 
 class _ValidationSummaryCard extends StatelessWidget {
   final List<ValidationIssue> issues;
+  final Future<void> Function(ValidationIssue issue) onIssueTap;
+  final VoidCallback? onViewAll;
 
-  const _ValidationSummaryCard({required this.issues});
+  const _ValidationSummaryCard({
+    required this.issues,
+    required this.onIssueTap,
+    required this.onViewAll,
+  });
 
   @override
   Widget build(BuildContext context) {
     final blocking = issues.where((e) => e.level == 'blocking').toList();
     final errors = issues.where((e) => e.level == 'error').toList();
     final warnings = issues.where((e) => e.level == 'warning').toList();
+
+    final previewIssues = issues.take(8).toList();
+    final hasMore = issues.length > previewIssues.length;
 
     return Card(
       child: Padding(
@@ -413,32 +587,159 @@ class _ValidationSummaryCard extends StatelessWidget {
             const SizedBox(height: 12),
             if (issues.isEmpty)
               const Text('No validation issues found.')
-            else
-              ...issues.take(8).map(
-                (issue) => ListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(
-                    issue.level == 'blocking'
-                        ? Icons.block
-                        : issue.level == 'error'
-                            ? Icons.error_outline
-                            : Icons.warning_amber_rounded,
-                    color: issue.level == 'blocking'
-                        ? Colors.red
-                        : issue.level == 'error'
-                            ? Colors.deepOrange
-                            : Colors.orange,
-                  ),
-                  title: Text(issue.issueMessage),
-                  subtitle: Text(
-                    '${_friendlyReportName(issue.reportName)} • ${issue.issueCode}',
-                  ),
+            else ...[
+              ...previewIssues.map(
+                (issue) => _IssueTile(
+                  issue: issue,
+                  onTap: () => onIssueTap(issue),
+                  onFix: () => onIssueTap(issue),
                 ),
               ),
+              if (hasMore || onViewAll != null) ...[
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: onViewAll,
+                    icon: const Icon(Icons.list_alt),
+                    label: Text(
+                      hasMore
+                          ? 'View all ${issues.length} issues'
+                          : 'View all issues',
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ],
         ),
       ),
+    );
+  }
+}
+
+class _IssueTile extends StatelessWidget {
+  final ValidationIssue issue;
+  final VoidCallback onTap;
+  final VoidCallback onFix;
+
+  const _IssueTile({
+    required this.issue,
+    required this.onTap,
+    required this.onFix,
+  });
+
+  IconData _iconForLevel(String level) {
+    switch (level) {
+      case 'blocking':
+        return Icons.block;
+      case 'error':
+        return Icons.error_outline;
+      default:
+        return Icons.warning_amber_rounded;
+    }
+  }
+
+  Color _colorForLevel(String level) {
+    switch (level) {
+      case 'blocking':
+        return Colors.red;
+      case 'error':
+        return Colors.deepOrange;
+      default:
+        return Colors.orange;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _colorForLevel(issue.level);
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(_iconForLevel(issue.level), color: color),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    issue.issueMessage,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _IssueLevelChip(level: issue.level),
+                      Chip(
+                        visualDensity: VisualDensity.compact,
+                        label: Text(_friendlyReportName(issue.reportName)),
+                      ),
+                      Chip(
+                        visualDensity: VisualDensity.compact,
+                        label: Text(issue.issueCode),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            FilledButton.tonalIcon(
+              onPressed: onFix,
+              icon: const Icon(Icons.build_circle_outlined),
+              label: const Text('Fix'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _IssueLevelChip extends StatelessWidget {
+  final String level;
+
+  const _IssueLevelChip({required this.level});
+
+  Color _color() {
+    switch (level) {
+      case 'blocking':
+        return Colors.red;
+      case 'error':
+        return Colors.deepOrange;
+      default:
+        return Colors.orange;
+    }
+  }
+
+  String _label() {
+    switch (level) {
+      case 'blocking':
+        return 'Blocking';
+      case 'error':
+        return 'Error';
+      default:
+        return 'Warning';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _color();
+    return Chip(
+      visualDensity: VisualDensity.compact,
+      label: Text(_label()),
+      backgroundColor: color.withOpacity(0.12),
+      side: BorderSide(color: color.withOpacity(0.3)),
     );
   }
 }
@@ -859,6 +1160,10 @@ class ValidationIssue {
   final String issueMessage;
   final String? reportName;
   final String? finalizeRunId;
+  final Map<String, dynamic> issueDetails;
+  final String? exhibitorId;
+  final String? animalId;
+  final String? classKey;
 
   ValidationIssue({
     required this.id,
@@ -867,9 +1172,21 @@ class ValidationIssue {
     required this.issueMessage,
     required this.reportName,
     required this.finalizeRunId,
+    required this.issueDetails,
+    required this.exhibitorId,
+    required this.animalId,
+    required this.classKey,
   });
 
+  String? get entryId => issueDetails['entry_id']?.toString();
+  String? get rawPlacement => issueDetails['raw_placement']?.toString();
+
   factory ValidationIssue.fromJson(Map<String, dynamic> json) {
+    final rawDetails = json['issue_details'];
+    final details = rawDetails is Map
+        ? Map<String, dynamic>.from(rawDetails)
+        : <String, dynamic>{};
+
     return ValidationIssue(
       id: (json['id'] ?? '') as String,
       level: (json['level'] ?? 'warning') as String,
@@ -877,6 +1194,10 @@ class ValidationIssue {
       issueMessage: (json['issue_message'] ?? '') as String,
       reportName: json['report_name'] as String?,
       finalizeRunId: json['finalize_run_id'] as String?,
+      issueDetails: details,
+      exhibitorId: json['exhibitor_id']?.toString(),
+      animalId: json['animal_id']?.toString(),
+      classKey: json['class_key']?.toString(),
     );
   }
 }

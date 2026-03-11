@@ -13,11 +13,13 @@ const String kDefaultFinalAwardMode = 'four_six_bis';
 class AdminResultsEntryScreen extends StatefulWidget {
   final String showId;
   final String showName;
+  final String? initialEntryId;
 
   const AdminResultsEntryScreen({
     super.key,
     required this.showId,
     required this.showName,
+    this.initialEntryId,
   });
 
   @override
@@ -25,6 +27,7 @@ class AdminResultsEntryScreen extends StatefulWidget {
 }
 
 class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
+  bool _didAutoOpenInitialEntryFromRoot = false;
   bool _loading = true;
   String? _msg;
 
@@ -43,28 +46,34 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     _loadAll();
   }
 
-  Future<void> _loadAll() async {
-    setState(() {
-      _loading = true;
-      _msg = null;
-    });
-
-    try {
-      await _loadSections();
-      await _loadJudges();
-      await _loadBreedClassSystems();
-      await _loadShowSettings();
-      await _loadEntries();
-      if (!mounted) return;
-      setState(() => _loading = false);
-    } catch (e) {
-      if (!mounted) return;
+    Future<void> _loadAll() async {
       setState(() {
-        _loading = false;
-        _msg = 'Load failed: $e';
+        _loading = true;
+        _msg = null;
       });
+
+      try {
+        await _loadSections();
+        await _loadJudges();
+        await _loadBreedClassSystems();
+        await _loadShowSettings();
+        await _loadEntries();
+
+        if (!mounted) return;
+
+        setState(() => _loading = false);
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _openInitialEntryFromRootIfNeeded();
+        });
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _loading = false;
+          _msg = 'Load failed: $e';
+        });
+      }
     }
-  }
 
   Future<void> _loadSections() async {
     final rows = await supabase
@@ -156,95 +165,107 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     _judges = result;
   }
 
-  Future<void> _jumpToIssue(_ValidationIssue issue) async {
-    final breedEntries = _entries.where((e) {
-      return (e['breed'] ?? '').toString().trim().toLowerCase() ==
-          issue.breed.toLowerCase();
-    }).toList();
+    Future<void> _jumpToIssue(_ValidationIssue issue) async {
+      final allEntries = await _fetchHydratedEntries(sectionId: null);
 
-    if (breedEntries.isEmpty) return;
+      final targetEntryId =
+          (issue.entry['entry_id'] ?? issue.entry['id'] ?? '').toString().trim();
 
-    final byGroup = _showsByGroup(breedEntries);
-    final byVariety = _showsByVariety(breedEntries);
+      Map<String, dynamic> targetEntry;
+      try {
+        targetEntry = allEntries.firstWhere((e) {
+          return (e['entry_id'] ?? e['id'] ?? '').toString().trim() == targetEntryId;
+        });
+      } catch (_) {
+        targetEntry = Map<String, dynamic>.from(issue.entry);
+      }
 
-    List<Map<String, dynamic>> working = [...breedEntries];
-
-    if (byGroup && (issue.groupName ?? '').trim().isNotEmpty) {
-      working = working.where((e) {
-        return (e['group_name'] ?? '').toString().trim().toLowerCase() ==
-            issue.groupName!.toLowerCase();
+      final breedEntries = allEntries.where((e) {
+        return (e['breed'] ?? '').toString().trim().toLowerCase() ==
+            issue.breed.toLowerCase();
       }).toList();
-    }
 
-    if (byVariety && (issue.variety ?? '').trim().isNotEmpty) {
+      if (breedEntries.isEmpty) return;
+
+      final byGroup = _showsByGroup(breedEntries);
+      final byVariety = _showsByVariety(breedEntries);
+
+      List<Map<String, dynamic>> working = [...breedEntries];
+
+      if (byGroup && (issue.groupName ?? '').trim().isNotEmpty) {
+        working = working.where((e) {
+          return (e['group_name'] ?? '').toString().trim().toLowerCase() ==
+              issue.groupName!.toLowerCase();
+        }).toList();
+      }
+
+      if (byVariety && (issue.variety ?? '').trim().isNotEmpty) {
+        working = working.where((e) {
+          return (e['variety'] ?? '').toString().trim().toLowerCase() ==
+              issue.variety!.toLowerCase();
+        }).toList();
+      }
+
       working = working.where((e) {
-        return (e['variety'] ?? '').toString().trim().toLowerCase() ==
-            issue.variety!.toLowerCase();
+        return _classSexLabelFromEntry(e).toLowerCase() ==
+            issue.classSexLabel.toLowerCase();
       }).toList();
-    }
 
-    working = working.where((e) {
-      return _classSexLabelFromEntry(e).toLowerCase() ==
-          issue.classSexLabel.toLowerCase();
-    }).toList();
+      if (working.isEmpty) {
+        working = breedEntries;
+      }
 
-    if (working.isEmpty) {
-      working = breedEntries;
-    }
+      final targetSectionId =
+          (targetEntry['section_id'] ?? '').toString().trim();
+      if (targetSectionId.isNotEmpty) {
+        _selectedSectionId = targetSectionId;
+      }
 
-    final sectionName = _sectionNameForEntry(issue.entry);
+      final sectionName = _sectionNameForEntry(targetEntry);
 
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => _ResultsAnimalsScreen(
-          showId: widget.showId,
-          showName: widget.showName,
-          sectionLabel: sectionName,
-          breed: issue.breed,
-          variety: issue.variety ?? '',
-          classSexLabel: issue.classSexLabel,
-          entries: working,
-          judges: _judges,
-          onBulkJudgeApply: (entries, judgeId) async {
-            final ids = entries
-              .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
-              .where((x) => x.isNotEmpty)
-              .toList();
-            if (ids.isEmpty) return;
-
-            await supabase
-                .from('entries')
-                .update({
-                  'judged_by_show_judge_id':
-                      (judgeId == null || judgeId.isEmpty) ? null : judgeId,
-                  'updated_at': DateTime.now().toUtc().toIso8601String(),
-                })
-                .inFilter('id', ids);
-          },
-          initialJudgeId: working
-                  .map((e) => (e['judged_by_show_judge_id'] ?? '').toString().trim())
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => _ResultsAnimalsScreen(
+            showId: widget.showId,
+            showName: widget.showName,
+            sectionLabel: sectionName,
+            breed: issue.breed,
+            variety: issue.variety ?? '',
+            classSexLabel: issue.classSexLabel,
+            entries: working,
+            judges: _judges,
+            onBulkJudgeApply: (entries, judgeId) async {
+              final ids = entries
+                  .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
                   .where((x) => x.isNotEmpty)
-                  .toSet()
-                  .length ==
-              1
-              ? working
-                  .map((e) => (e['judged_by_show_judge_id'] ?? '').toString().trim())
-                  .where((x) => x.isNotEmpty)
-                  .first
-              : null,
-          breedClassSystems: _breedClassSystems,
-          finalAwardMode: _finalAwardMode,
-          showsByGroup: byGroup,
-          showsByVariety: byVariety,
-          initialEntryIdToOpen: (issue.entry['entry_id'] ?? issue.entry['id'] ?? '').toString(),
+                  .toList();
+              if (ids.isEmpty) return;
+
+              await supabase
+                  .from('entries')
+                  .update({
+                    'judged_by_show_judge_id':
+                        (judgeId == null || judgeId.isEmpty) ? null : judgeId,
+                    'updated_at': DateTime.now().toUtc().toIso8601String(),
+                  })
+                  .inFilter('id', ids);
+            },
+            initialJudgeId: _singleJudgeIdFromEntries(working),
+            breedClassSystems: _breedClassSystems,
+            finalAwardMode: _finalAwardMode,
+            showsByGroup: byGroup,
+            showsByVariety: byVariety,
+            initialEntryIdToOpen:
+                (targetEntry['entry_id'] ?? targetEntry['id'] ?? '')
+                    .toString(),
+          ),
         ),
-      ),
-    );
+      );
 
-    await _loadEntries();
-    if (mounted) setState(() {});
-  }
+      await _loadEntries();
+      if (mounted) setState(() {});
+    }
 
   Future<void> _loadBreedClassSystems() async {
     final rows = await supabase
@@ -273,48 +294,189 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     _finalAwardMode = (row['final_award_mode'] ?? kDefaultFinalAwardMode).toString();
   }
 
-  Future<void> _loadEntries() async {
-    final rows = await supabase.rpc(
-      'report_results_entry_rows',
-      params: {
-        'p_show_id': widget.showId,
-        'p_section_id': (_selectedSectionId == null || _selectedSectionId!.isEmpty)
+    Future<List<Map<String, dynamic>>> _fetchHydratedEntries({
+      String? sectionId,
+    }) async {
+      final rows = await supabase.rpc(
+        'report_results_entry_rows',
+        params: {
+          'p_show_id': widget.showId,
+          'p_section_id': (sectionId == null || sectionId.isEmpty) ? null : sectionId,
+        },
+      );
+
+      final entries = (rows as List)
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+
+      final entryIds = entries
+          .map((e) => (e['entry_id'] ?? '').toString())
+          .where((x) => x.isNotEmpty)
+          .toList();
+
+      final awardsByEntryId = <String, List<String>>{};
+
+      if (entryIds.isNotEmpty) {
+        final awardRows = await supabase
+            .from('entry_awards')
+            .select('entry_id,award_code')
+            .eq('show_id', widget.showId)
+            .inFilter('entry_id', entryIds);
+
+        for (final row in (awardRows as List).cast<Map<String, dynamic>>()) {
+          final entryId = (row['entry_id'] ?? '').toString();
+          final award = (row['award_code'] ?? '').toString().trim();
+          if (entryId.isEmpty || award.isEmpty) continue;
+          awardsByEntryId.putIfAbsent(entryId, () => <String>[]);
+          awardsByEntryId[entryId]!.add(award);
+        }
+      }
+
+      for (final e in entries) {
+        final id = (e['entry_id'] ?? '').toString();
+        e['_awards'] = awardsByEntryId[id] ?? <String>[];
+
+        // normalize old widget code expectations
+        e['id'] ??= e['entry_id'];
+        e['breed'] ??= e['breed_name'];
+        e['variety'] ??= e['variety_name'];
+      }
+
+      return entries;
+    }
+
+    String? _singleJudgeIdFromEntries(List<Map<String, dynamic>> entries) {
+      final ids = entries
+          .map((e) => (e['judged_by_show_judge_id'] ?? '').toString().trim())
+          .where((x) => x.isNotEmpty)
+          .toSet();
+
+      if (ids.length == 1) return ids.first;
+      return null;
+    }
+
+    Future<void> _openInitialEntryFromRootIfNeeded() async {
+      if (_didAutoOpenInitialEntryFromRoot) return;
+      if (widget.initialEntryId == null || widget.initialEntryId!.trim().isEmpty) {
+        return;
+      }
+
+      final targetId = widget.initialEntryId!.trim();
+
+      List<Map<String, dynamic>> allEntries = _entries;
+      Map<String, dynamic> target = allEntries.cast<Map<String, dynamic>>().firstWhere(
+        (e) => ((e['entry_id'] ?? e['id'] ?? '').toString().trim() == targetId),
+        orElse: () => <String, dynamic>{},
+      );
+
+      if (target.isEmpty) {
+        allEntries = await _fetchHydratedEntries(sectionId: null);
+        target = allEntries.firstWhere(
+          (e) => ((e['entry_id'] ?? e['id'] ?? '').toString().trim() == targetId),
+          orElse: () => <String, dynamic>{},
+        );
+      }
+
+      if (target.isEmpty || !mounted) return;
+
+      _didAutoOpenInitialEntryFromRoot = true;
+
+      final breed = (target['breed'] ?? '').toString().trim();
+      final breedEntries = allEntries.where((e) {
+        return (e['breed'] ?? '').toString().trim().toLowerCase() ==
+            breed.toLowerCase();
+      }).toList();
+
+      if (breedEntries.isEmpty) return;
+
+      final byGroup = _showsByGroup(breedEntries);
+      final byVariety = _showsByVariety(breedEntries);
+
+      List<Map<String, dynamic>> working = [...breedEntries];
+
+      final issueGroup = (target['group_name'] ?? '').toString().trim();
+      final issueVariety = (target['variety'] ?? '').toString().trim();
+      final classSexLabel = _classSexLabelFromEntry(target);
+
+      if (byGroup && issueGroup.isNotEmpty) {
+        working = working.where((e) {
+          return (e['group_name'] ?? '').toString().trim().toLowerCase() ==
+              issueGroup.toLowerCase();
+        }).toList();
+      }
+
+      if (byVariety && issueVariety.isNotEmpty) {
+        working = working.where((e) {
+          return (e['variety'] ?? '').toString().trim().toLowerCase() ==
+              issueVariety.toLowerCase();
+        }).toList();
+      }
+
+      working = working.where((e) {
+        return _classSexLabelFromEntry(e).toLowerCase() ==
+            classSexLabel.toLowerCase();
+      }).toList();
+
+      if (working.isEmpty) {
+        working = breedEntries;
+      }
+
+      final targetSectionId = (target['section_id'] ?? '').toString().trim();
+      if (targetSectionId.isNotEmpty) {
+        _selectedSectionId = targetSectionId;
+      }
+
+      final sectionName = _sectionNameForEntry(target);
+
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => _ResultsAnimalsScreen(
+            showId: widget.showId,
+            showName: widget.showName,
+            sectionLabel: sectionName,
+            breed: breed,
+            variety: issueVariety,
+            classSexLabel: classSexLabel,
+            entries: working,
+            judges: _judges,
+            onBulkJudgeApply: (entries, judgeId) async {
+              final ids = entries
+                  .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
+                  .where((x) => x.isNotEmpty)
+                  .toList();
+              if (ids.isEmpty) return;
+
+              await supabase
+                  .from('entries')
+                  .update({
+                    'judged_by_show_judge_id':
+                        (judgeId == null || judgeId.isEmpty) ? null : judgeId,
+                    'updated_at': DateTime.now().toUtc().toIso8601String(),
+                  })
+                  .inFilter('id', ids);
+            },
+            initialJudgeId: _singleJudgeIdFromEntries(working),
+            breedClassSystems: _breedClassSystems,
+            finalAwardMode: _finalAwardMode,
+            showsByGroup: byGroup,
+            showsByVariety: byVariety,
+            initialEntryIdToOpen: targetId,
+          ),
+        ),
+      );
+
+      await _loadEntries();
+      if (mounted) setState(() {});
+    }
+
+    Future<void> _loadEntries() async {
+      _entries = await _fetchHydratedEntries(
+        sectionId: (_selectedSectionId == null || _selectedSectionId!.isEmpty)
             ? null
             : _selectedSectionId,
-      },
-    );
-
-    _entries = (rows as List).cast<Map<String, dynamic>>();
-
-    final entryIds = _entries.map((e) => e['entry_id'].toString()).toList();
-    final awardsByEntryId = <String, List<String>>{};
-
-    if (entryIds.isNotEmpty) {
-      final awardRows = await supabase
-          .from('entry_awards')
-          .select('entry_id,award_code')
-          .eq('show_id', widget.showId)
-          .inFilter('entry_id', entryIds);
-
-      for (final row in (awardRows as List).cast<Map<String, dynamic>>()) {
-        final entryId = (row['entry_id'] ?? '').toString();
-        final award = (row['award_code'] ?? '').toString().trim();
-        if (entryId.isEmpty || award.isEmpty) continue;
-        awardsByEntryId.putIfAbsent(entryId, () => <String>[]);
-        awardsByEntryId[entryId]!.add(award);
-      }
+      );
     }
-
-    for (final e in _entries) {
-      final id = e['entry_id'].toString();
-      e['_awards'] = awardsByEntryId[id] ?? <String>[];
-
-      // normalize old widget code expectations
-      e['id'] ??= e['entry_id'];
-      e['breed'] ??= e['breed_name'];
-      e['variety'] ??= e['variety_name'];
-    }
-  }
 
   String _classSexLabelFromEntry(Map<String, dynamic> e) {
     final rawClass = (e['class_name'] ?? '').toString().trim();
@@ -725,77 +887,83 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     ].where((x) => x.isNotEmpty).join(' • ');
   }
 
-  void _openValidationSheet() {
-    final issues = _buildValidationIssues();
+    void _openValidationSheet() {
+      final issues = _buildValidationIssues();
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (_) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.8,
-        minChildSize: 0.45,
-        maxChildSize: 0.95,
-        builder: (context, scrollController) {
-          return SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-              child: Column(
-                children: [
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Results Validation',
-                      style: Theme.of(context).textTheme.titleLarge,
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (_) => DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.8,
+          minChildSize: 0.45,
+          maxChildSize: 0.95,
+          builder: (context, scrollController) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                child: Column(
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Results Validation',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      issues.isEmpty
-                          ? 'No validation issues found.'
-                          : '${issues.length} validation issue${issues.length == 1 ? '' : 's'} found.',
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        issues.isEmpty
+                            ? 'No validation issues found.'
+                            : '${issues.length} validation issue${issues.length == 1 ? '' : 's'} found.',
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Expanded(
-                    child: issues.isEmpty
-                        ? const Align(
-                            alignment: Alignment.topLeft,
-                            child: Text('Everything looks good so far.'),
-                          )
-                        : ListView.separated(
-                            controller: scrollController,
-                            itemCount: issues.length,
-                            separatorBuilder: (_, __) => const Divider(height: 1),
-                            itemBuilder: (context, i) {
-                              final issue = issues[i];
-                              return ListTile(
-                                leading: const Icon(Icons.warning_amber_rounded),
-                                title: Text(issue.title),
-                                subtitle: Text(
-                                  '${issue.message}\n${_issueSubtitle(issue)}',
-                                ),
-                                isThreeLine: true,
-                                trailing: const Icon(Icons.chevron_right),
-                                onTap: () async {
-                                  Navigator.pop(context);
-                                  await _jumpToIssue(issue);
-                                },
-                              );
-                            },
-                          ),
-                  ),
-                ],
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: issues.isEmpty
+                          ? const Align(
+                              alignment: Alignment.topLeft,
+                              child: Text('Everything looks good so far.'),
+                            )
+                          : ListView.separated(
+                              controller: scrollController,
+                              itemCount: issues.length,
+                              separatorBuilder: (_, __) => const Divider(height: 1),
+                              itemBuilder: (context, i) {
+                                final issue = issues[i];
+                                return ListTile(
+                                  leading: const Icon(Icons.warning_amber_rounded),
+                                  title: Text(issue.title),
+                                  subtitle: Text(
+                                    '${issue.message}\n${_issueSubtitle(issue)}',
+                                  ),
+                                  isThreeLine: true,
+                                  trailing: TextButton(
+                                    onPressed: () async {
+                                      Navigator.pop(context);
+                                      await _jumpToIssue(issue);
+                                    },
+                                    child: const Text('Fix'),
+                                  ),
+                                  onTap: () async {
+                                    Navigator.pop(context);
+                                    await _jumpToIssue(issue);
+                                  },
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          );
-        },
-      ),
-    );
-  }
+            );
+          },
+        ),
+      );
+    }
 
   @override
   Widget build(BuildContext context) {
