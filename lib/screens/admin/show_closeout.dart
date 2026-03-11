@@ -25,6 +25,72 @@ class ShowCloseoutPage extends StatefulWidget {
 }
 
 class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
+    bool _shouldDisplayIssue(ValidationIssue issue) {
+      // Hide noisy informational warnings that should not block closeout UI.
+      const hiddenWarningCodes = <String>{
+        'points_skipped_entry',
+      };
+
+      if (hiddenWarningCodes.contains(issue.issueCode)) {
+        return false;
+      }
+
+      return true;
+    }
+
+    List<ValidationIssue> _dedupeIssues(List<ValidationIssue> issues) {
+      final seen = <String>{};
+      final result = <ValidationIssue>[];
+
+      for (final issue in issues) {
+        final key = [
+          issue.level,
+          issue.issueCode,
+          issue.issueMessage.trim(),
+          issue.reportName ?? '',
+          issue.entryId ?? '',
+          issue.classKey ?? '',
+          issue.exhibitorId ?? '',
+          issue.animalId ?? '',
+        ].join('|');
+
+        if (seen.add(key)) {
+          result.add(issue);
+        }
+      }
+
+      return result;
+    }
+
+    List<ValidationIssue> _cleanIssues(List<ValidationIssue> issues) {
+      final visible = issues.where(_shouldDisplayIssue).toList();
+      final deduped = _dedupeIssues(visible);
+
+      deduped.sort((a, b) {
+        int levelRank(String level) {
+          switch (level) {
+            case 'blocking':
+              return 0;
+            case 'error':
+              return 1;
+            case 'warning':
+              return 2;
+            default:
+              return 99;
+          }
+        }
+
+        final lr = levelRank(a.level).compareTo(levelRank(b.level));
+        if (lr != 0) return lr;
+
+        final rr = (a.reportName ?? '').compareTo(b.reportName ?? '');
+        if (rr != 0) return rr;
+
+        return a.issueMessage.compareTo(b.issueMessage);
+      });
+
+      return deduped;
+    }
   bool _loading = true;
   bool _finalizing = false;
   String? _error;
@@ -65,13 +131,15 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       final allIssues = issuesJson.map(ValidationIssue.fromJson).toList();
 
       final latestRunId = dashboard.latestFinalize.id;
-      final filteredIssues = latestRunId == null || latestRunId.isEmpty
+      final latestRunIssues = latestRunId == null || latestRunId.isEmpty
           ? allIssues
           : allIssues.where((i) => i.finalizeRunId == latestRunId).toList();
 
+      final cleanedIssues = _cleanIssues(latestRunIssues);
+
       setState(() {
         _dashboard = dashboard;
-        _validationIssues = filteredIssues;
+        _validationIssues = cleanedIssues;
       });
     } catch (e) {
       setState(() {
