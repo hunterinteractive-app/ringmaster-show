@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:
 
 jobs:
   deploy:
@@ -14,23 +13,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Flutter
+      - name: Install Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
 
-      - name: Flutter pub get
+      - name: Get packages
         run: flutter pub get
 
       - name: Build web
         run: flutter build web --release
 
-      - name: Add SPA fallback
-        run: |
-          echo "/* /index.html 200" > build/web/_redirects
+      - name: Add SPA redirect
+        run: echo "/* /index.html 200" > build/web/_redirects
+
+      - name: Install Wrangler
+        run: npm install -g wrangler
 
       - name: Deploy to Cloudflare Pages
-        run: npx wrangler pages deploy build/web --project-name=ringmaster-show
+        run: wrangler pages deploy build/web --project-name=ringmaster-show
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
