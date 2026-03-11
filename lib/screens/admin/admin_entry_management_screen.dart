@@ -101,6 +101,9 @@ class _AdminEntryManagementScreenState extends State<AdminEntryManagementScreen>
 
     final res = await q.order('created_at', ascending: true);
     _entries = (res as List).cast<Map<String, dynamic>>();
+    for (final e in _entries.take(5)) {
+      debugPrint('ENTRY ROW: $e');
+    }
   }
 
   String _sectionLabel(Map<String, dynamic> s) {
@@ -127,6 +130,8 @@ class _AdminEntryManagementScreenState extends State<AdminEntryManagementScreen>
   }
 
   String _exhibitorDisplayName(Map<String, dynamic> e) {
+    debugPrint('EXHIBITOR LOOKUP ROW: $e');
+
     final label = (e['exhibitor_label'] ?? '').toString().trim();
     if (label.isNotEmpty) return label;
 
