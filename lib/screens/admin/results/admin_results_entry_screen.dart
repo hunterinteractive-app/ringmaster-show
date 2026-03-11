@@ -1877,17 +1877,6 @@ class _ResultsAnimalsScreenState extends State<_ResultsAnimalsScreen> {
   String _exhibitorName(Map<String, dynamic> e) {
     final label = (e['exhibitor_label'] ?? '').toString().trim();
     if (label.isNotEmpty) return label;
-
-    final ex = e['exhibitors'];
-    if (ex is Map) {
-      final dn = (ex['display_name'] ?? '').toString().trim();
-      if (dn.isNotEmpty) return dn;
-
-      final first = (ex['first_name'] ?? '').toString().trim();
-      final last = (ex['last_name'] ?? '').toString().trim();
-      final combined = ('$last, $first').replaceAll(RegExp(r'^\s*,\s*|\s+$'), '').trim();
-      if (combined.isNotEmpty) return combined;
-    }
     return '(Unknown Exhibitor)';
   }
 
