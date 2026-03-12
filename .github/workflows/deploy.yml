@@ -15,14 +15,17 @@ jobs:
       - name: Install Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.29.2"
+          flutter-version: "3.41.4"
           channel: stable
           cache: true
+
+      - name: Show Flutter version
+        run: flutter --version
 
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build Flutter web
+      - name: Build Flutter Web
         run: flutter build web --release
 
       - name: Deploy to Cloudflare Pages
