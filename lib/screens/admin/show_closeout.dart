@@ -224,37 +224,51 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     }
   }
 
-  Future<void> _openIssueFix(ValidationIssue issue) async {
-    switch (issue.issueCode) {
-      case 'no_judges_assigned':
-      case 'missing_secretary_email':
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => EditShowSettingsScreen(showId: widget.showId),
-          ),
-        );
-        await _loadData();
-        return;
-
-      case 'points_skipped_entry':
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => AdminResultsEntryScreen(
-              showId: widget.showId,
-              showName: widget.showName,
+    Future<void> _openIssueFix(ValidationIssue issue) async {
+      switch (issue.issueCode) {
+        case 'no_judges_assigned':
+          // Most useful place for this warning is Results Entry,
+          // because that's where class-level judged_by_show_judge_id gets assigned.
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => AdminResultsEntryScreen(
+                showId: widget.showId,
+                showName: widget.showName,
+              ),
             ),
-          ),
-        );
-        await _loadData();
-        return;
+          );
+          await _loadData();
+          return;
 
-      default:
-        _showIssueDetails(issue);
-        return;
+        case 'missing_secretary_email':
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => EditShowSettingsScreen(showId: widget.showId),
+            ),
+          );
+          await _loadData();
+          return;
+
+        case 'points_skipped_entry':
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => AdminResultsEntryScreen(
+                showId: widget.showId,
+                showName: widget.showName,
+              ),
+            ),
+          );
+          await _loadData();
+          return;
+
+        default:
+          _showIssueDetails(issue);
+          return;
+      }
     }
-  }
 
   void _showIssueDetails(ValidationIssue issue) {
     showModalBottomSheet<void>(
