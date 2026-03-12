@@ -70,6 +70,11 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       });
 
       try {
+        final session = supabase.auth.currentSession;
+        if (session == null) {
+          throw Exception('Your session has expired. Please sign in again.');
+        }
+
         await _drainFinalizeQueue();
         await _loadData();
 
@@ -289,32 +294,45 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   }
 
     Future<void> _drainFinalizeQueue() async {
-    const maxAttempts = 60;
+      const maxAttempts = 60;
 
-    for (var i = 0; i < maxAttempts; i++) {
-      final queued = await supabase
-          .from('show_task_queue')
-          .select('id, task_type, task_status')
-          .eq('show_id', widget.showId)
-          .inFilter('task_status', ['queued', 'claimed']);
+      final session = supabase.auth.currentSession;
+      final accessToken = session?.accessToken;
 
-      final rows = (queued as List).cast<Map<String, dynamic>>();
-      if (rows.isEmpty) {
-        break;
+      if (accessToken == null || accessToken.isEmpty) {
+        throw Exception('Your session has expired. Please sign in again.');
       }
 
-      final resp = await supabase.functions.invoke(
-        'process-show-task',
-        body: {},
-      );
+      for (var i = 0; i < maxAttempts; i++) {
+        final queued = await supabase
+            .from('show_task_queue')
+            .select('id, task_type, task_status')
+            .eq('show_id', widget.showId)
+            .eq('task_type', 'render_report')
+            .inFilter('task_status', ['queued', 'claimed']);
 
-      if (resp.status >= 400) {
-        throw Exception('Worker invocation failed: ${resp.data}');
+        final rows = (queued as List).cast<Map<String, dynamic>>();
+        if (rows.isEmpty) {
+          break;
+        }
+
+        final resp = await supabase.functions.invoke(
+          'process-show-task',
+          headers: {
+            'Authorization': 'Bearer $accessToken',
+          },
+          body: {
+            'show_id': widget.showId,
+          },
+        );
+
+        if (resp.status >= 400) {
+          throw Exception('Worker invocation failed: ${resp.status} ${resp.data}');
+        }
+
+        await Future<void>.delayed(const Duration(milliseconds: 500));
       }
-
-      await Future<void>.delayed(const Duration(milliseconds: 350));
     }
-  }
 
     Future<void> _openIssueFix(ValidationIssue issue) async {
       switch (issue.issueCode) {
