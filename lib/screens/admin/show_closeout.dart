@@ -63,6 +63,37 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       return result;
     }
 
+    Future<void> _processQueuedReports() async {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+
+      try {
+        await _drainFinalizeQueue();
+        await _loadData();
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Queued reports processed.')),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _error = e.toString();
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Processing failed: $e')),
+        );
+      } finally {
+        if (mounted) {
+          setState(() {
+            _loading = false;
+          });
+        }
+      }
+    }
+
     List<ValidationIssue> _cleanIssues(List<ValidationIssue> issues) {
       final visible = issues.where(_shouldDisplayIssue).toList();
       final deduped = _dedupeIssues(visible);
@@ -512,6 +543,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                       _CloseoutStatusCard(
                         dashboard: _dashboard!,
                         onFinalize: _finalizing ? null : _runFinalize,
+                        onProcessQueuedReports: _loading ? null : _processQueuedReports,
                         finalizing: _finalizing,
                       ),
                       const SizedBox(height: 16),
@@ -545,11 +577,13 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 class _CloseoutStatusCard extends StatelessWidget {
   final CloseoutDashboard dashboard;
   final VoidCallback? onFinalize;
+  final VoidCallback? onProcessQueuedReports;
   final bool finalizing;
 
   const _CloseoutStatusCard({
     required this.dashboard,
     required this.onFinalize,
+    required this.onProcessQueuedReports,
     required this.finalizing,
   });
 
@@ -660,24 +694,33 @@ class _CloseoutStatusCard extends StatelessWidget {
             Text('Points generated: ${_fmt(closeout.pointsGeneratedAt)}'),
             Text('Reports generated: ${_fmt(closeout.reportsGeneratedAt)}'),
             const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: onFinalize,
-                icon: finalizing
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.task_alt),
-                label: Text(finalizing ? 'Finalizing…' : 'Finalize Show'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: statusColor,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: onFinalize,
+                    icon: finalizing
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.task_alt),
+                    label: Text(finalizing ? 'Finalizing…' : 'Finalize Show'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: statusColor,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(width: 12),
+                OutlinedButton.icon(
+                  onPressed: onProcessQueuedReports,
+                  icon: const Icon(Icons.sync),
+                  label: const Text('Process Queued Reports'),
+                ),
+              ],
             ),
           ],
         ),
