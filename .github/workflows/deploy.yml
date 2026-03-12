@@ -1,0 +1,79 @@
+# .github/workflows/deploy_flutter_web.yml
+name: Deploy Flutter Web to Cloudflare Pages
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - staging
+      - feature/**
+  pull_request:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Flutter setup
+      # This action is widely used, but it is third-party rather than an official Flutter action.
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.29.2"
+          channel: stable
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build web
+        run: flutter build web --release
+
+      # Optional but recommended: add Cloudflare Pages headers into the build output
+      - name: Add Pages headers
+        run: |
+          cat > build/web/_headers <<'EOF'
+          /index.html
+            Cache-Control: public, max-age=0, must-revalidate
+
+          /flutter_bootstrap.js
+            Cache-Control: public, max-age=60, must-revalidate
+
+          /flutter_service_worker.js
+            Cache-Control: public, max-age=0, must-revalidate
+
+          /manifest.json
+            Cache-Control: public, max-age=60, must-revalidate
+          EOF
+
+      - name: Deploy production
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: npx wrangler pages deploy build/web --project-name ringmaster-show
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Deploy preview branch
+        if: github.ref != 'refs/heads/main' && github.event_name == 'push'
+        run: npx wrangler pages deploy build/web --project-name ringmaster-show --branch "${GITHUB_REF_NAME}"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Deploy PR preview
+        if: github.event_name == 'pull_request'
+        run: npx wrangler pages deploy build/web --project-name ringmaster-show --branch "pr-${{ github.event.pull_request.number }}"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
