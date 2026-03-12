@@ -1025,14 +1025,20 @@ class _GeneratedReportsCard extends StatelessWidget {
                   trailing: hasFile
                       ? TextButton.icon(
                           onPressed: () async {
-                            final url = supabase.storage
-                                .from(report.storageBucket!)
-                                .getPublicUrl(report.storagePath!);
+                            try {
+                              final signedUrl = await supabase.storage
+                                  .from(report.storageBucket!)
+                                  .createSignedUrl(report.storagePath!, 60 * 5);
 
-                            await launchUrlString(
-                              url,
-                              mode: LaunchMode.externalApplication,
-                            );
+                              await launchUrlString(
+                                signedUrl,
+                                mode: LaunchMode.externalApplication,
+                              );
+                            } catch (e) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Download failed: $e')),
+                              );
+                            }
                           },
                           icon: const Icon(Icons.download),
                           label: const Text('Open'),
@@ -1250,14 +1256,20 @@ class _ReportRow extends StatelessWidget {
       trailing: hasFile
           ? TextButton.icon(
               onPressed: () async {
-                final url = supabase.storage
-                    .from(report.storageBucket!)
-                    .getPublicUrl(report.storagePath!);
+                try {
+                  final signedUrl = await supabase.storage
+                      .from(report.storageBucket!)
+                      .createSignedUrl(report.storagePath!, 60 * 5);
 
-                await launchUrlString(
-                  url,
-                  mode: LaunchMode.externalApplication,
-                );
+                  await launchUrlString(
+                    signedUrl,
+                    mode: LaunchMode.externalApplication,
+                  );
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Download failed: $e')),
+                  );
+                }
               },
               icon: const Icon(Icons.download),
               label: const Text('Download'),
