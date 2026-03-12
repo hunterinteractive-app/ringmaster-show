@@ -4,6 +4,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher_string.dart';
 
 import 'edit_show_settings_screen.dart';
 import 'results/admin_results_entry_screen.dart';
@@ -98,6 +99,66 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   CloseoutDashboard? _dashboard;
   List<ValidationIssue> _validationIssues = const [];
 
+    static const Set<String> _exhibitorReportKeys = {
+    'exhibitor_report',
+    'legs',
+  };
+
+  static const Set<String> _clubReportKeys = {
+    'cavy_points',
+    'commercial_points',
+    'details_by_breed',
+    'exh_by_breed',
+    'exh_total_points',
+    'fur_points',
+    'newsletter_show_report',
+  };
+
+  static const Set<String> _arbaReportKeys = {
+    'arba_report',
+  };
+
+  List<ReportArtifactSummary> _reportsFor(Set<String> keys) {
+    final reports = _dashboard?.reports ?? const <ReportArtifactSummary>[];
+    return reports.where((r) => keys.contains(r.reportName)).toList()
+      ..sort((a, b) => _friendlyReportName(a.reportName)
+          .compareTo(_friendlyReportName(b.reportName)));
+  }
+
+  List<ReportArtifactSummary> _otherReports() {
+    final reports = _dashboard?.reports ?? const <ReportArtifactSummary>[];
+    return reports.where((r) {
+      return !_exhibitorReportKeys.contains(r.reportName) &&
+          !_clubReportKeys.contains(r.reportName) &&
+          !_arbaReportKeys.contains(r.reportName);
+    }).toList()
+      ..sort((a, b) => _friendlyReportName(a.reportName)
+          .compareTo(_friendlyReportName(b.reportName)));
+  }
+
+  bool _allGenerated(List<ReportArtifactSummary> reports) {
+    if (reports.isEmpty) return false;
+    return reports.every((r) => r.artifactStatus == 'generated');
+  }
+
+  Future<void> _sendExhibitorReports() async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Send Exhibitor Reports coming next.')),
+    );
+  }
+
+  Future<void> _sendClubReports() async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Send Club Reports coming next.')),
+    );
+  }
+
+  Future<void> _sendArbaReports() async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Send ARBA Reports coming next.')),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -174,7 +235,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         },
       );
 
-      await _drainRenderQueue();
+      await _drainFinalizeQueue();
       await _loadData();
 
       if (!mounted) return;
@@ -196,18 +257,18 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     }
   }
 
-  Future<void> _drainRenderQueue() async {
-    const maxAttempts = 40;
+    Future<void> _drainFinalizeQueue() async {
+    const maxAttempts = 60;
 
     for (var i = 0; i < maxAttempts; i++) {
       final queued = await supabase
           .from('show_task_queue')
           .select('id, task_type, task_status')
           .eq('show_id', widget.showId)
-          .eq('task_type', 'render_report')
           .inFilter('task_status', ['queued', 'claimed']);
 
-      if ((queued as List).isEmpty) {
+      final rows = (queued as List).cast<Map<String, dynamic>>();
+      if (rows.isEmpty) {
         break;
       }
 
@@ -220,7 +281,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         throw Exception('Worker invocation failed: ${resp.data}');
       }
 
-      await Future<void>.delayed(const Duration(milliseconds: 250));
+      await Future<void>.delayed(const Duration(milliseconds: 350));
     }
   }
 
@@ -462,7 +523,18 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                             : _showAllIssuesSheet,
                       ),
                       const SizedBox(height: 16),
-                      _GeneratedReportsCard(reports: _dashboard!.reports),
+                      _DistributionAndReportsCard(
+                        exhibitorReports: _reportsFor(_exhibitorReportKeys),
+                        clubReports: _reportsFor(_clubReportKeys),
+                        arbaReports: _reportsFor(_arbaReportKeys),
+                        otherReports: _otherReports(),
+                        onSendExhibitor: _sendExhibitorReports,
+                        onSendClub: _sendClubReports,
+                        onSendArba: _sendArbaReports,
+                        canSendExhibitor: _allGenerated(_reportsFor(_exhibitorReportKeys)),
+                        canSendClub: _allGenerated(_reportsFor(_clubReportKeys)),
+                        canSendArba: _allGenerated(_reportsFor(_arbaReportKeys)),
+                      ),
                     ],
                   ),
                 ),
@@ -831,6 +903,32 @@ class _GeneratedReportsCard extends StatelessWidget {
 
   const _GeneratedReportsCard({required this.reports});
 
+  IconData _iconForStatus(String status) {
+    switch (status) {
+      case 'generated':
+        return Icons.check_circle;
+      case 'warning':
+        return Icons.warning_amber_rounded;
+      case 'failed':
+        return Icons.error;
+      default:
+        return Icons.schedule;
+    }
+  }
+
+  Color? _colorForStatus(String status) {
+    switch (status) {
+      case 'generated':
+        return Colors.green;
+      case 'warning':
+        return Colors.orange;
+      case 'failed':
+        return Colors.red;
+      default:
+        return null;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final sortedReports = [...reports]
@@ -851,36 +949,263 @@ class _GeneratedReportsCard extends StatelessWidget {
             if (sortedReports.isEmpty)
               const Text('No reports found.')
             else
-              ...sortedReports.map(
-                (report) => ListTile(
+              ...sortedReports.map((report) {
+                final hasFile = (report.storageBucket?.isNotEmpty == true) &&
+                    (report.storagePath?.isNotEmpty == true);
+
+                return ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: Icon(
-                    report.artifactStatus == 'generated'
-                        ? Icons.check_circle
-                        : report.artifactStatus == 'warning'
-                            ? Icons.warning_amber_rounded
-                            : report.artifactStatus == 'failed'
-                                ? Icons.error
-                                : Icons.schedule,
-                    color: report.artifactStatus == 'generated'
-                        ? Colors.green
-                        : report.artifactStatus == 'warning'
-                            ? Colors.orange
-                            : report.artifactStatus == 'failed'
-                                ? Colors.red
-                                : null,
+                    _iconForStatus(report.artifactStatus),
+                    color: _colorForStatus(report.artifactStatus),
                   ),
                   title: Text(_friendlyReportName(report.reportName)),
                   subtitle: Text(report.artifactStatus),
-                  trailing: Text(_fmt(report.generatedAt)),
-                ),
-              ),
+                  trailing: hasFile
+                      ? TextButton.icon(
+                          onPressed: () async {
+                            final url = supabase.storage
+                                .from(report.storageBucket!)
+                                .getPublicUrl(report.storagePath!);
+
+                            await launchUrlString(
+                              url,
+                              mode: LaunchMode.externalApplication,
+                            );
+                          },
+                          icon: const Icon(Icons.download),
+                          label: const Text('Open'),
+                        )
+                      : Text(_fmt(report.generatedAt)),
+                );
+              }),
           ],
         ),
       ),
     );
   }
 }
+
+class _DistributionAndReportsCard extends StatelessWidget {
+  final List<ReportArtifactSummary> exhibitorReports;
+  final List<ReportArtifactSummary> clubReports;
+  final List<ReportArtifactSummary> arbaReports;
+  final List<ReportArtifactSummary> otherReports;
+  final Future<void> Function() onSendExhibitor;
+  final Future<void> Function() onSendClub;
+  final Future<void> Function() onSendArba;
+  final bool canSendExhibitor;
+  final bool canSendClub;
+  final bool canSendArba;
+
+  const _DistributionAndReportsCard({
+    required this.exhibitorReports,
+    required this.clubReports,
+    required this.arbaReports,
+    required this.otherReports,
+    required this.onSendExhibitor,
+    required this.onSendClub,
+    required this.onSendArba,
+    required this.canSendExhibitor,
+    required this.canSendClub,
+    required this.canSendArba,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 2,
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Reports & Distribution',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 12),
+              const TabBar(
+                tabs: [
+                  Tab(text: 'Distribution'),
+                  Tab(text: 'Other Reports'),
+                ],
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 520,
+                child: TabBarView(
+                  children: [
+                    ListView(
+                      children: [
+                        _ReportSectionTile(
+                          title: 'Exhibitor Reports',
+                          subtitle: 'Final exhibitor report and legs.',
+                          reports: exhibitorReports,
+                          buttonLabel: 'Send Exhibitor Reports',
+                          onPressed: canSendExhibitor ? onSendExhibitor : null,
+                        ),
+                        _ReportSectionTile(
+                          title: 'Club Reports',
+                          subtitle: 'Breed/state club and points-related reports.',
+                          reports: clubReports,
+                          buttonLabel: 'Send Club Reports',
+                          onPressed: canSendClub ? onSendClub : null,
+                        ),
+                        _ReportSectionTile(
+                          title: 'ARBA Reports',
+                          subtitle: 'Official ARBA report delivery.',
+                          reports: arbaReports,
+                          buttonLabel: 'Send ARBA Reports',
+                          onPressed: canSendArba ? onSendArba : null,
+                        ),
+                      ],
+                    ),
+                    ListView(
+                      children: [
+                        _ReportSectionTile(
+                          title: 'Other Generated Reports',
+                          subtitle: 'Additional generated reports available for download.',
+                          reports: otherReports,
+                          buttonLabel: null,
+                          onPressed: null,
+                          initiallyExpanded: true,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReportSectionTile extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final List<ReportArtifactSummary> reports;
+  final String? buttonLabel;
+  final Future<void> Function()? onPressed;
+  final bool initiallyExpanded;
+
+  const _ReportSectionTile({
+    required this.title,
+    required this.subtitle,
+    required this.reports,
+    required this.buttonLabel,
+    required this.onPressed,
+    this.initiallyExpanded = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ExpansionTile(
+      initiallyExpanded: initiallyExpanded,
+      tilePadding: EdgeInsets.zero,
+      childrenPadding: const EdgeInsets.only(bottom: 12),
+      title: Text(title),
+      subtitle: Text(subtitle),
+      children: [
+        if (reports.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text('No reports in this section.'),
+            ),
+          )
+        else
+          ...reports.map((report) => _ReportRow(report: report)),
+        if (buttonLabel != null) ...[
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FilledButton.icon(
+              onPressed: onPressed,
+              icon: const Icon(Icons.send),
+              label: Text(buttonLabel!),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ReportRow extends StatelessWidget {
+  final ReportArtifactSummary report;
+
+  const _ReportRow({required this.report});
+
+  IconData _iconForStatus(String status) {
+    switch (status) {
+      case 'generated':
+        return Icons.check_circle;
+      case 'warning':
+        return Icons.warning_amber_rounded;
+      case 'failed':
+        return Icons.error;
+      default:
+        return Icons.schedule;
+    }
+  }
+
+  Color? _colorForStatus(String status) {
+    switch (status) {
+      case 'generated':
+        return Colors.green;
+      case 'warning':
+        return Colors.orange;
+      case 'failed':
+        return Colors.red;
+      default:
+        return null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasFile = (report.storageBucket?.isNotEmpty == true) &&
+        (report.storagePath?.isNotEmpty == true);
+
+    return ListTile(
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(
+        _iconForStatus(report.artifactStatus),
+        color: _colorForStatus(report.artifactStatus),
+      ),
+      title: Text(_friendlyReportName(report.reportName)),
+      subtitle: Text(
+        report.artifactStatus == 'generated'
+            ? 'Generated ${_fmt(report.generatedAt)}'
+            : report.artifactStatus,
+      ),
+      trailing: hasFile
+          ? TextButton.icon(
+              onPressed: () async {
+                final url = supabase.storage
+                    .from(report.storageBucket!)
+                    .getPublicUrl(report.storagePath!);
+
+                await launchUrlString(
+                  url,
+                  mode: LaunchMode.externalApplication,
+                );
+              },
+              icon: const Icon(Icons.download),
+              label: const Text('Download'),
+            )
+          : null,
+    );
+  }
+}
+
 
 class _StatTile extends StatelessWidget {
   final String label;
@@ -1000,6 +1325,18 @@ String _friendlyReportName(String? key) {
       return 'Control Sheet';
     case 'checkin_sheet':
       return 'Check-In Sheet';
+        case 'exhibitor_report':
+      return 'Exhibitor Report';
+    case 'legs':
+      return 'Legs';
+    case 'commercial_class_points':
+      return 'Commercial Class Points';
+    case 'exh_by_breed':
+      return 'Exhibitor by Breed';
+    case 'exh_total_points':
+      return 'Exhibitor Total Points';
+    case 'newsletter':
+      return 'Newsletter';
     case null:
       return '-';
     default:
