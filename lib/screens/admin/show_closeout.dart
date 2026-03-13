@@ -6,8 +6,13 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
-import 'edit_show_settings_screen.dart';
-import 'results/admin_results_entry_screen.dart';
+import 'closeout/data/closeout_repository.dart';
+import 'closeout/data/loaders/arba_report_loader.dart';
+import 'closeout/pdf/builders/arba_report_pdf.dart';
+import 'closeout/registry/report_registry.dart';
+import 'closeout/services/closeout_runner.dart';
+import 'closeout/services/report_engine.dart';
+import 'closeout/services/report_upload_service.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -26,116 +31,25 @@ class ShowCloseoutPage extends StatefulWidget {
 }
 
 class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
-    bool _shouldDisplayIssue(ValidationIssue issue) {
-      // Hide noisy informational warnings that should not block closeout UI.
-      const hiddenWarningCodes = <String>{
-        'points_skipped_entry',
-      };
+  final _secretaryNameController = TextEditingController();
+  final _secretaryAddressController = TextEditingController();
+  final _secretaryEmailController = TextEditingController();
+  final _secretaryPhoneController = TextEditingController();
+  final _superintendentController = TextEditingController();
+  final _superintendentNumberController = TextEditingController();
+  final _sweepstakesClubController = TextEditingController();
 
-      if (hiddenWarningCodes.contains(issue.issueCode)) {
-        return false;
-      }
+  bool _sweepstakesIssue = false;
+  bool _officialProtest = false;
+  bool _arbaReportFiled = false;
 
-      return true;
-    }
-
-    List<ValidationIssue> _dedupeIssues(List<ValidationIssue> issues) {
-      final seen = <String>{};
-      final result = <ValidationIssue>[];
-
-      for (final issue in issues) {
-        final key = [
-          issue.level,
-          issue.issueCode,
-          issue.issueMessage.trim(),
-          issue.reportName ?? '',
-          issue.entryId ?? '',
-          issue.classKey ?? '',
-          issue.exhibitorId ?? '',
-          issue.animalId ?? '',
-        ].join('|');
-
-        if (seen.add(key)) {
-          result.add(issue);
-        }
-      }
-
-      return result;
-    }
-
-    Future<void> _processQueuedReports() async {
-      setState(() {
-        _loading = true;
-        _error = null;
-      });
-
-      try {
-        final session = supabase.auth.currentSession;
-        if (session == null) {
-          throw Exception('Your session has expired. Please sign in again.');
-        }
-
-        await _drainFinalizeQueue();
-        await _loadData();
-
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Queued reports processed.')),
-        );
-      } catch (e) {
-        if (!mounted) return;
-        setState(() {
-          _error = e.toString();
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Processing failed: $e')),
-        );
-      } finally {
-        if (mounted) {
-          setState(() {
-            _loading = false;
-          });
-        }
-      }
-    }
-
-    List<ValidationIssue> _cleanIssues(List<ValidationIssue> issues) {
-      final visible = issues.where(_shouldDisplayIssue).toList();
-      final deduped = _dedupeIssues(visible);
-
-      deduped.sort((a, b) {
-        int levelRank(String level) {
-          switch (level) {
-            case 'blocking':
-              return 0;
-            case 'error':
-              return 1;
-            case 'warning':
-              return 2;
-            default:
-              return 99;
-          }
-        }
-
-        final lr = levelRank(a.level).compareTo(levelRank(b.level));
-        if (lr != 0) return lr;
-
-        final rr = (a.reportName ?? '').compareTo(b.reportName ?? '');
-        if (rr != 0) return rr;
-
-        return a.issueMessage.compareTo(b.issueMessage);
-      });
-
-      return deduped;
-    }
   bool _loading = true;
-  bool _finalizing = false;
+  bool _generatingReport = false;
   String? _error;
 
   CloseoutDashboard? _dashboard;
-  List<ValidationIssue> _validationIssues = const [];
 
-    static const Set<String> _exhibitorReportKeys = {
+  static const Set<String> _exhibitorReportKeys = {
     'exhibitor_report',
     'legs',
   };
@@ -154,51 +68,84 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     'arba_report',
   };
 
-  List<ReportArtifactSummary> _reportsFor(Set<String> keys) {
-    final reports = _dashboard?.reports ?? const <ReportArtifactSummary>[];
-    return reports.where((r) => keys.contains(r.reportName)).toList()
-      ..sort((a, b) => _friendlyReportName(a.reportName)
-          .compareTo(_friendlyReportName(b.reportName)));
-  }
-
-  List<ReportArtifactSummary> _otherReports() {
-    final reports = _dashboard?.reports ?? const <ReportArtifactSummary>[];
-    return reports.where((r) {
-      return !_exhibitorReportKeys.contains(r.reportName) &&
-          !_clubReportKeys.contains(r.reportName) &&
-          !_arbaReportKeys.contains(r.reportName);
-    }).toList()
-      ..sort((a, b) => _friendlyReportName(a.reportName)
-          .compareTo(_friendlyReportName(b.reportName)));
-  }
-
-  bool _allGenerated(List<ReportArtifactSummary> reports) {
-    if (reports.isEmpty) return false;
-    return reports.every((r) => r.artifactStatus == 'generated');
-  }
-
-  Future<void> _sendExhibitorReports() async {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Send Exhibitor Reports coming next.')),
-    );
-  }
-
-  Future<void> _sendClubReports() async {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Send Club Reports coming next.')),
-    );
-  }
-
-  Future<void> _sendArbaReports() async {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Send ARBA Reports coming next.')),
-    );
-  }
+  static const List<String> _reportDisplayOrder = [
+    'arba_report',
+    'exhibitor_report',
+    'legs',
+    'newsletter_show_report',
+    'exh_total_points',
+    'exh_by_breed',
+    'details_by_breed',
+    'fur_points',
+    'cavy_points',
+    'commercial_points',
+    'judge_report',
+    'finalized_show_report',
+    'show_statistics',
+    'overall_standings',
+    'group_standings',
+    'variety_standings',
+    'class_standings',
+    'points_report_csv',
+    'control_sheet',
+    'checkin_sheet',
+    'commercial_class_points',
+    'newsletter',
+  ];
 
   @override
   void initState() {
     super.initState();
     unawaited(_loadData());
+  }
+
+  @override
+  void dispose() {
+    _secretaryNameController.dispose();
+    _secretaryAddressController.dispose();
+    _secretaryEmailController.dispose();
+    _secretaryPhoneController.dispose();
+    _superintendentController.dispose();
+    _superintendentNumberController.dispose();
+    _sweepstakesClubController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadArbaDetails() async {
+    final row = await supabase
+        .from('show_arba_report_details')
+        .select('''
+          secretary_name,
+          secretary_address,
+          secretary_email,
+          secretary_phone,
+          superintendent_name,
+          superintendent_arba_number,
+          sweepstakes_issue,
+          sweepstakes_club,
+          official_protest,
+          arba_report_filed
+        ''')
+        .eq('show_id', widget.showId)
+        .maybeSingle();
+
+    if (row == null) return;
+
+    _secretaryNameController.text = (row['secretary_name'] ?? '').toString();
+    _secretaryAddressController.text =
+        (row['secretary_address'] ?? '').toString();
+    _secretaryEmailController.text = (row['secretary_email'] ?? '').toString();
+    _secretaryPhoneController.text = (row['secretary_phone'] ?? '').toString();
+    _superintendentController.text =
+        (row['superintendent_name'] ?? '').toString();
+    _superintendentNumberController.text =
+        (row['superintendent_arba_number'] ?? '').toString();
+
+    _sweepstakesIssue = row['sweepstakes_issue'] == true;
+    _sweepstakesClubController.text =
+        (row['sweepstakes_club'] ?? '').toString();
+    _officialProtest = row['official_protest'] == true;
+    _arbaReportFiled = _officialProtest && row['arba_report_filed'] == true;
   }
 
   Future<void> _loadData() async {
@@ -213,32 +160,17 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         params: {'p_show_id': widget.showId},
       );
 
-      final issuesResp = await supabase.rpc(
-        'get_show_validation_issues',
-        params: {'p_show_id': widget.showId},
-      );
-
       final dashboardJson = Map<String, dynamic>.from(dashboardResp as Map);
-      final issuesJson = List<Map<String, dynamic>>.from(
-        ((issuesResp as List?) ?? const [])
-            .map((e) => Map<String, dynamic>.from(e as Map)),
-      );
-
       final dashboard = CloseoutDashboard.fromJson(dashboardJson);
-      final allIssues = issuesJson.map(ValidationIssue.fromJson).toList();
 
-      final latestRunId = dashboard.latestFinalize.id;
-      final latestRunIssues = latestRunId == null || latestRunId.isEmpty
-          ? allIssues
-          : allIssues.where((i) => i.finalizeRunId == latestRunId).toList();
+      await _loadArbaDetails();
 
-      final cleanedIssues = _cleanIssues(latestRunIssues);
-
+      if (!mounted) return;
       setState(() {
         _dashboard = dashboard;
-        _validationIssues = cleanedIssues;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = e.toString();
       });
@@ -251,289 +183,225 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     }
   }
 
-  Future<void> _runFinalize() async {
-    setState(() {
-      _finalizing = true;
-      _error = null;
-    });
-
+  Future<void> _saveArbaDetails() async {
     try {
-      final userId = supabase.auth.currentUser?.id;
-      if (userId == null) {
-        throw Exception('You must be signed in to finalize a show.');
-      }
+      await supabase.from('show_arba_report_details').upsert({
+        'show_id': widget.showId,
+        'secretary_name': _secretaryNameController.text.trim(),
+        'secretary_address': _secretaryAddressController.text.trim(),
+        'secretary_email': _secretaryEmailController.text.trim(),
+        'secretary_phone': _secretaryPhoneController.text.trim(),
+        'superintendent_name': _superintendentController.text.trim(),
+        'superintendent_arba_number':
+            _superintendentNumberController.text.trim(),
+        'sweepstakes_issue': _sweepstakesIssue,
+        'sweepstakes_club': _sweepstakesIssue
+            ? _sweepstakesClubController.text.trim()
+            : null,
+        'official_protest': _officialProtest,
+        'arba_report_filed': _officialProtest ? _arbaReportFiled : null,
+      });
 
-      await supabase.rpc(
-        'run_show_finalize_pipeline',
-        params: {
-          'p_show_id': widget.showId,
-          'p_triggered_by_user_id': userId,
-        },
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ARBA closeout details saved.')),
       );
 
-      await _drainFinalizeQueue();
+      await _loadData();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to save ARBA details: $e')),
+      );
+    }
+  }
+
+  Future<void> _generateReportByName(String reportName) async {
+    try {
+      setState(() {
+        _generatingReport = true;
+        _error = null;
+      });
+
+      // Save latest ARBA form data before generating any report.
+      await _saveArbaDetails();
+
+      final repository = CloseoutRepository(supabase);
+      final arbaLoader = ArbaReportLoader(repository);
+      final arbaBuilder = ArbaReportPdfBuilder();
+
+      final registry = ReportRegistry(
+        arbaLoader: arbaLoader,
+        arbaBuilder: arbaBuilder,
+      );
+
+      final engine = ReportEngine(registry);
+      final uploadService = ReportUploadService(supabase);
+
+      final runner = CloseoutRunner(
+        engine: engine,
+        uploadService: uploadService,
+      );
+
+      final artifact = (_dashboard?.reports ?? const <ReportArtifactSummary>[])
+          .where((r) => r.reportName == reportName)
+          .cast<ReportArtifactSummary?>()
+          .firstWhere(
+            (r) => r != null,
+            orElse: () => null,
+          );
+
+      await runner.generateSingleReport(
+        showId: widget.showId,
+        finalizeRunId: _dashboard?.latestFinalize.id ?? 'manual-run',
+        reportName: reportName,
+        artifactId: artifact?.id ?? '${reportName}_manual',
+      );
+
       await _loadData();
 
       if (!mounted) return;
-      _showFinalizeSummary();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${_friendlyReportName(reportName)} generated.'),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _error = e.toString();
-      });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Finalize failed: $e')),
+        SnackBar(content: Text('Failed to generate report: $e')),
       );
     } finally {
       if (mounted) {
         setState(() {
-          _finalizing = false;
+          _generatingReport = false;
         });
       }
     }
   }
 
-    Future<void> _drainFinalizeQueue() async {
-      const maxAttempts = 60;
+  Future<void> _downloadReportByName(String reportName) async {
+    try {
+      final reports = _dashboard?.reports ?? const <ReportArtifactSummary>[];
 
-      final session = supabase.auth.currentSession;
-      final accessToken = session?.accessToken;
+      final matches = reports
+          .where((r) =>
+              r.reportName == reportName &&
+              r.artifactStatus == 'generated' &&
+              (r.storageBucket?.isNotEmpty == true) &&
+              (r.storagePath?.isNotEmpty == true))
+          .toList()
+        ..sort((a, b) {
+          final aDt = DateTime.tryParse(a.generatedAt ?? '') ??
+              DateTime.fromMillisecondsSinceEpoch(0);
+          final bDt = DateTime.tryParse(b.generatedAt ?? '') ??
+              DateTime.fromMillisecondsSinceEpoch(0);
+          return bDt.compareTo(aDt);
+        });
 
-      if (accessToken == null || accessToken.isEmpty) {
-        throw Exception('Your session has expired. Please sign in again.');
-      }
-
-      for (var i = 0; i < maxAttempts; i++) {
-        final queued = await supabase
-            .from('show_task_queue')
-            .select('id, task_type, task_status')
-            .eq('show_id', widget.showId)
-            .eq('task_type', 'render_report')
-            .inFilter('task_status', ['queued', 'claimed']);
-
-        final rows = (queued as List).cast<Map<String, dynamic>>();
-        if (rows.isEmpty) {
-          break;
-        }
-
-        final resp = await supabase.functions.invoke(
-          'process-show-task',
-          headers: {
-            'Authorization': 'Bearer $accessToken',
-          },
-          body: {
-            'show_id': widget.showId,
-          },
+      if (matches.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                Text('No generated ${_friendlyReportName(reportName)} found.'),
+          ),
         );
-
-        if (resp.status >= 400) {
-          throw Exception('Worker invocation failed: ${resp.status} ${resp.data}');
-        }
-
-        await Future<void>.delayed(const Duration(milliseconds: 500));
+        return;
       }
+
+      final newest = matches.first;
+
+      final signedUrl = await supabase.storage
+          .from(newest.storageBucket!)
+          .createSignedUrl(newest.storagePath!, 60 * 5);
+
+      await launchUrlString(
+        signedUrl,
+        mode: LaunchMode.externalApplication,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Download failed: $e')),
+      );
     }
+  }
 
-    Future<void> _openIssueFix(ValidationIssue issue) async {
-      switch (issue.issueCode) {
-        case 'no_judges_assigned':
-          // Most useful place for this warning is Results Entry,
-          // because that's where class-level judged_by_show_judge_id gets assigned.
-          await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => AdminResultsEntryScreen(
-                showId: widget.showId,
-                showName: widget.showName,
-              ),
-            ),
-          );
-          await _loadData();
-          return;
-
-        case 'missing_secretary_email':
-          await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => EditShowSettingsScreen(showId: widget.showId),
-            ),
-          );
-          await _loadData();
-          return;
-
-        case 'points_skipped_entry':
-          await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => AdminResultsEntryScreen(
-                showId: widget.showId,
-                showName: widget.showName,
-              ),
-            ),
-          );
-          await _loadData();
-          return;
-
-        default:
-          _showIssueDetails(issue);
-          return;
-      }
-    }
-
-  void _showIssueDetails(ValidationIssue issue) {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (_) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  issue.issueMessage,
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _IssueLevelChip(level: issue.level),
-                    Chip(label: Text(_friendlyReportName(issue.reportName))),
-                    Chip(label: Text(issue.issueCode)),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                if (issue.entryId != null && issue.entryId!.isNotEmpty)
-                  Text('Entry ID: ${issue.entryId}'),
-                if (issue.rawPlacement != null && issue.rawPlacement!.isNotEmpty)
-                  Text('Raw placement: ${issue.rawPlacement}'),
-                if (issue.classKey != null && issue.classKey!.isNotEmpty)
-                  Text('Class: ${issue.classKey}'),
-                if (issue.exhibitorId != null && issue.exhibitorId!.isNotEmpty)
-                  Text('Exhibitor ID: ${issue.exhibitorId}'),
-                if (issue.animalId != null && issue.animalId!.isNotEmpty)
-                  Text('Animal ID: ${issue.animalId}'),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _openIssueFix(issue);
-                    },
-                    icon: const Icon(Icons.build_circle_outlined),
-                    label: const Text('Fix Issue'),
-                  ),
-                ),
-              ],
-            ),
-          ),
+  Future<void> _emailReportByName(String reportName) async {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Email ${_friendlyReportName(reportName)} coming next.',
         ),
       ),
     );
   }
 
-  void _showAllIssuesSheet() {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (_) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: Column(
-            children: [
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'All Validation Issues',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  _validationIssues.isEmpty
-                      ? 'No validation issues found.'
-                      : '${_validationIssues.length} issue${_validationIssues.length == 1 ? '' : 's'} found.',
-                ),
-              ),
-              const SizedBox(height: 12),
-              Expanded(
-                child: _validationIssues.isEmpty
-                    ? const Align(
-                        alignment: Alignment.topLeft,
-                        child: Text('Everything looks good so far.'),
-                      )
-                    : ListView.separated(
-                        itemCount: _validationIssues.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemBuilder: (context, index) {
-                          final issue = _validationIssues[index];
-                          return _IssueTile(
-                            issue: issue,
-                            onTap: () {
-                              Navigator.pop(context);
-                              _openIssueFix(issue);
-                            },
-                            onFix: () {
-                              Navigator.pop(context);
-                              _openIssueFix(issue);
-                            },
-                          );
-                        },
-                      ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  List<ReportArtifactSummary> _reportsForGroup(String groupKey) {
+    final reports = _dashboard?.reports ?? const <ReportArtifactSummary>[];
+
+    final filtered = switch (groupKey) {
+      'arba' => reports.where((r) => _arbaReportKeys.contains(r.reportName)),
+      'exhibitor' =>
+        reports.where((r) => _exhibitorReportKeys.contains(r.reportName)),
+      'club' => reports.where((r) => _clubReportKeys.contains(r.reportName)),
+      'other' => reports.where((r) {
+          return !_arbaReportKeys.contains(r.reportName) &&
+              !_exhibitorReportKeys.contains(r.reportName) &&
+              !_clubReportKeys.contains(r.reportName);
+        }),
+      _ => reports,
+    }.toList();
+
+    filtered.sort((a, b) {
+      final aIndex = _reportDisplayOrder.indexOf(a.reportName);
+      final bIndex = _reportDisplayOrder.indexOf(b.reportName);
+
+      if (aIndex == -1 && bIndex == -1) {
+        return _friendlyReportName(a.reportName)
+            .compareTo(_friendlyReportName(b.reportName));
+      }
+      if (aIndex == -1) return 1;
+      if (bIndex == -1) return -1;
+      return aIndex.compareTo(bIndex);
+    });
+
+    return filtered;
   }
 
-  void _showFinalizeSummary() {
-    final blocking =
-        _validationIssues.where((i) => i.level == 'blocking').length;
-    final errors = _validationIssues.where((i) => i.level == 'error').length;
-    final warnings =
-        _validationIssues.where((i) => i.level == 'warning').length;
+  List<String> _reportNamesForGroup(String groupKey) {
+    final reports = _reportsForGroup(groupKey);
+    final names = reports.map((r) => r.reportName).toSet().toList();
 
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Finalize Complete'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Blocking issues: $blocking'),
-            Text('Errors: $errors'),
-            Text('Warnings: $warnings'),
-            const SizedBox(height: 12),
-            Text(_dashboard?.dashboard.closeout.lastFinalizeMessage ?? ''),
-          ],
-        ),
-        actions: [
-          if (_validationIssues.isNotEmpty)
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                _showAllIssuesSheet();
-              },
-              child: const Text('View Issues'),
-            ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
+    if (groupKey == 'arba') {
+      for (final name in _arbaReportKeys) {
+        if (!names.contains(name)) names.add(name);
+      }
+    } else if (groupKey == 'exhibitor') {
+      for (final name in _exhibitorReportKeys) {
+        if (!names.contains(name)) names.add(name);
+      }
+    } else if (groupKey == 'club') {
+      for (final name in _clubReportKeys) {
+        if (!names.contains(name)) names.add(name);
+      }
+    }
+
+    names.sort((a, b) {
+      final aIndex = _reportDisplayOrder.indexOf(a);
+      final bIndex = _reportDisplayOrder.indexOf(b);
+
+      if (aIndex == -1 && bIndex == -1) {
+        return _friendlyReportName(a).compareTo(_friendlyReportName(b));
+      }
+      if (aIndex == -1) return 1;
+      if (bIndex == -1) return -1;
+      return aIndex.compareTo(bIndex);
+    });
+
+    return names;
   }
 
   @override
@@ -553,499 +421,211 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           ? const Center(child: CircularProgressIndicator())
           : _error != null
               ? _ErrorView(message: _error!, onRetry: _loadData)
-              : RefreshIndicator(
-                  onRefresh: _loadData,
-                  child: ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      _CloseoutStatusCard(
-                        dashboard: _dashboard!,
-                        onFinalize: _finalizing ? null : _runFinalize,
-                        onProcessQueuedReports: _loading ? null : _processQueuedReports,
-                        finalizing: _finalizing,
+              : _dashboard == null
+                  ? const Center(child: Text('No closeout data found.'))
+                  : RefreshIndicator(
+                      onRefresh: _loadData,
+                      child: ListView(
+                        padding: const EdgeInsets.all(16),
+                        children: [
+                          _ArbaCloseoutCard(
+                            secretaryNameController: _secretaryNameController,
+                            secretaryAddressController:
+                                _secretaryAddressController,
+                            secretaryEmailController: _secretaryEmailController,
+                            secretaryPhoneController: _secretaryPhoneController,
+                            superintendentController: _superintendentController,
+                            superintendentNumberController:
+                                _superintendentNumberController,
+                            sweepstakesIssue: _sweepstakesIssue,
+                            sweepstakesClubController:
+                                _sweepstakesClubController,
+                            onSweepstakesChanged: (v) {
+                              setState(() {
+                                _sweepstakesIssue = v;
+                                if (!v) {
+                                  _sweepstakesClubController.clear();
+                                }
+                              });
+                            },
+                            onSweepstakesClubChanged: (_) {},
+                            officialProtest: _officialProtest,
+                            onOfficialProtestChanged: (v) {
+                              setState(() {
+                                _officialProtest = v;
+                                if (!v) {
+                                  _arbaReportFiled = false;
+                                }
+                              });
+                            },
+                            arbaReportFiled: _arbaReportFiled,
+                            onArbaReportFiledChanged: (v) {
+                              setState(() => _arbaReportFiled = v);
+                            },
+                            onSave: _saveArbaDetails,
+                          ),
+                          const SizedBox(height: 16),
+                          _ReportActionsCard(
+                            reports: _dashboard?.reports ??
+                                const <ReportArtifactSummary>[],
+                            groupedReportNames: {
+                              'arba': _reportNamesForGroup('arba'),
+                              'exhibitor': _reportNamesForGroup('exhibitor'),
+                              'club': _reportNamesForGroup('club'),
+                              'other': _reportNamesForGroup('other'),
+                            },
+                            onGenerate: _generateReportByName,
+                            onDownload: _downloadReportByName,
+                            onEmail: _emailReportByName,
+                            loading: _generatingReport,
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 16),
-                      _ValidationSummaryCard(
-                        issues: _validationIssues,
-                        onIssueTap: _openIssueFix,
-                        onViewAll: _validationIssues.isEmpty
-                            ? null
-                            : _showAllIssuesSheet,
-                      ),
-                      const SizedBox(height: 16),
-                      _DistributionAndReportsCard(
-                        exhibitorReports: _reportsFor(_exhibitorReportKeys),
-                        clubReports: _reportsFor(_clubReportKeys),
-                        arbaReports: _reportsFor(_arbaReportKeys),
-                        otherReports: _otherReports(),
-                        onSendExhibitor: _sendExhibitorReports,
-                        onSendClub: _sendClubReports,
-                        onSendArba: _sendArbaReports,
-                        canSendExhibitor: _allGenerated(_reportsFor(_exhibitorReportKeys)),
-                        canSendClub: _allGenerated(_reportsFor(_clubReportKeys)),
-                        canSendArba: _allGenerated(_reportsFor(_arbaReportKeys)),
-                      ),
-                    ],
-                  ),
-                ),
+                    ),
     );
   }
 }
 
-class _CloseoutStatusCard extends StatelessWidget {
-  final CloseoutDashboard dashboard;
-  final VoidCallback? onFinalize;
-  final VoidCallback? onProcessQueuedReports;
-  final bool finalizing;
+class _ArbaCloseoutCard extends StatelessWidget {
+  final TextEditingController secretaryNameController;
+  final TextEditingController secretaryAddressController;
+  final TextEditingController secretaryEmailController;
+  final TextEditingController secretaryPhoneController;
+  final TextEditingController superintendentController;
+  final TextEditingController superintendentNumberController;
+  final TextEditingController sweepstakesClubController;
 
-  const _CloseoutStatusCard({
-    required this.dashboard,
-    required this.onFinalize,
-    required this.onProcessQueuedReports,
-    required this.finalizing,
+  final bool sweepstakesIssue;
+  final ValueChanged<bool> onSweepstakesChanged;
+  final ValueChanged<String> onSweepstakesClubChanged;
+
+  final bool officialProtest;
+  final ValueChanged<bool> onOfficialProtestChanged;
+
+  final bool arbaReportFiled;
+  final ValueChanged<bool> onArbaReportFiledChanged;
+
+  final Future<void> Function() onSave;
+
+  const _ArbaCloseoutCard({
+    required this.secretaryNameController,
+    required this.secretaryAddressController,
+    required this.secretaryEmailController,
+    required this.secretaryPhoneController,
+    required this.superintendentController,
+    required this.superintendentNumberController,
+    required this.sweepstakesIssue,
+    required this.sweepstakesClubController,
+    required this.onSweepstakesChanged,
+    required this.onSweepstakesClubChanged,
+    required this.officialProtest,
+    required this.onOfficialProtestChanged,
+    required this.arbaReportFiled,
+    required this.onArbaReportFiledChanged,
+    required this.onSave,
   });
-
-  Color _statusColor(BuildContext context, String status) {
-    switch (status) {
-      case 'in_sync':
-        return Colors.green;
-      case 'warning':
-        return Colors.orange;
-      case 'error':
-        return Colors.red;
-      case 'dirty':
-        return Colors.amber.shade800;
-      case 'archived':
-        return Colors.deepPurple;
-      default:
-        return Theme.of(context).colorScheme.outline;
-    }
-  }
-
-  String _statusLabel(String status) {
-    switch (status) {
-      case 'in_sync':
-        return 'In Sync';
-      case 'warning':
-        return 'Warnings';
-      case 'error':
-        return 'Errors Found';
-      case 'dirty':
-        return 'Out of Sync';
-      case 'archived':
-        return 'Archived';
-      case 'in_progress':
-        return 'In Progress';
-      default:
-        return 'Not Ready';
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
-    final closeout = dashboard.dashboard.closeout;
-    final statusColor = _statusColor(context, closeout.syncStatus);
-
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Container(
-                  width: 12,
-                  height: 12,
-                  decoration: BoxDecoration(
-                    color: statusColor,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'Show Closeout Status',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const Spacer(),
-                Chip(
-                  label: Text(_statusLabel(closeout.syncStatus)),
-                  backgroundColor: statusColor.withOpacity(0.12),
-                  side: BorderSide(color: statusColor.withOpacity(0.35)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 16,
-              runSpacing: 12,
-              children: [
-                _StatTile(
-                  label: 'Results Version',
-                  value: '${dashboard.dashboard.resultsVersion}',
-                ),
-                _StatTile(
-                  label: 'Warnings',
-                  value: '${closeout.warningCount}',
-                ),
-                _StatTile(
-                  label: 'Errors',
-                  value: '${closeout.errorCount}',
-                ),
-                _StatTile(
-                  label: 'Blocking',
-                  value: '${closeout.blockingErrorCount}',
-                ),
-                _StatTile(
-                  label: 'Reports',
-                  value: '${closeout.reportsGeneratedCount}',
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text('Last message: ${closeout.lastFinalizeMessage ?? '-'}'),
-            const SizedBox(height: 6),
             Text(
-              'Results changed: ${_fmt(closeout.resultsLastChangedAt ?? dashboard.dashboard.resultsLastChangedAt)}',
+              'ARBA Final Closeout Confirmation',
+              style: Theme.of(context).textTheme.titleMedium,
             ),
-            Text('Finalized: ${_fmt(closeout.finalizedAt)}'),
-            Text('Points generated: ${_fmt(closeout.pointsGeneratedAt)}'),
-            Text('Reports generated: ${_fmt(closeout.reportsGeneratedAt)}'),
             const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: onFinalize,
-                    icon: finalizing
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.task_alt),
-                    label: Text(finalizing ? 'Finalizing…' : 'Finalize Show'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: statusColor,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                OutlinedButton.icon(
-                  onPressed: onProcessQueuedReports,
-                  icon: const Icon(Icons.sync),
-                  label: const Text('Process Queued Reports'),
-                ),
-              ],
+            TextField(
+              controller: secretaryNameController,
+              decoration: const InputDecoration(
+                labelText: 'Show Secretary Name',
+              ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ValidationSummaryCard extends StatelessWidget {
-  final List<ValidationIssue> issues;
-  final Future<void> Function(ValidationIssue issue) onIssueTap;
-  final VoidCallback? onViewAll;
-
-  const _ValidationSummaryCard({
-    required this.issues,
-    required this.onIssueTap,
-    required this.onViewAll,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final blocking = issues.where((e) => e.level == 'blocking').toList();
-    final errors = issues.where((e) => e.level == 'error').toList();
-    final warnings = issues.where((e) => e.level == 'warning').toList();
-
-    final previewIssues = issues.take(8).toList();
-    final hasMore = issues.length > previewIssues.length;
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+            const SizedBox(height: 12),
+            TextField(
+              controller: secretaryAddressController,
+              decoration: const InputDecoration(
+                labelText: 'Secretary Address',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: secretaryEmailController,
+              decoration: const InputDecoration(
+                labelText: 'Secretary Email',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: secretaryPhoneController,
+              decoration: const InputDecoration(
+                labelText: 'Secretary Phone',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: superintendentController,
+              decoration: const InputDecoration(
+                labelText: 'Superintendent Name',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: superintendentNumberController,
+              decoration: const InputDecoration(
+                labelText: 'Superintendent ARBA Number',
+              ),
+            ),
+            const SizedBox(height: 20),
             Text(
-              'Validation Issues',
-              style: Theme.of(context).textTheme.titleMedium,
+              'ANY TROUBLE RECEIVING SWEEPSTAKES SANCTIONS FROM NATIONAL SPECIALTY CLUBS?',
+              style: Theme.of(context).textTheme.labelLarge,
             ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                _CountChip(
-                  label: 'Blocking',
-                  count: blocking.length,
-                  color: Colors.red,
-                ),
-                _CountChip(
-                  label: 'Errors',
-                  count: errors.length,
-                  color: Colors.deepOrange,
-                ),
-                _CountChip(
-                  label: 'Warnings',
-                  count: warnings.length,
-                  color: Colors.orange,
-                ),
-              ],
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(sweepstakesIssue ? 'Yes' : 'No'),
+              value: sweepstakesIssue,
+              onChanged: onSweepstakesChanged,
             ),
-            const SizedBox(height: 12),
-            if (issues.isEmpty)
-              const Text('No validation issues found.')
-            else ...[
-              ...previewIssues.map(
-                (issue) => _IssueTile(
-                  issue: issue,
-                  onTap: () => onIssueTap(issue),
-                  onFix: () => onIssueTap(issue),
+            if (sweepstakesIssue)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: TextField(
+                  controller: sweepstakesClubController,
+                  decoration: const InputDecoration(
+                    labelText: 'Which club(s)?',
+                  ),
+                  onChanged: onSweepstakesClubChanged,
                 ),
               ),
-              if (hasMore || onViewAll != null) ...[
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                    onPressed: onViewAll,
-                    icon: const Icon(Icons.list_alt),
-                    label: Text(
-                      hasMore
-                          ? 'View all ${issues.length} issues'
-                          : 'View all issues',
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _IssueTile extends StatelessWidget {
-  final ValidationIssue issue;
-  final VoidCallback onTap;
-  final VoidCallback onFix;
-
-  const _IssueTile({
-    required this.issue,
-    required this.onTap,
-    required this.onFix,
-  });
-
-  IconData _iconForLevel(String level) {
-    switch (level) {
-      case 'blocking':
-        return Icons.block;
-      case 'error':
-        return Icons.error_outline;
-      default:
-        return Icons.warning_amber_rounded;
-    }
-  }
-
-  Color _colorForLevel(String level) {
-    switch (level) {
-      case 'blocking':
-        return Colors.red;
-      case 'error':
-        return Colors.deepOrange;
-      default:
-        return Colors.orange;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final color = _colorForLevel(issue.level);
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(_iconForLevel(issue.level), color: color),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    issue.issueMessage,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _IssueLevelChip(level: issue.level),
-                      Chip(
-                        visualDensity: VisualDensity.compact,
-                        label: Text(_friendlyReportName(issue.reportName)),
-                      ),
-                      Chip(
-                        visualDensity: VisualDensity.compact,
-                        label: Text(issue.issueCode),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            FilledButton.tonalIcon(
-              onPressed: onFix,
-              icon: const Icon(Icons.build_circle_outlined),
-              label: const Text('Fix'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _IssueLevelChip extends StatelessWidget {
-  final String level;
-
-  const _IssueLevelChip({required this.level});
-
-  Color _color() {
-    switch (level) {
-      case 'blocking':
-        return Colors.red;
-      case 'error':
-        return Colors.deepOrange;
-      default:
-        return Colors.orange;
-    }
-  }
-
-  String _label() {
-    switch (level) {
-      case 'blocking':
-        return 'Blocking';
-      case 'error':
-        return 'Error';
-      default:
-        return 'Warning';
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final color = _color();
-    return Chip(
-      visualDensity: VisualDensity.compact,
-      label: Text(_label()),
-      backgroundColor: color.withOpacity(0.12),
-      side: BorderSide(color: color.withOpacity(0.3)),
-    );
-  }
-}
-
-class _GeneratedReportsCard extends StatelessWidget {
-  final List<ReportArtifactSummary> reports;
-
-  const _GeneratedReportsCard({required this.reports});
-
-  IconData _iconForStatus(String status) {
-    switch (status) {
-      case 'generated':
-        return Icons.check_circle;
-      case 'warning':
-        return Icons.warning_amber_rounded;
-      case 'failed':
-        return Icons.error;
-      default:
-        return Icons.schedule;
-    }
-  }
-
-  Color? _colorForStatus(String status) {
-    switch (status) {
-      case 'generated':
-        return Colors.green;
-      case 'warning':
-        return Colors.orange;
-      case 'failed':
-        return Colors.red;
-      default:
-        return null;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final sortedReports = [...reports]
-      ..sort((a, b) => _friendlyReportName(a.reportName)
-          .compareTo(_friendlyReportName(b.reportName)));
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+            const SizedBox(height: 8),
             Text(
-              'Generated Reports',
-              style: Theme.of(context).textTheme.titleMedium,
+              'Was there an official protest filed at this show?',
+              style: Theme.of(context).textTheme.labelLarge,
             ),
-            const SizedBox(height: 12),
-            if (sortedReports.isEmpty)
-              const Text('No reports found.')
-            else
-              ...sortedReports.map((report) {
-                final hasFile = (report.storageBucket?.isNotEmpty == true) &&
-                    (report.storagePath?.isNotEmpty == true);
-
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(
-                    _iconForStatus(report.artifactStatus),
-                    color: _colorForStatus(report.artifactStatus),
-                  ),
-                  title: Text(_friendlyReportName(report.reportName)),
-                  subtitle: Text(report.artifactStatus),
-                  trailing: hasFile
-                      ? TextButton.icon(
-                          onPressed: () async {
-                            try {
-                              final signedUrl = await supabase.storage
-                                  .from(report.storageBucket!)
-                                  .createSignedUrl(report.storagePath!, 60 * 5);
-
-                              await launchUrlString(
-                                signedUrl,
-                                mode: LaunchMode.externalApplication,
-                              );
-                            } catch (e) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Download failed: $e')),
-                              );
-                            }
-                          },
-                          icon: const Icon(Icons.download),
-                          label: const Text('Open'),
-                        )
-                      : Text(_fmt(report.generatedAt)),
-                );
-              }),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(officialProtest ? 'Yes' : 'No'),
+              value: officialProtest,
+              onChanged: onOfficialProtestChanged,
+            ),
+            if (officialProtest)
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(arbaReportFiled ? 'Yes' : 'No'),
+                subtitle: const Text('Has a report been filed with ARBA?'),
+                value: arbaReportFiled,
+                onChanged: onArbaReportFiledChanged,
+              ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: onSave,
+              icon: const Icon(Icons.save),
+              label: const Text('Save ARBA Closeout Info'),
+            ),
           ],
         ),
       ),
@@ -1053,272 +633,227 @@ class _GeneratedReportsCard extends StatelessWidget {
   }
 }
 
-class _DistributionAndReportsCard extends StatelessWidget {
-  final List<ReportArtifactSummary> exhibitorReports;
-  final List<ReportArtifactSummary> clubReports;
-  final List<ReportArtifactSummary> arbaReports;
-  final List<ReportArtifactSummary> otherReports;
-  final Future<void> Function() onSendExhibitor;
-  final Future<void> Function() onSendClub;
-  final Future<void> Function() onSendArba;
-  final bool canSendExhibitor;
-  final bool canSendClub;
-  final bool canSendArba;
-
-  const _DistributionAndReportsCard({
-    required this.exhibitorReports,
-    required this.clubReports,
-    required this.arbaReports,
-    required this.otherReports,
-    required this.onSendExhibitor,
-    required this.onSendClub,
-    required this.onSendArba,
-    required this.canSendExhibitor,
-    required this.canSendClub,
-    required this.canSendArba,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 2,
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Reports & Distribution',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 12),
-              const TabBar(
-                tabs: [
-                  Tab(text: 'Distribution'),
-                  Tab(text: 'Other Reports'),
-                ],
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 520,
-                child: TabBarView(
-                  children: [
-                    ListView(
-                      children: [
-                        _ReportSectionTile(
-                          title: 'Exhibitor Reports',
-                          subtitle: 'Final exhibitor report and legs.',
-                          reports: exhibitorReports,
-                          buttonLabel: 'Send Exhibitor Reports',
-                          onPressed: canSendExhibitor ? onSendExhibitor : null,
-                        ),
-                        _ReportSectionTile(
-                          title: 'Club Reports',
-                          subtitle: 'Breed/state club and points-related reports.',
-                          reports: clubReports,
-                          buttonLabel: 'Send Club Reports',
-                          onPressed: canSendClub ? onSendClub : null,
-                        ),
-                        _ReportSectionTile(
-                          title: 'ARBA Reports',
-                          subtitle: 'Official ARBA report delivery.',
-                          reports: arbaReports,
-                          buttonLabel: 'Send ARBA Reports',
-                          onPressed: canSendArba ? onSendArba : null,
-                        ),
-                      ],
-                    ),
-                    ListView(
-                      children: [
-                        _ReportSectionTile(
-                          title: 'Other Generated Reports',
-                          subtitle: 'Additional generated reports available for download.',
-                          reports: otherReports,
-                          buttonLabel: null,
-                          onPressed: null,
-                          initiallyExpanded: true,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ReportSectionTile extends StatelessWidget {
-  final String title;
-  final String subtitle;
+class _ReportActionsCard extends StatefulWidget {
   final List<ReportArtifactSummary> reports;
-  final String? buttonLabel;
-  final Future<void> Function()? onPressed;
-  final bool initiallyExpanded;
+  final Map<String, List<String>> groupedReportNames;
+  final Future<void> Function(String reportName) onGenerate;
+  final Future<void> Function(String reportName) onDownload;
+  final Future<void> Function(String reportName) onEmail;
+  final bool loading;
 
-  const _ReportSectionTile({
-    required this.title,
-    required this.subtitle,
+  const _ReportActionsCard({
     required this.reports,
-    required this.buttonLabel,
-    required this.onPressed,
-    this.initiallyExpanded = false,
+    required this.groupedReportNames,
+    required this.onGenerate,
+    required this.onDownload,
+    required this.onEmail,
+    required this.loading,
+  });
+
+  @override
+  State<_ReportActionsCard> createState() => _ReportActionsCardState();
+}
+
+class _ReportActionsCardState extends State<_ReportActionsCard> {
+  String _selectedGroup = 'arba';
+  String? _selectedReportName = 'arba_report';
+
+  static const Map<String, String> _groupLabels = {
+    'arba': 'ARBA Reports',
+    'exhibitor': 'Exhibitor Reports',
+    'club': 'Club Reports',
+    'other': 'Other Reports',
+  };
+
+  List<String> get _currentReports =>
+      widget.groupedReportNames[_selectedGroup] ?? const [];
+
+  ReportArtifactSummary? get _selectedArtifact {
+    final reportName = _selectedReportName;
+    if (reportName == null) return null;
+
+    final matches = widget.reports
+        .where((r) => r.reportName == reportName)
+        .toList()
+      ..sort((a, b) {
+        final aDt = DateTime.tryParse(a.generatedAt ?? '') ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+        final bDt = DateTime.tryParse(b.generatedAt ?? '') ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+        return bDt.compareTo(aDt);
+      });
+
+    if (matches.isEmpty) return null;
+    return matches.first;
+  }
+
+  bool get _canDownload {
+    final artifact = _selectedArtifact;
+    return artifact != null &&
+        artifact.artifactStatus == 'generated' &&
+        (artifact.storageBucket?.isNotEmpty == true) &&
+        (artifact.storagePath?.isNotEmpty == true);
+  }
+
+  @override
+  void didUpdateWidget(covariant _ReportActionsCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    final reports = _currentReports;
+    if (reports.isEmpty) {
+      _selectedReportName = null;
+      return;
+    }
+
+    if (_selectedReportName == null || !reports.contains(_selectedReportName)) {
+      _selectedReportName = reports.first;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final artifact = _selectedArtifact;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Reports & Distribution',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              initialValue: _selectedGroup,
+              decoration: const InputDecoration(
+                labelText: 'Report Group',
+                border: OutlineInputBorder(),
+              ),
+              items: _groupLabels.entries
+                  .map(
+                    (entry) => DropdownMenuItem<String>(
+                      value: entry.key,
+                      child: Text(entry.value),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value == null) return;
+
+                final reports = widget.groupedReportNames[value] ?? const [];
+
+                setState(() {
+                  _selectedGroup = value;
+                  _selectedReportName = reports.isEmpty ? null : reports.first;
+                });
+              },
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              initialValue: _currentReports.contains(_selectedReportName)
+                  ? _selectedReportName
+                  : (_currentReports.isNotEmpty ? _currentReports.first : null),
+              decoration: const InputDecoration(
+                labelText: 'Report',
+                border: OutlineInputBorder(),
+              ),
+              items: _currentReports
+                  .map(
+                    (reportName) => DropdownMenuItem<String>(
+                      value: reportName,
+                      child: Text(_friendlyReportName(reportName)),
+                    ),
+                  )
+                  .toList(),
+              onChanged: _currentReports.isEmpty
+                  ? null
+                  : (value) {
+                      setState(() {
+                        _selectedReportName = value;
+                      });
+                    },
+            ),
+            const SizedBox(height: 16),
+            _ReportInfoTile(
+              reportName: _selectedReportName == null
+                  ? '-'
+                  : _friendlyReportName(_selectedReportName),
+              status: artifact?.artifactStatus ?? 'not_generated',
+              generatedAt: artifact?.generatedAt,
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton.icon(
+                  onPressed: widget.loading || _selectedReportName == null
+                      ? null
+                      : () => widget.onGenerate(_selectedReportName!),
+                  icon: widget.loading
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.picture_as_pdf),
+                  label: Text(widget.loading ? 'Generating…' : 'Generate'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _canDownload && _selectedReportName != null
+                      ? () => widget.onDownload(_selectedReportName!)
+                      : null,
+                  icon: const Icon(Icons.download),
+                  label: const Text('Download'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _canDownload && _selectedReportName != null
+                      ? () => widget.onEmail(_selectedReportName!)
+                      : null,
+                  icon: const Icon(Icons.email_outlined),
+                  label: const Text('Email'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ReportInfoTile extends StatelessWidget {
+  final String reportName;
+  final String status;
+  final String? generatedAt;
+
+  const _ReportInfoTile({
+    required this.reportName,
+    required this.status,
+    required this.generatedAt,
   });
 
   @override
   Widget build(BuildContext context) {
-    return ExpansionTile(
-      initiallyExpanded: initiallyExpanded,
-      tilePadding: EdgeInsets.zero,
-      childrenPadding: const EdgeInsets.only(bottom: 12),
-      title: Text(title),
-      subtitle: Text(subtitle),
-      children: [
-        if (reports.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text('No reports in this section.'),
-            ),
-          )
-        else
-          ...reports.map((report) => _ReportRow(report: report)),
-        if (buttonLabel != null) ...[
-          const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: FilledButton.icon(
-              onPressed: onPressed,
-              icon: const Icon(Icons.send),
-              label: Text(buttonLabel!),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-class _ReportRow extends StatelessWidget {
-  final ReportArtifactSummary report;
-
-  const _ReportRow({required this.report});
-
-  IconData _iconForStatus(String status) {
-    switch (status) {
-      case 'generated':
-        return Icons.check_circle;
-      case 'warning':
-        return Icons.warning_amber_rounded;
-      case 'failed':
-        return Icons.error;
-      default:
-        return Icons.schedule;
-    }
-  }
-
-  Color? _colorForStatus(String status) {
-    switch (status) {
-      case 'generated':
-        return Colors.green;
-      case 'warning':
-        return Colors.orange;
-      case 'failed':
-        return Colors.red;
-      default:
-        return null;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final hasFile = (report.storageBucket?.isNotEmpty == true) &&
-        (report.storagePath?.isNotEmpty == true);
-
-    return ListTile(
-      dense: true,
-      contentPadding: EdgeInsets.zero,
-      leading: Icon(
-        _iconForStatus(report.artifactStatus),
-        color: _colorForStatus(report.artifactStatus),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: Theme.of(context).dividerColor),
+        borderRadius: BorderRadius.circular(12),
       ),
-      title: Text(_friendlyReportName(report.reportName)),
-      subtitle: Text(
-        report.artifactStatus == 'generated'
-            ? 'Generated ${_fmt(report.generatedAt)}'
-            : report.artifactStatus,
-      ),
-      trailing: hasFile
-          ? TextButton.icon(
-              onPressed: () async {
-                try {
-                  final signedUrl = await supabase.storage
-                      .from(report.storageBucket!)
-                      .createSignedUrl(report.storagePath!, 60 * 5);
-
-                  await launchUrlString(
-                    signedUrl,
-                    mode: LaunchMode.externalApplication,
-                  );
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Download failed: $e')),
-                  );
-                }
-              },
-              icon: const Icon(Icons.download),
-              label: const Text('Download'),
-            )
-          : null,
-    );
-  }
-}
-
-
-class _StatTile extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _StatTile({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 120,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: Theme.of(context).textTheme.labelMedium),
+          Text(reportName, style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 6),
+          Text('Status: ${_friendlyStatus(status)}'),
           const SizedBox(height: 4),
-          Text(value, style: Theme.of(context).textTheme.titleMedium),
+          Text('Last generated: ${_fmt(generatedAt)}'),
         ],
       ),
-    );
-  }
-}
-
-class _CountChip extends StatelessWidget {
-  final String label;
-  final int count;
-  final Color color;
-
-  const _CountChip({
-    required this.label,
-    required this.count,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Chip(
-      label: Text('$label: $count'),
-      backgroundColor: color.withOpacity(0.12),
-      side: BorderSide(color: color.withOpacity(0.3)),
     );
   }
 }
@@ -1327,7 +862,10 @@ class _ErrorView extends StatelessWidget {
   final String message;
   final Future<void> Function() onRetry;
 
-  const _ErrorView({required this.message, required this.onRetry});
+  const _ErrorView({
+    required this.message,
+    required this.onRetry,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1356,11 +894,25 @@ String _fmt(String? value) {
   if (value == null || value.isEmpty) return '-';
   try {
     final dt = DateTime.parse(value).toLocal();
-    final two = (int n) => n.toString().padLeft(2, '0');
-    return '${dt.year}-${two(dt.month)}-${two(dt.day)} '
-        '${two(dt.hour)}:${two(dt.minute)}';
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${dt.year}-${two(dt.month)}-${two(dt.day)} ${two(dt.hour)}:${two(dt.minute)}';
   } catch (_) {
     return value;
+  }
+}
+
+String _friendlyStatus(String status) {
+  switch (status) {
+    case 'generated':
+      return 'Generated';
+    case 'queued':
+      return 'Queued';
+    case 'failed':
+      return 'Failed';
+    case 'warning':
+      return 'Warning';
+    default:
+      return status.isEmpty ? '-' : status;
   }
 }
 
@@ -1398,7 +950,7 @@ String _friendlyReportName(String? key) {
       return 'Control Sheet';
     case 'checkin_sheet':
       return 'Check-In Sheet';
-        case 'exhibitor_report':
+    case 'exhibitor_report':
       return 'Exhibitor Report';
     case 'legs':
       return 'Legs';
@@ -1415,7 +967,9 @@ String _friendlyReportName(String? key) {
     default:
       return key
           .split('_')
-          .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
+          .map(
+            (w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}',
+          )
           .join(' ');
   }
 }
@@ -1641,55 +1195,6 @@ class ArchiveSummary {
       id: (json['id'] ?? '') as String,
       archiveVersion: ((json['archive_version'] ?? 0) as num).toInt(),
       archiveStatus: (json['archive_status'] ?? '') as String,
-    );
-  }
-}
-
-class ValidationIssue {
-  final String id;
-  final String level;
-  final String issueCode;
-  final String issueMessage;
-  final String? reportName;
-  final String? finalizeRunId;
-  final Map<String, dynamic> issueDetails;
-  final String? exhibitorId;
-  final String? animalId;
-  final String? classKey;
-
-  ValidationIssue({
-    required this.id,
-    required this.level,
-    required this.issueCode,
-    required this.issueMessage,
-    required this.reportName,
-    required this.finalizeRunId,
-    required this.issueDetails,
-    required this.exhibitorId,
-    required this.animalId,
-    required this.classKey,
-  });
-
-  String? get entryId => issueDetails['entry_id']?.toString();
-  String? get rawPlacement => issueDetails['raw_placement']?.toString();
-
-  factory ValidationIssue.fromJson(Map<String, dynamic> json) {
-    final rawDetails = json['issue_details'];
-    final details = rawDetails is Map
-        ? Map<String, dynamic>.from(rawDetails)
-        : <String, dynamic>{};
-
-    return ValidationIssue(
-      id: (json['id'] ?? '') as String,
-      level: (json['level'] ?? 'warning') as String,
-      issueCode: (json['issue_code'] ?? '') as String,
-      issueMessage: (json['issue_message'] ?? '') as String,
-      reportName: json['report_name'] as String?,
-      finalizeRunId: json['finalize_run_id'] as String?,
-      issueDetails: details,
-      exhibitorId: json['exhibitor_id']?.toString(),
-      animalId: json['animal_id']?.toString(),
-      classKey: json['class_key']?.toString(),
     );
   }
 }
