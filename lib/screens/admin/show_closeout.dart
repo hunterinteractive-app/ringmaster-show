@@ -14,6 +14,9 @@ import 'package:ringmaster_show/screens/admin/closeout/services/closeout_runner.
 import 'package:ringmaster_show/screens/admin/closeout/services/report_engine.dart';
 import 'package:ringmaster_show/screens/admin/closeout/services/report_upload_service.dart';
 
+import 'closeout/data/loaders/legs_report_loader.dart';
+import 'closeout/pdf/builders/legs_report_pdf.dart';
+
 final supabase = Supabase.instance.client;
 
 class ShowCloseoutPage extends StatefulWidget {
@@ -48,6 +51,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   String? _error;
 
   CloseoutDashboard? _dashboard;
+  LegsReportPdfBuilder? _legsBuilder;
 
   static const Set<String> _exhibitorReportKeys = {
     'exhibitor_report',
@@ -111,6 +115,10 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     super.dispose();
   }
 
+  Future<void> _ensureLegsBuilder() async {
+    _legsBuilder ??= await LegsReportPdfBuilder.fromAssets();
+  }
+
   Future<void> _loadArbaDetails() async {
     final row = await supabase
         .from('show_arba_report_details')
@@ -164,6 +172,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       final dashboard = CloseoutDashboard.fromJson(dashboardJson);
 
       await _loadArbaDetails();
+      await _ensureLegsBuilder();
 
       if (!mounted) return;
       setState(() {
@@ -206,13 +215,12 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('ARBA closeout details saved.')),
       );
-
-      await _loadData();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to save ARBA details: $e')),
       );
+      rethrow;
     }
   }
 
@@ -223,16 +231,19 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         _error = null;
       });
 
-      // Save latest ARBA form data before generating any report.
       await _saveArbaDetails();
+      await _ensureLegsBuilder();
 
       final repository = CloseoutRepository(supabase);
       final arbaLoader = ArbaReportLoader(repository);
       final arbaBuilder = ArbaReportPdfBuilder();
+      final legsLoader = LegsReportLoader(repository);
 
       final registry = ReportRegistry(
         arbaLoader: arbaLoader,
         arbaBuilder: arbaBuilder,
+        legsLoader: legsLoader,
+        legsBuilder: _legsBuilder!,
       );
 
       final engine = ReportEngine(registry);
@@ -411,7 +422,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         title: Text('${widget.showName} • Closeout'),
         actions: [
           IconButton(
-            onPressed: _loading ? null : _loadData,
+            onPressed: (_loading || _generatingReport) ? null : _loadData,
             icon: const Icon(Icons.refresh),
             tooltip: 'Refresh',
           ),
@@ -424,7 +435,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
               : _dashboard == null
                   ? const Center(child: Text('No closeout data found.'))
                   : RefreshIndicator(
-                      onRefresh: _loadData,
+                      onRefresh: _generatingReport ? () async {} : _loadData,
                       child: ListView(
                         padding: const EdgeInsets.all(16),
                         children: [

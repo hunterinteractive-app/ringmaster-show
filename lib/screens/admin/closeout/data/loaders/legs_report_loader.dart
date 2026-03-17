@@ -1,0 +1,725 @@
+import '../../models/base/report_request.dart';
+import '../../models/legs/legs_certificate_data.dart';
+import '../closeout_repository.dart';
+
+class LegsReportLoader {
+  LegsReportLoader(this.repo);
+
+  final CloseoutRepository repo;
+
+  static const Map<int, String> legRuleDescriptions = {
+    1: 'Wins First in a class providing there are 5 or more animals exhibited by 3 or more exhibitors.',
+    2: 'Wins Best of Breed providing there are 5 or more animals exhibited in the breed by 3 or more exhibitors.',
+    3: 'Wins Best Opposite Sex of Breed providing there are 5 or more of the same sex as the winner exhibited in the breed by 3 or more exhibitors.',
+    4: 'Wins Best of Group providing there are 5 or more animals exhibited in the group by 3 or more exhibitors.',
+    5: 'Wins Best Opposite Sex of Group providing there are 5 or more of the same sex as the winner exhibited in the group by 3 or more exhibitors.',
+    6: 'Wins Best of Variety providing there are 5 or more animals exhibited in the variety by 3 or more exhibitors.',
+    7: 'Wins Best Opposite Sex Variety providing there are 5 or more of the same sex as the winner exhibited in the variety by 3 or more exhibitors.',
+    8: 'Wins Best in Show providing there are 5 or more animals exhibited in the show by 3 or more exhibitors.',
+    9: 'Wins Best 6 Class / Best 4 Class providing there are 5 or more animals competing exhibited by 3 or more exhibitors.',
+    10: 'Wins Reserve in Show providing there are 5 or more animals exhibited by 3 or more exhibitors.',
+  };
+
+  Future<List<LegsCertificateData>> load(ReportRequest request) async {
+    final showId = request.showId;
+
+    final show = await repo.loadShowBasics(showId);
+    final arbaDetails = await _loadArbaDetails(showId);
+
+    final showName = _str(show['name']);
+    final clubName = await _loadClubName(showId);
+    final sanctionNumber = await _loadSanctionNumber(showId);
+    final showDate = _tryParseDate(show['start_date']);
+
+    final location = [
+      _str(show['location_name']),
+      _str(show['location_address']),
+    ].where((e) => e.isNotEmpty).join(', ');
+
+    final secretaryName = _firstNonEmpty([
+      _str(arbaDetails?['secretary_name']),
+      _str(show['secretary_name']),
+    ]);
+
+    final secretaryEmail = _firstNonEmpty([
+      _str(arbaDetails?['secretary_email']),
+      _str(show['secretary_email']),
+    ]);
+
+    final awardsRows = await repo.supabase
+        .from('entry_awards')
+        .select('''
+          id,
+          show_id,
+          award_code,
+          entries!entry_awards_entry_id_fkey (
+            id,
+            show_id,
+            exhibitor_id,
+            tattoo,
+            breed,
+            class_name,
+            sex,
+            species,
+            is_shown
+          )
+        ''')
+        .eq('show_id', showId);
+
+    final awards = List<Map<String, dynamic>>.from(awardsRows);
+    if (awards.isEmpty) return const [];
+
+    final entryContext = await _loadShownEntryContext(showId);
+
+    final judgeRefs = entryContext.values
+        .map((e) => e.showJudgeRowId)
+        .where((e) => e.isNotEmpty)
+        .toSet()
+        .toList();
+
+    final judgeNamesByRef = await _loadJudgeNamesByShowJudgeId(judgeRefs);
+
+    final candidates = <_LegCandidate>[];
+
+    for (final row in awards) {
+      final awardCode = _str(row['award_code']).toUpperCase();
+
+      final entryRaw = row['entries'];
+      if (entryRaw is! Map) continue;
+
+      final entry = Map<String, dynamic>.from(entryRaw);
+
+      final species = _str(entry['species']).toLowerCase();
+      if (species != 'rabbit' && species != 'cavy') continue;
+      if (entry['is_shown'] != true) continue;
+
+      final entryId = _str(entry['id']);
+      final exhibitorId = _str(entry['exhibitor_id']);
+      if (entryId.isEmpty || exhibitorId.isEmpty) continue;
+
+      final ctx = entryContext[entryId];
+      if (ctx == null) continue;
+
+      final ruleMatch = _determineLegRule(
+        awardCode: awardCode,
+        ctx: ctx,
+      );
+      if (ruleMatch == null) continue;
+
+      final judgeName = _firstNonEmpty([
+        judgeNamesByRef[ctx.showJudgeRowId] ?? '',
+        'Judge Not Available',
+      ]);
+
+      final exhibitorName = _firstNonEmpty([
+        ctx.exhibitorShowingName,
+        ctx.exhibitorLabel,
+        [
+          ctx.exhibitorFirstName,
+          ctx.exhibitorLastName,
+        ].where((e) => e.isNotEmpty).join(' '),
+        'Unknown Exhibitor',
+      ]);
+
+      final ownerAddress = [
+        ctx.exhibitorAddressLine1,
+        ctx.exhibitorAddressLine2,
+        ctx.exhibitorCity,
+        ctx.exhibitorState,
+        ctx.exhibitorZip,
+      ].where((e) => e.isNotEmpty).join(', ');
+
+      final earNumber = _firstNonEmpty([
+        _str(entry['tattoo']),
+        ctx.tattoo,
+      ]);
+
+      final exhibitorNumber = _firstNonEmpty([
+        ctx.exhibitorLabel,
+      ]);
+
+      final certificateId =
+          'leg_${showId}_${entryId}_r${ruleMatch.rule}_${awardCode.toLowerCase()}';
+
+      final barcodeValue =
+          'RMLEG|show=$showId|entry=$entryId|rule=${ruleMatch.rule}|ear=$earNumber';
+
+      final qrValue =
+          'https://ringmasterone.com/verify/leg/$certificateId';
+
+      candidates.add(
+        _LegCandidate(
+          priority: ruleMatch.priority,
+          data: LegsCertificateData(
+            certificateId: certificateId,
+            showId: showId,
+            exhibitorId: exhibitorId,
+            exhibitorNumber: exhibitorNumber,
+            exhibitorName: exhibitorName,
+            ownerAddress: ownerAddress,
+            entryId: entryId,
+            earNumber: earNumber,
+            breed: _str(entry['breed']),
+            variety: ctx.varietyDisplay,
+            className: _str(entry['class_name']),
+            sex: _str(entry['sex']),
+            showName: showName,
+            clubName: clubName.isNotEmpty ? clubName : showName,
+            sanctionNumber: sanctionNumber,
+            showDate: showDate,
+            location: location,
+            secretaryName: secretaryName,
+            secretaryEmail: secretaryEmail,
+            judgeName: judgeName,
+            winCode: awardCode,
+            legRule: ruleMatch.rule,
+            legRuleDescription: legRuleDescriptions[ruleMatch.rule] ?? '',
+            animalsCount: ruleMatch.animalsCount,
+            exhibitorsCount: ruleMatch.exhibitorsCount,
+            barcodeValue: barcodeValue,
+            qrValue: qrValue,
+          ),
+        ),
+      );
+    }
+
+    final bestByEntry = <String, _LegCandidate>{};
+    for (final candidate in candidates) {
+      final key = candidate.data.entryId;
+      final existing = bestByEntry[key];
+      if (existing == null || candidate.priority < existing.priority) {
+        bestByEntry[key] = candidate;
+      }
+    }
+
+    final output = <LegsCertificateData>[
+      ...bestByEntry.values.map((e) => e.data),
+    ]..sort((a, b) {
+        final nameCompare = a.exhibitorName.compareTo(b.exhibitorName);
+        if (nameCompare != 0) return nameCompare;
+        return a.earNumber.compareTo(b.earNumber);
+      });
+
+    return output;
+  }
+
+  Future<Map<String, dynamic>?> _loadArbaDetails(String showId) async {
+    try {
+      final row = await repo.supabase
+          .from('show_arba_report_details')
+          .select('secretary_name, secretary_email')
+          .eq('show_id', showId)
+          .maybeSingle();
+
+      return row == null ? null : Map<String, dynamic>.from(row);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<String> _loadSanctionNumber(String showId) async {
+    try {
+      final row = await repo.supabase
+          .from('show_sanctions')
+          .select('sanction_number')
+          .eq('show_id', showId)
+          .eq('sanctioning_body', 'ARBA')
+          .limit(1)
+          .maybeSingle();
+
+      if (row == null) return '';
+      return _str(row['sanction_number']);
+    } catch (_) {
+      return '';
+    }
+  }
+
+  Future<String> _loadClubName(String showId) async {
+    try {
+      final row = await repo.supabase
+          .from('show_sanctions')
+          .select('club_name')
+          .eq('show_id', showId)
+          .eq('sanctioning_body', 'ARBA')
+          .limit(1)
+          .maybeSingle();
+
+      if (row == null) return '';
+      return _str(row['club_name']);
+    } catch (_) {
+      return '';
+    }
+  }
+
+  Future<Map<String, String>> _loadJudgeNamesByShowJudgeId(
+    List<String> rawJudgeRefs,
+  ) async {
+    if (rawJudgeRefs.isEmpty) return {};
+
+    try {
+      final refs = rawJudgeRefs
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toSet()
+          .toList();
+
+      if (refs.isEmpty) return {};
+
+      final resolvedByRef = <String, String>{};
+
+      // First pass:
+      // report_entry_base_v.judged_by_show_judge_id may already equal judges.id
+      final directJudgeRows = await repo.supabase
+          .from('judges')
+          .select('id, name, first_name, last_name')
+          .inFilter('id', refs);
+
+      for (final row in List<Map<String, dynamic>>.from(directJudgeRows)) {
+        final judgeId = _str(row['id']);
+        final judgeName = _firstNonEmpty([
+          _str(row['name']),
+          [
+            _str(row['first_name']),
+            _str(row['last_name']),
+          ].where((e) => e.isNotEmpty).join(' '),
+        ]);
+
+        if (judgeId.isNotEmpty && judgeName.isNotEmpty) {
+          resolvedByRef[judgeId] = judgeName;
+        }
+      }
+
+      // Second pass:
+      // if the ref is actually show_judges.id, resolve to show_judges.judge_id -> judges.id
+      final unresolvedRefs = refs
+          .where((ref) => !resolvedByRef.containsKey(ref))
+          .toList();
+
+      if (unresolvedRefs.isNotEmpty) {
+        final showJudgeRows = await repo.supabase
+            .from('show_judges')
+            .select('id, judge_id')
+            .inFilter('id', unresolvedRefs);
+
+        final showJudgeList = List<Map<String, dynamic>>.from(showJudgeRows);
+
+        final fallbackJudgeIds = showJudgeList
+            .map((e) => _str(e['judge_id']))
+            .where((e) => e.isNotEmpty)
+            .toSet()
+            .toList();
+
+        if (fallbackJudgeIds.isNotEmpty) {
+          final fallbackJudgeRows = await repo.supabase
+              .from('judges')
+              .select('id, name, first_name, last_name')
+              .inFilter('id', fallbackJudgeIds);
+
+          final fallbackJudgeNameById = <String, String>{};
+          for (final row in List<Map<String, dynamic>>.from(fallbackJudgeRows)) {
+            final judgeId = _str(row['id']);
+            final judgeName = _firstNonEmpty([
+              _str(row['name']),
+              [
+                _str(row['first_name']),
+                _str(row['last_name']),
+              ].where((e) => e.isNotEmpty).join(' '),
+            ]);
+
+            if (judgeId.isNotEmpty && judgeName.isNotEmpty) {
+              fallbackJudgeNameById[judgeId] = judgeName;
+            }
+          }
+
+          for (final row in showJudgeList) {
+            final showJudgeId = _str(row['id']);
+            final judgeId = _str(row['judge_id']);
+            final judgeName = fallbackJudgeNameById[judgeId] ?? '';
+
+            if (showJudgeId.isNotEmpty && judgeName.isNotEmpty) {
+              resolvedByRef[showJudgeId] = judgeName;
+            }
+          }
+        }
+      }
+
+      return resolvedByRef;
+    } catch (_) {
+      return {};
+    }
+  }
+
+  Future<Map<String, _EntryLegContext>> _loadShownEntryContext(
+    String showId,
+  ) async {
+    final rows = await repo.supabase
+        .from('report_entry_base_v')
+        .select('''
+          entry_id,
+          exhibitor_id,
+          exhibitor_label,
+          exhibitor_showing_name,
+          exhibitor_first_name,
+          exhibitor_last_name,
+          exhibitor_address_line1,
+          exhibitor_address_line2,
+          exhibitor_city,
+          exhibitor_state,
+          exhibitor_zip,
+          breed,
+          variety,
+          group_name,
+          uses_group_awards,
+          class_name,
+          sex,
+          species,
+          is_shown,
+          tattoo,
+          judged_by_show_judge_id
+        ''')
+        .eq('show_id', showId)
+        .eq('is_shown', true);
+
+    final list = List<Map<String, dynamic>>.from(rows);
+    final byEntryId = <String, _EntryLegContext>{};
+
+    final showAnimals = list.length;
+    final showExhibitors = list
+        .map((e) => _str(e['exhibitor_id']))
+        .where((e) => e.isNotEmpty)
+        .toSet()
+        .length;
+
+    for (final row in list) {
+      final entryId = _str(row['entry_id']);
+      if (entryId.isEmpty) continue;
+
+      final breed = _str(row['breed']);
+      final varietyDisplay = _str(row['variety']);
+      final usesGroupAwards = row['uses_group_awards'] == true;
+      final groupName = usesGroupAwards ? _str(row['group_name']) : '';
+      final className = _str(row['class_name']);
+      final sex = _str(row['sex']);
+      final showJudgeRowId = _str(row['judged_by_show_judge_id']);
+
+      final breedRows = list.where((e) => _str(e['breed']) == breed).toList();
+      final breedAnimals = breedRows.length;
+      final breedExhibitors = breedRows
+          .map((e) => _str(e['exhibitor_id']))
+          .where((e) => e.isNotEmpty)
+          .toSet()
+          .length;
+
+      final breedSameSexRows =
+          breedRows.where((e) => _str(e['sex']) == sex).toList();
+      final breedSameSexAnimals = breedSameSexRows.length;
+
+      final varietyRows = list.where((e) {
+        return _str(e['breed']) == breed &&
+            _str(e['variety']) == varietyDisplay;
+      }).toList();
+
+      final varietyAnimals = varietyRows.length;
+      final varietyExhibitors = varietyRows
+          .map((e) => _str(e['exhibitor_id']))
+          .where((e) => e.isNotEmpty)
+          .toSet()
+          .length;
+
+      final varietySameSexRows =
+          varietyRows.where((e) => _str(e['sex']) == sex).toList();
+      final varietySameSexAnimals = varietySameSexRows.length;
+
+      final groupRows = usesGroupAwards && groupName.isNotEmpty
+          ? list.where((e) {
+              return e['uses_group_awards'] == true &&
+                  _str(e['group_name']) == groupName;
+            }).toList()
+          : <Map<String, dynamic>>[];
+
+      final groupAnimals = groupRows.length;
+      final groupExhibitors = groupRows
+          .map((e) => _str(e['exhibitor_id']))
+          .where((e) => e.isNotEmpty)
+          .toSet()
+          .length;
+
+      final groupSameSexRows =
+          groupRows.where((e) => _str(e['sex']) == sex).toList();
+      final groupSameSexAnimals = groupSameSexRows.length;
+
+      final classRows = list.where((e) {
+        return _str(e['breed']) == breed &&
+            _str(e['variety']) == varietyDisplay &&
+            _str(e['class_name']) == className;
+      }).toList();
+
+      final classAnimals = classRows.length;
+      final classExhibitors = classRows
+          .map((e) => _str(e['exhibitor_id']))
+          .where((e) => e.isNotEmpty)
+          .toSet()
+          .length;
+
+      byEntryId[entryId] = _EntryLegContext(
+        varietyDisplay: varietyDisplay,
+        groupName: groupName,
+        usesGroupAwards: usesGroupAwards,
+        showJudgeRowId: showJudgeRowId,
+        tattoo: _str(row['tattoo']),
+        exhibitorLabel: _str(row['exhibitor_label']),
+        exhibitorShowingName: _str(row['exhibitor_showing_name']),
+        exhibitorFirstName: _str(row['exhibitor_first_name']),
+        exhibitorLastName: _str(row['exhibitor_last_name']),
+        exhibitorAddressLine1: _str(row['exhibitor_address_line1']),
+        exhibitorAddressLine2: _str(row['exhibitor_address_line2']),
+        exhibitorCity: _str(row['exhibitor_city']),
+        exhibitorState: _str(row['exhibitor_state']),
+        exhibitorZip: _str(row['exhibitor_zip']),
+        breedAnimals: breedAnimals,
+        breedExhibitors: breedExhibitors,
+        breedSameSexAnimals: breedSameSexAnimals,
+        varietyAnimals: varietyAnimals,
+        varietyExhibitors: varietyExhibitors,
+        varietySameSexAnimals: varietySameSexAnimals,
+        groupAnimals: groupAnimals,
+        groupExhibitors: groupExhibitors,
+        groupSameSexAnimals: groupSameSexAnimals,
+        classAnimals: classAnimals,
+        classExhibitors: classExhibitors,
+        showAnimals: showAnimals,
+        showExhibitors: showExhibitors,
+      );
+    }
+
+    return byEntryId;
+  }
+
+  _LegRuleMatch? _determineLegRule({
+    required String awardCode,
+    required _EntryLegContext ctx,
+  }) {
+    final normalized = awardCode.toUpperCase();
+
+    if ((normalized == 'BIS' || normalized == 'BEST_IN_SHOW') &&
+        ctx.showAnimals >= 5 &&
+        ctx.showExhibitors >= 3) {
+      return _LegRuleMatch(
+        rule: 8,
+        priority: 1,
+        animalsCount: ctx.showAnimals,
+        exhibitorsCount: ctx.showExhibitors,
+      );
+    }
+
+    if ((normalized == 'RIS' || normalized == 'RESERVE_IN_SHOW') &&
+        ctx.showAnimals >= 5 &&
+        ctx.showExhibitors >= 3) {
+      return _LegRuleMatch(
+        rule: 10,
+        priority: 2,
+        animalsCount: ctx.showAnimals,
+        exhibitorsCount: ctx.showExhibitors,
+      );
+    }
+
+    if (normalized == 'BOB' &&
+        ctx.breedAnimals >= 1 &&
+        ctx.breedExhibitors >= 1) {
+      return _LegRuleMatch(
+        rule: 2,
+        priority: 3,
+        animalsCount: ctx.breedAnimals,
+        exhibitorsCount: ctx.breedExhibitors,
+      );
+    }
+
+    if ((normalized == 'BOSB' || normalized == 'BOS') &&
+        ctx.breedSameSexAnimals >= 5 &&
+        ctx.breedExhibitors >= 3) {
+      return _LegRuleMatch(
+        rule: 3,
+        priority: 4,
+        animalsCount: ctx.breedSameSexAnimals,
+        exhibitorsCount: ctx.breedExhibitors,
+      );
+    }
+
+    if (normalized == 'BOG' &&
+        ctx.groupAnimals >= 5 &&
+        ctx.groupExhibitors >= 3) {
+      return _LegRuleMatch(
+        rule: 4,
+        priority: 5,
+        animalsCount: ctx.groupAnimals,
+        exhibitorsCount: ctx.groupExhibitors,
+      );
+    }
+
+    if (normalized == 'BOSG' &&
+        ctx.groupSameSexAnimals >= 5 &&
+        ctx.groupExhibitors >= 3) {
+      return _LegRuleMatch(
+        rule: 5,
+        priority: 6,
+        animalsCount: ctx.groupSameSexAnimals,
+        exhibitorsCount: ctx.groupExhibitors,
+      );
+    }
+
+    if (normalized == 'BOV' &&
+        ctx.varietyAnimals >= 5 &&
+        ctx.varietyExhibitors >= 3) {
+      return _LegRuleMatch(
+        rule: 6,
+        priority: 7,
+        animalsCount: ctx.varietyAnimals,
+        exhibitorsCount: ctx.varietyExhibitors,
+      );
+    }
+
+    if (normalized == 'BOSV' &&
+        ctx.varietySameSexAnimals >= 5 &&
+        ctx.varietyExhibitors >= 3) {
+      return _LegRuleMatch(
+        rule: 7,
+        priority: 8,
+        animalsCount: ctx.varietySameSexAnimals,
+        exhibitorsCount: ctx.varietyExhibitors,
+      );
+    }
+
+    if ((normalized == 'BEST_4_CLASS' || normalized == 'BEST_6_CLASS') &&
+        ctx.classAnimals >= 5 &&
+        ctx.classExhibitors >= 3) {
+      return _LegRuleMatch(
+        rule: 9,
+        priority: 9,
+        animalsCount: ctx.classAnimals,
+        exhibitorsCount: ctx.classExhibitors,
+      );
+    }
+
+    if ((normalized == '1' || normalized == '1ST' || normalized == 'FIRST') &&
+        ctx.classAnimals >= 5 &&
+        ctx.classExhibitors >= 3) {
+      return _LegRuleMatch(
+        rule: 1,
+        priority: 10,
+        animalsCount: ctx.classAnimals,
+        exhibitorsCount: ctx.classExhibitors,
+      );
+    }
+
+    return null;
+  }
+
+  String _firstNonEmpty(List<String> values) {
+    for (final value in values) {
+      final trimmed = value.trim();
+      if (trimmed.isNotEmpty) return trimmed;
+    }
+    return '';
+  }
+
+  String _str(dynamic value) {
+    if (value == null) return '';
+    return value.toString().trim();
+  }
+
+  DateTime? _tryParseDate(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    return DateTime.tryParse(value.toString());
+  }
+}
+
+class _LegCandidate {
+  final int priority;
+  final LegsCertificateData data;
+
+  const _LegCandidate({
+    required this.priority,
+    required this.data,
+  });
+}
+
+class _LegRuleMatch {
+  final int rule;
+  final int priority;
+  final int animalsCount;
+  final int exhibitorsCount;
+
+  const _LegRuleMatch({
+    required this.rule,
+    required this.priority,
+    required this.animalsCount,
+    required this.exhibitorsCount,
+  });
+}
+
+class _EntryLegContext {
+  final String varietyDisplay;
+  final String groupName;
+  final bool usesGroupAwards;
+  final String showJudgeRowId;
+  final String tattoo;
+
+  final String exhibitorLabel;
+  final String exhibitorShowingName;
+  final String exhibitorFirstName;
+  final String exhibitorLastName;
+  final String exhibitorAddressLine1;
+  final String exhibitorAddressLine2;
+  final String exhibitorCity;
+  final String exhibitorState;
+  final String exhibitorZip;
+
+  final int breedAnimals;
+  final int breedExhibitors;
+  final int breedSameSexAnimals;
+
+  final int varietyAnimals;
+  final int varietyExhibitors;
+  final int varietySameSexAnimals;
+
+  final int groupAnimals;
+  final int groupExhibitors;
+  final int groupSameSexAnimals;
+
+  final int classAnimals;
+  final int classExhibitors;
+
+  final int showAnimals;
+  final int showExhibitors;
+
+  const _EntryLegContext({
+    required this.varietyDisplay,
+    required this.groupName,
+    required this.usesGroupAwards,
+    required this.showJudgeRowId,
+    required this.tattoo,
+    required this.exhibitorLabel,
+    required this.exhibitorShowingName,
+    required this.exhibitorFirstName,
+    required this.exhibitorLastName,
+    required this.exhibitorAddressLine1,
+    required this.exhibitorAddressLine2,
+    required this.exhibitorCity,
+    required this.exhibitorState,
+    required this.exhibitorZip,
+    required this.breedAnimals,
+    required this.breedExhibitors,
+    required this.breedSameSexAnimals,
+    required this.varietyAnimals,
+    required this.varietyExhibitors,
+    required this.varietySameSexAnimals,
+    required this.groupAnimals,
+    required this.groupExhibitors,
+    required this.groupSameSexAnimals,
+    required this.classAnimals,
+    required this.classExhibitors,
+    required this.showAnimals,
+    required this.showExhibitors,
+  });
+}
