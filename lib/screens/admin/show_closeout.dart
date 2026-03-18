@@ -16,6 +16,8 @@ import 'package:ringmaster_show/screens/admin/closeout/services/report_upload_se
 
 import 'closeout/data/loaders/legs_report_loader.dart';
 import 'closeout/pdf/builders/legs_report_pdf.dart';
+import 'closeout/data/loaders/exhibitor_report_loader.dart';
+import 'closeout/pdf/builders/exhibitor_report_pdf.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -52,6 +54,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
   CloseoutDashboard? _dashboard;
   LegsReportPdfBuilder? _legsBuilder;
+  ExhibitorReportPdfBuilder? _exhibitorBuilder;
 
   static const Set<String> _exhibitorReportKeys = {
     'exhibitor_report',
@@ -119,6 +122,10 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     _legsBuilder ??= await LegsReportPdfBuilder.fromAssets();
   }
 
+  Future<void> _ensureExhibitorBuilder() async {
+    _exhibitorBuilder ??= await ExhibitorReportPdfBuilder.fromAssets();
+  }
+
   Future<void> _loadArbaDetails() async {
     final row = await supabase
         .from('show_arba_report_details')
@@ -173,6 +180,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
       await _loadArbaDetails();
       await _ensureLegsBuilder();
+      await _ensureExhibitorBuilder();
 
       if (!mounted) return;
       setState(() {
@@ -233,17 +241,24 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
       await _saveArbaDetails();
       await _ensureLegsBuilder();
+      await _ensureExhibitorBuilder();
 
       final repository = CloseoutRepository(supabase);
       final arbaLoader = ArbaReportLoader(repository);
       final arbaBuilder = ArbaReportPdfBuilder();
+
       final legsLoader = LegsReportLoader(repository);
+      await _ensureLegsBuilder();
+
+      final exhibitorLoader = ExhibitorReportLoader(repository);
 
       final registry = ReportRegistry(
         arbaLoader: arbaLoader,
         arbaBuilder: arbaBuilder,
         legsLoader: legsLoader,
         legsBuilder: _legsBuilder!,
+        exhibitorLoader: exhibitorLoader,
+        exhibitorBuilder: _exhibitorBuilder!,
       );
 
       final engine = ReportEngine(registry);
