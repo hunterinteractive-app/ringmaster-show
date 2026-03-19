@@ -110,19 +110,16 @@ class _AnimalEditorDialog extends StatefulWidget {
 }
 
 class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
-  // Core fields
-  final _name = TextEditingController(); // optional
-  final _tattoo = TextEditingController(); // required
+  final _name = TextEditingController();
+  final _tattoo = TextEditingController();
 
-  // Breed/Variety text fields (always user-editable)
-  final _breedText = TextEditingController(); // required (but can be custom)
-  final _varietyText = TextEditingController(); // required (but can be custom)
+  final _breedText = TextEditingController();
+  final _varietyText = TextEditingController();
 
   String _species = 'rabbit';
-  String? _sexValue; // required (dropdown)
+  String? _sexValue;
   DateTime? _birthDate;
 
-  // If user selects a breed from list, we store its id to filter varieties.
   String? _breedId;
 
   List<Map<String, dynamic>> _breedOptions = [];
@@ -130,6 +127,9 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
 
   bool _loadingBreeds = false;
   bool _loadingVarieties = false;
+  bool _isLopBreedName(String breedName) {
+    return breedName.trim().toLowerCase().endsWith('lop');
+  }
 
   bool _saving = false;
   String? _msg;
@@ -156,6 +156,24 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
     }
   }
 
+  bool get _hasValidBreedSelection {
+    if (_breedId == null) return false;
+    final breedName = _breedText.text.trim().toLowerCase();
+    return _breedOptions.any((b) {
+      return (b['id']?.toString() == _breedId) &&
+          ((b['name'] ?? '').toString().trim().toLowerCase() == breedName);
+    });
+  }
+
+  bool get _hasValidVarietySelection {
+    if (!_hasValidBreedSelection) return false;
+    final varietyName = _varietyText.text.trim().toLowerCase();
+    if (varietyName.isEmpty) return false;
+    return _varietyOptions.any((v) {
+      return ((v['name'] ?? '').toString().trim().toLowerCase() == varietyName);
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -173,9 +191,8 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
         _birthDate = DateTime.tryParse(bd.toString());
       }
 
-      _sexValue = _normalizeSex(e['sex']?.toString(), _species) ?? (_sexOptions.first);
+      _sexValue = _normalizeSex(e['sex']?.toString(), _species) ?? _sexOptions.first;
     } else {
-      // defaults for new
       _sexValue = _sexOptions.first;
     }
 
@@ -186,11 +203,13 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
 
     _breedText.addListener(() {
       final typed = _breedText.text.trim().toLowerCase();
+
       if (typed.isEmpty) {
-        if (_breedId != null) {
+        if (_breedId != null || _varietyText.text.isNotEmpty || _varietyOptions.isNotEmpty) {
           setState(() {
             _breedId = null;
             _varietyOptions = [];
+            _varietyText.clear();
           });
         }
         return;
@@ -205,13 +224,15 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
         final newId = match.first['id'] as String;
         if (newId != _breedId) {
           _breedId = newId;
+          _varietyText.clear();
           _loadVarietiesForBreed(newId);
         }
       } else {
-        if (_breedId != null) {
+        if (_breedId != null || _varietyText.text.isNotEmpty || _varietyOptions.isNotEmpty) {
           setState(() {
             _breedId = null;
             _varietyOptions = [];
+            _varietyText.clear();
           });
         }
       }
@@ -249,6 +270,32 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
       _varietyOptions = [];
     });
 
+    final matchedBreed = _breedOptions.firstWhere(
+      (b) => (b['id'] ?? '').toString() == breedId,
+      orElse: () => <String, dynamic>{},
+    );
+
+    final breedName = (matchedBreed['name'] ?? '').toString().trim();
+
+    if (_isLopBreedName(breedName)) {
+      if (!mounted) return;
+      setState(() {
+        _loadingVarieties = false;
+        _varietyOptions = const [
+          {'id': 'lop_broken', 'name': 'Broken'},
+          {'id': 'lop_solid', 'name': 'Solid'},
+        ];
+      });
+
+      final currentVariety = _varietyText.text.trim().toLowerCase();
+      if (currentVariety.isNotEmpty &&
+          currentVariety != 'broken' &&
+          currentVariety != 'solid') {
+        _varietyText.clear();
+      }
+      return;
+    }
+
     final res = await supabase
         .from('varieties')
         .select('id,name')
@@ -274,6 +321,14 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
     if (match.isNotEmpty) {
       _breedId = match.first['id'] as String;
       await _loadVarietiesForBreed(_breedId!);
+    } else {
+      if (mounted) {
+        setState(() {
+          _breedId = null;
+          _varietyOptions = [];
+          _varietyText.clear();
+        });
+      }
     }
   }
 
@@ -292,14 +347,34 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
     if (_tattoo.text.trim().isEmpty) return false;
     if (_sexValue == null) return false;
     if (_birthDate == null) return false;
-
     if (_breedText.text.trim().isEmpty) return false;
     if (_varietyText.text.trim().isEmpty) return false;
-
+    if (!_hasValidBreedSelection) return false;
+    if (!_hasValidVarietySelection) return false;
     return true;
   }
 
   Future<void> _save() async {
+    if (_breedText.text.trim().isEmpty) {
+      setState(() => _msg = 'Breed is required.');
+      return;
+    }
+
+    if (!_hasValidBreedSelection) {
+      setState(() => _msg = 'Please select a breed from the list.');
+      return;
+    }
+
+    if (_varietyText.text.trim().isEmpty) {
+      setState(() => _msg = 'Variety is required.');
+      return;
+    }
+
+    if (!_hasValidVarietySelection) {
+      setState(() => _msg = 'Please select a valid variety from the list.');
+      return;
+    }
+
     if (!_validate()) {
       setState(() => _msg =
           'Required: species, tattoo, sex, birth date, breed, and variety. (Name is optional)');
@@ -324,7 +399,7 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
       'tattoo': _tattoo.text.trim(),
       'breed': _breedText.text.trim(),
       'variety': _varietyText.text.trim(),
-      'sex': _sexValue, // <- enforced values
+      'sex': _sexValue,
       'birth_date': _birthDate!.toIso8601String().substring(0, 10),
     };
 
@@ -346,9 +421,17 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final customBreedWarning = (_breedId == null && _breedText.text.trim().isNotEmpty)
-        ? 'Custom breed (not in list). Variety suggestions won’t be filtered.'
-        : null;
+    final invalidBreedWarning =
+        (!_hasValidBreedSelection && _breedText.text.trim().isNotEmpty)
+            ? 'Choose a breed from the list.'
+            : null;
+
+    final invalidVarietyWarning =
+        (_breedId != null &&
+                _varietyText.text.trim().isNotEmpty &&
+                !_hasValidVarietySelection)
+            ? 'Choose a variety from the list.'
+            : null;
 
     return AlertDialog(
       title: Text(_isEdit ? 'Edit Animal' : 'Add Animal'),
@@ -366,12 +449,12 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
                 final newSpecies = v ?? 'rabbit';
                 setState(() {
                   _species = newSpecies;
-                  _sexValue = _sexOptions.first; // reset sex on species change
+                  _sexValue = _sexOptions.first;
                   _breedId = null;
                   _breedOptions = [];
                   _varietyOptions = [];
-                  _breedText.text = '';
-                  _varietyText.text = '';
+                  _breedText.clear();
+                  _varietyText.clear();
                   _msg = null;
                 });
                 await _loadBreedsForSpecies();
@@ -405,7 +488,7 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
                 setState(() {
                   _breedId = opt['id'] as String;
                   _breedText.text = (opt['name'] as String);
-                  _varietyText.text = '';
+                  _varietyText.clear();
                   _msg = null;
                 });
                 await _loadVarietiesForBreed(_breedId!);
@@ -428,17 +511,20 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
                   focusNode: focusNode,
                   decoration: const InputDecoration(
                     labelText: 'Breed (required)',
-                    hintText: 'Type to search or enter custom…',
+                    hintText: 'Type to search and select a breed…',
                   ),
                 );
               },
             ),
 
-            if (customBreedWarning != null) ...[
+            if (invalidBreedWarning != null) ...[
               const SizedBox(height: 6),
               Align(
                 alignment: Alignment.centerLeft,
-                child: Text(customBreedWarning, style: const TextStyle(fontSize: 12)),
+                child: Text(
+                  invalidBreedWarning,
+                  style: const TextStyle(fontSize: 12, color: Colors.red),
+                ),
               ),
             ],
 
@@ -447,10 +533,10 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
             if (_breedId != null && _loadingVarieties) const LinearProgressIndicator(),
             Autocomplete<Map<String, dynamic>>(
               optionsBuilder: (TextEditingValue text) {
+                if (_breedId == null) return const Iterable<Map<String, dynamic>>.empty();
                 final q = text.text.trim().toLowerCase();
-                final source = (_breedId == null) ? <Map<String, dynamic>>[] : _varietyOptions;
-                if (q.isEmpty) return source;
-                return source.where(
+                if (q.isEmpty) return _varietyOptions;
+                return _varietyOptions.where(
                   (v) => (v['name'] as String).toLowerCase().contains(q),
                 );
               },
@@ -477,19 +563,44 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
                 return TextField(
                   controller: controller,
                   focusNode: focusNode,
+                  readOnly: _breedId == null,
                   decoration: InputDecoration(
                     labelText: 'Variety (required)',
                     hintText: _breedId == null
-                        ? 'Enter custom variety…'
-                        : 'Type to search (filtered) or enter custom…',
+                        ? 'Select a breed first'
+                        : 'Type to search and select a variety…',
+                    suffixIcon: _varietyText.text.trim().isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: 'Clear variety',
+                            onPressed: _saving
+                                ? null
+                                : () {
+                                    setState(() {
+                                      _varietyText.clear();
+                                      _msg = null;
+                                    });
+                                  },
+                            icon: const Icon(Icons.clear),
+                          ),
                   ),
                 );
               },
             ),
 
+            if (invalidVarietyWarning != null) ...[
+              const SizedBox(height: 6),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  invalidVarietyWarning,
+                  style: const TextStyle(fontSize: 12, color: Colors.red),
+                ),
+              ),
+            ],
+
             const SizedBox(height: 12),
 
-            // ✅ Sex dropdown (enforced)
             DropdownButtonFormField<String>(
               value: _sexValue,
               items: _sexOptions
@@ -511,7 +622,10 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
                     'Birth date: ${_birthDate == null ? "(required)" : _birthDate!.toString().substring(0, 10)}',
                   ),
                 ),
-                TextButton(onPressed: _pickBirthDate, child: const Text('Pick')),
+                TextButton(
+                  onPressed: _saving ? null : _pickBirthDate,
+                  child: const Text('Pick'),
+                ),
               ],
             ),
 

@@ -71,7 +71,7 @@ class _AdminEntryManagementScreenState extends State<AdminEntryManagementScreen>
   Future<void> _loadSections() async {
     final rows = await supabase
         .from('show_sections')
-        .select('id,letter,display_name,is_enabled,sort_order')
+        .select('id,letter,display_name,kind,is_enabled,sort_order')
         .eq('show_id', widget.showId)
         .eq('is_enabled', true)
         .order('sort_order', ascending: true);
@@ -83,14 +83,32 @@ class _AdminEntryManagementScreenState extends State<AdminEntryManagementScreen>
     }
   }
 
+  Future<void> _openAddEntry() async {
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _AdminAddEntrySheet(
+        showId: widget.showId,
+        sections: _sections,
+        initialSectionId: _selectedSectionId,
+      ),
+    );
+
+    if (saved == true) {
+      await _loadEntries();
+      if (!mounted) return;
+      setState(() => _msg = 'Entry added.');
+    }
+  }
+
   Future<void> _loadEntries() async {
     var q = supabase
         .from('entries')
         .select(
           'id,show_id,section_id,exhibitor_id,exhibitor_user_id,animal_id,species,'
           'tattoo,breed,variety,sex,class_name,notes,status,created_at,updated_at,scratched_at,'
-          'show_sections(id,letter,display_name),'
-          // IMPORTANT: disambiguate embed relationship (you have multiple FKs)
+          'show_sections(id,letter,display_name,kind),'
           'exhibitors!entries_exhibitor_id_fkey(id,display_name,first_name,last_name)',
         )
         .eq('show_id', widget.showId);
@@ -101,9 +119,6 @@ class _AdminEntryManagementScreenState extends State<AdminEntryManagementScreen>
 
     final res = await q.order('created_at', ascending: true);
     _entries = (res as List).cast<Map<String, dynamic>>();
-    for (final e in _entries.take(5)) {
-      debugPrint('ENTRY ROW: $e');
-    }
   }
 
   String _sectionLabel(Map<String, dynamic> s) {
@@ -130,8 +145,6 @@ class _AdminEntryManagementScreenState extends State<AdminEntryManagementScreen>
   }
 
   String _exhibitorDisplayName(Map<String, dynamic> e) {
-    debugPrint('EXHIBITOR LOOKUP ROW: $e');
-
     final label = (e['exhibitor_label'] ?? '').toString().trim();
     if (label.isNotEmpty) return label;
 
@@ -283,6 +296,11 @@ class _AdminEntryManagementScreenState extends State<AdminEntryManagementScreen>
         title: Text('Entry Mgmt — ${widget.showName}'),
         actions: [
           IconButton(
+            tooltip: 'Add Entry',
+            icon: const Icon(Icons.add),
+            onPressed: _loading || _sections.isEmpty ? null : _openAddEntry,
+          ),
+          IconButton(
             tooltip: 'Reload',
             icon: const Icon(Icons.refresh),
             onPressed: _loading ? null : _loadAll,
@@ -302,14 +320,17 @@ class _AdminEntryManagementScreenState extends State<AdminEntryManagementScreen>
                         child: Text(
                           _msg!,
                           style: TextStyle(
-                            color: (_msg == 'Entry updated.' || _msg == 'Scratched.' || _msg == 'Unscratched.' || _msg == 'Animal moved.')
+                            color: (_msg == 'Entry updated.' ||
+                                    _msg == 'Scratched.' ||
+                                    _msg == 'Unscratched.' ||
+                                    _msg == 'Animal moved.' ||
+                                    _msg == 'Entry added.')
                                 ? Colors.green
                                 : Colors.red,
                           ),
                         ),
                       ),
                     ),
-
                   Padding(
                     padding: const EdgeInsets.all(12),
                     child: Column(
@@ -357,9 +378,7 @@ class _AdminEntryManagementScreenState extends State<AdminEntryManagementScreen>
                       ],
                     ),
                   ),
-
                   const Divider(height: 1),
-
                   Expanded(
                     child: filtered.isEmpty
                         ? const Center(child: Text('No entries found for this filter.'))
@@ -442,7 +461,7 @@ class _AdminEntryManagementScreenState extends State<AdminEntryManagementScreen>
                                         ),
                                         onTap: () => _openEdit(e),
                                       );
-                                    }).toList(),
+                                    }),
                                   ],
                                 ),
                               );
@@ -540,48 +559,41 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
           children: [
             Text('Edit Entry', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
-
             if (_msg != null)
               Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: Text(_msg!, style: const TextStyle(color: Colors.red)),
               ),
-
             TextField(
               controller: _tattoo,
               enabled: !_saving,
               decoration: const InputDecoration(labelText: 'Tattoo / Ear #'),
             ),
             const SizedBox(height: 10),
-
             TextField(
               controller: _breed,
               enabled: !_saving,
               decoration: const InputDecoration(labelText: 'Breed'),
             ),
             const SizedBox(height: 10),
-
             TextField(
               controller: _variety,
               enabled: !_saving,
               decoration: const InputDecoration(labelText: 'Variety'),
             ),
             const SizedBox(height: 10),
-
             TextField(
               controller: _sex,
               enabled: !_saving,
               decoration: const InputDecoration(labelText: 'Sex'),
             ),
             const SizedBox(height: 10),
-
             TextField(
               controller: _className,
               enabled: !_saving,
               decoration: const InputDecoration(labelText: 'Class'),
             ),
             const SizedBox(height: 10),
-
             TextField(
               controller: _notes,
               enabled: !_saving,
@@ -590,7 +602,6 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
               decoration: const InputDecoration(labelText: 'Notes'),
             ),
             const SizedBox(height: 14),
-
             FilledButton(
               onPressed: _saving ? null : _save,
               child: Text(_saving ? 'Saving…' : 'Save Changes'),
@@ -660,7 +671,6 @@ class _MoveEntrySheetState extends State<_MoveEntrySheet> {
     try {
       await supabase.from('entries').update({
         'section_id': _sectionId,
-        // Optional: allow changing class at same time (per-entry)
         'class_name': _className.text.trim().isEmpty ? null : _className.text.trim(),
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       }).eq('id', entryId);
@@ -688,13 +698,11 @@ class _MoveEntrySheetState extends State<_MoveEntrySheet> {
           children: [
             Text('Move Animal', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
-
             if (_msg != null)
               Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: Text(_msg!, style: const TextStyle(color: Colors.red)),
               ),
-
             DropdownButtonFormField<String>(
               value: _sectionId,
               decoration: const InputDecoration(labelText: 'Move to section'),
@@ -707,7 +715,6 @@ class _MoveEntrySheetState extends State<_MoveEntrySheet> {
               onChanged: _saving ? null : (v) => setState(() => _sectionId = v),
             ),
             const SizedBox(height: 12),
-
             FilledButton(
               onPressed: _saving ? null : _save,
               child: Text(_saving ? 'Moving…' : 'Save Move'),
@@ -715,6 +722,569 @@ class _MoveEntrySheetState extends State<_MoveEntrySheet> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _AdminAddEntrySheet extends StatefulWidget {
+  final String showId;
+  final List<Map<String, dynamic>> sections;
+  final String? initialSectionId;
+
+  const _AdminAddEntrySheet({
+    required this.showId,
+    required this.sections,
+    required this.initialSectionId,
+  });
+
+  @override
+  State<_AdminAddEntrySheet> createState() => _AdminAddEntrySheetState();
+}
+
+class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
+  bool _loading = true;
+  bool _saving = false;
+  String? _msg;
+
+  List<Map<String, dynamic>> _exhibitors = [];
+  List<Map<String, dynamic>> _animals = [];
+
+  String? _exhibitorId;
+  String? _sectionId;
+  Map<String, dynamic>? _animal;
+
+  bool _addNewExhibitor = false;
+  bool _useLocalAnimal = false;
+
+  final _showingName = TextEditingController();
+  final _displayName = TextEditingController();
+  final _firstName = TextEditingController();
+  final _lastName = TextEditingController();
+  final _email = TextEditingController();
+  final _phone = TextEditingController();
+
+  String _exhibitorType = 'open';
+
+  final _tattoo = TextEditingController();
+  final _breed = TextEditingController();
+  final _variety = TextEditingController();
+  final _sex = TextEditingController();
+
+  final _className = TextEditingController();
+  final _notes = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _sectionId = widget.initialSectionId;
+    _loadExhibitors();
+  }
+
+  @override
+  void dispose() {
+    _showingName.dispose();
+    _displayName.dispose();
+    _firstName.dispose();
+    _lastName.dispose();
+    _email.dispose();
+    _phone.dispose();
+    _tattoo.dispose();
+    _breed.dispose();
+    _variety.dispose();
+    _sex.dispose();
+    _className.dispose();
+    _notes.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadExhibitors() async {
+    try {
+      final res = await supabase
+          .from('exhibitors')
+          .select(
+            'id,showing_name,display_name,first_name,last_name,email,phone,type,owner_user_id,is_active,is_local_only,created_for_show_id',
+          )
+          .eq('is_active', true)
+          .order('display_name', ascending: true);
+
+      _exhibitors = (res as List).cast<Map<String, dynamic>>();
+
+      if (!mounted) return;
+      setState(() => _loading = false);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _msg = 'Failed to load exhibitors: $e';
+      });
+    }
+  }
+
+  String _exhibitorLabel(Map<String, dynamic> e) {
+    final showing = (e['showing_name'] ?? '').toString().trim();
+    if (showing.isNotEmpty) return showing;
+
+    final display = (e['display_name'] ?? '').toString().trim();
+    if (display.isNotEmpty) return display;
+
+    final first = (e['first_name'] ?? '').toString().trim();
+    final last = (e['last_name'] ?? '').toString().trim();
+    final combined = '$first $last'.trim();
+    if (combined.isNotEmpty) return combined;
+
+    return '(Unnamed Exhibitor)';
+  }
+
+  String _animalLabel(Map<String, dynamic> a) {
+    final tattoo = (a['tattoo'] ?? '').toString().trim();
+    final breed = (a['breed'] ?? '').toString().trim();
+    final variety = (a['variety'] ?? '').toString().trim();
+    final name = (a['name'] ?? '').toString().trim();
+
+    if (tattoo.isNotEmpty && breed.isNotEmpty) {
+      return '$tattoo • $breed${variety.isNotEmpty ? " • $variety" : ""}';
+    }
+    if (name.isNotEmpty) return name;
+    if (tattoo.isNotEmpty) return tattoo;
+    return '(Unnamed Animal)';
+  }
+
+  String _sectionKind() {
+    final s = widget.sections.firstWhere(
+      (x) => x['id'].toString() == _sectionId,
+      orElse: () => <String, dynamic>{},
+    );
+    return (s['kind'] ?? '').toString().toLowerCase();
+  }
+
+  Future<void> _loadAnimalsForSelectedExhibitor() async {
+    _animals = [];
+    _animal = null;
+
+    if (_exhibitorId == null || _exhibitorId!.isEmpty) {
+      if (mounted) setState(() {});
+      return;
+    }
+
+    final exhibitor = _exhibitors.firstWhere(
+      (e) => e['id'].toString() == _exhibitorId,
+      orElse: () => <String, dynamic>{},
+    );
+
+    final ownerUserId = (exhibitor['owner_user_id'] ?? '').toString().trim();
+
+    // Walk-in / local exhibitors may not have an owner_user_id
+    if (ownerUserId.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _animals = [];
+          _animal = null;
+        });
+      }
+      return;
+    }
+
+    try {
+      final res = await supabase
+          .from('animals')
+          .select('id,owner_user_id,name,tattoo,breed,variety,sex,species')
+          .eq('owner_user_id', ownerUserId)
+          .order('created_at', ascending: false);
+
+      if (!mounted) return;
+      setState(() {
+        _animals = (res as List).cast<Map<String, dynamic>>();
+        _animal = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _animals = [];
+        _animal = null;
+        _msg = 'Failed to load animals: $e';
+      });
+    }
+  }
+
+  Future<String> _createNewExhibitor() async {
+    final showing = _showingName.text.trim();
+    final display = _displayName.text.trim();
+    final first = _firstName.text.trim();
+    final last = _lastName.text.trim();
+    final email = _email.text.trim();
+    final phone = _phone.text.trim();
+
+    if (showing.isEmpty &&
+        display.isEmpty &&
+        first.isEmpty &&
+        last.isEmpty) {
+      throw Exception('Enter at least a showing name, display name, or first/last name.');
+    }
+
+    final inserted = await supabase
+        .from('exhibitors')
+        .insert({
+          'showing_name': showing.isEmpty ? null : showing,
+          'display_name': display.isEmpty ? null : display,
+          'first_name': first.isEmpty ? null : first,
+          'last_name': last.isEmpty ? null : last,
+          'email': email.isEmpty ? null : email,
+          'phone': phone.isEmpty ? null : phone,
+          'type': _exhibitorType,
+          'is_active': true,
+          'is_local_only': true,
+          'created_for_show_id': widget.showId,
+          'owner_user_id': null,
+        })
+        .select(
+          'id,showing_name,display_name,first_name,last_name,email,phone,type,owner_user_id,is_active,is_local_only,created_for_show_id',
+        )
+        .single();
+
+    final row = Map<String, dynamic>.from(inserted);
+    _exhibitors.add(row);
+
+    return row['id'].toString();
+  }
+
+  Future<void> _save({bool reset = false}) async {
+    if (_sectionId == null || _sectionId!.isEmpty) {
+      setState(() => _msg = 'Select section');
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+      _msg = null;
+    });
+
+    try {
+      String resolvedExhibitorId;
+
+      if (_addNewExhibitor) {
+        resolvedExhibitorId = await _createNewExhibitor();
+      } else {
+        if (_exhibitorId == null || _exhibitorId!.isEmpty) {
+          throw Exception('Select exhibitor');
+        }
+        resolvedExhibitorId = _exhibitorId!;
+      }
+
+      final exhibitor = _exhibitors.firstWhere(
+        (e) => e['id'].toString() == resolvedExhibitorId,
+        orElse: () => <String, dynamic>{},
+      );
+
+      final type = (exhibitor['type'] ?? '').toString().toLowerCase();
+      if (_sectionKind() == 'youth' && type != 'youth') {
+        throw Exception('Youth section requires youth exhibitor');
+      }
+
+      if (!_useLocalAnimal && _animal == null) {
+        throw Exception('Select an animal');
+      }
+
+      if (_useLocalAnimal) {
+        if (_tattoo.text.trim().isEmpty) {
+          throw Exception('Enter tattoo');
+        }
+        if (_breed.text.trim().isEmpty) {
+          throw Exception('Enter breed');
+        }
+      }
+
+      final animalId = _useLocalAnimal ? null : _animal!['id'];
+
+      if (animalId != null) {
+        final dup = await supabase
+            .from('entries')
+            .select('id')
+            .eq('show_id', widget.showId)
+            .eq('section_id', _sectionId!)
+            .eq('animal_id', animalId)
+            .maybeSingle();
+
+        if (dup != null) {
+          throw Exception('Animal already entered in this section');
+        }
+      }
+
+      await supabase.from('entries').insert({
+        'show_id': widget.showId,
+        'section_id': _sectionId,
+        'exhibitor_id': resolvedExhibitorId,
+        'animal_id': animalId,
+        'species': _useLocalAnimal ? null : _animal!['species'],
+        'tattoo': _useLocalAnimal ? _tattoo.text.trim() : _animal!['tattoo'],
+        'breed': _useLocalAnimal ? _breed.text.trim() : _animal!['breed'],
+        'variety': _useLocalAnimal ? _variety.text.trim() : _animal!['variety'],
+        'sex': _useLocalAnimal ? _sex.text.trim() : _animal!['sex'],
+        'class_name': _className.text.trim().isEmpty ? null : _className.text.trim(),
+        'notes': _notes.text.trim().isEmpty ? null : _notes.text.trim(),
+        'status': 'entered',
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      });
+
+      if (!mounted) return;
+
+      if (!reset) {
+        Navigator.pop(context, true);
+        return;
+      }
+
+      setState(() {
+        _animal = null;
+        _animals = _addNewExhibitor ? [] : _animals;
+        _tattoo.clear();
+        _breed.clear();
+        _variety.clear();
+        _sex.clear();
+        _className.clear();
+        _notes.clear();
+        _saving = false;
+        _msg = 'Saved. Add another.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _msg = 'Save failed: $e';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final inset = MediaQuery.of(context).viewInsets.bottom;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: inset + 16, left: 16, right: 16, top: 10),
+      child: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('Add Entry', style: Theme.of(context).textTheme.titleLarge),
+                  const SizedBox(height: 10),
+                  if (_msg != null)
+                    Text(_msg!, style: const TextStyle(color: Colors.red)),
+
+                  const SizedBox(height: 10),
+
+                  DropdownButtonFormField<String>(
+                    value: _sectionId,
+                    decoration: const InputDecoration(labelText: 'Section'),
+                    items: widget.sections
+                        .map((s) => DropdownMenuItem<String>(
+                              value: s['id'].toString(),
+                              child: Text((s['display_name'] ?? s['letter']).toString()),
+                            ))
+                        .toList(),
+                    onChanged: _saving ? null : (v) => setState(() => _sectionId = v),
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Add New Exhibitor'),
+                    subtitle: const Text('Create a show/local exhibitor with contact info'),
+                    value: _addNewExhibitor,
+                    onChanged: _saving
+                        ? null
+                        : (v) {
+                            setState(() {
+                              _addNewExhibitor = v;
+                              _exhibitorId = null;
+                              _animal = null;
+                              _animals = [];
+                              _msg = null;
+                            });
+                          },
+                  ),
+
+                  if (_addNewExhibitor) ...[
+                    TextField(
+                      controller: _showingName,
+                      enabled: !_saving,
+                      decoration: const InputDecoration(labelText: 'Showing Name'),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _displayName,
+                      enabled: !_saving,
+                      decoration: const InputDecoration(labelText: 'Display Name'),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _firstName,
+                            enabled: !_saving,
+                            decoration: const InputDecoration(labelText: 'First Name'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextField(
+                            controller: _lastName,
+                            enabled: !_saving,
+                            decoration: const InputDecoration(labelText: 'Last Name'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _email,
+                      enabled: !_saving,
+                      decoration: const InputDecoration(labelText: 'Email'),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _phone,
+                      enabled: !_saving,
+                      decoration: const InputDecoration(labelText: 'Phone'),
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      value: _exhibitorType,
+                      decoration: const InputDecoration(labelText: 'Exhibitor Type'),
+                      items: const [
+                        DropdownMenuItem(value: 'open', child: Text('Open')),
+                        DropdownMenuItem(value: 'youth', child: Text('Youth')),
+                      ],
+                      onChanged: _saving
+                          ? null
+                          : (v) => setState(() => _exhibitorType = v ?? 'open'),
+                    ),
+                  ] else ...[
+                    DropdownButtonFormField<String>(
+                      value: _exhibitorId,
+                      decoration: const InputDecoration(labelText: 'Exhibitor'),
+                      items: _exhibitors
+                          .map((e) => DropdownMenuItem<String>(
+                                value: e['id'].toString(),
+                                child: Text(_exhibitorLabel(e)),
+                              ))
+                          .toList(),
+                      onChanged: _saving
+                          ? null
+                          : (v) async {
+                              setState(() {
+                                _exhibitorId = v;
+                                _animal = null;
+                                _animals = [];
+                                _msg = null;
+                              });
+                              await _loadAnimalsForSelectedExhibitor();
+                            },
+                    ),
+                  ],
+
+                  const SizedBox(height: 14),
+
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Add New Animal (Local Only)'),
+                    subtitle: const Text('Use when the animal is not already in the system'),
+                    value: _useLocalAnimal,
+                    onChanged: _saving
+                        ? null
+                        : (v) {
+                            setState(() {
+                              _useLocalAnimal = v;
+                              _animal = null;
+                              _msg = null;
+                            });
+                          },
+                  ),
+
+                  if (_useLocalAnimal) ...[
+                    TextField(
+                      controller: _tattoo,
+                      enabled: !_saving,
+                      decoration: const InputDecoration(labelText: 'Tattoo'),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _breed,
+                      enabled: !_saving,
+                      decoration: const InputDecoration(labelText: 'Breed'),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _variety,
+                      enabled: !_saving,
+                      decoration: const InputDecoration(labelText: 'Variety'),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _sex,
+                      enabled: !_saving,
+                      decoration: const InputDecoration(labelText: 'Sex'),
+                    ),
+                  ] else ...[
+                    if (_addNewExhibitor)
+                      const Text(
+                        'Select "Add New Animal" for a new walk-in exhibitor, or switch back to an existing exhibitor to load saved animals.',
+                      )
+                    else if (_exhibitorId == null)
+                      const Text('Select an exhibitor first to load their animals.')
+                    else if (_animals.isEmpty)
+                      const Text('No saved animals found for this exhibitor. Use "Add New Animal" to enter one locally.')
+                    else
+                      DropdownButtonFormField<Map<String, dynamic>>(
+                        value: _animal,
+                        decoration: const InputDecoration(labelText: 'Animal'),
+                        items: _animals
+                            .map((a) => DropdownMenuItem<Map<String, dynamic>>(
+                                  value: a,
+                                  child: Text(_animalLabel(a)),
+                                ))
+                            .toList(),
+                        onChanged: _saving ? null : (v) => setState(() => _animal = v),
+                      ),
+                  ],
+
+                  const SizedBox(height: 12),
+
+                  TextField(
+                    controller: _className,
+                    enabled: !_saving,
+                    decoration: const InputDecoration(labelText: 'Class'),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _notes,
+                    enabled: !_saving,
+                    decoration: const InputDecoration(labelText: 'Notes'),
+                  ),
+                  const SizedBox(height: 16),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: _saving ? null : () => _save(),
+                          child: Text(_saving ? 'Saving…' : 'Save'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: _saving ? null : () => _save(reset: true),
+                          child: const Text('Save & Add Another'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
     );
   }
 }

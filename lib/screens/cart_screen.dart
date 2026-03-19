@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../utils/date_time_utils.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -358,7 +359,7 @@ class _CartScreenState extends State<CartScreen> {
                       Text(
                         _deadlinePassed()
                             ? 'Entry deadline: PASSED'
-                            : 'Entry deadline: ${_parseTs(_show?['entry_close_at'])?.toLocal().toString() ?? '(not set)'}',
+                            : 'Entry deadline: ${formatLocalDateTime(_show?['entry_close_at']?.toString())}',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                       const SizedBox(height: 10),

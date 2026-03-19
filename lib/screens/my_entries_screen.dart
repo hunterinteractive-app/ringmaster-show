@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'my_animals_screen.dart';
+import '../utils/date_time_utils.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -411,7 +412,10 @@ class _ShowExpansionCard extends StatelessWidget {
     final exhibitorIds = exhibitorBuckets.keys.toList()
       ..sort((a, b) => exhibitorLabel(a).compareTo(exhibitorLabel(b)));
 
-    final deadlineText = closeAt == null ? '(deadline not set)' : closeAt!.toLocal().toString();
+    final deadlineText = closeAt == null
+        ? '(deadline not set)'
+        : formatLocalDateTime(closeAt!.toIso8601String());
+
     final totalEntries = exhibitorBuckets.values.fold<int>(0, (sum, list) => sum + list.length);
 
     return Card(
@@ -425,7 +429,9 @@ class _ShowExpansionCard extends StatelessWidget {
           Align(
             alignment: Alignment.centerLeft,
             child: Text(
-              deadlinePassed ? 'Entry deadline: PASSED' : 'Entry deadline: $deadlineText',
+              deadlinePassed
+                  ? 'Entry deadline: PASSED'
+                  : 'Entry deadline: $deadlineText',
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ),

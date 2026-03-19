@@ -19,6 +19,8 @@ import 'closeout/pdf/builders/legs_report_pdf.dart';
 import 'closeout/data/loaders/exhibitor_report_loader.dart';
 import 'closeout/pdf/builders/exhibitor_report_pdf.dart';
 
+import '../../../utils/date_time_utils.dart';
+
 final supabase = Supabase.instance.client;
 
 class ShowCloseoutPage extends StatefulWidget {
@@ -94,8 +96,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     'variety_standings',
     'class_standings',
     'points_report_csv',
-    'control_sheet',
-    'checkin_sheet',
     'commercial_class_points',
     'newsletter',
   ];
@@ -497,8 +497,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                             groupedReportNames: {
                               'arba': _reportNamesForGroup('arba'),
                               'exhibitor': _reportNamesForGroup('exhibitor'),
-                              'club': _reportNamesForGroup('club'),
-                              'other': _reportNamesForGroup('other'),
+                              //'club': _reportNamesForGroup('club'), 🧪
+                              //'other': _reportNamesForGroup('other'),🧪
                             },
                             onGenerate: _generateReportByName,
                             onDownload: _downloadReportByName,
@@ -917,14 +917,8 @@ class _ErrorView extends StatelessWidget {
 }
 
 String _fmt(String? value) {
-  if (value == null || value.isEmpty) return '-';
-  try {
-    final dt = DateTime.parse(value).toLocal();
-    String two(int n) => n.toString().padLeft(2, '0');
-    return '${dt.year}-${two(dt.month)}-${two(dt.day)} ${two(dt.hour)}:${two(dt.minute)}';
-  } catch (_) {
-    return value;
-  }
+  final formatted = formatLocalDateTime(value);
+  return formatted == '(not set)' || formatted == '(invalid date)' ? '-' : formatted;
 }
 
 String _friendlyStatus(String status) {

@@ -6,12 +6,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 final supabase = Supabase.instance.client;
 
 class ShowSectionsDialog {
-  static Future<void> open(
+  static Future<bool> open(
     BuildContext context, {
     required String showId,
     required String showName,
   }) async {
-    await showDialog(
+    final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (_) => _ShowSectionsDialog(
@@ -19,6 +19,8 @@ class ShowSectionsDialog {
         showName: showName,
       ),
     );
+
+    return result == true;
   }
 }
 
@@ -104,9 +106,7 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
       _deletedIds.clear();
 
       for (final row in rows) {
-        _sections.add(
-          _EditableSection.fromDb(row),
-        );
+        _sections.add(_EditableSection.fromDb(row));
       }
 
       _normalizeSortOrder();
@@ -248,14 +248,11 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
     });
 
     try {
-      // Delete removed rows first
       for (final id in _deletedIds) {
         await supabase.from('show_sections').delete().eq('id', id);
       }
-
       _deletedIds.clear();
 
-      // Save current rows
       for (int i = 0; i < _sections.length; i++) {
         final s = _sections[i];
         s.sortOrder = i + 1;
@@ -283,10 +280,7 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
       }
 
       if (!mounted) return;
-      setState(() {
-        _saving = false;
-        _msg = 'Saved.';
-      });
+      Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -328,9 +322,7 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
                 Expanded(
                   child: Text(
                     'Section ${index + 1}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),
                 IconButton(
@@ -429,9 +421,7 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
               if (_msg != null) ...[
                 Text(
                   _msg!,
-                  style: TextStyle(
-                    color: _msg == 'Saved.' ? Colors.green : Colors.red,
-                  ),
+                  style: const TextStyle(color: Colors.red),
                 ),
                 const SizedBox(height: 8),
               ],
@@ -477,7 +467,7 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
-                    onPressed: _saving ? null : () => Navigator.pop(context),
+                    onPressed: _saving ? null : () => Navigator.pop(context, false),
                     child: const Text('Close'),
                   ),
                   const SizedBox(width: 8),

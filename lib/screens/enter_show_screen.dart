@@ -94,8 +94,9 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     final sections = await _loadEnabledSections();
     final exhibitors = await _loadActiveExhibitors();
 
-    if (exhibitors.isNotEmpty && _selectedExhibitorId == null) {
-      _selectedExhibitorId = exhibitors.first['id'].toString();
+    final allowedExhibitors = _allowedExhibitorsForCurrentSectionKind(exhibitors);
+    if (allowedExhibitors.isNotEmpty && _selectedExhibitorId == null) {
+      _selectedExhibitorId = allowedExhibitors.first['id'].toString();
     }
 
     await _loadActiveCartIdIfExists();
@@ -134,6 +135,55 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     final dn = (e['display_name'] ?? '').toString().trim();
     if (dn.isNotEmpty) return dn;
     return '(Unnamed Exhibitor)';
+  }
+
+  String _exhibitorType(Map<String, dynamic> e) {
+    return (e['type'] ?? '').toString().trim().toLowerCase();
+  }
+
+  bool _isYouthExhibitor(Map<String, dynamic> e) {
+    final type = _exhibitorType(e);
+    return type == 'youth';
+  }
+
+  bool _isExhibitorAllowedForKind(Map<String, dynamic> exhibitor, String? sectionKind) {
+    if (sectionKind == 'youth') {
+      return _isYouthExhibitor(exhibitor);
+    }
+
+    // Open show can accept either open or youth exhibitors.
+    return true;
+  }
+
+  List<Map<String, dynamic>> _allowedExhibitorsForCurrentSectionKind(
+    List<Map<String, dynamic>> exhibitors,
+  ) {
+    return exhibitors
+        .where((e) => _isExhibitorAllowedForKind(e, _lockedSectionKind))
+        .toList();
+  }
+
+  Map<String, dynamic>? _selectedExhibitorRecord() {
+    if (_selectedExhibitorId == null) return null;
+    try {
+      return _exhibitors.firstWhere((e) => e['id'].toString() == _selectedExhibitorId);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _ensureSelectedExhibitorStillAllowed() {
+    if (_selectedExhibitorId == null) return;
+
+    final exhibitor = _selectedExhibitorRecord();
+    if (exhibitor == null) {
+      _selectedExhibitorId = null;
+      return;
+    }
+
+    if (!_isExhibitorAllowedForKind(exhibitor, _lockedSectionKind)) {
+      _selectedExhibitorId = null;
+    }
   }
 
   // ------------------------------
@@ -523,6 +573,12 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
       _selectedSectionIds.clear();
       _lockedSectionKind = null;
       _msg = null;
+
+      final allowed = _allowedExhibitorsForCurrentSectionKind(_exhibitors);
+      if (_selectedExhibitorId != null &&
+          !allowed.any((e) => e['id'].toString() == _selectedExhibitorId)) {
+        _selectedExhibitorId = allowed.isNotEmpty ? allowed.first['id'].toString() : null;
+      }
     });
   }
 
@@ -544,9 +600,18 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
 
       if (_selectedSectionIds.contains(sectionId)) {
         _selectedSectionIds.remove(sectionId);
-        if (_selectedSectionIds.isEmpty) _lockedSectionKind = null;
+        if (_selectedSectionIds.isEmpty) {
+          _lockedSectionKind = null;
+        }
       } else {
         _selectedSectionIds.add(sectionId);
+      }
+
+      _ensureSelectedExhibitorStillAllowed();
+
+      final allowed = _allowedExhibitorsForCurrentSectionKind(_exhibitors);
+      if (_selectedExhibitorId == null && allowed.isNotEmpty) {
+        _selectedExhibitorId = allowed.first['id'].toString();
       }
     });
   }
@@ -571,6 +636,21 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     }
     if (_selectedSectionIds.isEmpty || _lockedSectionKind == null) {
       setState(() => _msg = 'Select one or more sections (Open A/B… or Youth A/B…).');
+      return;
+    }
+
+    final selectedExhibitor = _selectedExhibitorRecord();
+    if (selectedExhibitor == null) {
+      setState(() => _msg = 'Selected exhibitor could not be found.');
+      return;
+    }
+
+    if (!_isExhibitorAllowedForKind(selectedExhibitor, _lockedSectionKind)) {
+      setState(() {
+        _msg = _lockedSectionKind == 'youth'
+            ? 'Youth sections require a youth exhibitor.'
+            : 'Selected exhibitor is not allowed for the chosen sections.';
+      });
       return;
     }
 
@@ -668,7 +748,15 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
       await _loadActiveCartIdIfExists();
       await _refreshAnimalsInCart();
       await _refreshAnimalsAlreadyEnteredForShow(bundleAnimalsFallback(chosen, eligibleAnimals));
-      if (mounted) setState(() {});
+      if (mounted) {
+        setState(() {
+          _ensureSelectedExhibitorStillAllowed();
+          final allowed = _allowedExhibitorsForCurrentSectionKind(_exhibitors);
+          if (_selectedExhibitorId == null && allowed.isNotEmpty) {
+            _selectedExhibitorId = allowed.first['id'].toString();
+          }
+        });
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _msg = 'Add to cart failed: $e');
@@ -908,8 +996,16 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
           final sections = bundle.sections;
 
           _exhibitors = bundle.exhibitors;
-          if (_selectedExhibitorId == null && _exhibitors.isNotEmpty) {
-            _selectedExhibitorId = _exhibitors.first['id'].toString();
+
+          final allowedExhibitors = _allowedExhibitorsForCurrentSectionKind(_exhibitors);
+
+          if (_selectedExhibitorId == null && allowedExhibitors.isNotEmpty) {
+            _selectedExhibitorId = allowedExhibitors.first['id'].toString();
+          } else if (_selectedExhibitorId != null &&
+              !allowedExhibitors.any((e) => e['id'].toString() == _selectedExhibitorId)) {
+            _selectedExhibitorId = allowedExhibitors.isNotEmpty
+                ? allowedExhibitors.first['id'].toString()
+                : null;
           }
 
           if (sections.isEmpty) {
@@ -975,12 +1071,15 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: DropdownButtonFormField<String>(
                   value: _selectedExhibitorId,
-                  items: _exhibitors.map((e) {
+                  items: allowedExhibitors.map((e) {
                     final id = e['id'].toString();
                     final label = _exhibitorLabel(e);
+                    final type = _exhibitorType(e);
+                    final suffix = type.isEmpty ? '' : ' (${type[0].toUpperCase()}${type.substring(1)})';
+
                     return DropdownMenuItem<String>(
                       value: id,
-                      child: Text(label),
+                      child: Text('$label$suffix'),
                     );
                   }).toList(),
                   onChanged: _submitting
@@ -991,9 +1090,11 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                             _msg = null;
                           });
                         },
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Exhibitor (Showing name)',
-                    helperText: 'Choose who these entries belong to.',
+                    helperText: _lockedSectionKind == 'youth'
+                        ? 'Youth sections only allow youth exhibitors.'
+                        : 'Open sections allow youth or open exhibitors.',
                   ),
                 ),
               ),
@@ -1040,7 +1141,9 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                   child: Text(
                     _lockedSectionKind == null
                         ? 'Pick one section to lock to Open or Youth, then select multiple.'
-                        : 'You can select multiple ${_lockedSectionKind!} sections. You can’t mix Open and Youth.',
+                        : _lockedSectionKind == 'youth'
+                            ? 'You can select multiple youth sections. Youth sections require a youth exhibitor.'
+                            : 'You can select multiple open sections. Open sections allow youth or open exhibitors.',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ),

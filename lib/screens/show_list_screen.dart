@@ -12,6 +12,7 @@ import 'account_settings_screen.dart';
 import 'my_entries_screen.dart';
 
 import '../services/role_service.dart';
+import '../utils/date_time_utils.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -25,7 +26,7 @@ class ShowListScreen extends StatelessWidget {
   Future<List<Map<String, dynamic>>> _loadShows() async {
     final res = await supabase
         .from('shows')
-        .select('id,name,start_date,location_name')
+        .select('id,name,start_date,location_name,entry_close_at')
         .eq('is_published', true)
         .order('start_date');
 
@@ -230,6 +231,9 @@ class ShowListScreen extends StatelessWidget {
                   final showName = (s['name'] ?? '').toString();
                   final startDate = (s['start_date'] ?? '').toString();
                   final location = (s['location_name'] ?? '').toString();
+                  final entryDeadlineText = formatLocalDateTime(s['entry_close_at']?.toString());
+                  final deadlinePassed = s['entry_close_at'] != null &&
+                      DateTime.parse(s['entry_close_at'].toString()).toLocal().isBefore(DateTime.now());
 
                   // ✅ Super Admin can admin any show
                   final isAdminForShow =
@@ -237,7 +241,10 @@ class ShowListScreen extends StatelessWidget {
 
                   return ListTile(
                     title: Text(showName),
-                    subtitle: Text('$startDate • $location'),
+                    subtitle: Text(
+                      '$startDate • $location\n'
+                      '${deadlinePassed ? 'Entry deadline: PASSED' : 'Entry deadline: $entryDeadlineText'}',
+                    ),
                     trailing: PopupMenuButton<String>(
                       tooltip: 'Actions',
                       onSelected: (v) {
