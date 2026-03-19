@@ -57,6 +57,53 @@ class ShowListScreen extends StatelessWidget {
         .toSet();
   }
 
+  Future<bool> _hasAnyAssignedShows() async {
+    final user = supabase.auth.currentUser;
+    if (user == null) return false;
+
+    final rows = await supabase
+        .from('role_assignments')
+        .select('show_id')
+        .eq('user_id', user.id)
+        .limit(1);
+
+    return (rows as List).isNotEmpty;
+  }
+
+  Future<bool> _hasAvailableShowCapacity() async {
+    final user = supabase.auth.currentUser;
+    if (user == null) return false;
+
+    final row = await supabase
+        .from('account_license_balances')
+        .select(
+          'purchased_show_days, consumed_show_days, unlimited_active, unlimited_expires_at',
+        )
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+    if (row == null) return false;
+
+    final unlimitedActive = row['unlimited_active'] == true;
+    final unlimitedExpiresAtRaw = row['unlimited_expires_at']?.toString();
+
+    if (unlimitedActive) {
+      if (unlimitedExpiresAtRaw == null || unlimitedExpiresAtRaw.trim().isEmpty) {
+        return true;
+      }
+
+      final expiresAt = DateTime.tryParse(unlimitedExpiresAtRaw);
+      if (expiresAt != null && expiresAt.toUtc().isAfter(DateTime.now().toUtc())) {
+        return true;
+      }
+    }
+
+    final purchased = (row['purchased_show_days'] as num?)?.toInt() ?? 0;
+    final consumed = (row['consumed_show_days'] as num?)?.toInt() ?? 0;
+
+    return purchased > consumed;
+  }
+
   Future<_ShowListBundle> _loadBundle() async {
     final shows = await _loadShows();
     final isSuper = await RoleService.isSuperAdmin();
@@ -68,10 +115,26 @@ class ShowListScreen extends StatelessWidget {
       adminShowIds = <String>{};
     }
 
+    bool hasAvailableShowCapacity = false;
+    try {
+      hasAvailableShowCapacity = await _hasAvailableShowCapacity();
+    } catch (_) {
+      hasAvailableShowCapacity = false;
+    }
+
+    bool hasAnyAssignedShows = false;
+    try {
+      hasAnyAssignedShows = await _hasAnyAssignedShows();
+    } catch (_) {
+      hasAnyAssignedShows = false;
+    }
+
     return _ShowListBundle(
       shows: shows,
       adminShowIds: adminShowIds,
       isSuperAdmin: isSuper,
+      hasAvailableShowCapacity: hasAvailableShowCapacity,
+      hasAnyAssignedShows: hasAnyAssignedShows,
     );
   }
 
@@ -122,7 +185,6 @@ class ShowListScreen extends StatelessWidget {
           appBar: AppBar(
             title: const Text('Upcoming Shows'),
             actions: [
-              // We can only decide Admin visibility once bundle is loaded
               if (snap.connectionState == ConnectionState.done &&
                   snap.hasError == false &&
                   (snap.data?.canSeeAdminButton ?? false))
@@ -169,7 +231,6 @@ class ShowListScreen extends StatelessWidget {
                 },
               ),
 
-              // Super Admin shortcut
               FutureBuilder<bool>(
                 future: RoleService.isSuperAdmin(),
                 builder: (context, snap) {
@@ -182,7 +243,9 @@ class ShowListScreen extends StatelessWidget {
                     onPressed: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const SuperadminHomeScreen()),
+                        MaterialPageRoute(
+                          builder: (_) => const SuperadminHomeScreen(),
+                        ),
                       );
                     },
                   );
@@ -195,7 +258,9 @@ class ShowListScreen extends StatelessWidget {
                 onPressed: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const AccountSettingsScreen()),
+                    MaterialPageRoute(
+                      builder: (_) => const AccountSettingsScreen(),
+                    ),
                   );
                 },
               ),
@@ -231,11 +296,15 @@ class ShowListScreen extends StatelessWidget {
                   final showName = (s['name'] ?? '').toString();
                   final startDate = (s['start_date'] ?? '').toString();
                   final location = (s['location_name'] ?? '').toString();
-                  final entryDeadlineText = formatLocalDateTime(s['entry_close_at']?.toString());
-                  final deadlinePassed = s['entry_close_at'] != null &&
-                      DateTime.parse(s['entry_close_at'].toString()).toLocal().isBefore(DateTime.now());
 
-                  // ✅ Super Admin can admin any show
+                  final entryDeadlineText =
+                      formatLocalDateTime(s['entry_close_at']?.toString());
+
+                  final deadlinePassed = s['entry_close_at'] != null &&
+                      DateTime.parse(
+                        s['entry_close_at'].toString(),
+                      ).toLocal().isBefore(DateTime.now());
+
                   final isAdminForShow =
                       bundle.isSuperAdmin || bundle.adminShowIds.contains(showId);
 
@@ -245,6 +314,7 @@ class ShowListScreen extends StatelessWidget {
                       '$startDate • $location\n'
                       '${deadlinePassed ? 'Entry deadline: PASSED' : 'Entry deadline: $entryDeadlineText'}',
                     ),
+                    isThreeLine: true,
                     trailing: PopupMenuButton<String>(
                       tooltip: 'Actions',
                       onSelected: (v) {
@@ -282,11 +352,15 @@ class _ShowListBundle {
   final List<Map<String, dynamic>> shows;
   final Set<String> adminShowIds;
   final bool isSuperAdmin;
+  final bool hasAvailableShowCapacity;
+  final bool hasAnyAssignedShows;
 
   _ShowListBundle({
     required this.shows,
     required this.adminShowIds,
     required this.isSuperAdmin,
+    required this.hasAvailableShowCapacity,
+    required this.hasAnyAssignedShows,
   });
 
   Set<String> get allShowIds => shows
@@ -294,5 +368,9 @@ class _ShowListBundle {
       .where((id) => id.isNotEmpty)
       .toSet();
 
-  bool get canSeeAdminButton => isSuperAdmin || adminShowIds.isNotEmpty;
+  bool get canSeeAdminButton =>
+      isSuperAdmin ||
+      adminShowIds.isNotEmpty ||
+      hasAvailableShowCapacity ||
+      hasAnyAssignedShows;
 }
