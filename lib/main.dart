@@ -8,7 +8,7 @@ import 'screens/login_screen.dart';
 import 'screens/show_list_screen.dart';
 import 'screens/account_profile_setup_screen.dart';
 import 'config/supabase_config.dart';
-
+import 'theme/app_theme.dart';
 
 
 
@@ -38,7 +38,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'RingMaster Show',
-      theme: ThemeData(useMaterial3: true),
+      theme: AppTheme.lightTheme,
       home: const Root(),
     );
   }

@@ -68,7 +68,9 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
     try {
       final res = await supabase
           .from('show_sections')
-          .select('id, show_id, kind, letter, display_name, is_enabled, sort_order')
+          .select(
+            'id, show_id, kind, letter, display_name, is_enabled, sort_order',
+          )
           .eq('show_id', widget.showId);
 
       final rows = (res as List).cast<Map<String, dynamic>>();
@@ -94,8 +96,12 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
         final sr = aso.compareTo(bso);
         if (sr != 0) return sr;
 
-        final ad = (a['display_name'] ?? a['letter'] ?? '').toString().toLowerCase();
-        final bd = (b['display_name'] ?? b['letter'] ?? '').toString().toLowerCase();
+        final ad = (a['display_name'] ?? a['letter'] ?? '')
+            .toString()
+            .toLowerCase();
+        final bd = (b['display_name'] ?? b['letter'] ?? '')
+            .toString()
+            .toLowerCase();
         return ad.compareTo(bd);
       });
 
@@ -292,27 +298,45 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
 
   Widget _kindChip(String kind) {
     final label = kind == 'youth' ? 'Youth' : 'Open';
-    final color = kind == 'youth' ? Colors.deepPurple : Colors.blue;
+    final bgColor =
+        kind == 'youth' ? const Color(0xFFEEE8FF) : const Color(0xFFE8F0FF);
+    final fgColor =
+        kind == 'youth' ? const Color(0xFF5B3FA8) : const Color(0xFF1D4E89);
 
-    return Chip(
-      label: Text(label),
-      backgroundColor: color.withValues(alpha: 0.10),
-      side: BorderSide(color: color.withValues(alpha: 0.35)),
-      labelStyle: TextStyle(
-        color: color.shade700,
-        fontWeight: FontWeight.w600,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(999),
       ),
-      visualDensity: VisualDensity.compact,
+      child: Text(
+        label,
+        style: TextStyle(
+          color: fgColor,
+          fontWeight: FontWeight.w700,
+          fontSize: 12,
+        ),
+      ),
     );
   }
 
   Widget _sectionCard(int index) {
     final s = _sections[index];
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.05),
+            blurRadius: 10,
+          ),
+        ],
+      ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
         child: Column(
           children: [
             Row(
@@ -322,7 +346,10 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
                 Expanded(
                   child: Text(
                     'Section ${index + 1}',
-                    style: const TextStyle(fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
                   ),
                 ),
                 IconButton(
@@ -344,7 +371,7 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             Row(
               children: [
                 SizedBox(
@@ -355,10 +382,11 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
                     decoration: const InputDecoration(
                       labelText: 'Letter',
                       isDense: true,
+                      border: OutlineInputBorder(),
                     ),
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 12),
                 Expanded(
                   child: TextField(
                     controller: s.displayNameCtrl,
@@ -367,12 +395,13 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
                       labelText: 'Display Name',
                       hintText: 'Example: Open A or Sweepstakes Youth',
                       isDense: true,
+                      border: OutlineInputBorder(),
                     ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             SwitchListTile(
               dense: true,
               contentPadding: EdgeInsets.zero,
@@ -398,84 +427,163 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
 
     return Dialog(
       insetPadding: const EdgeInsets.all(16),
+      backgroundColor: Colors.transparent,
       child: ConstrainedBox(
         constraints: BoxConstraints(
-          maxWidth: media.width * 0.72,
-          maxHeight: media.height * 0.88,
+          maxWidth: media.width * 0.76,
+          maxHeight: media.height * 0.90,
         ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Show Sections — ${widget.showName}',
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Set the show order, enable/disable sections, and customize names like Open A or Youth B.',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const SizedBox(height: 12),
-              if (_msg != null) ...[
-                Text(
-                  _msg!,
-                  style: const TextStyle(color: Colors.red),
-                ),
-                const SizedBox(height: 8),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [
+                Color(0xFF11285A),
+                Color(0xFF0B1C43),
               ],
-              Row(
-                children: [
-                  FilledButton.icon(
-                    onPressed: _saving ? null : () => _addSection('open'),
-                    icon: const Icon(Icons.add),
-                    label: const Text('Add Open'),
-                  ),
-                  const SizedBox(width: 8),
-                  FilledButton.icon(
-                    onPressed: _saving ? null : () => _addSection('youth'),
-                    icon: const Icon(Icons.add),
-                    label: const Text('Add Youth'),
-                  ),
-                  const Spacer(),
-                  OutlinedButton.icon(
-                    onPressed: _saving ? null : _loadSections,
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Reload'),
-                  ),
-                ],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
+                child: Row(
+                  children: [
+                    Image.asset(
+                      'assets/images/ringmaster_show_logo.png',
+                      height: 38,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Show Sections — ${widget.showName}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 20,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: _saving
+                          ? null
+                          : () => Navigator.pop(context, false),
+                      icon: const Icon(Icons.close, color: Colors.white),
+                      tooltip: 'Close',
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 12),
-              const Divider(height: 1),
-              const SizedBox(height: 12),
               Expanded(
-                child: _loading
-                    ? const Center(child: CircularProgressIndicator())
-                    : _sections.isEmpty
-                        ? const Align(
-                            alignment: Alignment.topLeft,
-                            child: Text('No sections yet. Add Open and/or Youth sections.'),
-                          )
-                        : ListView.builder(
-                            itemCount: _sections.length,
-                            itemBuilder: (context, index) => _sectionCard(index),
+                child: Container(
+                  margin: const EdgeInsets.only(top: 4),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF4F6FB),
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(24),
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Set the show order, enable or disable sections, and customize names like Open A or Youth B.',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                        const SizedBox(height: 14),
+                        if (_msg != null) ...[
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.red.withOpacity(.08),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Colors.red.withOpacity(.25),
+                              ),
+                            ),
+                            child: Text(
+                              _msg!,
+                              style: const TextStyle(
+                                color: Colors.red,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: _saving ? null : () => Navigator.pop(context, false),
-                    child: const Text('Close'),
+                          const SizedBox(height: 12),
+                        ],
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            FilledButton.icon(
+                              onPressed: _saving ? null : () => _addSection('open'),
+                              icon: const Icon(Icons.add),
+                              label: const Text('Add Open'),
+                            ),
+                            FilledButton.icon(
+                              onPressed: _saving ? null : () => _addSection('youth'),
+                              icon: const Icon(Icons.add),
+                              label: const Text('Add Youth'),
+                            ),
+                            OutlinedButton.icon(
+                              onPressed: _saving ? null : _loadSections,
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('Reload'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        Expanded(
+                          child: _loading
+                              ? const Center(child: CircularProgressIndicator())
+                              : _sections.isEmpty
+                                  ? const Align(
+                                      alignment: Alignment.topLeft,
+                                      child: Text(
+                                        'No sections yet. Add Open and/or Youth sections.',
+                                      ),
+                                    )
+                                  : ListView.builder(
+                                      itemCount: _sections.length,
+                                      itemBuilder: (context, index) =>
+                                          _sectionCard(index),
+                                    ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: _saving
+                                    ? null
+                                    : () => Navigator.pop(context, false),
+                                child: const Text('Close'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: FilledButton(
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: const Color(0xFFD4A623),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 16),
+                                ),
+                                onPressed: _saving ? null : _saveAll,
+                                child: Text(_saving ? 'Saving…' : 'Save'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: _saving ? null : _saveAll,
-                    child: Text(_saving ? 'Saving…' : 'Save'),
-                  ),
-                ],
+                ),
               ),
             ],
           ),

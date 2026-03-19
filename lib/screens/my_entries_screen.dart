@@ -1,9 +1,14 @@
 // lib/screens/my_entries_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'my_animals_screen.dart';
+import 'show_list_screen.dart';
+import 'account_settings_screen.dart';
+import '../theme/app_theme.dart';
 import '../utils/date_time_utils.dart';
+import '../widgets/rm_widgets.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -18,19 +23,11 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
   bool _loading = true;
   String? _msg;
 
-  // show_id -> show row
   final Map<String, Map<String, dynamic>> _showsById = {};
-
-  // section_id -> section row
   final Map<String, Map<String, dynamic>> _sectionsById = {};
-
-  // exhibitor_id -> exhibitor row
   final Map<String, Map<String, dynamic>> _exhibitorsById = {};
 
-  // Raw entries
   List<Map<String, dynamic>> _entries = [];
-
-  // Show expansion state
   final Set<String> _expandedShowIds = {};
 
   @override
@@ -39,9 +36,6 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
     _load();
   }
 
-  // ------------------------------
-  // Load
-  // ------------------------------
   Future<void> _load() async {
     final user = supabase.auth.currentUser;
     if (user == null) {
@@ -69,8 +63,10 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
 
       _entries = (rows as List).cast<Map<String, dynamic>>();
 
-      final showIds =
-          _entries.map((e) => (e['show_id'] ?? '').toString()).where((s) => s.isNotEmpty).toSet();
+      final showIds = _entries
+          .map((e) => (e['show_id'] ?? '').toString())
+          .where((s) => s.isNotEmpty)
+          .toSet();
 
       if (showIds.isNotEmpty) {
         final shows = await supabase
@@ -81,7 +77,8 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
         _showsById
           ..clear()
           ..addAll({
-            for (final s in (shows as List).cast<Map<String, dynamic>>()) s['id'].toString(): s,
+            for (final s in (shows as List).cast<Map<String, dynamic>>())
+              s['id'].toString(): s,
           });
 
         final sections = await supabase
@@ -92,12 +89,15 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
         _sectionsById
           ..clear()
           ..addAll({
-            for (final s in (sections as List).cast<Map<String, dynamic>>()) s['id'].toString(): s,
+            for (final s in (sections as List).cast<Map<String, dynamic>>())
+              s['id'].toString(): s,
           });
       }
 
-      final exhibitorIds =
-          _entries.map((e) => (e['exhibitor_id'] ?? '').toString()).where((s) => s.isNotEmpty).toSet();
+      final exhibitorIds = _entries
+          .map((e) => (e['exhibitor_id'] ?? '').toString())
+          .where((s) => s.isNotEmpty)
+          .toSet();
 
       if (exhibitorIds.isNotEmpty) {
         final exRows = await supabase
@@ -108,7 +108,8 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
         _exhibitorsById
           ..clear()
           ..addAll({
-            for (final e in (exRows as List).cast<Map<String, dynamic>>()) e['id'].toString(): e,
+            for (final e in (exRows as List).cast<Map<String, dynamic>>())
+              e['id'].toString(): e,
           });
       }
 
@@ -123,9 +124,6 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
     }
   }
 
-  // ------------------------------
-  // Helpers
-  // ------------------------------
   DateTime? _parseTs(dynamic v) {
     if (v == null) return null;
     return DateTime.tryParse(v.toString());
@@ -150,10 +148,9 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
     return DateTime.now().isAfter(closeAt.toLocal());
   }
 
-  /// ✅ Hide the entire show after 48 hours past show start_date.
   bool _hideShowAfter48h(String showId) {
     final sd = _showStartDate(showId);
-    if (sd == null) return false; // if missing show date, don't hide
+    if (sd == null) return false;
     final cutoff = sd.toLocal().add(const Duration(hours: 48));
     return DateTime.now().isAfter(cutoff);
   }
@@ -185,9 +182,6 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
     return 'Section';
   }
 
-  // ------------------------------
-  // Actions: Scratch/Edit
-  // ------------------------------
   Future<void> _scratchEntry(Map<String, dynamic> entry) async {
     final id = entry['id']?.toString() ?? '';
     if (id.isEmpty) return;
@@ -214,7 +208,8 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
     if (showId.isEmpty) return;
 
     if (_deadlinePassedForShow(showId)) {
-      setState(() => _msg = 'Entry deadline passed. Editing is locked. You can still scratch entries.');
+      setState(() => _msg =
+          'Entry deadline passed. Editing is locked. You can still scratch entries.');
       return;
     }
 
@@ -244,15 +239,19 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
       return;
     }
 
-    final picked = animals.where((a) => (a['id'] ?? '').toString() == result.animalId).toList();
+    final picked = animals
+        .where((a) => (a['id'] ?? '').toString() == result.animalId)
+        .toList();
     if (picked.isEmpty) {
       setState(() => _msg = 'Selected animal not found.');
       return;
     }
-    final a = picked.first;
 
+    final a = picked.first;
     final rawSpecies = (a['species'] ?? '').toString().trim().toLowerCase();
-    final species = (rawSpecies == 'rabbit' || rawSpecies == 'cavy') ? rawSpecies : null;
+    final species =
+        (rawSpecies == 'rabbit' || rawSpecies == 'cavy') ? rawSpecies : null;
+
     if (species == null) {
       setState(() => _msg = 'Animal species must be rabbit or cavy.');
       return;
@@ -275,9 +274,6 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
     }
   }
 
-  // ------------------------------
-  // Grouping: Show -> Exhibitor -> Entries
-  // ------------------------------
   Map<String, Map<String, List<Map<String, dynamic>>>> _grouped() {
     final Map<String, Map<String, List<Map<String, dynamic>>>> out = {};
     for (final e in _entries) {
@@ -290,7 +286,6 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
       out[showId]![exhibitorId]!.add(e);
     }
 
-    // sort entries in each exhibitor bucket
     for (final showBuckets in out.values) {
       for (final list in showBuckets.values) {
         list.sort((a, b) {
@@ -308,46 +303,70 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
     return out;
   }
 
-  // ------------------------------
-  // UI
-  // ------------------------------
+  void _openUpcomingShows(BuildContext context) {
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const ShowListScreen()),
+    );
+  }
+
+  void _openAnimals(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const MyAnimalsScreen()),
+    );
+  }
+
+  void _openAccount(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AccountSettingsScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final grouped = _grouped();
 
-    // ✅ Filter out shows older than 48 hours after show date
-    final visibleShowIds = grouped.keys.where((showId) => !_hideShowAfter48h(showId)).toList()
+    final visibleShowIds = grouped.keys
+        .where((showId) => !_hideShowAfter48h(showId))
+        .toList()
       ..sort((a, b) => _showTitle(a).compareTo(_showTitle(b)));
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('My Entries'),
-        actions: [
-          IconButton(
-            tooltip: 'Reload',
-            icon: const Icon(Icons.refresh),
-            onPressed: _loading ? null : _load,
-          ),
-        ],
+      appBar: _MyEntriesAppBar(
+        onUpcomingShows: () => _openUpcomingShows(context),
+        onAnimals: () => _openAnimals(context),
+        onAccount: () => _openAccount(context),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : visibleShowIds.isEmpty
-              ? const Center(
-                  child: Text(
-                    'No recent entries.\n(Shows disappear here 48 hours after their show date.)',
-                    textAlign: TextAlign.center,
-                  ),
+              ? const RMEmptyState(
+                  title: 'No recent entries',
+                  subtitle:
+                      'Shows disappear here 48 hours after their show date.',
+                  icon: Icons.receipt_long_outlined,
                 )
               : ListView(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(AppSpacing.lg),
                   children: [
                     if (_msg != null)
                       Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Text(_msg!, style: const TextStyle(color: Colors.red)),
+                        padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                        child: RMCard(
+                          child: Text(
+                            _msg!,
+                            style: TextStyle(
+                              color: _msg!.toLowerCase().contains('failed') ||
+                                      _msg!.toLowerCase().contains('error') ||
+                                      _msg!.toLowerCase().contains('required')
+                                  ? AppColors.danger
+                                  : AppColors.success,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
                       ),
-
                     for (final showId in visibleShowIds) ...[
                       _ShowExpansionCard(
                         title: _showTitle(showId),
@@ -369,10 +388,138 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
                           });
                         },
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: AppSpacing.md),
                     ],
                   ],
                 ),
+    );
+  }
+}
+
+class _MyEntriesAppBar extends StatelessWidget implements PreferredSizeWidget {
+  final VoidCallback onUpcomingShows;
+  final VoidCallback onAnimals;
+  final VoidCallback onAccount;
+
+  const _MyEntriesAppBar({
+    required this.onUpcomingShows,
+    required this.onAnimals,
+    required this.onAccount,
+  });
+
+  @override
+  Size get preferredSize => const Size.fromHeight(92);
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final showLabels = width >= 1100;
+
+    return AppBar(
+      toolbarHeight: 92,
+      titleSpacing: 16,
+      title: Row(
+        children: [
+          Image.asset(
+            'assets/images/ringmaster_show_logo.png',
+            height: 48,
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.high,
+          ),
+          const SizedBox(width: 14),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'RingMaster Show',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: Colors.white,
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'My Entries',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.white.withOpacity(.9),
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                    ),
+              ),
+            ],
+          ),
+        ],
+      ),
+      actions: [
+        _TopBarAction(
+          icon: Icons.event,
+          label: 'Shows',
+          showLabel: showLabels,
+          onTap: onUpcomingShows,
+        ),
+        _TopBarAction(
+          icon: Icons.pets,
+          label: 'Animals',
+          showLabel: showLabels,
+          onTap: onAnimals,
+        ),
+        _TopBarAction(
+          icon: Icons.manage_accounts,
+          label: 'Account',
+          showLabel: showLabels,
+          onTap: onAccount,
+        ),
+        const SizedBox(width: 10),
+      ],
+    );
+  }
+}
+
+class _TopBarAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool showLabel;
+  final VoidCallback onTap;
+
+  const _TopBarAction({
+    required this.icon,
+    required this.label,
+    required this.showLabel,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (!showLabel) {
+      return IconButton(
+        tooltip: label,
+        icon: Icon(icon, color: Colors.white),
+        onPressed: onTap,
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: TextButton.icon(
+        onPressed: onTap,
+        style: TextButton.styleFrom(
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+          ),
+        ),
+        icon: Icon(icon, size: 18, color: Colors.white),
+        label: Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -381,16 +528,11 @@ class _ShowExpansionCard extends StatelessWidget {
   final String title;
   final bool deadlinePassed;
   final DateTime? closeAt;
-
-  // exhibitorId -> entries
   final Map<String, List<Map<String, dynamic>>> exhibitorBuckets;
-
   final String Function(String? exhibitorId) exhibitorLabel;
   final String Function(String? sectionId) sectionLabel;
-
   final Future<void> Function(Map<String, dynamic> entry) onEdit;
   final Future<void> Function(Map<String, dynamic> entry) onScratch;
-
   final bool initiallyExpanded;
   final ValueChanged<bool> onExpandedChanged;
 
@@ -416,74 +558,132 @@ class _ShowExpansionCard extends StatelessWidget {
         ? '(deadline not set)'
         : formatLocalDateTime(closeAt!.toIso8601String());
 
-    final totalEntries = exhibitorBuckets.values.fold<int>(0, (sum, list) => sum + list.length);
+    final totalEntries =
+        exhibitorBuckets.values.fold<int>(0, (sum, list) => sum + list.length);
 
-    return Card(
-      child: ExpansionTile(
-        initiallyExpanded: initiallyExpanded,
-        onExpansionChanged: onExpandedChanged,
-        title: Text(title),
-        subtitle: Text('$totalEntries entries'),
-        childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-        children: [
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              deadlinePassed
-                  ? 'Entry deadline: PASSED'
-                  : 'Entry deadline: $deadlineText',
-              style: Theme.of(context).textTheme.bodySmall,
+    return RMCard(
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          initiallyExpanded: initiallyExpanded,
+          onExpansionChanged: onExpandedChanged,
+          tilePadding: EdgeInsets.zero,
+          childrenPadding: const EdgeInsets.only(bottom: AppSpacing.sm),
+          title: Text(
+            title,
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.xs),
+            child: Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                RMBadge(
+                  text: '$totalEntries entr${totalEntries == 1 ? 'y' : 'ies'}',
+                  icon: Icons.receipt_long,
+                ),
+                RMBadge(
+                  text: deadlinePassed
+                      ? 'Deadline Passed'
+                      : 'Deadline: $deadlineText',
+                  icon: Icons.event_available,
+                  danger: deadlinePassed,
+                  success: !deadlinePassed,
+                ),
+              ],
             ),
           ),
-          const Divider(height: 24),
+          children: [
+            const SizedBox(height: AppSpacing.md),
+            for (final exId in exhibitorIds) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(AppSpacing.md),
+                decoration: BoxDecoration(
+                  color: AppColors.bg,
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      exhibitorLabel(exId),
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    ...exhibitorBuckets[exId]!.map((e) {
+                      final section = sectionLabel(e['section_id']);
+                      final tattoo = (e['tattoo'] ?? '').toString();
+                      final breed = (e['breed'] ?? '').toString();
+                      final variety = (e['variety'] ?? '').toString();
+                      final sex = (e['sex'] ?? '').toString();
+                      final cls = (e['class_name'] ?? '').toString();
+                      final status = (e['status'] ?? '').toString();
+                      final scratched = status.toLowerCase() == 'scratched';
 
-          for (final exId in exhibitorIds) ...[
-            Text(exhibitorLabel(exId), style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: 8),
+                      final canEdit = !deadlinePassed && !scratched;
+                      final canScratch = !scratched;
 
-            ...exhibitorBuckets[exId]!.map((e) {
-              final section = sectionLabel(e['section_id']);
-              final tattoo = (e['tattoo'] ?? '').toString();
-              final breed = (e['breed'] ?? '').toString();
-              final variety = (e['variety'] ?? '').toString();
-              final sex = (e['sex'] ?? '').toString();
-              final cls = (e['class_name'] ?? '').toString();
-              final status = (e['status'] ?? '').toString();
-              final scratched = status.toLowerCase() == 'scratched';
-
-              final canEdit = !deadlinePassed && !scratched;
-              final canScratch = !scratched;
-
-              return ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text('$tattoo'),
-                subtitle: Text('$breed • $variety • $sex\nClass: $cls\nStatus: $status\nSection: $section'),
-                isThreeLine: true,
-                trailing: (canEdit || canScratch)
-                    ? Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (canEdit)
-                            IconButton(
-                              tooltip: 'Edit',
-                              icon: const Icon(Icons.edit),
-                              onPressed: () => onEdit(e),
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(AppRadius.sm),
+                            border: Border.all(color: Colors.grey.shade200),
+                          ),
+                          child: ListTile(
+                            title: Text(
+                              tattoo.isEmpty ? '(No tattoo)' : tattoo,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                decoration:
+                                    scratched ? TextDecoration.lineThrough : null,
+                              ),
                             ),
-                          if (canScratch)
-                            IconButton(
-                              tooltip: 'Scratch',
-                              icon: const Icon(Icons.remove_circle_outline),
-                              onPressed: () => onScratch(e),
+                            subtitle: Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Text(
+                                '$breed • $variety • $sex\nClass: $cls\nStatus: $status\nSection: $section',
+                              ),
                             ),
-                        ],
-                      )
-                    : null,
-              );
-            }).toList(),
-
-            const Divider(height: 24),
+                            isThreeLine: true,
+                            trailing: (canEdit || canScratch)
+                                ? Wrap(
+                                    spacing: 4,
+                                    children: [
+                                      if (canEdit)
+                                        IconButton(
+                                          tooltip: 'Edit',
+                                          icon: const Icon(Icons.edit),
+                                          onPressed: () => onEdit(e),
+                                        ),
+                                      if (canScratch)
+                                        IconButton(
+                                          tooltip: 'Scratch',
+                                          icon: const Icon(
+                                            Icons.remove_circle_outline,
+                                          ),
+                                          onPressed: () => onScratch(e),
+                                        ),
+                                    ],
+                                  )
+                                : null,
+                          ),
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -492,14 +692,17 @@ class _ShowExpansionCard extends StatelessWidget {
 class _EditEntryResult {
   final String animalId;
   final String className;
-  _EditEntryResult({required this.animalId, required this.className});
+
+  _EditEntryResult({
+    required this.animalId,
+    required this.className,
+  });
 }
 
 class _EditEntryDialogV2 extends StatefulWidget {
   final String initialAnimalId;
   final String initialClassName;
   final List<Map<String, dynamic>> animals;
-
   final Future<void> Function() onAddNewAnimal;
   final Future<List<Map<String, dynamic>>> Function() reloadAnimals;
 
@@ -541,7 +744,9 @@ class _EditEntryDialogV2State extends State<_EditEntryDialogV2> {
     final breed = (a['breed'] ?? '').toString().trim();
     final variety = (a['variety'] ?? '').toString().trim();
     final sex = (a['sex'] ?? '').toString().trim();
-    final top = tattoo.isNotEmpty ? tattoo : (name.isNotEmpty ? name : (a['id'] ?? '').toString());
+    final top = tattoo.isNotEmpty
+        ? tattoo
+        : (name.isNotEmpty ? name : (a['id'] ?? '').toString());
     return '$top — $breed • $variety • $sex';
   }
 
@@ -554,8 +759,11 @@ class _EditEntryDialogV2State extends State<_EditEntryDialogV2> {
 
       setState(() {
         _animals = refreshed;
-        final exists = _animals.any((a) => (a['id'] ?? '').toString() == _animalId);
-        if (!exists && _animals.isNotEmpty) _animalId = (_animals.first['id'] ?? '').toString();
+        final exists =
+            _animals.any((a) => (a['id'] ?? '').toString() == _animalId);
+        if (!exists && _animals.isNotEmpty) {
+          _animalId = (_animals.first['id'] ?? '').toString();
+        }
       });
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -564,7 +772,8 @@ class _EditEntryDialogV2State extends State<_EditEntryDialogV2> {
 
   @override
   Widget build(BuildContext context) {
-    final hasSelected = _animals.any((a) => (a['id'] ?? '').toString() == _animalId);
+    final hasSelected =
+        _animals.any((a) => (a['id'] ?? '').toString() == _animalId);
 
     return AlertDialog(
       title: const Text('Edit Entry'),
@@ -580,10 +789,15 @@ class _EditEntryDialogV2State extends State<_EditEntryDialogV2> {
                   final id = (a['id'] ?? '').toString();
                   return DropdownMenuItem<String>(
                     value: id,
-                    child: Text(_animalLabel(a), overflow: TextOverflow.ellipsis),
+                    child: Text(
+                      _animalLabel(a),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   );
                 }).toList(),
-                onChanged: _busy ? null : (v) => setState(() => _animalId = v ?? _animalId),
+                onChanged: _busy
+                    ? null
+                    : (v) => setState(() => _animalId = v ?? _animalId),
                 decoration: const InputDecoration(
                   labelText: 'Animal',
                   helperText: 'Swap to an existing animal from My Animals.',
@@ -622,7 +836,10 @@ class _EditEntryDialogV2State extends State<_EditEntryDialogV2> {
               : () {
                   Navigator.pop(
                     context,
-                    _EditEntryResult(animalId: _animalId, className: _classCtrl.text),
+                    _EditEntryResult(
+                      animalId: _animalId,
+                      className: _classCtrl.text,
+                    ),
                   );
                 },
           child: Text(_busy ? 'Working…' : 'Save'),

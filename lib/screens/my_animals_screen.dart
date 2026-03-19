@@ -1,6 +1,14 @@
+// lib/screens/my_animal_screen.dart
+
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'show_list_screen.dart';
+import 'my_entries_screen.dart';
+import 'account_settings_screen.dart';
+import '../theme/app_theme.dart';
+import '../widgets/rm_widgets.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -28,6 +36,38 @@ class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
     setState(() {});
   }
 
+  Future<void> _confirmDeleteAnimal(Map<String, dynamic> animal) async {
+    final name = (animal['name'] ?? '').toString().trim();
+    final tattoo = (animal['tattoo'] ?? '').toString().trim();
+    final breed = (animal['breed'] ?? '').toString().trim();
+
+    final label = name.isNotEmpty
+        ? '$name${tattoo.isNotEmpty ? ' ($tattoo)' : ''}'
+        : '$breed${tattoo.isNotEmpty ? ' ($tattoo)' : ''}';
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete Animal'),
+        content: Text('Are you sure you want to delete $label?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _deleteAnimal(animal['id'] as String);
+    }
+  }
+
   Future<void> _openAnimalEditor({Map<String, dynamic>? existing}) async {
     final saved = await showDialog<bool>(
       context: context,
@@ -39,18 +79,41 @@ class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
     }
   }
 
+  void _openShows(BuildContext context) {
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const ShowListScreen()),
+    );
+  }
+
+  void _openEntries(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const MyEntriesScreen()),
+    );
+  }
+
+  void _openAccount(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AccountSettingsScreen()),
+    );
+  }
+
+  String _speciesLabel(String value) {
+    final s = value.trim().toLowerCase();
+    if (s == 'rabbit') return 'Rabbit';
+    if (s == 'cavy') return 'Cavy';
+    return value;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('My Animals'),
-        actions: [
-          IconButton(
-            tooltip: 'Add',
-            icon: const Icon(Icons.add),
-            onPressed: () => _openAnimalEditor(),
-          ),
-        ],
+      appBar: _MyAnimalsAppBar(
+        onShows: () => _openShows(context),
+        onEntries: () => _openEntries(context),
+        onAccount: () => _openAccount(context),
+        onAdd: () => _openAnimalEditor(),
       ),
       body: FutureBuilder<List<Map<String, dynamic>>>(
         future: _loadAnimals(),
@@ -64,38 +127,240 @@ class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
 
           final animals = snap.data ?? [];
           if (animals.isEmpty) {
-            return const Center(child: Text('No animals yet. Tap + to add one.'));
+            return const RMEmptyState(
+              title: 'No animals yet',
+              subtitle: 'Add your animals here so they are ready when entering shows.',
+              icon: Icons.pets_outlined,
+            );
           }
 
-          return ListView.separated(
+          return ListView.builder(
+            padding: const EdgeInsets.all(AppSpacing.lg),
             itemCount: animals.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
             itemBuilder: (context, i) {
               final a = animals[i];
               final species = (a['species'] ?? '').toString();
-
+              final breed = (a['breed'] ?? '').toString();
+              final variety = (a['variety'] ?? '').toString();
+              final sex = (a['sex'] ?? '').toString();
+              final dob = (a['birth_date'] ?? '').toString();
+              final tattoo = (a['tattoo'] ?? '').toString().trim();
               final name = (a['name'] ?? '').toString().trim();
-              final title = name.isEmpty
-                  ? '${a['breed']} (${a['tattoo']})'
-                  : '$name (${a['tattoo']})';
 
-              return ListTile(
-                title: Text(title),
-                subtitle: Text(
-                  '${species.toUpperCase()} • ${a['breed']} • ${a['variety']} • ${a['sex']}'
-                  '\nDOB: ${a['birth_date'] ?? ''}',
-                ),
-                isThreeLine: true,
-                onTap: () => _openAnimalEditor(existing: a),
-                trailing: IconButton(
-                  tooltip: 'Delete',
-                  icon: const Icon(Icons.delete_outline),
-                  onPressed: () => _deleteAnimal(a['id'] as String),
+              final title = name.isEmpty
+                  ? '$breed${tattoo.isNotEmpty ? ' ($tattoo)' : ''}'
+                  : '$name${tattoo.isNotEmpty ? ' ($tattoo)' : ''}';
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                child: RMCard(
+                  onTap: () => _openAnimalEditor(existing: a),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              title,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                          PopupMenuButton<String>(
+                            tooltip: 'Actions',
+                            onSelected: (value) {
+                              if (value == 'edit') {
+                                _openAnimalEditor(existing: a);
+                              } else if (value == 'delete') {
+                                _confirmDeleteAnimal(a);
+                              }
+                            },
+                            itemBuilder: (_) => const [
+                              PopupMenuItem(
+                                value: 'edit',
+                                child: Text('Edit'),
+                              ),
+                              PopupMenuItem(
+                                value: 'delete',
+                                child: Text('Delete'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Wrap(
+                        spacing: AppSpacing.sm,
+                        runSpacing: AppSpacing.sm,
+                        children: [
+                          RMBadge(
+                            text: _speciesLabel(species),
+                            icon: Icons.category_outlined,
+                          ),
+                          if (sex.isNotEmpty)
+                            RMBadge(
+                              text: sex,
+                              icon: Icons.info_outline,
+                            ),
+                          if (dob.isNotEmpty)
+                            RMBadge(
+                              text: 'DOB: $dob',
+                              icon: Icons.cake_outlined,
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      Text(
+                        '$breed • $variety',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ],
+                  ),
                 ),
               );
             },
           );
         },
+      ),
+    );
+  }
+}
+
+class _MyAnimalsAppBar extends StatelessWidget implements PreferredSizeWidget {
+  final VoidCallback onShows;
+  final VoidCallback onEntries;
+  final VoidCallback onAccount;
+  final VoidCallback onAdd;
+
+  const _MyAnimalsAppBar({
+    required this.onShows,
+    required this.onEntries,
+    required this.onAccount,
+    required this.onAdd,
+  });
+
+  @override
+  Size get preferredSize => const Size.fromHeight(92);
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final showLabels = width >= 1100;
+
+    return AppBar(
+      toolbarHeight: 92,
+      titleSpacing: 16,
+      title: Row(
+        children: [
+          Image.asset(
+            'assets/images/ringmaster_show_logo.png',
+            height: 48,
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.high,
+          ),
+          const SizedBox(width: 14),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'RingMaster Show',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: Colors.white,
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'My Animals',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.white.withOpacity(.9),
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                    ),
+              ),
+            ],
+          ),
+        ],
+      ),
+      actions: [
+        _TopBarAction(
+          icon: Icons.event,
+          label: 'Shows',
+          showLabel: showLabels,
+          onTap: onShows,
+        ),
+        _TopBarAction(
+          icon: Icons.receipt_long,
+          label: 'Entries',
+          showLabel: showLabels,
+          onTap: onEntries,
+        ),
+        _TopBarAction(
+          icon: Icons.manage_accounts,
+          label: 'Account',
+          showLabel: showLabels,
+          onTap: onAccount,
+        ),
+        _TopBarAction(
+          icon: Icons.add,
+          label: 'Add Animal',
+          showLabel: showLabels,
+          onTap: onAdd,
+        ),
+        const SizedBox(width: 10),
+      ],
+    );
+  }
+}
+
+class _TopBarAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool showLabel;
+  final VoidCallback onTap;
+
+  const _TopBarAction({
+    required this.icon,
+    required this.label,
+    required this.showLabel,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (!showLabel) {
+      return IconButton(
+        tooltip: label,
+        icon: Icon(icon, color: Colors.white),
+        onPressed: onTap,
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: TextButton.icon(
+        onPressed: onTap,
+        style: TextButton.styleFrom(
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+          ),
+        ),
+        icon: Icon(icon, size: 18, color: Colors.white),
+        label: Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ),
     );
   }
@@ -112,14 +377,12 @@ class _AnimalEditorDialog extends StatefulWidget {
 class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
   final _name = TextEditingController();
   final _tattoo = TextEditingController();
-
   final _breedText = TextEditingController();
   final _varietyText = TextEditingController();
 
   String _species = 'rabbit';
   String? _sexValue;
   DateTime? _birthDate;
-
   String? _breedId;
 
   List<Map<String, dynamic>> _breedOptions = [];
@@ -127,14 +390,14 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
 
   bool _loadingBreeds = false;
   bool _loadingVarieties = false;
-  bool _isLopBreedName(String breedName) {
-    return breedName.trim().toLowerCase().endsWith('lop');
-  }
-
   bool _saving = false;
   String? _msg;
 
   bool get _isEdit => widget.existing != null;
+
+  bool _isLopBreedName(String breedName) {
+    return breedName.trim().toLowerCase().endsWith('lop');
+  }
 
   List<String> get _sexOptions =>
       _species == 'rabbit' ? const ['Buck', 'Doe'] : const ['Boar', 'Sow'];
@@ -191,7 +454,8 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
         _birthDate = DateTime.tryParse(bd.toString());
       }
 
-      _sexValue = _normalizeSex(e['sex']?.toString(), _species) ?? _sexOptions.first;
+      _sexValue =
+          _normalizeSex(e['sex']?.toString(), _species) ?? _sexOptions.first;
     } else {
       _sexValue = _sexOptions.first;
     }
@@ -205,7 +469,9 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
       final typed = _breedText.text.trim().toLowerCase();
 
       if (typed.isEmpty) {
-        if (_breedId != null || _varietyText.text.isNotEmpty || _varietyOptions.isNotEmpty) {
+        if (_breedId != null ||
+            _varietyText.text.isNotEmpty ||
+            _varietyOptions.isNotEmpty) {
           setState(() {
             _breedId = null;
             _varietyOptions = [];
@@ -228,7 +494,9 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
           _loadVarietiesForBreed(newId);
         }
       } else {
-        if (_breedId != null || _varietyText.text.isNotEmpty || _varietyOptions.isNotEmpty) {
+        if (_breedId != null ||
+            _varietyText.text.isNotEmpty ||
+            _varietyOptions.isNotEmpty) {
           setState(() {
             _breedId = null;
             _varietyOptions = [];
@@ -405,7 +673,10 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
 
     try {
       if (_isEdit) {
-        await supabase.from('animals').update(payload).eq('id', widget.existing!['id']);
+        await supabase
+            .from('animals')
+            .update(payload)
+            .eq('id', widget.existing!['id']);
       } else {
         await supabase.from('animals').insert(payload);
       }
@@ -462,18 +733,16 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
               decoration: const InputDecoration(labelText: 'Species (required)'),
             ),
             const SizedBox(height: 8),
-
             TextField(
               controller: _name,
               decoration: const InputDecoration(labelText: 'Name (optional)'),
             ),
             TextField(
               controller: _tattoo,
-              decoration: const InputDecoration(labelText: 'Tattoo / ID (required)'),
+              decoration:
+                  const InputDecoration(labelText: 'Tattoo / ID (required)'),
             ),
-
             const SizedBox(height: 12),
-
             if (_loadingBreeds) const LinearProgressIndicator(),
             Autocomplete<Map<String, dynamic>>(
               optionsBuilder: (TextEditingValue text) {
@@ -516,7 +785,6 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
                 );
               },
             ),
-
             if (invalidBreedWarning != null) ...[
               const SizedBox(height: 6),
               Align(
@@ -527,13 +795,14 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
                 ),
               ),
             ],
-
             const SizedBox(height: 12),
-
-            if (_breedId != null && _loadingVarieties) const LinearProgressIndicator(),
+            if (_breedId != null && _loadingVarieties)
+              const LinearProgressIndicator(),
             Autocomplete<Map<String, dynamic>>(
               optionsBuilder: (TextEditingValue text) {
-                if (_breedId == null) return const Iterable<Map<String, dynamic>>.empty();
+                if (_breedId == null) {
+                  return const Iterable<Map<String, dynamic>>.empty();
+                }
                 final q = text.text.trim().toLowerCase();
                 if (q.isEmpty) return _varietyOptions;
                 return _varietyOptions.where(
@@ -587,7 +856,6 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
                 );
               },
             ),
-
             if (invalidVarietyWarning != null) ...[
               const SizedBox(height: 6),
               Align(
@@ -598,9 +866,7 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
                 ),
               ),
             ],
-
             const SizedBox(height: 12),
-
             DropdownButtonFormField<String>(
               value: _sexValue,
               items: _sexOptions
@@ -612,9 +878,7 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
                 hintText: _species == 'rabbit' ? 'Buck or Doe' : 'Boar or Sow',
               ),
             ),
-
             const SizedBox(height: 8),
-
             Row(
               children: [
                 Expanded(
@@ -628,7 +892,6 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
                 ),
               ],
             ),
-
             if (_msg != null) ...[
               const SizedBox(height: 8),
               Text(_msg!, style: const TextStyle(color: Colors.red)),

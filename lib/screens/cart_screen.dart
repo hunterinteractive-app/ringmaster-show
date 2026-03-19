@@ -1,3 +1,5 @@
+// lib/screens/cart_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../utils/date_time_utils.dart';
@@ -321,144 +323,279 @@ class _CartScreenState extends State<CartScreen> {
   // UI
   // ------------------------------
   @override
-  Widget build(BuildContext context) {
-    final title = 'Cart — ${widget.showName}';
+    Widget build(BuildContext context) {
+      final title = 'Cart — ${widget.showName}';
 
-    final overallFee = _calculateFeesForItems(_items);
-    final currency = overallFee['currency'] as String;
+      final overallFee = _calculateFeesForItems(_items);
+      final currency = overallFee['currency'] as String;
 
-    final grouped = _groupItemsByExhibitor();
+      final grouped = _groupItemsByExhibitor();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-        actions: [
-          IconButton(
-            tooltip: 'Reload',
-            icon: const Icon(Icons.refresh),
-            onPressed: _confirming ? null : _load,
-          ),
-        ],
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                if (_msg != null)
-                  Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Text(_msg!, style: const TextStyle(color: Colors.red)),
+      return Scaffold(
+        appBar: AppBar(
+          toolbarHeight: 70,
+          titleSpacing: 0,
+          title: Row(
+            children: [
+              const SizedBox(width: 12),
+              Image.asset(
+                'assets/images/ringmaster_show_logo.png',
+                height: 42,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 18,
                   ),
-
-                // Deadline + Overall Fee Summary
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _deadlinePassed()
-                            ? 'Entry deadline: PASSED'
-                            : 'Entry deadline: ${formatLocalDateTime(_show?['entry_close_at']?.toString())}',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                      const SizedBox(height: 10),
-                      Text('Overall Fees', style: Theme.of(context).textTheme.titleMedium),
-                      const SizedBox(height: 6),
-                      _feeSettings == null
-                          ? Text(
-                              'No show fee settings found yet. (show_fee_settings row missing)',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            )
-                          : Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '${overallFee['entry_count']} entries × ${_money(overallFee['fee_per_entry'] as double, currency: currency)} = '
-                                  '${_money(overallFee['entries_subtotal'] as double, currency: currency)}',
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            IconButton(
+              tooltip: 'Reload',
+              icon: const Icon(Icons.refresh),
+              onPressed: _confirming ? null : _load,
+            ),
+          ],
+        ),
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Color(0xFF11285A),
+                Color(0xFF0B1C43),
+              ],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+          ),
+          child: _loading
+              ? const Center(
+                  child: CircularProgressIndicator(color: Colors.white),
+                )
+              : SafeArea(
+                  child: Container(
+                    margin: const EdgeInsets.only(top: 8),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFF4F6FB),
+                      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                    ),
+                    child: Column(
+                      children: [
+                        if (_msg != null)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.red.withOpacity(.08),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: Colors.red.withOpacity(.25),
                                 ),
-                                if ((overallFee['show_fee'] as double) > 0)
-                                  Text('Per-show fee: ${_money(overallFee['show_fee'] as double, currency: currency)}'),
-                                if ((overallFee['discount_amount'] as double) > 0)
-                                  Text(
-                                    'Multi-show discount (${overallFee['additional_entries']} additional entries): '
-                                    '-${_money(overallFee['discount_amount'] as double, currency: currency)}',
-                                  ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  'Total: ${_money(overallFee['total'] as double, currency: currency)}',
-                                  style: Theme.of(context).textTheme.titleSmall,
+                              ),
+                              child: Text(
+                                _msg!,
+                                style: const TextStyle(
+                                  color: Colors.red,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+
+                        Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(.05),
+                                  blurRadius: 10,
                                 ),
                               ],
                             ),
-                    ],
-                  ),
-                ),
-
-                const Divider(height: 1),
-
-                // Grouped cart list
-                Expanded(
-                  child: _items.isEmpty
-                      ? const Center(child: Text('Your cart is empty.'))
-                      : ListView(
-                          children: [
-                            for (final entry in grouped.entries) ...[
-                              _ExhibitorGroupHeader(
-                                exhibitorName: entry.key == '__unassigned__'
-                                    ? 'Unassigned Exhibitor'
-                                    : (_exhibitorLabelById[entry.key] ?? 'Exhibitor'),
-                                feeSettingsExists: _feeSettings != null,
-                                feeLine: _feeSettings == null
-                                    ? null
-                                    : _buildExhibitorFeeLine(
-                                        exhibitorItems: entry.value,
-                                        currency: currency,
-                                      ),
-                              ),
-                              ...entry.value.map((it) {
-                                final sectionId = it['section_id']?.toString() ?? '';
-                                final sec = _sectionById[sectionId];
-                                final secName = (sec?['display_name'] ?? 'Section').toString();
-
-                                final animalLabel =
-                                    '${(it['breed'] ?? '').toString()} • ${(it['variety'] ?? '').toString()} • ${(it['sex'] ?? '').toString()}';
-
-                                final top =
-                                    '${(it['tattoo'] ?? '').toString().trim().isEmpty ? it['animal_id'] : it['tattoo']}';
-
-                                return ListTile(
-                                  title: Text('$secName — $top'),
-                                  subtitle: Text('$animalLabel\nClass: ${(it['class_name'] ?? '').toString()}'),
-                                  isThreeLine: true,
-                                  trailing: IconButton(
-                                    tooltip: 'Remove',
-                                    icon: const Icon(Icons.delete_outline),
-                                    onPressed: _confirming ? null : () => _removeItem(it['id'].toString()),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _deadlinePassed()
+                                      ? 'Entry deadline: PASSED'
+                                      : 'Entry deadline: ${formatLocalDateTime(_show?['entry_close_at']?.toString())}',
+                                  style: TextStyle(
+                                    color: _deadlinePassed()
+                                        ? Colors.red
+                                        : Colors.black87,
+                                    fontWeight: FontWeight.w600,
                                   ),
-                                );
-                              }).toList(),
-                              const Divider(height: 1),
-                            ],
-                          ],
+                                ),
+                                const SizedBox(height: 14),
+                                Text(
+                                  'Overall Fees',
+                                  style: Theme.of(context).textTheme.titleMedium,
+                                ),
+                                const SizedBox(height: 8),
+                                _feeSettings == null
+                                    ? Text(
+                                        'No show fee settings found yet. (show_fee_settings row missing)',
+                                        style: Theme.of(context).textTheme.bodySmall,
+                                      )
+                                    : Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            '${overallFee['entry_count']} entries × ${_money(overallFee['fee_per_entry'] as double, currency: currency)} = '
+                                            '${_money(overallFee['entries_subtotal'] as double, currency: currency)}',
+                                          ),
+                                          if ((overallFee['show_fee'] as double) > 0)
+                                            Padding(
+                                              padding: const EdgeInsets.only(top: 4),
+                                              child: Text(
+                                                'Per-show fee: ${_money(overallFee['show_fee'] as double, currency: currency)}',
+                                              ),
+                                            ),
+                                          if ((overallFee['discount_amount'] as double) > 0)
+                                            Padding(
+                                              padding: const EdgeInsets.only(top: 4),
+                                              child: Text(
+                                                'Multi-show discount (${overallFee['additional_entries']} additional entries): '
+                                                '-${_money(overallFee['discount_amount'] as double, currency: currency)}',
+                                              ),
+                                            ),
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            'Total: ${_money(overallFee['total'] as double, currency: currency)}',
+                                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                          ),
+                                        ],
+                                      ),
+                              ],
+                            ),
+                          ),
                         ),
-                ),
 
-                // Confirm button
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: (_confirming || _deadlinePassed() || _items.isEmpty) ? null : _confirmDayOf,
-                      child: Text(_confirming ? 'Confirming…' : 'Confirm Entries (Pay Day-of-Show)'),
+                        Expanded(
+                          child: _items.isEmpty
+                              ? const Center(
+                                  child: Text(
+                                    'Your cart is empty.',
+                                    textAlign: TextAlign.center,
+                                  ),
+                                )
+                              : ListView(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  children: [
+                                    for (final entry in grouped.entries) ...[
+                                      Container(
+                                        margin: const EdgeInsets.only(bottom: 10),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius: BorderRadius.circular(16),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withOpacity(.04),
+                                              blurRadius: 8,
+                                            ),
+                                          ],
+                                        ),
+                                        child: Column(
+                                          children: [
+                                            _ExhibitorGroupHeader(
+                                              exhibitorName: entry.key == '__unassigned__'
+                                                  ? 'Unassigned Exhibitor'
+                                                  : (_exhibitorLabelById[entry.key] ?? 'Exhibitor'),
+                                              feeSettingsExists: _feeSettings != null,
+                                              feeLine: _feeSettings == null
+                                                  ? null
+                                                  : _buildExhibitorFeeLine(
+                                                      exhibitorItems: entry.value,
+                                                      currency: currency,
+                                                    ),
+                                            ),
+                                            const Divider(height: 1),
+                                            ...entry.value.map((it) {
+                                              final sectionId =
+                                                  it['section_id']?.toString() ?? '';
+                                              final sec = _sectionById[sectionId];
+                                              final secName =
+                                                  (sec?['display_name'] ?? 'Section')
+                                                      .toString();
+
+                                              final animalLabel =
+                                                  '${(it['breed'] ?? '').toString()} • ${(it['variety'] ?? '').toString()} • ${(it['sex'] ?? '').toString()}';
+
+                                              final top =
+                                                  '${(it['tattoo'] ?? '').toString().trim().isEmpty ? it['animal_id'] : it['tattoo']}';
+
+                                              return ListTile(
+                                                title: Text(
+                                                  '$secName — $top',
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                                subtitle: Text(
+                                                  '$animalLabel\nClass: ${(it['class_name'] ?? '').toString()}',
+                                                ),
+                                                isThreeLine: true,
+                                                trailing: IconButton(
+                                                  tooltip: 'Remove',
+                                                  icon: const Icon(Icons.delete_outline),
+                                                  onPressed: _confirming
+                                                      ? null
+                                                      : () => _removeItem(
+                                                            it['id'].toString(),
+                                                          ),
+                                                ),
+                                              );
+                                            }),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                        ),
+
+                        Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: FilledButton(
+                              style: FilledButton.styleFrom(
+                                backgroundColor: const Color(0xFFD4A623),
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                              ),
+                              onPressed: (_confirming || _deadlinePassed() || _items.isEmpty)
+                                  ? null
+                                  : _confirmDayOf,
+                              child: Text(
+                                _confirming
+                                    ? 'Confirming…'
+                                    : 'Confirm Entries (Pay Day-of-Show)',
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-              ],
-            ),
-    );
-  }
+        ),
+      );
+    }
 
   String _buildExhibitorFeeLine({
     required List<Map<String, dynamic>> exhibitorItems,
@@ -499,12 +636,22 @@ class _ExhibitorGroupHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-      color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.35),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF11285A).withOpacity(.06),
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(16),
+        ),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(exhibitorName, style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            exhibitorName,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
           if (feeSettingsExists && feeLine != null) ...[
             const SizedBox(height: 4),
             Text(

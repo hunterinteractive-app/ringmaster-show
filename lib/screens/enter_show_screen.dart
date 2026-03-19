@@ -1,4 +1,5 @@
 // lib/screens/enter_show_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -94,9 +95,8 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     final sections = await _loadEnabledSections();
     final exhibitors = await _loadActiveExhibitors();
 
-    final allowedExhibitors = _allowedExhibitorsForCurrentSectionKind(exhibitors);
-    if (allowedExhibitors.isNotEmpty && _selectedExhibitorId == null) {
-      _selectedExhibitorId = allowedExhibitors.first['id'].toString();
+    if (exhibitors.isNotEmpty && _selectedExhibitorId == null) {
+      _selectedExhibitorId = exhibitors.first['id'].toString();
     }
 
     await _loadActiveCartIdIfExists();
@@ -146,12 +146,14 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     return type == 'youth';
   }
 
-  bool _isExhibitorAllowedForKind(Map<String, dynamic> exhibitor, String? sectionKind) {
+  bool _isExhibitorAllowedForKind(
+    Map<String, dynamic> exhibitor,
+    String? sectionKind,
+  ) {
     if (sectionKind == 'youth') {
       return _isYouthExhibitor(exhibitor);
     }
 
-    // Open show can accept either open or youth exhibitors.
     return true;
   }
 
@@ -166,7 +168,9 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   Map<String, dynamic>? _selectedExhibitorRecord() {
     if (_selectedExhibitorId == null) return null;
     try {
-      return _exhibitors.firstWhere((e) => e['id'].toString() == _selectedExhibitorId);
+      return _exhibitors.firstWhere(
+        (e) => e['id'].toString() == _selectedExhibitorId,
+      );
     } catch (_) {
       return null;
     }
@@ -573,12 +577,6 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
       _selectedSectionIds.clear();
       _lockedSectionKind = null;
       _msg = null;
-
-      final allowed = _allowedExhibitorsForCurrentSectionKind(_exhibitors);
-      if (_selectedExhibitorId != null &&
-          !allowed.any((e) => e['id'].toString() == _selectedExhibitorId)) {
-        _selectedExhibitorId = allowed.isNotEmpty ? allowed.first['id'].toString() : null;
-      }
     });
   }
 
@@ -600,18 +598,9 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
 
       if (_selectedSectionIds.contains(sectionId)) {
         _selectedSectionIds.remove(sectionId);
-        if (_selectedSectionIds.isEmpty) {
-          _lockedSectionKind = null;
-        }
+        if (_selectedSectionIds.isEmpty) _lockedSectionKind = null;
       } else {
         _selectedSectionIds.add(sectionId);
-      }
-
-      _ensureSelectedExhibitorStillAllowed();
-
-      final allowed = _allowedExhibitorsForCurrentSectionKind(_exhibitors);
-      if (_selectedExhibitorId == null && allowed.isNotEmpty) {
-        _selectedExhibitorId = allowed.first['id'].toString();
       }
     });
   }
@@ -636,21 +625,6 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     }
     if (_selectedSectionIds.isEmpty || _lockedSectionKind == null) {
       setState(() => _msg = 'Select one or more sections (Open A/B… or Youth A/B…).');
-      return;
-    }
-
-    final selectedExhibitor = _selectedExhibitorRecord();
-    if (selectedExhibitor == null) {
-      setState(() => _msg = 'Selected exhibitor could not be found.');
-      return;
-    }
-
-    if (!_isExhibitorAllowedForKind(selectedExhibitor, _lockedSectionKind)) {
-      setState(() {
-        _msg = _lockedSectionKind == 'youth'
-            ? 'Youth sections require a youth exhibitor.'
-            : 'Selected exhibitor is not allowed for the chosen sections.';
-      });
       return;
     }
 
@@ -748,15 +722,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
       await _loadActiveCartIdIfExists();
       await _refreshAnimalsInCart();
       await _refreshAnimalsAlreadyEnteredForShow(bundleAnimalsFallback(chosen, eligibleAnimals));
-      if (mounted) {
-        setState(() {
-          _ensureSelectedExhibitorStillAllowed();
-          final allowed = _allowedExhibitorsForCurrentSectionKind(_exhibitors);
-          if (_selectedExhibitorId == null && allowed.isNotEmpty) {
-            _selectedExhibitorId = allowed.first['id'].toString();
-          }
-        });
-      }
+      if (mounted) setState(() {});
     } catch (e) {
       if (!mounted) return;
       setState(() => _msg = 'Add to cart failed: $e');
@@ -978,412 +944,225 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text('Enter: ${widget.showName}')),
-      body: FutureBuilder<_EnterShowLoadBundle>(
-        future: _loadFuture,
-        builder: (context, snap) {
-          if (snap.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snap.hasError) {
-            return Center(child: Text('Error: ${snap.error}'));
-          }
-
-          final bundle = snap.data!;
-          final allAnimals = bundle.animals;
-          final sections = bundle.sections;
-
-          _exhibitors = bundle.exhibitors;
-
-          final allowedExhibitors = _allowedExhibitorsForCurrentSectionKind(_exhibitors);
-
-          if (_selectedExhibitorId == null && allowedExhibitors.isNotEmpty) {
-            _selectedExhibitorId = allowedExhibitors.first['id'].toString();
-          } else if (_selectedExhibitorId != null &&
-              !allowedExhibitors.any((e) => e['id'].toString() == _selectedExhibitorId)) {
-            _selectedExhibitorId = allowedExhibitors.isNotEmpty
-                ? allowedExhibitors.first['id'].toString()
-                : null;
-          }
-
-          if (sections.isEmpty) {
-            return const Center(
-              child: Text('No show sections configured. Admin must enable Open/Youth A/B.'),
-            );
-          }
-
-          if (_exhibitors.isEmpty) {
-            return const Center(
-              child: Text('No active exhibitors found.\nGo to Account Settings and add an exhibitor first.'),
-            );
-          }
-
-          if (allAnimals.isEmpty) {
-            return const Center(child: Text('No animals saved yet. Add animals first.'));
-          }
-
-          final visibleSections = _lockedSectionKind == null
-              ? sections
-              : sections.where((s) => (s['kind'] ?? '').toString() == _lockedSectionKind).toList();
-
-          final eligible = <Map<String, dynamic>>[];
-          final ineligible = <Map<String, dynamic>>[];
-
-          for (final a in allAnimals) {
-            final animalId = (a['id'] ?? '').toString();
-            final species = (a['species'] ?? '').toString();
-            final breed = (a['breed'] ?? '').toString();
-            final variety = (a['variety'] ?? '').toString();
-
-            final alreadyEntered = _isAnimalAlreadyEntered(animalId);
-            final breedOk = _breedAllowed(species, breed);
-            final varOk = breedOk ? _varietyAllowed(breed, variety) : false;
-
-            if (!alreadyEntered && breedOk && varOk) {
-              eligible.add(a);
-            } else {
-              ineligible.add(a);
-            }
-          }
-
-          final sortedEligible = _sortAnimals(eligible);
-          final sortedIneligible = _sortAnimals(ineligible);
-          final groupedEligible = _groupEligibleAnimals(sortedEligible);
-
-          final showDateText = _showDate == null
-              ? '(show date missing)'
-              : _showDate!.toIso8601String().substring(0, 10);
-
-          return Column(
+    Widget build(BuildContext context) {
+      return Scaffold(
+        appBar: AppBar(
+          toolbarHeight: 70,
+          titleSpacing: 0,
+          title: Row(
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text('Show date: $showDateText'),
-                ),
+              const SizedBox(width: 12),
+              Image.asset(
+                'assets/ringmaster_show_logo.png',
+                height: 42,
               ),
-              const SizedBox(height: 8),
-
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: DropdownButtonFormField<String>(
-                  value: _selectedExhibitorId,
-                  items: allowedExhibitors.map((e) {
-                    final id = e['id'].toString();
-                    final label = _exhibitorLabel(e);
-                    final type = _exhibitorType(e);
-                    final suffix = type.isEmpty ? '' : ' (${type[0].toUpperCase()}${type.substring(1)})';
-
-                    return DropdownMenuItem<String>(
-                      value: id,
-                      child: Text('$label$suffix'),
-                    );
-                  }).toList(),
-                  onChanged: _submitting
-                      ? null
-                      : (v) {
-                          setState(() {
-                            _selectedExhibitorId = v;
-                            _msg = null;
-                          });
-                        },
-                  decoration: InputDecoration(
-                    labelText: 'Exhibitor (Showing name)',
-                    helperText: _lockedSectionKind == 'youth'
-                        ? 'Youth sections only allow youth exhibitors.'
-                        : 'Open sections allow youth or open exhibitors.',
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  widget.showName,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 18,
                   ),
-                ),
-              ),
-
-              const SizedBox(height: 8),
-
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: _submitting ? null : _viewCart,
-                    icon: const Icon(Icons.shopping_cart_outlined),
-                    label: Text(_activeCartId == null ? 'View Cart (create)' : 'View Cart'),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 10),
-
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        _lockedSectionKind == null
-                            ? 'Select sections (Open or Youth)'
-                            : 'Selected: ${_lockedSectionKind!.toUpperCase()}',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: _submitting ? null : _clearSectionSelection,
-                      child: const Text('Clear'),
-                    ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    _lockedSectionKind == null
-                        ? 'Pick one section to lock to Open or Youth, then select multiple.'
-                        : _lockedSectionKind == 'youth'
-                            ? 'You can select multiple youth sections. Youth sections require a youth exhibitor.'
-                            : 'You can select multiple open sections. Open sections allow youth or open exhibitors.',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ),
-              ),
-
-              SizedBox(
-                height: 46,
-                child: ListView(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  scrollDirection: Axis.horizontal,
-                  children: visibleSections.map((s) {
-                    final id = s['id'].toString();
-                    final kind = (s['kind'] ?? '').toString();
-                    final name = (s['display_name'] ?? '').toString();
-                    final selected = _selectedSectionIds.contains(id);
-
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: FilterChip(
-                        label: Text(name),
-                        selected: selected,
-                        onSelected: _submitting ? null : (_) => _toggleSection(sectionId: id, kind: kind),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
-
-              if (_msg != null)
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Text(_msg!, style: const TextStyle(color: Colors.red)),
-                ),
-
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Animals already in your cart or already entered in this show are not available.',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ),
-              ),
-
-              if (sortedEligible.isEmpty)
-                Expanded(
-                  child: Center(
-                    child: Text(
-                      sortedIneligible.isEmpty
-                          ? 'No animals available.'
-                          : 'None of your saved animals are allowed for this show.\nCheck show breed/variety settings.',
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                )
-              else
-                Expanded(
-                  child: ListView(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                'Eligible animals (${sortedEligible.length})',
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                            ),
-                            TextButton(
-                              onPressed: _submitting
-                                  ? null
-                                  : () => _toggleManySelected(
-                                        sortedEligible,
-                                        !_allSelectableChecked(sortedEligible),
-                                      ),
-                              child: Text(
-                                _allSelectableChecked(sortedEligible) ? 'Clear All' : 'Select All',
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      ...groupedEligible.entries.map((breedEntry) {
-                        final breedName = breedEntry.key;
-                        final varietyMap = breedEntry.value;
-                        final breedAnimals = varietyMap.values.expand((x) => x).toList();
-                        final breedAllChecked = _allSelectableChecked(breedAnimals);
-                        final breedCollapsed = _isBreedCollapsed(breedName);
-
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Container(
-                              color: Colors.black12,
-                              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                              child: Row(
-                                children: [
-                                  IconButton(
-                                    visualDensity: VisualDensity.compact,
-                                    onPressed: () => _toggleBreedCollapsed(breedName),
-                                    icon: Icon(
-                                      breedCollapsed ? Icons.chevron_right : Icons.expand_more,
-                                    ),
-                                  ),
-                                  Expanded(
-                                    child: InkWell(
-                                      onTap: () => _toggleBreedCollapsed(breedName),
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(vertical: 4),
-                                        child: Text(
-                                          '$breedName (${breedAnimals.length})',
-                                          style: Theme.of(context).textTheme.titleMedium,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  TextButton(
-                                    onPressed: _submitting
-                                        ? null
-                                        : () => _toggleManySelected(
-                                              breedAnimals,
-                                              !breedAllChecked,
-                                            ),
-                                    child: Text(breedAllChecked ? 'Clear Breed' : 'Select Breed'),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            if (!breedCollapsed)
-                              ...varietyMap.entries.map((varietyEntry) {
-                                final varietyName = varietyEntry.key;
-                                final varietyAnimals = varietyEntry.value;
-                                final varietyAllChecked = _allSelectableChecked(varietyAnimals);
-                                final varietyCollapsed = _isVarietyCollapsed(breedName, varietyName);
-
-                                return Column(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                                  children: [
-                                    Container(
-                                      color: Colors.black12.withOpacity(0.04),
-                                      padding: const EdgeInsets.fromLTRB(24, 8, 12, 8),
-                                      child: Row(
-                                        children: [
-                                          IconButton(
-                                            visualDensity: VisualDensity.compact,
-                                            onPressed: () => _toggleVarietyCollapsed(breedName, varietyName),
-                                            icon: Icon(
-                                              varietyCollapsed ? Icons.chevron_right : Icons.expand_more,
-                                              size: 20,
-                                            ),
-                                          ),
-                                          Expanded(
-                                            child: InkWell(
-                                              onTap: () => _toggleVarietyCollapsed(breedName, varietyName),
-                                              child: Padding(
-                                                padding: const EdgeInsets.symmetric(vertical: 4),
-                                                child: Text(
-                                                  '$varietyName (${varietyAnimals.length})',
-                                                  style: Theme.of(context).textTheme.titleSmall,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                          TextButton(
-                                            onPressed: _submitting
-                                                ? null
-                                                : () => _toggleManySelected(
-                                                      varietyAnimals,
-                                                      !varietyAllChecked,
-                                                    ),
-                                            child: Text(
-                                              varietyAllChecked ? 'Clear Variety' : 'Select Variety',
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    if (!varietyCollapsed) ...varietyAnimals.map(_buildAnimalTile),
-                                  ],
-                                );
-                              }),
-                          ],
-                        );
-                      }),
-
-                      if (sortedIneligible.isNotEmpty) ...[
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(12, 16, 12, 6),
-                          child: Text(
-                            'Not allowed for this show (${sortedIneligible.length})',
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                        ),
-                        ...sortedIneligible.map((a) {
-                          final animalId = (a['id'] ?? '').toString();
-                          final species = (a['species'] ?? '').toString();
-                          final breed = (a['breed'] ?? '').toString();
-                          final variety = (a['variety'] ?? '').toString();
-
-                          final alreadyEntered = _isAnimalAlreadyEntered(animalId);
-                          final breedOk = _breedAllowed(species, breed);
-
-                          final reason = alreadyEntered
-                              ? 'Already entered in this show'
-                              : (!breedOk
-                                  ? 'Breed disabled for this show'
-                                  : 'Variety not enabled for this show');
-
-                          return ListTile(
-                            title: Text(_displayAnimalTitle(a)),
-                            subtitle: Text(
-                              '${species.toUpperCase()} • $breed • $variety • ${a['sex']}\n$reason',
-                            ),
-                            isThreeLine: true,
-                          );
-                        }),
-                      ],
-                    ],
-                  ),
-                ),
-
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: _submitting ? null : () => _addSelectedToCart(sortedEligible),
-                    child: Text(_submitting ? 'Saving…' : 'Add Selected to Cart'),
-                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
-          );
-        },
-      ),
-    );
-  }
+          ),
+        ),
+
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Color(0xFF11285A),
+                Color(0xFF0B1C43),
+              ],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+          ),
+
+          child: FutureBuilder<_EnterShowLoadBundle>(
+            future: _loadFuture,
+            builder: (context, snap) {
+              if (snap.connectionState != ConnectionState.done) {
+                return const Center(child: CircularProgressIndicator(color: Colors.white));
+              }
+
+              if (snap.hasError) {
+                return Center(
+                  child: Text(
+                    'Error: ${snap.error}',
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                );
+              }
+
+              final bundle = snap.data!;
+              final allAnimals = bundle.animals;
+              final sections = bundle.sections;
+
+              _exhibitors = bundle.exhibitors;
+
+              final allowedExhibitors = _allowedExhibitorsForCurrentSectionKind(_exhibitors);
+
+              if (_selectedExhibitorId == null && allowedExhibitors.isNotEmpty) {
+                _selectedExhibitorId = allowedExhibitors.first['id'].toString();
+              }
+
+              final showDateText = _showDate == null
+                  ? '(show date missing)'
+                  : _showDate!.toIso8601String().substring(0, 10);
+
+              return Container(
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF4F6FB),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                ),
+                child: Column(
+                  children: [
+
+                    /// HEADER CARD
+                    Container(
+                      margin: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(.05),
+                            blurRadius: 10,
+                          )
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Show Date: $showDateText',
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 10),
+
+                          DropdownButtonFormField<String>(
+                            value: _selectedExhibitorId,
+                            decoration: const InputDecoration(
+                              labelText: 'Exhibitor',
+                              border: OutlineInputBorder(),
+                            ),
+                            items: allowedExhibitors.map((e) {
+                              return DropdownMenuItem(
+                                value: e['id'].toString(),
+                                child: Text(_exhibitorLabel(e)),
+                              );
+                            }).toList(),
+                            onChanged: _submitting
+                                ? null
+                                : (v) => setState(() => _selectedExhibitorId = v),
+                          ),
+
+                          const SizedBox(height: 10),
+
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: _viewCart,
+                                  icon: const Icon(Icons.shopping_cart_outlined),
+                                  label: const Text('View Cart'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    /// SECTIONS
+                    Container(
+                      height: 50,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: ListView(
+                        scrollDirection: Axis.horizontal,
+                        children: sections.map((s) {
+                          final id = s['id'].toString();
+                          final selected = _selectedSectionIds.contains(id);
+
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: FilterChip(
+                              label: Text(s['display_name']),
+                              selected: selected,
+                              selectedColor: const Color(0xFFD4A623),
+                              onSelected: (_) => _toggleSection(
+                                sectionId: id,
+                                kind: s['kind'],
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+
+                    if (_msg != null)
+                      Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Text(
+                          _msg!,
+                          style: const TextStyle(color: Colors.red),
+                        ),
+                      ),
+
+                    /// ANIMALS LIST
+                    Expanded(
+                      child: ListView(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        children: _sortAnimals(allAnimals).map((a) {
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(14),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(.04),
+                                  blurRadius: 8,
+                                )
+                              ],
+                            ),
+                            child: _buildAnimalTile(a),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+
+                    /// ADD TO CART
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFFD4A623),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                          onPressed: _submitting
+                              ? null
+                              : () => _addSelectedToCart(_sortAnimals(allAnimals)),
+                          child: Text(_submitting ? 'Saving…' : 'Add Selected to Cart'),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      );
+    }
 }
 
 class _EnterShowLoadBundle {

@@ -1,3 +1,5 @@
+// lib/screens/account_profile_setup_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -84,6 +86,41 @@ class _AccountProfileSetupScreenState extends State<AccountProfileSetupScreen> {
       }
     });
   }
+
+  Widget _buildSectionCard(
+    BuildContext context, {
+    required String title,
+    required List<Widget> children,
+  }) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.05),
+            blurRadius: 10,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 12),
+          ...children,
+        ],
+      ),
+    );
+  }
+
+
 
   @override
   void dispose() {
@@ -318,186 +355,327 @@ class _AccountProfileSetupScreenState extends State<AccountProfileSetupScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(isEdit ? 'Edit Exhibitor' : 'Add Exhibitor'),
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : SafeArea(
-              child: Column(
-                children: [
-                  if (_msg != null)
-                    Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(_msg!, style: const TextStyle(color: Colors.red)),
-                      ),
-                    ),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                      child: Column(
-                        children: [
-                          DropdownButtonFormField<String>(
-                            value: _type,
-                            items: const [
-                              DropdownMenuItem(value: 'adult', child: Text('Adult')),
-                              DropdownMenuItem(value: 'youth', child: Text('Youth (under 19)')),
-                              DropdownMenuItem(value: 'group', child: Text('Group / Family')),
-                            ],
-                            onChanged: _saving ? null : (v) => setState(() => _type = v ?? 'adult'),
-                            decoration: const InputDecoration(labelText: 'Type'),
-                          ),
-                          const SizedBox(height: 12),
-
-                          TextField(
-                            controller: _firstName,
-                            enabled: !_saving,
-                            textInputAction: TextInputAction.next,
-                            decoration: const InputDecoration(labelText: 'First name *'),
-                          ),
-                          const SizedBox(height: 8),
-                          TextField(
-                            controller: _lastName,
-                            enabled: !_saving,
-                            textInputAction: TextInputAction.next,
-                            decoration: const InputDecoration(labelText: 'Last name *'),
-                          ),
-                          const SizedBox(height: 8),
-                          TextField(
-                            controller: _showingName,
-                            enabled: !_saving,
-                            textInputAction: TextInputAction.next,
-                            decoration: const InputDecoration(
-                              labelText: 'Showing name',
-                              helperText: 'Defaults to First + Last unless changed.',
-                            ),
-                          ),
-
-                          const SizedBox(height: 8),
-                          TextField(
-                            controller: _arba,
-                            enabled: !_saving,
-                            textInputAction: TextInputAction.next,
-                            decoration: const InputDecoration(labelText: 'ARBA number'),
-                          ),
-
-                          const SizedBox(height: 12),
-
-                          TextField(
-                            controller: _email,
-                            enabled: !_saving,
-                            keyboardType: TextInputType.emailAddress,
-                            textInputAction: TextInputAction.next,
-                            decoration: const InputDecoration(labelText: 'Email *'),
-                          ),
-                          const SizedBox(height: 8),
-                          TextField(
-                            controller: _phone,
-                            enabled: !_saving,
-                            keyboardType: TextInputType.phone,
-                            textInputAction: TextInputAction.next,
-                            decoration: const InputDecoration(
-                              labelText: 'Phone *',
-                              helperText: 'Example: (260) 555-1234',
-                            ),
-                          ),
-
-                          const SizedBox(height: 16),
-
-                          TextField(
-                            controller: _address1,
-                            enabled: !_saving,
-                            textInputAction: TextInputAction.next,
-                            decoration: const InputDecoration(labelText: 'Address line 1 *'),
-                          ),
-                          const SizedBox(height: 8),
-                          TextField(
-                            controller: _address2,
-                            enabled: !_saving,
-                            textInputAction: TextInputAction.next,
-                            decoration: const InputDecoration(labelText: 'Address line 2'),
-                          ),
-                          const SizedBox(height: 8),
-                          TextField(
-                            controller: _city,
-                            enabled: !_saving,
-                            textInputAction: TextInputAction.next,
-                            decoration: const InputDecoration(labelText: 'City *'),
-                          ),
-                          const SizedBox(height: 8),
-                          TextField(
-                            controller: _state,
-                            enabled: !_saving,
-                            textInputAction: TextInputAction.next,
-                            decoration: const InputDecoration(labelText: 'State *'),
-                          ),
-                          const SizedBox(height: 8),
-                          TextField(
-                            controller: _zip,
-                            enabled: !_saving,
-                            keyboardType: TextInputType.number,
-                            textInputAction: TextInputAction.done,
-                            decoration: const InputDecoration(labelText: 'ZIP *'),
-                          ),
-
-                          const SizedBox(height: 16),
-
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  _birthDate == null
-                                      ? 'Birth date: (not set)'
-                                      : 'Birth date: ${_birthDate!.toIso8601String().substring(0, 10)}',
-                                ),
-                              ),
-                              TextButton(
-                                onPressed: _saving ? null : _pickBirthDate,
-                                child: const Text('Pick'),
-                              ),
-                              if (_type == 'youth')
-                                TextButton(
-                                  onPressed: _saving ? null : () => setState(() => _birthDate = null),
-                                  child: const Text('Clear'),
-                                ),
-                            ],
-                          ),
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              _type == 'youth'
-                                  ? 'Birth date is required for Youth.'
-                                  : 'Birth date is only required for Youth exhibitors.',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ),
-
-                          const SizedBox(height: 16),
-
-                          SwitchListTile(
-                            title: const Text('Active'),
-                            subtitle: const Text('Inactive exhibitors won’t show up in pickers.'),
-                            value: _active,
-                            onChanged: _saving ? null : (v) => setState(() => _active = v),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        onPressed: _saving ? null : _save,
-                        child: Text(_saving ? 'Saving…' : 'Save'),
-                      ),
-                    ),
-                  ),
-                ],
+        toolbarHeight: 70,
+        titleSpacing: 0,
+        title: Row(
+          children: [
+            const SizedBox(width: 12),
+            Image.asset(
+              'assets/images/ringmaster_show_logo.png',
+              height: 42,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                isEdit ? 'Edit Exhibitor' : 'Add Exhibitor',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 18,
+                ),
+                overflow: TextOverflow.ellipsis,
               ),
             ),
+          ],
+        ),
+      ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Color(0xFF11285A),
+              Color(0xFF0B1C43),
+            ],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: _loading
+            ? const Center(
+                child: CircularProgressIndicator(color: Colors.white),
+              )
+            : SafeArea(
+                child: Container(
+                  margin: const EdgeInsets.only(top: 8),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF4F6FB),
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        if (_msg != null)
+                          Container(
+                            width: double.infinity,
+                            margin: const EdgeInsets.only(bottom: 16),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.red.withOpacity(.08),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Colors.red.withOpacity(.25),
+                              ),
+                            ),
+                            child: Text(
+                              _msg!,
+                              style: const TextStyle(
+                                color: Colors.red,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        Expanded(
+                          child: SingleChildScrollView(
+                            child: Column(
+                              children: [
+                                _buildSectionCard(
+                                  context,
+                                  title: 'Exhibitor Type',
+                                  children: [
+                                    DropdownButtonFormField<String>(
+                                      value: _type,
+                                      items: const [
+                                        DropdownMenuItem(
+                                          value: 'adult',
+                                          child: Text('Adult'),
+                                        ),
+                                        DropdownMenuItem(
+                                          value: 'youth',
+                                          child: Text('Youth (under 19)'),
+                                        ),
+                                        DropdownMenuItem(
+                                          value: 'group',
+                                          child: Text('Group / Family'),
+                                        ),
+                                      ],
+                                      onChanged: _saving
+                                          ? null
+                                          : (v) => setState(() => _type = v ?? 'adult'),
+                                      decoration: const InputDecoration(
+                                        labelText: 'Type',
+                                        border: OutlineInputBorder(),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                _buildSectionCard(
+                                  context,
+                                  title: 'Names',
+                                  children: [
+                                    TextField(
+                                      controller: _firstName,
+                                      enabled: !_saving,
+                                      textInputAction: TextInputAction.next,
+                                      decoration: const InputDecoration(
+                                        labelText: 'First name *',
+                                        border: OutlineInputBorder(),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    TextField(
+                                      controller: _lastName,
+                                      enabled: !_saving,
+                                      textInputAction: TextInputAction.next,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Last name *',
+                                        border: OutlineInputBorder(),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    TextField(
+                                      controller: _showingName,
+                                      enabled: !_saving,
+                                      textInputAction: TextInputAction.next,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Showing name',
+                                        helperText: 'Defaults to First + Last unless changed.',
+                                        border: OutlineInputBorder(),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    TextField(
+                                      controller: _arba,
+                                      enabled: !_saving,
+                                      textInputAction: TextInputAction.next,
+                                      decoration: const InputDecoration(
+                                        labelText: 'ARBA number',
+                                        border: OutlineInputBorder(),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                _buildSectionCard(
+                                  context,
+                                  title: 'Contact Information',
+                                  children: [
+                                    TextField(
+                                      controller: _email,
+                                      enabled: !_saving,
+                                      keyboardType: TextInputType.emailAddress,
+                                      textInputAction: TextInputAction.next,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Email *',
+                                        border: OutlineInputBorder(),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    TextField(
+                                      controller: _phone,
+                                      enabled: !_saving,
+                                      keyboardType: TextInputType.phone,
+                                      textInputAction: TextInputAction.next,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Phone *',
+                                        helperText: 'Example: (260) 555-1234',
+                                        border: OutlineInputBorder(),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                _buildSectionCard(
+                                  context,
+                                  title: 'Address',
+                                  children: [
+                                    TextField(
+                                      controller: _address1,
+                                      enabled: !_saving,
+                                      textInputAction: TextInputAction.next,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Address line 1 *',
+                                        border: OutlineInputBorder(),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    TextField(
+                                      controller: _address2,
+                                      enabled: !_saving,
+                                      textInputAction: TextInputAction.next,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Address line 2',
+                                        border: OutlineInputBorder(),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    TextField(
+                                      controller: _city,
+                                      enabled: !_saving,
+                                      textInputAction: TextInputAction.next,
+                                      decoration: const InputDecoration(
+                                        labelText: 'City *',
+                                        border: OutlineInputBorder(),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    TextField(
+                                      controller: _state,
+                                      enabled: !_saving,
+                                      textInputAction: TextInputAction.next,
+                                      decoration: const InputDecoration(
+                                        labelText: 'State *',
+                                        border: OutlineInputBorder(),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    TextField(
+                                      controller: _zip,
+                                      enabled: !_saving,
+                                      keyboardType: TextInputType.number,
+                                      textInputAction: TextInputAction.done,
+                                      decoration: const InputDecoration(
+                                        labelText: 'ZIP *',
+                                        border: OutlineInputBorder(),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                _buildSectionCard(
+                                  context,
+                                  title: 'Birth Date & Status',
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            _birthDate == null
+                                                ? 'Birth date: (not set)'
+                                                : 'Birth date: ${_birthDate!.toIso8601String().substring(0, 10)}',
+                                          ),
+                                        ),
+                                        TextButton(
+                                          onPressed: _saving ? null : _pickBirthDate,
+                                          child: const Text('Pick'),
+                                        ),
+                                        if (_type == 'youth')
+                                          TextButton(
+                                            onPressed: _saving
+                                                ? null
+                                                : () => setState(() => _birthDate = null),
+                                            child: const Text('Clear'),
+                                          ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: Text(
+                                        _type == 'youth'
+                                            ? 'Birth date is required for Youth.'
+                                            : 'Birth date is only required for Youth exhibitors.',
+                                        style: Theme.of(context).textTheme.bodySmall,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    SwitchListTile(
+                                      title: const Text('Active'),
+                                      subtitle: const Text(
+                                        'Inactive exhibitors won’t show up in pickers.',
+                                      ),
+                                      value: _active,
+                                      onChanged: _saving
+                                          ? null
+                                          : (v) => setState(() => _active = v),
+                                      contentPadding: EdgeInsets.zero,
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: _saving
+                                    ? null
+                                    : () {
+                                        if (Navigator.of(context).canPop()) {
+                                          Navigator.pop(context, false);
+                                        }
+                                      },
+                                child: const Text('Cancel'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: FilledButton(
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: const Color(0xFFD4A623),
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                ),
+                                onPressed: _saving ? null : _save,
+                                child: Text(_saving ? 'Saving…' : 'Save'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+      ),
     );
   }
 }

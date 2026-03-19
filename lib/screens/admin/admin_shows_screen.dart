@@ -1,15 +1,20 @@
 // lib/screens/admin/admin_shows_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../create_show_screen.dart';
 import 'edit_show_settings_screen.dart';
+import '../../screens/show_list_screen.dart';
+import '../../screens/my_animals_screen.dart';
+import '../../screens/my_entries_screen.dart';
+import '../../screens/account_settings_screen.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/rm_widgets.dart';
 
 final supabase = Supabase.instance.client;
 
 class AdminShowsScreen extends StatefulWidget {
-  /// Only these shows will appear in Admin.
-  /// Pass from ShowListScreen based on show_admins rows.
   final List<String> allowedShowIds;
 
   const AdminShowsScreen({
@@ -22,7 +27,7 @@ class AdminShowsScreen extends StatefulWidget {
 }
 
 class _AdminShowsScreenState extends State<AdminShowsScreen> {
-  late final Future<_AdminShowsPageData> _pageFuture;
+  late Future<_AdminShowsPageData> _pageFuture;
 
   @override
   void initState() {
@@ -101,7 +106,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
   }
 
   String _fmtDate(String? v) {
-    if (v == null || v.isEmpty) return '';
+    if (v == null || v.isEmpty) return '—';
     return v.length >= 10 ? v.substring(0, 10) : v;
   }
 
@@ -110,12 +115,8 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
     final dt = DateTime.tryParse(v);
     if (dt == null) return '—';
     final local = dt.toLocal();
-    final y = local.year.toString().padLeft(4, '0');
-    final m = local.month.toString().padLeft(2, '0');
-    final d = local.day.toString().padLeft(2, '0');
-    final hh = local.hour.toString().padLeft(2, '0');
-    final mm = local.minute.toString().padLeft(2, '0');
-    return '$y-$m-$d $hh:$mm';
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${local.year}-${two(local.month)}-${two(local.day)} ${two(local.hour)}:${two(local.minute)}';
   }
 
   Future<void> _reload() async {
@@ -137,11 +138,40 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
   Future<void> _openEditShow(String showId) async {
     await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => EditShowSettingsScreen(showId: showId)),
+      MaterialPageRoute(
+        builder: (_) => EditShowSettingsScreen(showId: showId),
+      ),
     );
     if (mounted) {
       await _reload();
     }
+  }
+
+  void _openShows() {
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const ShowListScreen()),
+    );
+  }
+
+  void _openAnimals() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const MyAnimalsScreen()),
+    );
+  }
+
+  void _openEntries() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const MyEntriesScreen()),
+    );
+  }
+
+  void _openAccount() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AccountSettingsScreen()),
+    );
   }
 
   Widget _buildLicenseBanner(_ShowCreationStatus license) {
@@ -157,30 +187,22 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
       text = '$days show day${days == 1 ? '' : 's'} remaining';
     }
 
-    final color = license.canCreate ? Colors.green : Colors.orange;
-
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
-        border: Border.all(color: color.withValues(alpha: 0.35)),
-        borderRadius: BorderRadius.circular(12),
-      ),
+    return RMCard(
       child: Row(
         children: [
           Icon(
-            license.canCreate ? Icons.check_circle_outline : Icons.warning_amber_rounded,
-            color: color,
+            license.canCreate
+                ? Icons.check_circle_outline
+                : Icons.warning_amber_rounded,
+            color: license.canCreate ? AppColors.success : Colors.orange,
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Text(
               text,
               style: TextStyle(
-                color: color,
-                fontWeight: FontWeight.w600,
+                color: license.canCreate ? AppColors.success : Colors.orange,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
@@ -205,85 +227,303 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
             );
 
         return Scaffold(
-          appBar: AppBar(
-            title: const Text('Admin: Shows'),
-            actions: [
-              IconButton(
-                tooltip: 'Reload',
-                icon: const Icon(Icons.refresh),
-                onPressed: snap.connectionState == ConnectionState.waiting ? null : _reload,
-              ),
-              IconButton(
-                tooltip: license.canCreate ? 'Create Show' : (license.message ?? 'Cannot create show'),
-                icon: const Icon(Icons.add),
-                onPressed: (snap.connectionState == ConnectionState.waiting || !license.canCreate)
-                    ? null
-                    : _openCreate,
-              ),
-            ],
+          appBar: _AdminShowsAppBar(
+            canCreate: license.canCreate &&
+                snap.connectionState != ConnectionState.waiting,
+            onShows: _openShows,
+            onAnimals: _openAnimals,
+            onEntries: _openEntries,
+            onAccount: _openAccount,
+            onReload: snap.connectionState == ConnectionState.waiting
+                ? null
+                : _reload,
+            onCreate: (snap.connectionState == ConnectionState.waiting ||
+                    !license.canCreate)
+                ? null
+                : _openCreate,
           ),
           body: snap.connectionState != ConnectionState.done
               ? const Center(child: CircularProgressIndicator())
               : snap.hasError
                   ? Center(child: Text('Error: ${snap.error}'))
-                  : Column(
-                      children: [
-                        _buildLicenseBanner(license),
-                        if (widget.allowedShowIds.isEmpty)
-                          const Expanded(
-                            child: Center(
-                              child: Text('You do not have admin access to any shows.'),
+                  : Padding(
+                      padding: const EdgeInsets.all(AppSpacing.lg),
+                      child: Column(
+                        children: [
+                          _buildLicenseBanner(license),
+                          const SizedBox(height: AppSpacing.md),
+                          if (widget.allowedShowIds.isEmpty)
+                            const Expanded(
+                              child: RMEmptyState(
+                                title: 'No admin access yet',
+                                subtitle:
+                                    'You do not currently have admin access to any shows.',
+                                icon: Icons.admin_panel_settings_outlined,
+                              ),
+                            )
+                          else if ((page?.shows ?? []).isEmpty)
+                            const Expanded(
+                              child: RMEmptyState(
+                                title: 'No shows available',
+                                subtitle:
+                                    'No shows were found for your current admin access.',
+                                icon: Icons.event_busy_outlined,
+                              ),
+                            )
+                          else
+                            Expanded(
+                              child: ListView.builder(
+                                itemCount: page!.shows.length,
+                                itemBuilder: (context, i) {
+                                  final s = page.shows[i];
+
+                                  final showId = s['id'].toString();
+                                  final name = (s['name'] ?? '').toString();
+                                  final start =
+                                      _fmtDate((s['start_date'] ?? '').toString());
+                                  final end =
+                                      _fmtDate((s['end_date'] ?? '').toString());
+                                  final loc =
+                                      (s['location_name'] ?? '').toString();
+                                  final published = s['is_published'] == true;
+
+                                  final openAt =
+                                      _fmtTs(s['entry_open_at']?.toString());
+                                  final closeAt =
+                                      _fmtTs(s['entry_close_at']?.toString());
+
+                                  return Padding(
+                                    padding: const EdgeInsets.only(
+                                      bottom: AppSpacing.md,
+                                    ),
+                                    child: RMCard(
+                                      onTap: () => _openEditShow(showId),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  name,
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .titleMedium
+                                                      ?.copyWith(
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                      ),
+                                                ),
+                                              ),
+                                              RMBadge(
+                                                text: published
+                                                    ? 'Published'
+                                                    : 'Draft',
+                                                icon: published
+                                                    ? Icons.public
+                                                    : Icons.edit_note,
+                                                success: published,
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(
+                                            height: AppSpacing.sm,
+                                          ),
+                                          Text(
+                                            '$start${end != '—' ? ' → $end' : ''} • $loc',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall
+                                                ?.copyWith(
+                                                  color: AppColors.muted,
+                                                ),
+                                          ),
+                                          const SizedBox(
+                                            height: AppSpacing.md,
+                                          ),
+                                          Wrap(
+                                            spacing: AppSpacing.sm,
+                                            runSpacing: AppSpacing.sm,
+                                            children: [
+                                              RMBadge(
+                                                text: 'Open: $openAt',
+                                                icon: Icons.lock_open,
+                                              ),
+                                              RMBadge(
+                                                text: 'Deadline: $closeAt',
+                                                icon: Icons.event_available,
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
                             ),
-                          )
-                        else if ((page?.shows ?? []).isEmpty)
-                          const Expanded(
-                            child: Center(
-                              child: Text('No shows available for your admin access.'),
-                            ),
-                          )
-                        else
-                          Expanded(
-                            child: ListView.separated(
-                              itemCount: page!.shows.length,
-                              separatorBuilder: (_, __) => const Divider(height: 1),
-                              itemBuilder: (context, i) {
-                                final s = page.shows[i];
-
-                                final showId = s['id'].toString();
-                                final name = (s['name'] ?? '').toString();
-                                final start = _fmtDate((s['start_date'] ?? '').toString());
-                                final end = _fmtDate((s['end_date'] ?? '').toString());
-                                final loc = (s['location_name'] ?? '').toString();
-                                final published = s['is_published'] == true;
-
-                                final openAt = _fmtTs(s['entry_open_at']?.toString());
-                                final closeAt = _fmtTs(s['entry_close_at']?.toString());
-
-                                final subtitleLines = <String>[
-                                  '$start${end.isNotEmpty ? ' → $end' : ''} • $loc',
-                                  'Entries: $openAt → $closeAt',
-                                ];
-
-                                return ListTile(
-                                  title: Row(
-                                    children: [
-                                      Expanded(child: Text(name)),
-                                      const SizedBox(width: 8),
-                                      Chip(label: Text(published ? 'Published' : 'Draft')),
-                                    ],
-                                  ),
-                                  subtitle: Text(subtitleLines.join('\n')),
-                                  isThreeLine: true,
-                                  trailing: const Icon(Icons.chevron_right),
-                                  onTap: () => _openEditShow(showId),
-                                );
-                              },
-                            ),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
         );
       },
+    );
+  }
+}
+
+class _AdminShowsAppBar extends StatelessWidget implements PreferredSizeWidget {
+  final VoidCallback onShows;
+  final VoidCallback onAnimals;
+  final VoidCallback onEntries;
+  final VoidCallback onAccount;
+  final VoidCallback? onReload;
+  final VoidCallback? onCreate;
+  final bool canCreate;
+
+  const _AdminShowsAppBar({
+    required this.onShows,
+    required this.onAnimals,
+    required this.onEntries,
+    required this.onAccount,
+    required this.onReload,
+    required this.onCreate,
+    required this.canCreate,
+  });
+
+  @override
+  Size get preferredSize => const Size.fromHeight(92);
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final showLabels = width >= 1100;
+
+    return AppBar(
+      toolbarHeight: 92,
+      titleSpacing: 16,
+      title: Row(
+        children: [
+          Image.asset(
+            'assets/images/ringmaster_show_logo.png',
+            height: 48,
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.high,
+          ),
+          const SizedBox(width: 14),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'RingMaster Show',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: Colors.white,
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Admin Shows',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.white.withOpacity(.9),
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                    ),
+              ),
+            ],
+          ),
+        ],
+      ),
+      actions: [
+        _TopBarAction(
+          icon: Icons.event,
+          label: 'Shows',
+          showLabel: showLabels,
+          onTap: onShows,
+        ),
+        _TopBarAction(
+          icon: Icons.pets,
+          label: 'Animals',
+          showLabel: showLabels,
+          onTap: onAnimals,
+        ),
+        _TopBarAction(
+          icon: Icons.receipt_long,
+          label: 'Entries',
+          showLabel: showLabels,
+          onTap: onEntries,
+        ),
+        _TopBarAction(
+          icon: Icons.manage_accounts,
+          label: 'Account',
+          showLabel: showLabels,
+          onTap: onAccount,
+        ),
+        _TopBarAction(
+          icon: Icons.refresh,
+          label: 'Reload',
+          showLabel: showLabels,
+          onTap: onReload,
+        ),
+        _TopBarAction(
+          icon: Icons.add,
+          label: 'Create Show',
+          showLabel: showLabels,
+          onTap: onCreate,
+        ),
+        const SizedBox(width: 10),
+      ],
+    );
+  }
+}
+
+class _TopBarAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool showLabel;
+  final VoidCallback? onTap;
+
+  const _TopBarAction({
+    required this.icon,
+    required this.label,
+    required this.showLabel,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (!showLabel) {
+      return IconButton(
+        tooltip: label,
+        icon: Icon(icon, color: Colors.white),
+        onPressed: onTap,
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: TextButton.icon(
+        onPressed: onTap,
+        style: TextButton.styleFrom(
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+          ),
+        ),
+        icon: Icon(icon, size: 18, color: Colors.white),
+        label: Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
     );
   }
 }
