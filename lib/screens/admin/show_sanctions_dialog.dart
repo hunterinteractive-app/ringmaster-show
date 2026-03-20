@@ -293,9 +293,8 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
         }).toList();
 
         final existing = match.isNotEmpty ? match.first : null;
-        final value = existing == null
-            ? ''
-            : (existing['sanction_number'] ?? '').toString();
+        final value =
+            existing == null ? '' : (existing['sanction_number'] ?? '').toString();
 
         _controllers[key] = TextEditingController(text: value);
 
@@ -448,9 +447,8 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
               scrollDirection: Axis.horizontal,
               child: ConstrainedBox(
                 constraints: BoxConstraints(
-                  minWidth: firstColWidth +
-                      useArbaColWidth +
-                      (_sections.length * dataColWidth),
+                  minWidth:
+                      firstColWidth + useArbaColWidth + (_sections.length * dataColWidth),
                 ),
                 child: Table(
                   defaultVerticalAlignment: TableCellVerticalAlignment.middle,
@@ -466,7 +464,9 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                   ),
                   children: [
                     TableRow(
-                      decoration: BoxDecoration(color: Colors.grey.shade100),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF11285A).withOpacity(.08),
+                      ),
                       children: [
                         _headerCell('Show Name:'),
                         _headerCell('Use ARBA'),
@@ -557,10 +557,13 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
 
   Widget _headerCell(String text) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       child: Text(
         text,
-        style: const TextStyle(fontWeight: FontWeight.w600),
+        style: const TextStyle(
+          fontWeight: FontWeight.w700,
+          fontSize: 13,
+        ),
       ),
     );
   }
@@ -580,7 +583,7 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
             text,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontWeight: isBold ? FontWeight.w600 : FontWeight.w400,
+              fontWeight: isBold ? FontWeight.w700 : FontWeight.w500,
               fontSize: 13,
             ),
           ),
@@ -631,58 +634,146 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
     final dialogWidth = media.width * 0.94;
     final dialogHeight = media.height * 0.88;
 
+    final savedMessage = _msg == 'Saved.';
+
     return Dialog(
       insetPadding: const EdgeInsets.all(16),
+      backgroundColor: Colors.transparent,
       child: ConstrainedBox(
         constraints: BoxConstraints(
           maxWidth: dialogWidth,
           maxHeight: dialogHeight,
         ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [
+                Color(0xFF11285A),
+                Color(0xFF0B1C43),
+              ],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+            borderRadius: BorderRadius.circular(24),
+          ),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Sanction Numbers — ${widget.showName}',
-                style: Theme.of(context).textTheme.headlineSmall,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
+                child: Row(
+                  children: [
+                    Image.asset(
+                      'assets/images/ringmaster_show_logo.png',
+                      height: 38,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Sanction Numbers — ${widget.showName}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 20,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: _saving ? null : () => Navigator.pop(context),
+                      icon: const Icon(Icons.close, color: Colors.white),
+                      tooltip: 'Close',
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 12),
-              Text(
-                'Sections are pulled from this show only and sorted Open first, Youth last.',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const SizedBox(height: 10),
-              if (_msg != null) ...[
-                Text(
-                  _msg!,
-                  style: TextStyle(
-                    color: _msg == 'Saved.' ? Colors.green : Colors.red,
+              Expanded(
+                child: Container(
+                  margin: const EdgeInsets.only(top: 4),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF4F6FB),
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Sections are pulled from this show only and sorted Open first, Youth last.',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                        const SizedBox(height: 12),
+                        if (_msg != null) ...[
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: savedMessage
+                                  ? Colors.green.withOpacity(.08)
+                                  : Colors.red.withOpacity(.08),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: savedMessage
+                                    ? Colors.green.withOpacity(.25)
+                                    : Colors.red.withOpacity(.25),
+                              ),
+                            ),
+                            child: Text(
+                              _msg!,
+                              style: TextStyle(
+                                color: savedMessage ? Colors.green : Colors.red,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        Expanded(
+                          child: _loading
+                              ? const Center(child: CircularProgressIndicator())
+                              : Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(16),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(.05),
+                                        blurRadius: 10,
+                                      ),
+                                    ],
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(16),
+                                    child: _buildSpreadsheet(),
+                                  ),
+                                ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: _saving ? null : () => Navigator.pop(context),
+                                child: const Text('Close'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: FilledButton(
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: const Color(0xFFD4A623),
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                ),
+                                onPressed: _saving ? null : _saveAll,
+                                child: Text(_saving ? 'Saving…' : 'Save'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                const SizedBox(height: 8),
-              ],
-              const Divider(height: 1),
-              const SizedBox(height: 12),
-              Expanded(
-                child: _loading
-                    ? const Center(child: CircularProgressIndicator())
-                    : _buildSpreadsheet(),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: _saving ? null : () => Navigator.pop(context),
-                    child: const Text('Close'),
-                  ),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: _saving ? null : _saveAll,
-                    child: Text(_saving ? 'Saving…' : 'Save'),
-                  ),
-                ],
               ),
             ],
           ),

@@ -34,7 +34,10 @@ class _SuperadminHomeScreenState extends State<SuperadminHomeScreen> {
     });
 
     try {
-      final res = await supabase.functions.invoke('import-arba-judges');
+      final res = await supabase.functions.invoke(
+        'import-arba-judges',
+        body: {},
+      );
 
       if (!mounted) return;
 
@@ -99,55 +102,155 @@ class _SuperadminHomeScreenState extends State<SuperadminHomeScreen> {
     final success = _msg != null && _msg!.startsWith('ARBA judges imported');
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF4F6FB),
       appBar: AppBar(
+        backgroundColor: const Color(0xFF11285A),
+        foregroundColor: Colors.white,
+        elevation: 0,
         title: const Text('Superadmin'),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      body: Column(
         children: [
-          Text(
-            'Global Admin Tools',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Manage shared catalogs and system-wide imports.',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 16),
-
-          if (_msg != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Text(
-                _msg!,
-                style: TextStyle(
-                  color: success ? Colors.green : Colors.red,
-                ),
+          Container(
+            width: double.infinity,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Color(0xFF11285A),
+                  Color(0xFF0B1C43),
+                ],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
               ),
             ),
-
-          _toolCard(
-            icon: Icons.pets,
-            title: 'Breed Catalog (Global)',
-            subtitle: 'Manage the shared breed and variety catalog used across shows',
-            onTap: _openBreedCatalog,
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Global Admin Tools',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Manage shared catalogs and system-wide imports.',
+                  style: TextStyle(
+                    color: Colors.white70,
+                  ),
+                ),
+                if (_msg != null) ...[
+                  const SizedBox(height: 14),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(.10),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(.18),
+                      ),
+                    ),
+                    child: Text(
+                      _msg!,
+                      style: TextStyle(
+                        color: success
+                            ? Colors.white
+                            : const Color(0xFFFFD7D7),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
-
-          const SizedBox(height: 12),
-
-          _toolCard(
-            icon: Icons.download,
-            title: 'Import ARBA Judges',
-            subtitle: 'Sync the ARBA judge directory into the local judges table',
-            onTap: _importingJudges ? null : _runArbaJudgeImport,
-            leadingOverride: _importingJudges
-                ? const SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : null,
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Card(
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                    leading: Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF11285A).withOpacity(.08),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.pets,
+                        color: Color(0xFF11285A),
+                      ),
+                    ),
+                    title: const Text(
+                      'Breed Catalog (Global)',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    subtitle: const Padding(
+                      padding: EdgeInsets.only(top: 6),
+                      child: Text(
+                        'Manage the shared breed and variety catalog used across shows',
+                      ),
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: _openBreedCatalog,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Card(
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                    leading: Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF11285A).withOpacity(.08),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: _importingJudges
+                          ? const Padding(
+                              padding: EdgeInsets.all(10),
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(
+                              Icons.download,
+                              color: Color(0xFF11285A),
+                            ),
+                    ),
+                    title: const Text(
+                      'Import ARBA Judges',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    subtitle: const Padding(
+                      padding: EdgeInsets.only(top: 6),
+                      child: Text(
+                        'Sync the ARBA judge directory into the local judges table',
+                      ),
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: _importingJudges ? null : _runArbaJudgeImport,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),

@@ -78,8 +78,7 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
           .from('show_sections')
           .select('id,letter,display_name,kind,is_enabled,sort_order')
           .eq('show_id', widget.showId)
-          .eq('is_enabled', true)
-          ;
+          .eq('is_enabled', true);
 
       _sections = (rows as List).cast<Map<String, dynamic>>();
 
@@ -103,8 +102,10 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
 
         final aso = a['sort_order'];
         final bso = b['sort_order'];
-        final asoI = (aso is int) ? aso : int.tryParse(aso?.toString() ?? '') ?? 9999;
-        final bsoI = (bso is int) ? bso : int.tryParse(bso?.toString() ?? '') ?? 9999;
+        final asoI =
+            (aso is int) ? aso : int.tryParse(aso?.toString() ?? '') ?? 9999;
+        final bsoI =
+            (bso is int) ? bso : int.tryParse(bso?.toString() ?? '') ?? 9999;
         final soCmp = asoI.compareTo(bsoI);
         if (soCmp != 0) return soCmp;
 
@@ -168,7 +169,8 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
   }
 
   void _openCheckInGenerator() {
-    if (!_combineSections && (_selectedSectionId == null || _selectedSectionId!.isEmpty)) {
+    if (!_combineSections &&
+        (_selectedSectionId == null || _selectedSectionId!.isEmpty)) {
       setState(() {
         _msg = 'Please select a section for check-in sheets.';
       });
@@ -184,14 +186,18 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => _CheckInGeneratorSheet(
-        showId: widget.showId,
-        showName: widget.showName,
-        sections: _sections,
-        sectionId: _combineSections ? null : _selectedSectionId,
-        sectionLabel: sectionName,
-        includeScratched: _includeScratched,
-        combineSections: _combineSections,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _themedBottomSheetShell(
+        context,
+        child: _CheckInGeneratorSheet(
+          showId: widget.showId,
+          showName: widget.showName,
+          sections: _sections,
+          sectionId: _combineSections ? null : _selectedSectionId,
+          sectionLabel: sectionName,
+          includeScratched: _includeScratched,
+          combineSections: _combineSections,
+        ),
       ),
     );
   }
@@ -211,26 +217,136 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => _ControlSheetsGeneratorSheet(
-        showId: widget.showId,
-        showName: widget.showName,
-        sections: _sections,
-        sectionId: sectionId,
-        sectionLabel: sectionName,
-        includeScratched: _includeScratched,
-        combineSections: false, // HARD CODED: never combined
+      backgroundColor: Colors.transparent,
+      builder: (_) => _themedBottomSheetShell(
+        context,
+        child: _ControlSheetsGeneratorSheet(
+          showId: widget.showId,
+          showName: widget.showName,
+          sections: _sections,
+          sectionId: sectionId,
+          sectionLabel: sectionName,
+          includeScratched: _includeScratched,
+          combineSections: false,
+        ),
+      ),
+    );
+  }
+
+  Widget _messageBanner() {
+    if (_msg == null) return const SizedBox.shrink();
+
+    final isSuccess = !_msg!.toLowerCase().contains('failed') &&
+        !_msg!.toLowerCase().contains('missing') &&
+        !_msg!.toLowerCase().contains('please');
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isSuccess
+              ? Colors.green.withOpacity(.08)
+              : Colors.red.withOpacity(.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSuccess
+                ? Colors.green.withOpacity(.25)
+                : Colors.red.withOpacity(.25),
+          ),
+        ),
+        child: Text(
+          _msg!,
+          style: TextStyle(
+            color: isSuccess ? Colors.green.shade700 : Colors.red,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required List<Widget> children,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.05),
+            blurRadius: 12,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            subtitle,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 14),
+          ...children,
+        ],
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final canOpenCheckIn = !_loading && (_combineSections || (_selectedSectionId != null && _selectedSectionId!.isNotEmpty));
+    final canOpenCheckIn = !_loading &&
+        (_combineSections ||
+            (_selectedSectionId != null && _selectedSectionId!.isNotEmpty));
     final hasSections = _sections.isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Print Packs — ${widget.showName}'),
+        toolbarHeight: 70,
+        titleSpacing: 0,
+        title: Row(
+          children: [
+            const SizedBox(width: 12),
+            Image.asset(
+              'assets/images/ringmaster_show_logo.png',
+              height: 42,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Print Packs — ${widget.showName}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 18,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
         actions: [
           IconButton(
             tooltip: 'Reload sections',
@@ -239,174 +355,243 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
           ),
         ],
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                if (_msg != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: Text(
-                      _msg!,
-                      style: const TextStyle(color: Colors.red),
-                    ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Color(0xFF11285A),
+              Color(0xFF0B1C43),
+            ],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: _loading
+            ? const Center(
+                child: CircularProgressIndicator(color: Colors.white),
+              )
+            : SafeArea(
+                child: Container(
+                  margin: const EdgeInsets.only(top: 8),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF4F6FB),
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(24)),
                   ),
+                  child: ListView(
+                    padding: const EdgeInsets.all(16),
+                    children: [
+                      _messageBanner(),
 
-                // =========================
-                // CONTROL SHEETS
-                // =========================
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const ListTile(
-                          leading: Icon(Icons.description),
-                          title: Text('Control sheets'),
-                          subtitle: Text('Generate judge control sheets (PDF)'),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Control sheets are generated one show section at a time.',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                        const SizedBox(height: 10),
-                        SwitchListTile(
-                          value: _includeScratched,
-                          onChanged: (v) => setState(() => _includeScratched = v),
-                          title: const Text('Include scratched entries'),
-                        ),
-                        const SizedBox(height: 10),
-                        if (!hasSections)
-                          const Text(
-                            'No enabled show sections found.',
-                            style: TextStyle(color: Colors.red),
-                          )
-                        else
-                          ..._sections.map(
-                            (section) => Padding(
-                              padding: const EdgeInsets.only(bottom: 10),
-                              child: SizedBox(
-                                width: double.infinity,
-                                child: FilledButton.icon(
-                                  onPressed: () => _openControlSheetsGeneratorForSection(section),
-                                  icon: const Icon(Icons.download),
-                                  label: Text('Download Control Sheets — ${_sectionLabel(section)}'),
+                      _buildSectionCard(
+                        icon: Icons.description_outlined,
+                        title: 'Control Sheets',
+                        subtitle:
+                            'Generate judge control sheets as PDF files. These are always built one section at a time.',
+                        children: [
+                          SwitchListTile(
+                            value: _includeScratched,
+                            contentPadding: EdgeInsets.zero,
+                            onChanged: (v) =>
+                                setState(() => _includeScratched = v),
+                            title: const Text('Include scratched entries'),
+                          ),
+                          const SizedBox(height: 8),
+                          if (!hasSections)
+                            const Text(
+                              'No enabled show sections found.',
+                              style: TextStyle(color: Colors.red),
+                            )
+                          else
+                            ..._sections.map(
+                              (section) => Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: SizedBox(
+                                  width: double.infinity,
+                                  child: FilledButton.icon(
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor:
+                                          const Color(0xFFD4A623),
+                                      foregroundColor: Colors.black87,
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 16,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(14),
+                                      ),
+                                    ),
+                                    onPressed: () =>
+                                        _openControlSheetsGeneratorForSection(
+                                      section,
+                                    ),
+                                    icon: const Icon(Icons.download),
+                                    label: Text(
+                                      'Download Control Sheets — ${_sectionLabel(section)}',
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // =========================
-                // CHECK-IN SHEETS
-                // =========================
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const ListTile(
-                          leading: Icon(Icons.checklist),
-                          title: Text('Check-in sheets'),
-                          subtitle: Text('Generate exhibitor check-in sheets (PDF)'),
-                        ),
-                        const SizedBox(height: 10),
-                        SwitchListTile(
-                          value: _combineSections,
-                          onChanged: (v) {
-                            setState(() {
-                              _combineSections = v;
-                              if (!v &&
-                                  (_selectedSectionId == null || _selectedSectionId!.isEmpty) &&
-                                  _sections.isNotEmpty) {
-                                _selectedSectionId = _sections.first['id']?.toString();
-                              }
-                            });
-                          },
-                          title: const Text('Combine sections'),
-                          subtitle: const Text('One sheet per exhibitor (covers Open/Youth A/B/...)'),
-                        ),
-                        const SizedBox(height: 8),
-                        if (!_combineSections) ...[
-                          DropdownButtonFormField<String>(
-                            isExpanded: true,
-                            value: (_selectedSectionId != null &&
-                                    _sections.any((s) => s['id']?.toString() == _selectedSectionId))
-                                ? _selectedSectionId
-                                : null,
-                            hint: const Text('Select a section'),
-                            decoration: const InputDecoration(
-                              labelText: 'Show Letter / Section',
-                            ),
-                            items: _sections
-                                .map(
-                                  (s) => DropdownMenuItem<String>(
-                                    value: s['id']?.toString(),
-                                    child: Text(_sectionLabel(s)),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: _sections.isEmpty
-                                ? null
-                                : (v) {
-                                    setState(() {
-                                      _selectedSectionId = v;
-                                    });
-                                  },
-                          ),
-                          const SizedBox(height: 10),
-                        ] else ...[
-                          Text(
-                            'Sections included: ${_sections.isEmpty ? '(none)' : _sections.map(_sectionLabel).join(', ')}',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                          const SizedBox(height: 10),
                         ],
-                        SwitchListTile(
-                          value: _includeScratched,
-                          onChanged: (v) => setState(() => _includeScratched = v),
-                          title: const Text('Include scratched entries'),
-                        ),
-                        const SizedBox(height: 10),
-                        FilledButton.icon(
-                          onPressed: canOpenCheckIn ? _openCheckInGenerator : null,
-                          icon: const Icon(Icons.picture_as_pdf),
-                          label: Text(
-                            _combineSections
-                                ? 'Generate Check-In Sheets (Combined)'
-                                : 'Generate Check-In Sheets',
+                      ),
+
+                      _buildSectionCard(
+                        icon: Icons.checklist_outlined,
+                        title: 'Check-In Sheets',
+                        subtitle:
+                            'Generate exhibitor check-in sheets as PDF files.',
+                        children: [
+                          SwitchListTile(
+                            value: _combineSections,
+                            contentPadding: EdgeInsets.zero,
+                            onChanged: (v) {
+                              setState(() {
+                                _combineSections = v;
+                                if (!v &&
+                                    (_selectedSectionId == null ||
+                                        _selectedSectionId!.isEmpty) &&
+                                    _sections.isNotEmpty) {
+                                  _selectedSectionId =
+                                      _sections.first['id']?.toString();
+                                }
+                              });
+                            },
+                            title: const Text('Combine sections'),
+                            subtitle: const Text(
+                              'One sheet per exhibitor across Open/Youth A/B/...',
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
+                          const SizedBox(height: 8),
+                          if (!_combineSections) ...[
+                            DropdownButtonFormField<String>(
+                              isExpanded: true,
+                              value: (_selectedSectionId != null &&
+                                      _sections.any((s) =>
+                                          s['id']?.toString() ==
+                                          _selectedSectionId))
+                                  ? _selectedSectionId
+                                  : null,
+                              hint: const Text('Select a section'),
+                              decoration: const InputDecoration(
+                                labelText: 'Show Letter / Section',
+                                border: OutlineInputBorder(),
+                              ),
+                              items: _sections
+                                  .map(
+                                    (s) => DropdownMenuItem<String>(
+                                      value: s['id']?.toString(),
+                                      child: Text(_sectionLabel(s)),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: _sections.isEmpty
+                                  ? null
+                                  : (v) {
+                                      setState(() {
+                                        _selectedSectionId = v;
+                                      });
+                                    },
+                            ),
+                            const SizedBox(height: 12),
+                          ] else ...[
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(.03),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                'Sections included: ${_sections.isEmpty ? '(none)' : _sections.map(_sectionLabel).join(', ')}',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+                          SwitchListTile(
+                            value: _includeScratched,
+                            contentPadding: EdgeInsets.zero,
+                            onChanged: (v) =>
+                                setState(() => _includeScratched = v),
+                            title: const Text('Include scratched entries'),
+                          ),
+                          const SizedBox(height: 10),
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton.icon(
+                              style: FilledButton.styleFrom(
+                                backgroundColor: const Color(0xFFD4A623),
+                                foregroundColor: Colors.black87,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                              onPressed:
+                                  canOpenCheckIn ? _openCheckInGenerator : null,
+                              icon: const Icon(Icons.picture_as_pdf),
+                              label: Text(
+                                _combineSections
+                                    ? 'Generate Check-In Sheets (Combined)'
+                                    : 'Generate Check-In Sheets',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      _buildSectionCard(
+                        icon: Icons.sell_outlined,
+                        title: 'Coop Tags',
+                        subtitle: 'Optional feature coming next.',
+                        children: const [
+                          Text('Coop tag generation will be added here.'),
+                        ],
+                      ),
+
+                      _buildSectionCard(
+                        icon: Icons.rate_review_outlined,
+                        title: 'Comment Cards',
+                        subtitle: 'Optional feature coming next.',
+                        children: const [
+                          Text('Comment card generation will be added here.'),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-
-                const SizedBox(height: 20),
-                const ListTile(
-                  leading: Icon(Icons.sell),
-                  title: Text('Coop tags'),
-                  subtitle: Text('Optional (coming next)'),
-                ),
-                const Divider(),
-                const ListTile(
-                  leading: Icon(Icons.rate_review),
-                  title: Text('Comment cards'),
-                  subtitle: Text('Optional (coming next)'),
-                ),
-              ],
-            ),
+              ),
+      ),
     );
   }
+}
+
+Widget _themedBottomSheetShell(BuildContext context, {required Widget child}) {
+  return Container(
+    decoration: const BoxDecoration(
+      gradient: LinearGradient(
+        colors: [
+          Color(0xFF11285A),
+          Color(0xFF0B1C43),
+        ],
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+      ),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    child: SafeArea(
+      top: false,
+      child: Container(
+        margin: const EdgeInsets.only(top: 8),
+        decoration: const BoxDecoration(
+          color: Color(0xFFF4F6FB),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: child,
+      ),
+    ),
+  );
 }
 
 // =======================================================
@@ -433,14 +618,17 @@ class _ControlSheetsGeneratorSheet extends StatefulWidget {
   });
 
   @override
-  State<_ControlSheetsGeneratorSheet> createState() => _ControlSheetsGeneratorSheetState();
+  State<_ControlSheetsGeneratorSheet> createState() =>
+      _ControlSheetsGeneratorSheetState();
 }
 
-class _ControlSheetsGeneratorSheetState extends State<_ControlSheetsGeneratorSheet> {
+class _ControlSheetsGeneratorSheetState
+    extends State<_ControlSheetsGeneratorSheet> {
   bool _building = false;
   String? _msg;
 
-  String _safe(Map<String, dynamic> e, String k) => (e[k] ?? '').toString().trim();
+  String _safe(Map<String, dynamic> e, String k) =>
+      (e[k] ?? '').toString().trim();
 
   String _ageOnly(String raw) {
     final s = raw.trim();
@@ -491,7 +679,9 @@ class _ControlSheetsGeneratorSheetState extends State<_ControlSheetsGeneratorShe
     final groupName = _safe(row, 'group_name');
     final variety = _safe(row, 'variety');
 
-    if (groupName.isNotEmpty && variety.isNotEmpty) return '$groupName / $variety';
+    if (groupName.isNotEmpty && variety.isNotEmpty) {
+      return '$groupName / $variety';
+    }
     if (groupName.isNotEmpty) return groupName;
     return variety;
   }
@@ -579,7 +769,9 @@ class _ControlSheetsGeneratorSheetState extends State<_ControlSheetsGeneratorShe
         }
 
         allPages.add({
-          'sectionTitle': widget.combineSections ? _sectionTitleFromRow(first) : widget.sectionLabel,
+          'sectionTitle': widget.combineSections
+              ? _sectionTitleFromRow(first)
+              : widget.sectionLabel,
           'breed': _safe(first, 'breed'),
           'color': _colorLabel(first),
           'class': _ageOnly(_safe(first, 'class_name')),
@@ -598,7 +790,8 @@ class _ControlSheetsGeneratorSheetState extends State<_ControlSheetsGeneratorShe
       required String showHeader,
       required String pageText,
     }) {
-      final titleStyle = pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold);
+      final titleStyle =
+          pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold);
       final pageStyle = pw.TextStyle(fontSize: 10);
 
       return pw.Row(
@@ -607,11 +800,18 @@ class _ControlSheetsGeneratorSheetState extends State<_ControlSheetsGeneratorShe
           pw.Expanded(
             child: pw.Column(
               children: [
-                pw.Text(showHeader, style: titleStyle, textAlign: pw.TextAlign.center),
+                pw.Text(
+                  showHeader,
+                  style: titleStyle,
+                  textAlign: pw.TextAlign.center,
+                ),
                 pw.SizedBox(height: 8),
                 pw.Text(
                   'Judging Sheet - Breed Class',
-                  style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+                  style: pw.TextStyle(
+                    fontSize: 14,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
                   textAlign: pw.TextAlign.center,
                 ),
               ],
@@ -626,7 +826,8 @@ class _ControlSheetsGeneratorSheetState extends State<_ControlSheetsGeneratorShe
     }
 
     pw.Widget _underlinedValue(String label, String value) {
-      final textStyle = pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold);
+      final textStyle =
+          pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold);
 
       return pw.Row(
         mainAxisSize: pw.MainAxisSize.min,
@@ -684,9 +885,11 @@ class _ControlSheetsGeneratorSheetState extends State<_ControlSheetsGeneratorShe
                   pw.SizedBox(height: 10),
                   pw.Row(
                     children: [
-                      _underlinedValue('No. in Class', rabbitCount.toString()),
+                      _underlinedValue(
+                          'No. in Class', rabbitCount.toString()),
                       pw.SizedBox(width: 20),
-                      _underlinedValue('No. Exhibitors', exhibitorCount.toString()),
+                      _underlinedValue(
+                          'No. Exhibitors', exhibitorCount.toString()),
                     ],
                   ),
                 ],
@@ -776,7 +979,8 @@ class _ControlSheetsGeneratorSheetState extends State<_ControlSheetsGeneratorShe
               crossAxisAlignment: pw.CrossAxisAlignment.stretch,
               children: [
                 _topHeader(
-                  showHeader: '${widget.showName}   ${(p['sectionTitle'] ?? '').toString()}',
+                  showHeader:
+                      '${widget.showName}   ${(p['sectionTitle'] ?? '').toString()}',
                   pageText: 'Page ${i + 1} of $totalPages',
                 ),
                 pw.SizedBox(height: 18),
@@ -790,8 +994,10 @@ class _ControlSheetsGeneratorSheetState extends State<_ControlSheetsGeneratorShe
                 ),
                 pw.SizedBox(height: 14),
                 _judgingTable(
-                  groupEntries: (p['rows'] as List).cast<Map<String, dynamic>>(),
-                  specialsList: (p['specials'] as List).map((x) => x.toString()).toList(),
+                  groupEntries:
+                      (p['rows'] as List).cast<Map<String, dynamic>>(),
+                  specialsList:
+                      (p['specials'] as List).map((x) => x.toString()).toList(),
                 ),
               ],
             );
@@ -838,7 +1044,9 @@ class _ControlSheetsGeneratorSheetState extends State<_ControlSheetsGeneratorShe
       if (!mounted) return;
       setState(() {
         _building = false;
-        _msg = savedPath == null ? 'Save canceled.' : 'PDF saved to: $savedPath';
+        _msg = savedPath == null
+            ? 'Save canceled.'
+            : 'PDF saved to: $savedPath';
       });
     } catch (e) {
       if (!mounted) return;
@@ -852,14 +1060,24 @@ class _ControlSheetsGeneratorSheetState extends State<_ControlSheetsGeneratorShe
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final isSuccess = _msg != null &&
+        (_msg == 'Save canceled.' || _msg!.startsWith('PDF saved to:'));
 
     return Padding(
-      padding: EdgeInsets.only(left: 16, right: 16, top: 10, bottom: bottomInset + 16),
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 10,
+        bottom: bottomInset + 16,
+      ),
       child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Generate Control Sheets', style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              'Generate Control Sheets',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 10),
             Text(
               '${widget.showName} • ${widget.sectionLabel}',
@@ -867,33 +1085,56 @@ class _ControlSheetsGeneratorSheetState extends State<_ControlSheetsGeneratorShe
             ),
             const SizedBox(height: 6),
             Text(
-              widget.includeScratched ? 'Including scratched entries' : 'Excluding scratched entries',
+              widget.includeScratched
+                  ? 'Including scratched entries'
+                  : 'Excluding scratched entries',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 6),
             Text(
-              widget.combineSections ? 'Mode: Combined (pages grouped by class)' : 'Mode: Single section',
+              widget.combineSections
+                  ? 'Mode: Combined (pages grouped by class)'
+                  : 'Mode: Single section',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 12),
             if (_msg != null) ...[
-              Text(
-                _msg!,
-                style: TextStyle(
-                  color: _msg == 'Save canceled.' || _msg!.startsWith('PDF saved to:')
-                      ? Colors.green
-                      : Colors.red,
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isSuccess
+                      ? Colors.green.withOpacity(.08)
+                      : Colors.red.withOpacity(.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isSuccess
+                        ? Colors.green.withOpacity(.25)
+                        : Colors.red.withOpacity(.25),
+                  ),
+                ),
+                child: Text(
+                  _msg!,
+                  style: TextStyle(
+                    color: isSuccess ? Colors.green.shade700 : Colors.red,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
               const SizedBox(height: 10),
             ],
             FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFD4A623),
+                foregroundColor: Colors.black87,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
               onPressed: _building ? null : _generatePdf,
               icon: const Icon(Icons.picture_as_pdf),
               label: Text(_building ? 'Building PDF…' : 'Generate PDF'),
             ),
             const SizedBox(height: 8),
-            TextButton(
+            OutlinedButton(
               onPressed: _building ? null : () => Navigator.pop(context),
               child: const Text('Close'),
             ),
@@ -928,7 +1169,8 @@ class _CheckInGeneratorSheet extends StatefulWidget {
   });
 
   @override
-  State<_CheckInGeneratorSheet> createState() => _CheckInGeneratorSheetState();
+  State<_CheckInGeneratorSheet> createState() =>
+      _CheckInGeneratorSheetState();
 }
 
 class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
@@ -959,7 +1201,8 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
     return (rows as List).cast<Map<String, dynamic>>();
   }
 
-  String _safe(Map<String, dynamic> e, String k) => (e[k] ?? '').toString().trim();
+  String _safe(Map<String, dynamic> e, String k) =>
+      (e[k] ?? '').toString().trim();
 
   String _displayAgeClassOnly(String raw) {
     final s = raw.trim();
@@ -980,12 +1223,15 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
     final groupName = _safe(row, 'group_name');
     final variety = _safe(row, 'variety');
 
-    if (groupName.isNotEmpty && variety.isNotEmpty) return '$groupName / $variety';
+    if (groupName.isNotEmpty && variety.isNotEmpty) {
+      return '$groupName / $variety';
+    }
     if (groupName.isNotEmpty) return groupName;
     return variety;
   }
 
-  Map<String, List<Map<String, dynamic>>> _groupByExhibitor(List<Map<String, dynamic>> entries) {
+  Map<String, List<Map<String, dynamic>>> _groupByExhibitor(
+      List<Map<String, dynamic>> entries) {
     final map = <String, List<Map<String, dynamic>>>{};
 
     for (final e in entries) {
@@ -1002,10 +1248,14 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
         final c1 = at.compareTo(bt);
         if (c1 != 0) return c1;
 
-        final breedCmp = _safe(a, 'breed').toLowerCase().compareTo(_safe(b, 'breed').toLowerCase());
+        final breedCmp = _safe(a, 'breed')
+            .toLowerCase()
+            .compareTo(_safe(b, 'breed').toLowerCase());
         if (breedCmp != 0) return breedCmp;
 
-        return _groupVarietyLabel(a).toLowerCase().compareTo(_groupVarietyLabel(b).toLowerCase());
+        return _groupVarietyLabel(a)
+            .toLowerCase()
+            .compareTo(_groupVarietyLabel(b).toLowerCase());
       });
     }
 
@@ -1020,7 +1270,8 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
     return set.length > 1;
   }
 
-  Map<String, List<Map<String, dynamic>>> _groupEntriesBySection(List<Map<String, dynamic>> exEntries) {
+  Map<String, List<Map<String, dynamic>>> _groupEntriesBySection(
+      List<Map<String, dynamic>> exEntries) {
     final map = <String, List<Map<String, dynamic>>>{};
     for (final e in exEntries) {
       final sid = (e['section_id'] ?? '').toString();
@@ -1030,7 +1281,8 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
     return map;
   }
 
-  List<Map<String, dynamic>> _sortedSectionsForExhibitor(List<Map<String, dynamic>> exEntries) {
+  List<Map<String, dynamic>> _sortedSectionsForExhibitor(
+      List<Map<String, dynamic>> exEntries) {
     final map = <String, Map<String, dynamic>>{};
     for (final e in exEntries) {
       final sid = (e['section_id'] ?? '').toString();
@@ -1065,8 +1317,10 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
 
       final aso = a['sort_order'];
       final bso = b['sort_order'];
-      final asoI = (aso is int) ? aso : int.tryParse(aso?.toString() ?? '') ?? 9999;
-      final bsoI = (bso is int) ? bso : int.tryParse(bso?.toString() ?? '') ?? 9999;
+      final asoI =
+          (aso is int) ? aso : int.tryParse(aso?.toString() ?? '') ?? 9999;
+      final bsoI =
+          (bso is int) ? bso : int.tryParse(bso?.toString() ?? '') ?? 9999;
       final soCmp = asoI.compareTo(bsoI);
       if (soCmp != 0) return soCmp;
 
@@ -1094,7 +1348,8 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
         kindLabel = 'Youth';
         break;
       default:
-        kindLabel = kind.isEmpty ? 'Section' : kind[0].toUpperCase() + kind.substring(1);
+        kindLabel =
+            kind.isEmpty ? 'Section' : kind[0].toUpperCase() + kind.substring(1);
     }
 
     return letter.isEmpty ? kindLabel : '$kindLabel $letter';
@@ -1110,8 +1365,10 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
       ..sort((a, b) {
         final aList = grouped[a]!;
         final bList = grouped[b]!;
-        final aName = aList.isEmpty ? '' : _exhibitorNameFromEntry(aList.first).toLowerCase();
-        final bName = bList.isEmpty ? '' : _exhibitorNameFromEntry(bList.first).toLowerCase();
+        final aName =
+            aList.isEmpty ? '' : _exhibitorNameFromEntry(aList.first).toLowerCase();
+        final bName =
+            bList.isEmpty ? '' : _exhibitorNameFromEntry(bList.first).toLowerCase();
         return aName.compareTo(bName);
       });
 
@@ -1128,7 +1385,13 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
         child: pw.Row(
           children: [
             pw.Expanded(
-              child: pw.Text(left, style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+              child: pw.Text(
+                left,
+                style: pw.TextStyle(
+                  fontSize: 11,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
             ),
             pw.Expanded(
               child: pw.Align(
@@ -1156,9 +1419,17 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
               ),
             ),
             pw.SizedBox(height: 6),
-            pw.Text('All Shows: $allShows', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+            pw.Text(
+              'All Shows: $allShows',
+              style:
+                  pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
+            ),
             pw.SizedBox(height: 2),
-            pw.Text('This Show: $thisShow', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+            pw.Text(
+              'This Show: $thisShow',
+              style:
+                  pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
+            ),
           ],
         ),
       );
@@ -1177,38 +1448,55 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
         if (a1.isNotEmpty) a1,
         if (a2.isNotEmpty) a2,
         if (city.isNotEmpty || st.isNotEmpty || zip.isNotEmpty)
-          '${city.isEmpty ? '' : city}${city.isNotEmpty && st.isNotEmpty ? ', ' : ''}${st.isEmpty ? '' : st} ${zip.isEmpty ? '' : zip}'.trim(),
+          '${city.isEmpty ? '' : city}${city.isNotEmpty && st.isNotEmpty ? ', ' : ''}${st.isEmpty ? '' : st} ${zip.isEmpty ? '' : zip}'
+              .trim(),
         if (phone.isNotEmpty) 'Phone: $phone',
         if (email.isNotEmpty) 'Email: $email',
       ];
 
       if (lines.isEmpty) {
-        return pw.Text('(No address/contact on file)', style: pw.TextStyle(fontSize: 9));
+        return pw.Text(
+          '(No address/contact on file)',
+          style: pw.TextStyle(fontSize: 9),
+        );
       }
 
       return pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: lines.map((x) => pw.Text(x, style: pw.TextStyle(fontSize: 9))).toList(),
+        children:
+            lines.map((x) => pw.Text(x, style: pw.TextStyle(fontSize: 9))).toList(),
       );
     }
 
     pw.Widget _infoBlockRight() {
-      String s2(Map<String, dynamic>? m, String k) => (m == null) ? '' : (m[k] ?? '').toString().trim();
+      String s2(Map<String, dynamic>? m, String k) =>
+          (m == null) ? '' : (m[k] ?? '').toString().trim();
 
       final name = s2(_showRow, 'secretary_name');
       final phone = s2(_showRow, 'secretary_phone');
       final email = s2(_showRow, 'secretary_email');
 
       final lines = <pw.Widget>[
-        pw.Text('Show Secretary:', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+        pw.Text(
+          'Show Secretary:',
+          style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+        ),
       ];
 
-      if (name.isNotEmpty) lines.add(pw.Text(name, style: pw.TextStyle(fontSize: 9)));
-      if (phone.isNotEmpty) lines.add(pw.Text(phone, style: pw.TextStyle(fontSize: 9)));
-      if (email.isNotEmpty) lines.add(pw.Text(email, style: pw.TextStyle(fontSize: 9)));
+      if (name.isNotEmpty) {
+        lines.add(pw.Text(name, style: pw.TextStyle(fontSize: 9)));
+      }
+      if (phone.isNotEmpty) {
+        lines.add(pw.Text(phone, style: pw.TextStyle(fontSize: 9)));
+      }
+      if (email.isNotEmpty) {
+        lines.add(pw.Text(email, style: pw.TextStyle(fontSize: 9)));
+      }
 
       if (lines.length == 1) {
-        lines.add(pw.Text('(Not set for this show)', style: pw.TextStyle(fontSize: 9)));
+        lines.add(
+          pw.Text('(Not set for this show)', style: pw.TextStyle(fontSize: 9)),
+        );
       }
 
       return pw.Column(
@@ -1268,13 +1556,34 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
             pw.TableRow(
               decoration: const pw.BoxDecoration(color: PdfColors.grey300),
               children: [
-                pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Ear #', style: h)),
-                pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Coop #', style: h)),
-                pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Breed', style: h)),
-                pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Group / Variety', style: h)),
-                pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Class', style: h)),
-                pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Sex', style: h)),
-                pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Fur', style: h)),
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(6),
+                  child: pw.Text('Ear #', style: h),
+                ),
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(6),
+                  child: pw.Text('Coop #', style: h),
+                ),
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(6),
+                  child: pw.Text('Breed', style: h),
+                ),
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(6),
+                  child: pw.Text('Group / Variety', style: h),
+                ),
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(6),
+                  child: pw.Text('Class', style: h),
+                ),
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(6),
+                  child: pw.Text('Sex', style: h),
+                ),
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(6),
+                  child: pw.Text('Fur', style: h),
+                ),
               ],
             ),
             ...exEntries.map((e) {
@@ -1293,16 +1602,34 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
 
               return pw.TableRow(
                 children: [
-                  pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text(_safe(e, 'tattoo'), style: style)),
-                  pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('', style: style)),
-                  pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text(_safe(e, 'breed'), style: style)),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(6),
+                    child: pw.Text(_safe(e, 'tattoo'), style: style),
+                  ),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(6),
+                    child: pw.Text('', style: style),
+                  ),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(6),
+                    child: pw.Text(_safe(e, 'breed'), style: style),
+                  ),
                   pw.Padding(
                     padding: const pw.EdgeInsets.all(6),
                     child: pw.Text(_groupVarietyLabel(e), style: style),
                   ),
-                  pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text(ageClass, style: style)),
-                  pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text(_safe(e, 'sex'), style: style)),
-                  pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('', style: style)),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(6),
+                    child: pw.Text(ageClass, style: style),
+                  ),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(6),
+                    child: pw.Text(_safe(e, 'sex'), style: style),
+                  ),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(6),
+                    child: pw.Text('', style: style),
+                  ),
                 ],
               );
             }),
@@ -1337,18 +1664,33 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
                   pw.Expanded(
                     child: pw.Column(
                       children: [
-                        pw.Text(widget.showName, style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                        pw.Text(
+                          widget.showName,
+                          style: pw.TextStyle(
+                            fontSize: 14,
+                            fontWeight: pw.FontWeight.bold,
+                          ),
+                        ),
                         pw.SizedBox(height: 2),
-                        pw.Text(widget.sectionLabel, style: pw.TextStyle(fontSize: 12)),
+                        pw.Text(
+                          widget.sectionLabel,
+                          style: pw.TextStyle(fontSize: 12),
+                        ),
                         pw.SizedBox(height: 2),
                         pw.Text(
                           'Exhibitor Check-In Sheet',
-                          style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+                          style: pw.TextStyle(
+                            fontSize: 12,
+                            fontWeight: pw.FontWeight.bold,
+                          ),
                         ),
                       ],
                     ),
                   ),
-                  pw.Text('Page ${i + 1} of $totalPages', style: pw.TextStyle(fontSize: 10)),
+                  pw.Text(
+                    'Page ${i + 1} of $totalPages',
+                    style: pw.TextStyle(fontSize: 10),
+                  ),
                 ],
               ),
             );
@@ -1403,14 +1745,18 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
 
               for (final s in sList) {
                 final sid = (s['id'] ?? '').toString();
-                final blockEntries = bySection[sid] ?? const <Map<String, dynamic>>[];
+                final blockEntries =
+                    bySection[sid] ?? const <Map<String, dynamic>>[];
                 if (blockEntries.isEmpty) continue;
 
                 widgets.add(pw.SizedBox(height: 10));
                 widgets.add(
                   pw.Text(
                     _sectionHeader(s),
-                    style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
+                    style: pw.TextStyle(
+                      fontSize: 11,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
                   ),
                 );
                 widgets.add(pw.SizedBox(height: 4));
@@ -1424,9 +1770,15 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
             widgets.add(
               pw.Row(
                 children: [
-                  pw.Text('RingMaster Show', style: pw.TextStyle(fontSize: 9)),
+                  pw.Text(
+                    'RingMaster Show',
+                    style: pw.TextStyle(fontSize: 9),
+                  ),
                   pw.Spacer(),
-                  pw.Text('${DateTime.now().toLocal()}', style: pw.TextStyle(fontSize: 9)),
+                  pw.Text(
+                    '${DateTime.now().toLocal()}',
+                    style: pw.TextStyle(fontSize: 9),
+                  ),
                 ],
               ),
             );
@@ -1477,7 +1829,9 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
       if (!mounted) return;
       setState(() {
         _building = false;
-        _msg = savedPath == null ? 'Save canceled.' : 'PDF saved to: $savedPath';
+        _msg = savedPath == null
+            ? 'Save canceled.'
+            : 'PDF saved to: $savedPath';
       });
     } catch (e) {
       if (!mounted) return;
@@ -1491,14 +1845,24 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final isSuccess = _msg != null &&
+        (_msg == 'Save canceled.' || _msg!.startsWith('PDF saved to:'));
 
     return Padding(
-      padding: EdgeInsets.only(left: 16, right: 16, top: 10, bottom: bottomInset + 16),
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 10,
+        bottom: bottomInset + 16,
+      ),
       child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Generate Check-In Sheets', style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              'Generate Check-In Sheets',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 10),
             Text(
               '${widget.showName} • ${widget.sectionLabel}',
@@ -1506,33 +1870,56 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
             ),
             const SizedBox(height: 6),
             Text(
-              widget.includeScratched ? 'Including scratched entries' : 'Excluding scratched entries',
+              widget.includeScratched
+                  ? 'Including scratched entries'
+                  : 'Excluding scratched entries',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 6),
             Text(
-              widget.combineSections ? 'Mode: Combined (one sheet per exhibitor)' : 'Mode: Single section',
+              widget.combineSections
+                  ? 'Mode: Combined (one sheet per exhibitor)'
+                  : 'Mode: Single section',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 12),
             if (_msg != null) ...[
-              Text(
-                _msg!,
-                style: TextStyle(
-                  color: _msg == 'Save canceled.' || _msg!.startsWith('PDF saved to:')
-                      ? Colors.green
-                      : Colors.red,
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isSuccess
+                      ? Colors.green.withOpacity(.08)
+                      : Colors.red.withOpacity(.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isSuccess
+                        ? Colors.green.withOpacity(.25)
+                        : Colors.red.withOpacity(.25),
+                  ),
+                ),
+                child: Text(
+                  _msg!,
+                  style: TextStyle(
+                    color: isSuccess ? Colors.green.shade700 : Colors.red,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
               const SizedBox(height: 10),
             ],
             FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFD4A623),
+                foregroundColor: Colors.black87,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
               onPressed: _building ? null : _generatePdf,
               icon: const Icon(Icons.picture_as_pdf),
               label: Text(_building ? 'Building PDF…' : 'Generate PDF'),
             ),
             const SizedBox(height: 8),
-            TextButton(
+            OutlinedButton(
               onPressed: _building ? null : () => Navigator.pop(context),
               child: const Text('Close'),
             ),

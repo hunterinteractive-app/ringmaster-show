@@ -15,24 +15,22 @@ class AdminEntryManagementScreen extends StatefulWidget {
   });
 
   @override
-  State<AdminEntryManagementScreen> createState() => _AdminEntryManagementScreenState();
+  State<AdminEntryManagementScreen> createState() =>
+      _AdminEntryManagementScreenState();
 }
 
-class _AdminEntryManagementScreenState extends State<AdminEntryManagementScreen> {
+class _AdminEntryManagementScreenState
+    extends State<AdminEntryManagementScreen> {
   bool _loading = true;
   String? _msg;
 
-  // Sections (Show letters)
   List<Map<String, dynamic>> _sections = [];
   String? _selectedSectionId;
 
-  // Entries
   List<Map<String, dynamic>> _entries = [];
 
-  // Search
   final _search = TextEditingController();
 
-  // Expand/collapse memory per exhibitor
   final Set<String> _expandedExhibitorIds = <String>{};
 
   @override
@@ -88,10 +86,14 @@ class _AdminEntryManagementScreenState extends State<AdminEntryManagementScreen>
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => _AdminAddEntrySheet(
-        showId: widget.showId,
-        sections: _sections,
-        initialSectionId: _selectedSectionId,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _themedBottomSheetShell(
+        context,
+        child: _AdminAddEntrySheet(
+          showId: widget.showId,
+          sections: _sections,
+          initialSectionId: _selectedSectionId,
+        ),
       ),
     );
 
@@ -189,7 +191,8 @@ class _AdminEntryManagementScreenState extends State<AdminEntryManagementScreen>
 
     try {
       await supabase.from('entries').update({
-        'scratched_at': willScratch ? DateTime.now().toUtc().toIso8601String() : null,
+        'scratched_at':
+            willScratch ? DateTime.now().toUtc().toIso8601String() : null,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       }).eq('id', id);
 
@@ -207,7 +210,11 @@ class _AdminEntryManagementScreenState extends State<AdminEntryManagementScreen>
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => _EditEntrySheet(entry: entry),
+      backgroundColor: Colors.transparent,
+      builder: (_) => _themedBottomSheetShell(
+        context,
+        child: _EditEntrySheet(entry: entry),
+      ),
     );
 
     if (saved == true) {
@@ -222,9 +229,13 @@ class _AdminEntryManagementScreenState extends State<AdminEntryManagementScreen>
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => _MoveEntrySheet(
-        entry: entry,
-        sections: _sections,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _themedBottomSheetShell(
+        context,
+        child: _MoveEntrySheet(
+          entry: entry,
+          sections: _sections,
+        ),
       ),
     );
 
@@ -256,7 +267,8 @@ class _AdminEntryManagementScreenState extends State<AdminEntryManagementScreen>
     }
   }
 
-  Map<String, List<Map<String, dynamic>>> _groupByExhibitor(List<Map<String, dynamic>> items) {
+  Map<String, List<Map<String, dynamic>>> _groupByExhibitor(
+      List<Map<String, dynamic>> items) {
     final map = <String, List<Map<String, dynamic>>>{};
     for (final e in items) {
       final exId = _exhibitorId(e);
@@ -267,17 +279,96 @@ class _AdminEntryManagementScreenState extends State<AdminEntryManagementScreen>
     return map;
   }
 
+  Widget _messageBanner() {
+    if (_msg == null) return const SizedBox.shrink();
+
+    final successMessages = {
+      'Entry updated.',
+      'Scratched.',
+      'Unscratched.',
+      'Animal moved.',
+      'Entry added.',
+    };
+
+    final isSuccess = successMessages.contains(_msg);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isSuccess
+              ? Colors.green.withOpacity(.08)
+              : Colors.red.withOpacity(.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSuccess
+                ? Colors.green.withOpacity(.25)
+                : Colors.red.withOpacity(.25),
+          ),
+        ),
+        child: Text(
+          _msg!,
+          style: TextStyle(
+            color: isSuccess ? Colors.green.shade700 : Colors.red,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _summaryCard({
+    required String title,
+    required Widget child,
+  }) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.05),
+            blurRadius: 12,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 14),
+          child,
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final searchText = _search.text.trim();
 
-    final filtered = _entries.where((e) => _matchesSearch(e, searchText)).toList();
+    final filtered =
+        _entries.where((e) => _matchesSearch(e, searchText)).toList();
 
     final grouped = _groupByExhibitor(filtered);
     final exhibitorKeys = grouped.keys.toList()
       ..sort((a, b) {
-        final aName = grouped[a]!.isEmpty ? '' : _exhibitorDisplayName(grouped[a]!.first).toLowerCase();
-        final bName = grouped[b]!.isEmpty ? '' : _exhibitorDisplayName(grouped[b]!.first).toLowerCase();
+        final aName = grouped[a]!.isEmpty
+            ? ''
+            : _exhibitorDisplayName(grouped[a]!.first).toLowerCase();
+        final bName = grouped[b]!.isEmpty
+            ? ''
+            : _exhibitorDisplayName(grouped[b]!.first).toLowerCase();
         return aName.compareTo(bName);
       });
 
@@ -293,7 +384,28 @@ class _AdminEntryManagementScreenState extends State<AdminEntryManagementScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Entry Mgmt — ${widget.showName}'),
+        toolbarHeight: 70,
+        titleSpacing: 0,
+        title: Row(
+          children: [
+            const SizedBox(width: 12),
+            Image.asset(
+              'assets/images/ringmaster_show_logo.png',
+              height: 42,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Entry Mgmt — ${widget.showName}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 18,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
         actions: [
           IconButton(
             tooltip: 'Add Entry',
@@ -307,172 +419,262 @@ class _AdminEntryManagementScreenState extends State<AdminEntryManagementScreen>
           ),
         ],
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : SafeArea(
-              child: Column(
-                children: [
-                  if (_msg != null)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          _msg!,
-                          style: TextStyle(
-                            color: (_msg == 'Entry updated.' ||
-                                    _msg == 'Scratched.' ||
-                                    _msg == 'Unscratched.' ||
-                                    _msg == 'Animal moved.' ||
-                                    _msg == 'Entry added.')
-                                ? Colors.green
-                                : Colors.red,
-                          ),
-                        ),
-                      ),
-                    ),
-                  Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      children: [
-                        Row(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Color(0xFF11285A),
+              Color(0xFF0B1C43),
+            ],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: _loading
+            ? const Center(
+                child: CircularProgressIndicator(color: Colors.white),
+              )
+            : SafeArea(
+                child: Container(
+                  margin: const EdgeInsets.only(top: 8),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF4F6FB),
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(24)),
+                  ),
+                  child: Column(
+                    children: [
+                      _messageBanner(),
+                      _summaryCard(
+                        title: 'Filters',
+                        child: Column(
                           children: [
-                            Expanded(
-                              child: DropdownButtonFormField<String>(
-                                value: _selectedSectionId,
-                                decoration: const InputDecoration(
-                                  labelText: 'Show Letter / Section',
-                                ),
-                                items: _sections
-                                    .map(
-                                      (s) => DropdownMenuItem<String>(
-                                        value: s['id']?.toString(),
-                                        child: Text(_sectionLabel(s)),
-                                      ),
-                                    )
-                                    .toList(),
-                                onChanged: _sections.isEmpty ? null : _onChangeSection,
+                            DropdownButtonFormField<String>(
+                              value: _selectedSectionId,
+                              decoration: const InputDecoration(
+                                labelText: 'Show Letter / Section',
+                                border: OutlineInputBorder(),
+                              ),
+                              items: _sections
+                                  .map(
+                                    (s) => DropdownMenuItem<String>(
+                                      value: s['id']?.toString(),
+                                      child: Text(_sectionLabel(s)),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged:
+                                  _sections.isEmpty ? null : _onChangeSection,
+                            ),
+                            const SizedBox(height: 12),
+                            TextField(
+                              controller: _search,
+                              decoration: const InputDecoration(
+                                labelText:
+                                    'Search entries (includes exhibitor name)',
+                                hintText:
+                                    'Exhibitor, tattoo, breed, variety, sex, class, notes…',
+                                prefixIcon: Icon(Icons.search),
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                sectionTitle.isEmpty
+                                    ? 'Showing: ${filtered.length} entries • ${grouped.length} exhibitors'
+                                    : 'Showing: ${filtered.length} entries • ${grouped.length} exhibitors • $sectionTitle',
+                                style: Theme.of(context).textTheme.bodySmall,
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 10),
-                        TextField(
-                          controller: _search,
-                          decoration: const InputDecoration(
-                            labelText: 'Search entries (includes exhibitor name)',
-                            hintText: 'Exhibitor, tattoo, breed, variety, sex, class, notes…',
-                            prefixIcon: Icon(Icons.search),
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            sectionTitle.isEmpty
-                                ? 'Showing: ${filtered.length} entries • ${grouped.length} exhibitors'
-                                : 'Showing: ${filtered.length} entries • ${grouped.length} exhibitors • $sectionTitle',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Divider(height: 1),
-                  Expanded(
-                    child: filtered.isEmpty
-                        ? const Center(child: Text('No entries found for this filter.'))
-                        : ListView.builder(
-                            itemCount: exhibitorKeys.length,
-                            itemBuilder: (context, idx) {
-                              final exKey = exhibitorKeys[idx];
-                              final exEntries = grouped[exKey] ?? [];
-                              if (exEntries.isEmpty) return const SizedBox.shrink();
+                      ),
+                      const SizedBox(height: 16),
+                      Expanded(
+                        child: filtered.isEmpty
+                            ? const Center(
+                                child:
+                                    Text('No entries found for this filter.'),
+                              )
+                            : ListView.builder(
+                                padding:
+                                    const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                                itemCount: exhibitorKeys.length,
+                                itemBuilder: (context, idx) {
+                                  final exKey = exhibitorKeys[idx];
+                                  final exEntries = grouped[exKey] ?? [];
+                                  if (exEntries.isEmpty) {
+                                    return const SizedBox.shrink();
+                                  }
 
-                              final exhibitorName = _exhibitorDisplayName(exEntries.first);
-                              final isExpanded = _expandedExhibitorIds.contains(exKey);
+                                  final exhibitorName =
+                                      _exhibitorDisplayName(exEntries.first);
+                                  final isExpanded =
+                                      _expandedExhibitorIds.contains(exKey);
 
-                              return Card(
-                                margin: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-                                child: ExpansionTile(
-                                  initiallyExpanded: isExpanded,
-                                  onExpansionChanged: (v) {
-                                    setState(() {
-                                      if (v) {
-                                        _expandedExhibitorIds.add(exKey);
-                                      } else {
-                                        _expandedExhibitorIds.remove(exKey);
-                                      }
-                                    });
-                                  },
-                                  title: Text(exhibitorName),
-                                  subtitle: Text('${exEntries.length} entr${exEntries.length == 1 ? 'y' : 'ies'}'),
-                                  children: [
-                                    const Divider(height: 1),
-                                    ...exEntries.map((e) {
-                                      final tattoo = (e['tattoo'] ?? '').toString();
-                                      final breed = (e['breed'] ?? '').toString();
-                                      final variety = (e['variety'] ?? '').toString();
-                                      final sex = (e['sex'] ?? '').toString();
-                                      final cls = (e['class_name'] ?? '').toString();
-                                      final notes = (e['notes'] ?? '').toString();
-                                      final scratchedAt = e['scratched_at']?.toString();
-                                      final isScratched = scratchedAt != null && scratchedAt.isNotEmpty;
-
-                                      final section = e['show_sections'];
-                                      final letter = (section is Map ? (section['letter'] ?? '') : '').toString();
-
-                                      final titleLeft = tattoo.isEmpty ? '(no tattoo)' : tattoo;
-
-                                      final subtitle = [
-                                        if (breed.isNotEmpty) 'Breed: $breed',
-                                        if (variety.isNotEmpty) 'Variety: $variety',
-                                        if (sex.isNotEmpty) 'Sex: $sex',
-                                        if (cls.isNotEmpty) 'Class: $cls',
-                                        if (letter.isNotEmpty) 'Show: $letter',
-                                        if (isScratched) 'SCRATCHED: ${_dateOnly(scratchedAt)}',
-                                        if (notes.isNotEmpty) 'Notes: $notes',
-                                      ].join(' • ');
-
-                                      return ListTile(
-                                        title: Text(
-                                          titleLeft,
-                                          style: TextStyle(
-                                            decoration: isScratched ? TextDecoration.lineThrough : null,
-                                          ),
+                                  return Container(
+                                    margin: const EdgeInsets.only(bottom: 12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(18),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(.05),
+                                          blurRadius: 12,
                                         ),
-                                        subtitle: subtitle.isEmpty ? null : Text(subtitle),
-                                        isThreeLine: subtitle.length > 80,
-                                        trailing: PopupMenuButton<String>(
-                                          tooltip: 'Actions',
-                                          onSelected: (v) {
-                                            if (v == 'edit') _openEdit(e);
-                                            if (v == 'move') _openMove(e);
-                                            if (v == 'scratch') _toggleScratch(e);
-                                          },
-                                          itemBuilder: (_) => [
-                                            const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                                            const PopupMenuItem(value: 'move', child: Text('Move Animal')),
-                                            PopupMenuItem(
-                                              value: 'scratch',
-                                              child: Text(isScratched ? 'Un-scratch' : 'Scratch'),
+                                      ],
+                                    ),
+                                    child: ExpansionTile(
+                                      initiallyExpanded: isExpanded,
+                                      onExpansionChanged: (v) {
+                                        setState(() {
+                                          if (v) {
+                                            _expandedExhibitorIds.add(exKey);
+                                          } else {
+                                            _expandedExhibitorIds.remove(exKey);
+                                          }
+                                        });
+                                      },
+                                      title: Text(
+                                        exhibitorName,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      subtitle: Text(
+                                        '${exEntries.length} entr${exEntries.length == 1 ? 'y' : 'ies'}',
+                                      ),
+                                      children: [
+                                        const Divider(height: 1),
+                                        ...exEntries.map((e) {
+                                          final tattoo =
+                                              (e['tattoo'] ?? '').toString();
+                                          final breed =
+                                              (e['breed'] ?? '').toString();
+                                          final variety =
+                                              (e['variety'] ?? '').toString();
+                                          final sex =
+                                              (e['sex'] ?? '').toString();
+                                          final cls =
+                                              (e['class_name'] ?? '').toString();
+                                          final notes =
+                                              (e['notes'] ?? '').toString();
+                                          final scratchedAt =
+                                              e['scratched_at']?.toString();
+                                          final isScratched = scratchedAt !=
+                                                  null &&
+                                              scratchedAt.isNotEmpty;
+
+                                          final section = e['show_sections'];
+                                          final letter = (section is Map
+                                                  ? (section['letter'] ?? '')
+                                                  : '')
+                                              .toString();
+
+                                          final titleLeft = tattoo.isEmpty
+                                              ? '(no tattoo)'
+                                              : tattoo;
+
+                                          final subtitle = [
+                                            if (breed.isNotEmpty)
+                                              'Breed: $breed',
+                                            if (variety.isNotEmpty)
+                                              'Variety: $variety',
+                                            if (sex.isNotEmpty) 'Sex: $sex',
+                                            if (cls.isNotEmpty) 'Class: $cls',
+                                            if (letter.isNotEmpty)
+                                              'Show: $letter',
+                                            if (isScratched)
+                                              'SCRATCHED: ${_dateOnly(scratchedAt)}',
+                                            if (notes.isNotEmpty)
+                                              'Notes: $notes',
+                                          ].join(' • ');
+
+                                          return ListTile(
+                                            title: Text(
+                                              titleLeft,
+                                              style: TextStyle(
+                                                decoration: isScratched
+                                                    ? TextDecoration.lineThrough
+                                                    : null,
+                                              ),
                                             ),
-                                          ],
-                                        ),
-                                        onTap: () => _openEdit(e),
-                                      );
-                                    }),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
+                                            subtitle: subtitle.isEmpty
+                                                ? null
+                                                : Text(subtitle),
+                                            isThreeLine: subtitle.length > 80,
+                                            trailing:
+                                                PopupMenuButton<String>(
+                                              tooltip: 'Actions',
+                                              onSelected: (v) {
+                                                if (v == 'edit') _openEdit(e);
+                                                if (v == 'move') _openMove(e);
+                                                if (v == 'scratch') {
+                                                  _toggleScratch(e);
+                                                }
+                                              },
+                                              itemBuilder: (_) => [
+                                                const PopupMenuItem(
+                                                  value: 'edit',
+                                                  child: Text('Edit'),
+                                                ),
+                                                const PopupMenuItem(
+                                                  value: 'move',
+                                                  child: Text('Move Animal'),
+                                                ),
+                                                PopupMenuItem(
+                                                  value: 'scratch',
+                                                  child: Text(isScratched
+                                                      ? 'Un-scratch'
+                                                      : 'Scratch'),
+                                                ),
+                                              ],
+                                            ),
+                                            onTap: () => _openEdit(e),
+                                          );
+                                        }),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
+      ),
     );
   }
+}
+
+Widget _themedBottomSheetShell(BuildContext context, {required Widget child}) {
+  return Container(
+    decoration: const BoxDecoration(
+      gradient: LinearGradient(
+        colors: [
+          Color(0xFF11285A),
+          Color(0xFF0B1C43),
+        ],
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+      ),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    child: SafeArea(
+      top: false,
+      child: Container(
+        margin: const EdgeInsets.only(top: 8),
+        decoration: const BoxDecoration(
+          color: Color(0xFFF4F6FB),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: child,
+      ),
+    ),
+  );
 }
 
 class _EditEntrySheet extends StatefulWidget {
@@ -498,12 +700,17 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
   @override
   void initState() {
     super.initState();
-    _tattoo = TextEditingController(text: (widget.entry['tattoo'] ?? '').toString());
-    _breed = TextEditingController(text: (widget.entry['breed'] ?? '').toString());
-    _variety = TextEditingController(text: (widget.entry['variety'] ?? '').toString());
+    _tattoo =
+        TextEditingController(text: (widget.entry['tattoo'] ?? '').toString());
+    _breed =
+        TextEditingController(text: (widget.entry['breed'] ?? '').toString());
+    _variety = TextEditingController(
+        text: (widget.entry['variety'] ?? '').toString());
     _sex = TextEditingController(text: (widget.entry['sex'] ?? '').toString());
-    _className = TextEditingController(text: (widget.entry['class_name'] ?? '').toString());
-    _notes = TextEditingController(text: (widget.entry['notes'] ?? '').toString());
+    _className = TextEditingController(
+        text: (widget.entry['class_name'] ?? '').toString());
+    _notes =
+        TextEditingController(text: (widget.entry['notes'] ?? '').toString());
   }
 
   @override
@@ -531,7 +738,8 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
         'breed': _breed.text.trim().isEmpty ? null : _breed.text.trim(),
         'variety': _variety.text.trim().isEmpty ? null : _variety.text.trim(),
         'sex': _sex.text.trim().isEmpty ? null : _sex.text.trim(),
-        'class_name': _className.text.trim().isEmpty ? null : _className.text.trim(),
+        'class_name':
+            _className.text.trim().isEmpty ? null : _className.text.trim(),
         'notes': _notes.text.trim().isEmpty ? null : _notes.text.trim(),
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       }).eq('id', id);
@@ -552,7 +760,12 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return Padding(
-      padding: EdgeInsets.only(left: 16, right: 16, top: 10, bottom: bottomInset + 16),
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 10,
+        bottom: bottomInset + 16,
+      ),
       child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -560,38 +773,65 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
             Text('Edit Entry', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
             if (_msg != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Text(_msg!, style: const TextStyle(color: Colors.red)),
+              Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.red.withOpacity(.25)),
+                ),
+                child: Text(
+                  _msg!,
+                  style: const TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             TextField(
               controller: _tattoo,
               enabled: !_saving,
-              decoration: const InputDecoration(labelText: 'Tattoo / Ear #'),
+              decoration: const InputDecoration(
+                labelText: 'Tattoo / Ear #',
+                border: OutlineInputBorder(),
+              ),
             ),
             const SizedBox(height: 10),
             TextField(
               controller: _breed,
               enabled: !_saving,
-              decoration: const InputDecoration(labelText: 'Breed'),
+              decoration: const InputDecoration(
+                labelText: 'Breed',
+                border: OutlineInputBorder(),
+              ),
             ),
             const SizedBox(height: 10),
             TextField(
               controller: _variety,
               enabled: !_saving,
-              decoration: const InputDecoration(labelText: 'Variety'),
+              decoration: const InputDecoration(
+                labelText: 'Variety',
+                border: OutlineInputBorder(),
+              ),
             ),
             const SizedBox(height: 10),
             TextField(
               controller: _sex,
               enabled: !_saving,
-              decoration: const InputDecoration(labelText: 'Sex'),
+              decoration: const InputDecoration(
+                labelText: 'Sex',
+                border: OutlineInputBorder(),
+              ),
             ),
             const SizedBox(height: 10),
             TextField(
               controller: _className,
               enabled: !_saving,
-              decoration: const InputDecoration(labelText: 'Class'),
+              decoration: const InputDecoration(
+                labelText: 'Class',
+                border: OutlineInputBorder(),
+              ),
             ),
             const SizedBox(height: 10),
             TextField(
@@ -599,10 +839,18 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
               enabled: !_saving,
               minLines: 2,
               maxLines: 5,
-              decoration: const InputDecoration(labelText: 'Notes'),
+              decoration: const InputDecoration(
+                labelText: 'Notes',
+                border: OutlineInputBorder(),
+              ),
             ),
             const SizedBox(height: 14),
             FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFD4A623),
+                foregroundColor: Colors.black87,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
               onPressed: _saving ? null : _save,
               child: Text(_saving ? 'Saving…' : 'Save Changes'),
             ),
@@ -637,7 +885,9 @@ class _MoveEntrySheetState extends State<_MoveEntrySheet> {
   void initState() {
     super.initState();
     _sectionId = widget.entry['section_id']?.toString();
-    _className = TextEditingController(text: (widget.entry['class_name'] ?? '').toString());
+    _className = TextEditingController(
+      text: (widget.entry['class_name'] ?? '').toString(),
+    );
   }
 
   @override
@@ -671,7 +921,8 @@ class _MoveEntrySheetState extends State<_MoveEntrySheet> {
     try {
       await supabase.from('entries').update({
         'section_id': _sectionId,
-        'class_name': _className.text.trim().isEmpty ? null : _className.text.trim(),
+        'class_name':
+            _className.text.trim().isEmpty ? null : _className.text.trim(),
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       }).eq('id', entryId);
 
@@ -691,7 +942,12 @@ class _MoveEntrySheetState extends State<_MoveEntrySheet> {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return Padding(
-      padding: EdgeInsets.only(left: 16, right: 16, top: 10, bottom: bottomInset + 16),
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 10,
+        bottom: bottomInset + 16,
+      ),
       child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -699,23 +955,54 @@ class _MoveEntrySheetState extends State<_MoveEntrySheet> {
             Text('Move Animal', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
             if (_msg != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Text(_msg!, style: const TextStyle(color: Colors.red)),
+              Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.red.withOpacity(.25)),
+                ),
+                child: Text(
+                  _msg!,
+                  style: const TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             DropdownButtonFormField<String>(
               value: _sectionId,
-              decoration: const InputDecoration(labelText: 'Move to section'),
+              decoration: const InputDecoration(
+                labelText: 'Move to section',
+                border: OutlineInputBorder(),
+              ),
               items: widget.sections
-                  .map((s) => DropdownMenuItem<String>(
-                        value: s['id']?.toString(),
-                        child: Text(_sectionLabel(s)),
-                      ))
+                  .map(
+                    (s) => DropdownMenuItem<String>(
+                      value: s['id']?.toString(),
+                      child: Text(_sectionLabel(s)),
+                    ),
+                  )
                   .toList(),
               onChanged: _saving ? null : (v) => setState(() => _sectionId = v),
             ),
             const SizedBox(height: 12),
+            TextField(
+              controller: _className,
+              enabled: !_saving,
+              decoration: const InputDecoration(
+                labelText: 'Class',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
             FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFD4A623),
+                foregroundColor: Colors.black87,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
               onPressed: _saving ? null : _save,
               child: Text(_saving ? 'Moving…' : 'Save Move'),
             ),
@@ -873,7 +1160,6 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
 
     final ownerUserId = (exhibitor['owner_user_id'] ?? '').toString().trim();
 
-    // Walk-in / local exhibitors may not have an owner_user_id
     if (ownerUserId.isEmpty) {
       if (mounted) {
         setState(() {
@@ -918,7 +1204,9 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
         display.isEmpty &&
         first.isEmpty &&
         last.isEmpty) {
-      throw Exception('Enter at least a showing name, display name, or first/last name.');
+      throw Exception(
+        'Enter at least a showing name, display name, or first/last name.',
+      );
     }
 
     final inserted = await supabase
@@ -1017,9 +1305,11 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
         'species': _useLocalAnimal ? null : _animal!['species'],
         'tattoo': _useLocalAnimal ? _tattoo.text.trim() : _animal!['tattoo'],
         'breed': _useLocalAnimal ? _breed.text.trim() : _animal!['breed'],
-        'variety': _useLocalAnimal ? _variety.text.trim() : _animal!['variety'],
+        'variety':
+            _useLocalAnimal ? _variety.text.trim() : _animal!['variety'],
         'sex': _useLocalAnimal ? _sex.text.trim() : _animal!['sex'],
-        'class_name': _className.text.trim().isEmpty ? null : _className.text.trim(),
+        'class_name':
+            _className.text.trim().isEmpty ? null : _className.text.trim(),
         'notes': _notes.text.trim().isEmpty ? null : _notes.text.trim(),
         'status': 'entered',
         'created_at': DateTime.now().toUtc().toIso8601String(),
@@ -1057,40 +1347,69 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
   @override
   Widget build(BuildContext context) {
     final inset = MediaQuery.of(context).viewInsets.bottom;
+    final isSuccess = _msg == 'Saved. Add another.';
 
     return Padding(
-      padding: EdgeInsets.only(bottom: inset + 16, left: 16, right: 16, top: 10),
+      padding:
+          EdgeInsets.only(bottom: inset + 16, left: 16, right: 16, top: 10),
       child: _loading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('Add Entry', style: Theme.of(context).textTheme.titleLarge),
+                  Text('Add Entry',
+                      style: Theme.of(context).textTheme.titleLarge),
                   const SizedBox(height: 10),
                   if (_msg != null)
-                    Text(_msg!, style: const TextStyle(color: Colors.red)),
-
-                  const SizedBox(height: 10),
-
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: isSuccess
+                            ? Colors.green.withOpacity(.08)
+                            : Colors.red.withOpacity(.08),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isSuccess
+                              ? Colors.green.withOpacity(.25)
+                              : Colors.red.withOpacity(.25),
+                        ),
+                      ),
+                      child: Text(
+                        _msg!,
+                        style: TextStyle(
+                          color:
+                              isSuccess ? Colors.green.shade700 : Colors.red,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
                   DropdownButtonFormField<String>(
                     value: _sectionId,
-                    decoration: const InputDecoration(labelText: 'Section'),
+                    decoration: const InputDecoration(
+                      labelText: 'Section',
+                      border: OutlineInputBorder(),
+                    ),
                     items: widget.sections
-                        .map((s) => DropdownMenuItem<String>(
-                              value: s['id'].toString(),
-                              child: Text((s['display_name'] ?? s['letter']).toString()),
-                            ))
+                        .map(
+                          (s) => DropdownMenuItem<String>(
+                            value: s['id'].toString(),
+                            child:
+                                Text((s['display_name'] ?? s['letter']).toString()),
+                          ),
+                        )
                         .toList(),
-                    onChanged: _saving ? null : (v) => setState(() => _sectionId = v),
+                    onChanged:
+                        _saving ? null : (v) => setState(() => _sectionId = v),
                   ),
-
                   const SizedBox(height: 14),
-
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Add New Exhibitor'),
-                    subtitle: const Text('Create a show/local exhibitor with contact info'),
+                    subtitle: const Text(
+                      'Create a show/local exhibitor with contact info',
+                    ),
                     value: _addNewExhibitor,
                     onChanged: _saving
                         ? null
@@ -1104,18 +1423,23 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                             });
                           },
                   ),
-
                   if (_addNewExhibitor) ...[
                     TextField(
                       controller: _showingName,
                       enabled: !_saving,
-                      decoration: const InputDecoration(labelText: 'Showing Name'),
+                      decoration: const InputDecoration(
+                        labelText: 'Showing Name',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
                     const SizedBox(height: 10),
                     TextField(
                       controller: _displayName,
                       enabled: !_saving,
-                      decoration: const InputDecoration(labelText: 'Display Name'),
+                      decoration: const InputDecoration(
+                        labelText: 'Display Name',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
                     const SizedBox(height: 10),
                     Row(
@@ -1124,7 +1448,10 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                           child: TextField(
                             controller: _firstName,
                             enabled: !_saving,
-                            decoration: const InputDecoration(labelText: 'First Name'),
+                            decoration: const InputDecoration(
+                              labelText: 'First Name',
+                              border: OutlineInputBorder(),
+                            ),
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -1132,7 +1459,10 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                           child: TextField(
                             controller: _lastName,
                             enabled: !_saving,
-                            decoration: const InputDecoration(labelText: 'Last Name'),
+                            decoration: const InputDecoration(
+                              labelText: 'Last Name',
+                              border: OutlineInputBorder(),
+                            ),
                           ),
                         ),
                       ],
@@ -1141,18 +1471,27 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                     TextField(
                       controller: _email,
                       enabled: !_saving,
-                      decoration: const InputDecoration(labelText: 'Email'),
+                      decoration: const InputDecoration(
+                        labelText: 'Email',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
                     const SizedBox(height: 10),
                     TextField(
                       controller: _phone,
                       enabled: !_saving,
-                      decoration: const InputDecoration(labelText: 'Phone'),
+                      decoration: const InputDecoration(
+                        labelText: 'Phone',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
                     const SizedBox(height: 10),
                     DropdownButtonFormField<String>(
                       value: _exhibitorType,
-                      decoration: const InputDecoration(labelText: 'Exhibitor Type'),
+                      decoration: const InputDecoration(
+                        labelText: 'Exhibitor Type',
+                        border: OutlineInputBorder(),
+                      ),
                       items: const [
                         DropdownMenuItem(value: 'open', child: Text('Open')),
                         DropdownMenuItem(value: 'youth', child: Text('Youth')),
@@ -1164,12 +1503,17 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                   ] else ...[
                     DropdownButtonFormField<String>(
                       value: _exhibitorId,
-                      decoration: const InputDecoration(labelText: 'Exhibitor'),
+                      decoration: const InputDecoration(
+                        labelText: 'Exhibitor',
+                        border: OutlineInputBorder(),
+                      ),
                       items: _exhibitors
-                          .map((e) => DropdownMenuItem<String>(
-                                value: e['id'].toString(),
-                                child: Text(_exhibitorLabel(e)),
-                              ))
+                          .map(
+                            (e) => DropdownMenuItem<String>(
+                              value: e['id'].toString(),
+                              child: Text(_exhibitorLabel(e)),
+                            ),
+                          )
                           .toList(),
                       onChanged: _saving
                           ? null
@@ -1184,13 +1528,13 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                             },
                     ),
                   ],
-
                   const SizedBox(height: 14),
-
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Add New Animal (Local Only)'),
-                    subtitle: const Text('Use when the animal is not already in the system'),
+                    subtitle: const Text(
+                      'Use when the animal is not already in the system',
+                    ),
                     value: _useLocalAnimal,
                     onChanged: _saving
                         ? null
@@ -1202,30 +1546,41 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                             });
                           },
                   ),
-
                   if (_useLocalAnimal) ...[
                     TextField(
                       controller: _tattoo,
                       enabled: !_saving,
-                      decoration: const InputDecoration(labelText: 'Tattoo'),
+                      decoration: const InputDecoration(
+                        labelText: 'Tattoo',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
                     const SizedBox(height: 10),
                     TextField(
                       controller: _breed,
                       enabled: !_saving,
-                      decoration: const InputDecoration(labelText: 'Breed'),
+                      decoration: const InputDecoration(
+                        labelText: 'Breed',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
                     const SizedBox(height: 10),
                     TextField(
                       controller: _variety,
                       enabled: !_saving,
-                      decoration: const InputDecoration(labelText: 'Variety'),
+                      decoration: const InputDecoration(
+                        labelText: 'Variety',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
                     const SizedBox(height: 10),
                     TextField(
                       controller: _sex,
                       enabled: !_saving,
-                      decoration: const InputDecoration(labelText: 'Sex'),
+                      decoration: const InputDecoration(
+                        labelText: 'Sex',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
                   ] else ...[
                     if (_addNewExhibitor)
@@ -1233,49 +1588,67 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                         'Select "Add New Animal" for a new walk-in exhibitor, or switch back to an existing exhibitor to load saved animals.',
                       )
                     else if (_exhibitorId == null)
-                      const Text('Select an exhibitor first to load their animals.')
+                      const Text(
+                        'Select an exhibitor first to load their animals.',
+                      )
                     else if (_animals.isEmpty)
-                      const Text('No saved animals found for this exhibitor. Use "Add New Animal" to enter one locally.')
+                      const Text(
+                        'No saved animals found for this exhibitor. Use "Add New Animal" to enter one locally.',
+                      )
                     else
                       DropdownButtonFormField<Map<String, dynamic>>(
                         value: _animal,
-                        decoration: const InputDecoration(labelText: 'Animal'),
+                        decoration: const InputDecoration(
+                          labelText: 'Animal',
+                          border: OutlineInputBorder(),
+                        ),
                         items: _animals
-                            .map((a) => DropdownMenuItem<Map<String, dynamic>>(
-                                  value: a,
-                                  child: Text(_animalLabel(a)),
-                                ))
+                            .map(
+                              (a) => DropdownMenuItem<Map<String, dynamic>>(
+                                value: a,
+                                child: Text(_animalLabel(a)),
+                              ),
+                            )
                             .toList(),
-                        onChanged: _saving ? null : (v) => setState(() => _animal = v),
+                        onChanged:
+                            _saving ? null : (v) => setState(() => _animal = v),
                       ),
                   ],
-
                   const SizedBox(height: 12),
-
                   TextField(
                     controller: _className,
                     enabled: !_saving,
-                    decoration: const InputDecoration(labelText: 'Class'),
+                    decoration: const InputDecoration(
+                      labelText: 'Class',
+                      border: OutlineInputBorder(),
+                    ),
                   ),
                   const SizedBox(height: 10),
                   TextField(
                     controller: _notes,
                     enabled: !_saving,
-                    decoration: const InputDecoration(labelText: 'Notes'),
+                    decoration: const InputDecoration(
+                      labelText: 'Notes',
+                      border: OutlineInputBorder(),
+                    ),
                   ),
                   const SizedBox(height: 16),
-
                   Row(
                     children: [
                       Expanded(
                         child: FilledButton(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFFD4A623),
+                            foregroundColor: Colors.black87,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
                           onPressed: _saving ? null : () => _save(),
                           child: Text(_saving ? 'Saving…' : 'Save'),
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: FilledButton(
+                        child: OutlinedButton(
                           onPressed: _saving ? null : () => _save(reset: true),
                           child: const Text('Save & Add Another'),
                         ),

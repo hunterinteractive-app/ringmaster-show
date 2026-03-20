@@ -88,57 +88,156 @@ class _BreedEditorScreenState extends State<BreedEditorScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF4F6FB),
       appBar: AppBar(
+        backgroundColor: const Color(0xFF11285A),
+        foregroundColor: Colors.white,
+        elevation: 0,
         title: Text(_isEdit ? 'Edit Breed' : 'Add Breed'),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            TextField(
-              controller: _name,
-              decoration: const InputDecoration(
-                labelText: 'Breed name (required)',
+      body: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Color(0xFF11285A),
+                  Color(0xFF0B1C43),
+                ],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
               ),
             ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              value: _classSystem,
-              decoration: const InputDecoration(labelText: 'Class system'),
-              items: const [
-                DropdownMenuItem(
-                  value: 'four',
-                  child: Text('Four-class (Jr/Sr)'),
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _isEdit ? 'Update Breed Details' : 'Create New Breed',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                      ),
                 ),
-                DropdownMenuItem(
-                  value: 'six',
-                  child: Text('Six-class (Jr/Int/Sr)'),
+                const SizedBox(height: 6),
+                Text(
+                  'Species: ${widget.species[0].toUpperCase()}${widget.species.substring(1)}',
+                  style: const TextStyle(color: Colors.white70),
                 ),
               ],
-              onChanged: (v) => setState(() => _classSystem = v ?? 'four'),
             ),
-            SwitchListTile(
-              title: const Text('Active'),
-              value: _active,
-              onChanged: (v) => setState(() => _active = v),
+          ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Card(
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        TextField(
+                          controller: _name,
+                          enabled: !_saving,
+                          decoration: const InputDecoration(
+                            labelText: 'Breed name',
+                            hintText: 'Enter breed name',
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        DropdownButtonFormField<String>(
+                          value: _classSystem,
+                          decoration: const InputDecoration(
+                            labelText: 'Class system',
+                          ),
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'four',
+                              child: Text('Four-class (Jr/Sr)'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'six',
+                              child: Text('Six-class (Jr/Int/Sr)'),
+                            ),
+                          ],
+                          onChanged: _saving
+                              ? null
+                              : (v) => setState(() => _classSystem = v ?? 'four'),
+                        ),
+                        const SizedBox(height: 8),
+                        SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Active'),
+                          subtitle: const Text(
+                            'Inactive breeds stay in the database but are hidden from normal use.',
+                          ),
+                          value: _active,
+                          onChanged:
+                              _saving ? null : (v) => setState(() => _active = v),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (_msg != null) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.red.withOpacity(.22),
+                      ),
+                    ),
+                    child: Text(
+                      _msg!,
+                      style: const TextStyle(
+                        color: Colors.red,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
-            if (_msg != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                _msg!,
-                style: const TextStyle(color: Colors.red),
+          ),
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _saving ? null : () => Navigator.pop(context),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFFD4A623),
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                      onPressed: _saving ? null : _save,
+                      child: Text(_saving ? 'Saving…' : 'Save'),
+                    ),
+                  ),
+                ],
               ),
-            ],
-            const Spacer(),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: _saving ? null : _save,
-                child: Text(_saving ? 'Saving…' : 'Save'),
-              ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

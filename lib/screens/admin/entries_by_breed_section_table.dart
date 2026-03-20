@@ -1,4 +1,5 @@
 // lib/screens/admin/entries_by_breed_section_table.dart
+
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -456,10 +457,16 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.05),
+        color: const Color(0xFF11285A).withOpacity(0.06),
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: const Color(0xFF11285A).withOpacity(0.10),
+        ),
       ),
-      child: Text('$label: $value'),
+      child: Text(
+        '$label: $value',
+        style: const TextStyle(fontWeight: FontWeight.w600),
+      ),
     );
   }
 
@@ -468,24 +475,15 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       margin: const EdgeInsets.only(right: 8),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.04),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: Colors.black.withOpacity(0.06),
+        ),
       ),
-      child: Text(text),
-    );
-  }
-
-  Widget _countsLegendBar() {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.04),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: const Text(
-        'All section counts are shown as Rabbits / Exhibitors (R/E).',
-        style: TextStyle(fontWeight: FontWeight.w500),
+      child: Text(
+        text,
+        style: const TextStyle(fontWeight: FontWeight.w500),
       ),
     );
   }
@@ -528,152 +526,346 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
     );
   }
 
+  Widget _countsLegendBar() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF11285A).withOpacity(0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFF11285A).withOpacity(0.10),
+        ),
+      ),
+      child: const Text(
+        'All section counts are shown as Rabbits / Exhibitors (R/E).',
+        style: TextStyle(fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+
   Widget _classTable(_VarietyGroup variety) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        headingRowHeight: 44,
-        dataRowMinHeight: 42,
-        dataRowMaxHeight: 52,
-        columns: [
-          const DataColumn(label: Text('Age / Sex Class')),
-          ..._sections.map((s) => DataColumn(label: Text('${_sectionHeader(s)} (R/E)'))),
-          const DataColumn(label: Text('Rabbits')),
-          const DataColumn(label: Text('Exhibitors')),
-        ],
-        rows: variety.classes.map((c) {
-          return DataRow(
-            cells: [
-              DataCell(Text(c.label)),
-              ..._sections.map((s) {
-                final sid = s['id'].toString();
-                final rabbits = _countForSection(c.countsBySection, sid);
-                final exhibitors = _exhibitorsForSection(c.exhibitorsBySection, sid);
-                final text =
-                    (rabbits == 0 && exhibitors == 0) ? '-' : '$rabbits/$exhibitors';
-                return DataCell(Text(text));
-              }),
-              DataCell(Text(c.rabbitCount.toString())),
-              DataCell(Text(c.exhibitorCount.toString())),
-            ],
-          );
-        }).toList(),
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.black.withOpacity(0.06)),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: DataTable(
+          headingRowHeight: 46,
+          dataRowMinHeight: 44,
+          dataRowMaxHeight: 54,
+          columnSpacing: 18,
+          headingRowColor: MaterialStatePropertyAll(
+            const Color(0xFF11285A).withOpacity(0.06),
+          ),
+          columns: [
+            const DataColumn(
+              label: Text(
+                'Age / Sex Class',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+            ..._sections.map(
+              (s) => DataColumn(
+                label: Text(
+                  '${_sectionHeader(s)} (R/E)',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+            const DataColumn(
+              label: Text(
+                'Rabbits',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+            const DataColumn(
+              label: Text(
+                'Exhibitors',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+          rows: variety.classes.map((c) {
+            return DataRow(
+              cells: [
+                DataCell(Text(c.label)),
+                ..._sections.map((s) {
+                  final sid = s['id'].toString();
+                  final rabbits = _countForSection(c.countsBySection, sid);
+                  final exhibitors = _exhibitorsForSection(c.exhibitorsBySection, sid);
+                  final text =
+                      (rabbits == 0 && exhibitors == 0) ? '-' : '$rabbits/$exhibitors';
+                  return DataCell(Text(text));
+                }),
+                DataCell(Text(c.rabbitCount.toString())),
+                DataCell(Text(c.exhibitorCount.toString())),
+              ],
+            );
+          }).toList(),
+        ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
-    if (_msg != null) return Center(child: Text(_msg!));
+    if (_loading) {
+      return Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Color(0xFF11285A),
+              Color(0xFF0B1C43),
+            ],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: const Center(
+          child: CircularProgressIndicator(color: Colors.white),
+        ),
+      );
+    }
+
+    if (_msg != null) {
+      return Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Color(0xFF11285A),
+              Color(0xFF0B1C43),
+            ],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: Center(
+          child: Container(
+            margin: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Text(
+              _msg!,
+              style: const TextStyle(
+                color: Colors.red,
+                fontWeight: FontWeight.w600,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      );
+    }
 
     if (_sections.isEmpty) {
-      return const Center(child: Text('No enabled sections for this show.'));
-    }
-    if (_breedGroups.isEmpty) {
-      return const Center(child: Text('No entries found for this show.'));
+      return Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Color(0xFF11285A),
+              Color(0xFF0B1C43),
+            ],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: const Center(
+          child: Text(
+            'No enabled sections for this show.',
+            style: TextStyle(color: Colors.white),
+          ),
+        ),
+      );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
-          child: Row(
+    if (_breedGroups.isEmpty) {
+      return Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Color(0xFF11285A),
+              Color(0xFF0B1C43),
+            ],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: const Center(
+          child: Text(
+            'No entries found for this show.',
+            style: TextStyle(color: Colors.white),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Color(0xFF11285A),
+            Color(0xFF0B1C43),
+          ],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+      ),
+      child: SafeArea(
+        child: Container(
+          margin: const EdgeInsets.only(top: 8),
+          decoration: const BoxDecoration(
+            color: Color(0xFFF4F6FB),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Entries by Breed / Section', style: Theme.of(context).textTheme.titleMedium),
-              const Spacer(),
-              TextButton.icon(
-                onPressed: _exportCsv,
-                icon: const Icon(Icons.download),
-                label: const Text('Export CSV'),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 14, 12, 6),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Entries by Breed / Section',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: _exportCsv,
+                      icon: const Icon(Icons.download),
+                      label: const Text('Export CSV'),
+                    ),
+                    const SizedBox(width: 6),
+                    IconButton(
+                      tooltip: 'Reload',
+                      onPressed: _load,
+                      icon: const Icon(Icons.refresh),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(width: 6),
-              IconButton(
-                tooltip: 'Reload',
-                onPressed: _load,
-                icon: const Icon(Icons.refresh),
+              _countsLegendBar(),
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: _breedGroups.length,
+                  itemBuilder: (context, index) {
+                    final breed = _breedGroups[index];
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(18),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 12,
+                          ),
+                        ],
+                      ),
+                      child: ExpansionTile(
+                        tilePadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 6,
+                        ),
+                        childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                        title: Text(
+                          breed.breed,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${breed.species.toUpperCase()} • ${breed.varieties.length} varieties',
+                            ),
+                            const SizedBox(height: 8),
+                            _breedSummaryBar(breed),
+                          ],
+                        ),
+                        trailing: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 260),
+                          child: Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            alignment: WrapAlignment.end,
+                            children: [
+                              _countChip('Exhibitors', breed.exhibitorCount),
+                              _countChip('Rabbits', breed.rabbitCount),
+                            ],
+                          ),
+                        ),
+                        children: [
+                          const SizedBox(height: 8),
+                          ...breed.varieties.map((variety) {
+                            return Container(
+                              margin: const EdgeInsets.only(top: 8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF8F9FC),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: Colors.black.withOpacity(0.05),
+                                ),
+                              ),
+                              child: ExpansionTile(
+                                tilePadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 6,
+                                ),
+                                childrenPadding:
+                                    const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                                title: Text(
+                                  variety.variety,
+                                  style: const TextStyle(fontWeight: FontWeight.w600),
+                                ),
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('${variety.classes.length} age/sex classes'),
+                                    const SizedBox(height: 8),
+                                    _varietySummaryBar(variety),
+                                  ],
+                                ),
+                                trailing: ConstrainedBox(
+                                  constraints: const BoxConstraints(maxWidth: 260),
+                                  child: Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    alignment: WrapAlignment.end,
+                                    children: [
+                                      _countChip('Exhibitors', variety.exhibitorCount),
+                                      _countChip('Rabbits', variety.rabbitCount),
+                                    ],
+                                  ),
+                                ),
+                                children: [
+                                  const SizedBox(height: 8),
+                                  _classTable(variety),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        ],
+                      ),
+                    );
+                  },
+                ),
               ),
             ],
           ),
         ),
-        const Divider(height: 1),
-        _countsLegendBar(),
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.all(12),
-            itemCount: _breedGroups.length,
-            itemBuilder: (context, index) {
-              final breed = _breedGroups[index];
-
-              return Card(
-                margin: const EdgeInsets.only(bottom: 12),
-                child: ExpansionTile(
-                  title: Text(breed.breed),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('${breed.species.toUpperCase()} • ${breed.varieties.length} varieties'),
-                      const SizedBox(height: 8),
-                      _breedSummaryBar(breed),
-                    ],
-                  ),
-                  childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                  trailing: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 260),
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      alignment: WrapAlignment.end,
-                      children: [
-                        _countChip('Exhibitors', breed.exhibitorCount),
-                        _countChip('Rabbits', breed.rabbitCount),
-                      ],
-                    ),
-                  ),
-                  children: [
-                    const SizedBox(height: 8),
-                    ...breed.varieties.map((variety) {
-                      return Card(
-                        margin: const EdgeInsets.only(top: 8),
-                        color: Colors.black.withOpacity(0.02),
-                        child: ExpansionTile(
-                          title: Text(variety.variety),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('${variety.classes.length} age/sex classes'),
-                              const SizedBox(height: 8),
-                              _varietySummaryBar(variety),
-                            ],
-                          ),
-                          trailing: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 260),
-                            child: Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              alignment: WrapAlignment.end,
-                              children: [
-                                _countChip('Exhibitors', variety.exhibitorCount),
-                                _countChip('Rabbits', variety.rabbitCount),
-                              ],
-                            ),
-                          ),
-                          childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                          children: [
-                            const SizedBox(height: 8),
-                            _classTable(variety),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-      ],
+      ),
     );
   }
 }

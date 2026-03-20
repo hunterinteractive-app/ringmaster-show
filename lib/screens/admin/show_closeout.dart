@@ -511,6 +511,52 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     );
   }
 }
+class _CloseoutSectionCard extends StatelessWidget {
+  final String title;
+  final String? subtitle;
+  final List<Widget> children;
+
+  const _CloseoutSectionCard({
+    required this.title,
+    this.subtitle,
+    required this.children,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.05),
+            blurRadius: 12,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: Theme.of(context).textTheme.titleMedium),
+          if (subtitle != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              subtitle!,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+          const SizedBox(height: 12),
+          ...children,
+        ],
+      ),
+    );
+  }
+}
 
 class _ArbaCloseoutCard extends StatelessWidget {
   final TextEditingController secretaryNameController;
@@ -553,112 +599,158 @@ class _ArbaCloseoutCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'ARBA Final Closeout Confirmation',
-              style: Theme.of(context).textTheme.titleMedium,
+    return _CloseoutSectionCard(
+      title: 'ARBA Final Closeout Confirmation',
+      subtitle: 'Complete the required show secretary and protest information before generating final reports.',
+      children: [
+        TextField(
+          controller: secretaryNameController,
+          decoration: const InputDecoration(
+            labelText: 'Show Secretary Name',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: secretaryAddressController,
+          decoration: const InputDecoration(
+            labelText: 'Secretary Address',
+            border: OutlineInputBorder(),
+          ),
+          maxLines: 2,
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: secretaryEmailController,
+          decoration: const InputDecoration(
+            labelText: 'Secretary Email',
+            border: OutlineInputBorder(),
+          ),
+          keyboardType: TextInputType.emailAddress,
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: secretaryPhoneController,
+          decoration: const InputDecoration(
+            labelText: 'Secretary Phone',
+            border: OutlineInputBorder(),
+          ),
+          keyboardType: TextInputType.phone,
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: superintendentController,
+          decoration: const InputDecoration(
+            labelText: 'Superintendent Name',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: superintendentNumberController,
+          decoration: const InputDecoration(
+            labelText: 'Superintendent ARBA Number',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFF11285A).withOpacity(.04),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: const Color(0xFF11285A).withOpacity(.10),
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: secretaryNameController,
-              decoration: const InputDecoration(
-                labelText: 'Show Secretary Name',
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Sweepstakes Sanction Issues',
+                style: Theme.of(context).textTheme.titleSmall,
               ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: secretaryAddressController,
-              decoration: const InputDecoration(
-                labelText: 'Secretary Address',
+              const SizedBox(height: 4),
+              Text(
+                'Did you have any trouble receiving sweepstakes sanctions from national specialty clubs?',
+                style: Theme.of(context).textTheme.bodySmall,
               ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: secretaryEmailController,
-              decoration: const InputDecoration(
-                labelText: 'Secretary Email',
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(sweepstakesIssue ? 'Yes' : 'No'),
+                value: sweepstakesIssue,
+                onChanged: onSweepstakesChanged,
               ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: secretaryPhoneController,
-              decoration: const InputDecoration(
-                labelText: 'Secretary Phone',
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: superintendentController,
-              decoration: const InputDecoration(
-                labelText: 'Superintendent Name',
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: superintendentNumberController,
-              decoration: const InputDecoration(
-                labelText: 'Superintendent ARBA Number',
-              ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'ANY TROUBLE RECEIVING SWEEPSTAKES SANCTIONS FROM NATIONAL SPECIALTY CLUBS?',
-              style: Theme.of(context).textTheme.labelLarge,
-            ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(sweepstakesIssue ? 'Yes' : 'No'),
-              value: sweepstakesIssue,
-              onChanged: onSweepstakesChanged,
-            ),
-            if (sweepstakesIssue)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: TextField(
+              if (sweepstakesIssue)
+                TextField(
                   controller: sweepstakesClubController,
                   decoration: const InputDecoration(
                     labelText: 'Which club(s)?',
+                    border: OutlineInputBorder(),
                   ),
                   onChanged: onSweepstakesClubChanged,
                 ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFD4A623).withOpacity(.08),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: const Color(0xFFD4A623).withOpacity(.25),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Official Protest',
+                style: Theme.of(context).textTheme.titleSmall,
               ),
-            const SizedBox(height: 8),
-            Text(
-              'Was there an official protest filed at this show?',
-              style: Theme.of(context).textTheme.labelLarge,
-            ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(officialProtest ? 'Yes' : 'No'),
-              value: officialProtest,
-              onChanged: onOfficialProtestChanged,
-            ),
-            if (officialProtest)
+              const SizedBox(height: 4),
+              Text(
+                'Was there an official protest filed at this show?',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: Text(arbaReportFiled ? 'Yes' : 'No'),
-                subtitle: const Text('Has a report been filed with ARBA?'),
-                value: arbaReportFiled,
-                onChanged: onArbaReportFiledChanged,
+                title: Text(officialProtest ? 'Yes' : 'No'),
+                value: officialProtest,
+                onChanged: onOfficialProtestChanged,
               ),
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: onSave,
-              icon: const Icon(Icons.save),
-              label: const Text('Save ARBA Closeout Info'),
-            ),
-          ],
+              if (officialProtest)
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(arbaReportFiled ? 'Yes' : 'No'),
+                  subtitle: const Text('Has a report been filed with ARBA?'),
+                  value: arbaReportFiled,
+                  onChanged: onArbaReportFiledChanged,
+                ),
+            ],
+          ),
         ),
-      ),
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFD4A623),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+            ),
+            onPressed: onSave,
+            icon: const Icon(Icons.save),
+            label: const Text('Save ARBA Closeout Info'),
+          ),
+        ),
+      ],
     );
   }
 }
-
 class _ReportActionsCard extends StatefulWidget {
   final List<ReportArtifactSummary> reports;
   final Map<String, List<String>> groupedReportNames;
@@ -740,112 +832,108 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
   Widget build(BuildContext context) {
     final artifact = _selectedArtifact;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return _CloseoutSectionCard(
+      title: 'Reports & Distribution',
+      subtitle: 'Generate, download, and distribute closeout reports by category.',
+      children: [
+        DropdownButtonFormField<String>(
+          initialValue: _selectedGroup,
+          decoration: const InputDecoration(
+            labelText: 'Report Group',
+            border: OutlineInputBorder(),
+          ),
+          items: _groupLabels.entries
+              .map(
+                (entry) => DropdownMenuItem<String>(
+                  value: entry.key,
+                  child: Text(entry.value),
+                ),
+              )
+              .toList(),
+          onChanged: (value) {
+            if (value == null) return;
+
+            final reports = widget.groupedReportNames[value] ?? const [];
+
+            setState(() {
+              _selectedGroup = value;
+              _selectedReportName = reports.isEmpty ? null : reports.first;
+            });
+          },
+        ),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<String>(
+          initialValue: _currentReports.contains(_selectedReportName)
+              ? _selectedReportName
+              : (_currentReports.isNotEmpty ? _currentReports.first : null),
+          decoration: const InputDecoration(
+            labelText: 'Report',
+            border: OutlineInputBorder(),
+          ),
+          items: _currentReports
+              .map(
+                (reportName) => DropdownMenuItem<String>(
+                  value: reportName,
+                  child: Text(_friendlyReportName(reportName)),
+                ),
+              )
+              .toList(),
+          onChanged: _currentReports.isEmpty
+              ? null
+              : (value) {
+                  setState(() {
+                    _selectedReportName = value;
+                  });
+                },
+        ),
+        const SizedBox(height: 16),
+        _ReportInfoTile(
+          reportName: _selectedReportName == null
+              ? '-'
+              : _friendlyReportName(_selectedReportName),
+          status: artifact?.artifactStatus ?? 'not_generated',
+          generatedAt: artifact?.generatedAt,
+        ),
+        const SizedBox(height: 16),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
           children: [
-            Text(
-              'Reports & Distribution',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              initialValue: _selectedGroup,
-              decoration: const InputDecoration(
-                labelText: 'Report Group',
-                border: OutlineInputBorder(),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFD4A623),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
               ),
-              items: _groupLabels.entries
-                  .map(
-                    (entry) => DropdownMenuItem<String>(
-                      value: entry.key,
-                      child: Text(entry.value),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (value) {
-                if (value == null) return;
-
-                final reports = widget.groupedReportNames[value] ?? const [];
-
-                setState(() {
-                  _selectedGroup = value;
-                  _selectedReportName = reports.isEmpty ? null : reports.first;
-                });
-              },
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              initialValue: _currentReports.contains(_selectedReportName)
-                  ? _selectedReportName
-                  : (_currentReports.isNotEmpty ? _currentReports.first : null),
-              decoration: const InputDecoration(
-                labelText: 'Report',
-                border: OutlineInputBorder(),
-              ),
-              items: _currentReports
-                  .map(
-                    (reportName) => DropdownMenuItem<String>(
-                      value: reportName,
-                      child: Text(_friendlyReportName(reportName)),
-                    ),
-                  )
-                  .toList(),
-              onChanged: _currentReports.isEmpty
+              onPressed: widget.loading || _selectedReportName == null
                   ? null
-                  : (value) {
-                      setState(() {
-                        _selectedReportName = value;
-                      });
-                    },
+                  : () => widget.onGenerate(_selectedReportName!),
+              icon: widget.loading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.picture_as_pdf),
+              label: Text(widget.loading ? 'Generating…' : 'Generate'),
             ),
-            const SizedBox(height: 16),
-            _ReportInfoTile(
-              reportName: _selectedReportName == null
-                  ? '-'
-                  : _friendlyReportName(_selectedReportName),
-              status: artifact?.artifactStatus ?? 'not_generated',
-              generatedAt: artifact?.generatedAt,
+            OutlinedButton.icon(
+              onPressed: _canDownload && _selectedReportName != null
+                  ? () => widget.onDownload(_selectedReportName!)
+                  : null,
+              icon: const Icon(Icons.download),
+              label: const Text('Download'),
             ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                FilledButton.icon(
-                  onPressed: widget.loading || _selectedReportName == null
-                      ? null
-                      : () => widget.onGenerate(_selectedReportName!),
-                  icon: widget.loading
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.picture_as_pdf),
-                  label: Text(widget.loading ? 'Generating…' : 'Generate'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _canDownload && _selectedReportName != null
-                      ? () => widget.onDownload(_selectedReportName!)
-                      : null,
-                  icon: const Icon(Icons.download),
-                  label: const Text('Download'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _canDownload && _selectedReportName != null
-                      ? () => widget.onEmail(_selectedReportName!)
-                      : null,
-                  icon: const Icon(Icons.email_outlined),
-                  label: const Text('Email'),
-                ),
-              ],
+            OutlinedButton.icon(
+              onPressed: _canDownload && _selectedReportName != null
+                  ? () => widget.onEmail(_selectedReportName!)
+                  : null,
+              icon: const Icon(Icons.email_outlined),
+              label: const Text('Email'),
             ),
           ],
         ),
-      ),
+      ],
     );
   }
 }
@@ -863,12 +951,21 @@ class _ReportInfoTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isGenerated = status == 'generated';
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        border: Border.all(color: Theme.of(context).dividerColor),
-        borderRadius: BorderRadius.circular(12),
+        color: isGenerated
+            ? Colors.green.withOpacity(.06)
+            : const Color(0xFF11285A).withOpacity(.04),
+        border: Border.all(
+          color: isGenerated
+              ? Colors.green.withOpacity(.25)
+              : Theme.of(context).dividerColor,
+        ),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -895,21 +992,41 @@ class _ErrorView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.error_outline, size: 42),
-            const SizedBox(height: 12),
-            Text(message, textAlign: TextAlign.center),
-            const SizedBox(height: 12),
-            FilledButton(
-              onPressed: onRetry,
-              child: const Text('Retry'),
-            ),
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Color(0xFF11285A),
+            Color(0xFF0B1C43),
           ],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+      ),
+      child: Center(
+        child: Container(
+          margin: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline, size: 42),
+              const SizedBox(height: 12),
+              Text(message, textAlign: TextAlign.center),
+              const SizedBox(height: 12),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFD4A623),
+                ),
+                onPressed: onRetry,
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
         ),
       ),
     );

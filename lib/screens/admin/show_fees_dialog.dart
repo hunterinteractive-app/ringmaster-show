@@ -1,3 +1,5 @@
+// lib/screens/admin/show_fees_dialog.dart
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -11,7 +13,11 @@ class ShowFeesDialog {
   }) async {
     await showDialog(
       context: context,
-      builder: (_) => _ShowFeesDialog(showId: showId, showName: showName),
+      barrierDismissible: false,
+      builder: (_) => _ShowFeesDialog(
+        showId: showId,
+        showName: showName,
+      ),
     );
   }
 }
@@ -20,7 +26,10 @@ class _ShowFeesDialog extends StatefulWidget {
   final String showId;
   final String showName;
 
-  const _ShowFeesDialog({required this.showId, required this.showName});
+  const _ShowFeesDialog({
+    required this.showId,
+    required this.showName,
+  });
 
   @override
   State<_ShowFeesDialog> createState() => _ShowFeesDialogState();
@@ -35,8 +44,14 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
   final _feePerShow = TextEditingController();
 
   bool _discountEnabled = false;
-  String _discountType = 'amount'; // amount|percent
+  String _discountType = 'amount';
   final _discountValue = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
 
   @override
   void dispose() {
@@ -45,8 +60,6 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
     _discountValue.dispose();
     super.dispose();
   }
-
-  String _fmtNum(String? s) => (s ?? '').trim();
 
   Future<void> _load() async {
     setState(() {
@@ -63,7 +76,6 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
           .maybeSingle();
 
       if (data == null) {
-        // defaults
         _feePerEntry.text = '0';
         _feePerShow.text = '';
         _discountEnabled = false;
@@ -73,8 +85,10 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
         _feePerEntry.text = (data['fee_per_entry'] ?? 0).toString();
         _feePerShow.text = (data['fee_per_show'] ?? '').toString();
         _discountEnabled = data['multi_show_discount_enabled'] == true;
-        _discountType = (data['multi_show_discount_type'] ?? 'amount').toString();
-        _discountValue.text = (data['multi_show_discount_value'] ?? 0).toString();
+        _discountType =
+            (data['multi_show_discount_type'] ?? 'amount').toString();
+        _discountValue.text =
+            (data['multi_show_discount_value'] ?? 0).toString();
       }
 
       if (!mounted) return;
@@ -90,34 +104,33 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
 
   double? _parseMoney(String s) {
     final x = double.tryParse(s.trim());
-    if (x == null) return null;
-    if (x < 0) return null;
+    if (x == null || x < 0) return null;
     return x;
   }
 
   bool _validate() {
     final perEntry = _parseMoney(_feePerEntry.text);
     if (perEntry == null) {
-      setState(() => _msg = 'Fee per entry must be a valid number ≥ 0.');
+      setState(() => _msg = 'Fee per entry must be ≥ 0.');
       return false;
     }
 
     if (_feePerShow.text.trim().isNotEmpty) {
       final perShow = _parseMoney(_feePerShow.text);
       if (perShow == null) {
-        setState(() => _msg = 'Fee per show must be a valid number ≥ 0 (or blank).');
+        setState(() => _msg = 'Fee per show must be ≥ 0 or blank.');
         return false;
       }
     }
 
     final disc = _parseMoney(_discountValue.text);
     if (disc == null) {
-      setState(() => _msg = 'Discount value must be a valid number ≥ 0.');
+      setState(() => _msg = 'Discount must be ≥ 0.');
       return false;
     }
 
     if (_discountType == 'percent' && disc > 100) {
-      setState(() => _msg = 'Percent discount cannot exceed 100%.');
+      setState(() => _msg = 'Percent cannot exceed 100.');
       return false;
     }
 
@@ -132,18 +145,17 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
       _msg = null;
     });
 
-    final feePerEntry = double.parse(_feePerEntry.text.trim());
-    final feePerShow = _feePerShow.text.trim().isEmpty ? null : double.parse(_feePerShow.text.trim());
-    final discVal = double.parse(_discountValue.text.trim());
-
     try {
       await supabase.from('show_fee_settings').upsert({
         'show_id': widget.showId,
-        'fee_per_entry': feePerEntry,
-        'fee_per_show': feePerShow,
+        'fee_per_entry': double.parse(_feePerEntry.text.trim()),
+        'fee_per_show': _feePerShow.text.trim().isEmpty
+            ? null
+            : double.parse(_feePerShow.text.trim()),
         'multi_show_discount_enabled': _discountEnabled,
         'multi_show_discount_type': _discountType,
-        'multi_show_discount_value': discVal,
+        'multi_show_discount_value':
+            double.parse(_discountValue.text.trim()),
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       });
 
@@ -161,96 +173,235 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
     }
   }
 
-  @override
-  void initState() {
-    super.initState();
-    _load();
+  Widget _section(String title, List<Widget> children) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.05),
+            blurRadius: 10,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title,
+              style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 12),
+          ...children,
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text('Fee Settings — ${widget.showName}'),
-      content: _loading
-          ? const SizedBox(height: 120, child: Center(child: CircularProgressIndicator()))
-          : SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+    final success = _msg == 'Saved.';
+
+    return Dialog(
+      insetPadding: const EdgeInsets.all(16),
+      backgroundColor: Colors.transparent,
+      child: Container(
+        constraints: const BoxConstraints(
+          maxWidth: 600,
+          maxHeight: 720,
+        ),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [
+              Color(0xFF11285A),
+              Color(0xFF0B1C43),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
+              child: Row(
                 children: [
-                  if (_msg != null) ...[
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        _msg!,
-                        style: TextStyle(color: _msg == 'Saved.' ? Colors.green : Colors.red),
+                  Image.asset(
+                    'assets/images/ringmaster_show_logo.png',
+                    height: 36,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Fee Settings — ${widget.showName}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 20,
                       ),
                     ),
-                    const SizedBox(height: 10),
-                  ],
-
-                  TextField(
-                    controller: _feePerEntry,
-                    enabled: !_saving,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Fee per animal / entry',
-                      hintText: 'Example: 2.00',
-                    ),
                   ),
-                  const SizedBox(height: 10),
-
-                  TextField(
-                    controller: _feePerShow,
-                    enabled: !_saving,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Optional: Fee per show (flat)',
-                      hintText: 'Leave blank if not used',
-                    ),
+                  IconButton(
+                    onPressed:
+                        _saving ? null : () => Navigator.pop(context),
+                    icon: const Icon(Icons.close, color: Colors.white),
                   ),
-
-                  const SizedBox(height: 16),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Multi-show discount'),
-                    value: _discountEnabled,
-                    onChanged: _saving ? null : (v) => setState(() => _discountEnabled = v),
-                  ),
-
-                  if (_discountEnabled) ...[
-                    DropdownButtonFormField<String>(
-                      value: _discountType,
-                      items: const [
-                        DropdownMenuItem(value: 'amount', child: Text('Amount (\$ off)')),
-                        DropdownMenuItem(value: 'percent', child: Text('Percent (% off)')),
-                      ],
-                      onChanged: _saving ? null : (v) => setState(() => _discountType = v ?? 'amount'),
-                      decoration: const InputDecoration(labelText: 'Discount type'),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _discountValue,
-                      enabled: !_saving,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Discount value',
-                        hintText: 'Example: 1.00 or 10',
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),
-      actions: [
-        TextButton(
-          onPressed: _saving ? null : () => Navigator.pop(context),
-          child: const Text('Close'),
+
+            Expanded(
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF4F6FB),
+                  borderRadius:
+                      BorderRadius.vertical(top: Radius.circular(24)),
+                ),
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          children: [
+                            if (_msg != null)
+                              Container(
+                                width: double.infinity,
+                                margin: const EdgeInsets.only(bottom: 16),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: success
+                                      ? Colors.green.withOpacity(.08)
+                                      : Colors.red.withOpacity(.08),
+                                  borderRadius:
+                                      BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  _msg!,
+                                  style: TextStyle(
+                                    color: success
+                                        ? Colors.green
+                                        : Colors.red,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+
+                            Expanded(
+                              child: SingleChildScrollView(
+                                child: Column(
+                                  children: [
+                                    _section('Entry Fees', [
+                                      TextField(
+                                        controller: _feePerEntry,
+                                        decoration: const InputDecoration(
+                                          labelText:
+                                              'Fee per animal / entry',
+                                          border: OutlineInputBorder(),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      TextField(
+                                        controller: _feePerShow,
+                                        decoration: const InputDecoration(
+                                          labelText:
+                                              'Optional: Fee per show',
+                                          border: OutlineInputBorder(),
+                                        ),
+                                      ),
+                                    ]),
+
+                                    _section('Discounts', [
+                                      SwitchListTile(
+                                        contentPadding: EdgeInsets.zero,
+                                        title: const Text(
+                                            'Enable multi-show discount'),
+                                        value: _discountEnabled,
+                                        onChanged: _saving
+                                            ? null
+                                            : (v) => setState(
+                                                () =>
+                                                    _discountEnabled = v),
+                                      ),
+                                      if (_discountEnabled) ...[
+                                        const SizedBox(height: 8),
+                                        DropdownButtonFormField<String>(
+                                          value: _discountType,
+                                          items: const [
+                                            DropdownMenuItem(
+                                                value: 'amount',
+                                                child: Text(
+                                                    'Amount (\$ off)')),
+                                            DropdownMenuItem(
+                                                value: 'percent',
+                                                child: Text(
+                                                    'Percent (% off)')),
+                                          ],
+                                          onChanged: (v) => setState(
+                                              () => _discountType =
+                                                  v ?? 'amount'),
+                                          decoration:
+                                              const InputDecoration(
+                                            labelText: 'Discount type',
+                                            border:
+                                                OutlineInputBorder(),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 12),
+                                        TextField(
+                                          controller: _discountValue,
+                                          decoration:
+                                              const InputDecoration(
+                                            labelText: 'Discount value',
+                                            border:
+                                                OutlineInputBorder(),
+                                          ),
+                                        ),
+                                      ],
+                                    ]),
+                                  ],
+                                ),
+                              ),
+                            ),
+
+                            const SizedBox(height: 12),
+
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: _saving
+                                        ? null
+                                        : () => Navigator.pop(context),
+                                    child: const Text('Close'),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: FilledButton(
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor:
+                                          const Color(0xFFD4A623),
+                                      padding:
+                                          const EdgeInsets.symmetric(
+                                              vertical: 16),
+                                    ),
+                                    onPressed:
+                                        _saving ? null : _save,
+                                    child: Text(
+                                        _saving ? 'Saving…' : 'Save'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+              ),
+            ),
+          ],
         ),
-        FilledButton(
-          onPressed: _saving ? null : _save,
-          child: Text(_saving ? 'Saving…' : 'Save'),
-        ),
-      ],
+      ),
     );
   }
 }

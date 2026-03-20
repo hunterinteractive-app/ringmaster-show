@@ -953,7 +953,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
             children: [
               const SizedBox(width: 12),
               Image.asset(
-                'assets/ringmaster_show_logo.png',
+                'assets/images/ringmaster_show_logo.png',
                 height: 42,
               ),
               const SizedBox(width: 12),

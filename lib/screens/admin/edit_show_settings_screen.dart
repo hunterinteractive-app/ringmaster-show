@@ -1,4 +1,5 @@
 // lib/screens/admin/edit_show_settings_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -38,7 +39,6 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   bool _saving = false;
   String? _msg;
 
-  // Show fields
   final _name = TextEditingController();
   final _location = TextEditingController();
 
@@ -53,7 +53,6 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   String _timezone = 'America/Indiana/Indianapolis';
   String _showNameForTitle = 'Show';
 
-  // ✅ New show setting
   String _finalAwardMode = 'four_six_bis';
 
   @override
@@ -62,8 +61,6 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
     _location.dispose();
     super.dispose();
   }
-
-  // ---------- Helpers ----------
 
   DateTime _asLocal(DateTime dt) => dt.toLocal();
 
@@ -129,8 +126,6 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
     }
   }
 
-  // ---------- Load ----------
-
   Future<void> _load() async {
     setState(() {
       _loading = true;
@@ -178,8 +173,6 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
     super.initState();
     _load();
   }
-
-  // ---------- Pickers ----------
 
   Future<void> _pickStartDate() async {
     final initial = _startDate ?? DateTime.now();
@@ -235,8 +228,6 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
     if (picked == null) return;
     setState(() => _entryCloseAt = picked);
   }
-
-  // ---------- Save ----------
 
   bool _validate() {
     if (_name.text.trim().isEmpty) {
@@ -303,8 +294,6 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
       });
     }
   }
-
-  // ---------- Navigation ----------
 
   Future<void> _openBreedSettings() async {
     await Navigator.push(
@@ -386,8 +375,6 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
     );
   }
 
-  // ---------- Post-show ----------
-
   void _openResultsEntry() {
     Navigator.push(
       context,
@@ -423,24 +410,106 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
           'Planned for a later phase.\n\nThis will finalize balances, reconcile payments, and close the books for the show.',
     );
   }
-  void _openShowCloseout() {
-  Navigator.of(context).push(
-    MaterialPageRoute(
-      builder: (_) => ShowCloseoutPage(
-        showId: widget.showId,
-        showName: _effectiveShowName(),
-      ),
-    ),
-  );
-}
 
-  // ---------- UI ----------
+  void _openShowCloseout() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ShowCloseoutPage(
+          showId: widget.showId,
+          showName: _effectiveShowName(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionCard({
+    required String title,
+    String? subtitle,
+    required List<Widget> children,
+  }) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.05),
+            blurRadius: 12,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: Theme.of(context).textTheme.titleMedium),
+          if (subtitle != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+          const SizedBox(height: 12),
+          ...children,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSettingsActionTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback? onTap,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: Colors.black.withOpacity(.05),
+        ),
+      ),
+      child: ListTile(
+        leading: Icon(icon),
+        title: Text(title),
+        subtitle: Text(subtitle),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: onTap,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Show Settings — $_showNameForTitle'),
+        toolbarHeight: 70,
+        titleSpacing: 0,
+        title: Row(
+          children: [
+            const SizedBox(width: 12),
+            Image.asset(
+              'assets/images/ringmaster_show_logo.png',
+              height: 42,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Show Settings — $_showNameForTitle',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 18,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
         actions: [
           IconButton(
             tooltip: 'Reload',
@@ -449,323 +518,350 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
           ),
         ],
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : LayoutBuilder(
-              builder: (context, constraints) {
-                return SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                    child: IntrinsicHeight(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          if (_msg != null) ...[
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: Align(
-                                alignment: Alignment.centerLeft,
-                                child: Text(
-                                  _msg!,
-                                  style: TextStyle(
-                                    color: (_msg == 'Saved.') ? Colors.green : Colors.red,
-                                  ),
-                                ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Color(0xFF11285A),
+              Color(0xFF0B1C43),
+            ],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: _loading
+            ? const Center(
+                child: CircularProgressIndicator(color: Colors.white),
+              )
+            : SafeArea(
+                child: Container(
+                  margin: const EdgeInsets.only(top: 8),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF4F6FB),
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                  ),
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (_msg != null)
+                          Container(
+                            width: double.infinity,
+                            margin: const EdgeInsets.only(bottom: 16),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: (_msg == 'Saved.')
+                                  ? Colors.green.withOpacity(.08)
+                                  : Colors.red.withOpacity(.08),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: (_msg == 'Saved.')
+                                    ? Colors.green.withOpacity(.25)
+                                    : Colors.red.withOpacity(.25),
+                              ),
+                            ),
+                            child: Text(
+                              _msg!,
+                              style: TextStyle(
+                                color: (_msg == 'Saved.') ? Colors.green : Colors.red,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+
+                        _buildSectionCard(
+                          title: 'Basic Show Info',
+                          children: [
+                            TextField(
+                              controller: _name,
+                              enabled: !_saving,
+                              decoration: const InputDecoration(
+                                labelText: 'Show name (required)',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            TextField(
+                              controller: _location,
+                              enabled: !_saving,
+                              decoration: const InputDecoration(
+                                labelText: 'Location (required)',
+                                border: OutlineInputBorder(),
                               ),
                             ),
                           ],
+                        ),
 
-                          // Basic show info
-                          TextField(
-                            controller: _name,
-                            decoration: const InputDecoration(labelText: 'Show name (required)'),
-                            enabled: !_saving,
-                          ),
-                          const SizedBox(height: 8),
-                          TextField(
-                            controller: _location,
-                            decoration: const InputDecoration(labelText: 'Location (required)'),
-                            enabled: !_saving,
-                          ),
-                          const SizedBox(height: 12),
-
-                          // Dates
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  'Start: ${_startDate == null ? '(required)' : _fmtDate(_startDate)}',
+                        _buildSectionCard(
+                          title: 'Dates',
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    'Start: ${_startDate == null ? '(required)' : _fmtDate(_startDate)}',
+                                  ),
                                 ),
-                              ),
-                              TextButton(
-                                onPressed: _saving ? null : _pickStartDate,
-                                child: const Text('Pick'),
-                              ),
-                            ],
-                          ),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  'End: ${_endDate == null ? '(required)' : _fmtDate(_endDate)}',
+                                TextButton(
+                                  onPressed: _saving ? null : _pickStartDate,
+                                  child: const Text('Pick'),
                                 ),
-                              ),
-                              TextButton(
-                                onPressed: _saving ? null : _pickEndDate,
-                                child: const Text('Pick'),
-                              ),
-                            ],
-                          ),
-
-                          const Divider(height: 24),
-
-                          // Entry window
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              'Entry window (date/time)',
-                              style: Theme.of(context).textTheme.titleMedium,
+                              ],
                             ),
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Expanded(child: Text('Entry open: ${_fmtDateTime(_entryOpenAt)}')),
-                              TextButton(
-                                onPressed: _saving ? null : _pickEntryOpenAt,
-                                child: const Text('Pick'),
-                              ),
-                              TextButton(
-                                onPressed: _saving ? null : () => setState(() => _entryOpenAt = null),
-                                child: const Text('Clear'),
-                              ),
-                            ],
-                          ),
-                          Row(
-                            children: [
-                              Expanded(child: Text('Entry close: ${_fmtDateTime(_entryCloseAt)}')),
-                              TextButton(
-                                onPressed: _saving ? null : _pickEntryCloseAt,
-                                child: const Text('Pick'),
-                              ),
-                              TextButton(
-                                onPressed: _saving ? null : () => setState(() => _entryCloseAt = null),
-                                child: const Text('Clear'),
-                              ),
-                            ],
-                          ),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    'End: ${_endDate == null ? '(required)' : _fmtDate(_endDate)}',
+                                  ),
+                                ),
+                                TextButton(
+                                  onPressed: _saving ? null : _pickEndDate,
+                                  child: const Text('Pick'),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
 
-                          const SizedBox(height: 8),
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
+                        _buildSectionCard(
+                          title: 'Entry Window',
+                          subtitle: 'Date and time for when exhibitors can begin and stop entering.',
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text('Entry open: ${_fmtDateTime(_entryOpenAt)}'),
+                                ),
+                                TextButton(
+                                  onPressed: _saving ? null : _pickEntryOpenAt,
+                                  child: const Text('Pick'),
+                                ),
+                                TextButton(
+                                  onPressed: _saving
+                                      ? null
+                                      : () => setState(() => _entryOpenAt = null),
+                                  child: const Text('Clear'),
+                                ),
+                              ],
+                            ),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text('Entry close: ${_fmtDateTime(_entryCloseAt)}'),
+                                ),
+                                TextButton(
+                                  onPressed: _saving ? null : _pickEntryCloseAt,
+                                  child: const Text('Pick'),
+                                ),
+                                TextButton(
+                                  onPressed: _saving
+                                      ? null
+                                      : () => setState(() => _entryCloseAt = null),
+                                  child: const Text('Clear'),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
                               'Timezone: $_timezone',
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
-                          ),
+                          ],
+                        ),
 
-                          const Divider(height: 24),
-
-                          // Publish toggle
-                          SwitchListTile(
-                            title: const Text('Published'),
-                            subtitle: const Text('If off, exhibitors won’t see this show in the public list.'),
-                            value: _published,
-                            onChanged: _saving ? null : (v) => setState(() => _published = v),
-                          ),
-
-                          // ✅ Pre-show Operations
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              'Admin Operations (Pre-show)',
-                              style: Theme.of(context).textTheme.titleMedium,
+                        _buildSectionCard(
+                          title: 'Publication & Awards',
+                          children: [
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text('Published'),
+                              subtitle: const Text(
+                                'If off, exhibitors won’t see this show in the public list.',
+                              ),
+                              value: _published,
+                              onChanged: _saving
+                                  ? null
+                                  : (v) => setState(() => _published = v),
                             ),
-                          ),
-                          const SizedBox(height: 6),
-
-                          ListTile(
-                            leading: const Icon(Icons.gavel),
-                            title: const Text('Judges'),
-                            subtitle: const Text('Select judges available for staff assignment'),
-                            trailing: const Icon(Icons.chevron_right),
-                            onTap: _saving
-                                ? null
-                                : () async {
-                                    final changed = await ShowJudgesDialog.open(
-                                      context,
-                                      showId: widget.showId,
-                                      showName: _showNameForTitle,
-                                    );
-                                    if (changed == true && mounted) {
-                                      setState(() => _msg = 'Judges updated.');
-                                    }
-                                  },
-                          ),
-
-                          ListTile(
-                            leading: const Icon(Icons.edit_note),
-                            title: const Text('Entry Management'),
-                            subtitle: const Text('Search, edit, scratch, move class, add notes'),
-                            trailing: const Icon(Icons.chevron_right),
-                            onTap: _saving ? null : _openEntryManagement,
-                          ),
-
-                          ListTile(
-                            leading: const Icon(Icons.bar_chart),
-                            title: const Text('Breed Counts'),
-                            subtitle: const Text('Totals by breed/show'),
-                            trailing: const Icon(Icons.chevron_right),
-                            onTap: _saving ? null : _openShowReports,
-                          ),
-
-                          ListTile(
-                            leading: const Icon(Icons.print),
-                            title: const Text('Print Packs'),
-                            subtitle: const Text('Check-In Sheets, Control Sheets, Coop Tags, Comment Cards'),
-                            trailing: const Icon(Icons.chevron_right),
-                            onTap: _saving ? null : _openPrintPacks,
-                          ),
-
-                          const Divider(height: 24),
-
-                          // ✅ Post-Show Operations
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              'Post-Show Operations',
-                              style: Theme.of(context).textTheme.titleMedium,
+                            const SizedBox(height: 12),
+                            DropdownButtonFormField<String>(
+                              value: _finalAwardMode,
+                              decoration: const InputDecoration(
+                                labelText: 'Final award format',
+                                border: OutlineInputBorder(),
+                              ),
+                              items: const [
+                                DropdownMenuItem(
+                                  value: 'four_six_bis',
+                                  child: Text('Best 4-Class / Best 6-Class / Best in Show'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'bis_ris',
+                                  child: Text('Best in Show / Reserve in Show'),
+                                ),
+                              ],
+                              onChanged: _saving
+                                  ? null
+                                  : (v) => setState(
+                                        () => _finalAwardMode = v ?? 'four_six_bis',
+                                      ),
                             ),
-                          ),
-                          const SizedBox(height: 6),
-
-                          ListTile(
-                            leading: const Icon(Icons.fact_check),
-                            title: const Text('Results Entry'),
-                            subtitle: const Text('Enter placements, DQs, and specials by class'),
-                            trailing: const Icon(Icons.chevron_right),
-                            onTap: _saving ? null : _openResultsEntry,
-                          ),
-
-                          ListTile(
-                            leading: const Icon(Icons.verified),
-                            title: const Text('Results Validation'),
-                            subtitle: const Text('Check for missing or inconsistent results before publishing'),
-                            trailing: const Icon(Icons.chevron_right),
-                            onTap: _saving ? null : _openResultsValidation,
-                          ),
-
-                          ListTile(
-                            leading: const Icon(Icons.public),
-                            title: const Text('Publish Results'),
-                            subtitle: const Text('Future: make finalized results visible to exhibitors and the public'),
-                            trailing: const Icon(Icons.chevron_right),
-                            onTap: _saving ? null : _openPublishResultsFuture,
-                          ),
-
-                          ListTile(
-                            leading: const Icon(Icons.request_quote),
-                            title: const Text('Financial Closeout'),
-                            subtitle: const Text('Future: finalize balances and reconcile show payments'),
-                            trailing: const Icon(Icons.chevron_right),
-                            onTap: _saving ? null : _openFinancialCloseoutLater,
-                          ),
-
-                          ListTile(
-                            leading: const Icon(Icons.archive),
-                            title: const Text('Close Show'),
-                            subtitle: const Text('Finalize, Send Reports,Lock/Download copy'),
-                            trailing: const Icon(Icons.chevron_right),
-                            onTap: _saving ? null : _openShowCloseout,
-                          ),
-
-                          const Divider(height: 24),
-
-                          // ✅ Show Settings Operations
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              'Show Settings',
-                              style: Theme.of(context).textTheme.titleMedium,
+                            const SizedBox(height: 8),
+                            Text(
+                              'Current mode: ${_finalAwardModeLabel(_finalAwardMode)}',
+                              style: Theme.of(context).textTheme.bodySmall,
                             ),
-                          ),
-                          const SizedBox(height: 6),
+                          ],
+                        ),
 
-                          ListTile(
-                            title: const Text('Breed Settings'),
-                            subtitle: const Text('Manage allowed breeds/varieties for this show'),
-                            trailing: const Icon(Icons.chevron_right),
-                            onTap: _saving ? null : _openBreedSettings,
-                          ),
-
-                          ListTile(
-                            leading: const Icon(Icons.view_module),
-                            title: const Text('Show Sections'),
-                            subtitle: const Text('Open A/B, Youth A/B (enable the ones this show runs)'),
-                            trailing: const Icon(Icons.chevron_right),
-                            onTap: _saving
-                                ? null
-                                : () async {
-                                    await ShowSectionsDialog.open(
-                                      context,
-                                      showId: widget.showId,
-                                      showName: _effectiveShowName(),
-                                    );
-
-                                    if (!mounted) return;
-                                    await _load();
-                                  },
-                          ),
-
-                          ListTile(
-                            leading: const Icon(Icons.confirmation_number),
-                            title: const Text('Sanction Numbers'),
-                            subtitle: const Text('Add/edit ARBA and breed/club sanction numbers'),
-                            trailing: const Icon(Icons.chevron_right),
-                            onTap: _saving ? null : _openSanctions,
-                          ),
-
-                          ListTile(
-                            leading: const Icon(Icons.attach_money),
-                            title: const Text('Show Fees'),
-                            subtitle: const Text('Per-animal fees and optional discounts'),
-                            trailing: const Icon(Icons.chevron_right),
-                            onTap: _saving ? null : _openFees,
-                          ),
-
-                          ListTile(
-                            leading: const Icon(Icons.rule),
-                            title: const Text('Show Rules'),
-                            subtitle: const Text('Validations like tattoo required, limits, required fields'),
-                            trailing: const Icon(Icons.chevron_right),
-                            onTap: _saving ? null : _openRules,
-                          ),
-
-                          ListTile(
-                            leading: const Icon(Icons.payments),
-                            title: const Text('Payment Settings'),
-                            subtitle: const Text('Day-of-show vs online (Stripe/Square later)'),
-                            trailing: const Icon(Icons.chevron_right),
-                            onTap: _saving ? null : _openPaymentSettings,
-                          ),
-
-                          const Spacer(),
-
-                          SizedBox(
-                            width: double.infinity,
-                            child: FilledButton(
-                              onPressed: _saving ? null : _save,
-                              child: Text(_saving ? 'Saving…' : 'Save Changes'),
+                        _buildSectionCard(
+                          title: 'Admin Operations (Pre-show)',
+                          children: [
+                            _buildSettingsActionTile(
+                              icon: Icons.gavel,
+                              title: 'Judges',
+                              subtitle: 'Select judges available for staff assignment',
+                              onTap: _saving
+                                  ? null
+                                  : () async {
+                                      final changed = await ShowJudgesDialog.open(
+                                        context,
+                                        showId: widget.showId,
+                                        showName: _showNameForTitle,
+                                      );
+                                      if (changed == true && mounted) {
+                                        setState(() => _msg = 'Judges updated.');
+                                      }
+                                    },
                             ),
+                            _buildSettingsActionTile(
+                              icon: Icons.edit_note,
+                              title: 'Entry Management',
+                              subtitle: 'Search, edit, scratch, move class, add notes',
+                              onTap: _saving ? null : _openEntryManagement,
+                            ),
+                            _buildSettingsActionTile(
+                              icon: Icons.bar_chart,
+                              title: 'Breed Counts',
+                              subtitle: 'Totals by breed/show',
+                              onTap: _saving ? null : _openShowReports,
+                            ),
+                            _buildSettingsActionTile(
+                              icon: Icons.print,
+                              title: 'Print Packs',
+                              subtitle: 'Check-In Sheets, Control Sheets, Coop Tags, Comment Cards',
+                              onTap: _saving ? null : _openPrintPacks,
+                            ),
+                          ],
+                        ),
+
+                        _buildSectionCard(
+                          title: 'Post-Show Operations',
+                          children: [
+                            _buildSettingsActionTile(
+                              icon: Icons.fact_check,
+                              title: 'Results Entry',
+                              subtitle: 'Enter placements, DQs, and specials by class',
+                              onTap: _saving ? null : _openResultsEntry,
+                            ),
+                            _buildSettingsActionTile(
+                              icon: Icons.verified,
+                              title: 'Results Validation',
+                              subtitle: 'Check for missing or inconsistent results before publishing',
+                              onTap: _saving ? null : _openResultsValidation,
+                            ),
+                            _buildSettingsActionTile(
+                              icon: Icons.public,
+                              title: 'Publish Results',
+                              subtitle: 'Future: make finalized results visible to exhibitors and the public',
+                              onTap: _saving ? null : _openPublishResultsFuture,
+                            ),
+                            _buildSettingsActionTile(
+                              icon: Icons.request_quote,
+                              title: 'Financial Closeout',
+                              subtitle: 'Future: finalize balances and reconcile show payments',
+                              onTap: _saving ? null : _openFinancialCloseoutLater,
+                            ),
+                            _buildSettingsActionTile(
+                              icon: Icons.archive,
+                              title: 'Close Show',
+                              subtitle: 'Finalize, send reports, and lock/download copy',
+                              onTap: _saving ? null : _openShowCloseout,
+                            ),
+                          ],
+                        ),
+
+                        _buildSectionCard(
+                          title: 'Show Settings',
+                          children: [
+                            _buildSettingsActionTile(
+                              icon: Icons.pets,
+                              title: 'Breed Settings',
+                              subtitle: 'Manage allowed breeds and varieties for this show',
+                              onTap: _saving ? null : _openBreedSettings,
+                            ),
+                            _buildSettingsActionTile(
+                              icon: Icons.view_module,
+                              title: 'Show Sections',
+                              subtitle: 'Open A/B, Youth A/B, and enabled section setup',
+                              onTap: _saving
+                                  ? null
+                                  : () async {
+                                      await ShowSectionsDialog.open(
+                                        context,
+                                        showId: widget.showId,
+                                        showName: _effectiveShowName(),
+                                      );
+
+                                      if (!mounted) return;
+                                      await _load();
+                                    },
+                            ),
+                            _buildSettingsActionTile(
+                              icon: Icons.confirmation_number,
+                              title: 'Sanction Numbers',
+                              subtitle: 'Add or edit ARBA and breed/club sanction numbers',
+                              onTap: _saving ? null : _openSanctions,
+                            ),
+                            _buildSettingsActionTile(
+                              icon: Icons.attach_money,
+                              title: 'Show Fees',
+                              subtitle: 'Per-animal fees and optional discounts',
+                              onTap: _saving ? null : _openFees,
+                            ),
+                            _buildSettingsActionTile(
+                              icon: Icons.rule,
+                              title: 'Show Rules',
+                              subtitle: 'Validations like tattoo required, limits, and required fields',
+                              onTap: _saving ? null : _openRules,
+                            ),
+                            _buildSettingsActionTile(
+                              icon: Icons.payments,
+                              title: 'Payment Settings',
+                              subtitle: 'Day-of-show vs online payment setup',
+                              onTap: _saving ? null : _openPaymentSettings,
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 8),
+
+                        FilledButton(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFFD4A623),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
                           ),
-                        ],
-                      ),
+                          onPressed: _saving ? null : _save,
+                          child: Text(_saving ? 'Saving…' : 'Save Changes'),
+                        ),
+                      ],
                     ),
                   ),
-                );
-              },
-            ),
+                ),
+              ),
+      ),
     );
   }
 }
