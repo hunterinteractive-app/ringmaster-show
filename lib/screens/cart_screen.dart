@@ -311,7 +311,28 @@ class _CartScreenState extends State<CartScreen> {
       final insertedCount = (res as num).toInt();
 
       if (!mounted) return;
-      Navigator.pop(context, insertedCount > 0);
+
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => AlertDialog(
+          title: const Text('Entries Received'),
+          content: Text(
+            insertedCount == 1
+                ? 'We have received your 1 entry. To review it, please view the Entries tab.'
+                : 'We have received your $insertedCount entries. To review them, please view the Entries tab.',
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+
+      if (!mounted) return;
+      Navigator.pop(context, true);
     } catch (e) {
       setState(() => _msg = 'Confirm failed: $e');
     } finally {

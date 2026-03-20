@@ -1265,7 +1265,11 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
 
       final type = (exhibitor['type'] ?? '').toString().toLowerCase();
       if (_sectionKind() == 'youth' && type != 'youth') {
-        throw Exception('Youth section requires youth exhibitor');
+        setState(() {
+          _saving = false;
+          _msg = 'Open exhibitors cannot enter a youth show section.';
+        });
+        return;
       }
 
       if (!_useLocalAnimal && _animal == null) {
