@@ -17,6 +17,7 @@ import '../services/role_service.dart';
 import '../utils/date_time_utils.dart';
 import '../theme/app_theme.dart';
 import '../widgets/rm_widgets.dart';
+import '../widgets/ringmaster_page_shell.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -173,174 +174,175 @@ class ShowListScreen extends StatelessWidget {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<_ShowListBundle>(
-      future: _loadBundle(),
-      builder: (context, snap) {
-        return Scaffold(
-          appBar: _ResponsiveShowAppBar(
-            bundle: snap.data,
-            showAdmin: snap.connectionState == ConnectionState.done &&
-                !snap.hasError &&
-                (snap.data?.canSeeAdminButton ?? false),
-            onAdmin: snap.data == null ? null : () => _openAdmin(context, snap.data!),
-            onAnimals: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const MyAnimalsScreen()),
-              );
-            },
-            onEntries: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const MyEntriesScreen()),
-              );
-            },
-            onSuperAdmin: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const SuperadminHomeScreen()),
-              );
-            },
-            onAccount: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const AccountSettingsScreen()),
-              );
-            },
-            onLogout: () => _logout(context),
-          ),
-          body: Builder(
-            builder: (_) {
-              if (snap.connectionState != ConnectionState.done) {
-                return const Center(child: CircularProgressIndicator());
-              }
+    @override
+    Widget build(BuildContext context) {
+      return FutureBuilder<_ShowListBundle>(
+        future: _loadBundle(),
+        builder: (context, snap) {
+          final bundle = snap.data;
 
-              if (snap.hasError) {
-                return Center(child: Text('Error: ${snap.error}'));
-              }
-
-              final bundle = snap.data!;
-              final shows = bundle.shows;
-
-              if (shows.isEmpty) {
-                return _UpcomingShowsEmptyState(
-                  showAdminButton: bundle.canSeeAdminButton,
-                  onAdmin: () => _openAdmin(context, bundle),
+          return Scaffold(
+            appBar: _ResponsiveShowAppBar(
+              bundle: bundle,
+              showAdmin: bundle?.canSeeAdminButton == true,
+              onAdmin: bundle == null ? null : () => _openAdmin(context, bundle),
+              onAnimals: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const MyAnimalsScreen()),
                 );
-              }
+              },
+              onEntries: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const MyEntriesScreen()),
+                );
+              },
+              onSuperAdmin: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SuperadminHomeScreen()),
+                );
+              },
+              onAccount: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AccountSettingsScreen()),
+                );
+              },
+              onLogout: () => _logout(context),
+            ),
+            body: Builder(
+              builder: (_) {
+                if (snap.connectionState != ConnectionState.done) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-              return ListView.builder(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.lg,
-                  AppSpacing.lg,
-                  AppSpacing.lg,
-                  AppSpacing.xl,
-                ),
-                itemCount: shows.length,
-                itemBuilder: (context, i) {
-                  final s = shows[i];
-                  final showId = s['id'].toString();
-                  final showName = (s['name'] ?? '').toString();
-                  final startDate = (s['start_date'] ?? '').toString();
-                  final location = (s['location_name'] ?? '').toString();
+                if (snap.hasError) {
+                  return Center(child: Text('Error: ${snap.error}'));
+                }
 
-                  final entryDeadlineText =
-                      formatLocalDateTime(s['entry_close_at']?.toString());
+                final bundle = snap.data!;
+                final shows = bundle.shows;
 
-                  final deadlinePassed = s['entry_close_at'] != null &&
-                      DateTime.parse(
-                        s['entry_close_at'].toString(),
-                      ).toLocal().isBefore(DateTime.now());
-
-                  final isAdminForShow =
-                      bundle.isSuperAdmin || bundle.adminShowIds.contains(showId);
-
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                    child: RMCard(
-                      onTap: () => _openEnterShow(context, showId, showName),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  showName,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleMedium
-                                      ?.copyWith(fontWeight: FontWeight.w700),
-                                ),
-                              ),
-                              PopupMenuButton<String>(
-                                tooltip: 'Actions',
-                                onSelected: (v) {
-                                  if (v == 'enter') {
-                                    _openEnterShow(context, showId, showName);
-                                  } else if (v == 'admin') {
-                                    _openEditShow(context, showId);
-                                  }
-                                },
-                                itemBuilder: (_) => [
-                                  const PopupMenuItem(
-                                    value: 'enter',
-                                    child: Text('Enter Show'),
-                                  ),
-                                  if (isAdminForShow)
-                                    const PopupMenuItem(
-                                      value: 'admin',
-                                      child: Text('Admin Settings'),
-                                    ),
-                                ],
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: AppSpacing.sm),
-                          Text(
-                            '$startDate • $location',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: AppColors.muted,
-                                ),
-                          ),
-                          const SizedBox(height: AppSpacing.md),
-                          Wrap(
-                            spacing: AppSpacing.sm,
-                            runSpacing: AppSpacing.sm,
-                            children: [
-                              RMBadge(
-                                text: deadlinePassed
-                                    ? 'Entry Closed'
-                                    : 'Entry Deadline: $entryDeadlineText',
-                                icon: Icons.event_available,
-                                danger: deadlinePassed,
-                                success: !deadlinePassed,
-                              ),
-                              if (isAdminForShow)
-                                const RMBadge(
-                                  text: 'Admin Access',
-                                  icon: Icons.admin_panel_settings,
-                                ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
+                if (shows.isEmpty) {
+                  return _UpcomingShowsEmptyState(
+                    showAdminButton: bundle.canSeeAdminButton,
+                    onAdmin: () => _openAdmin(context, bundle),
                   );
-                },
-              );
-            },
-          ),
-        );
-      },
-    );
-  }
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.lg,
+                    AppSpacing.lg,
+                    AppSpacing.lg,
+                    AppSpacing.xl,
+                  ),
+                  itemCount: shows.length,
+                  itemBuilder: (context, i) {
+                    final s = shows[i];
+                    final showId = s['id'].toString();
+                    final showName = (s['name'] ?? '').toString();
+                    final startDate = (s['start_date'] ?? '').toString();
+                    final location = (s['location_name'] ?? '').toString();
+
+                    final entryDeadlineText =
+                        formatLocalDateTime(s['entry_close_at']?.toString());
+
+                    final deadlinePassed = s['entry_close_at'] != null &&
+                        DateTime.parse(
+                          s['entry_close_at'].toString(),
+                        ).toLocal().isBefore(DateTime.now());
+
+                    final isAdminForShow =
+                        bundle.isSuperAdmin || bundle.adminShowIds.contains(showId);
+
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                      child: RMCard(
+                        onTap: () => _openEnterShow(context, showId, showName),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    showName,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w700),
+                                  ),
+                                ),
+                                PopupMenuButton<String>(
+                                  tooltip: 'Actions',
+                                  onSelected: (v) {
+                                    if (v == 'enter') {
+                                      _openEnterShow(context, showId, showName);
+                                    } else if (v == 'admin') {
+                                      _openEditShow(context, showId);
+                                    }
+                                  },
+                                  itemBuilder: (_) => [
+                                    const PopupMenuItem(
+                                      value: 'enter',
+                                      child: Text('Enter Show'),
+                                    ),
+                                    if (isAdminForShow)
+                                      const PopupMenuItem(
+                                        value: 'admin',
+                                        child: Text('Admin Settings'),
+                                      ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: AppSpacing.sm),
+                            Text(
+                              '$startDate • $location',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: AppColors.muted,
+                                  ),
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                            Wrap(
+                              spacing: AppSpacing.sm,
+                              runSpacing: AppSpacing.sm,
+                              children: [
+                                RMBadge(
+                                  text: deadlinePassed
+                                      ? 'Entry Closed'
+                                      : 'Entry Deadline: $entryDeadlineText',
+                                  icon: Icons.event_available,
+                                  danger: deadlinePassed,
+                                  success: !deadlinePassed,
+                                ),
+                                if (isAdminForShow)
+                                  const RMBadge(
+                                    text: 'Admin Access',
+                                    icon: Icons.admin_panel_settings,
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          );
+        },
+      );
+    }
 }
 
-class _ResponsiveShowAppBar extends StatelessWidget implements PreferredSizeWidget {
+class _ResponsiveShowAppBar extends StatelessWidget
+    implements PreferredSizeWidget {
   final _ShowListBundle? bundle;
   final bool showAdmin;
   final VoidCallback? onAdmin;
@@ -374,39 +376,55 @@ class _ResponsiveShowAppBar extends StatelessWidget implements PreferredSizeWidg
     return AppBar(
       toolbarHeight: 92,
       titleSpacing: 16,
-      title: Row(
-        children: [
-          Image.asset(
-            'assets/images/ringmaster_show_logo.png',
-            height: 48,
-            fit: BoxFit.contain,
-            filterQuality: FilterQuality.high,
-          ),
-          const SizedBox(width: 14),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+      title: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 320;
+          final logoSize = compact ? 36.0 : 48.0;
+          final titleFont = compact ? 20.0 : 28.0;
+          final subtitleFont = compact ? 12.0 : 15.0;
+
+          return Row(
             children: [
-              Text(
-                'RingMaster Show',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
-                    ),
+              Image.asset(
+                'assets/images/ringmaster_show_logo.png',
+                height: logoSize,
+                width: logoSize,
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.high,
               ),
-              const SizedBox(height: 2),
-              Text(
-                'Upcoming Shows',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.white.withOpacity(.9),
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'RingMaster Show',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            color: Colors.white,
+                            fontSize: titleFont,
+                            fontWeight: FontWeight.w800,
+                          ),
                     ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Upcoming Shows',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Colors.white.withOpacity(.9),
+                            fontSize: subtitleFont,
+                            fontWeight: FontWeight.w500,
+                          ),
+                    ),
+                  ],
+                ),
               ),
             ],
-          ),
-        ],
+          );
+        },
       ),
       actions: [
         if (showAdmin && onAdmin != null)

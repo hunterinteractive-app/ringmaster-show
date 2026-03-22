@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
 import 'my_animals_screen.dart';
 import 'show_list_screen.dart';
@@ -323,205 +324,91 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final grouped = _grouped();
+    @override
+    Widget build(BuildContext context) {
+      final grouped = _grouped();
 
-    final visibleShowIds = grouped.keys
-        .where((showId) => !_hideShowAfter48h(showId))
-        .toList()
-      ..sort((a, b) => _showTitle(a).compareTo(_showTitle(b)));
+      final visibleShowIds = grouped.keys
+          .where((showId) => !_hideShowAfter48h(showId))
+          .toList()
+        ..sort((a, b) => _showTitle(a).compareTo(_showTitle(b)));
 
-    return Scaffold(
-      appBar: _MyEntriesAppBar(
-        onUpcomingShows: () => _openUpcomingShows(context),
-        onAnimals: () => _openAnimals(context),
-        onAccount: () => _openAccount(context),
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : visibleShowIds.isEmpty
-              ? const RMEmptyState(
-                  title: 'No recent entries',
-                  subtitle:
-                      'Shows disappear here 48 hours after their show date.',
-                  icon: Icons.receipt_long_outlined,
-                )
-              : ListView(
-                  padding: const EdgeInsets.all(AppSpacing.lg),
-                  children: [
-                    if (_msg != null)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                        child: RMCard(
-                          child: Text(
-                            _msg!,
-                            style: TextStyle(
-                              color: _msg!.toLowerCase().contains('failed') ||
-                                      _msg!.toLowerCase().contains('error') ||
-                                      _msg!.toLowerCase().contains('required')
-                                  ? AppColors.danger
-                                  : AppColors.success,
-                              fontWeight: FontWeight.w600,
+      return RingMasterPageShell(
+        title: 'RingMaster Show',
+        subtitle: 'My Entries',
+        showBackButton: true,
+        actions: [
+          IconButton(
+            tooltip: 'Shows',
+            icon: const Icon(Icons.event),
+            onPressed: () => _openUpcomingShows(context),
+          ),
+          IconButton(
+            tooltip: 'Animals',
+            icon: const Icon(Icons.pets),
+            onPressed: () => _openAnimals(context),
+          ),
+          IconButton(
+            tooltip: 'Account',
+            icon: const Icon(Icons.manage_accounts),
+            onPressed: () => _openAccount(context),
+          ),
+        ],
+        body: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : visibleShowIds.isEmpty
+                ? const RMEmptyState(
+                    title: 'No recent entries',
+                    subtitle: 'Shows disappear here 48 hours after their show date.',
+                    icon: Icons.receipt_long_outlined,
+                  )
+                : ListView(
+                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    children: [
+                      if (_msg != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                          child: RMCard(
+                            child: Text(
+                              _msg!,
+                              style: TextStyle(
+                                color: _msg!.toLowerCase().contains('failed') ||
+                                        _msg!.toLowerCase().contains('error') ||
+                                        _msg!.toLowerCase().contains('required')
+                                    ? AppColors.danger
+                                    : AppColors.success,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    for (final showId in visibleShowIds) ...[
-                      _ShowExpansionCard(
-                        title: _showTitle(showId),
-                        deadlinePassed: _deadlinePassedForShow(showId),
-                        closeAt: _parseTs(_showsById[showId]?['entry_close_at']),
-                        exhibitorBuckets: grouped[showId] ?? const {},
-                        exhibitorLabel: _exhibitorLabelById,
-                        sectionLabel: _sectionLabel,
-                        onEdit: _editEntry,
-                        onScratch: _scratchEntry,
-                        initiallyExpanded: _expandedShowIds.contains(showId),
-                        onExpandedChanged: (expanded) {
-                          setState(() {
-                            if (expanded) {
-                              _expandedShowIds.add(showId);
-                            } else {
-                              _expandedShowIds.remove(showId);
-                            }
-                          });
-                        },
-                      ),
-                      const SizedBox(height: AppSpacing.md),
+                      for (final showId in visibleShowIds) ...[
+                        _ShowExpansionCard(
+                          title: _showTitle(showId),
+                          deadlinePassed: _deadlinePassedForShow(showId),
+                          closeAt: _parseTs(_showsById[showId]?['entry_close_at']),
+                          exhibitorBuckets: grouped[showId] ?? const {},
+                          exhibitorLabel: _exhibitorLabelById,
+                          sectionLabel: _sectionLabel,
+                          onEdit: _editEntry,
+                          onScratch: _scratchEntry,
+                          initiallyExpanded: _expandedShowIds.contains(showId),
+                          onExpandedChanged: (expanded) {
+                            setState(() {
+                              if (expanded) {
+                                _expandedShowIds.add(showId);
+                              } else {
+                                _expandedShowIds.remove(showId);
+                              }
+                            });
+                          },
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                      ],
                     ],
-                  ],
-                ),
-    );
-  }
-}
-
-class _MyEntriesAppBar extends StatelessWidget implements PreferredSizeWidget {
-  final VoidCallback onUpcomingShows;
-  final VoidCallback onAnimals;
-  final VoidCallback onAccount;
-
-  const _MyEntriesAppBar({
-    required this.onUpcomingShows,
-    required this.onAnimals,
-    required this.onAccount,
-  });
-
-  @override
-  Size get preferredSize => const Size.fromHeight(92);
-
-  @override
-  Widget build(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
-    final showLabels = width >= 1100;
-
-    return AppBar(
-      toolbarHeight: 92,
-      titleSpacing: 16,
-      title: Row(
-        children: [
-          Image.asset(
-            'assets/images/ringmaster_show_logo.png',
-            height: 48,
-            fit: BoxFit.contain,
-            filterQuality: FilterQuality.high,
-          ),
-          const SizedBox(width: 14),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'RingMaster Show',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
-                    ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'My Entries',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.white.withOpacity(.9),
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                    ),
-              ),
-            ],
-          ),
-        ],
-      ),
-      actions: [
-        _TopBarAction(
-          icon: Icons.event,
-          label: 'Shows',
-          showLabel: showLabels,
-          onTap: onUpcomingShows,
-        ),
-        _TopBarAction(
-          icon: Icons.pets,
-          label: 'Animals',
-          showLabel: showLabels,
-          onTap: onAnimals,
-        ),
-        _TopBarAction(
-          icon: Icons.manage_accounts,
-          label: 'Account',
-          showLabel: showLabels,
-          onTap: onAccount,
-        ),
-        const SizedBox(width: 10),
-      ],
-    );
-  }
-}
-
-class _TopBarAction extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool showLabel;
-  final VoidCallback onTap;
-
-  const _TopBarAction({
-    required this.icon,
-    required this.label,
-    required this.showLabel,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (!showLabel) {
-      return IconButton(
-        tooltip: label,
-        icon: Icon(icon, color: Colors.white),
-        onPressed: onTap,
+                  ),
       );
     }
-
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: TextButton.icon(
-        onPressed: onTap,
-        style: TextButton.styleFrom(
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.sm),
-          ),
-        ),
-        icon: Icon(icon, size: 18, color: Colors.white),
-        label: Text(
-          label,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class _ShowExpansionCard extends StatelessWidget {
