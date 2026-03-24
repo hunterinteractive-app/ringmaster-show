@@ -187,18 +187,108 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
     final id = entry['id']?.toString() ?? '';
     if (id.isEmpty) return;
 
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Scratch Entry'),
+        content: const Text(
+          'This will mark the entry as scratched. You can restore it again before the entry deadline.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Scratch'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
     try {
-      await supabase.from('entries').update({'status': 'scratched'}).eq('id', id);
+      await supabase
+          .from('entries')
+          .update({'status': 'scratched'})
+          .eq('id', id);
+
       await _load();
+
+      if (!mounted) return;
+      setState(() {
+        _msg = 'Entry scratched.';
+      });
     } catch (e) {
+      if (!mounted) return;
       setState(() => _msg = 'Scratch failed: $e');
     }
   }
 
+  Future<void> _restoreEntry(Map<String, dynamic> entry) async {
+    final id = entry['id']?.toString() ?? '';
+    if (id.isEmpty) return;
+
+    final showId = entry['show_id']?.toString() ?? '';
+    if (showId.isEmpty) return;
+
+    if (_deadlinePassedForShow(showId)) {
+      setState(() {
+        _msg = 'Entry deadline passed. Scratched entries can no longer be restored.';
+      });
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Restore Entry'),
+        content: const Text(
+          'This will restore the scratched entry back into the show.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Restore'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await supabase
+          .from('entries')
+          .update({'status': 'entered'})
+          .eq('id', id);
+
+      await _load();
+
+      if (!mounted) return;
+      setState(() {
+        _msg = 'Entry restored.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _msg = 'Restore failed: $e');
+    }
+  }
+
   Future<List<Map<String, dynamic>>> _loadMyAnimals() async {
+    final user = supabase.auth.currentUser;
+    if (user == null) return [];
+
     final rows = await supabase
         .from('animals')
         .select('id,species,name,tattoo,breed,variety,sex,birth_date')
+        .eq('owner_user_id', user.id)
         .order('created_at', ascending: false);
 
     return (rows as List).cast<Map<String, dynamic>>();
@@ -287,20 +377,6 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
       out[showId]![exhibitorId]!.add(e);
     }
 
-    for (final showBuckets in out.values) {
-      for (final list in showBuckets.values) {
-        list.sort((a, b) {
-          final sa = _sectionLabel(a['section_id']);
-          final sb = _sectionLabel(b['section_id']);
-          final c1 = sa.compareTo(sb);
-          if (c1 != 0) return c1;
-          final ta = (a['tattoo'] ?? '').toString();
-          final tb = (b['tattoo'] ?? '').toString();
-          return ta.compareTo(tb);
-        });
-      }
-    }
-
     return out;
   }
 
@@ -324,91 +400,92 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
     );
   }
 
-    @override
-    Widget build(BuildContext context) {
-      final grouped = _grouped();
+  @override
+  Widget build(BuildContext context) {
+    final grouped = _grouped();
 
-      final visibleShowIds = grouped.keys
-          .where((showId) => !_hideShowAfter48h(showId))
-          .toList()
-        ..sort((a, b) => _showTitle(a).compareTo(_showTitle(b)));
+    final visibleShowIds = grouped.keys
+        .where((showId) => !_hideShowAfter48h(showId))
+        .toList()
+      ..sort((a, b) => _showTitle(a).compareTo(_showTitle(b)));
 
-      return RingMasterPageShell(
-        title: 'RingMaster Show',
-        subtitle: 'My Entries',
-        showBackButton: true,
-        actions: [
-          IconButton(
-            tooltip: 'Shows',
-            icon: const Icon(Icons.event),
-            onPressed: () => _openUpcomingShows(context),
-          ),
-          IconButton(
-            tooltip: 'Animals',
-            icon: const Icon(Icons.pets),
-            onPressed: () => _openAnimals(context),
-          ),
-          IconButton(
-            tooltip: 'Account',
-            icon: const Icon(Icons.manage_accounts),
-            onPressed: () => _openAccount(context),
-          ),
-        ],
-        body: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : visibleShowIds.isEmpty
-                ? const RMEmptyState(
-                    title: 'No recent entries',
-                    subtitle: 'Shows disappear here 48 hours after their show date.',
-                    icon: Icons.receipt_long_outlined,
-                  )
-                : ListView(
-                    padding: const EdgeInsets.all(AppSpacing.lg),
-                    children: [
-                      if (_msg != null)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                          child: RMCard(
-                            child: Text(
-                              _msg!,
-                              style: TextStyle(
-                                color: _msg!.toLowerCase().contains('failed') ||
-                                        _msg!.toLowerCase().contains('error') ||
-                                        _msg!.toLowerCase().contains('required')
-                                    ? AppColors.danger
-                                    : AppColors.success,
-                                fontWeight: FontWeight.w600,
-                              ),
+    return RingMasterPageShell(
+      title: 'RingMaster Show',
+      subtitle: 'My Entries',
+      showBackButton: true,
+      actions: [
+        IconButton(
+          tooltip: 'Shows',
+          icon: const Icon(Icons.event),
+          onPressed: () => _openUpcomingShows(context),
+        ),
+        IconButton(
+          tooltip: 'Animals',
+          icon: const Icon(Icons.pets),
+          onPressed: () => _openAnimals(context),
+        ),
+        IconButton(
+          tooltip: 'Account',
+          icon: const Icon(Icons.manage_accounts),
+          onPressed: () => _openAccount(context),
+        ),
+      ],
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : visibleShowIds.isEmpty
+              ? const RMEmptyState(
+                  title: 'No recent entries',
+                  subtitle: 'Shows disappear here 48 hours after their show date.',
+                  icon: Icons.receipt_long_outlined,
+                )
+              : ListView(
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  children: [
+                    if (_msg != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                        child: RMCard(
+                          child: Text(
+                            _msg!,
+                            style: TextStyle(
+                              color: _msg!.toLowerCase().contains('failed') ||
+                                      _msg!.toLowerCase().contains('error') ||
+                                      _msg!.toLowerCase().contains('required')
+                                  ? AppColors.danger
+                                  : AppColors.success,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
-                      for (final showId in visibleShowIds) ...[
-                        _ShowExpansionCard(
-                          title: _showTitle(showId),
-                          deadlinePassed: _deadlinePassedForShow(showId),
-                          closeAt: _parseTs(_showsById[showId]?['entry_close_at']),
-                          exhibitorBuckets: grouped[showId] ?? const {},
-                          exhibitorLabel: _exhibitorLabelById,
-                          sectionLabel: _sectionLabel,
-                          onEdit: _editEntry,
-                          onScratch: _scratchEntry,
-                          initiallyExpanded: _expandedShowIds.contains(showId),
-                          onExpandedChanged: (expanded) {
-                            setState(() {
-                              if (expanded) {
-                                _expandedShowIds.add(showId);
-                              } else {
-                                _expandedShowIds.remove(showId);
-                              }
-                            });
-                          },
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                      ],
+                      ),
+                    for (final showId in visibleShowIds) ...[
+                      _ShowExpansionCard(
+                        title: _showTitle(showId),
+                        deadlinePassed: _deadlinePassedForShow(showId),
+                        closeAt: _parseTs(_showsById[showId]?['entry_close_at']),
+                        exhibitorBuckets: grouped[showId] ?? const {},
+                        exhibitorLabel: _exhibitorLabelById,
+                        sectionLabel: _sectionLabel,
+                        onEdit: _editEntry,
+                        onScratch: _scratchEntry,
+                        onRestore: _restoreEntry,
+                        initiallyExpanded: _expandedShowIds.contains(showId),
+                        onExpandedChanged: (expanded) {
+                          setState(() {
+                            if (expanded) {
+                              _expandedShowIds.add(showId);
+                            } else {
+                              _expandedShowIds.remove(showId);
+                            }
+                          });
+                        },
+                      ),
+                      const SizedBox(height: AppSpacing.md),
                     ],
-                  ),
-      );
-    }
+                  ],
+                ),
+    );
+  }
 }
 
 class _ShowExpansionCard extends StatelessWidget {
@@ -420,6 +497,7 @@ class _ShowExpansionCard extends StatelessWidget {
   final String Function(String? sectionId) sectionLabel;
   final Future<void> Function(Map<String, dynamic> entry) onEdit;
   final Future<void> Function(Map<String, dynamic> entry) onScratch;
+  final Future<void> Function(Map<String, dynamic> entry) onRestore;
   final bool initiallyExpanded;
   final ValueChanged<bool> onExpandedChanged;
 
@@ -432,9 +510,59 @@ class _ShowExpansionCard extends StatelessWidget {
     required this.sectionLabel,
     required this.onEdit,
     required this.onScratch,
+    required this.onRestore,
     required this.initiallyExpanded,
     required this.onExpandedChanged,
   });
+
+  String _safeLower(dynamic value) {
+    return (value ?? '').toString().trim().toLowerCase();
+  }
+
+  String _safeLabel(dynamic value, String fallback) {
+    final text = (value ?? '').toString().trim();
+    return text.isEmpty ? fallback : text;
+  }
+
+  Map<String, Map<String, Map<String, Map<String, List<Map<String, dynamic>>>>>>
+      _groupEntriesForDisplay(List<Map<String, dynamic>> entries) {
+    final grouped =
+        <String, Map<String, Map<String, Map<String, List<Map<String, dynamic>>>>>>{};
+
+    final sorted = List<Map<String, dynamic>>.from(entries)
+      ..sort((a, b) {
+        final breedCmp = _safeLower(a['breed']).compareTo(_safeLower(b['breed']));
+        if (breedCmp != 0) return breedCmp;
+
+        final varietyCmp =
+            _safeLower(a['variety']).compareTo(_safeLower(b['variety']));
+        if (varietyCmp != 0) return varietyCmp;
+
+        final classCmp =
+            _safeLower(a['class_name']).compareTo(_safeLower(b['class_name']));
+        if (classCmp != 0) return classCmp;
+
+        final sexCmp = _safeLower(a['sex']).compareTo(_safeLower(b['sex']));
+        if (sexCmp != 0) return sexCmp;
+
+        return _safeLower(a['tattoo']).compareTo(_safeLower(b['tattoo']));
+      });
+
+    for (final e in sorted) {
+      final breed = _safeLabel(e['breed'], '(No Breed)');
+      final variety = _safeLabel(e['variety'], '(No Variety)');
+      final className = _safeLabel(e['class_name'], '(No Class)');
+      final sex = _safeLabel(e['sex'], '(No Sex)');
+
+      grouped.putIfAbsent(breed, () => {});
+      grouped[breed]!.putIfAbsent(variety, () => {});
+      grouped[breed]![variety]!.putIfAbsent(className, () => {});
+      grouped[breed]![variety]![className]!.putIfAbsent(sex, () => []);
+      grouped[breed]![variety]![className]![sex]!.add(e);
+    }
+
+    return grouped;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -487,85 +615,252 @@ class _ShowExpansionCard extends StatelessWidget {
           children: [
             const SizedBox(height: AppSpacing.md),
             for (final exId in exhibitorIds) ...[
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(AppSpacing.md),
-                decoration: BoxDecoration(
-                  color: AppColors.bg,
-                  borderRadius: BorderRadius.circular(AppRadius.sm),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      exhibitorLabel(exId),
-                      style: Theme.of(context).textTheme.titleSmall,
+              Builder(
+                builder: (context) {
+                  final groupedEntries =
+                      _groupEntriesForDisplay(exhibitorBuckets[exId]!);
+
+                  return Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    decoration: BoxDecoration(
+                      color: AppColors.bg,
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
                     ),
-                    const SizedBox(height: AppSpacing.sm),
-                    ...exhibitorBuckets[exId]!.map((e) {
-                      final section = sectionLabel(e['section_id']);
-                      final tattoo = (e['tattoo'] ?? '').toString();
-                      final breed = (e['breed'] ?? '').toString();
-                      final variety = (e['variety'] ?? '').toString();
-                      final sex = (e['sex'] ?? '').toString();
-                      final cls = (e['class_name'] ?? '').toString();
-                      final status = (e['status'] ?? '').toString();
-                      final scratched = status.toLowerCase() == 'scratched';
-
-                      final canEdit = !deadlinePassed && !scratched;
-                      final canScratch = !scratched;
-
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(AppRadius.sm),
-                            border: Border.all(color: Colors.grey.shade200),
-                          ),
-                          child: ListTile(
-                            title: Text(
-                              tattoo.isEmpty ? '(No tattoo)' : tattoo,
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                decoration:
-                                    scratched ? TextDecoration.lineThrough : null,
-                              ),
-                            ),
-                            subtitle: Padding(
-                              padding: const EdgeInsets.only(top: 6),
-                              child: Text(
-                                '$breed • $variety • $sex\nClass: $cls\nStatus: $status\nSection: $section',
-                              ),
-                            ),
-                            isThreeLine: true,
-                            trailing: (canEdit || canScratch)
-                                ? Wrap(
-                                    spacing: 4,
-                                    children: [
-                                      if (canEdit)
-                                        IconButton(
-                                          tooltip: 'Edit',
-                                          icon: const Icon(Icons.edit),
-                                          onPressed: () => onEdit(e),
-                                        ),
-                                      if (canScratch)
-                                        IconButton(
-                                          tooltip: 'Scratch',
-                                          icon: const Icon(
-                                            Icons.remove_circle_outline,
-                                          ),
-                                          onPressed: () => onScratch(e),
-                                        ),
-                                    ],
-                                  )
-                                : null,
-                          ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          exhibitorLabel(exId),
+                          style: Theme.of(context).textTheme.titleSmall,
                         ),
-                      );
-                    }),
-                  ],
-                ),
+                        const SizedBox(height: AppSpacing.sm),
+                        ...groupedEntries.entries.map((breedEntry) {
+                          final breed = breedEntry.key;
+                          final varieties = breedEntry.value;
+
+                          final varietyKeys = varieties.keys.toList()
+                            ..sort((a, b) =>
+                                a.toLowerCase().compareTo(b.toLowerCase()));
+
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  breed,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleSmall
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                                const SizedBox(height: AppSpacing.sm),
+                                ...varietyKeys.map((variety) {
+                                  final classes = varieties[variety]!;
+                                  final classKeys = classes.keys.toList()
+                                    ..sort((a, b) => a.toLowerCase()
+                                        .compareTo(b.toLowerCase()));
+
+                                  return Padding(
+                                    padding: const EdgeInsets.only(
+                                      left: 12,
+                                      bottom: AppSpacing.sm,
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          variety,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyLarge
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        ...classKeys.map((className) {
+                                          final sexes = classes[className]!;
+                                          final sexKeys = sexes.keys.toList()
+                                            ..sort((a, b) => a.toLowerCase()
+                                                .compareTo(b.toLowerCase()));
+
+                                          return Padding(
+                                            padding: const EdgeInsets.only(
+                                              left: 12,
+                                              bottom: 8,
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  className,
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .bodyMedium
+                                                      ?.copyWith(
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
+                                                ),
+                                                const SizedBox(height: 4),
+                                                ...sexKeys.map((sex) {
+                                                  final entries = sexes[sex]!;
+                                                  return Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                      left: 12,
+                                                      bottom: 8,
+                                                    ),
+                                                    child: Column(
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .start,
+                                                      children: [
+                                                        Text(
+                                                          sex,
+                                                          style:
+                                                              Theme.of(context)
+                                                                  .textTheme
+                                                                  .bodyMedium,
+                                                        ),
+                                                        const SizedBox(height: 6),
+                                                        ...entries.map((e) {
+                                                          final section =
+                                                              sectionLabel(
+                                                                  e['section_id']);
+                                                          final tattoo =
+                                                              (e['tattoo'] ?? '')
+                                                                  .toString()
+                                                                  .trim();
+                                                          final rawStatus =
+                                                              (e['status'] ?? '')
+                                                                  .toString()
+                                                                  .trim();
+                                                          final normalizedStatus =
+                                                              rawStatus.isEmpty
+                                                                  ? 'entered'
+                                                                  : rawStatus;
+                                                          final scratched =
+                                                              normalizedStatus
+                                                                      .toLowerCase() ==
+                                                                  'scratched';
+
+                                                          final canEdit =
+                                                              !deadlinePassed &&
+                                                                  !scratched;
+                                                          final canScratch =
+                                                              !scratched;
+                                                          final canRestore =
+                                                              scratched &&
+                                                                  !deadlinePassed;
+
+                                                          return Padding(
+                                                            padding:
+                                                                const EdgeInsets
+                                                                    .only(
+                                                              bottom: AppSpacing
+                                                                  .sm,
+                                                            ),
+                                                            child: Container(
+                                                              decoration:
+                                                                  BoxDecoration(
+                                                                color:
+                                                                    Colors.white,
+                                                                borderRadius:
+                                                                    BorderRadius
+                                                                        .circular(
+                                                                  AppRadius.sm,
+                                                                ),
+                                                                border: Border.all(
+                                                                  color: Colors
+                                                                      .grey
+                                                                      .shade200,
+                                                                ),
+                                                              ),
+                                                              child: ListTile(
+                                                                title: Text(
+                                                                  tattoo.isEmpty
+                                                                      ? '(No tattoo)'
+                                                                      : tattoo,
+                                                                  style:
+                                                                      TextStyle(
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w600,
+                                                                    decoration:
+                                                                        scratched
+                                                                            ? TextDecoration.lineThrough
+                                                                            : null,
+                                                                  ),
+                                                                ),
+                                                                subtitle:
+                                                                    Padding(
+                                                                  padding:
+                                                                      const EdgeInsets
+                                                                          .only(
+                                                                    top: 6,
+                                                                  ),
+                                                                  child: Text(
+                                                                    'Status: $normalizedStatus\nSection: $section',
+                                                                  ),
+                                                                ),
+                                                                trailing:
+                                                                    (canEdit ||
+                                                                            canScratch ||
+                                                                            canRestore)
+                                                                        ? Wrap(
+                                                                            spacing:
+                                                                                4,
+                                                                            children: [
+                                                                              if (canEdit)
+                                                                                IconButton(
+                                                                                  tooltip: 'Edit',
+                                                                                  icon: const Icon(Icons.edit),
+                                                                                  onPressed: () => onEdit(e),
+                                                                                ),
+                                                                              if (canScratch)
+                                                                                IconButton(
+                                                                                  tooltip: 'Scratch',
+                                                                                  icon: const Icon(Icons.remove_circle_outline),
+                                                                                  onPressed: () => onScratch(e),
+                                                                                ),
+                                                                              if (canRestore)
+                                                                                IconButton(
+                                                                                  tooltip: 'Restore',
+                                                                                  icon: const Icon(Icons.undo),
+                                                                                  onPressed: () => onRestore(e),
+                                                                                ),
+                                                                            ],
+                                                                          )
+                                                                        : null,
+                                                              ),
+                                                            ),
+                                                          );
+                                                        }),
+                                                      ],
+                                                    ),
+                                                  );
+                                                }),
+                                              ],
+                                            ),
+                                          );
+                                        }),
+                                      ],
+                                    ),
+                                  );
+                                }),
+                              ],
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                  );
+                },
               ),
               const SizedBox(height: AppSpacing.md),
             ],

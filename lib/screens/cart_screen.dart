@@ -177,6 +177,18 @@ class _CartScreenState extends State<CartScreen> {
     return '$sym${v.toStringAsFixed(2)}';
   }
 
+  String _buildClassDisplay(Map<String, dynamic> it) {
+    final className = (it['class_name'] ?? '').toString().trim();
+
+    // If class exists → show projected
+    // If missing → needs validation
+    if (className.isEmpty) {
+      return 'Class: Needs Validation ⚠️';
+    }
+ 
+    return 'Projected Class: $className';
+  }
+
   // ------------------------------
   // Fee calculation (overall)
   // ------------------------------
@@ -521,7 +533,7 @@ class _CartScreenState extends State<CartScreen> {
                                             ),
                                           ),
                                           subtitle: Text(
-                                            '$animalLabel\nClass: ${(it['class_name'] ?? '').toString()}',
+                                            '$animalLabel\n${_buildClassDisplay(it)}',
                                           ),
                                           isThreeLine: true,
                                           trailing: IconButton(

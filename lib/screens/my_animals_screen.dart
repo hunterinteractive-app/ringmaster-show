@@ -1,7 +1,6 @@
-// lib/screens/my_animal_screen.dart
-
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'show_list_screen.dart';
@@ -23,10 +22,15 @@ class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
   Future<List<Map<String, dynamic>>> _loadAnimals() async {
     final user = supabase.auth.currentUser;
     if (user == null) return [];
+
     final res = await supabase
         .from('animals')
-        .select('id,species,name,tattoo,breed,variety,sex,birth_date,created_at')
+        .select(
+          'id,species,name,tattoo,breed,variety,sex,birth_date,is_dob_unknown,created_at',
+        )
+        .eq('owner_user_id', user.id)
         .order('created_at', ascending: false);
+
     return (res as List).cast<Map<String, dynamic>>();
   }
 
@@ -106,6 +110,15 @@ class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
     return value;
   }
 
+  String _dobBadgeText(Map<String, dynamic> animal) {
+    final isUnknown = animal['is_dob_unknown'] == true;
+    final dob = (animal['birth_date'] ?? '').toString().trim();
+
+    if (isUnknown) return 'DOB Unknown';
+    if (dob.isNotEmpty) return 'DOB: $dob';
+    return 'DOB Unknown';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -129,7 +142,8 @@ class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
           if (animals.isEmpty) {
             return const RMEmptyState(
               title: 'No animals yet',
-              subtitle: 'Add your animals here so they are ready when entering shows.',
+              subtitle:
+                  'Add your animals here so they are ready when entering shows.',
               icon: Icons.pets_outlined,
             );
           }
@@ -143,7 +157,6 @@ class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
               final breed = (a['breed'] ?? '').toString();
               final variety = (a['variety'] ?? '').toString();
               final sex = (a['sex'] ?? '').toString();
-              final dob = (a['birth_date'] ?? '').toString();
               final tattoo = (a['tattoo'] ?? '').toString().trim();
               final name = (a['name'] ?? '').toString().trim();
 
@@ -206,11 +219,10 @@ class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
                               text: sex,
                               icon: Icons.info_outline,
                             ),
-                          if (dob.isNotEmpty)
-                            RMBadge(
-                              text: 'DOB: $dob',
-                              icon: Icons.cake_outlined,
-                            ),
+                          RMBadge(
+                            text: _dobBadgeText(a),
+                            icon: Icons.cake_outlined,
+                          ),
                         ],
                       ),
                       const SizedBox(height: AppSpacing.md),
@@ -379,10 +391,18 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
   final _tattoo = TextEditingController();
   final _breedText = TextEditingController();
   final _varietyText = TextEditingController();
+  final _sexText = TextEditingController();
+
+  final _nameFocus = FocusNode();
+  final _tattooFocus = FocusNode();
+  final _breedFocus = FocusNode();
+  final _varietyFocus = FocusNode();
+  final _sexFocus = FocusNode();
 
   String _species = 'rabbit';
   String? _sexValue;
   DateTime? _birthDate;
+  bool _isDobUnknown = false;
   String? _breedId;
 
   List<Map<String, dynamic>> _breedOptions = [];
@@ -433,8 +453,15 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
     final varietyName = _varietyText.text.trim().toLowerCase();
     if (varietyName.isEmpty) return false;
     return _varietyOptions.any((v) {
-      return ((v['name'] ?? '').toString().trim().toLowerCase() == varietyName);
+      return ((v['name'] ?? '').toString().trim().toLowerCase() ==
+          varietyName);
     });
+  }
+
+  bool get _hasValidSexSelection {
+    final sexName = _sexText.text.trim().toLowerCase();
+    if (sexName.isEmpty) return false;
+    return _sexOptions.any((s) => s.toLowerCase() == sexName);
   }
 
   @override
@@ -449,15 +476,19 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
       _breedText.text = (e['breed'] ?? '').toString();
       _varietyText.text = (e['variety'] ?? '').toString();
 
+      _isDobUnknown = e['is_dob_unknown'] == true;
+
       final bd = e['birth_date'];
-      if (bd != null && bd.toString().isNotEmpty) {
+      if (!_isDobUnknown && bd != null && bd.toString().isNotEmpty) {
         _birthDate = DateTime.tryParse(bd.toString());
       }
 
       _sexValue =
           _normalizeSex(e['sex']?.toString(), _species) ?? _sexOptions.first;
+      _sexText.text = _sexValue ?? '';
     } else {
       _sexValue = _sexOptions.first;
+      _sexText.text = _sexValue ?? '';
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -513,6 +544,14 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
     _tattoo.dispose();
     _breedText.dispose();
     _varietyText.dispose();
+    _sexText.dispose();
+
+    _nameFocus.dispose();
+    _tattooFocus.dispose();
+    _breedFocus.dispose();
+    _varietyFocus.dispose();
+    _sexFocus.dispose();
+
     super.dispose();
   }
 
@@ -527,7 +566,14 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
 
     if (!mounted) return;
     setState(() {
-      _breedOptions = (res as List).cast<Map<String, dynamic>>();
+      _breedOptions = (res as List)
+          .cast<Map<String, dynamic>>()
+        ..sort(
+          (a, b) => (a['name'] ?? '')
+              .toString()
+              .toLowerCase()
+              .compareTo((b['name'] ?? '').toString().toLowerCase()),
+        );
       _loadingBreeds = false;
     });
   }
@@ -554,13 +600,6 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
           {'id': 'lop_solid', 'name': 'Solid'},
         ];
       });
-
-      final currentVariety = _varietyText.text.trim().toLowerCase();
-      if (currentVariety.isNotEmpty &&
-          currentVariety != 'broken' &&
-          currentVariety != 'solid') {
-        _varietyText.clear();
-      }
       return;
     }
 
@@ -572,7 +611,14 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
 
     if (!mounted) return;
     setState(() {
-      _varietyOptions = (res as List).cast<Map<String, dynamic>>();
+      _varietyOptions = (res as List)
+          .cast<Map<String, dynamic>>()
+        ..sort(
+          (a, b) => (a['name'] ?? '')
+              .toString()
+              .toLowerCase()
+              .compareTo((b['name'] ?? '').toString().toLowerCase()),
+        );
       _loadingVarieties = false;
     });
   }
@@ -607,22 +653,66 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
       firstDate: DateTime(2000),
       lastDate: DateTime.now(),
     );
-    if (picked != null) setState(() => _birthDate = picked);
+    if (picked != null) {
+      setState(() {
+        _birthDate = picked;
+        _isDobUnknown = false;
+      });
+    }
+  }
+
+  Future<void> _toggleUnknownDob(bool value) async {
+    if (!value) {
+      setState(() => _isDobUnknown = false);
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Unknown Date of Birth'),
+        content: const Text(
+          'You can continue without a date of birth. This rabbit’s class may need to be validated during show entry.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      setState(() {
+        _isDobUnknown = true;
+        _birthDate = null;
+      });
+    }
   }
 
   bool _validate() {
     if (_species.trim().isEmpty) return false;
     if (_tattoo.text.trim().isEmpty) return false;
     if (_sexValue == null) return false;
-    if (_birthDate == null) return false;
+    if (_birthDate == null && !_isDobUnknown) return false;
     if (_breedText.text.trim().isEmpty) return false;
     if (_varietyText.text.trim().isEmpty) return false;
     if (!_hasValidBreedSelection) return false;
     if (!_hasValidVarietySelection) return false;
+    if (!_hasValidSexSelection) return false;
     return true;
   }
 
   Future<void> _save() async {
+    if (_sexText.text.trim().isNotEmpty) {
+      _sexValue = _sexText.text.trim();
+    }
+
     if (_breedText.text.trim().isEmpty) {
       setState(() => _msg = 'Breed is required.');
       return;
@@ -643,9 +733,19 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
       return;
     }
 
+    if (_sexText.text.trim().isEmpty) {
+      setState(() => _msg = 'Sex is required.');
+      return;
+    }
+
+    if (!_hasValidSexSelection) {
+      setState(() => _msg = 'Please select a valid sex from the list.');
+      return;
+    }
+
     if (!_validate()) {
       setState(() => _msg =
-          'Required: species, tattoo, sex, birth date, breed, and variety. (Name is optional)');
+          'Required: species, tattoo, sex, breed, and variety. Date of birth can be exact or marked unknown. (Name is optional)');
       return;
     }
 
@@ -668,7 +768,10 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
       'breed': _breedText.text.trim(),
       'variety': _varietyText.text.trim(),
       'sex': _sexValue,
-      'birth_date': _birthDate!.toIso8601String().substring(0, 10),
+      'birth_date': _isDobUnknown
+          ? null
+          : _birthDate?.toIso8601String().substring(0, 10),
+      'is_dob_unknown': _isDobUnknown,
     };
 
     try {
@@ -686,7 +789,7 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
     } catch (e) {
       setState(() => _msg = 'Save failed: $e');
     } finally {
-      setState(() => _saving = false);
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -702,6 +805,11 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
                 _varietyText.text.trim().isNotEmpty &&
                 !_hasValidVarietySelection)
             ? 'Choose a variety from the list.'
+            : null;
+
+    final invalidSexWarning =
+        (_sexText.text.trim().isNotEmpty && !_hasValidSexSelection)
+            ? 'Choose a sex from the list.'
             : null;
 
     return AlertDialog(
@@ -721,6 +829,7 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
                 setState(() {
                   _species = newSpecies;
                   _sexValue = _sexOptions.first;
+                  _sexText.text = _sexOptions.first;
                   _breedId = null;
                   _breedOptions = [];
                   _varietyOptions = [];
@@ -735,25 +844,31 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
             const SizedBox(height: 8),
             TextField(
               controller: _name,
+              focusNode: _nameFocus,
+              textInputAction: TextInputAction.next,
+              onSubmitted: (_) =>
+                  FocusScope.of(context).requestFocus(_tattooFocus),
               decoration: const InputDecoration(labelText: 'Name (optional)'),
             ),
             TextField(
               controller: _tattoo,
+              focusNode: _tattooFocus,
+              textInputAction: TextInputAction.next,
+              onSubmitted: (_) =>
+                  FocusScope.of(context).requestFocus(_breedFocus),
               decoration:
                   const InputDecoration(labelText: 'Tattoo / ID (required)'),
             ),
             const SizedBox(height: 12),
             if (_loadingBreeds) const LinearProgressIndicator(),
-            Autocomplete<Map<String, dynamic>>(
-              optionsBuilder: (TextEditingValue text) {
-                final q = text.text.trim().toLowerCase();
-                if (q.isEmpty) return _breedOptions;
-                return _breedOptions.where(
-                  (b) => (b['name'] as String).toLowerCase().contains(q),
-                );
-              },
-              displayStringForOption: (opt) => opt['name'] as String,
-              onSelected: (opt) async {
+            _FocusOpenAutocomplete(
+              textController: _breedText,
+              focusNode: _breedFocus,
+              labelText: 'Breed (required)',
+              hintText: 'Type to search and select a breed…',
+              options: _breedOptions,
+              displayStringForOption: (opt) => (opt['name'] ?? '').toString(),
+              onSelectedAsync: (opt) async {
                 setState(() {
                   _breedId = opt['id'] as String;
                   _breedText.text = (opt['name'] as String);
@@ -761,28 +876,9 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
                   _msg = null;
                 });
                 await _loadVarietiesForBreed(_breedId!);
-              },
-              fieldViewBuilder: (context, controller, focusNode, onSubmit) {
-                controller.text = _breedText.text;
-                controller.selection = TextSelection.fromPosition(
-                  TextPosition(offset: controller.text.length),
-                );
-
-                controller.addListener(() {
-                  if (_breedText.text != controller.text) {
-                    _breedText.text = controller.text;
-                    _breedText.selection = controller.selection;
-                  }
-                });
-
-                return TextField(
-                  controller: controller,
-                  focusNode: focusNode,
-                  decoration: const InputDecoration(
-                    labelText: 'Breed (required)',
-                    hintText: 'Type to search and select a breed…',
-                  ),
-                );
+                if (mounted) {
+                  FocusScope.of(context).requestFocus(_varietyFocus);
+                }
               },
             ),
             if (invalidBreedWarning != null) ...[
@@ -798,62 +894,37 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
             const SizedBox(height: 12),
             if (_breedId != null && _loadingVarieties)
               const LinearProgressIndicator(),
-            Autocomplete<Map<String, dynamic>>(
-              optionsBuilder: (TextEditingValue text) {
-                if (_breedId == null) {
-                  return const Iterable<Map<String, dynamic>>.empty();
-                }
-                final q = text.text.trim().toLowerCase();
-                if (q.isEmpty) return _varietyOptions;
-                return _varietyOptions.where(
-                  (v) => (v['name'] as String).toLowerCase().contains(q),
-                );
-              },
-              displayStringForOption: (opt) => opt['name'] as String,
+            _FocusOpenAutocomplete(
+              textController: _varietyText,
+              focusNode: _varietyFocus,
+              labelText: 'Variety (required)',
+              hintText: _breedId == null
+                  ? 'Select a breed first'
+                  : 'Type to search and select a variety…',
+              options: _breedId == null ? const [] : _varietyOptions,
+              displayStringForOption: (opt) => (opt['name'] ?? '').toString(),
+              enabled: _breedId != null,
+              readOnly: _breedId == null,
+              suffixIcon: _varietyText.text.trim().isEmpty
+                  ? null
+                  : IconButton(
+                      tooltip: 'Clear variety',
+                      onPressed: _saving
+                          ? null
+                          : () {
+                              setState(() {
+                                _varietyText.clear();
+                                _msg = null;
+                              });
+                            },
+                      icon: const Icon(Icons.clear),
+                    ),
               onSelected: (opt) {
                 setState(() {
                   _varietyText.text = (opt['name'] as String);
                   _msg = null;
                 });
-              },
-              fieldViewBuilder: (context, controller, focusNode, onSubmit) {
-                controller.text = _varietyText.text;
-                controller.selection = TextSelection.fromPosition(
-                  TextPosition(offset: controller.text.length),
-                );
-
-                controller.addListener(() {
-                  if (_varietyText.text != controller.text) {
-                    _varietyText.text = controller.text;
-                    _varietyText.selection = controller.selection;
-                  }
-                });
-
-                return TextField(
-                  controller: controller,
-                  focusNode: focusNode,
-                  readOnly: _breedId == null,
-                  decoration: InputDecoration(
-                    labelText: 'Variety (required)',
-                    hintText: _breedId == null
-                        ? 'Select a breed first'
-                        : 'Type to search and select a variety…',
-                    suffixIcon: _varietyText.text.trim().isEmpty
-                        ? null
-                        : IconButton(
-                            tooltip: 'Clear variety',
-                            onPressed: _saving
-                                ? null
-                                : () {
-                                    setState(() {
-                                      _varietyText.clear();
-                                      _msg = null;
-                                    });
-                                  },
-                            icon: const Icon(Icons.clear),
-                          ),
-                  ),
-                );
+                FocusScope.of(context).requestFocus(_sexFocus);
               },
             ),
             if (invalidVarietyWarning != null) ...[
@@ -867,15 +938,37 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
               ),
             ],
             const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              value: _sexValue,
-              items: _sexOptions
-                  .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                  .toList(),
-              onChanged: (v) => setState(() => _sexValue = v),
-              decoration: InputDecoration(
-                labelText: 'Sex (required)',
-                hintText: _species == 'rabbit' ? 'Buck or Doe' : 'Boar or Sow',
+            _FocusOpenAutocomplete(
+              textController: _sexText,
+              focusNode: _sexFocus,
+              labelText: 'Sex (required)',
+              hintText: _species == 'rabbit' ? 'Buck or Doe' : 'Boar or Sow',
+              options: _sexOptions.map((s) => {'name': s}).toList(),
+              displayStringForOption: (opt) => (opt['name'] ?? '').toString(),
+              onSelected: (opt) {
+                setState(() {
+                  _sexValue = (opt['name'] ?? '').toString();
+                  _sexText.text = _sexValue ?? '';
+                  _msg = null;
+                });
+              },
+            ),
+            if (invalidSexWarning != null) ...[
+              const SizedBox(height: 6),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  invalidSexWarning,
+                  style: const TextStyle(fontSize: 12, color: Colors.red),
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Exact date not required. This is only used to help project the correct class when entering shows.',
+                style: Theme.of(context).textTheme.bodySmall,
               ),
             ),
             const SizedBox(height: 8),
@@ -883,14 +976,23 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
               children: [
                 Expanded(
                   child: Text(
-                    'Birth date: ${_birthDate == null ? "(required)" : _birthDate!.toString().substring(0, 10)}',
+                    _isDobUnknown
+                        ? 'Birth date: Unknown'
+                        : 'Birth date: ${_birthDate == null ? "(optional)" : _birthDate!.toString().substring(0, 10)}',
                   ),
                 ),
                 TextButton(
-                  onPressed: _saving ? null : _pickBirthDate,
+                  onPressed:
+                      (_saving || _isDobUnknown) ? null : _pickBirthDate,
                   child: const Text('Pick'),
                 ),
               ],
+            ),
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Unknown DOB'),
+              value: _isDobUnknown,
+              onChanged: _saving ? null : (v) => _toggleUnknownDob(v ?? false),
             ),
             if (_msg != null) ...[
               const SizedBox(height: 8),
@@ -909,6 +1011,319 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
           child: Text(_saving ? 'Saving…' : 'Save'),
         ),
       ],
+    );
+  }
+}
+
+class _FocusOpenAutocomplete extends StatefulWidget {
+  final TextEditingController textController;
+  final FocusNode focusNode;
+  final String labelText;
+  final String hintText;
+  final List<Map<String, dynamic>> options;
+  final String Function(Map<String, dynamic>) displayStringForOption;
+  final Future<void> Function(Map<String, dynamic>)? onSelectedAsync;
+  final void Function(Map<String, dynamic>)? onSelected;
+  final bool enabled;
+  final bool readOnly;
+  final VoidCallback? onFieldTap;
+  final Widget? suffixIcon;
+
+  const _FocusOpenAutocomplete({
+    required this.textController,
+    required this.focusNode,
+    required this.labelText,
+    required this.hintText,
+    required this.options,
+    required this.displayStringForOption,
+    this.onSelectedAsync,
+    this.onSelected,
+    this.enabled = true,
+    this.readOnly = false,
+    this.onFieldTap,
+    this.suffixIcon,
+  });
+
+  @override
+  State<_FocusOpenAutocomplete> createState() => _FocusOpenAutocompleteState();
+}
+
+class _FocusOpenAutocompleteState extends State<_FocusOpenAutocomplete> {
+  late final TextEditingController _fieldController;
+
+  bool _syncingFromExternal = false;
+  bool _syncingToExternal = false;
+
+  List<Map<String, dynamic>> _lastOptions = const [];
+  int _highlightedIndex = 0;
+  void Function(Map<String, dynamic>)? _rawOnSelected;
+
+  @override
+  void initState() {
+    super.initState();
+    _fieldController = TextEditingController(text: widget.textController.text);
+
+    widget.textController.addListener(_handleExternalTextChanged);
+    _fieldController.addListener(_handleFieldTextChanged);
+    widget.focusNode.addListener(_handleFocusChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant _FocusOpenAutocomplete oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.textController != widget.textController) {
+      oldWidget.textController.removeListener(_handleExternalTextChanged);
+      widget.textController.addListener(_handleExternalTextChanged);
+
+      _syncingFromExternal = true;
+      _fieldController.value = widget.textController.value;
+      _syncingFromExternal = false;
+    }
+
+    if (oldWidget.focusNode != widget.focusNode) {
+      oldWidget.focusNode.removeListener(_handleFocusChanged);
+      widget.focusNode.addListener(_handleFocusChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.textController.removeListener(_handleExternalTextChanged);
+    widget.focusNode.removeListener(_handleFocusChanged);
+    _fieldController.removeListener(_handleFieldTextChanged);
+    _fieldController.dispose();
+    super.dispose();
+  }
+
+  void _handleExternalTextChanged() {
+    if (_syncingToExternal) return;
+    if (_fieldController.text == widget.textController.text) return;
+
+    _syncingFromExternal = true;
+    _fieldController.value = widget.textController.value;
+    _syncingFromExternal = false;
+  }
+
+  void _handleFieldTextChanged() {
+    if (_syncingFromExternal) return;
+    if (widget.textController.text == _fieldController.text) return;
+
+    _syncingToExternal = true;
+    widget.textController.value = _fieldController.value;
+    _syncingToExternal = false;
+  }
+
+  void _handleFocusChanged() {
+    if (!widget.focusNode.hasFocus) return;
+    if (!widget.enabled || widget.readOnly) return;
+    _openOptions();
+  }
+
+  void _openOptions() {
+    final currentText = _fieldController.text;
+    final currentSelection = _fieldController.selection;
+
+    _syncingToExternal = true;
+    _fieldController.value = TextEditingValue(
+      text: '$currentText ',
+      selection: TextSelection.collapsed(offset: currentText.length + 1),
+    );
+    _syncingToExternal = false;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      _syncingToExternal = true;
+      _fieldController.value = TextEditingValue(
+        text: currentText,
+        selection: currentSelection.isValid
+            ? currentSelection
+            : TextSelection.collapsed(offset: currentText.length),
+      );
+      _syncingToExternal = false;
+
+      widget.textController.value = _fieldController.value;
+    });
+  }
+
+  void _commitHighlightedOption() {
+    if (_lastOptions.isEmpty || _rawOnSelected == null) return;
+
+    final index = _highlightedIndex.clamp(0, _lastOptions.length - 1);
+    final selected = _lastOptions[index];
+    _rawOnSelected!(selected);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RawAutocomplete<Map<String, dynamic>>(
+      textEditingController: _fieldController,
+      focusNode: widget.focusNode,
+      displayStringForOption: widget.displayStringForOption,
+      optionsBuilder: (TextEditingValue textEditingValue) {
+        if (!widget.enabled) {
+          _lastOptions = const [];
+          _highlightedIndex = 0;
+          return const Iterable<Map<String, dynamic>>.empty();
+        }
+
+        final q = textEditingValue.text.trim().toLowerCase();
+
+        final results = widget.options.where((opt) {
+          final label =
+              widget.displayStringForOption(opt).trim().toLowerCase();
+          return q.isEmpty || label.contains(q);
+        }).toList()
+          ..sort((a, b) {
+            final aLabel = widget.displayStringForOption(a).toLowerCase();
+            final bLabel = widget.displayStringForOption(b).toLowerCase();
+            return aLabel.compareTo(bLabel);
+          });
+
+        _lastOptions = List<Map<String, dynamic>>.from(results);
+        if (_highlightedIndex >= _lastOptions.length) {
+          _highlightedIndex = 0;
+        }
+
+        return results;
+      },
+      onSelected: (opt) async {
+        final label = widget.displayStringForOption(opt);
+
+        _syncingToExternal = true;
+        _fieldController.value = TextEditingValue(
+          text: label,
+          selection: TextSelection.collapsed(offset: label.length),
+        );
+        _syncingToExternal = false;
+
+        widget.textController.value = _fieldController.value;
+
+        if (widget.onSelected != null) {
+          widget.onSelected!(opt);
+        }
+        if (widget.onSelectedAsync != null) {
+          await widget.onSelectedAsync!(opt);
+        }
+      },
+      fieldViewBuilder: (
+        context,
+        textEditingController,
+        focusNode,
+        onFieldSubmitted,
+      ) {
+        return Focus(
+          canRequestFocus: false,
+          skipTraversal: true,
+          onKeyEvent: (node, event) {
+            if (event is! KeyDownEvent) return KeyEventResult.ignored;
+
+            if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+              if (_lastOptions.isNotEmpty) {
+                setState(() {
+                  _highlightedIndex =
+                      (_highlightedIndex + 1) % _lastOptions.length;
+                });
+                return KeyEventResult.handled;
+              }
+            }
+
+            if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+              if (_lastOptions.isNotEmpty) {
+                setState(() {
+                  _highlightedIndex =
+                      (_highlightedIndex - 1 + _lastOptions.length) %
+                          _lastOptions.length;
+                });
+                return KeyEventResult.handled;
+              }
+            }
+
+            if (event.logicalKey == LogicalKeyboardKey.tab ||
+                event.logicalKey == LogicalKeyboardKey.enter) {
+              if (_lastOptions.isNotEmpty) {
+                _commitHighlightedOption();
+                return KeyEventResult.handled;
+              }
+            }
+
+            return KeyEventResult.ignored;
+          },
+          child: TextField(
+            controller: textEditingController,
+            focusNode: focusNode,
+            enabled: widget.enabled,
+            readOnly: widget.readOnly,
+            textInputAction: TextInputAction.next,
+            onTap: () {
+              widget.onFieldTap?.call();
+              if (widget.enabled && !widget.readOnly) {
+                _openOptions();
+              }
+            },
+            onSubmitted: (_) => onFieldSubmitted(),
+            decoration: InputDecoration(
+              labelText: widget.labelText,
+              hintText: widget.hintText,
+              suffixIcon: widget.suffixIcon,
+            ),
+          ),
+        );
+      },
+      optionsViewBuilder: (context, onSelected, options) {
+        final opts = options.toList();
+        _rawOnSelected = onSelected;
+
+        if (opts.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 6,
+            borderRadius: BorderRadius.circular(12),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: 420,
+                maxHeight: 240,
+              ),
+              child: ListView.builder(
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                itemCount: opts.length,
+                itemBuilder: (context, index) {
+                  final opt = opts[index];
+                  final label = widget.displayStringForOption(opt);
+                  final isHighlighted = index == _highlightedIndex;
+
+                  return InkWell(
+                    onTap: () => onSelected(opt),
+                    child: Container(
+                      color: isHighlighted
+                          ? Theme.of(context).highlightColor
+                          : null,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      child: Text(
+                        label,
+                        style: TextStyle(
+                          fontWeight: isHighlighted
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
