@@ -1,8 +1,7 @@
-// lib/screens/create_show_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/club_service.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -31,6 +30,11 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
   bool _loadingBreeds = false;
   List<Map<String, dynamic>> _breedOptions = [];
 
+  List<Map<String, dynamic>> _clubs = [];
+  String? _selectedClubId;
+  String? _selectedClubName;
+  bool _loadingClubs = false;
+
   bool _saving = false;
   String? _msg;
 
@@ -38,6 +42,7 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
   void initState() {
     super.initState();
     _loadBreeds();
+    _loadClubs();
   }
 
   @override
@@ -45,6 +50,32 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
     _name.dispose();
     _location.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadClubs() async {
+    setState(() => _loadingClubs = true);
+
+    try {
+      final clubs = await ClubService.loadMyClubs();
+
+      if (!mounted) return;
+      setState(() {
+        _clubs = clubs;
+
+        if (_clubs.isNotEmpty && (_selectedClubId == null || _selectedClubId!.isEmpty)) {
+          _selectedClubId = _clubs.first['id']?.toString();
+          _selectedClubName = _clubs.first['name']?.toString();
+        }
+
+        _loadingClubs = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadingClubs = false;
+        _msg = 'Failed to load clubs: $e';
+      });
+    }
   }
 
   Future<void> _loadBreeds() async {
@@ -144,6 +175,11 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
 
     if (_location.text.trim().isEmpty) {
       setState(() => _msg = 'Location is required.');
+      return false;
+    }
+
+    if (_selectedClubId == null || _selectedClubId!.isEmpty) {
+      setState(() => _msg = 'Hosting club is required.');
       return false;
     }
 
@@ -249,12 +285,16 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
         'entry_close_at': _entryCloseAt?.toUtc().toIso8601String(),
         'is_single_breed_show': _isSingleBreedShow,
         'single_breed_id': _isSingleBreedShow ? _singleBreedId : null,
+        'club_id': _selectedClubId,
+        'club_name': _selectedClubName,
       }).eq('id', showId);
 
       final sectionRows = _buildSectionRows(showId);
       if (sectionRows.isNotEmpty) {
         await supabase.from('show_sections').insert(sectionRows);
       }
+
+      await _ensureShowAdmin(showId: showId, userId: user.id);
 
       if (!mounted) return;
       Navigator.pop(context, true);
@@ -352,6 +392,36 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
                                     border: OutlineInputBorder(),
                                   ),
                                 ),
+                                const SizedBox(height: 12),
+                                if (_loadingClubs) const LinearProgressIndicator(),
+                                DropdownButtonFormField<String>(
+                                  value: _selectedClubId,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Hosting Club (required)',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                  items: _clubs.map((club) {
+                                    return DropdownMenuItem<String>(
+                                      value: club['id'].toString(),
+                                      child: Text((club['name'] ?? 'Club').toString()),
+                                    );
+                                  }).toList(),
+                                  onChanged: (_saving || _loadingClubs)
+                                      ? null
+                                      : (value) {
+                                          setState(() {
+                                            _selectedClubId = value;
+
+                                            final selected = _clubs.firstWhere(
+                                              (c) => c['id'].toString() == value,
+                                              orElse: () => <String, dynamic>{},
+                                            );
+
+                                            _selectedClubName =
+                                                (selected['name'] ?? '').toString();
+                                          });
+                                        },
+                                ),
                                 const SizedBox(height: 16),
                                 Row(
                                   children: [
@@ -397,9 +467,7 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
                               ],
                             ),
                           ),
-
                           const SizedBox(height: 16),
-
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.all(16),
@@ -446,9 +514,7 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
                               ],
                             ),
                           ),
-
                           const SizedBox(height: 16),
-
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.all(16),
@@ -531,9 +597,7 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
                               ],
                             ),
                           ),
-
                           const SizedBox(height: 16),
-
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.all(16),
@@ -596,7 +660,6 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
                               ],
                             ),
                           ),
-
                           if (_msg != null) ...[
                             const SizedBox(height: 12),
                             Container(

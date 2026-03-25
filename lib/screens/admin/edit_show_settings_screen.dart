@@ -1,8 +1,7 @@
-// lib/screens/admin/edit_show_settings_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../services/club_service.dart';
 import 'show_breed_settings_screen.dart';
 import 'show_sanctions_dialog.dart';
 import 'show_fees_dialog.dart';
@@ -54,6 +53,11 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   String _showNameForTitle = 'Show';
 
   String _finalAwardMode = 'four_six_bis';
+
+  List<Map<String, dynamic>> _clubs = [];
+  String? _selectedClubId;
+  String? _selectedClubName;
+  bool _loadingClubs = false;
 
   @override
   void dispose() {
@@ -126,6 +130,33 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
     }
   }
 
+  Future<void> _loadClubs() async {
+    setState(() => _loadingClubs = true);
+
+    try {
+      final clubs = await ClubService.loadMyClubs();
+
+      if (!mounted) return;
+      setState(() {
+        _clubs = clubs;
+
+        if ((_selectedClubId == null || _selectedClubId!.isEmpty) &&
+            _clubs.isNotEmpty) {
+          _selectedClubId = _clubs.first['id']?.toString();
+          _selectedClubName = _clubs.first['name']?.toString();
+        }
+
+        _loadingClubs = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadingClubs = false;
+        _msg = 'Failed to load clubs: $e';
+      });
+    }
+  }
+
   Future<void> _load() async {
     setState(() {
       _loading = true;
@@ -136,7 +167,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
       final show = await supabase
           .from('shows')
           .select(
-            'id,name,location_name,start_date,end_date,timezone,is_published,entry_open_at,entry_close_at,final_award_mode',
+            'id,name,location_name,start_date,end_date,timezone,is_published,entry_open_at,entry_close_at,final_award_mode,club_id,club_name',
           )
           .eq('id', widget.showId)
           .single();
@@ -156,6 +187,11 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
       _entryCloseAt = _parseTs(show['entry_close_at']?.toString());
 
       _finalAwardMode = (show['final_award_mode'] ?? 'four_six_bis').toString();
+
+      _selectedClubId = show['club_id']?.toString();
+      _selectedClubName = show['club_name']?.toString();
+
+      await _loadClubs();
 
       if (!mounted) return;
       setState(() => _loading = false);
@@ -238,6 +274,10 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
       setState(() => _msg = 'Location is required.');
       return false;
     }
+    if (_selectedClubId == null || _selectedClubId!.isEmpty) {
+      setState(() => _msg = 'Hosting club is required.');
+      return false;
+    }
     if (_startDate == null || _endDate == null) {
       setState(() => _msg = 'Start and end dates are required.');
       return false;
@@ -278,6 +318,8 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
         'entry_open_at': _entryOpenAt?.toUtc().toIso8601String(),
         'entry_close_at': _entryCloseAt?.toUtc().toIso8601String(),
         'final_award_mode': _finalAwardMode,
+        'club_id': _selectedClubId,
+        'club_name': _selectedClubName,
       }).eq('id', widget.showId);
 
       if (!mounted) return;
@@ -325,14 +367,6 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
 
   void _openRules() {
     ShowRulesDialog.open(
-      context,
-      showId: widget.showId,
-      showName: _effectiveShowName(),
-    );
-  }
-
-  void _openPaymentSettings() {
-    ShowPaymentSettingsDialog.open(
       context,
       showId: widget.showId,
       showName: _effectiveShowName(),
@@ -569,7 +603,6 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                               ),
                             ),
                           ),
-
                         _buildSectionCard(
                           title: 'Basic Show Info',
                           children: [
@@ -590,9 +623,38 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                 border: OutlineInputBorder(),
                               ),
                             ),
+                            const SizedBox(height: 12),
+                            if (_loadingClubs) const LinearProgressIndicator(),
+                            DropdownButtonFormField<String>(
+                              value: _selectedClubId,
+                              decoration: const InputDecoration(
+                                labelText: 'Hosting Club (required)',
+                                border: OutlineInputBorder(),
+                              ),
+                              items: _clubs.map((club) {
+                                return DropdownMenuItem<String>(
+                                  value: club['id'].toString(),
+                                  child: Text((club['name'] ?? 'Club').toString()),
+                                );
+                              }).toList(),
+                              onChanged: (_saving || _loadingClubs)
+                                  ? null
+                                  : (value) {
+                                      setState(() {
+                                        _selectedClubId = value;
+
+                                        final selected = _clubs.firstWhere(
+                                          (c) => c['id'].toString() == value,
+                                          orElse: () => <String, dynamic>{},
+                                        );
+
+                                        _selectedClubName =
+                                            (selected['name'] ?? '').toString();
+                                      });
+                                    },
+                            ),
                           ],
                         ),
-
                         _buildSectionCard(
                           title: 'Dates',
                           children: [
@@ -624,7 +686,6 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                             ),
                           ],
                         ),
-
                         _buildSectionCard(
                           title: 'Entry Window',
                           subtitle: 'Date and time for when exhibitors can begin and stop entering.',
@@ -670,7 +731,6 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                             ),
                           ],
                         ),
-
                         _buildSectionCard(
                           title: 'Publication & Awards',
                           children: [
@@ -715,7 +775,6 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                             ),
                           ],
                         ),
-
                         _buildSectionCard(
                           title: 'Admin Operations (Pre-show)',
                           children: [
@@ -756,7 +815,6 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                             ),
                           ],
                         ),
-
                         _buildSectionCard(
                           title: 'Post-Show Operations',
                           children: [
@@ -792,7 +850,6 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                             ),
                           ],
                         ),
-
                         _buildSectionCard(
                           title: 'Show Settings',
                           children: [
@@ -827,8 +884,8 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                             ),
                             _buildSettingsActionTile(
                               icon: Icons.attach_money,
-                              title: 'Show Fees',
-                              subtitle: 'Per-animal fees and optional discounts',
+                              title: 'Show Fees & Payments',
+                              subtitle: 'Per-animal fees, discounts, day-of-show, and online payment setup',
                               onTap: _saving ? null : _openFees,
                             ),
                             _buildSettingsActionTile(
@@ -837,17 +894,9 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                               subtitle: 'Validations like tattoo required, limits, and required fields',
                               onTap: _saving ? null : _openRules,
                             ),
-                            _buildSettingsActionTile(
-                              icon: Icons.payments,
-                              title: 'Payment Settings',
-                              subtitle: 'Day-of-show vs online payment setup',
-                              onTap: _saving ? null : _openPaymentSettings,
-                            ),
                           ],
                         ),
-
                         const SizedBox(height: 8),
-
                         FilledButton(
                           style: FilledButton.styleFrom(
                             backgroundColor: const Color(0xFFD4A623),
