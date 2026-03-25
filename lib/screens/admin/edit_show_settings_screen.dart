@@ -1,3 +1,5 @@
+// lib/screens/admin/edit_show_settings_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -6,7 +8,6 @@ import 'show_breed_settings_screen.dart';
 import 'show_sanctions_dialog.dart';
 import 'show_fees_dialog.dart';
 import 'show_rules_dialog.dart';
-import 'show_payment_settings_dialog.dart';
 import 'show_sections_dialog.dart';
 import 'show_judges_dialog.dart';
 
@@ -51,13 +52,19 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
 
   String _timezone = 'America/Indiana/Indianapolis';
   String _showNameForTitle = 'Show';
-
   String _finalAwardMode = 'four_six_bis';
 
   List<Map<String, dynamic>> _clubs = [];
   String? _selectedClubId;
   String? _selectedClubName;
   bool _loadingClubs = false;
+  bool _canSwitchHostingClub = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
 
   @override
   void dispose() {
@@ -71,6 +78,11 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   String _effectiveShowName() {
     final n = _name.text.trim();
     return n.isEmpty ? _showNameForTitle : n;
+  }
+
+  bool _entryClosed() {
+    if (_entryCloseAt == null) return false;
+    return DateTime.now().isAfter(_entryCloseAt!.toLocal());
   }
 
   String _fmtDate(DateTime? d) {
@@ -135,15 +147,28 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
 
     try {
       final clubs = await ClubService.loadMyClubs();
+      final canSwitch = await ClubService.canSwitchHostingClub();
 
       if (!mounted) return;
       setState(() {
         _clubs = clubs;
+        _canSwitchHostingClub = canSwitch;
 
         if ((_selectedClubId == null || _selectedClubId!.isEmpty) &&
             _clubs.isNotEmpty) {
           _selectedClubId = _clubs.first['id']?.toString();
           _selectedClubName = _clubs.first['name']?.toString();
+        }
+
+        if (_selectedClubId != null && _selectedClubId!.isNotEmpty) {
+          final selected = _clubs.cast<Map<String, dynamic>?>().firstWhere(
+                (club) => club?['id']?.toString() == _selectedClubId,
+                orElse: () => null,
+              );
+
+          if (selected != null) {
+            _selectedClubName = selected['name']?.toString();
+          }
         }
 
         _loadingClubs = false;
@@ -202,12 +227,6 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
         _msg = 'Load failed: $e';
       });
     }
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
   }
 
   Future<void> _pickStartDate() async {
@@ -270,32 +289,39 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
       setState(() => _msg = 'Show name is required.');
       return false;
     }
+
     if (_location.text.trim().isEmpty) {
       setState(() => _msg = 'Location is required.');
       return false;
     }
+
     if (_selectedClubId == null || _selectedClubId!.isEmpty) {
       setState(() => _msg = 'Hosting club is required.');
       return false;
     }
+
     if (_startDate == null || _endDate == null) {
       setState(() => _msg = 'Start and end dates are required.');
       return false;
     }
+
     if (_endDate!.isBefore(_startDate!)) {
       setState(() => _msg = 'End date can’t be before start date.');
       return false;
     }
+
     if (_entryOpenAt != null && _entryCloseAt != null) {
       if (_entryCloseAt!.isBefore(_entryOpenAt!)) {
         setState(() => _msg = 'Entry close can’t be before entry open.');
         return false;
       }
     }
+
     if (_finalAwardMode != 'four_six_bis' && _finalAwardMode != 'bis_ris') {
       setState(() => _msg = 'Final award mode is invalid.');
       return false;
     }
+
     return true;
   }
 
@@ -598,11 +624,14 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                             child: Text(
                               _msg!,
                               style: TextStyle(
-                                color: (_msg == 'Saved.') ? Colors.green : Colors.red,
+                                color: (_msg == 'Saved.')
+                                    ? Colors.green
+                                    : Colors.red,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
+
                         _buildSectionCard(
                           title: 'Basic Show Info',
                           children: [
@@ -626,10 +655,15 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                             const SizedBox(height: 12),
                             if (_loadingClubs) const LinearProgressIndicator(),
                             DropdownButtonFormField<String>(
-                              value: _selectedClubId,
-                              decoration: const InputDecoration(
-                                labelText: 'Hosting Club (required)',
-                                border: OutlineInputBorder(),
+                              value: _clubs.any((club) => club['id']?.toString() == _selectedClubId)
+                                  ? _selectedClubId
+                                  : null,
+                              decoration: InputDecoration(
+                                labelText: 'Hosting Club',
+                                border: const OutlineInputBorder(),
+                                helperText: _canSwitchHostingClub
+                                    ? 'You can switch hosting clubs.'
+                                    : 'Locked to your account. Upgrade to Multi-Club Hosting to change this.',
                               ),
                               items: _clubs.map((club) {
                                 return DropdownMenuItem<String>(
@@ -637,7 +671,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                   child: Text((club['name'] ?? 'Club').toString()),
                                 );
                               }).toList(),
-                              onChanged: (_saving || _loadingClubs)
+                              onChanged: (_saving || _loadingClubs || !_canSwitchHostingClub)
                                   ? null
                                   : (value) {
                                       setState(() {
@@ -648,13 +682,13 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                           orElse: () => <String, dynamic>{},
                                         );
 
-                                        _selectedClubName =
-                                            (selected['name'] ?? '').toString();
+                                        _selectedClubName = (selected['name'] ?? '').toString();
                                       });
                                     },
                             ),
                           ],
                         ),
+
                         _buildSectionCard(
                           title: 'Dates',
                           children: [
@@ -686,23 +720,29 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                             ),
                           ],
                         ),
+
                         _buildSectionCard(
                           title: 'Entry Window',
-                          subtitle: 'Date and time for when exhibitors can begin and stop entering.',
+                          subtitle:
+                              'Date and time for when exhibitors can begin and stop entering.',
                           children: [
                             Row(
                               children: [
                                 Expanded(
-                                  child: Text('Entry open: ${_fmtDateTime(_entryOpenAt)}'),
+                                  child: Text(
+                                    'Entry open: ${_fmtDateTime(_entryOpenAt)}',
+                                  ),
                                 ),
                                 TextButton(
                                   onPressed: _saving ? null : _pickEntryOpenAt,
                                   child: const Text('Pick'),
                                 ),
                                 TextButton(
-                                  onPressed: _saving
-                                      ? null
-                                      : () => setState(() => _entryOpenAt = null),
+                                  onPressed:
+                                      _saving
+                                          ? null
+                                          : () =>
+                                              setState(() => _entryOpenAt = null),
                                   child: const Text('Clear'),
                                 ),
                               ],
@@ -710,16 +750,22 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                             Row(
                               children: [
                                 Expanded(
-                                  child: Text('Entry close: ${_fmtDateTime(_entryCloseAt)}'),
+                                  child: Text(
+                                    'Entry close: ${_fmtDateTime(_entryCloseAt)}',
+                                  ),
                                 ),
                                 TextButton(
-                                  onPressed: _saving ? null : _pickEntryCloseAt,
+                                  onPressed:
+                                      _saving ? null : _pickEntryCloseAt,
                                   child: const Text('Pick'),
                                 ),
                                 TextButton(
-                                  onPressed: _saving
-                                      ? null
-                                      : () => setState(() => _entryCloseAt = null),
+                                  onPressed:
+                                      _saving
+                                          ? null
+                                          : () => setState(
+                                            () => _entryCloseAt = null,
+                                          ),
                                   child: const Text('Clear'),
                                 ),
                               ],
@@ -731,17 +777,20 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                             ),
                           ],
                         ),
+
                         _buildSectionCard(
                           title: 'Publication & Awards',
                           children: [
                             SwitchListTile(
                               contentPadding: EdgeInsets.zero,
                               title: const Text('Published'),
-                              subtitle: const Text(
-                                'If off, exhibitors won’t see this show in the public list.',
+                              subtitle: Text(
+                                _entryClosed()
+                                    ? 'Entry is closed. This show remains visible in Upcoming Shows, but publication can no longer be changed.'
+                                    : 'If off, exhibitors won’t see this show in the public list.',
                               ),
                               value: _published,
-                              onChanged: _saving
+                              onChanged: (_saving || _entryClosed())
                                   ? null
                                   : (v) => setState(() => _published = v),
                             ),
@@ -755,17 +804,24 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                               items: const [
                                 DropdownMenuItem(
                                   value: 'four_six_bis',
-                                  child: Text('Best 4-Class / Best 6-Class / Best in Show'),
+                                  child: Text(
+                                    'Best 4-Class / Best 6-Class / Best in Show',
+                                  ),
                                 ),
                                 DropdownMenuItem(
                                   value: 'bis_ris',
-                                  child: Text('Best in Show / Reserve in Show'),
+                                  child: Text(
+                                    'Best in Show / Reserve in Show',
+                                  ),
                                 ),
                               ],
-                              onChanged: _saving
-                                  ? null
-                                  : (v) => setState(
-                                        () => _finalAwardMode = v ?? 'four_six_bis',
+                              onChanged:
+                                  _saving
+                                      ? null
+                                      : (v) => setState(
+                                        () =>
+                                            _finalAwardMode =
+                                                v ?? 'four_six_bis',
                                       ),
                             ),
                             const SizedBox(height: 8),
@@ -775,30 +831,37 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                             ),
                           ],
                         ),
+
                         _buildSectionCard(
                           title: 'Admin Operations (Pre-show)',
                           children: [
                             _buildSettingsActionTile(
                               icon: Icons.gavel,
                               title: 'Judges',
-                              subtitle: 'Select judges available for staff assignment',
-                              onTap: _saving
-                                  ? null
-                                  : () async {
-                                      final changed = await ShowJudgesDialog.open(
-                                        context,
-                                        showId: widget.showId,
-                                        showName: _showNameForTitle,
-                                      );
-                                      if (changed == true && mounted) {
-                                        setState(() => _msg = 'Judges updated.');
-                                      }
-                                    },
+                              subtitle:
+                                  'Select judges available for staff assignment',
+                              onTap:
+                                  _saving
+                                      ? null
+                                      : () async {
+                                        final changed =
+                                            await ShowJudgesDialog.open(
+                                              context,
+                                              showId: widget.showId,
+                                              showName: _showNameForTitle,
+                                            );
+                                        if (changed == true && mounted) {
+                                          setState(
+                                            () => _msg = 'Judges updated.',
+                                          );
+                                        }
+                                      },
                             ),
                             _buildSettingsActionTile(
                               icon: Icons.edit_note,
                               title: 'Entry Management',
-                              subtitle: 'Search, edit, scratch, move class, add notes',
+                              subtitle:
+                                  'Search, edit, scratch, move class, add notes',
                               onTap: _saving ? null : _openEntryManagement,
                             ),
                             _buildSettingsActionTile(
@@ -810,93 +873,110 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                             _buildSettingsActionTile(
                               icon: Icons.print,
                               title: 'Print Packs',
-                              subtitle: 'Check-In Sheets, Control Sheets, Coop Tags, Comment Cards',
+                              subtitle:
+                                  'Check-In Sheets, Control Sheets, Coop Tags, Comment Cards',
                               onTap: _saving ? null : _openPrintPacks,
                             ),
                           ],
                         ),
+
                         _buildSectionCard(
                           title: 'Post-Show Operations',
                           children: [
                             _buildSettingsActionTile(
                               icon: Icons.fact_check,
                               title: 'Results Entry',
-                              subtitle: 'Enter placements, DQs, and specials by class',
+                              subtitle:
+                                  'Enter placements, DQs, and specials by class',
                               onTap: _saving ? null : _openResultsEntry,
                             ),
                             _buildSettingsActionTile(
                               icon: Icons.verified,
                               title: 'Results Validation',
-                              subtitle: 'Check for missing or inconsistent results before publishing',
+                              subtitle:
+                                  'Check for missing or inconsistent results before publishing',
                               onTap: _saving ? null : _openResultsValidation,
                             ),
                             _buildSettingsActionTile(
                               icon: Icons.public,
                               title: 'Publish Results',
-                              subtitle: 'Future: make finalized results visible to exhibitors and the public',
+                              subtitle:
+                                  'Future: make finalized results visible to exhibitors and the public',
                               onTap: _saving ? null : _openPublishResultsFuture,
                             ),
                             _buildSettingsActionTile(
                               icon: Icons.request_quote,
                               title: 'Financial Closeout',
-                              subtitle: 'Future: finalize balances and reconcile show payments',
-                              onTap: _saving ? null : _openFinancialCloseoutLater,
+                              subtitle:
+                                  'Future: finalize balances and reconcile show payments',
+                              onTap:
+                                  _saving ? null : _openFinancialCloseoutLater,
                             ),
                             _buildSettingsActionTile(
                               icon: Icons.archive,
                               title: 'Close Show',
-                              subtitle: 'Finalize, send reports, and lock/download copy',
+                              subtitle:
+                                  'Finalize, send reports, and lock/download copy',
                               onTap: _saving ? null : _openShowCloseout,
                             ),
                           ],
                         ),
+
                         _buildSectionCard(
                           title: 'Show Settings',
                           children: [
                             _buildSettingsActionTile(
                               icon: Icons.pets,
                               title: 'Breed Settings',
-                              subtitle: 'Manage allowed breeds and varieties for this show',
+                              subtitle:
+                                  'Manage allowed breeds and varieties for this show',
                               onTap: _saving ? null : _openBreedSettings,
                             ),
                             _buildSettingsActionTile(
                               icon: Icons.view_module,
                               title: 'Show Sections',
-                              subtitle: 'Open A/B, Youth A/B, and enabled section setup',
-                              onTap: _saving
-                                  ? null
-                                  : () async {
-                                      await ShowSectionsDialog.open(
-                                        context,
-                                        showId: widget.showId,
-                                        showName: _effectiveShowName(),
-                                      );
+                              subtitle:
+                                  'Open A/B, Youth A/B, and enabled section setup',
+                              onTap:
+                                  _saving
+                                      ? null
+                                      : () async {
+                                        await ShowSectionsDialog.open(
+                                          context,
+                                          showId: widget.showId,
+                                          showName: _effectiveShowName(),
+                                        );
 
-                                      if (!mounted) return;
-                                      await _load();
-                                    },
+                                        if (!mounted) return;
+                                        await _load();
+                                      },
                             ),
                             _buildSettingsActionTile(
                               icon: Icons.confirmation_number,
                               title: 'Sanction Numbers',
-                              subtitle: 'Add or edit ARBA and breed/club sanction numbers',
+                              subtitle:
+                                  'Add or edit ARBA and breed/club sanction numbers',
                               onTap: _saving ? null : _openSanctions,
                             ),
                             _buildSettingsActionTile(
                               icon: Icons.attach_money,
                               title: 'Show Fees & Payments',
-                              subtitle: 'Per-animal fees, discounts, day-of-show, and online payment setup',
+                              subtitle:
+                                  'Per-animal fees, discounts, day-of-show, and online payment setup',
                               onTap: _saving ? null : _openFees,
                             ),
                             _buildSettingsActionTile(
                               icon: Icons.rule,
                               title: 'Show Rules',
-                              subtitle: 'Validations like tattoo required, limits, and required fields',
+                              subtitle:
+                                  'Validations like tattoo required, limits, and required fields',
                               onTap: _saving ? null : _openRules,
                             ),
                           ],
                         ),
+
                         const SizedBox(height: 8),
+
                         FilledButton(
                           style: FilledButton.styleFrom(
                             backgroundColor: const Color(0xFFD4A623),

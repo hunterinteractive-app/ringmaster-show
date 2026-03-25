@@ -100,6 +100,15 @@ class ShowListScreen extends StatelessWidget {
     final shows = await _loadShows();
     final isSuper = await RoleService.isSuperAdmin();
 
+    List<Map<String, dynamic>> superAdminShows = <Map<String, dynamic>>[];
+    if (isSuper) {
+      try {
+        superAdminShows = await _loadAllShowsForSuperAdmin();
+      } catch (_) {
+        superAdminShows = <Map<String, dynamic>>[];
+      }
+    }
+
     Set<String> adminShowIds = <String>{};
     try {
       adminShowIds = await _loadAdminShowIds();
@@ -123,11 +132,21 @@ class ShowListScreen extends StatelessWidget {
 
     return _ShowListBundle(
       shows: shows,
+      superAdminShows: superAdminShows,
       adminShowIds: adminShowIds,
       isSuperAdmin: isSuper,
       hasAvailableShowCapacity: hasAvailableShowCapacity,
       hasAnyAssignedShows: hasAnyAssignedShows,
     );
+  }
+
+  Future<List<Map<String, dynamic>>> _loadAllShowsForSuperAdmin() async {
+    final res = await supabase
+        .from('shows')
+        .select('id,name,start_date,location_name,entry_close_at,is_published')
+        .order('start_date');
+
+    return (res as List).cast<Map<String, dynamic>>();
   }
 
   Future<void> _logout(BuildContext context) async {
@@ -140,8 +159,9 @@ class ShowListScreen extends StatelessWidget {
   }
 
   void _openAdmin(BuildContext context, _ShowListBundle bundle) {
-    final allowedShowIds =
-        (bundle.isSuperAdmin ? bundle.allShowIds : bundle.adminShowIds).toList();
+    final allowedShowIds = bundle.isSuperAdmin
+        ? bundle.superAdminShowIds.toList()
+        : bundle.adminShowIds.toList();
 
     Navigator.push(
       context,
@@ -624,6 +644,7 @@ class _UpcomingShowsEmptyState extends StatelessWidget {
 
 class _ShowListBundle {
   final List<Map<String, dynamic>> shows;
+  final List<Map<String, dynamic>> superAdminShows;
   final Set<String> adminShowIds;
   final bool isSuperAdmin;
   final bool hasAvailableShowCapacity;
@@ -631,13 +652,14 @@ class _ShowListBundle {
 
   _ShowListBundle({
     required this.shows,
+    required this.superAdminShows,
     required this.adminShowIds,
     required this.isSuperAdmin,
     required this.hasAvailableShowCapacity,
     required this.hasAnyAssignedShows,
   });
 
-  Set<String> get allShowIds => shows
+  Set<String> get superAdminShowIds => superAdminShows
       .map((s) => (s['id'] ?? '').toString())
       .where((id) => id.isNotEmpty)
       .toSet();

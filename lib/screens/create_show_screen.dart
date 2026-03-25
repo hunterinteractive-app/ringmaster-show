@@ -15,6 +15,7 @@ class CreateShowScreen extends StatefulWidget {
 class _CreateShowScreenState extends State<CreateShowScreen> {
   final _name = TextEditingController();
   final _location = TextEditingController();
+  final _hostingClubName = TextEditingController();
 
   DateTime _start = DateTime.now();
   DateTime _end = DateTime.now();
@@ -35,6 +36,9 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
   String? _selectedClubName;
   bool _loadingClubs = false;
 
+  bool _hasLockedHostingClub = false;
+  bool _canSwitchHostingClub = false; // future paid add-on
+
   bool _saving = false;
   String? _msg;
 
@@ -49,6 +53,7 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
   void dispose() {
     _name.dispose();
     _location.dispose();
+    _hostingClubName.dispose();
     super.dispose();
   }
 
@@ -57,14 +62,33 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
 
     try {
       final clubs = await ClubService.loadMyClubs();
+      final canSwitch = await ClubService.canSwitchHostingClub();
 
       if (!mounted) return;
       setState(() {
         _clubs = clubs;
+        _canSwitchHostingClub = canSwitch;
 
-        if (_clubs.isNotEmpty && (_selectedClubId == null || _selectedClubId!.isEmpty)) {
-          _selectedClubId = _clubs.first['id']?.toString();
-          _selectedClubName = _clubs.first['name']?.toString();
+        if (_clubs.isNotEmpty) {
+          _hasLockedHostingClub = true;
+
+          if (_selectedClubId == null || _selectedClubId!.isEmpty) {
+            _selectedClubId = _clubs.first['id']?.toString();
+          }
+
+          final selected = _clubs.cast<Map<String, dynamic>?>().firstWhere(
+                (club) => club?['id']?.toString() == _selectedClubId,
+                orElse: () => _clubs.first,
+              );
+
+          _selectedClubId = selected?['id']?.toString();
+          _selectedClubName = selected?['name']?.toString() ?? '';
+          _hostingClubName.text = _selectedClubName ?? '';
+        } else {
+          _hasLockedHostingClub = false;
+          _selectedClubId = null;
+          _selectedClubName = null;
+          _hostingClubName.text = '';
         }
 
         _loadingClubs = false;
@@ -178,9 +202,16 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
       return false;
     }
 
-    if (_selectedClubId == null || _selectedClubId!.isEmpty) {
-      setState(() => _msg = 'Hosting club is required.');
-      return false;
+    if (_hasLockedHostingClub) {
+      if (_selectedClubId == null || _selectedClubId!.isEmpty) {
+        setState(() => _msg = 'Hosting club is required.');
+        return false;
+      }
+    } else {
+      if (_hostingClubName.text.trim().isEmpty) {
+        setState(() => _msg = 'Hosting club name is required.');
+        return false;
+      }
     }
 
     if (_end.isBefore(_start)) {
@@ -193,7 +224,8 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
       return false;
     }
 
-    if (_isSingleBreedShow && (_singleBreedId == null || _singleBreedId!.isEmpty)) {
+    if (_isSingleBreedShow &&
+        (_singleBreedId == null || _singleBreedId!.isEmpty)) {
       setState(() => _msg = 'Select the breed for this single-breed show.');
       return false;
     }
@@ -256,6 +288,32 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
     }
   }
 
+  Future<Map<String, dynamic>> _createFirstClubForUser({
+    required String userId,
+    required String clubName,
+  }) async {
+    final created = await supabase
+        .from('clubs')
+        .insert({
+          'name': clubName.trim(),
+          'created_by': userId,
+          'is_active': true,
+        })
+        .select()
+        .single();
+
+    final clubId = created['id'].toString();
+
+    await supabase.from('club_members').insert({
+      'club_id': clubId,
+      'user_id': userId,
+      'role': 'owner',
+      'is_active': true,
+    });
+
+    return Map<String, dynamic>.from(created);
+  }
+
   Future<void> _create() async {
     if (!_validate()) return;
 
@@ -267,6 +325,25 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
     });
 
     try {
+      String? clubId = _selectedClubId;
+      String? clubName = _selectedClubName;
+
+      if (!_hasLockedHostingClub) {
+        final createdClub = await _createFirstClubForUser(
+          userId: user.id,
+          clubName: _hostingClubName.text.trim(),
+        );
+
+        clubId = createdClub['id']?.toString();
+        clubName = createdClub['name']?.toString();
+
+        _selectedClubId = clubId;
+        _selectedClubName = clubName;
+        _hasLockedHostingClub = true;
+
+        await _loadClubs();
+      }
+
       final dynamic rpcResult = await supabase.rpc(
         'create_show_with_license',
         params: {
@@ -285,8 +362,8 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
         'entry_close_at': _entryCloseAt?.toUtc().toIso8601String(),
         'is_single_breed_show': _isSingleBreedShow,
         'single_breed_id': _isSingleBreedShow ? _singleBreedId : null,
-        'club_id': _selectedClubId,
-        'club_name': _selectedClubName,
+        'club_id': clubId,
+        'club_name': clubName,
       }).eq('id', showId);
 
       final sectionRows = _buildSectionRows(showId);
@@ -310,6 +387,10 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final selectedClubExists = _clubs.any(
+      (club) => club['id']?.toString() == _selectedClubId,
+    );
+
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: 70,
@@ -394,34 +475,59 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
                                 ),
                                 const SizedBox(height: 12),
                                 if (_loadingClubs) const LinearProgressIndicator(),
-                                DropdownButtonFormField<String>(
-                                  value: _selectedClubId,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Hosting Club (required)',
-                                    border: OutlineInputBorder(),
+                                if (!_hasLockedHostingClub) ...[
+                                  TextField(
+                                    controller: _hostingClubName,
+                                    enabled: !_saving,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Hosting Club Name (required)',
+                                      border: OutlineInputBorder(),
+                                      helperText:
+                                          'This will be saved as your default hosting club.',
+                                    ),
                                   ),
-                                  items: _clubs.map((club) {
-                                    return DropdownMenuItem<String>(
-                                      value: club['id'].toString(),
-                                      child: Text((club['name'] ?? 'Club').toString()),
-                                    );
-                                  }).toList(),
-                                  onChanged: (_saving || _loadingClubs)
-                                      ? null
-                                      : (value) {
-                                          setState(() {
-                                            _selectedClubId = value;
+                                ] else ...[
+                                  DropdownButtonFormField<String>(
+                                    value: selectedClubExists ? _selectedClubId : null,
+                                    decoration: InputDecoration(
+                                      labelText: 'Hosting Club',
+                                      border: const OutlineInputBorder(),
+                                      helperText: _canSwitchHostingClub
+                                          ? 'You can switch hosting clubs.'
+                                          : 'Locked to your account. Upgrade to Multi-Club Hosting to change this.',
+                                    ),
+                                    items: _clubs.map((club) {
+                                      return DropdownMenuItem<String>(
+                                        value: club['id'].toString(),
+                                        child: Text(
+                                          (club['name'] ?? 'Club').toString(),
+                                        ),
+                                      );
+                                    }).toList(),
+                                    onChanged:
+                                        (_saving ||
+                                                _loadingClubs ||
+                                                !_canSwitchHostingClub)
+                                            ? null
+                                            : (value) {
+                                                setState(() {
+                                                  _selectedClubId = value;
 
-                                            final selected = _clubs.firstWhere(
-                                              (c) => c['id'].toString() == value,
-                                              orElse: () => <String, dynamic>{},
-                                            );
+                                                  final selected =
+                                                      _clubs.firstWhere(
+                                                    (c) =>
+                                                        c['id'].toString() ==
+                                                        value,
+                                                    orElse: () => <String, dynamic>{},
+                                                  );
 
-                                            _selectedClubName =
-                                                (selected['name'] ?? '').toString();
-                                          });
-                                        },
-                                ),
+                                                  _selectedClubName =
+                                                      (selected['name'] ?? '')
+                                                          .toString();
+                                                });
+                                              },
+                                  ),
+                                ],
                                 const SizedBox(height: 16),
                                 Row(
                                   children: [
@@ -434,7 +540,8 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
                                       ),
                                     ),
                                     TextButton(
-                                      onPressed: _saving ? null : () => _pickDate(true),
+                                      onPressed:
+                                          _saving ? null : () => _pickDate(true),
                                       child: const Text('Pick'),
                                     ),
                                   ],
@@ -450,7 +557,8 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
                                       ),
                                     ),
                                     TextButton(
-                                      onPressed: _saving ? null : () => _pickDate(false),
+                                      onPressed:
+                                          _saving ? null : () => _pickDate(false),
                                       child: const Text('Pick'),
                                     ),
                                   ],
@@ -500,7 +608,8 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
                                       ),
                                     ),
                                     TextButton(
-                                      onPressed: _saving ? null : _pickEntryCloseAt,
+                                      onPressed:
+                                          _saving ? null : _pickEntryCloseAt,
                                       child: const Text('Pick'),
                                     ),
                                     TextButton(
