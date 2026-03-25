@@ -50,7 +50,8 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
 
   String? _activeCartId;
   final Set<String> _animalIdsInCart = {};
-  final Set<String> _animalIdsAlreadyEnteredForShow = {};
+  final Map<String, Set<String>> _enteredAnimalIdsBySection = {};
+  final Map<String, Set<String>> _enteredSectionsByAnimal = {};
 
   Future<_EnterShowLoadBundle>? _loadFuture;
 
@@ -144,6 +145,56 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
       _msg = null;
     });
   }
+
+  bool _hasSectionConflictForAnimal(String animalId) {
+  final existingSectionIds = _enteredSectionsByAnimal[animalId];
+  if (existingSectionIds == null || existingSectionIds.isEmpty) return false;
+
+  for (final selectedSectionId in _selectedSectionIds) {
+    final selectedKind = _sectionKindForId(selectedSectionId);
+    final selectedLetter = _sectionLetterForId(selectedSectionId);
+
+    if (selectedKind.isEmpty || selectedLetter.isEmpty) continue;
+
+    for (final existingSectionId in existingSectionIds) {
+      final existingKind = _sectionKindForId(existingSectionId);
+      final existingLetter = _sectionLetterForId(existingSectionId);
+
+      if (existingKind.isEmpty || existingLetter.isEmpty) continue;
+
+      if (selectedLetter == existingLetter && selectedKind != existingKind) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+String _sectionConflictLabelForAnimal(String animalId) {
+  final existingSectionIds = _enteredSectionsByAnimal[animalId];
+  if (existingSectionIds == null || existingSectionIds.isEmpty) return '';
+
+  for (final selectedSectionId in _selectedSectionIds) {
+    final selectedKind = _sectionKindForId(selectedSectionId);
+    final selectedLetter = _sectionLetterForId(selectedSectionId);
+
+    if (selectedKind.isEmpty || selectedLetter.isEmpty) continue;
+
+    for (final existingSectionId in existingSectionIds) {
+      final existingKind = _sectionKindForId(existingSectionId);
+      final existingLetter = _sectionLetterForId(existingSectionId);
+
+      if (existingKind.isEmpty || existingLetter.isEmpty) continue;
+
+      if (selectedLetter == existingLetter && selectedKind != existingKind) {
+        return _sectionLabelForId(existingSectionId);
+      }
+    }
+  }
+
+  return '';
+}
 
   bool _isSixClassBreed(String breedName) {
     final classSystem =
@@ -422,7 +473,8 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   Future<void> _refreshAnimalsAlreadyEnteredForShow(
     List<Map<String, dynamic>> animals,
   ) async {
-    _animalIdsAlreadyEnteredForShow.clear();
+    _enteredAnimalIdsBySection.clear();
+    _enteredSectionsByAnimal.clear();
 
     final animalIds = animals
         .map((a) => (a['id'] ?? '').toString())
@@ -433,22 +485,45 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
 
     final rows = await supabase
         .from('entries')
-        .select('animal_id')
+        .select('animal_id,section_id')
         .eq('show_id', widget.showId)
         .inFilter('animal_id', animalIds);
 
     for (final r in (rows as List).cast<Map<String, dynamic>>()) {
-      final aid = r['animal_id']?.toString();
-      if (aid != null && aid.isNotEmpty) {
-        _animalIdsAlreadyEnteredForShow.add(aid);
-      }
+      final animalId = r['animal_id']?.toString();
+      final sectionId = r['section_id']?.toString();
+
+      if (animalId == null || animalId.isEmpty) continue;
+      if (sectionId == null || sectionId.isEmpty) continue;
+
+      _enteredAnimalIdsBySection.putIfAbsent(sectionId, () => <String>{});
+      _enteredAnimalIdsBySection[sectionId]!.add(animalId);
+
+      _enteredSectionsByAnimal.putIfAbsent(animalId, () => <String>{});
+      _enteredSectionsByAnimal[animalId]!.add(sectionId);
     }
   }
 
   bool _isAnimalInCart(String animalId) => _animalIdsInCart.contains(animalId);
 
-  bool _isAnimalAlreadyEntered(String animalId) {
-    return _animalIdsAlreadyEnteredForShow.contains(animalId);
+  bool _isAnimalAlreadyEnteredInAnySelectedSection(String animalId) {
+    for (final sectionId in _selectedSectionIds) {
+      final enteredIds = _enteredAnimalIdsBySection[sectionId];
+      if (enteredIds != null && enteredIds.contains(animalId)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  String _alreadyEnteredSectionLabel(String animalId) {
+    for (final sectionId in _selectedSectionIds) {
+      final enteredIds = _enteredAnimalIdsBySection[sectionId];
+      if (enteredIds != null && enteredIds.contains(animalId)) {
+        return _sectionLabelForId(sectionId);
+      }
+    }
+    return '';
   }
 
   Future<void> _loadShowContext() async {
@@ -808,7 +883,11 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   void _toggleSelected(Map<String, dynamic> animal, bool isSelected) {
     final id = animal['id'] as String;
 
-    if (_isAnimalInCart(id) || _isAnimalAlreadyEntered(id)) return;
+    if (_isAnimalInCart(id) ||
+        _isAnimalAlreadyEnteredInAnySelectedSection(id) ||
+        _hasSectionConflictForAnimal(id)) {
+      return;
+    }
 
     setState(() {
       _selected[id] = isSelected;
@@ -861,7 +940,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     final errors = <String>[];
 
     if (_selectedSectionIds.isEmpty) {
-      errors.add('Select at least one section.');
+      errors.add('Select at least one show.');
       return errors;
     }
 
@@ -923,8 +1002,22 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
         errors.add('$title is already in the cart.');
       }
 
-      if (_isAnimalAlreadyEntered(animalId)) {
-        errors.add('$title is already entered in this show.');
+      if (_isAnimalAlreadyEnteredInAnySelectedSection(animalId)) {
+        final sectionLabel = _alreadyEnteredSectionLabel(animalId);
+        errors.add(
+          sectionLabel.isEmpty
+              ? '$title is already entered in one of the selected sections.'
+              : '$title is already entered in $sectionLabel.',
+        );
+      }
+
+      if (_hasSectionConflictForAnimal(animalId)) {
+        final conflictLabel = _sectionConflictLabelForAnimal(animalId);
+        errors.add(
+          conflictLabel.isEmpty
+              ? '$title cannot be entered in both Open and Youth for the same letter.'
+              : '$title conflicts with existing $conflictLabel. The same letter cannot be entered in both Open and Youth.',
+        );
       }
     }
 
@@ -1309,8 +1402,13 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     final id = a['id'] as String;
     final checked = _selected[id] ?? false;
     final inCart = _isAnimalInCart(id);
-    final alreadyEntered = _isAnimalAlreadyEntered(id);
-    final disabled = inCart || alreadyEntered;
+    final alreadyEnteredInSelectedSection =
+        _isAnimalAlreadyEnteredInAnySelectedSection(id);
+    final hasSectionConflict = _hasSectionConflictForAnimal(id);
+    final disabled = inCart || alreadyEnteredInSelectedSection || hasSectionConflict;
+
+    final alreadyEnteredLabel = _alreadyEnteredSectionLabel(id);
+    final conflictLabel = _sectionConflictLabelForAnimal(id);
 
     final tile = ListTile(
       leading: Checkbox(
@@ -1355,11 +1453,17 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
               ),
             ],
           ),
-          if (alreadyEntered || inCart)
+          if (alreadyEnteredInSelectedSection || hasSectionConflict || inCart)
             Text(
-              alreadyEntered
-                  ? 'Already entered in this show'
-                  : 'Already in cart',
+              alreadyEnteredInSelectedSection
+                  ? (alreadyEnteredLabel.isEmpty
+                      ? 'Already entered in one of the selected sections'
+                      : 'Already entered in $alreadyEnteredLabel')
+                  : hasSectionConflict
+                      ? (conflictLabel.isEmpty
+                          ? 'Cannot enter the same letter in both Open and Youth'
+                          : 'Conflicts with existing $conflictLabel')
+                      : 'Already in cart',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Colors.red,
                     fontWeight: FontWeight.w600,
