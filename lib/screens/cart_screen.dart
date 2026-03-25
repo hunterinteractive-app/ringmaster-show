@@ -6,6 +6,8 @@ import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import '../utils/date_time_utils.dart';
 import '../services/stripe_connect_service.dart';
 
+import 'my_entries_screen.dart';
+
 final supabase = Supabase.instance.client;
 
 class CartScreen extends StatefulWidget {
@@ -351,7 +353,9 @@ class _CartScreenState extends State<CartScreen> {
               FilledButton(
                 onPressed: () {
                   Navigator.pop(context); // close dialog
-                  Navigator.of(context).pushNamed('/my-entries');
+                  Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const MyEntriesScreen()),
+                );
                 },
                 child: const Text('View My Entries'),
               ),
