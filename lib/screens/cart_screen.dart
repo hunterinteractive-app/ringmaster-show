@@ -323,18 +323,41 @@ class _CartScreenState extends State<CartScreen> {
 
     if (stripeStatus == 'success') {
       setState(() {
-        _msg = 'Payment return detected. Refreshing cart status...';
+        _msg = null;
       });
 
-      Future.delayed(const Duration(milliseconds: 1200), () async {
+      Future.delayed(const Duration(milliseconds: 800), () async {
         if (!mounted) return;
+
         await _load();
         if (!mounted) return;
 
-        setState(() {
-          _msg =
-              'Payment return detected. If payment completed successfully, your cart should update shortly.';
-        });
+        await showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => AlertDialog(
+            title: const Text('Payment Successful'),
+            content: const Text(
+              'Your payment was received and your entries were submitted successfully.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context); // close dialog
+                  Navigator.pop(context, true); // leave cart
+                },
+                child: const Text('Back to Show'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  Navigator.pop(context); // close dialog
+                  Navigator.of(context).pushNamed('/my-entries');
+                },
+                child: const Text('View My Entries'),
+              ),
+            ],
+          ),
+        );
       });
     } else if (stripeStatus == 'cancel') {
       setState(() {
