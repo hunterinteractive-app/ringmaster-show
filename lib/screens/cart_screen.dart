@@ -700,38 +700,28 @@ class _CartScreenState extends State<CartScreen> {
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  child: Column(
-                    children: [
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton.icon(
-                          onPressed: _canPayOnline ? _payOnline : null,
-                          icon: const Icon(Icons.credit_card),
-                          label: Text(
-                            _payingOnline
-                                ? 'Opening Checkout…'
-                                : 'Pay Online',
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: _stripeConnected
+                        ? FilledButton.icon(
+                            onPressed: _canPayOnline ? _payOnline : null,
+                            icon: const Icon(Icons.credit_card),
+                            label: Text(
+                              _payingOnline ? 'Opening Checkout…' : 'Pay Online',
+                            ),
+                          )
+                        : FilledButton(
+                            onPressed: (_confirming ||
+                                    _deadlinePassed() ||
+                                    _items.isEmpty)
+                                ? null
+                                : _confirmDayOf,
+                            child: Text(
+                              _confirming
+                                  ? 'Confirming…'
+                                  : 'Confirm Entries (Pay Day-of-Show)',
+                            ),
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton(
-                          onPressed: (_confirming ||
-                                  _payingOnline ||
-                                  _deadlinePassed() ||
-                                  _items.isEmpty)
-                              ? null
-                              : _confirmDayOf,
-                          child: Text(
-                            _confirming
-                                ? 'Confirming…'
-                                : 'Confirm Entries (Pay Day-of-Show)',
-                          ),
-                        ),
-                      ),
-                    ],
                   ),
                 ),
               ],
