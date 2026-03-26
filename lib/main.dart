@@ -7,17 +7,16 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'screens/login_screen.dart';
 import 'screens/show_list_screen.dart';
 import 'screens/account_profile_setup_screen.dart';
+
 import 'config/supabase_config.dart';
 import 'theme/app_theme.dart';
-
-
+import 'services/app_init_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
   const supabaseAnon = String.fromEnvironment('SUPABASE_ANON_KEY');
-
 
   SupabaseConfig.validate();
 
@@ -68,7 +67,14 @@ class _RootState extends State<Root> {
     _refresh();
 
     // React to sign-in/sign-out immediately
-    _authSub = supabase.auth.onAuthStateChange.listen((_) {
+    _authSub = supabase.auth.onAuthStateChange.listen((data) {
+      final event = data.event;
+      final session = data.session;
+
+      if (event == AuthChangeEvent.signedOut || session == null) {
+        AppInitService.reset();
+      }
+
       _refresh();
     });
   }
@@ -93,7 +99,7 @@ class _RootState extends State<Root> {
       return;
     }
 
-    // Signed in: check if at least 1 exhibitor exists for this owner_user_id
+    // Signed in: claim pending licenses first, then check exhibitor
     if (!mounted) return;
     setState(() {
       _loading = true;
@@ -101,6 +107,8 @@ class _RootState extends State<Root> {
     });
 
     try {
+      await AppInitService.initializeForCurrentUser();
+
       final row = await supabase
           .from('exhibitors')
           .select('id')
@@ -118,7 +126,7 @@ class _RootState extends State<Root> {
       setState(() {
         _loading = false;
         _hasExhibitor = false;
-        _msg = 'Exhibitor check failed: $e';
+        _msg = 'Startup check failed: $e';
       });
     }
   }

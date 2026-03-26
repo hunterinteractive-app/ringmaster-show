@@ -37,7 +37,7 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
   bool _loadingClubs = false;
 
   bool _hasLockedHostingClub = false;
-  bool _canSwitchHostingClub = false; // future paid add-on
+  bool _canSwitchHostingClub = false; // from license / multi-club entitlement
 
   bool _saving = false;
   String? _msg;
@@ -74,15 +74,9 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
 
           if (_selectedClubId == null || _selectedClubId!.isEmpty) {
             _selectedClubId = _clubs.first['id']?.toString();
+            _selectedClubName = _clubs.first['name']?.toString();
           }
 
-          final selected = _clubs.cast<Map<String, dynamic>?>().firstWhere(
-                (club) => club?['id']?.toString() == _selectedClubId,
-                orElse: () => _clubs.first,
-              );
-
-          _selectedClubId = selected?['id']?.toString();
-          _selectedClubName = selected?['name']?.toString() ?? '';
           _hostingClubName.text = _selectedClubName ?? '';
         } else {
           _hasLockedHostingClub = false;
@@ -337,12 +331,25 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
         clubId = createdClub['id']?.toString();
         clubName = createdClub['name']?.toString();
 
-        _selectedClubId = clubId;
-        _selectedClubName = clubName;
-        _hasLockedHostingClub = true;
+        if (!_hasLockedHostingClub) {
+          final createdClub = await _createFirstClubForUser(
+            userId: user.id,
+            clubName: _hostingClubName.text.trim(),
+          );
 
-        await _loadClubs();
-      }
+          clubId = createdClub['id']?.toString();
+          clubName = createdClub['name']?.toString();
+
+          if (mounted) {
+            setState(() {
+              _selectedClubId = clubId;
+              _selectedClubName = clubName;
+              _hasLockedHostingClub = true;
+            });
+          }
+
+          await _loadClubs();
+        }
 
       final dynamic rpcResult = await supabase.rpc(
         'create_show_with_license',
