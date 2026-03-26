@@ -331,25 +331,16 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
         clubId = createdClub['id']?.toString();
         clubName = createdClub['name']?.toString();
 
-        if (!_hasLockedHostingClub) {
-          final createdClub = await _createFirstClubForUser(
-            userId: user.id,
-            clubName: _hostingClubName.text.trim(),
-          );
-
-          clubId = createdClub['id']?.toString();
-          clubName = createdClub['name']?.toString();
-
-          if (mounted) {
-            setState(() {
-              _selectedClubId = clubId;
-              _selectedClubName = clubName;
-              _hasLockedHostingClub = true;
-            });
-          }
-
-          await _loadClubs();
+        if (mounted) {
+          setState(() {
+            _selectedClubId = clubId;
+            _selectedClubName = clubName;
+            _hasLockedHostingClub = true;
+          });
         }
+
+        await _loadClubs();
+      }
 
       final dynamic rpcResult = await supabase.rpc(
         'create_show_with_license',
