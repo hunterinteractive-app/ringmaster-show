@@ -1,3 +1,5 @@
+// lib/screens/admin/closeout/services/closeout_runner.dart
+
 import '../models/base/report_request.dart';
 import 'report_engine.dart';
 import 'report_upload_service.dart';
@@ -18,17 +20,19 @@ class CloseoutRunner {
     required String artifactId,
     String? breedName,
     String? scope,
+    String? showLetter,
     String? showName,
     String? showDate,
     String? sanctionNumber,
   }) async {
     final request = ReportRequest(
       showId: showId,
-      finalizeRunId: finalizeRunId,
       reportName: reportName,
+      finalizeRunId: finalizeRunId,
       artifactId: artifactId,
       breedName: breedName,
       scope: scope,
+      showLetter: showLetter,
       showName: showName,
       showDate: showDate,
       sanctionNumber: sanctionNumber,

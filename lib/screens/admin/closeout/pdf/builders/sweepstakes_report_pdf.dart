@@ -9,7 +9,6 @@ import '../../models/base/report_request.dart';
 import '../../models/clubs/sweepstakes_report_data.dart';
 
 class SweepstakesReportPdf {
-  /// OPTIONAL: pass logo bytes in constructor
   final Uint8List? logoBytes;
 
   SweepstakesReportPdf({this.logoBytes});
@@ -42,23 +41,10 @@ class SweepstakesReportPdf {
             showDate: showDate,
             sanctionNumber: sanctionNumber,
           ),
-
           pw.SizedBox(height: 14),
-
-          _buildRuleBadges(data),
-
-          pw.SizedBox(height: 14),
-
           _buildResultsTable(data),
-
           pw.SizedBox(height: 16),
-
           _buildCalculationExplanation(data),
-
-          pw.SizedBox(height: 14),
-
-          _buildRulesBasis(data),
-
           if (data.isProvisional) ...[
             pw.SizedBox(height: 12),
             _buildDisclaimer(data),
@@ -80,9 +66,20 @@ class SweepstakesReportPdf {
     );
   }
 
-  // =====================================================
-  // HEADER (WITH LOGO)
-  // =====================================================
+  String _buildFileName({
+    required String breedName,
+    required String scope,
+    required String showName,
+  }) {
+    String clean(String input) {
+      return input
+          .replaceAll(RegExp(r'[^\w\s-]'), '')
+          .trim()
+          .replaceAll(RegExp(r'\s+'), '_');
+    }
+
+    return '${clean(showName)}_${clean(breedName)}_${clean(scope.toLowerCase())}_sweepstakes.pdf';
+  }
 
   pw.Widget _buildHeader({
     required SweepstakesReportData data,
@@ -119,6 +116,16 @@ class SweepstakesReportPdf {
     return pw.Row(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
+        if (logoBytes != null)
+          pw.Container(
+            width: 100,
+            height: 80,
+            margin: const pw.EdgeInsets.only(right: 12),
+            child: pw.Image(
+              pw.MemoryImage(logoBytes!),
+              fit: pw.BoxFit.contain,
+            ),
+          ),
         pw.Expanded(
           child: pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -144,6 +151,7 @@ class SweepstakesReportPdf {
                     infoRow('Show Date', showDate),
                     infoRow('Breed', data.breedName),
                     infoRow('Scope', data.scope),
+                    infoRow('Show Letter', data.showLetter),
                     if (sanctionNumber.isNotEmpty)
                       infoRow('Sanction #', sanctionNumber),
                   ],
@@ -152,78 +160,9 @@ class SweepstakesReportPdf {
             ],
           ),
         ),
-
-        if (logoBytes != null)
-          pw.Container(
-            width: 110,
-            height: 80,
-            alignment: pw.Alignment.topRight,
-            child: pw.Image(
-              pw.MemoryImage(logoBytes!),
-              fit: pw.BoxFit.contain,
-            ),
-          ),
       ],
     );
   }
-
-  // =====================================================
-  // RULE BADGES
-  // =====================================================
-
-  pw.Widget _buildRuleBadges(SweepstakesReportData data) {
-    List<pw.Widget> badges = [];
-
-    pw.Widget badge(String text, PdfColor color) {
-      return pw.Container(
-        padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-        margin: const pw.EdgeInsets.only(right: 6, bottom: 4),
-        decoration: pw.BoxDecoration(
-          color: color,
-          borderRadius: pw.BorderRadius.circular(3),
-        ),
-        child: pw.Text(
-          text,
-          style: pw.TextStyle(
-            fontSize: 8,
-            color: PdfColors.white,
-          ),
-        ),
-      );
-    }
-
-    if (data.engineType.contains('FLAT')) {
-      badges.add(badge('Flat Scoring', PdfColors.blueGrey));
-    } else {
-      badges.add(badge('Multiplier Scoring', PdfColors.blue));
-    }
-
-    if (data.showVarietyPoints) {
-      badges.add(badge('Variety Awards', PdfColors.green));
-    }
-
-    if (data.showGroupPoints) {
-      badges.add(badge('Group Awards', PdfColors.teal));
-    }
-
-    if (data.showBobPoints) {
-      badges.add(badge('Breed Awards', PdfColors.deepOrange));
-    }
-
-    if (data.showBisPoints) {
-      badges.add(badge('BIS Enabled', PdfColors.purple));
-    }
-
-    if (data.showFurPoints) {
-      badges.add(badge('Fur/Wool', PdfColors.brown));
-    }
-
-    return pw.Wrap(children: badges);
-  }
-
-  // =====================================================
-  // RESULTS TABLE
-  // =====================================================
 
   pw.Widget _buildResultsTable(SweepstakesReportData data) {
     final headers = <String>[
@@ -255,7 +194,9 @@ class SweepstakesReportPdf {
     return pw.TableHelper.fromTextArray(
       headers: headers,
       data: tableData,
-      headerDecoration: const pw.BoxDecoration(color: PdfColors.blueGrey700),
+      headerDecoration: const pw.BoxDecoration(
+        color: PdfColors.blueGrey700,
+      ),
       headerStyle: pw.TextStyle(
         color: PdfColors.white,
         fontSize: 10,
@@ -264,47 +205,45 @@ class SweepstakesReportPdf {
       cellStyle: const pw.TextStyle(fontSize: 9),
       border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
       oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
+      cellAlignment: pw.Alignment.centerLeft,
+      headerAlignment: pw.Alignment.centerLeft,
+      cellPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+      columnWidths: {
+        0: const pw.FixedColumnWidth(36),
+        1: const pw.FlexColumnWidth(3.0),
+      },
     );
   }
 
-  // =====================================================
-  // CALCULATION EXPLANATION (NEW CORE FEATURE)
-  // =====================================================
-
   pw.Widget _buildCalculationExplanation(SweepstakesReportData data) {
-    List<String> lines = [];
+    final lines = <String>[
+      'Points are awarded based on official sweepstakes scoring rules for this breed.',
+      
+      if (data.engineType.toUpperCase().contains('FLAT'))
+        '- Class placements are assigned fixed point values based on placing (1st–5th).'
+      else
+        '- Class placements are weighted based on class size or exhibitor count.',
 
-    lines.add('Points are calculated based on the following structure:');
+      if (data.showVarietyPoints)
+        '- Variety awards contribute additional points where applicable.',
 
-    lines.add('• Class placements (1st–5th)');
+      if (data.showGroupPoints)
+        '- Group awards contribute additional points where applicable.',
 
-    if (data.engineType.contains('FLAT')) {
-      lines.add('• Flat placement scoring (no class size multiplier)');
-    } else {
-      lines.add('• Placement points multiplied by class size or exhibitor count');
-    }
+      if (data.showBobPoints)
+        '- Best of Breed (BOB) and Best Opposite Sex (BOS) awards are included.',
 
-    if (data.showVarietyPoints) {
-      lines.add('• Variety awards (Best/Best Opposite Variety)');
-    }
+      if (data.showBisPoints)
+        '- Best in Show (BIS) and Reserve Best in Show (RBIS) awards are included.',
 
-    if (data.showGroupPoints) {
-      lines.add('• Group awards (Best/Best Opposite Group)');
-    }
+      if (data.showFurPoints)
+        '- Fur/Wool class awards are included when applicable.',
 
-    if (data.showBobPoints) {
-      lines.add('• Breed awards (Best of Breed / Best Opposite)');
-    }
-
-    if (data.showBisPoints) {
-      lines.add('• Best in Show / Reserve in Show awards');
-    }
-
-    if (data.showFurPoints) {
-      lines.add('• Fur/Wool awards included in scoring');
-    }
+      '- Total points reflect the combined value of all placements and awards earned at this show.',
+    ];
 
     return pw.Container(
+      width: double.infinity,
       padding: const pw.EdgeInsets.all(10),
       decoration: pw.BoxDecoration(
         border: pw.Border.all(color: PdfColors.grey400),
@@ -322,10 +261,10 @@ class SweepstakesReportPdf {
           ),
           pw.SizedBox(height: 6),
           ...lines.map(
-            (l) => pw.Padding(
-              padding: const pw.EdgeInsets.only(bottom: 2),
+            (line) => pw.Padding(
+              padding: const pw.EdgeInsets.only(bottom: 3),
               child: pw.Text(
-                l,
+                line,
                 style: const pw.TextStyle(fontSize: 9),
               ),
             ),
@@ -335,72 +274,65 @@ class SweepstakesReportPdf {
     );
   }
 
-  // =====================================================
-  // RULE BASIS (ENHANCED)
-  // =====================================================
-
-  pw.Widget _buildRulesBasis(SweepstakesReportData data) {
+  pw.Widget _buildDisclaimer(SweepstakesReportData data) {
     return pw.Container(
+      width: double.infinity,
       padding: const pw.EdgeInsets.all(10),
       decoration: pw.BoxDecoration(
-        color: PdfColors.grey100,
-        border: pw.Border.all(color: PdfColors.grey400),
+        color: PdfColors.amber50,
+        border: pw.Border.all(color: PdfColors.amber700),
         borderRadius: pw.BorderRadius.circular(4),
       ),
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           pw.Text(
-            'Rule Metadata',
+            'Important',
             style: pw.TextStyle(
-              fontSize: 12,
+              fontSize: 11,
               fontWeight: pw.FontWeight.bold,
+              color: PdfColors.amber900,
             ),
           ),
-          pw.SizedBox(height: 6),
-          pw.Text('Engine: ${data.engineType}', style: pw.TextStyle(fontSize: 9)),
-          pw.Text('Source: ${data.ruleSource}', style: pw.TextStyle(fontSize: 9)),
-          pw.Text('Status: ${data.verificationStatus}', style: pw.TextStyle(fontSize: 9)),
+          pw.SizedBox(height: 4),
+          pw.Text(
+            data.disclaimer,
+            style: const pw.TextStyle(fontSize: 9),
+          ),
         ],
       ),
     );
   }
 
-  // =====================================================
-  // DISCLAIMER
-  // =====================================================
-
-  pw.Widget _buildDisclaimer(SweepstakesReportData data) {
-    return pw.Container(
-      padding: const pw.EdgeInsets.all(10),
-      decoration: pw.BoxDecoration(
-        color: PdfColors.amber50,
-        border: pw.Border.all(color: PdfColors.amber700),
-      ),
-      child: pw.Text(
-        data.disclaimer,
-        style: const pw.TextStyle(fontSize: 9),
-      ),
-    );
-  }
-
-  // =====================================================
-  // FOOTER
-  // =====================================================
-
   pw.Widget _footer(pw.Context context) {
-    return pw.Row(
-      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-      children: [
-        pw.Text(
-          'Generated by RingMaster Show',
-          style: const pw.TextStyle(fontSize: 7),
-        ),
-        pw.Text(
-          'Page ${context.pageNumber} of ${context.pagesCount}',
-          style: const pw.TextStyle(fontSize: 7),
-        ),
-      ],
+    return pw.Container(
+      padding: const pw.EdgeInsets.only(top: 6),
+      child: pw.Column(
+        mainAxisSize: pw.MainAxisSize.min,
+        children: [
+          pw.Divider(thickness: 0.5),
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text(
+                'Generated by RingMaster Show',
+                style: pw.TextStyle(
+                  fontSize: 7,
+                  color: PdfColors.grey700,
+                  fontStyle: pw.FontStyle.italic,
+                ),
+              ),
+              pw.Text(
+                'Page ${context.pageNumber} of ${context.pagesCount}',
+                style: const pw.TextStyle(
+                  fontSize: 7,
+                  color: PdfColors.grey700,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 

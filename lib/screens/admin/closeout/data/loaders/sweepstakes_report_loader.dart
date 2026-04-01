@@ -13,6 +13,7 @@ class SweepstakesReportLoader {
     final showId = request.showId;
     final breedName = (request.breedName ?? '').trim();
     final scope = (request.scope ?? '').trim().toUpperCase();
+    final showLetter = (request.showLetter ?? '').trim().toUpperCase();
 
     if (breedName.isEmpty) {
       throw Exception('Sweepstakes report requires breedName.');
@@ -22,12 +23,17 @@ class SweepstakesReportLoader {
       throw Exception('Sweepstakes report requires scope.');
     }
 
+    if (showLetter.isEmpty) {
+      throw Exception('Sweepstakes report requires showLetter.');
+    }
+
     final rowsResponse = await repo.supabase
         .from('v_sweepstakes_pdf_rows')
         .select()
         .eq('show_id', showId)
         .eq('breed_name', breedName)
         .eq('scope', scope)
+        .eq('show_letter', showLetter)
         .order('rank', ascending: true);
 
     final rows = (rowsResponse as List)
@@ -36,24 +42,25 @@ class SweepstakesReportLoader {
 
     if (rows.isEmpty) {
       throw Exception(
-        'No sweepstakes results found for breed "$breedName" in scope "$scope".',
+        'No sweepstakes results found for breed "$breedName" in scope "$scope" and show letter "$showLetter".',
       );
     }
 
     final headerResponse = await repo.supabase
         .from('v_sweepstakes_pdf_rows')
         .select(
-          'show_id, breed_name, scope, rule_source, verification_status, engine_type',
+          'show_id, breed_name, scope, show_letter, rule_source, verification_status, engine_type',
         )
         .eq('show_id', showId)
         .eq('breed_name', breedName)
         .eq('scope', scope)
+        .eq('show_letter', showLetter)
         .limit(1)
         .maybeSingle();
 
     if (headerResponse == null) {
       throw Exception(
-        'No sweepstakes header data found for breed "$breedName" in scope "$scope".',
+        'No sweepstakes header data found for breed "$breedName" in scope "$scope" and show letter "$showLetter".',
       );
     }
 
@@ -63,6 +70,7 @@ class SweepstakesReportLoader {
       showId: (header['show_id'] ?? '').toString(),
       breedName: (header['breed_name'] ?? '').toString(),
       scope: (header['scope'] ?? '').toString(),
+      showLetter: (header['show_letter'] ?? '').toString(),
       ruleSource: (header['rule_source'] ?? '').toString(),
       verificationStatus: (header['verification_status'] ?? '').toString(),
       engineType: (header['engine_type'] ?? '').toString(),

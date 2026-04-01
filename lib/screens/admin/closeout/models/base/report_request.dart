@@ -1,3 +1,5 @@
+// lib/screens/admin/closeout/models/base/report_request.dart
+
 class ReportRequest {
   ReportRequest({
     required this.showId,
@@ -6,6 +8,7 @@ class ReportRequest {
     this.artifactId,
     this.breedName,
     this.scope,
+    this.showLetter,
     this.showName,
     this.showDate,
     this.sanctionNumber,
@@ -18,6 +21,7 @@ class ReportRequest {
 
   final String? breedName;
   final String? scope;
+  final String? showLetter;
   final String? showName;
   final String? showDate;
   final String? sanctionNumber;
@@ -30,6 +34,7 @@ class ReportRequest {
       'artifactId': artifactId,
       'breedName': breedName,
       'scope': scope,
+      'showLetter': showLetter,
       'showName': showName,
       'showDate': showDate,
       'sanctionNumber': sanctionNumber,
@@ -43,6 +48,7 @@ class ReportRequest {
     String? artifactId,
     String? breedName,
     String? scope,
+    String? showLetter,
     String? showName,
     String? showDate,
     String? sanctionNumber,
@@ -54,6 +60,7 @@ class ReportRequest {
       artifactId: artifactId ?? this.artifactId,
       breedName: breedName ?? this.breedName,
       scope: scope ?? this.scope,
+      showLetter: showLetter ?? this.showLetter,
       showName: showName ?? this.showName,
       showDate: showDate ?? this.showDate,
       sanctionNumber: sanctionNumber ?? this.sanctionNumber,
