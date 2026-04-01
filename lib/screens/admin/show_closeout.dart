@@ -18,6 +18,8 @@ import 'closeout/data/loaders/legs_report_loader.dart';
 import 'closeout/pdf/builders/legs_report_pdf.dart';
 import 'closeout/data/loaders/exhibitor_report_loader.dart';
 import 'closeout/pdf/builders/exhibitor_report_pdf.dart';
+import 'closeout/data/loaders/sweepstakes_report_loader.dart';
+import 'closeout/pdf/builders/sweepstakes_report_pdf.dart';
 
 import '../../../utils/date_time_utils.dart';
 
@@ -71,6 +73,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     'exh_total_points',
     'fur_points',
     'newsletter_show_report',
+    'sweepstakes_report',
   };
 
   static const Set<String> _arbaReportKeys = {
@@ -86,6 +89,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     'exh_by_breed',
     'details_by_breed',
     'fur_points',
+    'sweepstakes_report',
     'cavy_points',
     'commercial_points',
     'judge_report',
@@ -232,7 +236,35 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     }
   }
 
-  Future<void> _generateReportByName(String reportName) async {
+  Future<String> _loadArbaSanctionNumber(String showId) async {
+    try {
+      final row = await supabase
+          .from('show_sanctions')
+          .select('sanction_number')
+          .eq('show_id', showId)
+          .eq('sanctioning_body', 'ARBA')
+          .limit(1)
+          .maybeSingle();
+
+      if (row == null) return '';
+      return (row['sanction_number'] ?? '').toString().trim();
+    } catch (_) {
+      return '';
+    }
+  }
+
+  String _formatShowDate(dynamic rawDate) {
+    if (rawDate == null) return '';
+    final parsed = DateTime.tryParse(rawDate.toString());
+    if (parsed == null) return rawDate.toString();
+    return '${parsed.month.toString().padLeft(2, '0')}-${parsed.day.toString().padLeft(2, '0')}-${parsed.year}';
+  }
+
+  Future<void> _generateReportByName(
+    String reportName, {
+    String? breedName,
+    String? scope,
+  }) async {
     try {
       setState(() {
         _generatingReport = true;
@@ -246,11 +278,17 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       final repository = CloseoutRepository(supabase);
       final arbaLoader = ArbaReportLoader(repository);
       final arbaBuilder = ArbaReportPdfBuilder();
+      final showBasics = await repository.loadShowBasics(widget.showId);
+      final showDate = _formatShowDate(showBasics['start_date']);
+      final sanctionNumber = await _loadArbaSanctionNumber(widget.showId);
 
       final legsLoader = LegsReportLoader(repository);
       await _ensureLegsBuilder();
 
       final exhibitorLoader = ExhibitorReportLoader(repository);
+
+      final sweepstakesLoader = SweepstakesReportLoader(repository);
+      final sweepstakesBuilder = SweepstakesReportPdf();
 
       final registry = ReportRegistry(
         arbaLoader: arbaLoader,
@@ -259,6 +297,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         legsBuilder: _legsBuilder!,
         exhibitorLoader: exhibitorLoader,
         exhibitorBuilder: _exhibitorBuilder!,
+        sweepstakesLoader: sweepstakesLoader,
+        sweepstakesBuilder: sweepstakesBuilder,
       );
 
       final engine = ReportEngine(registry);
@@ -277,11 +317,22 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
             orElse: () => null,
           );
 
+      if (artifact == null) {
+        throw Exception(
+          'No record exists for report "$reportName".',
+        );
+      }
+
       await runner.generateSingleReport(
         showId: widget.showId,
         finalizeRunId: _dashboard?.latestFinalize.id ?? 'manual-run',
         reportName: reportName,
-        artifactId: artifact?.id ?? '${reportName}_manual',
+        artifactId: artifact.id,
+        breedName: breedName,
+        scope: scope,
+        showName: widget.showName,
+        showDate: showDate,
+        sanctionNumber: sanctionNumber,
       );
 
       await _loadData();
@@ -492,15 +543,25 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                           ),
                           const SizedBox(height: 16),
                           _ReportActionsCard(
+                            showId: widget.showId,
                             reports: _dashboard?.reports ??
                                 const <ReportArtifactSummary>[],
                             groupedReportNames: {
                               'arba': _reportNamesForGroup('arba'),
                               'exhibitor': _reportNamesForGroup('exhibitor'),
-                              //'club': _reportNamesForGroup('club'), 🧪
+                              'club': _reportNamesForGroup('club'),
                               //'other': _reportNamesForGroup('other'),🧪
                             },
-                            onGenerate: _generateReportByName,
+                            onGenerate: (
+                              reportName, {
+                              String? breedName,
+                              String? scope,
+                            }) =>
+                                _generateReportByName(
+                                  reportName,
+                                  breedName: breedName,
+                                  scope: scope,
+                                ),
                             onDownload: _downloadReportByName,
                             onEmail: _emailReportByName,
                             loading: _generatingReport,
@@ -754,12 +815,18 @@ class _ArbaCloseoutCard extends StatelessWidget {
 class _ReportActionsCard extends StatefulWidget {
   final List<ReportArtifactSummary> reports;
   final Map<String, List<String>> groupedReportNames;
-  final Future<void> Function(String reportName) onGenerate;
+  final Future<void> Function(
+    String reportName, {
+    String? breedName,
+    String? scope,
+  }) onGenerate;
   final Future<void> Function(String reportName) onDownload;
   final Future<void> Function(String reportName) onEmail;
   final bool loading;
+  final String showId;
 
   const _ReportActionsCard({
+    required this.showId,
     required this.reports,
     required this.groupedReportNames,
     required this.onGenerate,
@@ -775,6 +842,8 @@ class _ReportActionsCard extends StatefulWidget {
 class _ReportActionsCardState extends State<_ReportActionsCard> {
   String _selectedGroup = 'arba';
   String? _selectedReportName = 'arba_report';
+  final TextEditingController _breedController = TextEditingController();
+  String _selectedScope = 'OPEN';
 
   static const Map<String, String> _groupLabels = {
     'arba': 'ARBA Reports',
@@ -782,6 +851,9 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
     'club': 'Club Reports',
     'other': 'Other Reports',
   };
+
+  List<String> _availableBreeds = [];
+  bool _loadingBreeds = false;
 
   List<String> get _currentReports =>
       widget.groupedReportNames[_selectedGroup] ?? const [];
@@ -811,6 +883,87 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
         artifact.artifactStatus == 'generated' &&
         (artifact.storageBucket?.isNotEmpty == true) &&
         (artifact.storagePath?.isNotEmpty == true);
+  }
+
+  Future<void> _loadBreedsForSweepstakes() async {
+    if (_loadingBreeds) return;
+
+    setState(() {
+      _loadingBreeds = true;
+    });
+
+    try {
+      final kind = _selectedScope == 'OPEN' ? 'open' : 'youth';
+
+      final sections = await supabase
+          .from('show_sections')
+          .select('id, display_name, kind, sort_order')
+          .eq('show_id', widget.showId)
+          .eq('kind', kind)
+          .eq('is_enabled', true)
+          .order('sort_order');
+
+      final breedSet = <String>{};
+
+      for (final section in (sections as List)) {
+        final sectionId = section['id'].toString();
+
+        final rows = await supabase.rpc(
+          'report_results_entry_rows',
+          params: {
+            'p_show_id': widget.showId,
+            'p_section_id': sectionId,
+          },
+        );
+
+        for (final row in (rows as List)) {
+          final breed = (row['breed_name'] ?? '').toString().trim();
+          if (breed.isNotEmpty) {
+            breedSet.add(breed);
+          }
+        }
+      }
+
+      final breeds = breedSet.toList()..sort();
+
+      if (!mounted) return;
+
+      setState(() {
+        _availableBreeds = breeds;
+
+        if (breeds.isNotEmpty) {
+          final current = _breedController.text.trim();
+          if (current.isEmpty || !breeds.contains(current)) {
+            _breedController.text = breeds.first;
+          }
+        } else {
+          _breedController.clear();
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _availableBreeds = [];
+        _breedController.clear();
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed loading breeds: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingBreeds = false;
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _breedController.dispose();
+    super.dispose();
   }
 
   @override
@@ -850,15 +1003,20 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
                 ),
               )
               .toList(),
-          onChanged: (value) {
+          onChanged: (value) async {
             if (value == null) return;
 
             final reports = widget.groupedReportNames[value] ?? const [];
+            final nextReport = reports.isEmpty ? null : reports.first;
 
             setState(() {
               _selectedGroup = value;
-              _selectedReportName = reports.isEmpty ? null : reports.first;
+              _selectedReportName = nextReport;
             });
+
+            if (nextReport == 'sweepstakes_report') {
+              await _loadBreedsForSweepstakes();
+            }
           },
         ),
         const SizedBox(height: 12),
@@ -880,12 +1038,75 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
               .toList(),
           onChanged: _currentReports.isEmpty
               ? null
-              : (value) {
+              : (value) async {
                   setState(() {
                     _selectedReportName = value;
                   });
+
+                  if (value == 'sweepstakes_report') {
+                    await _loadBreedsForSweepstakes();
+                  }
                 },
         ),
+
+        if (_selectedReportName == 'sweepstakes_report') ...[
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            initialValue: _availableBreeds.contains(_breedController.text.trim())
+                ? _breedController.text.trim()
+                : (_availableBreeds.isNotEmpty ? _availableBreeds.first : null),
+            decoration: InputDecoration(
+              labelText: 'Breed Name',
+              border: const OutlineInputBorder(),
+              suffixIcon: _loadingBreeds
+                  ? const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : null,
+            ),
+            items: _availableBreeds
+                .map(
+                  (breed) => DropdownMenuItem<String>(
+                    value: breed,
+                    child: Text(breed),
+                  ),
+                )
+                .toList(),
+            onChanged: _loadingBreeds || _availableBreeds.isEmpty
+                ? null
+                : (value) {
+                    if (value == null) return;
+                    setState(() {
+                      _breedController.text = value;
+                    });
+                  },
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            initialValue: _selectedScope,
+            decoration: const InputDecoration(
+              labelText: 'Scope',
+              border: OutlineInputBorder(),
+            ),
+            items: const [
+              DropdownMenuItem(value: 'OPEN', child: Text('Open')),
+              DropdownMenuItem(value: 'YOUTH', child: Text('Youth')),
+            ],
+            onChanged: (value) async {
+              if (value == null) return;
+              setState(() {
+                _selectedScope = value;
+              });
+              await _loadBreedsForSweepstakes();
+            },
+          ),
+        ],
+
         const SizedBox(height: 16),
         _ReportInfoTile(
           reportName: _selectedReportName == null
@@ -905,9 +1126,20 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
               ),
-              onPressed: widget.loading || _selectedReportName == null
+              onPressed: widget.loading ||
+                      _selectedReportName == null ||
+                      (_selectedReportName == 'sweepstakes_report' &&
+                          _breedController.text.trim().isEmpty)
                   ? null
-                  : () => widget.onGenerate(_selectedReportName!),
+                  : () => widget.onGenerate(
+                        _selectedReportName!,
+                        breedName: _selectedReportName == 'sweepstakes_report'
+                            ? _breedController.text.trim()
+                            : null,
+                        scope: _selectedReportName == 'sweepstakes_report'
+                            ? _selectedScope
+                            : null,
+                      ),
               icon: widget.loading
                   ? const SizedBox(
                       width: 16,
@@ -1077,6 +1309,8 @@ String _friendlyReportName(String? key) {
       return 'Class Standings';
     case 'fur_points':
       return 'Fur Points';
+    case 'sweepstakes_report':
+      return 'Sweepstakes Report';
     case 'cavy_points':
       return 'Cavy Points';
     case 'commercial_points':

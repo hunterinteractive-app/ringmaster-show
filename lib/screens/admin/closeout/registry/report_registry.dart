@@ -1,14 +1,17 @@
 import '../data/loaders/arba_report_loader.dart';
 import '../data/loaders/exhibitor_report_loader.dart';
 import '../data/loaders/legs_report_loader.dart';
+import '../data/loaders/sweepstakes_report_loader.dart';
 
 import '../models/arba/arba_report_data.dart';
 import '../models/exhibitor/exhibitor_report_data.dart';
 import '../models/legs/legs_certificate_data.dart';
+import '../models/clubs/sweepstakes_report_data.dart';
 
 import '../pdf/builders/arba_report_pdf.dart';
 import '../pdf/builders/exhibitor_report_pdf.dart';
 import '../pdf/builders/legs_report_pdf.dart';
+import '../pdf/builders/sweepstakes_report_pdf.dart';
 
 import 'report_definition.dart';
 
@@ -22,6 +25,8 @@ class ReportRegistry {
     required LegsReportPdfBuilder legsBuilder,
     required ExhibitorReportLoader exhibitorLoader,
     required ExhibitorReportPdfBuilder exhibitorBuilder,
+    required SweepstakesReportLoader sweepstakesLoader,
+    required SweepstakesReportPdf sweepstakesBuilder,
   }) : definitions = {
           'arba_report': ReportDefinition(
             reportName: 'arba_report',
@@ -47,6 +52,16 @@ class ReportRegistry {
             builder: (data, req) async =>
                 await exhibitorBuilder.buildFile(
                   data as List<ExhibitorReportData>,
+                  req,
+                ),
+          ),
+          'sweepstakes_report': ReportDefinition(
+            reportName: 'sweepstakes_report',
+            outputType: 'pdf',
+            loader: (req) async => await sweepstakesLoader.load(req),
+            builder: (data, req) async =>
+                await sweepstakesBuilder.buildFile(
+                  data as SweepstakesReportData,
                   req,
                 ),
           ),

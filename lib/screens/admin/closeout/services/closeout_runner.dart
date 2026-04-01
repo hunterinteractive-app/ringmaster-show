@@ -16,12 +16,22 @@ class CloseoutRunner {
     required String finalizeRunId,
     required String reportName,
     required String artifactId,
+    String? breedName,
+    String? scope,
+    String? showName,
+    String? showDate,
+    String? sanctionNumber,
   }) async {
     final request = ReportRequest(
       showId: showId,
       finalizeRunId: finalizeRunId,
       reportName: reportName,
       artifactId: artifactId,
+      breedName: breedName,
+      scope: scope,
+      showName: showName,
+      showDate: showDate,
+      sanctionNumber: sanctionNumber,
     );
 
     try {
