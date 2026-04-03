@@ -122,38 +122,55 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
         .from('judge_assignments')
         .select(
           'id,judge_id,assignment_label,'
-          'judges(id,display_name,name,first_name,last_name,arba_judge_number,judge_type,is_active)',
+          'judges(id,display_name,name,first_name,last_name,judge_type,is_active)',
         )
         .eq('show_id', widget.showId);
 
     final result = <Map<String, dynamic>>[];
 
-    for (final row in (rows as List)) {
-      final map = row as Map<String, dynamic>;
+    for (final raw in (rows as List)) {
+      final map = Map<String, dynamic>.from(raw as Map);
       final judge = map['judges'];
 
-      if (judge is Map) {
-        final displayName = (judge['display_name'] ?? '').toString().trim();
-        final name = (judge['name'] ?? '').toString().trim();
-        final first = (judge['first_name'] ?? '').toString().trim();
-        final last = (judge['last_name'] ?? '').toString().trim();
+      final assignmentId = (map['id'] ?? '').toString().trim();
+      final masterJudgeId = (map['judge_id'] ?? '').toString().trim();
 
-        final label = displayName.isNotEmpty
+      // We need a real judge id to save into entries.judged_by_show_judge_id.
+      if (masterJudgeId.isEmpty) continue;
+
+      String label = '';
+
+      if (judge is Map) {
+        final judgeMap = Map<String, dynamic>.from(judge);
+        final displayName = (judgeMap['display_name'] ?? '').toString().trim();
+        final name = (judgeMap['name'] ?? '').toString().trim();
+        final first = (judgeMap['first_name'] ?? '').toString().trim();
+        final last = (judgeMap['last_name'] ?? '').toString().trim();
+        final arbaNumber =
+            (judgeMap['arba_judge_number'] ?? '').toString().trim();
+
+        final baseName = displayName.isNotEmpty
             ? displayName
             : name.isNotEmpty
                 ? name
-                : [first, last].where((x) => x.isNotEmpty).join(' ');
+                : [first, last].where((x) => x.isNotEmpty).join(' ').trim();
 
-        result.add({
-          'id': (judge['id'] ?? map['judge_id']).toString(),
-          'name': label.isEmpty ? (map['judge_id'] ?? '').toString() : label,
-        });
-      } else {
-        final id = (map['judge_id'] ?? '').toString();
-        if (id.isNotEmpty) {
-          result.add({'id': id, 'name': id});
+        label = baseName.isNotEmpty ? baseName : masterJudgeId;
+
+        if (arbaNumber.isNotEmpty) {
+          label = '$label (#$arbaNumber)';
         }
+      } else {
+        label = (map['assignment_label'] ?? '').toString().trim();
+        if (label.isEmpty) label = masterJudgeId;
       }
+
+      result.add({
+        'id': masterJudgeId,           // THIS is what gets saved
+        'judge_id': masterJudgeId,     // same saved id
+        'assignment_id': assignmentId, // only for fallback matching
+        'name': label,
+      });
     }
 
     result.sort((a, b) {
@@ -336,10 +353,22 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
         final id = (e['entry_id'] ?? '').toString();
         e['_awards'] = awardsByEntryId[id] ?? <String>[];
 
-        // normalize old widget code expectations
         e['id'] ??= e['entry_id'];
         e['breed'] ??= e['breed_name'];
         e['variety'] ??= e['variety_name'];
+
+        final normalizedGroup = (
+          e['group_name'] ??
+          e['group_display_name'] ??
+          e['group_label'] ??
+          e['group'] ??
+          e['group_code']
+        )?.toString().trim();
+
+        e['group_name'] =
+            (normalizedGroup == null || normalizedGroup.isEmpty)
+                ? null
+                : normalizedGroup;
       }
 
       return entries;
@@ -577,11 +606,19 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
 
   String _judgeNameById(String? judgeId) {
     if (judgeId == null || judgeId.isEmpty) return '';
+
     for (final j in _judges) {
-      if ((j['id'] ?? '').toString() == judgeId) {
-        return (j['name'] ?? '').toString();
+      final savedJudgeId = (j['id'] ?? '').toString().trim();
+      final masterJudgeId = (j['judge_id'] ?? '').toString().trim();
+      final assignmentId = (j['assignment_id'] ?? '').toString().trim();
+
+      if (savedJudgeId == judgeId ||
+          masterJudgeId == judgeId ||
+          assignmentId == judgeId) {
+        return (j['name'] ?? '').toString().trim();
       }
     }
+
     return '';
   }
 
@@ -640,7 +677,16 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
   String breed(Map<String, dynamic> e) => (e['breed'] ?? '').toString().trim();
   String variety(Map<String, dynamic> e) => (e['variety'] ?? '').toString().trim();
   String sectionId(Map<String, dynamic> e) => (e['section_id'] ?? '').toString().trim();
-  String groupName(Map<String, dynamic> e) => (e['group_name'] ?? '').toString().trim();
+  String groupName(Map<String, dynamic> e) {
+    return (
+      e['group_name'] ??
+      e['group_display_name'] ??
+      e['group_label'] ??
+      e['group'] ??
+      e['group_code'] ??
+      ''
+    ).toString().trim();
+  }
   List<String> awards(Map<String, dynamic> e) =>
       ((e['_awards'] as List?) ?? const []).map((x) => x.toString()).toList();
 
@@ -878,6 +924,14 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     final breed = (e['breed'] ?? '').toString().trim();
     final variety = (e['variety'] ?? '').toString().trim();
     final groupName = (e['group_name'] ?? '').toString().trim();
+
+    // 🚨 IMPORTANT: skip grouping fallback if breed uses groups
+    if (groupName.isEmpty && e['uses_group_awards'] == true) {
+      // skip this entry OR assign to a special bucket only if ALL are empty
+      
+    }
+
+    final key = groupName.isEmpty ? '(No Group)' : groupName;
 
     return [
       tattoo.isEmpty ? '(No ear #)' : tattoo,
@@ -1326,7 +1380,15 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
   Map<String, List<Map<String, dynamic>>> _groupByGroupName() {
     final out = <String, List<Map<String, dynamic>>>{};
     for (final e in _entries) {
-      final groupName = (e['group_name'] ?? '').toString().trim();
+      final groupName = (
+        e['group_name'] ??
+        e['group_display_name'] ??
+        e['group_label'] ??
+        e['group'] ??
+        e['group_code'] ??
+        ''
+      ).toString().trim();
+
       final key = groupName.isEmpty ? '(Unknown Group)' : groupName;
       out.putIfAbsent(key, () => <Map<String, dynamic>>[]);
       out[key]!.add(e);
@@ -1336,11 +1398,19 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
 
   String _judgeNameById(String? judgeId) {
     if (judgeId == null || judgeId.isEmpty) return '';
+
     for (final j in widget.judges) {
-      if ((j['id'] ?? '').toString() == judgeId) {
-        return (j['name'] ?? '').toString();
+      final savedJudgeId = (j['id'] ?? '').toString().trim();
+      final masterJudgeId = (j['judge_id'] ?? '').toString().trim();
+      final assignmentId = (j['assignment_id'] ?? '').toString().trim();
+
+      if (savedJudgeId == judgeId ||
+          masterJudgeId == judgeId ||
+          assignmentId == judgeId) {
+        return (j['name'] ?? '').toString().trim();
       }
     }
+
     return '';
   }
 
@@ -1637,11 +1707,19 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
 
   String _judgeNameById(String? judgeId) {
     if (judgeId == null || judgeId.isEmpty) return '';
+
     for (final j in widget.judges) {
-      if ((j['id'] ?? '').toString() == judgeId) {
-        return (j['name'] ?? '').toString();
+      final savedJudgeId = (j['id'] ?? '').toString().trim();
+      final masterJudgeId = (j['judge_id'] ?? '').toString().trim();
+      final assignmentId = (j['assignment_id'] ?? '').toString().trim();
+
+      if (savedJudgeId == judgeId ||
+          masterJudgeId == judgeId ||
+          assignmentId == judgeId) {
+        return (j['name'] ?? '').toString().trim();
       }
     }
+
     return '';
   }
 
@@ -1963,11 +2041,19 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
 
   String _judgeNameById(String? judgeId) {
     if (judgeId == null || judgeId.isEmpty) return '';
+
     for (final j in widget.judges) {
-      if ((j['id'] ?? '').toString() == judgeId) {
-        return (j['name'] ?? '').toString();
+      final savedJudgeId = (j['id'] ?? '').toString().trim();
+      final masterJudgeId = (j['judge_id'] ?? '').toString().trim();
+      final assignmentId = (j['assignment_id'] ?? '').toString().trim();
+
+      if (savedJudgeId == judgeId ||
+          masterJudgeId == judgeId ||
+          assignmentId == judgeId) {
+        return (j['name'] ?? '').toString().trim();
       }
     }
+
     return '';
   }
 
@@ -2225,7 +2311,7 @@ class _ResultsAnimalsScreenState extends State<_ResultsAnimalsScreen> {
   void initState() {
     super.initState();
     _entries = [...widget.entries];
-    _currentJudgeId = widget.initialJudgeId;
+    _currentJudgeId = _normalizeJudgeId(widget.initialJudgeId);
     _sortEntries();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -2256,6 +2342,26 @@ class _ResultsAnimalsScreenState extends State<_ResultsAnimalsScreen> {
     }
   }
 
+  String? _normalizeJudgeId(String? storedJudgeId) {
+    if (storedJudgeId == null || storedJudgeId.trim().isEmpty) return null;
+
+    final raw = storedJudgeId.trim();
+
+    for (final j in widget.judges) {
+      final savedJudgeId = (j['id'] ?? '').toString().trim();
+      final masterJudgeId = (j['judge_id'] ?? '').toString().trim();
+      final assignmentId = (j['assignment_id'] ?? '').toString().trim();
+
+      if (raw == savedJudgeId ||
+          raw == masterJudgeId ||
+          raw == assignmentId) {
+        return savedJudgeId;
+      }
+    }
+
+    return raw;
+  }
+
   String _exhibitorName(Map<String, dynamic> e) {
     final label = (e['exhibitor_label'] ?? '').toString().trim();
     if (label.isNotEmpty) return label;
@@ -2264,11 +2370,19 @@ class _ResultsAnimalsScreenState extends State<_ResultsAnimalsScreen> {
 
   String _judgeNameById(String? judgeId) {
     if (judgeId == null || judgeId.isEmpty) return '';
+
     for (final j in widget.judges) {
-      if ((j['id'] ?? '').toString() == judgeId) {
-        return (j['name'] ?? '').toString();
+      final savedJudgeId = (j['id'] ?? '').toString().trim();
+      final masterJudgeId = (j['judge_id'] ?? '').toString().trim();
+      final assignmentId = (j['assignment_id'] ?? '').toString().trim();
+
+      if (savedJudgeId == judgeId ||
+          masterJudgeId == judgeId ||
+          assignmentId == judgeId) {
+        return (j['name'] ?? '').toString().trim();
       }
     }
+
     return '';
   }
 
@@ -2300,6 +2414,15 @@ class _ResultsAnimalsScreenState extends State<_ResultsAnimalsScreen> {
       return copy;
     }).toList();
 
+    for (final id in currentIds) {
+      final found = refreshed.any(
+        (e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim() == id,
+      );
+      if (!found) {
+        debugPrint('Warning: updated entry $id but could not re-read row.');
+      }
+    }
+
     final awardRows = await supabase
         .from('entry_awards')
         .select('entry_id,award_code')
@@ -2326,6 +2449,8 @@ class _ResultsAnimalsScreenState extends State<_ResultsAnimalsScreen> {
     final judgeIds = _entries
         .map((e) => (e['judged_by_show_judge_id'] ?? '').toString().trim())
         .where((x) => x.isNotEmpty)
+        .map(_normalizeJudgeId)
+        .whereType<String>()
         .toSet();
 
     _currentJudgeId = judgeIds.length == 1 ? judgeIds.first : null;
@@ -2686,9 +2811,25 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
     _isShown = widget.entry['is_shown'] != false;
     _isDisqualified = widget.entry['is_disqualified'] == true;
 
-    _judgeId = (widget.entry['judged_by_show_judge_id'] ?? '').toString().trim();
-    if (_judgeId != null && _judgeId!.isEmpty) {
+    final storedJudgeId =
+        (widget.entry['judged_by_show_judge_id'] ?? '').toString().trim();
+
+    if (storedJudgeId.isEmpty) {
       _judgeId = null;
+    } else {
+      String? matched;
+
+      for (final j in widget.judges) {
+        final assignmentId = (j['id'] ?? '').toString().trim();
+        final legacyJudgeId = (j['judge_id'] ?? '').toString().trim();
+
+        if (storedJudgeId == assignmentId || storedJudgeId == legacyJudgeId) {
+          matched = assignmentId;
+          break;
+        }
+      }
+
+      _judgeId = matched ?? storedJudgeId;
     }
 
     final currentPlacement = (widget.entry['placement'] ?? '').toString().trim();
@@ -2724,7 +2865,16 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
 
   String _variety(Map<String, dynamic> e) => (e['variety'] ?? '').toString().trim();
 
-  String _groupName(Map<String, dynamic> e) => (e['group_name'] ?? '').toString().trim();
+  String _groupName(Map<String, dynamic> e) {
+    return (
+      e['group_name'] ??
+      e['group_display_name'] ??
+      e['group_label'] ??
+      e['group'] ??
+      e['group_code'] ??
+      ''
+    ).toString().trim();
+  }
 
   String _entryId(Map<String, dynamic> e) =>
     (e['entry_id'] ?? e['id'] ?? '').toString().trim();
@@ -3012,6 +3162,21 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
         throw Exception('Entry ID is missing.');
       }
 
+      final user = supabase.auth.currentUser;
+      final session = supabase.auth.currentSession;
+
+      debugPrint('SAVE DEBUG auth.currentUser.id=${user?.id}');
+      debugPrint('SAVE DEBUG auth.session.exists=${session != null}');
+      debugPrint('SAVE DEBUG entryId=$entryId');
+      debugPrint('SAVE DEBUG showId=${widget.entry['show_id'] ?? '(missing from entry row)'}');
+
+      if (user == null || session == null) {
+        throw Exception(
+          'No authenticated Supabase user/session in the app. '
+          'Reads may still work through RPC, but direct table updates will be blocked by RLS.',
+        );
+      }
+
       final scratched = _isScratched(widget.entry);
       final shouldClearPlacement = !_isShown || _isDisqualified || scratched;
 
@@ -3024,19 +3189,55 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
         return;
       }
 
+      final int? normalizedPlacement = shouldClearPlacement
+          ? null
+          : int.tryParse((_placement ?? '').trim());
+
+      String? normalizedJudgeId;
+      if (_judgeId != null && _judgeId!.trim().isNotEmpty) {
+        final rawJudgeId = _judgeId!.trim();
+
+        for (final j in widget.judges) {
+          final assignmentId = (j['id'] ?? '').toString().trim();
+          final legacyJudgeId = (j['judge_id'] ?? '').toString().trim();
+
+          if (rawJudgeId == assignmentId || rawJudgeId == legacyJudgeId) {
+            normalizedJudgeId = assignmentId;
+            break;
+          }
+        }
+
+        normalizedJudgeId ??= rawJudgeId;
+      }
+
+      final normalizedDqReason = _isDisqualified
+          ? (_dqReason.text.trim().isEmpty ? null : _dqReason.text.trim())
+          : null;
+
+      final payload = <String, dynamic>{
+        'placement': normalizedPlacement,
+        'disqualified_reason': normalizedDqReason,
+        'is_shown': _isShown,
+        'is_disqualified': _isDisqualified,
+        'judged_by_show_judge_id': normalizedJudgeId,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      };
+
+      debugPrint('SAVE DEBUG entryId=$entryId');
+      debugPrint('SAVE DEBUG payload=$payload');
+
       await supabase
           .from('entries')
-          .update({
-            'placement': shouldClearPlacement ? null : _placement,
-            'disqualified_reason': _isDisqualified
-                ? (_dqReason.text.trim().isEmpty ? null : _dqReason.text.trim())
-                : null,
-            'is_shown': _isShown,
-            'is_disqualified': _isDisqualified,
-            'judged_by_show_judge_id': _judgeId,
-            'updated_at': DateTime.now().toUtc().toIso8601String(),
-          })
+          .update(payload)
           .eq('id', entryId);
+
+      final reread = await supabase
+          .from('entries')
+          .select('id, placement, judged_by_show_judge_id, is_shown, is_disqualified, updated_at')
+          .eq('id', entryId)
+          .single();
+
+      debugPrint('SAVE DEBUG reread=$reread');
 
       await supabase
           .from('entry_awards')
@@ -3084,14 +3285,6 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
     final placementOptions = _placementOptions();
     final canPlace = !scratched && _isShown && !_isDisqualified;
     final canAward = !scratched && _isShown && !_isDisqualified;
-
-    if (!canPlace) {
-      _placement = null;
-    }
-
-    if (!canAward) {
-      _selectedAwards.clear();
-    }
 
     return Padding(
       padding: EdgeInsets.only(

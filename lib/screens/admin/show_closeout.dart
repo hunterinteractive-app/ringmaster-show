@@ -15,6 +15,7 @@ import 'package:ringmaster_show/screens/admin/closeout/registry/report_registry.
 import 'package:ringmaster_show/screens/admin/closeout/services/closeout_runner.dart';
 import 'package:ringmaster_show/screens/admin/closeout/services/report_engine.dart';
 import 'package:ringmaster_show/screens/admin/closeout/services/report_upload_service.dart';
+import 'package:ringmaster_show/services/report_email_service.dart';
 
 import 'closeout/data/loaders/legs_report_loader.dart';
 import 'closeout/pdf/builders/legs_report_pdf.dart';
@@ -55,6 +56,10 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   bool _sweepstakesIssue = false;
   bool _officialProtest = false;
   bool _arbaReportFiled = false;
+
+  bool _loadingMissingPlacements = false;
+  List<_MissingPlacementItem> _missingPlacementItems = [];
+  bool _missingPlacementsLoaded = false;
 
   bool _loading = true;
   bool _generatingReport = false;
@@ -110,6 +115,412 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       'commercial_class_points',
       'newsletter',
     ];
+
+    String _norm(String value) {
+      return value
+          .toLowerCase()
+          .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+          .trim();
+    }
+
+    String _fileNameOf(ReportArtifactSummary artifact) {
+      return (artifact.fileName ?? '').trim();
+    }
+
+    String _artifactMatchText(ReportArtifactSummary artifact) {
+      return _norm([
+        artifact.reportName,
+        artifact.fileName ?? '',
+        artifact.storagePath ?? '',
+      ].join(' '));
+    }
+
+    ReportArtifactSummary? _newestGeneratedArtifactWhere(
+      String reportName,
+      bool Function(ReportArtifactSummary artifact) test,
+    ) {
+      final matches = (_dashboard?.reports ?? const <ReportArtifactSummary>[])
+          .where((r) => r.reportName == reportName)
+          .where((r) => r.artifactStatus == 'generated')
+          .where((r) => (r.storageBucket?.isNotEmpty == true))
+          .where((r) => (r.storagePath?.isNotEmpty == true))
+          .where(test)
+          .toList()
+        ..sort((a, b) {
+          final aDt = DateTime.tryParse(a.generatedAt ?? '') ??
+              DateTime.fromMillisecondsSinceEpoch(0);
+          final bDt = DateTime.tryParse(b.generatedAt ?? '') ??
+              DateTime.fromMillisecondsSinceEpoch(0);
+          return bDt.compareTo(aDt);
+        });
+
+      return matches.isEmpty ? null : matches.first;
+    }
+
+    bool _artifactMatchesExhibitor(
+      ReportArtifactSummary artifact,
+      _ExhibitorEmailTarget exhibitor,
+    ) {
+      final hay = _artifactMatchText(artifact);
+      final exhibitorId = _norm(exhibitor.exhibitorId);
+      final exhibitorName = _norm(exhibitor.exhibitorName);
+
+      if (exhibitorId.isNotEmpty && hay.contains(exhibitorId)) return true;
+      if (exhibitorName.isNotEmpty && hay.contains(exhibitorName)) return true;
+
+      final nameParts = exhibitorName.split(' ').where((x) => x.isNotEmpty).toList();
+      if (nameParts.length >= 2) {
+        final first = nameParts.first;
+        final last = nameParts.last;
+        if (hay.contains(first) && hay.contains(last)) return true;
+      }
+
+      return false;
+    }
+
+    bool _artifactMatchesClubTarget(
+      ReportArtifactSummary artifact,
+      _ClubEmailTarget target,
+    ) {
+      final hay = _artifactMatchText(artifact);
+
+      final breed = _norm(target.breedName);
+      final scope = _norm(target.scope);
+      final showLetter = _norm(target.showLetter);
+
+      if (breed.isNotEmpty && !hay.contains(breed)) return false;
+      if (scope.isNotEmpty && !hay.contains(scope)) return false;
+      if (showLetter.isNotEmpty && showLetter != 'all' && !hay.contains(showLetter)) {
+        return false;
+      }
+
+      return true;
+    }
+
+        Future<List<_ExhibitorEmailTarget>> _loadExhibitorEmailTargets() async {
+          final rows = await supabase
+              .from('entries')
+              .select('''
+                exhibitor_id,
+                exhibitors (
+                  id,
+                  display_name,
+                  first_name,
+                  last_name,
+                  email
+                )
+              ''')
+              .eq('show_id', widget.showId);
+
+          final out = <String, _ExhibitorEmailTarget>{};
+
+          for (final raw in (rows as List)) {
+            final row = Map<String, dynamic>.from(raw as Map);
+            final exhibitorId = (row['exhibitor_id'] ?? '').toString().trim();
+            final exhibitor = row['exhibitors'];
+
+            if (exhibitorId.isEmpty || exhibitor is! Map) continue;
+
+            final ex = Map<String, dynamic>.from(exhibitor);
+            final email = (ex['email'] ?? '').toString().trim();
+            if (email.isEmpty) continue;
+
+            final displayName = (ex['display_name'] ?? '').toString().trim();
+            final first = (ex['first_name'] ?? '').toString().trim();
+            final last = (ex['last_name'] ?? '').toString().trim();
+
+            final exhibitorName = displayName.isNotEmpty
+                ? displayName
+                : [first, last].where((x) => x.isNotEmpty).join(' ').trim();
+
+            if (exhibitorName.isEmpty) continue;
+
+            out[exhibitorId] = _ExhibitorEmailTarget(
+              exhibitorId: exhibitorId,
+              exhibitorName: exhibitorName,
+              email: email,
+            );
+          }
+
+          final list = out.values.toList()
+            ..sort((a, b) => a.exhibitorName.toLowerCase().compareTo(
+                  b.exhibitorName.toLowerCase(),
+                ));
+
+          return list;
+        }
+
+    Future<List<_ClubEmailTarget>> _loadClubEmailTargets() async {
+      // IMPORTANT:
+      // Adjust these selected field names if your show_sanctions table uses different names.
+      final rows = await supabase
+          .from('show_sanctions')
+          .select('''
+            club_name,
+            breed_name,
+            contact_email,
+            sanctioning_body,
+            section_id,
+            show_sections!inner (
+              id,
+              kind,
+              letter
+            )
+          ''')
+          .eq('show_id', widget.showId);
+
+      final out = <String, _ClubEmailTarget>{};
+
+      for (final raw in (rows as List)) {
+        final row = Map<String, dynamic>.from(raw as Map);
+
+        final sanctioningBody =
+            (row['sanctioning_body'] ?? '').toString().trim().toUpperCase();
+
+        // Skip ARBA here. This button is for breed/club reports.
+        if (sanctioningBody == 'ARBA') continue;
+
+        final clubName = (row['club_name'] ?? '').toString().trim();
+        final breedName = (row['breed_name'] ?? '').toString().trim();
+        final email = (row['contact_email'] ?? '').toString().trim();
+
+        final section = row['show_sections'] is Map
+            ? Map<String, dynamic>.from(row['show_sections'] as Map)
+            : <String, dynamic>{};
+
+        final scope = (section['kind'] ?? '').toString().trim().toUpperCase();
+        final showLetter = (section['letter'] ?? '').toString().trim().toUpperCase();
+
+        if (clubName.isEmpty ||
+            breedName.isEmpty ||
+            scope.isEmpty ||
+            showLetter.isEmpty ||
+            email.isEmpty) {
+          continue;
+        }
+
+        final key = '$clubName|$breedName|$scope|$showLetter|$email';
+
+        out[key] = _ClubEmailTarget(
+          clubName: clubName,
+          breedName: breedName,
+          scope: scope,
+          showLetter: showLetter,
+          email: email,
+        );
+      }
+
+      final list = out.values.toList()
+        ..sort((a, b) {
+          final clubCmp =
+              a.clubName.toLowerCase().compareTo(b.clubName.toLowerCase());
+          if (clubCmp != 0) return clubCmp;
+
+          final breedCmp =
+              a.breedName.toLowerCase().compareTo(b.breedName.toLowerCase());
+          if (breedCmp != 0) return breedCmp;
+
+          final scopeCmp = a.scope.compareTo(b.scope);
+          if (scopeCmp != 0) return scopeCmp;
+
+          return a.showLetter.compareTo(b.showLetter);
+        });
+
+      return list;
+    }
+
+    Future<void> _loadMissingPlacements() async {
+      if (_loadingMissingPlacements) return;
+
+      setState(() {
+        _loadingMissingPlacements = true;
+      });
+
+      try {
+        final rows = await supabase.rpc(
+          'report_results_entry_rows',
+          params: {
+            'p_show_id': widget.showId,
+            'p_section_id': null,
+            'p_show_letter': null,
+          },
+        );
+
+        final items = <_MissingPlacementItem>[];
+
+        for (final raw in (rows as List)) {
+          final row = Map<String, dynamic>.from(raw as Map);
+
+          final scratchedAt = (row['scratched_at'] ?? '').toString().trim();
+          final isShown = row['is_shown'] != false;
+          final isDisqualified = row['is_disqualified'] == true;
+          final placement = (row['placement'] ?? '').toString().trim();
+
+          final isEligibleForPlacement =
+              scratchedAt.isEmpty && isShown && !isDisqualified;
+
+          if (!isEligibleForPlacement) continue;
+          if (placement.isNotEmpty) continue;
+
+          items.add(
+            _MissingPlacementItem(
+              entryId: (row['entry_id'] ?? '').toString(),
+              sectionLabel: (row['section_label'] ?? 'Section').toString().trim(),
+              breedName: (row['breed_name'] ?? '').toString().trim(),
+              groupName: (row['group_name'] ?? '').toString().trim().isEmpty
+                  ? null
+                  : (row['group_name'] ?? '').toString().trim(),
+              varietyName: (row['variety_name'] ?? '').toString().trim().isEmpty
+                  ? null
+                  : (row['variety_name'] ?? '').toString().trim(),
+              className: (row['class_name'] ?? '').toString().trim(),
+              sex: (row['sex'] ?? '').toString().trim(),
+              tattoo: (row['tattoo'] ?? '').toString().trim(),
+              exhibitorLabel: (row['exhibitor_label'] ?? '').toString().trim(),
+            ),
+          );
+        }
+
+        items.sort((a, b) {
+          final sectionCmp =
+              a.sectionLabel.toLowerCase().compareTo(b.sectionLabel.toLowerCase());
+          if (sectionCmp != 0) return sectionCmp;
+
+          final breedCmp =
+              a.breedName.toLowerCase().compareTo(b.breedName.toLowerCase());
+          if (breedCmp != 0) return breedCmp;
+
+          return a.tattoo.toLowerCase().compareTo(b.tattoo.toLowerCase());
+        });
+
+        if (!mounted) return;
+        setState(() {
+          _missingPlacementItems = items;
+          _missingPlacementsLoaded = true;
+        });
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed loading missing placements: $e')),
+        );
+      } finally {
+        if (mounted) {
+          setState(() {
+            _loadingMissingPlacements = false;
+          });
+        }
+      }
+    }
+
+    Future<void> _sendArtifactEmail({
+      required ReportArtifactSummary artifact,
+      required String to,
+      String? subject,
+      String? message,
+    }) async {
+      final service = ReportEmailService();
+
+      await service.sendReportEmail(
+        showId: widget.showId,
+        artifactId: artifact.id,
+        to: to,
+        subject: subject,
+        message: message,
+      );
+    }
+
+    Widget _buildMissingPlacementsPanel() {
+      final readiness = _dashboard?.resultsReadiness;
+      final missingCount = readiness?.missingPlacementCount ?? 0;
+
+      if (missingCount <= 0) return const SizedBox.shrink();
+
+      return Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: Colors.orange.withOpacity(.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.orange.withOpacity(.22)),
+        ),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          leading: const Icon(
+            Icons.format_list_numbered,
+            color: Colors.orange,
+          ),
+          title: Text(
+            '$missingCount missing placement${missingCount == 1 ? '' : 's'}',
+            style: const TextStyle(
+              fontWeight: FontWeight.w700,
+              color: Colors.orange,
+            ),
+          ),
+          subtitle: const Text('Tap to view which entries are still missing.'),
+          onExpansionChanged: (expanded) async {
+            if (expanded && !_missingPlacementsLoaded) {
+              await _loadMissingPlacements();
+            }
+          },
+          children: [
+            if (_loadingMissingPlacements)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (_missingPlacementItems.isEmpty)
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text('No missing placement rows found.'),
+              )
+            else
+              ..._missingPlacementItems.map((item) {
+                final parts = <String>[
+                  item.sectionLabel,
+                  item.breedName,
+                  if (item.groupName != null && item.groupName!.isNotEmpty)
+                    item.groupName!,
+                  if (item.varietyName != null && item.varietyName!.isNotEmpty)
+                    item.varietyName!,
+                  item.className,
+                  item.sex,
+                  if (item.exhibitorLabel.isNotEmpty) item.exhibitorLabel,
+                ];
+
+                return Container(
+                  margin: const EdgeInsets.only(top: 8),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.pets, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item.tattoo.isEmpty ? '(No ear #)' : item.tattoo,
+                              style: const TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(parts.join(' • ')),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+          ],
+        ),
+      );
+    }
 
   @override
   void initState() {
@@ -333,15 +744,174 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   
 
   Future<void> _sendAllExhibitorReports() async {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Sending exhibitor reports (next step)')),
-    );
+    final ready = await _ensureResultsReadyForReports();
+    if (!ready) return;
+
+    setState(() {
+      _generatingReport = true;
+    });
+
+    try {
+      final exhibitors = await _loadExhibitorEmailTargets();
+
+      if (exhibitors.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No exhibitor email targets found.')),
+        );
+        return;
+      }
+
+      int sentCount = 0;
+      int skippedCount = 0;
+      int failedCount = 0;
+
+      for (final exhibitor in exhibitors) {
+        final exhibitorReport = _newestGeneratedArtifactWhere(
+          'exhibitor_report',
+          (a) => _artifactMatchesExhibitor(a, exhibitor),
+        );
+
+        final legsReport = _newestGeneratedArtifactWhere(
+          'legs',
+          (a) => _artifactMatchesExhibitor(a, exhibitor),
+        );
+
+        final artifacts = <ReportArtifactSummary>[
+          if (exhibitorReport != null) exhibitorReport,
+          if (legsReport != null) legsReport,
+        ];
+
+        if (artifacts.isEmpty) {
+          skippedCount++;
+          continue;
+        }
+
+        for (final artifact in artifacts) {
+          try {
+            await _sendArtifactEmail(
+              artifact: artifact,
+              to: exhibitor.email,
+              subject: '${widget.showName} - ${_friendlyReportName(artifact.reportName)}',
+              message:
+                  'Attached is your ${_friendlyReportName(artifact.reportName).toLowerCase()} from ${widget.showName}.',
+            );
+            sentCount++;
+          } catch (e) {
+            failedCount++;
+            debugPrint(
+              'Failed sending ${artifact.reportName} to ${exhibitor.email}: $e',
+            );
+          }
+        }
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Exhibitor report send complete. Sent: $sentCount, skipped: $skippedCount, failed: $failedCount',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed sending exhibitor reports: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _generatingReport = false;
+        });
+      }
+    }
   }
 
   Future<void> _sendAllClubReports() async {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Sending club reports (next step)')),
-    );
+    final ready = await _ensureResultsReadyForReports();
+    if (!ready) return;
+
+    setState(() {
+      _generatingReport = true;
+    });
+
+    try {
+      final clubs = await _loadClubEmailTargets();
+
+      if (clubs.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No club email targets found.')),
+        );
+        return;
+      }
+
+      int sentCount = 0;
+      int skippedCount = 0;
+      int failedCount = 0;
+
+      for (final club in clubs) {
+        final sweepstakesArtifact = _newestGeneratedArtifactWhere(
+          'sweepstakes_report',
+          (a) => _artifactMatchesClubTarget(a, club),
+        );
+
+        final breedDetailArtifact = _newestGeneratedArtifactWhere(
+          'breed_results_detail_report',
+          (a) => _artifactMatchesClubTarget(a, club),
+        );
+
+        final artifacts = <ReportArtifactSummary>[
+          if (sweepstakesArtifact != null) sweepstakesArtifact,
+          if (breedDetailArtifact != null) breedDetailArtifact,
+        ];
+
+        if (artifacts.isEmpty) {
+          skippedCount++;
+          continue;
+        }
+
+        for (final artifact in artifacts) {
+          try {
+            await _sendArtifactEmail(
+              artifact: artifact,
+              to: club.email,
+              subject:
+                  '${widget.showName} - ${club.breedName} - ${_friendlyReportName(artifact.reportName)}',
+              message:
+                  'Attached is the ${_friendlyReportName(artifact.reportName).toLowerCase()} for ${club.breedName} (${club.scope} ${club.showLetter}) from ${widget.showName}.',
+            );
+            sentCount++;
+          } catch (e) {
+            failedCount++;
+            debugPrint(
+              'Failed sending ${artifact.reportName} to ${club.email}: $e',
+            );
+          }
+        }
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Club report send complete. Sent: $sentCount, skipped: $skippedCount, failed: $failedCount',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed sending club reports: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _generatingReport = false;
+        });
+      }
+    }
   }
 
     bool get _resultsReadyForReports =>
@@ -951,7 +1521,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                           const SizedBox(height: 16),
 
                           // ✅ NEW BULK ACTION BUTTONS (ADD THIS BLOCK)
-                          if (reportsBlocked)
+                          if (reportsBlocked) ...[
                             Container(
                               width: double.infinity,
                               margin: const EdgeInsets.only(bottom: 12),
@@ -983,6 +1553,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                 ],
                               ),
                             ),
+                            _buildMissingPlacementsPanel(),
+                          ],
 
                           Wrap(
                             spacing: 10,
@@ -1107,6 +1679,30 @@ class _CloseoutSectionCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _MissingPlacementItem {
+  final String entryId;
+  final String sectionLabel;
+  final String breedName;
+  final String? groupName;
+  final String? varietyName;
+  final String className;
+  final String sex;
+  final String tattoo;
+  final String exhibitorLabel;
+
+  const _MissingPlacementItem({
+    required this.entryId,
+    required this.sectionLabel,
+    required this.breedName,
+    required this.groupName,
+    required this.varietyName,
+    required this.className,
+    required this.sex,
+    required this.tattoo,
+    required this.exhibitorLabel,
+  });
 }
 
 class _ArbaCloseoutCard extends StatelessWidget {
@@ -2124,6 +2720,34 @@ class _GenerateAllReportsDialogState extends State<_GenerateAllReportsDialog> {
       ],
     );
   }
+}
+
+class _ExhibitorEmailTarget {
+  final String exhibitorId;
+  final String exhibitorName;
+  final String email;
+
+  const _ExhibitorEmailTarget({
+    required this.exhibitorId,
+    required this.exhibitorName,
+    required this.email,
+  });
+}
+
+class _ClubEmailTarget {
+  final String clubName;
+  final String breedName;
+  final String scope; // OPEN / YOUTH
+  final String showLetter;
+  final String email;
+
+  const _ClubEmailTarget({
+    required this.clubName,
+    required this.breedName,
+    required this.scope,
+    required this.showLetter,
+    required this.email,
+  });
 }
 
 class _ScopedReportTarget {
