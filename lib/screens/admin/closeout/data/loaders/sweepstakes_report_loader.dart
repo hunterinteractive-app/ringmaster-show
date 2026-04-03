@@ -27,6 +27,87 @@ class SweepstakesReportLoader {
       throw Exception('Sweepstakes report requires showLetter.');
     }
 
+    if (showLetter == 'ALL') {
+      final lettersResponse = await repo.supabase
+          .from('show_sections')
+          .select('letter')
+          .eq('show_id', showId)
+          .eq('is_enabled', true)
+          .eq('kind', scope.toLowerCase())
+          .order('letter');
+
+      final letters = (lettersResponse as List)
+          .map((e) => (e['letter'] ?? '').toString().trim().toUpperCase())
+          .where((e) => e.isNotEmpty)
+          .toSet()
+          .toList()
+        ..sort();
+
+      final sections = <SweepstakesReportSection>[];
+
+      for (final letter in letters) {
+        final rowsResponse = await repo.supabase
+            .from('v_sweepstakes_pdf_rows')
+            .select()
+            .eq('show_id', showId)
+            .eq('breed_name', breedName)
+            .eq('scope', scope)
+            .eq('show_letter', letter)
+            .order('rank', ascending: true);
+
+        final rows = (rowsResponse as List)
+            .map((e) => SweepstakesReportRow.fromMap(e as Map<String, dynamic>))
+            .toList();
+
+        if (rows.isEmpty) continue;
+
+        final headerResponse = await repo.supabase
+            .from('v_sweepstakes_pdf_rows')
+            .select(
+              'show_id, breed_name, scope, show_letter, rule_source, verification_status, engine_type',
+            )
+            .eq('show_id', showId)
+            .eq('breed_name', breedName)
+            .eq('scope', scope)
+            .eq('show_letter', letter)
+            .limit(1)
+            .maybeSingle();
+
+        if (headerResponse == null) continue;
+
+        final header = Map<String, dynamic>.from(headerResponse);
+
+        sections.add(
+          SweepstakesReportSection(
+            showLetter: (header['show_letter'] ?? '').toString(),
+            ruleSource: (header['rule_source'] ?? '').toString(),
+            verificationStatus:
+                (header['verification_status'] ?? '').toString(),
+            engineType: (header['engine_type'] ?? '').toString(),
+            rows: rows,
+          ),
+        );
+      }
+
+      if (sections.isEmpty) {
+        throw Exception(
+          'No sweepstakes results found for breed "$breedName" in scope "$scope" across all shows.',
+        );
+      }
+
+      return SweepstakesReportData(
+        showId: showId,
+        breedName: breedName,
+        scope: scope,
+        showLetter: 'ALL',
+        ruleSource: sections.first.ruleSource,
+        verificationStatus: sections.first.verificationStatus,
+        engineType: sections.first.engineType,
+        rows: const [],
+        sections: sections,
+      );
+    }
+
     final rowsResponse = await repo.supabase
         .from('v_sweepstakes_pdf_rows')
         .select()
@@ -75,6 +156,7 @@ class SweepstakesReportLoader {
       verificationStatus: (header['verification_status'] ?? '').toString(),
       engineType: (header['engine_type'] ?? '').toString(),
       rows: rows,
+      sections: const [],
     );
   }
 }

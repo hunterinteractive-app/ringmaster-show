@@ -1,3 +1,5 @@
+// lib/screens/admin/closeout/pdf/builders/legs_report_pdf.dart
+
 import 'dart:typed_data';
 
 import 'package:flutter/services.dart' show rootBundle;
@@ -50,17 +52,41 @@ class LegsReportPdfBuilder {
     'Only 1 leg of Grand Champion may be awarded to the same animal for the same show.',
   ];
 
+  Future<pw.ThemeData> _buildTheme() async {
+    final regular = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSans-Regular.ttf'),
+    );
+    final bold = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSans-Bold.ttf'),
+    );
+    final italic = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSans-Italic.ttf'),
+    );
+    final boldItalic = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSans-BoldItalic.ttf'),
+    );
+
+    return pw.ThemeData.withFont(
+      base: regular,
+      bold: bold,
+      italic: italic,
+      boldItalic: boldItalic,
+    );
+  }
+
   Future<ReportFileResult> buildFile(
     List<LegsCertificateData> data,
     ReportRequest request,
   ) async {
-    final pdf = pw.Document();
+    final theme = await _buildTheme();
+    final pdf = pw.Document(theme: theme);
 
     if (data.isEmpty) {
       pdf.addPage(
         pw.Page(
           pageFormat: PdfPageFormat.letter,
           margin: const pw.EdgeInsets.all(24),
+          theme: theme,
           build: (_) => pw.Center(
             child: pw.Text('No leg certificates found.'),
           ),
@@ -81,6 +107,7 @@ class LegsReportPdfBuilder {
             pw.Page(
               pageFormat: PdfPageFormat.letter,
               margin: const pw.EdgeInsets.fromLTRB(22, 18, 22, 18),
+              theme: theme,
               build: (_) {
                 return pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.stretch,

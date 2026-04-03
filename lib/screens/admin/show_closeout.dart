@@ -71,13 +71,13 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   };
 
     static const Set<String> _clubReportKeys = {
-      'cavy_points',
-      'commercial_points',
-      'details_by_breed',
-      'exh_by_breed',
-      'exh_total_points',
-      'fur_points',
-      'newsletter_show_report',
+      //'cavy_points',
+      //'commercial_points',
+      //'details_by_breed',
+      //'exh_by_breed',
+      //'exh_total_points',
+      //'fur_points',
+      //'newsletter_show_report',
       'sweepstakes_report',
       'breed_results_detail_report',
     };
@@ -129,6 +129,220 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     super.dispose();
   }
 
+  Future<void> _generateAllReports() async {
+    const supportedBulkReports = <String>{
+      'arba_report',
+      'exhibitor_report',
+      'legs',
+      'sweepstakes_report',
+      'breed_results_detail_report',
+    };
+
+    final artifacts = (_dashboard?.reports ?? const <ReportArtifactSummary>[])
+        .where((r) =>
+            r.reportName.isNotEmpty &&
+            supportedBulkReports.contains(r.reportName))
+        .toList()
+      ..sort((a, b) {
+        final aIndex = _reportDisplayOrder.indexOf(a.reportName);
+        final bIndex = _reportDisplayOrder.indexOf(b.reportName);
+
+        if (aIndex == -1 && bIndex == -1) {
+          return a.reportName.compareTo(b.reportName);
+        }
+        if (aIndex == -1) return 1;
+        if (bIndex == -1) return -1;
+        return aIndex.compareTo(bIndex);
+      });
+
+    if (artifacts.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No report artifacts found to generate.')),
+      );
+      return;
+    }
+
+    setState(() {
+      _generatingReport = true;
+    });
+
+    try {
+      final confirmed = await showDialog<bool>(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => _GenerateAllReportsDialog(
+              artifacts: artifacts,
+              onRun: (
+                onStarted,
+                onFinished,
+                onFailed,
+              ) async {
+                await _runGenerateAllReportsLive(
+                  artifacts,
+                  onStarted: onStarted,
+                  onFinished: onFinished,
+                  onFailed: onFailed,
+                );
+              },
+            ),
+          ) ??
+          false;
+
+      if (!confirmed) return;
+
+      await _loadData();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _generatingReport = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _runGenerateAllReportsLive(
+    List<ReportArtifactSummary> artifacts, {
+    required void Function(String artifactKey) onStarted,
+    required void Function(String artifactKey) onFinished,
+    required void Function(String artifactKey, Object error) onFailed,
+  }) async {
+    await _saveArbaDetails();
+    await _ensureLegsBuilder();
+    await _ensureExhibitorBuilder();
+    await _ensureReportLogo();
+
+    final repository = CloseoutRepository(supabase);
+    final arbaLoader = ArbaReportLoader(repository);
+    final arbaBuilder = ArbaReportPdfBuilder();
+    final showBasics = await repository.loadShowBasics(widget.showId);
+    final showDate = _formatShowDate(showBasics['start_date']);
+    final sanctionNumber = await _loadArbaSanctionNumber(widget.showId);
+
+    final legsLoader = LegsReportLoader(repository);
+    final exhibitorLoader = ExhibitorReportLoader(repository);
+    final sweepstakesLoader = SweepstakesReportLoader(repository);
+    final sweepstakesBuilder = SweepstakesReportPdf(
+      logoBytes: _reportLogoBytes,
+    );
+    final breedResultsDetailReportLoader =
+        BreedResultsDetailReportLoader(repository);
+    final breedResultsDetailReportBuilder = BreedResultsDetailReportPdf(
+      logoBytes: _reportLogoBytes,
+    );
+
+    final registry = ReportRegistry(
+      arbaLoader: arbaLoader,
+      arbaBuilder: arbaBuilder,
+      legsLoader: legsLoader,
+      legsBuilder: _legsBuilder!,
+      exhibitorLoader: exhibitorLoader,
+      exhibitorBuilder: _exhibitorBuilder!,
+      sweepstakesLoader: sweepstakesLoader,
+      sweepstakesBuilder: sweepstakesBuilder,
+      breedResultsDetailReportLoader: breedResultsDetailReportLoader,
+      breedResultsDetailReportBuilder: breedResultsDetailReportBuilder,
+    );
+
+    final engine = ReportEngine(registry);
+    final uploadService = ReportUploadService(supabase);
+
+    final runner = CloseoutRunner(
+      engine: engine,
+      uploadService: uploadService,
+    );
+
+    final latestFinalizeId = _dashboard?.latestFinalize.id ?? 'manual-run';
+
+    String artifactKey(ReportArtifactSummary artifact) {
+      final filePart = (artifact.fileName?.trim().isNotEmpty ?? false)
+          ? ' • ${artifact.fileName!.trim()}'
+          : '';
+      return '${artifact.reportName}::${artifact.id}$filePart';
+    }
+
+    final needsScopedTargets = artifacts.any(
+      (a) =>
+          a.reportName == 'sweepstakes_report' ||
+          a.reportName == 'breed_results_detail_report',
+    );
+
+    final scopedTargets =
+        needsScopedTargets ? await _loadScopedReportTargets() : <_ScopedReportTarget>[];
+
+    Future<void> runSingle(ReportArtifactSummary artifact) async {
+      final key = artifactKey(artifact);
+      onStarted(key);
+
+      try {
+        if (artifact.reportName == 'sweepstakes_report' ||
+            artifact.reportName == 'breed_results_detail_report') {
+          final lowerFileName = (artifact.fileName ?? '').toLowerCase();
+
+          final matchingTarget = scopedTargets.firstWhere(
+            (t) =>
+                lowerFileName.contains(t.breedName.toLowerCase()) &&
+                lowerFileName.contains(t.scope.toLowerCase()) &&
+                lowerFileName.contains(t.showLetter.toLowerCase()),
+          );
+
+          await runner.generateSingleReport(
+            showId: widget.showId,
+            finalizeRunId: latestFinalizeId,
+            reportName: artifact.reportName,
+            artifactId: artifact.id,
+            breedName: matchingTarget.breedName,
+            scope: matchingTarget.scope,
+            showLetter: matchingTarget.showLetter,
+            showName: widget.showName,
+            showDate: showDate,
+            sanctionNumber: sanctionNumber,
+          );
+        } else {
+          await runner.generateSingleReport(
+            showId: widget.showId,
+            finalizeRunId: latestFinalizeId,
+            reportName: artifact.reportName,
+            artifactId: artifact.id,
+            showName: widget.showName,
+            showDate: showDate,
+            sanctionNumber: sanctionNumber,
+          );
+        }
+
+        onFinished(key);
+      } catch (e) {
+        onFailed(key, e);
+      }
+    }
+
+    await Future.wait(
+      artifacts.map(runSingle),
+      eagerError: false,
+    );
+
+    await supabase.rpc(
+    'refresh_show_reports_state',
+    params: {'p_show_id': widget.showId},
+  );
+}
+
+  
+
+  Future<void> _sendAllExhibitorReports() async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Sending exhibitor reports (next step)')),
+    );
+  }
+
+  Future<void> _sendAllClubReports() async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Sending club reports (next step)')),
+    );
+  }
+
+  bool get _isBusy => _loading || _generatingReport;
+
   Future<void> _ensureLegsBuilder() async {
     _legsBuilder ??= await LegsReportPdfBuilder.fromAssets();
   }
@@ -140,7 +354,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   Future<void> _ensureReportLogo() async {
     if (_reportLogoBytes != null) return;
 
-    final bytes = await rootBundle.load('assets/images/ringmaster_logo.png');
+    final bytes = await rootBundle.load('assets/images/ringmaster_show_logo.png');
     _reportLogoBytes = bytes.buffer.asUint8List();
   }
 
@@ -195,6 +409,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
       final dashboardJson = Map<String, dynamic>.from(dashboardResp as Map);
       final dashboard = CloseoutDashboard.fromJson(dashboardJson);
+
+      debugPrint('🔥🧪 isReportsStale = ${dashboard.dashboard.closeout.isReportsStale}');
 
       await _loadArbaDetails();
       await _ensureLegsBuilder();
@@ -273,6 +489,66 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     final parsed = DateTime.tryParse(rawDate.toString());
     if (parsed == null) return rawDate.toString();
     return '${parsed.month.toString().padLeft(2, '0')}-${parsed.day.toString().padLeft(2, '0')}-${parsed.year}';
+  }
+
+  Future<List<_ScopedReportTarget>> _loadScopedReportTargets() async {
+    final targets = <_ScopedReportTarget>[];
+
+    final enabledSections = await supabase
+        .from('show_sections')
+        .select('id, kind, letter')
+        .eq('show_id', widget.showId)
+        .eq('is_enabled', true);
+
+    final seen = <String>{};
+
+    for (final raw in (enabledSections as List)) {
+      final row = Map<String, dynamic>.from(raw as Map);
+
+      final sectionId = (row['id'] ?? '').toString();
+      final kind = (row['kind'] ?? '').toString().trim().toUpperCase();
+      final sectionLetter = (row['letter'] ?? '').toString().trim().toUpperCase();
+
+      if (sectionId.isEmpty || kind.isEmpty) continue;
+
+      final results = await supabase.rpc(
+        'report_results_entry_rows',
+        params: {
+          'p_show_id': widget.showId,
+          'p_section_id': sectionId,
+          'p_show_letter': sectionLetter.isEmpty ? null : sectionLetter,
+        },
+      );
+
+      for (final rawResult in (results as List)) {
+        final result = Map<String, dynamic>.from(rawResult as Map);
+        final breedName = (result['breed_name'] ?? '').toString().trim();
+        if (breedName.isEmpty) continue;
+
+        final key = '$breedName|$kind|$sectionLetter';
+        if (seen.add(key)) {
+          targets.add(
+            _ScopedReportTarget(
+              breedName: breedName,
+              scope: kind,
+              showLetter: sectionLetter,
+            ),
+          );
+        }
+      }
+    }
+
+    targets.sort((a, b) {
+      final breedCmp = a.breedName.compareTo(b.breedName);
+      if (breedCmp != 0) return breedCmp;
+
+      final scopeCmp = a.scope.compareTo(b.scope);
+      if (scopeCmp != 0) return scopeCmp;
+
+      return a.showLetter.compareTo(b.showLetter);
+    });
+
+    return targets;
   }
 
   Future<void> _generateReportByName(
@@ -536,16 +812,13 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                         children: [
                           _ArbaCloseoutCard(
                             secretaryNameController: _secretaryNameController,
-                            secretaryAddressController:
-                                _secretaryAddressController,
+                            secretaryAddressController: _secretaryAddressController,
                             secretaryEmailController: _secretaryEmailController,
                             secretaryPhoneController: _secretaryPhoneController,
                             superintendentController: _superintendentController,
-                            superintendentNumberController:
-                                _superintendentNumberController,
+                            superintendentNumberController: _superintendentNumberController,
                             sweepstakesIssue: _sweepstakesIssue,
-                            sweepstakesClubController:
-                                _sweepstakesClubController,
+                            sweepstakesClubController: _sweepstakesClubController,
                             onSweepstakesChanged: (v) {
                               setState(() {
                                 _sweepstakesIssue = v;
@@ -571,6 +844,45 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                             onSave: _saveArbaDetails,
                           ),
                           const SizedBox(height: 16),
+
+                          // ✅ NEW BULK ACTION BUTTONS (ADD THIS BLOCK)
+                          Wrap(
+                            spacing: 10,
+                            runSpacing: 10,
+                            children: [
+                              FilledButton.icon(
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: _dashboard?.dashboard.closeout.isReportsStale == true
+                                      ? const Color(0xFFD4A623) // yellow = needs refresh
+                                      : Colors.green, // green = up to date
+                                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                                ),
+                                onPressed: _isBusy ? null : _generateAllReports,
+                                icon: const Icon(Icons.auto_awesome),
+                                label: Text(
+                                  _dashboard?.dashboard.closeout.isReportsStale == true
+                                      ? 'Generate All Reports'
+                                      : 'All Reports Fresh',
+                                ),
+                              ),
+
+                              OutlinedButton.icon(
+                                onPressed: _isBusy ? null : _sendAllExhibitorReports,
+                                icon: const Icon(Icons.send_outlined),
+                                label: const Text('Send All Exhibitor Reports'),
+                              ),
+
+                              OutlinedButton.icon(
+                                onPressed: _isBusy ? null : _sendAllClubReports,
+                                icon: const Icon(Icons.group_outlined),
+                                label: const Text('Send All Club Reports'),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 16),
+
+                          // ✅ EXISTING CARD (DO NOT CHANGE)
                           _ReportActionsCard(
                             showId: widget.showId,
                             reports: _dashboard?.reports ??
@@ -876,7 +1188,7 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
   String? _selectedReportName = 'arba_report';
   final TextEditingController _breedController = TextEditingController();
   String _selectedScope = 'OPEN';
-  String _selectedShowLetter = 'A';
+  String _selectedShowLetter = 'ALL';
   List<String> _availableShowLetters = [];
   bool _loadingShowLetters = false;
 
@@ -884,7 +1196,7 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
     'arba': 'ARBA Reports',
     'exhibitor': 'Exhibitor Reports',
     'club': 'Club Reports',
-    'other': 'Other Reports',
+    //'other': 'Other Reports',
   };
 
   List<String> _availableBreeds = [];
@@ -955,11 +1267,12 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
       setState(() {
         _availableShowLetters = sorted;
         if (sorted.isNotEmpty) {
-          if (!sorted.contains(_selectedShowLetter)) {
+          if (_selectedShowLetter != 'ALL' &&
+              !sorted.contains(_selectedShowLetter)) {
             _selectedShowLetter = sorted.first;
           }
         } else {
-          _selectedShowLetter = '';
+          _selectedShowLetter = 'ALL';
         }
       });
     } catch (e) {
@@ -1010,7 +1323,8 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
           params: {
             'p_show_id': widget.showId,
             'p_section_id': sectionId,
-            'p_show_letter': _selectedShowLetter.isEmpty
+            'p_show_letter': (_selectedShowLetter.isEmpty ||
+                    _selectedShowLetter == 'ALL')
                 ? null
                 : _selectedShowLetter,
           },
@@ -1156,11 +1470,13 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
           if (_selectedReportNeedsBreedScope) ...[
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
-            initialValue: _availableShowLetters.contains(_selectedShowLetter)
-                ? _selectedShowLetter
-                : (_availableShowLetters.isNotEmpty
-                    ? _availableShowLetters.first
-                    : null),
+            initialValue: _selectedShowLetter == 'ALL'
+                ? 'ALL'
+                : (_availableShowLetters.contains(_selectedShowLetter)
+                    ? _selectedShowLetter
+                    : (_availableShowLetters.isNotEmpty
+                        ? _availableShowLetters.first
+                        : 'ALL')),
             decoration: InputDecoration(
               labelText: 'Show Letter',
               border: const OutlineInputBorder(),
@@ -1175,15 +1491,19 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
                     )
                   : null,
             ),
-            items: _availableShowLetters
-                .map(
-                  (letter) => DropdownMenuItem<String>(
-                    value: letter,
-                    child: Text(letter),
-                  ),
-                )
-                .toList(),
-            onChanged: _loadingShowLetters || _availableShowLetters.isEmpty
+            items: [
+              const DropdownMenuItem<String>(
+                value: 'ALL',
+                child: Text('All Shows'),
+              ),
+              ..._availableShowLetters.map(
+                (letter) => DropdownMenuItem<String>(
+                  value: letter,
+                  child: Text(letter),
+                ),
+              ),
+            ],
+            onChanged: _loadingShowLetters
                 ? null
                 : (value) async {
                     if (value == null) return;
@@ -1410,6 +1730,210 @@ class _ErrorView extends StatelessWidget {
       ),
     );
   }
+}
+
+class _GenerateAllReportsDialog extends StatefulWidget {
+  final List<ReportArtifactSummary> artifacts;
+  final Future<void> Function(
+    void Function(String artifactKey) onStarted,
+    void Function(String artifactKey) onFinished,
+    void Function(String artifactKey, Object error) onFailed,
+  ) onRun;
+
+  const _GenerateAllReportsDialog({
+    required this.artifacts,
+    required this.onRun,
+  });
+
+  @override
+  State<_GenerateAllReportsDialog> createState() =>
+      _GenerateAllReportsDialogState();
+}
+
+class _GenerateAllReportsDialogState extends State<_GenerateAllReportsDialog> {
+  bool _finished = false;
+  String? _error;
+
+  final Set<String> _completed = {};
+  final Set<String> _running = {};
+  final Map<String, String> _failed = {};
+
+  double get _progress {
+    final done = _completed.length + _failed.length;
+    return widget.artifacts.isEmpty ? 0 : done / widget.artifacts.length;
+  }
+
+  String _artifactKey(ReportArtifactSummary artifact) {
+    final filePart = (artifact.fileName?.trim().isNotEmpty ?? false)
+        ? ' • ${artifact.fileName!.trim()}'
+        : '';
+    return '${artifact.reportName}::${artifact.id}$filePart';
+  }
+
+  String _artifactLabel(ReportArtifactSummary artifact) {
+    if (artifact.fileName?.trim().isNotEmpty ?? false) {
+      return artifact.fileName!.trim();
+    }
+    return _friendlyReportName(artifact.reportName);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_start());
+  }
+
+  Future<void> _start() async {
+    try {
+      await widget.onRun(
+        (reportName) {
+          if (!mounted) return;
+          setState(() {
+            _running.add(reportName);
+            _failed.remove(reportName);
+          });
+        },
+        (reportName) {
+          if (!mounted) return;
+          setState(() {
+            _running.remove(reportName);
+            _completed.add(reportName);
+          });
+        },
+        (reportName, error) {
+          if (!mounted) return;
+          setState(() {
+            _running.remove(reportName);
+            _failed[reportName] = error.toString();
+          });
+        },
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _finished = true;
+        if (_failed.isNotEmpty) {
+          _error = '${_failed.length} report(s) failed.';
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _finished = true;
+        _error = e.toString();
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Generating Report Artifacts'),
+      content: SizedBox(
+        width: 520,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            LinearProgressIndicator(value: _finished ? 1 : _progress),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                '${_completed.length + _failed.length} of ${widget.artifacts.length} report artifacts processed'
+              ),
+            ),
+            const SizedBox(height: 12),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 320),
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: widget.artifacts.length,
+                itemBuilder: (context, index) {
+                  final artifact = widget.artifacts[index];
+                  final key = _artifactKey(artifact);
+                  final isDone = _completed.contains(key);
+                  final isRunning = _running.contains(key);
+                  final failedMessage = _failed[key];
+
+                  IconData icon;
+                  Color color;
+                  String status;
+
+                  if (failedMessage != null) {
+                    icon = Icons.error;
+                    color = Colors.red;
+                    status = 'Failed';
+                  } else if (isDone) {
+                    icon = Icons.check_circle;
+                    color = Colors.green;
+                    status = 'Done';
+                  } else if (isRunning) {
+                    icon = Icons.autorenew;
+                    color = const Color(0xFFD4A623);
+                    status = 'Running';
+                  } else {
+                    icon = Icons.schedule;
+                    color = Colors.grey;
+                    status = 'Queued';
+                  }
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(icon, color: color),
+                        title: Text(_artifactLabel(artifact)),
+                        subtitle: Text(_friendlyReportName(artifact.reportName)),
+                        trailing: Text(status),
+                      ),
+                      if (failedMessage != null)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 40, bottom: 8),
+                          child: Text(
+                            failedMessage,
+                            style: const TextStyle(
+                              color: Colors.red,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _error!,
+                style: const TextStyle(color: Colors.red),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _finished ? () => Navigator.of(context).pop(true) : null,
+          child: Text(_finished ? 'Close' : 'Working...'),
+        ),
+      ],
+    );
+  }
+}
+
+class _ScopedReportTarget {
+  final String breedName;
+  final String scope;
+  final String showLetter;
+
+  const _ScopedReportTarget({
+    required this.breedName,
+    required this.scope,
+    required this.showLetter,
+  });
 }
 
 String _fmt(String? value) {

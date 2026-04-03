@@ -13,6 +13,7 @@ class BreedResultsDetailReportLoader {
     final showId = request.showId;
     final breedName = (request.breedName ?? '').trim();
     final scope = (request.scope ?? '').trim().toUpperCase();
+    final showLetter = (request.showLetter ?? '').trim().toUpperCase();
 
     if (breedName.isEmpty) {
       throw Exception('Breed Results Detail Report requires breedName.');
@@ -22,12 +23,117 @@ class BreedResultsDetailReportLoader {
       throw Exception('Breed Results Detail Report requires scope.');
     }
 
+    if (showLetter.isEmpty) {
+      throw Exception('Breed Results Detail Report requires showLetter.');
+    }
+
+    if (showLetter == 'ALL') {
+      final lettersResponse = await repo.supabase
+          .from('show_sections')
+          .select('letter')
+          .eq('show_id', showId)
+          .eq('is_enabled', true)
+          .eq('kind', scope.toLowerCase())
+          .order('letter');
+
+      final letters = (lettersResponse as List)
+          .map((e) => (e['letter'] ?? '').toString().trim().toUpperCase())
+          .where((e) => e.isNotEmpty)
+          .toSet()
+          .toList()
+        ..sort();
+
+      final sections = <BreedResultsDetailSection>[];
+
+      for (final letter in letters) {
+        final sectionRows = await repo.supabase.rpc(
+          'report_results_entry_rows_for_breed_detail',
+          params: {
+            'p_show_id': showId,
+            'p_breed_name': breedName,
+            'p_scope': scope,
+            'p_show_letter': letter,
+          },
+        );
+
+        final rows = (sectionRows as List)
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+
+        if (rows.isEmpty) continue;
+
+        final awardsResponse = await repo.supabase.rpc(
+          'report_results_awards_for_breed_detail',
+          params: {
+            'p_show_id': showId,
+            'p_breed_name': breedName,
+            'p_scope': scope,
+            'p_show_letter': showLetter,
+          },
+        );
+
+        final awardRows = (awardsResponse as List)
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+
+        final judgeName = _deriveJudgeName(rows);
+
+        final breedAwards = awardRows
+            .where((a) => _isBreedAward(a['award_code']))
+            .map(_mapAwardRow)
+            .toList();
+
+        final varietyAwardMap = <String, List<BreedAward>>{};
+        for (final row
+            in awardRows.where((a) => _isVarietyAward(a['award_code']))) {
+          final varietyName = _safe(
+            row['variety_name'],
+            fallback: 'Unspecified Variety',
+          );
+          varietyAwardMap.putIfAbsent(varietyName, () => []);
+          varietyAwardMap[varietyName]!.add(_mapAwardRow(row));
+        }
+
+        final varieties = _buildVarieties(
+          rows: rows,
+          varietyAwardMap: varietyAwardMap,
+        );
+
+        sections.add(
+          BreedResultsDetailSection(
+            showLetter: letter,
+            judgeName: judgeName,
+            breedAwards: breedAwards,
+            varieties: varieties,
+          ),
+        );
+      }
+
+      if (sections.isEmpty) {
+        throw Exception(
+          'No breed detail rows found for breed "$breedName" in scope "$scope" across all shows.',
+        );
+      }
+
+      return BreedResultsDetailReportData(
+        showId: showId,
+        breedName: breedName,
+        scope: scope,
+        showLetter: 'ALL',
+        judgeName: sections.first.judgeName,
+        breedAwards: const [],
+        varieties: const [],
+        sections: sections,
+      );
+    }
+
     final sectionRows = await repo.supabase.rpc(
       'report_results_entry_rows_for_breed_detail',
       params: {
         'p_show_id': showId,
         'p_breed_name': breedName,
         'p_scope': scope,
+        'p_show_letter': showLetter,
       },
     );
 
@@ -37,7 +143,7 @@ class BreedResultsDetailReportLoader {
 
     if (rows.isEmpty) {
       throw Exception(
-        'No breed detail rows found for breed "$breedName" in scope "$scope".',
+        'No breed detail rows found for breed "$breedName" in scope "$scope" and show letter "$showLetter".',
       );
     }
 
@@ -47,6 +153,7 @@ class BreedResultsDetailReportLoader {
         'p_show_id': showId,
         'p_breed_name': breedName,
         'p_scope': scope,
+        'p_show_letter': showLetter,
       },
     );
 
@@ -63,7 +170,10 @@ class BreedResultsDetailReportLoader {
 
     final varietyAwardMap = <String, List<BreedAward>>{};
     for (final row in awardRows.where((a) => _isVarietyAward(a['award_code']))) {
-      final varietyName = _safe(row['variety_name'], fallback: 'Unspecified Variety');
+      final varietyName = _safe(
+        row['variety_name'],
+        fallback: 'Unspecified Variety',
+      );
       varietyAwardMap.putIfAbsent(varietyName, () => []);
       varietyAwardMap[varietyName]!.add(_mapAwardRow(row));
     }
@@ -77,9 +187,11 @@ class BreedResultsDetailReportLoader {
       showId: showId,
       breedName: breedName,
       scope: scope,
+      showLetter: showLetter,
       judgeName: judgeName,
       breedAwards: breedAwards,
       varieties: varieties,
+      sections: const [],
     );
   }
 
@@ -142,37 +254,33 @@ class BreedResultsDetailReportLoader {
           return aEx.compareTo(bEx);
         });
 
-      final entries = placedRows
-          .where((r) => _placementNumber(r['placement']) > 0)
+      final rowsOut = placedRows
+          .where((r) => _placementNumber(r['placement']) < 999)
           .map((r) => ClassEntry(
-                place: _placementNumber(r['placement']),
+                place: _placementNumber(r['placement']).toString(),
                 animal: _animalLabel(r),
-                exhibitor: _safe(r['exhibitor_label']),
+                exhibitorName: _safe(r['exhibitor_label']),
               ))
           .toList();
 
       final entryCount = classRows.length;
-      final exhibitorCount = classRows
-          .map((r) => _safe(r['exhibitor_id']))
-          .where((e) => e.isNotEmpty)
-          .toSet()
-          .length;
+      final placedCount = rowsOut.length;
 
       return ClassSection(
         className: className,
         entryCount: entryCount,
-        exhibitorCount: exhibitorCount,
-        entries: entries,
+        placedCount: placedCount,
+        rows: rowsOut,
       );
     }).toList();
   }
 
   BreedAward _mapAwardRow(Map<String, dynamic> row) {
     return BreedAward(
-      label: _normalizeAwardLabel(_safe(row['award_code'])),
+      award: _normalizeAwardLabel(_safe(row['award_code'])),
       animal: _animalLabel(row),
       className: _safe(row['class_name']),
-      exhibitor: _safe(row['exhibitor_label']),
+      exhibitorName: _safe(row['exhibitor_label']),
     );
   }
 
@@ -181,7 +289,7 @@ class BreedResultsDetailReportLoader {
       final judge = _safe(row['judge_name']);
       if (judge.isNotEmpty) return judge;
     }
-    return 'Judge Not Listed';
+    return '';
   }
 
   bool _isBreedAward(Object? code) {

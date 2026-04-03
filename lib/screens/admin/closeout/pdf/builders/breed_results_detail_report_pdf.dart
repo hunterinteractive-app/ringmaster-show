@@ -1,6 +1,8 @@
 // lib/screens/admin/closeout/pdf/builders/breed_results_detail_report_pdf.dart
 
 import 'dart:typed_data';
+
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
@@ -13,11 +15,34 @@ class BreedResultsDetailReportPdf {
 
   BreedResultsDetailReportPdf({this.logoBytes});
 
+  Future<pw.ThemeData> _buildTheme() async {
+    final regular = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSans-Regular.ttf'),
+    );
+    final bold = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSans-Bold.ttf'),
+    );
+    final italic = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSans-Italic.ttf'),
+    );
+    final boldItalic = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSans-BoldItalic.ttf'),
+    );
+
+    return pw.ThemeData.withFont(
+      base: regular,
+      bold: bold,
+      italic: italic,
+      boldItalic: boldItalic,
+    );
+  }
+
   Future<ReportFileResult> buildFile(
     BreedResultsDetailReportData data,
     ReportRequest request,
   ) async {
-    final pdf = pw.Document();
+    final theme = await _buildTheme();
+    final pdf = pw.Document(theme: theme);
 
     final showName = (request.showName ?? '').trim().isEmpty
         ? 'Unknown Show'
@@ -27,40 +52,51 @@ class BreedResultsDetailReportPdf {
         ? 'Unknown Date'
         : request.showDate!.trim();
 
-    final sanctionNumber = (request.sanctionNumber ?? '').trim();
+    final sections = data.sections.isNotEmpty
+        ? data.sections
+        : [
+            BreedResultsDetailSection(
+              showLetter: data.showLetter,
+              judgeName: data.judgeName,
+              breedAwards: data.breedAwards,
+              varieties: data.varieties,
+            ),
+          ];
 
-    pdf.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.letter,
-        margin: const pw.EdgeInsets.all(20),
-        footer: _footer,
-        build: (context) => [
-          _buildHeader(
-            showName: showName,
-            showDate: showDate,
-            sanctionNumber: sanctionNumber,
-          ),
-          pw.SizedBox(height: 12),
-          _buildBreedHeader(
-            breedName: data.breedName,
-            scope: data.scope,
-            judgeName: data.judgeName,
-          ),
-          pw.SizedBox(height: 10),
-          _buildBreedAwards(data.breedAwards),
-          pw.SizedBox(height: 12),
-          ...data.varieties.map((v) => _buildVarietySection(v)),
-        ],
-      ),
-    );
+    for (final section in sections) {
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.letter.landscape,
+          margin: const pw.EdgeInsets.all(24),
+          theme: theme,
+          footer: (context) => _footer(context),
+          build: (context) => [
+            _buildHeader(
+              breedName: data.breedName,
+              scope: data.scope,
+              showLetter: section.showLetter,
+              judgeName: section.judgeName,
+              showName: showName,
+              showDate: showDate,
+            ),
+            pw.SizedBox(height: 12),
+            ..._buildSections(
+              breedAwards: section.breedAwards,
+              varieties: section.varieties,
+            ),
+          ],
+        ),
+      );
+    }
 
     final bytes = await pdf.save();
 
     return ReportFileResult(
       fileName: _buildFileName(
-        showName: showName,
         breedName: data.breedName,
         scope: data.scope,
+        showName: showName,
+        isAllShows: data.sections.isNotEmpty,
       ),
       mimeType: 'application/pdf',
       bytes: bytes,
@@ -68,9 +104,10 @@ class BreedResultsDetailReportPdf {
   }
 
   String _buildFileName({
-    required String showName,
     required String breedName,
     required String scope,
+    required String showName,
+    required bool isAllShows,
   }) {
     String clean(String input) {
       return input
@@ -79,17 +116,33 @@ class BreedResultsDetailReportPdf {
           .replaceAll(RegExp(r'\s+'), '_');
     }
 
-    return '${clean(showName)}_${clean(breedName)}_${clean(scope.toLowerCase())}_breed_results_detail.pdf';
+    final suffix =
+        isAllShows ? 'all_shows_breed_results_detail' : 'breed_results_detail';
+
+    return '${clean(showName)}_${clean(breedName)}_${clean(scope.toLowerCase())}_$suffix.pdf';
   }
 
   pw.Widget _buildHeader({
+    required String breedName,
+    required String scope,
+    required String showLetter,
+    required String judgeName,
     required String showName,
     required String showDate,
-    required String sanctionNumber,
   }) {
     return pw.Row(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
+        if (logoBytes != null)
+          pw.Container(
+            width: 105,
+            height: 80,
+            margin: const pw.EdgeInsets.only(right: 14),
+            child: pw.Image(
+              pw.MemoryImage(logoBytes!),
+              fit: pw.BoxFit.contain,
+            ),
+          ),
         pw.Expanded(
           child: pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -97,141 +150,157 @@ class BreedResultsDetailReportPdf {
               pw.Text(
                 'Breed Results Detail Report',
                 style: pw.TextStyle(
-                  fontSize: 18,
+                  fontSize: 20,
                   fontWeight: pw.FontWeight.bold,
                 ),
               ),
-              pw.SizedBox(height: 6),
-              pw.Text('Show: $showName'),
-              pw.Text('Date: $showDate'),
-              if (sanctionNumber.isNotEmpty)
-                pw.Text('Sanction #: $sanctionNumber'),
+              pw.SizedBox(height: 8),
+              pw.Text(
+                'Show: $showName',
+                style: const pw.TextStyle(fontSize: 10),
+              ),
+              pw.Text(
+                'Date: $showDate',
+                style: const pw.TextStyle(fontSize: 10),
+              ),
+              pw.SizedBox(height: 10),
+              pw.Container(
+                width: double.infinity,
+                padding: const pw.EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                decoration: const pw.BoxDecoration(
+                  color: PdfColors.grey300,
+                ),
+                child: pw.Row(
+                  children: [
+                    pw.Expanded(
+                      child: pw.Text(
+                        breedName,
+                        style: pw.TextStyle(
+                          fontSize: 13,
+                          fontWeight: pw.FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    pw.Expanded(
+                      child: pw.Text(
+                        'Judge: ${judgeName.isEmpty ? 'Judge Not Listed' : judgeName}',
+                        textAlign: pw.TextAlign.center,
+                        style: const pw.TextStyle(fontSize: 10),
+                      ),
+                    ),
+                    pw.Text(
+                      '$scope - $showLetter',
+                      style: pw.TextStyle(
+                        fontSize: 12,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
-        if (logoBytes != null)
-          pw.Container(
-            width: 80,
-            height: 60,
-            child: pw.Image(
-              pw.MemoryImage(logoBytes!),
-              fit: pw.BoxFit.contain,
-            ),
-          ),
       ],
     );
   }
 
-  pw.Widget _buildBreedHeader({
-    required String breedName,
-    required String scope,
-    required String judgeName,
+  List<pw.Widget> _buildSections({
+    required List<BreedAward> breedAwards,
+    required List<VarietySection> varieties,
   }) {
-    return pw.Container(
-      padding: const pw.EdgeInsets.all(8),
-      decoration: const pw.BoxDecoration(
-        color: PdfColors.grey300,
-      ),
-      child: pw.Row(
-        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-        children: [
-          pw.Text(
-            breedName,
-            style: pw.TextStyle(
-              fontSize: 14,
-              fontWeight: pw.FontWeight.bold,
-            ),
-          ),
-          pw.Text('Judge: $judgeName'),
-          pw.Text(scope),
-        ],
-      ),
-    );
-  }
+    final widgets = <pw.Widget>[];
 
-  pw.Widget _buildBreedAwards(List<BreedAward> awards) {
-    if (awards.isEmpty) return pw.SizedBox();
-
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
+    if (breedAwards.isNotEmpty) {
+      widgets.add(
         pw.Text(
           'Breed Awards',
           style: pw.TextStyle(
-            fontSize: 12,
+            fontSize: 14,
             fontWeight: pw.FontWeight.bold,
           ),
         ),
-        pw.SizedBox(height: 6),
-        pw.TableHelper.fromTextArray(
+      );
+      widgets.add(pw.SizedBox(height: 6));
+      widgets.add(
+        _buildAwardTable(
           headers: const ['Award', 'Animal', 'Class', 'Exhibitor'],
-          data: awards
-              .map((a) => [
-                    a.label,
-                    a.animal,
-                    a.className,
-                    a.exhibitor,
-                  ])
+          rows: breedAwards
+              .map((r) => [r.award, r.animal, r.className, r.exhibitorName])
               .toList(),
-          headerDecoration: const pw.BoxDecoration(
-            color: PdfColors.blueGrey700,
-          ),
-          headerStyle: pw.TextStyle(
-            color: PdfColors.white,
-            fontSize: 9,
-            fontWeight: pw.FontWeight.bold,
-          ),
-          cellStyle: const pw.TextStyle(fontSize: 9),
-          border: pw.TableBorder.all(
-            color: PdfColors.grey400,
-            width: 0.5,
-          ),
         ),
-      ],
-    );
-  }
+      );
+      widgets.add(pw.SizedBox(height: 14));
+    }
 
-  pw.Widget _buildVarietySection(VarietySection v) {
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.SizedBox(height: 10),
+    for (final variety in varieties) {
+      widgets.add(
         pw.Container(
           width: double.infinity,
-          padding: const pw.EdgeInsets.all(6),
-          decoration: const pw.BoxDecoration(
-            color: PdfColors.grey300,
-          ),
+          padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+          decoration: const pw.BoxDecoration(color: PdfColors.grey300),
           child: pw.Text(
-            v.varietyName,
+            variety.varietyName,
             style: pw.TextStyle(
+              fontSize: 12,
               fontWeight: pw.FontWeight.bold,
             ),
           ),
         ),
-        pw.SizedBox(height: 6),
-        _buildVarietyAwards(v),
-        pw.SizedBox(height: 6),
-        ...v.classes.map(_buildClassSection),
-      ],
-    );
+      );
+      widgets.add(pw.SizedBox(height: 6));
+
+      if (variety.awards.isNotEmpty) {
+        widgets.add(
+          _buildAwardTable(
+            headers: const ['Award', 'Animal', 'Class', 'Exhibitor'],
+            rows: variety.awards
+                .map((r) => [r.award, r.animal, r.className, r.exhibitorName])
+                .toList(),
+          ),
+        );
+        widgets.add(pw.SizedBox(height: 10));
+      }
+
+      for (final classGroup in variety.classes) {
+        widgets.add(
+          pw.Text(
+            '${classGroup.className} (${classGroup.entryCount}/${classGroup.placedCount})',
+            style: pw.TextStyle(
+              fontSize: 11,
+              fontWeight: pw.FontWeight.bold,
+            ),
+          ),
+        );
+        widgets.add(pw.SizedBox(height: 4));
+        widgets.add(
+          _buildPlacementTable(
+            rows: classGroup.rows
+                .map((r) => [r.place, r.animal, r.exhibitorName])
+                .toList(),
+          ),
+        );
+        widgets.add(pw.SizedBox(height: 10));
+      }
+
+      widgets.add(pw.SizedBox(height: 6));
+    }
+
+    return widgets;
   }
 
-  pw.Widget _buildVarietyAwards(VarietySection v) {
-    if (v.awards.isEmpty) return pw.SizedBox();
-
+  pw.Widget _buildAwardTable({
+    required List<String> headers,
+    required List<List<String>> rows,
+  }) {
     return pw.TableHelper.fromTextArray(
-      headers: const ['Award', 'Animal', 'Class', 'Exhibitor'],
-      data: v.awards
-          .map((a) => [
-                a.label,
-                a.animal,
-                a.className,
-                a.exhibitor,
-              ])
-          .toList(),
+      headers: headers,
+      data: rows,
       headerDecoration: const pw.BoxDecoration(
-        color: PdfColors.grey700,
+        color: PdfColors.blueGrey700,
       ),
       headerStyle: pw.TextStyle(
         color: PdfColors.white,
@@ -243,45 +312,38 @@ class BreedResultsDetailReportPdf {
         color: PdfColors.grey400,
         width: 0.5,
       ),
+      oddRowDecoration: const pw.BoxDecoration(
+        color: PdfColors.grey100,
+      ),
+      cellPadding: const pw.EdgeInsets.symmetric(
+        horizontal: 6,
+        vertical: 5,
+      ),
     );
   }
 
-  pw.Widget _buildClassSection(ClassSection c) {
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.SizedBox(height: 6),
-        pw.Text(
-          '${c.className} (${c.entryCount}/${c.exhibitorCount})',
-          style: pw.TextStyle(
-            fontSize: 10,
-            fontWeight: pw.FontWeight.bold,
-          ),
-        ),
-        pw.SizedBox(height: 4),
-        pw.TableHelper.fromTextArray(
-          headers: const ['Place', 'Animal', 'Exhibitor'],
-          data: c.entries
-              .map((e) => [
-                    e.place.toString(),
-                    e.animal,
-                    e.exhibitor,
-                  ])
-              .toList(),
-          headerDecoration: const pw.BoxDecoration(
-            color: PdfColors.grey200,
-          ),
-          headerStyle: pw.TextStyle(
-            fontSize: 9,
-            fontWeight: pw.FontWeight.bold,
-          ),
-          cellStyle: const pw.TextStyle(fontSize: 9),
-          border: pw.TableBorder.all(
-            color: PdfColors.grey400,
-            width: 0.5,
-          ),
-        ),
-      ],
+  pw.Widget _buildPlacementTable({
+    required List<List<String>> rows,
+  }) {
+    return pw.TableHelper.fromTextArray(
+      headers: const ['Place', 'Animal', 'Exhibitor'],
+      data: rows,
+      headerDecoration: const pw.BoxDecoration(
+        color: PdfColors.grey300,
+      ),
+      headerStyle: pw.TextStyle(
+        fontSize: 9,
+        fontWeight: pw.FontWeight.bold,
+      ),
+      cellStyle: const pw.TextStyle(fontSize: 9),
+      border: pw.TableBorder.all(
+        color: PdfColors.grey400,
+        width: 0.5,
+      ),
+      cellPadding: const pw.EdgeInsets.symmetric(
+        horizontal: 6,
+        vertical: 5,
+      ),
     );
   }
 

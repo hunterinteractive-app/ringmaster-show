@@ -4,10 +4,33 @@ import 'dart:typed_data';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+
+Future<pw.ThemeData> _buildPdfTheme() async {
+  final regular = pw.Font.ttf(
+    await rootBundle.load('assets/fonts/NotoSans-Regular.ttf'),
+  );
+  final bold = pw.Font.ttf(
+    await rootBundle.load('assets/fonts/NotoSans-Bold.ttf'),
+  );
+  final italic = pw.Font.ttf(
+    await rootBundle.load('assets/fonts/NotoSans-Italic.ttf'),
+  );
+  final boldItalic = pw.Font.ttf(
+    await rootBundle.load('assets/fonts/NotoSans-BoldItalic.ttf'),
+  );
+
+  return pw.ThemeData.withFont(
+    base: regular,
+    bold: bold,
+    italic: italic,
+    boldItalic: boldItalic,
+  );
+}
 
 final supabase = Supabase.instance.client;
 
@@ -714,300 +737,303 @@ class _ControlSheetsGeneratorSheetState
     return out;
   }
 
-  pw.Document _buildPdf(List<Map<String, dynamic>> rows) {
-    final doc = pw.Document();
+    pw.Document _buildPdf(
+    List<Map<String, dynamic>> rows,
+      pw.ThemeData theme,
+    ) {
+      final doc = pw.Document(theme: theme);
 
-    final bySection = <String, List<Map<String, dynamic>>>{};
-    for (final row in rows) {
-      final sid = _safe(row, 'section_id');
-      bySection.putIfAbsent(sid, () => <Map<String, dynamic>>[]);
-      bySection[sid]!.add(row);
-    }
-
-    final sectionRows = widget.combineSections
-        ? bySection.entries.toList()
-        : <MapEntry<String, List<Map<String, dynamic>>>>[
-            MapEntry(widget.sectionId ?? '', rows),
-          ];
-
-    final allPages = <Map<String, dynamic>>[];
-
-    for (final sectionEntry in sectionRows) {
-      final sectionEntries = sectionEntry.value;
-      if (sectionEntries.isEmpty) continue;
-
-      final grouped = <String, List<Map<String, dynamic>>>{};
-
-      for (final row in sectionEntries) {
-        final breed = _safe(row, 'breed');
-        final color = _colorLabel(row);
-        final cls = _ageOnly(_safe(row, 'class_name'));
-        final sex = _safe(row, 'sex');
-
-        final key = [
-          breed.toLowerCase(),
-          color.toLowerCase(),
-          cls.toLowerCase(),
-          sex.toLowerCase(),
-        ].join('|');
-
-        grouped.putIfAbsent(key, () => <Map<String, dynamic>>[]);
-        grouped[key]!.add(row);
+      final bySection = <String, List<Map<String, dynamic>>>{};
+      for (final row in rows) {
+        final sid = _safe(row, 'section_id');
+        bySection.putIfAbsent(sid, () => <Map<String, dynamic>>[]);
+        bySection[sid]!.add(row);
       }
 
-      final keys = grouped.keys.toList()..sort();
+      final sectionRows = widget.combineSections
+          ? bySection.entries.toList()
+          : <MapEntry<String, List<Map<String, dynamic>>>>[
+              MapEntry(widget.sectionId ?? '', rows),
+            ];
 
-      for (final key in keys) {
-        final groupRows = grouped[key]!;
-        if (groupRows.isEmpty) continue;
+      final allPages = <Map<String, dynamic>>[];
 
-        final first = groupRows.first;
-        final exhibitorIds = <String>{};
-        for (final row in groupRows) {
-          final exId = _safe(row, 'exhibitor_id');
-          if (exId.isNotEmpty) exhibitorIds.add(exId);
+      for (final sectionEntry in sectionRows) {
+        final sectionEntries = sectionEntry.value;
+        if (sectionEntries.isEmpty) continue;
+
+        final grouped = <String, List<Map<String, dynamic>>>{};
+
+        for (final row in sectionEntries) {
+          final breed = _safe(row, 'breed');
+          final color = _colorLabel(row);
+          final cls = _ageOnly(_safe(row, 'class_name'));
+          final sex = _safe(row, 'sex');
+
+          final key = [
+            breed.toLowerCase(),
+            color.toLowerCase(),
+            cls.toLowerCase(),
+            sex.toLowerCase(),
+          ].join('|');
+
+          grouped.putIfAbsent(key, () => <Map<String, dynamic>>[]);
+          grouped[key]!.add(row);
         }
 
-        allPages.add({
-          'sectionTitle': widget.combineSections
-              ? _sectionTitleFromRow(first)
-              : widget.sectionLabel,
-          'breed': _safe(first, 'breed'),
-          'color': _colorLabel(first),
-          'class': _ageOnly(_safe(first, 'class_name')),
-          'sex': _safe(first, 'sex'),
-          'rabbitCount': groupRows.length,
-          'exhibitorCount': exhibitorIds.length,
-          'rows': groupRows,
-          'specials': _specialsForRow(first),
-        });
+        final keys = grouped.keys.toList()..sort();
+
+        for (final key in keys) {
+          final groupRows = grouped[key]!;
+          if (groupRows.isEmpty) continue;
+
+          final first = groupRows.first;
+          final exhibitorIds = <String>{};
+
+          for (final row in groupRows) {
+            final exId = _safe(row, 'exhibitor_id');
+            if (exId.isNotEmpty) exhibitorIds.add(exId);
+          }
+
+          allPages.add({
+            'sectionTitle': widget.combineSections
+                ? _sectionTitleFromRow(first)
+                : widget.sectionLabel,
+            'breed': _safe(first, 'breed'),
+            'color': _colorLabel(first),
+            'class': _ageOnly(_safe(first, 'class_name')),
+            'sex': _safe(first, 'sex'),
+            'rabbitCount': groupRows.length,
+            'exhibitorCount': exhibitorIds.length,
+            'rows': groupRows,
+            'specials': _specialsForRow(first),
+          });
+        }
       }
-    }
 
-    final totalPages = allPages.length;
+      final totalPages = allPages.length;
 
-    pw.Widget _topHeader({
-      required String showHeader,
-      required String pageText,
-    }) {
-      final titleStyle =
-          pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold);
-      final pageStyle = pw.TextStyle(fontSize: 10);
+      pw.Widget _topHeader({
+        required String showHeader,
+        required String pageText,
+      }) {
+        final titleStyle =
+            pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold);
+        final pageStyle = pw.TextStyle(fontSize: 10);
 
-      return pw.Row(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          pw.Expanded(
-            child: pw.Column(
-              children: [
-                pw.Text(
-                  showHeader,
-                  style: titleStyle,
-                  textAlign: pw.TextAlign.center,
-                ),
-                pw.SizedBox(height: 8),
-                pw.Text(
-                  'Judging Sheet - Breed Class',
-                  style: pw.TextStyle(
-                    fontSize: 14,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
-                  textAlign: pw.TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-          pw.Padding(
-            padding: const pw.EdgeInsets.only(left: 12, top: 2),
-            child: pw.Text(pageText, style: pageStyle),
-          ),
-        ],
-      );
-    }
-
-    pw.Widget _underlinedValue(String label, String value) {
-      final textStyle =
-          pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold);
-
-      return pw.Row(
-        mainAxisSize: pw.MainAxisSize.min,
-        crossAxisAlignment: pw.CrossAxisAlignment.end,
-        children: [
-          pw.Text('$label: ', style: textStyle),
-          pw.Container(
-            decoration: const pw.BoxDecoration(
-              border: pw.Border(
-                bottom: pw.BorderSide(width: 0.8),
-              ),
-            ),
-            padding: const pw.EdgeInsets.only(bottom: 2),
-            child: pw.Text(value, style: textStyle),
-          ),
-        ],
-      );
-    }
-
-    pw.Widget _classHeaderBlock({
-      required String breed,
-      required String color,
-      required String cls,
-      required String sex,
-      required int rabbitCount,
-      required int exhibitorCount,
-    }) {
-      return pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-        children: [
-          pw.Row(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Expanded(
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    _underlinedValue('Breed', breed),
-                    pw.SizedBox(height: 10),
-                    _underlinedValue('Color', color),
-                  ],
-                ),
-              ),
-              pw.SizedBox(width: 18),
-              pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
+        return pw.Row(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Expanded(
+              child: pw.Column(
                 children: [
-                  pw.Row(
-                    children: [
-                      _underlinedValue('Class', cls),
-                      pw.SizedBox(width: 20),
-                      _underlinedValue('Sex', sex),
-                    ],
+                  pw.Text(
+                    showHeader,
+                    style: titleStyle,
+                    textAlign: pw.TextAlign.center,
                   ),
-                  pw.SizedBox(height: 10),
-                  pw.Row(
-                    children: [
-                      _underlinedValue(
-                          'No. in Class', rabbitCount.toString()),
-                      pw.SizedBox(width: 20),
-                      _underlinedValue(
-                          'No. Exhibitors', exhibitorCount.toString()),
-                    ],
+                  pw.SizedBox(height: 8),
+                  pw.Text(
+                    'Judging Sheet - Breed Class',
+                    style: pw.TextStyle(
+                      fontSize: 14,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                    textAlign: pw.TextAlign.center,
                   ),
                 ],
               ),
-            ],
-          ),
-        ],
-      );
-    }
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.only(left: 12, top: 2),
+              child: pw.Text(pageText, style: pageStyle),
+            ),
+          ],
+        );
+      }
 
-    pw.Widget _judgingTable({
-      required List<Map<String, dynamic>> groupEntries,
-      required List<String> specialsList,
-    }) {
-      final h = pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold);
-      final c = pw.TextStyle(fontSize: 9);
-      final specialsText = specialsList.join(', ');
+      pw.Widget _underlinedValue(String label, String value) {
+        final textStyle =
+            pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold);
 
-      return pw.Table(
-        border: pw.TableBorder.all(width: 0.8),
-        columnWidths: {
-          0: const pw.FixedColumnWidth(80),
-          1: const pw.FlexColumnWidth(1),
-          2: const pw.FixedColumnWidth(150),
-          3: const pw.FixedColumnWidth(140),
-        },
-        children: [
-          pw.TableRow(
-            decoration: const pw.BoxDecoration(color: PdfColors.grey300),
-            children: [
-              pw.Padding(
-                padding: const pw.EdgeInsets.all(6),
-                child: pw.Text('Ear #', style: h),
+        return pw.Row(
+          mainAxisSize: pw.MainAxisSize.min,
+          crossAxisAlignment: pw.CrossAxisAlignment.end,
+          children: [
+            pw.Text('$label: ', style: textStyle),
+            pw.Container(
+              decoration: const pw.BoxDecoration(
+                border: pw.Border(
+                  bottom: pw.BorderSide(width: 0.8),
+                ),
               ),
-              pw.Padding(
-                padding: const pw.EdgeInsets.all(6),
-                child: pw.Text('Exhibitor', style: h),
-              ),
-              pw.Padding(
-                padding: const pw.EdgeInsets.all(6),
-                child: pw.Text('Place / DQ', style: h),
-              ),
-              pw.Padding(
-                padding: const pw.EdgeInsets.all(6),
-                child: pw.Text('Specials', style: h),
-              ),
-            ],
-          ),
-          ...groupEntries.map((row) {
-            return pw.TableRow(
+              padding: const pw.EdgeInsets.only(bottom: 2),
+              child: pw.Text(value, style: textStyle),
+            ),
+          ],
+        );
+      }
+
+      pw.Widget _classHeaderBlock({
+        required String breed,
+        required String color,
+        required String cls,
+        required String sex,
+        required int rabbitCount,
+        required int exhibitorCount,
+      }) {
+        return pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+          children: [
+            pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Padding(
-                  padding: const pw.EdgeInsets.all(6),
-                  child: pw.Text(_safe(row, 'tattoo'), style: c),
-                ),
-                pw.Padding(
-                  padding: const pw.EdgeInsets.all(6),
-                  child: pw.Text(_safe(row, 'exhibitor_label'), style: c),
-                ),
-                pw.Padding(
-                  padding: const pw.EdgeInsets.all(6),
-                  child: pw.Text('', style: c),
-                ),
-                pw.Padding(
-                  padding: const pw.EdgeInsets.all(6),
-                  child: pw.Text(
-                    specialsText,
-                    style: c,
+                pw.Expanded(
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      _underlinedValue('Breed', breed),
+                      pw.SizedBox(height: 10),
+                      _underlinedValue('Color', color),
+                    ],
                   ),
                 ),
-              ],
-            );
-          }),
-        ],
-      );
-    }
-
-    for (var i = 0; i < allPages.length; i++) {
-      final p = allPages[i];
-
-      doc.addPage(
-        pw.Page(
-          pageFormat: PdfPageFormat.letter,
-          margin: const pw.EdgeInsets.fromLTRB(28, 28, 28, 28),
-          build: (_) {
-            return pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-              children: [
-                _topHeader(
-                  showHeader:
-                      '${widget.showName}   ${(p['sectionTitle'] ?? '').toString()}',
-                  pageText: 'Page ${i + 1} of $totalPages',
-                ),
-                pw.SizedBox(height: 18),
-                _classHeaderBlock(
-                  breed: (p['breed'] ?? '').toString(),
-                  color: (p['color'] ?? '').toString(),
-                  cls: (p['class'] ?? '').toString(),
-                  sex: (p['sex'] ?? '').toString(),
-                  rabbitCount: (p['rabbitCount'] as int?) ?? 0,
-                  exhibitorCount: (p['exhibitorCount'] as int?) ?? 0,
-                ),
-                pw.SizedBox(height: 14),
-                _judgingTable(
-                  groupEntries:
-                      (p['rows'] as List).cast<Map<String, dynamic>>(),
-                  specialsList:
-                      (p['specials'] as List).map((x) => x.toString()).toList(),
+                pw.SizedBox(width: 18),
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Row(
+                      children: [
+                        _underlinedValue('Class', cls),
+                        pw.SizedBox(width: 20),
+                        _underlinedValue('Sex', sex),
+                      ],
+                    ),
+                    pw.SizedBox(height: 10),
+                    pw.Row(
+                      children: [
+                        _underlinedValue('No. in Class', rabbitCount.toString()),
+                        pw.SizedBox(width: 20),
+                        _underlinedValue(
+                          'No. Exhibitors',
+                          exhibitorCount.toString(),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ],
-            );
+            ),
+          ],
+        );
+      }
+
+      pw.Widget _judgingTable({
+        required List<Map<String, dynamic>> groupEntries,
+        required List<String> specialsList,
+      }) {
+        final h = pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold);
+        final c = pw.TextStyle(fontSize: 9);
+        final specialsText = specialsList.join(', ');
+
+        return pw.Table(
+          border: pw.TableBorder.all(width: 0.8),
+          columnWidths: {
+            0: const pw.FixedColumnWidth(80),
+            1: const pw.FlexColumnWidth(1),
+            2: const pw.FixedColumnWidth(150),
+            3: const pw.FixedColumnWidth(140),
           },
-        ),
-      );
-    }
+          children: [
+            pw.TableRow(
+              decoration: const pw.BoxDecoration(color: PdfColors.grey300),
+              children: [
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(6),
+                  child: pw.Text('Ear #', style: h),
+                ),
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(6),
+                  child: pw.Text('Exhibitor', style: h),
+                ),
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(6),
+                  child: pw.Text('Place / DQ', style: h),
+                ),
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(6),
+                  child: pw.Text('Specials', style: h),
+                ),
+              ],
+            ),
+            ...groupEntries.map((row) {
+              return pw.TableRow(
+                children: [
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(6),
+                    child: pw.Text(_safe(row, 'tattoo'), style: c),
+                  ),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(6),
+                    child: pw.Text(_safe(row, 'exhibitor_label'), style: c),
+                  ),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(6),
+                    child: pw.Text('', style: c),
+                  ),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(6),
+                    child: pw.Text(specialsText, style: c),
+                  ),
+                ],
+              );
+            }),
+          ],
+        );
+      }
 
-    return doc;
-  }
+      for (var i = 0; i < allPages.length; i++) {
+        final p = allPages[i];
+
+        doc.addPage(
+          pw.Page(
+            pageFormat: PdfPageFormat.letter,
+            margin: const pw.EdgeInsets.fromLTRB(28, 28, 28, 28),
+            theme: theme,
+            build: (_) {
+              return pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+                children: [
+                  _topHeader(
+                    showHeader:
+                        '${widget.showName}   ${(p['sectionTitle'] ?? '').toString()}',
+                    pageText: 'Page ${i + 1} of $totalPages',
+                  ),
+                  pw.SizedBox(height: 18),
+                  _classHeaderBlock(
+                    breed: (p['breed'] ?? '').toString(),
+                    color: (p['color'] ?? '').toString(),
+                    cls: (p['class'] ?? '').toString(),
+                    sex: (p['sex'] ?? '').toString(),
+                    rabbitCount: (p['rabbitCount'] as int?) ?? 0,
+                    exhibitorCount: (p['exhibitorCount'] as int?) ?? 0,
+                  ),
+                  pw.SizedBox(height: 14),
+                  _judgingTable(
+                    groupEntries:
+                        (p['rows'] as List).cast<Map<String, dynamic>>(),
+                    specialsList:
+                        (p['specials'] as List).map((x) => x.toString()).toList(),
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      }
+
+      return doc;
+    }
 
   Future<void> _generatePdf() async {
     if (_building) return;
@@ -1029,7 +1055,8 @@ class _ControlSheetsGeneratorSheetState
         return;
       }
 
-      final doc = _buildPdf(rows);
+      final theme = await _buildPdfTheme();
+      final doc = _buildPdf(rows, theme);
       final bytes = await doc.save();
 
       final name = widget.combineSections
@@ -1357,8 +1384,9 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
 
   pw.Document _buildPdf({
     required List<Map<String, dynamic>> entries,
+    required pw.ThemeData theme,
   }) {
-    final doc = pw.Document();
+    final doc = pw.Document(theme: theme);
 
     final grouped = _groupByExhibitor(entries);
     final exhibitorKeys = grouped.keys.toList()
@@ -1814,7 +1842,11 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
         return;
       }
 
-      final doc = _buildPdf(entries: entries);
+      final theme = await _buildPdfTheme();
+      final doc = _buildPdf(
+        entries: entries,
+        theme: theme,
+      );
       final bytes = await doc.save();
 
       final name = widget.combineSections

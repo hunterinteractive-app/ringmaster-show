@@ -4,14 +4,32 @@ class BreedResultsDetailReportData {
   final String showId;
   final String breedName;
   final String scope;
+  final String showLetter;
   final String judgeName;
   final List<BreedAward> breedAwards;
   final List<VarietySection> varieties;
+  final List<BreedResultsDetailSection> sections;
 
   const BreedResultsDetailReportData({
     required this.showId,
     required this.breedName,
     required this.scope,
+    required this.showLetter,
+    required this.judgeName,
+    required this.breedAwards,
+    required this.varieties,
+    this.sections = const [],
+  });
+}
+
+class BreedResultsDetailSection {
+  final String showLetter;
+  final String judgeName;
+  final List<BreedAward> breedAwards;
+  final List<VarietySection> varieties;
+
+  const BreedResultsDetailSection({
+    required this.showLetter,
     required this.judgeName,
     required this.breedAwards,
     required this.varieties,
@@ -19,16 +37,16 @@ class BreedResultsDetailReportData {
 }
 
 class BreedAward {
-  final String label;
+  final String award;
   final String animal;
   final String className;
-  final String exhibitor;
+  final String exhibitorName;
 
   const BreedAward({
-    required this.label,
+    required this.award,
     required this.animal,
     required this.className,
-    required this.exhibitor,
+    required this.exhibitorName,
   });
 }
 
@@ -47,25 +65,25 @@ class VarietySection {
 class ClassSection {
   final String className;
   final int entryCount;
-  final int exhibitorCount;
-  final List<ClassEntry> entries;
+  final int placedCount;
+  final List<ClassEntry> rows;
 
   const ClassSection({
     required this.className,
     required this.entryCount,
-    required this.exhibitorCount,
-    required this.entries,
+    required this.placedCount,
+    required this.rows,
   });
 }
 
 class ClassEntry {
-  final int place;
+  final String place;
   final String animal;
-  final String exhibitor;
+  final String exhibitorName;
 
   const ClassEntry({
     required this.place,
     required this.animal,
-    required this.exhibitor,
+    required this.exhibitorName,
   });
 }

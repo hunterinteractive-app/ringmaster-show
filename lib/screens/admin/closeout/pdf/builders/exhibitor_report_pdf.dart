@@ -1,3 +1,5 @@
+// lib/screens/admin/closeout/pdf/builders/exhibitor_report_pdf.dart
+
 import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
@@ -25,36 +27,61 @@ class ExhibitorReportPdfBuilder {
     );
   }
 
+  Future<pw.ThemeData> _buildTheme() async {
+    final regular = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSans-Regular.ttf'),
+    );
+    final bold = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSans-Bold.ttf'),
+    );
+    final italic = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSans-Italic.ttf'),
+    );
+    final boldItalic = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSans-BoldItalic.ttf'),
+    );
+
+    return pw.ThemeData.withFont(
+      base: regular,
+      bold: bold,
+      italic: italic,
+      boldItalic: boldItalic,
+    );
+  }
+
   Future<ReportFileResult> buildFile(
     List<ExhibitorReportData> data,
     ReportRequest request,
   ) async {
-    final pdf = pw.Document();
+    final theme = await _buildTheme();
+    final pdf = pw.Document(theme: theme);
     final logoImage = pw.MemoryImage(logoBytes);
 
     if (data.isEmpty) {
       pdf.addPage(
         pw.Page(
-            pageFormat: PdfPageFormat.letter,
-            margin: const pw.EdgeInsets.fromLTRB(24, 24, 24, 34),
-            build: (context) => pw.Column(
+          pageFormat: PdfPageFormat.letter,
+          margin: const pw.EdgeInsets.fromLTRB(24, 24, 24, 34),
+          theme: theme,
+          build: (context) => pw.Column(
             children: [
-                pw.Expanded(
+              pw.Expanded(
                 child: pw.Center(
-                    child: pw.Text('No exhibitor reports found.'),
+                  child: pw.Text('No exhibitor reports found.'),
                 ),
-                ),
-                _footer(context),
+              ),
+              _footer(context),
             ],
-            ),
+          ),
         ),
-        );
+      );
     } else {
       for (final exhibitor in data) {
         pdf.addPage(
           pw.MultiPage(
             pageFormat: PdfPageFormat.letter,
             margin: const pw.EdgeInsets.fromLTRB(24, 24, 24, 34),
+            theme: theme,
             header: (_) => _header(exhibitor, logoImage),
             footer: (context) => _footer(context),
             build: (_) => [
@@ -131,10 +158,10 @@ class ExhibitorReportPdfBuilder {
               child: pw.Padding(
                 padding: const pw.EdgeInsets.only(top: 4),
                 child: pw.Image(
-                logoImage,
-                fit: pw.BoxFit.contain,
+                  logoImage,
+                  fit: pw.BoxFit.contain,
                 ),
-            ),
+              ),
             ),
           ],
         ),

@@ -1,6 +1,8 @@
 // lib/screens/admin/closeout/pdf/builders/sweepstakes_report_pdf.dart
 
 import 'dart:typed_data';
+
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
@@ -13,11 +15,34 @@ class SweepstakesReportPdf {
 
   SweepstakesReportPdf({this.logoBytes});
 
+  Future<pw.ThemeData> _buildTheme() async {
+    final regular = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSans-Regular.ttf'),
+    );
+    final bold = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSans-Bold.ttf'),
+    );
+    final italic = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSans-Italic.ttf'),
+    );
+    final boldItalic = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSans-BoldItalic.ttf'),
+    );
+
+    return pw.ThemeData.withFont(
+      base: regular,
+      bold: bold,
+      italic: italic,
+      boldItalic: boldItalic,
+    );
+  }
+
   Future<ReportFileResult> buildFile(
     SweepstakesReportData data,
     ReportRequest request,
   ) async {
-    final pdf = pw.Document();
+    final theme = await _buildTheme();
+    final pdf = pw.Document(theme: theme);
 
     final showName = (request.showName ?? '').trim().isEmpty
         ? 'Unknown Show'
@@ -29,29 +54,60 @@ class SweepstakesReportPdf {
 
     final sanctionNumber = (request.sanctionNumber ?? '').trim();
 
-    pdf.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.letter.landscape,
-        margin: const pw.EdgeInsets.all(24),
-        footer: (context) => _footer(context),
-        build: (context) => [
-          _buildHeader(
-            data: data,
-            showName: showName,
-            showDate: showDate,
-            sanctionNumber: sanctionNumber,
-          ),
-          pw.SizedBox(height: 14),
-          _buildResultsTable(data),
-          pw.SizedBox(height: 16),
-          _buildCalculationExplanation(data),
-          if (data.isProvisional) ...[
-            pw.SizedBox(height: 12),
-            _buildDisclaimer(data),
+    final sections = data.sections.isNotEmpty
+        ? data.sections
+        : [
+            SweepstakesReportSection(
+              showLetter: data.showLetter,
+              ruleSource: data.ruleSource,
+              verificationStatus: data.verificationStatus,
+              engineType: data.engineType,
+              rows: data.rows,
+            ),
+          ];
+
+    for (final section in sections) {
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.letter.landscape,
+          margin: const pw.EdgeInsets.all(24),
+          theme: theme,
+          footer: (context) => _footer(context),
+          build: (context) => [
+            _buildHeader(
+              breedName: data.breedName,
+              scope: data.scope,
+              showLetter: section.showLetter,
+              showName: showName,
+              showDate: showDate,
+              sanctionNumber: sanctionNumber,
+            ),
+            pw.SizedBox(height: 14),
+            _buildResultsTable(
+              rows: section.rows,
+              showVarietyPoints: _showVarietyPoints(section.rows),
+              showGroupPoints: _showGroupPoints(section.rows),
+              showBobPoints: _showBobPoints(section.rows),
+              showBisPoints: _showBisPoints(section.rows),
+              showFurPoints: _showFurPoints(section.rows),
+            ),
+            pw.SizedBox(height: 16),
+            _buildCalculationExplanation(
+              engineType: section.engineType,
+              showVarietyPoints: _showVarietyPoints(section.rows),
+              showGroupPoints: _showGroupPoints(section.rows),
+              showBobPoints: _showBobPoints(section.rows),
+              showBisPoints: _showBisPoints(section.rows),
+              showFurPoints: _showFurPoints(section.rows),
+            ),
+            if (_isProvisional(section.verificationStatus)) ...[
+              pw.SizedBox(height: 12),
+              _buildDisclaimer(),
+            ],
           ],
-        ],
-      ),
-    );
+        ),
+      );
+    }
 
     final bytes = await pdf.save();
 
@@ -60,6 +116,7 @@ class SweepstakesReportPdf {
         breedName: data.breedName,
         scope: data.scope,
         showName: showName,
+        isAllShows: data.sections.isNotEmpty,
       ),
       mimeType: 'application/pdf',
       bytes: bytes,
@@ -70,6 +127,7 @@ class SweepstakesReportPdf {
     required String breedName,
     required String scope,
     required String showName,
+    required bool isAllShows,
   }) {
     String clean(String input) {
       return input
@@ -78,11 +136,14 @@ class SweepstakesReportPdf {
           .replaceAll(RegExp(r'\s+'), '_');
     }
 
-    return '${clean(showName)}_${clean(breedName)}_${clean(scope.toLowerCase())}_sweepstakes.pdf';
+    final suffix = isAllShows ? 'all_shows_sweepstakes' : 'sweepstakes';
+    return '${clean(showName)}_${clean(breedName)}_${clean(scope.toLowerCase())}_$suffix.pdf';
   }
 
   pw.Widget _buildHeader({
-    required SweepstakesReportData data,
+    required String breedName,
+    required String scope,
+    required String showLetter,
     required String showName,
     required String showDate,
     required String sanctionNumber,
@@ -149,9 +210,9 @@ class SweepstakesReportPdf {
                   children: [
                     infoRow('Show Name', showName),
                     infoRow('Show Date', showDate),
-                    infoRow('Breed', data.breedName),
-                    infoRow('Scope', data.scope),
-                    infoRow('Show Letter', data.showLetter),
+                    infoRow('Breed', breedName),
+                    infoRow('Scope', scope),
+                    infoRow('Show Letter', showLetter),
                     if (sanctionNumber.isNotEmpty)
                       infoRow('Sanction #', sanctionNumber),
                   ],
@@ -164,29 +225,36 @@ class SweepstakesReportPdf {
     );
   }
 
-  pw.Widget _buildResultsTable(SweepstakesReportData data) {
+  pw.Widget _buildResultsTable({
+    required List<SweepstakesReportRow> rows,
+    required bool showVarietyPoints,
+    required bool showGroupPoints,
+    required bool showBobPoints,
+    required bool showBisPoints,
+    required bool showFurPoints,
+  }) {
     final headers = <String>[
       'Rank',
       'Exhibitor',
       'Class',
-      if (data.showVarietyPoints) 'Variety',
-      if (data.showGroupPoints) 'Group',
-      if (data.showBobPoints) 'BOB/BOS',
-      if (data.showBisPoints) 'BIS/BRIS',
-      if (data.showFurPoints) 'Fur/Wool',
+      if (showVarietyPoints) 'Variety',
+      if (showGroupPoints) 'Group',
+      if (showBobPoints) 'BOB/BOS',
+      if (showBisPoints) 'BIS/BRIS',
+      if (showFurPoints) 'Fur/Wool',
       'Total',
     ];
 
-    final tableData = data.rows.map((row) {
+    final tableData = rows.map((row) {
       return [
         row.rank.toString(),
         row.exhibitorName,
         _fmt(row.classPoints),
-        if (data.showVarietyPoints) _fmt(row.varietyPoints),
-        if (data.showGroupPoints) _fmt(row.groupPoints),
-        if (data.showBobPoints) _fmt(row.bobPoints),
-        if (data.showBisPoints) _fmt(row.bisPoints),
-        if (data.showFurPoints) _fmt(row.furPoints),
+        if (showVarietyPoints) _fmt(row.varietyPoints),
+        if (showGroupPoints) _fmt(row.groupPoints),
+        if (showBobPoints) _fmt(row.bobPoints),
+        if (showBisPoints) _fmt(row.bisPoints),
+        if (showFurPoints) _fmt(row.furPoints),
         _fmt(row.totalPoints),
       ];
     }).toList();
@@ -215,30 +283,30 @@ class SweepstakesReportPdf {
     );
   }
 
-  pw.Widget _buildCalculationExplanation(SweepstakesReportData data) {
+  pw.Widget _buildCalculationExplanation({
+    required String engineType,
+    required bool showVarietyPoints,
+    required bool showGroupPoints,
+    required bool showBobPoints,
+    required bool showBisPoints,
+    required bool showFurPoints,
+  }) {
     final lines = <String>[
       'Points are awarded based on official sweepstakes scoring rules for this breed.',
-      
-      if (data.engineType.toUpperCase().contains('FLAT'))
-        '- Class placements are assigned fixed point values based on placing (1st–5th).'
+      if (engineType.toUpperCase().contains('FLAT'))
+        '- Class placements are assigned fixed point values based on placing (1st-5th).'
       else
         '- Class placements are weighted based on class size or exhibitor count.',
-
-      if (data.showVarietyPoints)
+      if (showVarietyPoints)
         '- Variety awards contribute additional points where applicable.',
-
-      if (data.showGroupPoints)
+      if (showGroupPoints)
         '- Group awards contribute additional points where applicable.',
-
-      if (data.showBobPoints)
+      if (showBobPoints)
         '- Best of Breed (BOB) and Best Opposite Sex (BOS) awards are included.',
-
-      if (data.showBisPoints)
+      if (showBisPoints)
         '- Best in Show (BIS) and Reserve Best in Show (RBIS) awards are included.',
-
-      if (data.showFurPoints)
+      if (showFurPoints)
         '- Fur/Wool class awards are included when applicable.',
-
       '- Total points reflect the combined value of all placements and awards earned at this show.',
     ];
 
@@ -274,7 +342,7 @@ class SweepstakesReportPdf {
     );
   }
 
-  pw.Widget _buildDisclaimer(SweepstakesReportData data) {
+  pw.Widget _buildDisclaimer() {
     return pw.Container(
       width: double.infinity,
       padding: const pw.EdgeInsets.all(10),
@@ -296,7 +364,7 @@ class SweepstakesReportPdf {
           ),
           pw.SizedBox(height: 4),
           pw.Text(
-            data.disclaimer,
+            'This report may contain provisional calculations and should be reviewed against the breed club rules before final submission.',
             style: const pw.TextStyle(fontSize: 9),
           ),
         ],
@@ -335,6 +403,24 @@ class SweepstakesReportPdf {
       ),
     );
   }
+
+  bool _showVarietyPoints(List<SweepstakesReportRow> rows) =>
+      rows.any((r) => r.varietyPoints != 0);
+
+  bool _showGroupPoints(List<SweepstakesReportRow> rows) =>
+      rows.any((r) => r.groupPoints != 0);
+
+  bool _showBobPoints(List<SweepstakesReportRow> rows) =>
+      rows.any((r) => r.bobPoints != 0);
+
+  bool _showBisPoints(List<SweepstakesReportRow> rows) =>
+      rows.any((r) => r.bisPoints != 0);
+
+  bool _showFurPoints(List<SweepstakesReportRow> rows) =>
+      rows.any((r) => r.furPoints != 0);
+
+  bool _isProvisional(String verificationStatus) =>
+      verificationStatus.trim().toUpperCase() != 'VERIFIED';
 
   String _fmt(double value) {
     if (value == value.roundToDouble()) {
