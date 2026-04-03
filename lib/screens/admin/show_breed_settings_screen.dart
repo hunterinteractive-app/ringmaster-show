@@ -20,6 +20,8 @@ class ShowBreedSettingsScreen extends StatefulWidget {
 }
 
 class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
+  final ScrollController _breedScrollController = ScrollController();
+
   String _speciesFilter = 'all'; // all | rabbit | cavy
   String _search = '';
   String? _msg;
@@ -49,6 +51,12 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
   void initState() {
     super.initState();
     _refresh();
+  }
+
+  @override
+  void dispose() {
+    _breedScrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadShowLock() async {
@@ -707,16 +715,24 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
                 const SizedBox(height: 4),
 
                 Expanded(
-                  child: _loading
-                      ? const Center(child: CircularProgressIndicator())
-                      : _breeds.isEmpty
-                          ? const Center(
-                              child: Text(
-                                'No breeds found.',
-                                style: TextStyle(fontWeight: FontWeight.w500),
-                              ),
-                            )
-                          : ListView.builder(
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _breeds.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'No breeds found.',
+                              style: TextStyle(fontWeight: FontWeight.w500),
+                            ),
+                          )
+                        : Scrollbar(
+                            controller: _breedScrollController,
+                            thumbVisibility: true,
+                            child: ListView.builder(
+                              controller: _breedScrollController,
+                              primary: false,
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              keyboardDismissBehavior:
+                                  ScrollViewKeyboardDismissBehavior.onDrag,
                               padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
                               itemCount: _breeds.length,
                               itemBuilder: (context, i) {
@@ -1088,6 +1104,7 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
                                 );
                               },
                             ),
+                          ),
                 ),
               ],
             ),

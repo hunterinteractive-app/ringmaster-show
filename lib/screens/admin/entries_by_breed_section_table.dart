@@ -92,17 +92,30 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
         return al.compareTo(bl);
       });
 
-      var q = supabase
-          .from('entries')
-          .select('section_id,breed,variety,class_name,sex,exhibitor_id,species,scratched_at')
-          .eq('show_id', widget.showId);
+      final rows = await supabase.rpc(
+        'report_entries_by_breed_section',
+        params: {
+          'p_show_id': widget.showId,
+          'p_include_scratched': widget.includeScratched,
+        },
+      );
 
-      if (!widget.includeScratched) {
-        q = q.isFilter('scratched_at', null);
-      }
+      final entries = (rows as List).cast<Map<String, dynamic>>()
+        ..sort((a, b) {
+          int cmp(String key) =>
+              ((a[key] ?? '').toString()).compareTo((b[key] ?? '').toString());
 
-      final rows = await q.order('breed').order('variety').order('class_name').order('sex');
-      final entries = (rows as List).cast<Map<String, dynamic>>();
+          final breedCmp = cmp('breed');
+          if (breedCmp != 0) return breedCmp;
+
+          final varietyCmp = cmp('variety');
+          if (varietyCmp != 0) return varietyCmp;
+
+          final classCmp = cmp('class_name');
+          if (classCmp != 0) return classCmp;
+
+          return cmp('sex');
+        });
 
       final groups = _buildGroups(entries);
 

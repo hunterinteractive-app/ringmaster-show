@@ -447,13 +447,13 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
     );
   }
 
-  void _openResultsValidation() {
-    _showPostShowPlaceholder(
-      title: 'Results Validation',
-      body:
-          'This is the next post-show screen to build.\n\nUse it to review missing placements, inconsistent specials, and incomplete class results before publishing.',
-    );
-  }
+//  void _openResultsValidation() {
+//    _showPostShowPlaceholder(
+//      title: 'Results Validation',
+//      body:
+//          'This is the next post-show screen to build.\n\nUse it to review missing placements, inconsistent specials, and incomplete class results before publishing.',
+//    );
+//  }
 
   void _openPublishResultsFuture() {
     _showPostShowPlaceholder(
@@ -784,15 +784,45 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                             SwitchListTile(
                               contentPadding: EdgeInsets.zero,
                               title: const Text('Published'),
-                              subtitle: Text(
-                                _entryClosed()
-                                    ? 'Entry is closed. This show remains visible in Upcoming Shows, but publication can no longer be changed.'
-                                    : 'If off, exhibitors won’t see this show in the public list.',
+                              subtitle: const Text(
+                                'Controls whether this show is published.',
                               ),
                               value: _published,
-                              onChanged: (_saving || _entryClosed())
+                              onChanged: _saving
                                   ? null
-                                  : (v) => setState(() => _published = v),
+                                  : (v) async {
+                                      final previous = _published;
+
+                                      setState(() {
+                                        _published = v;
+                                        _saving = true;
+                                        _msg = null;
+                                      });
+
+                                      try {
+                                        await supabase
+                                            .from('shows')
+                                            .update({
+                                              'is_published': v,
+                                            })
+                                            .eq('id', widget.showId);
+
+                                        if (!mounted) return;
+                                        setState(() {
+                                          _saving = false;
+                                          _msg = v
+                                              ? 'Show published.'
+                                              : 'Show unpublished.';
+                                        });
+                                      } catch (e) {
+                                        if (!mounted) return;
+                                        setState(() {
+                                          _published = previous;
+                                          _saving = false;
+                                          _msg = 'Failed to update publish status: $e';
+                                        });
+                                      }
+                                    },
                             ),
                             const SizedBox(height: 12),
                             DropdownButtonFormField<String>(
@@ -890,28 +920,28 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                   'Enter placements, DQs, and specials by class',
                               onTap: _saving ? null : _openResultsEntry,
                             ),
-                            _buildSettingsActionTile(
-                              icon: Icons.verified,
-                              title: 'Results Validation',
-                              subtitle:
-                                  'Check for missing or inconsistent results before publishing',
-                              onTap: _saving ? null : _openResultsValidation,
-                            ),
-                            _buildSettingsActionTile(
-                              icon: Icons.public,
-                              title: 'Publish Results',
-                              subtitle:
-                                  'Future: make finalized results visible to exhibitors and the public',
-                              onTap: _saving ? null : _openPublishResultsFuture,
-                            ),
-                            _buildSettingsActionTile(
-                              icon: Icons.request_quote,
-                              title: 'Financial Closeout',
-                              subtitle:
-                                  'Future: finalize balances and reconcile show payments',
-                              onTap:
-                                  _saving ? null : _openFinancialCloseoutLater,
-                            ),
+//                            _buildSettingsActionTile(
+//                              icon: Icons.verified,
+//                              title: 'Results Validation',
+//                              subtitle:
+//                                  'Check for missing or inconsistent results before publishing',
+//                              onTap: _saving ? null : _openResultsValidation,
+//                            ),
+//                            _buildSettingsActionTile(
+//                              icon: Icons.public,
+//                              title: 'Publish Results',
+//                              subtitle:
+//                                  'Future: make finalized results visible to exhibitors and the public',
+//                              onTap: _saving ? null : _openPublishResultsFuture,
+//                            ),
+//                            _buildSettingsActionTile(
+//                              icon: Icons.request_quote,
+//                              title: 'Financial Closeout',
+//                              subtitle:
+//                                  'Future: finalize balances and reconcile show payments',
+//                              onTap:
+//                                  _saving ? null : _openFinancialCloseoutLater,
+//                            ),
                             _buildSettingsActionTile(
                               icon: Icons.archive,
                               title: 'Close Show',

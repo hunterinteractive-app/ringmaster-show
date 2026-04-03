@@ -25,10 +25,13 @@ class ShowListScreen extends StatelessWidget {
   const ShowListScreen({super.key});
 
   Future<List<Map<String, dynamic>>> _loadShows() async {
+    final now = DateTime.now().toUtc().toIso8601String();
+
     final res = await supabase
         .from('shows')
         .select('id,name,start_date,location_name,entry_close_at')
         .eq('is_published', true)
+        .or('entry_close_at.is.null,entry_close_at.gte.$now')
         .order('start_date');
 
     return (res as List).cast<Map<String, dynamic>>();

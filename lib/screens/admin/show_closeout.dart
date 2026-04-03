@@ -129,77 +129,80 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     super.dispose();
   }
 
-  Future<void> _generateAllReports() async {
-    const supportedBulkReports = <String>{
-      'arba_report',
-      'exhibitor_report',
-      'legs',
-      'sweepstakes_report',
-      'breed_results_detail_report',
-    };
+    Future<void> _generateAllReports() async {
+      final ready = await _ensureResultsReadyForReports();
+      if (!ready) return;
 
-    final artifacts = (_dashboard?.reports ?? const <ReportArtifactSummary>[])
-        .where((r) =>
-            r.reportName.isNotEmpty &&
-            supportedBulkReports.contains(r.reportName))
-        .toList()
-      ..sort((a, b) {
-        final aIndex = _reportDisplayOrder.indexOf(a.reportName);
-        final bIndex = _reportDisplayOrder.indexOf(b.reportName);
+      const supportedBulkReports = <String>{
+        'arba_report',
+        'exhibitor_report',
+        'legs',
+        'sweepstakes_report',
+        'breed_results_detail_report',
+      };
 
-        if (aIndex == -1 && bIndex == -1) {
-          return a.reportName.compareTo(b.reportName);
-        }
-        if (aIndex == -1) return 1;
-        if (bIndex == -1) return -1;
-        return aIndex.compareTo(bIndex);
+      final artifacts = (_dashboard?.reports ?? const <ReportArtifactSummary>[])
+          .where((r) =>
+              r.reportName.isNotEmpty &&
+              supportedBulkReports.contains(r.reportName))
+          .toList()
+        ..sort((a, b) {
+          final aIndex = _reportDisplayOrder.indexOf(a.reportName);
+          final bIndex = _reportDisplayOrder.indexOf(b.reportName);
+
+          if (aIndex == -1 && bIndex == -1) {
+            return a.reportName.compareTo(b.reportName);
+          }
+          if (aIndex == -1) return 1;
+          if (bIndex == -1) return -1;
+          return aIndex.compareTo(bIndex);
+        });
+
+      if (artifacts.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No report artifacts found to generate.')),
+        );
+        return;
+      }
+
+      setState(() {
+        _generatingReport = true;
       });
 
-    if (artifacts.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No report artifacts found to generate.')),
-      );
-      return;
-    }
+      try {
+        final confirmed = await showDialog<bool>(
+              context: context,
+              barrierDismissible: false,
+              builder: (context) => _GenerateAllReportsDialog(
+                artifacts: artifacts,
+                onRun: (
+                  onStarted,
+                  onFinished,
+                  onFailed,
+                ) async {
+                  await _runGenerateAllReportsLive(
+                    artifacts,
+                    onStarted: onStarted,
+                    onFinished: onFinished,
+                    onFailed: onFailed,
+                  );
+                },
+              ),
+            ) ??
+            false;
 
-    setState(() {
-      _generatingReport = true;
-    });
+        if (!confirmed) return;
 
-    try {
-      final confirmed = await showDialog<bool>(
-            context: context,
-            barrierDismissible: false,
-            builder: (context) => _GenerateAllReportsDialog(
-              artifacts: artifacts,
-              onRun: (
-                onStarted,
-                onFinished,
-                onFailed,
-              ) async {
-                await _runGenerateAllReportsLive(
-                  artifacts,
-                  onStarted: onStarted,
-                  onFinished: onFinished,
-                  onFailed: onFailed,
-                );
-              },
-            ),
-          ) ??
-          false;
-
-      if (!confirmed) return;
-
-      await _loadData();
-    } finally {
-      if (mounted) {
-        setState(() {
-          _generatingReport = false;
-        });
+        await _loadData();
+      } finally {
+        if (mounted) {
+          setState(() {
+            _generatingReport = false;
+          });
+        }
       }
     }
-  }
 
   Future<void> _runGenerateAllReportsLive(
     List<ReportArtifactSummary> artifacts, {
@@ -340,6 +343,102 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       const SnackBar(content: Text('Sending club reports (next step)')),
     );
   }
+
+    bool get _resultsReadyForReports =>
+        _dashboard?.resultsReadiness.ready == true;
+
+    String _resultsReadinessMessage() {
+      final readiness = _dashboard?.resultsReadiness;
+      if (readiness == null) {
+        return 'Results readiness could not be verified.';
+      }
+
+      final parts = <String>[];
+
+      if (readiness.missingPlacementCount > 0) {
+        parts.add(
+          '${readiness.missingPlacementCount} missing placement${readiness.missingPlacementCount == 1 ? '' : 's'}',
+        );
+      }
+
+      if (readiness.missingJudgeCount > 0) {
+        parts.add(
+          '${readiness.missingJudgeCount} missing judge${readiness.missingJudgeCount == 1 ? '' : 's'}',
+        );
+      }
+
+      if (readiness.duplicatePlacementGroupCount > 0) {
+        parts.add(
+          '${readiness.duplicatePlacementGroupCount} duplicate placement group${readiness.duplicatePlacementGroupCount == 1 ? '' : 's'}',
+        );
+      }
+
+      if (parts.isEmpty) {
+        return 'Results are ready for reports.';
+      }
+
+      return 'Reports are blocked until results are complete: ${parts.join(', ')}.';
+    }
+
+    Future<bool> _ensureResultsReadyForReports() async {
+      final resp = await supabase.rpc(
+        'show_results_readiness',
+        params: {'p_show_id': widget.showId},
+      );
+
+      final readiness = ResultsReadinessDto.fromJson(
+        Map<String, dynamic>.from(resp as Map),
+      );
+
+      if (!mounted) return false;
+
+      setState(() {
+        if (_dashboard != null) {
+          _dashboard = CloseoutDashboard(
+            dashboard: _dashboard!.dashboard,
+            resultsReadiness: readiness,
+            latestFinalize: _dashboard!.latestFinalize,
+            reports: _dashboard!.reports,
+            deliveries: _dashboard!.deliveries,
+            latestArchive: _dashboard!.latestArchive,
+          );
+        }
+      });
+
+      if (readiness.ready) return true;
+
+      final parts = <String>[];
+
+      if (readiness.missingPlacementCount > 0) {
+        parts.add(
+          '${readiness.missingPlacementCount} missing placement${readiness.missingPlacementCount == 1 ? '' : 's'}',
+        );
+      }
+
+      if (readiness.missingJudgeCount > 0) {
+        parts.add(
+          '${readiness.missingJudgeCount} missing judge${readiness.missingJudgeCount == 1 ? '' : 's'}',
+        );
+      }
+
+      if (readiness.duplicatePlacementGroupCount > 0) {
+        parts.add(
+          '${readiness.duplicatePlacementGroupCount} duplicate placement group${readiness.duplicatePlacementGroupCount == 1 ? '' : 's'}',
+        );
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            parts.isEmpty
+                ? 'Reports are blocked until results are complete.'
+                : 'Reports are blocked until results are complete: ${parts.join(', ')}.',
+          ),
+        ),
+      );
+
+      return false;
+    }
 
   bool get _isBusy => _loading || _generatingReport;
 
@@ -551,116 +650,119 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     return targets;
   }
 
-  Future<void> _generateReportByName(
-    String reportName, {
-    String? breedName,
-    String? scope,
-    String? showLetter,
-  }) async {
-    try {
-      setState(() {
-        _generatingReport = true;
-        _error = null;
-      });
+    Future<void> _generateReportByName(
+      String reportName, {
+      String? breedName,
+      String? scope,
+      String? showLetter,
+    }) async {
+      final ready = await _ensureResultsReadyForReports();
+      if (!ready) return;
 
-      await _saveArbaDetails();
-      await _ensureLegsBuilder();
-      await _ensureExhibitorBuilder();
-      await _ensureReportLogo();
-
-      final repository = CloseoutRepository(supabase);
-      final arbaLoader = ArbaReportLoader(repository);
-      final arbaBuilder = ArbaReportPdfBuilder();
-      final showBasics = await repository.loadShowBasics(widget.showId);
-      final showDate = _formatShowDate(showBasics['start_date']);
-      final sanctionNumber = await _loadArbaSanctionNumber(widget.showId);
-
-      final legsLoader = LegsReportLoader(repository);
-      await _ensureLegsBuilder();
-
-      final exhibitorLoader = ExhibitorReportLoader(repository);
-
-            final sweepstakesLoader = SweepstakesReportLoader(repository);
-            final sweepstakesBuilder = SweepstakesReportPdf(
-              logoBytes: _reportLogoBytes,
-            );
-
-            final breedResultsDetailReportLoader =
-                BreedResultsDetailReportLoader(repository);
-            final breedResultsDetailReportBuilder =
-                BreedResultsDetailReportPdf(
-              logoBytes: _reportLogoBytes,
-            );
-
-            final registry = ReportRegistry(
-              arbaLoader: arbaLoader,
-              arbaBuilder: arbaBuilder,
-              legsLoader: legsLoader,
-              legsBuilder: _legsBuilder!,
-              exhibitorLoader: exhibitorLoader,
-              exhibitorBuilder: _exhibitorBuilder!,
-              sweepstakesLoader: sweepstakesLoader,
-              sweepstakesBuilder: sweepstakesBuilder,
-              breedResultsDetailReportLoader: breedResultsDetailReportLoader,
-              breedResultsDetailReportBuilder: breedResultsDetailReportBuilder,
-            );
-
-      final engine = ReportEngine(registry);
-      final uploadService = ReportUploadService(supabase);
-
-      final runner = CloseoutRunner(
-        engine: engine,
-        uploadService: uploadService,
-      );
-
-      final artifact = (_dashboard?.reports ?? const <ReportArtifactSummary>[])
-          .where((r) => r.reportName == reportName)
-          .cast<ReportArtifactSummary?>()
-          .firstWhere(
-            (r) => r != null,
-            orElse: () => null,
-          );
-
-      if (artifact == null) {
-        throw Exception(
-          'No record exists for report "$reportName".',
-        );
-      }
-
-      await runner.generateSingleReport(
-        showId: widget.showId,
-        finalizeRunId: _dashboard?.latestFinalize.id ?? 'manual-run',
-        reportName: reportName,
-        artifactId: artifact.id,
-        breedName: breedName,
-        scope: scope,
-        showName: widget.showName,
-        showDate: showDate,
-        sanctionNumber: sanctionNumber,
-        showLetter: showLetter,
-      );
-
-      await _loadData();
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${_friendlyReportName(reportName)} generated.'),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to generate report: $e')),
-      );
-    } finally {
-      if (mounted) {
+      try {
         setState(() {
-          _generatingReport = false;
+          _generatingReport = true;
+          _error = null;
         });
+
+        await _saveArbaDetails();
+        await _ensureLegsBuilder();
+        await _ensureExhibitorBuilder();
+        await _ensureReportLogo();
+
+        final repository = CloseoutRepository(supabase);
+        final arbaLoader = ArbaReportLoader(repository);
+        final arbaBuilder = ArbaReportPdfBuilder();
+        final showBasics = await repository.loadShowBasics(widget.showId);
+        final showDate = _formatShowDate(showBasics['start_date']);
+        final sanctionNumber = await _loadArbaSanctionNumber(widget.showId);
+
+        final legsLoader = LegsReportLoader(repository);
+        await _ensureLegsBuilder();
+
+        final exhibitorLoader = ExhibitorReportLoader(repository);
+
+        final sweepstakesLoader = SweepstakesReportLoader(repository);
+        final sweepstakesBuilder = SweepstakesReportPdf(
+          logoBytes: _reportLogoBytes,
+        );
+
+        final breedResultsDetailReportLoader =
+            BreedResultsDetailReportLoader(repository);
+        final breedResultsDetailReportBuilder =
+            BreedResultsDetailReportPdf(
+          logoBytes: _reportLogoBytes,
+        );
+
+        final registry = ReportRegistry(
+          arbaLoader: arbaLoader,
+          arbaBuilder: arbaBuilder,
+          legsLoader: legsLoader,
+          legsBuilder: _legsBuilder!,
+          exhibitorLoader: exhibitorLoader,
+          exhibitorBuilder: _exhibitorBuilder!,
+          sweepstakesLoader: sweepstakesLoader,
+          sweepstakesBuilder: sweepstakesBuilder,
+          breedResultsDetailReportLoader: breedResultsDetailReportLoader,
+          breedResultsDetailReportBuilder: breedResultsDetailReportBuilder,
+        );
+
+        final engine = ReportEngine(registry);
+        final uploadService = ReportUploadService(supabase);
+
+        final runner = CloseoutRunner(
+          engine: engine,
+          uploadService: uploadService,
+        );
+
+        final artifact = (_dashboard?.reports ?? const <ReportArtifactSummary>[])
+            .where((r) => r.reportName == reportName)
+            .cast<ReportArtifactSummary?>()
+            .firstWhere(
+              (r) => r != null,
+              orElse: () => null,
+            );
+
+        if (artifact == null) {
+          throw Exception(
+            'No record exists for report "$reportName".',
+          );
+        }
+
+        await runner.generateSingleReport(
+          showId: widget.showId,
+          finalizeRunId: _dashboard?.latestFinalize.id ?? 'manual-run',
+          reportName: reportName,
+          artifactId: artifact.id,
+          breedName: breedName,
+          scope: scope,
+          showName: widget.showName,
+          showDate: showDate,
+          sanctionNumber: sanctionNumber,
+          showLetter: showLetter,
+        );
+
+        await _loadData();
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${_friendlyReportName(reportName)} generated.'),
+          ),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to generate report: $e')),
+        );
+      } finally {
+        if (mounted) {
+          setState(() {
+            _generatingReport = false;
+          });
+        }
       }
     }
-  }
 
   Future<void> _downloadReportByName(String reportName) async {
     try {
@@ -788,6 +890,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
   @override
   Widget build(BuildContext context) {
+    final reportsBlocked = !_resultsReadyForReports;
+    final reportsBlockedMessage = _resultsReadinessMessage();
+
     return Scaffold(
       appBar: AppBar(
         title: Text('${widget.showName} • Closeout'),
@@ -846,32 +951,72 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                           const SizedBox(height: 16),
 
                           // ✅ NEW BULK ACTION BUTTONS (ADD THIS BLOCK)
+                          if (reportsBlocked)
+                            Container(
+                              width: double.infinity,
+                              margin: const EdgeInsets.only(bottom: 12),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.withOpacity(.10),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: Colors.orange.withOpacity(.22),
+                                ),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Icon(
+                                    Icons.warning_amber_rounded,
+                                    color: Colors.orange,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      reportsBlockedMessage,
+                                      style: const TextStyle(
+                                        color: Colors.orange,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
                           Wrap(
                             spacing: 10,
                             runSpacing: 10,
                             children: [
                               FilledButton.icon(
                                 style: FilledButton.styleFrom(
-                                  backgroundColor: _dashboard?.dashboard.closeout.isReportsStale == true
-                                      ? const Color(0xFFD4A623) // yellow = needs refresh
-                                      : Colors.green, // green = up to date
-                                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                                  backgroundColor: reportsBlocked
+                                      ? Colors.grey
+                                      : (_dashboard?.dashboard.closeout.isReportsStale == true
+                                          ? const Color(0xFFD4A623)
+                                          : Colors.green),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 18,
+                                    vertical: 14,
+                                  ),
                                 ),
-                                onPressed: _isBusy ? null : _generateAllReports,
+                                onPressed: (_isBusy || reportsBlocked)
+                                    ? null
+                                    : _generateAllReports,
                                 icon: const Icon(Icons.auto_awesome),
                                 label: Text(
-                                  _dashboard?.dashboard.closeout.isReportsStale == true
-                                      ? 'Generate All Reports'
-                                      : 'All Reports Fresh',
+                                  reportsBlocked
+                                      ? 'Finish Results Before Reports'
+                                      : (_dashboard?.dashboard.closeout.isReportsStale == true
+                                          ? 'Generate All Reports'
+                                          : 'All Reports Fresh'),
                                 ),
                               ),
-
                               OutlinedButton.icon(
                                 onPressed: _isBusy ? null : _sendAllExhibitorReports,
                                 icon: const Icon(Icons.send_outlined),
                                 label: const Text('Send All Exhibitor Reports'),
                               ),
-
                               OutlinedButton.icon(
                                 onPressed: _isBusy ? null : _sendAllClubReports,
                                 icon: const Icon(Icons.group_outlined),
@@ -908,6 +1053,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                             onDownload: _downloadReportByName,
                             onEmail: _emailReportByName,
                             loading: _generatingReport,
+                            reportsBlocked: reportsBlocked,
+                            reportsBlockedMessage: reportsBlockedMessage,
                           ),
                         ],
                       ),
@@ -1168,6 +1315,8 @@ class _ReportActionsCard extends StatefulWidget {
   final Future<void> Function(String reportName) onEmail;
   final bool loading;
   final String showId;
+  final bool reportsBlocked;
+  final String? reportsBlockedMessage;
 
   const _ReportActionsCard({
     required this.showId,
@@ -1177,6 +1326,8 @@ class _ReportActionsCard extends StatefulWidget {
     required this.onDownload,
     required this.onEmail,
     required this.loading,
+    required this.reportsBlocked,
+    this.reportsBlockedMessage,
   });
 
   @override
@@ -1571,19 +1722,43 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
           ),
         ],
 
-        const SizedBox(height: 16),
-        _ReportInfoTile(
-          reportName: _selectedReportName == null
-              ? '-'
-              : _friendlyReportName(_selectedReportName),
-          status: artifact?.artifactStatus ?? 'not_generated',
-          generatedAt: artifact?.generatedAt,
-        ),
-        const SizedBox(height: 16),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: [
+                const SizedBox(height: 16),
+                _ReportInfoTile(
+                  reportName: _selectedReportName == null
+                      ? '-'
+                      : _friendlyReportName(_selectedReportName),
+                  status: artifact?.artifactStatus ?? 'not_generated',
+                  generatedAt: artifact?.generatedAt,
+                ),
+
+                if (widget.reportsBlocked) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(.10),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: Colors.orange.withOpacity(.22),
+                      ),
+                    ),
+                    child: Text(
+                      widget.reportsBlockedMessage ??
+                          'Reports are blocked until results are complete.',
+                      style: const TextStyle(
+                        color: Colors.orange,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
             FilledButton.icon(
               style: FilledButton.styleFrom(
                 backgroundColor: const Color(0xFFD4A623),
@@ -1591,6 +1766,7 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
                     const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
               ),
               onPressed: widget.loading ||
+                      widget.reportsBlocked ||
                       _selectedReportName == null ||
                       (_selectedReportNeedsBreedScope &&
                           _breedController.text.trim().isEmpty)
@@ -1676,6 +1852,32 @@ class _ReportInfoTile extends StatelessWidget {
           Text('Last generated: ${_fmt(generatedAt)}'),
         ],
       ),
+    );
+  }
+}
+
+class ResultsReadinessDto {
+  final bool ready;
+  final int missingPlacementCount;
+  final int missingJudgeCount;
+  final int duplicatePlacementGroupCount;
+
+  ResultsReadinessDto({
+    required this.ready,
+    required this.missingPlacementCount,
+    required this.missingJudgeCount,
+    required this.duplicatePlacementGroupCount,
+  });
+
+  factory ResultsReadinessDto.fromJson(Map<String, dynamic> json) {
+    return ResultsReadinessDto(
+      ready: (json['ready'] ?? false) == true,
+      missingPlacementCount:
+          ((json['missing_placement_count'] ?? 0) as num).toInt(),
+      missingJudgeCount:
+          ((json['missing_judge_count'] ?? 0) as num).toInt(),
+      duplicatePlacementGroupCount:
+          ((json['duplicate_placement_group_count'] ?? 0) as num).toInt(),
     );
   }
 }
@@ -2020,6 +2222,7 @@ String _friendlyReportName(String? key) {
 
 class CloseoutDashboard {
   final DashboardEnvelope dashboard;
+  final ResultsReadinessDto resultsReadiness;
   final LatestFinalize latestFinalize;
   final List<ReportArtifactSummary> reports;
   final List<DeliveryRunSummary> deliveries;
@@ -2027,6 +2230,7 @@ class CloseoutDashboard {
 
   CloseoutDashboard({
     required this.dashboard,
+    required this.resultsReadiness,
     required this.latestFinalize,
     required this.reports,
     required this.deliveries,
@@ -2037,6 +2241,9 @@ class CloseoutDashboard {
     return CloseoutDashboard(
       dashboard: DashboardEnvelope.fromJson(
         Map<String, dynamic>.from(json['dashboard'] ?? const {}),
+      ),
+      resultsReadiness: ResultsReadinessDto.fromJson(
+        Map<String, dynamic>.from(json['results_readiness'] ?? const {}),
       ),
       latestFinalize: LatestFinalize.fromJson(
         Map<String, dynamic>.from(json['latest_finalize'] ?? const {}),
