@@ -2232,20 +2232,30 @@ class _InlineAnimalEditorDialogState extends State<_InlineAnimalEditorDialog> {
               ),
             ],
             const SizedBox(height: 12),
-            _FocusOpenAutocomplete(
-              textController: _sexText,
-              focusNode: _sexFocus,
-              labelText: 'Sex (required)',
-              hintText: _species == 'rabbit' ? 'Buck or Doe' : 'Boar or Sow',
-              options: _sexOptions.map((s) => {'name': s}).toList(),
-              displayStringForOption: (opt) => (opt['name'] ?? '').toString(),
-              onSelected: (opt) {
-                setState(() {
-                  _sexValue = (opt['name'] ?? '').toString();
-                  _sexText.text = _sexValue ?? '';
-                  _msg = null;
-                });
-              },
+            DropdownButtonFormField<String>(
+              value: _sexValue != null && _sexOptions.contains(_sexValue)
+                  ? _sexValue
+                  : null,
+              decoration: const InputDecoration(
+                labelText: 'Sex (required)',
+              ),
+              items: _sexOptions
+                  .map(
+                    (sex) => DropdownMenuItem<String>(
+                      value: sex,
+                      child: Text(sex),
+                    ),
+                  )
+                  .toList(),
+              onChanged: _saving
+                  ? null
+                  : (value) {
+                      setState(() {
+                        _sexValue = value;
+                        _sexText.text = value ?? '';
+                        _msg = null;
+                      });
+                    },
             ),
             if (invalidSexWarning != null) ...[
               const SizedBox(height: 6),

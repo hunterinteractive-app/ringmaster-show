@@ -24,6 +24,8 @@ class CloseoutRunner {
     String? showName,
     String? showDate,
     String? sanctionNumber,
+    String? exhibitorId,
+    String? exhibitorName,
   }) async {
     final request = ReportRequest(
       showId: showId,

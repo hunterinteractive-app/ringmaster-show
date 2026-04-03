@@ -544,39 +544,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       final ready = await _ensureResultsReadyForReports();
       if (!ready) return;
 
-      const supportedBulkReports = <String>{
-        'arba_report',
-        'exhibitor_report',
-        'legs',
-        'sweepstakes_report',
-        'breed_results_detail_report',
-      };
-
-      final artifacts = (_dashboard?.reports ?? const <ReportArtifactSummary>[])
-          .where((r) =>
-              r.reportName.isNotEmpty &&
-              supportedBulkReports.contains(r.reportName))
-          .toList()
-        ..sort((a, b) {
-          final aIndex = _reportDisplayOrder.indexOf(a.reportName);
-          final bIndex = _reportDisplayOrder.indexOf(b.reportName);
-
-          if (aIndex == -1 && bIndex == -1) {
-            return a.reportName.compareTo(b.reportName);
-          }
-          if (aIndex == -1) return 1;
-          if (bIndex == -1) return -1;
-          return aIndex.compareTo(bIndex);
-        });
-
-      if (artifacts.isEmpty) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No report artifacts found to generate.')),
-        );
-        return;
-      }
-
       setState(() {
         _generatingReport = true;
       });
@@ -585,32 +552,204 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         final confirmed = await showDialog<bool>(
               context: context,
               barrierDismissible: false,
-              builder: (context) => _GenerateAllReportsDialog(
-                artifacts: artifacts,
-                onRun: (
-                  onStarted,
-                  onFinished,
-                  onFailed,
-                ) async {
-                  await _runGenerateAllReportsLive(
-                    artifacts,
-                    onStarted: onStarted,
-                    onFinished: onFinished,
-                    onFailed: onFailed,
-                  );
-                },
+              builder: (context) => AlertDialog(
+                title: const Text('Generate All Reports'),
+                content: const Text(
+                  'This will generate:\n'
+                  '• ARBA report\n'
+                  '• Individual exhibitor reports\n'
+                  '• Individual legs reports\n'
+                  '• Individual club sweepstakes reports\n'
+                  '• Individual breed detail reports',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.of(context).pop(true),
+                    child: const Text('Generate'),
+                  ),
+                ],
               ),
             ) ??
             false;
 
         if (!confirmed) return;
 
+        await _generateGlobalReportsOnly();
+        await _generateAllExhibitorScopedReports();
+        await _generateAllClubScopedReports();
+
+        await supabase.rpc(
+          'refresh_show_reports_state',
+          params: {'p_show_id': widget.showId},
+        );
+
         await _loadData();
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('All reports generated.')),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed generating reports: $e')),
+        );
       } finally {
         if (mounted) {
           setState(() {
             _generatingReport = false;
           });
+        }
+      }
+    }
+
+    Future<CloseoutRunner> _buildCloseoutRunner() async {
+      await _saveArbaDetails();
+      await _ensureLegsBuilder();
+      await _ensureExhibitorBuilder();
+      await _ensureReportLogo();
+
+      final repository = CloseoutRepository(supabase);
+      final arbaLoader = ArbaReportLoader(repository);
+      final arbaBuilder = ArbaReportPdfBuilder();
+
+      final legsLoader = LegsReportLoader(repository);
+      final exhibitorLoader = ExhibitorReportLoader(repository);
+
+      final sweepstakesLoader = SweepstakesReportLoader(repository);
+      final sweepstakesBuilder = SweepstakesReportPdf(
+        logoBytes: _reportLogoBytes,
+      );
+
+      final breedResultsDetailReportLoader =
+          BreedResultsDetailReportLoader(repository);
+      final breedResultsDetailReportBuilder = BreedResultsDetailReportPdf(
+        logoBytes: _reportLogoBytes,
+      );
+
+      final registry = ReportRegistry(
+        arbaLoader: arbaLoader,
+        arbaBuilder: arbaBuilder,
+        legsLoader: legsLoader,
+        legsBuilder: _legsBuilder!,
+        exhibitorLoader: exhibitorLoader,
+        exhibitorBuilder: _exhibitorBuilder!,
+        sweepstakesLoader: sweepstakesLoader,
+        sweepstakesBuilder: sweepstakesBuilder,
+        breedResultsDetailReportLoader: breedResultsDetailReportLoader,
+        breedResultsDetailReportBuilder: breedResultsDetailReportBuilder,
+      );
+
+      final engine = ReportEngine(registry);
+      final uploadService = ReportUploadService(supabase);
+
+      return CloseoutRunner(
+        engine: engine,
+        uploadService: uploadService,
+      );
+    }
+
+    Future<({
+      String finalizeRunId,
+      String showDate,
+      String sanctionNumber,
+    })> _loadRunContext() async {
+      final repository = CloseoutRepository(supabase);
+      final showBasics = await repository.loadShowBasics(widget.showId);
+      final showDate = _formatShowDate(showBasics['start_date']);
+      final sanctionNumber = await _loadArbaSanctionNumber(widget.showId);
+
+      return (
+        finalizeRunId: _dashboard?.latestFinalize.id ?? 'manual-run',
+        showDate: showDate,
+        sanctionNumber: sanctionNumber,
+      );
+    }
+
+    Future<void> _generateGlobalReportsOnly() async {
+      final runner = await _buildCloseoutRunner();
+      final ctx = await _loadRunContext();
+
+      final artifact = (_dashboard?.reports ?? const <ReportArtifactSummary>[])
+          .where((r) => r.reportName == 'arba_report')
+          .cast<ReportArtifactSummary?>()
+          .firstWhere(
+            (r) => r != null,
+            orElse: () => null,
+          );
+
+      if (artifact == null) return;
+
+      await runner.generateSingleReport(
+        showId: widget.showId,
+        finalizeRunId: ctx.finalizeRunId,
+        reportName: 'arba_report',
+        artifactId: artifact.id,
+        showName: widget.showName,
+        showDate: ctx.showDate,
+        sanctionNumber: ctx.sanctionNumber,
+      );
+    }
+
+    Future<void> _generateAllExhibitorScopedReports() async {
+      final runner = await _buildCloseoutRunner();
+      final ctx = await _loadRunContext();
+      final exhibitors = await _loadExhibitorEmailTargets();
+
+      for (final exhibitor in exhibitors) {
+        final exhibitorArtifacts = (_dashboard?.reports ?? const <ReportArtifactSummary>[])
+            .where((r) =>
+                r.reportName == 'exhibitor_report' ||
+                r.reportName == 'legs')
+            .toList();
+
+        for (final artifact in exhibitorArtifacts) {
+          await runner.generateSingleReport(
+            showId: widget.showId,
+            finalizeRunId: ctx.finalizeRunId,
+            reportName: artifact.reportName,
+            artifactId: artifact.id,
+            showName: widget.showName,
+            showDate: ctx.showDate,
+            sanctionNumber: ctx.sanctionNumber,
+
+            // requires runner/engine support:
+            exhibitorId: exhibitor.exhibitorId,
+            exhibitorName: exhibitor.exhibitorName,
+          );
+        }
+      }
+    }
+
+    Future<void> _generateAllClubScopedReports() async {
+      final runner = await _buildCloseoutRunner();
+      final ctx = await _loadRunContext();
+      final clubs = await _loadClubEmailTargets();
+
+      for (final club in clubs) {
+        final matchingReports = (_dashboard?.reports ?? const <ReportArtifactSummary>[])
+            .where((r) =>
+                r.reportName == 'sweepstakes_report' ||
+                r.reportName == 'breed_results_detail_report')
+            .toList();
+
+        for (final artifact in matchingReports) {
+          await runner.generateSingleReport(
+            showId: widget.showId,
+            finalizeRunId: ctx.finalizeRunId,
+            reportName: artifact.reportName,
+            artifactId: artifact.id,
+            breedName: club.breedName,
+            scope: club.scope,
+            showLetter: club.showLetter,
+            showName: widget.showName,
+            showDate: ctx.showDate,
+            sanctionNumber: ctx.sanctionNumber,
+          );
         }
       }
     }

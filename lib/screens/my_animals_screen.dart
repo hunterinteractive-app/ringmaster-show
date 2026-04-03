@@ -861,25 +861,30 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
             ),
             const SizedBox(height: 12),
             if (_loadingBreeds) const LinearProgressIndicator(),
-            _FocusOpenAutocomplete(
-              textController: _breedText,
-              focusNode: _breedFocus,
-              labelText: 'Breed (required)',
-              hintText: 'Type to search and select a breed…',
-              options: _breedOptions,
-              displayStringForOption: (opt) => (opt['name'] ?? '').toString(),
-              onSelectedAsync: (opt) async {
-                setState(() {
-                  _breedId = opt['id'] as String;
-                  _breedText.text = (opt['name'] as String);
-                  _varietyText.clear();
-                  _msg = null;
-                });
-                await _loadVarietiesForBreed(_breedId!);
-                if (mounted) {
-                  FocusScope.of(context).requestFocus(_varietyFocus);
-                }
-              },
+            DropdownButtonFormField<String>(
+              value: _sexValue != null && _sexOptions.contains(_sexValue)
+                  ? _sexValue
+                  : null,
+              decoration: const InputDecoration(
+                labelText: 'Sex (required)',
+              ),
+              items: _sexOptions
+                  .map(
+                    (sex) => DropdownMenuItem<String>(
+                      value: sex,
+                      child: Text(sex),
+                    ),
+                  )
+                  .toList(),
+              onChanged: _saving
+                  ? null
+                  : (value) {
+                      setState(() {
+                        _sexValue = value;
+                        _sexText.text = value ?? '';
+                        _msg = null;
+                      });
+                    },
             ),
             if (invalidBreedWarning != null) ...[
               const SizedBox(height: 6),
