@@ -74,71 +74,90 @@ class LegsReportPdfBuilder {
     );
   }
 
-  Future<ReportFileResult> buildFile(
-    List<LegsCertificateData> data,
-    ReportRequest request,
-  ) async {
-    final theme = await _buildTheme();
-    final pdf = pw.Document(theme: theme);
+    Future<ReportFileResult> buildFile(
+      List<LegsCertificateData> data,
+      ReportRequest request,
+    ) async {
+      final theme = await _buildTheme();
+      final pdf = pw.Document(theme: theme);
 
-    if (data.isEmpty) {
-      pdf.addPage(
-        pw.Page(
-          pageFormat: PdfPageFormat.letter,
-          margin: const pw.EdgeInsets.all(24),
-          theme: theme,
-          build: (_) => pw.Center(
-            child: pw.Text('No leg certificates found.'),
-          ),
-        ),
+      String cleanFilePart(String input) {
+        return input
+            .replaceAll(RegExp(r'[\\/:*?"<>|]'), '')
+            .replaceAll(RegExp(r'\s+'), ' ')
+            .trim();
+      }
+
+      final cleanedShowName = cleanFilePart(
+        (request.showName ?? '').trim().isEmpty ? 'Show' : (request.showName ?? '').trim(),
       );
-    } else {
-      final grouped = _groupByExhibitor(data);
 
-      for (final exhibitorGroup in grouped) {
-        final chunks = <List<LegsCertificateData>>[];
+      final cleanedExhibitorName = cleanFilePart(
+        (request.exhibitorName ?? '').trim().isEmpty
+            ? 'Exhibitor'
+            : (request.exhibitorName ?? '').trim(),
+      );
 
-        for (var i = 0; i < exhibitorGroup.length; i += 2) {
-          chunks.add(exhibitorGroup.skip(i).take(2).toList());
-        }
+      final fileName = '$cleanedShowName - $cleanedExhibitorName - Legs.pdf';
 
-        for (final chunk in chunks) {
-          pdf.addPage(
-            pw.Page(
-              pageFormat: PdfPageFormat.letter,
-              margin: const pw.EdgeInsets.fromLTRB(22, 18, 22, 18),
-              theme: theme,
-              build: (_) {
-                return pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-                  children: [
-                    _certificate(chunk[0]),
-                    pw.SizedBox(height: 8),
-                    _cutLine(),
-                    pw.SizedBox(height: 8),
-                    if (chunk.length > 1)
-                      _certificate(chunk[1])
-                    else
-                      _blankCertificateSpace(),
-                    pw.SizedBox(height: 10),
-                    _rulesBlock(),
-                  ],
-                );
-              },
+      if (data.isEmpty) {
+        pdf.addPage(
+          pw.Page(
+            pageFormat: PdfPageFormat.letter,
+            margin: const pw.EdgeInsets.all(24),
+            theme: theme,
+            build: (_) => pw.Center(
+              child: pw.Text('No leg certificates found.'),
             ),
-          );
+          ),
+        );
+      } else {
+        final grouped = _groupByExhibitor(data);
+
+        for (final exhibitorGroup in grouped) {
+          final chunks = <List<LegsCertificateData>>[];
+
+          for (var i = 0; i < exhibitorGroup.length; i += 2) {
+            chunks.add(exhibitorGroup.skip(i).take(2).toList());
+          }
+
+          for (final chunk in chunks) {
+            pdf.addPage(
+              pw.Page(
+                pageFormat: PdfPageFormat.letter,
+                margin: const pw.EdgeInsets.fromLTRB(22, 18, 22, 18),
+                theme: theme,
+                build: (_) {
+                  return pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+                    children: [
+                      _certificate(chunk[0]),
+                      pw.SizedBox(height: 8),
+                      _cutLine(),
+                      pw.SizedBox(height: 8),
+                      if (chunk.length > 1)
+                        _certificate(chunk[1])
+                      else
+                        _blankCertificateSpace(),
+                      pw.SizedBox(height: 10),
+                      _rulesBlock(),
+                    ],
+                  );
+                },
+              ),
+            );
+          }
         }
       }
+
+      final bytes = await pdf.save();
+
+      return ReportFileResult(
+        fileName: fileName,
+        mimeType: 'application/pdf',
+        bytes: bytes,
+      );
     }
-
-    final bytes = await pdf.save();
-
-    return ReportFileResult(
-      fileName: 'legs_report.pdf',
-      mimeType: 'application/pdf',
-      bytes: bytes,
-    );
-  }
 
   List<List<LegsCertificateData>> _groupByExhibitor(
     List<LegsCertificateData> data,

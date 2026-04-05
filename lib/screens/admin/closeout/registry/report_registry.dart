@@ -58,7 +58,7 @@ class ReportRegistry {
             loader: (req) async => await exhibitorLoader.load(req),
             builder: (data, req) async =>
                 await exhibitorBuilder.buildFile(
-                  data as List<ExhibitorReportData>,
+                  data as ExhibitorReportData,
                   req,
                 ),
           ),

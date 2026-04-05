@@ -12,6 +12,8 @@ class ReportRequest {
     this.showName,
     this.showDate,
     this.sanctionNumber,
+    this.exhibitorId,
+    this.exhibitorName,
   });
 
   final String showId;
@@ -26,6 +28,9 @@ class ReportRequest {
   final String? showDate;
   final String? sanctionNumber;
 
+  final String? exhibitorId;
+  final String? exhibitorName;
+
   Map<String, dynamic> toJson() {
     return {
       'showId': showId,
@@ -38,6 +43,8 @@ class ReportRequest {
       'showName': showName,
       'showDate': showDate,
       'sanctionNumber': sanctionNumber,
+      'exhibitorId': exhibitorId,
+      'exhibitorName': exhibitorName,
     };
   }
 
@@ -52,6 +59,8 @@ class ReportRequest {
     String? showName,
     String? showDate,
     String? sanctionNumber,
+    String? exhibitorId,
+    String? exhibitorName,
   }) {
     return ReportRequest(
       showId: showId ?? this.showId,
@@ -64,6 +73,8 @@ class ReportRequest {
       showName: showName ?? this.showName,
       showDate: showDate ?? this.showDate,
       sanctionNumber: sanctionNumber ?? this.sanctionNumber,
+      exhibitorId: exhibitorId ?? this.exhibitorId,
+      exhibitorName: exhibitorName ?? this.exhibitorName,
     );
   }
 }

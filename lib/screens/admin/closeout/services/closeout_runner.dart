@@ -38,10 +38,13 @@ class CloseoutRunner {
       showName: showName,
       showDate: showDate,
       sanctionNumber: sanctionNumber,
+      exhibitorId: exhibitorId,
+      exhibitorName: exhibitorName,
     );
 
     try {
       final file = await engine.generate(request);
+
       final storagePath = await uploadService.upload(
         showId: showId,
         file: file,

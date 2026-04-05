@@ -59,8 +59,6 @@ class SweepstakesReportLoader {
             .map((e) => SweepstakesReportRow.fromMap(e as Map<String, dynamic>))
             .toList();
 
-        if (rows.isEmpty) continue;
-
         final headerResponse = await repo.supabase
             .from('v_sweepstakes_pdf_rows')
             .select(
@@ -73,25 +71,28 @@ class SweepstakesReportLoader {
             .limit(1)
             .maybeSingle();
 
-        if (headerResponse == null) continue;
-
-        final header = Map<String, dynamic>.from(headerResponse);
+        final header = headerResponse == null
+            ? <String, dynamic>{
+                'show_id': showId,
+                'breed_name': breedName,
+                'scope': scope,
+                'show_letter': letter,
+                'rule_source': 'NO_RESULTS',
+                'verification_status': 'VERIFIED',
+                'engine_type': 'NO_RESULTS',
+              }
+            : Map<String, dynamic>.from(headerResponse);
 
         sections.add(
           SweepstakesReportSection(
-            showLetter: (header['show_letter'] ?? '').toString(),
-            ruleSource: (header['rule_source'] ?? '').toString(),
+            showLetter: (header['show_letter'] ?? letter).toString(),
+            ruleSource: (header['rule_source'] ?? 'NO_RESULTS').toString(),
             verificationStatus:
-                (header['verification_status'] ?? '').toString(),
-            engineType: (header['engine_type'] ?? '').toString(),
+                (header['verification_status'] ?? 'VERIFIED').toString(),
+            engineType: (header['engine_type'] ?? 'NO_RESULTS').toString(),
             rows: rows,
+            noResultsFound: rows.isEmpty,
           ),
-        );
-      }
-
-      if (sections.isEmpty) {
-        throw Exception(
-          'No sweepstakes results found for breed "$breedName" in scope "$scope" across all shows.',
         );
       }
 
@@ -100,11 +101,14 @@ class SweepstakesReportLoader {
         breedName: breedName,
         scope: scope,
         showLetter: 'ALL',
-        ruleSource: sections.first.ruleSource,
-        verificationStatus: sections.first.verificationStatus,
-        engineType: sections.first.engineType,
+        ruleSource: sections.isNotEmpty ? sections.first.ruleSource : 'NO_RESULTS',
+        verificationStatus: sections.isNotEmpty
+            ? sections.first.verificationStatus
+            : 'VERIFIED',
+        engineType: sections.isNotEmpty ? sections.first.engineType : 'NO_RESULTS',
         rows: const [],
         sections: sections,
+        noResultsFound: sections.every((s) => s.noResultsFound),
       );
     }
 
@@ -121,12 +125,6 @@ class SweepstakesReportLoader {
         .map((e) => SweepstakesReportRow.fromMap(e as Map<String, dynamic>))
         .toList();
 
-    if (rows.isEmpty) {
-      throw Exception(
-        'No sweepstakes results found for breed "$breedName" in scope "$scope" and show letter "$showLetter".',
-      );
-    }
-
     final headerResponse = await repo.supabase
         .from('v_sweepstakes_pdf_rows')
         .select(
@@ -139,24 +137,29 @@ class SweepstakesReportLoader {
         .limit(1)
         .maybeSingle();
 
-    if (headerResponse == null) {
-      throw Exception(
-        'No sweepstakes header data found for breed "$breedName" in scope "$scope" and show letter "$showLetter".',
-      );
-    }
-
-    final header = Map<String, dynamic>.from(headerResponse);
+    final header = headerResponse == null
+        ? <String, dynamic>{
+            'show_id': showId,
+            'breed_name': breedName,
+            'scope': scope,
+            'show_letter': showLetter,
+            'rule_source': 'NO_RESULTS',
+            'verification_status': 'VERIFIED',
+            'engine_type': 'NO_RESULTS',
+          }
+        : Map<String, dynamic>.from(headerResponse);
 
     return SweepstakesReportData(
-      showId: (header['show_id'] ?? '').toString(),
-      breedName: (header['breed_name'] ?? '').toString(),
-      scope: (header['scope'] ?? '').toString(),
-      showLetter: (header['show_letter'] ?? '').toString(),
-      ruleSource: (header['rule_source'] ?? '').toString(),
-      verificationStatus: (header['verification_status'] ?? '').toString(),
-      engineType: (header['engine_type'] ?? '').toString(),
+      showId: (header['show_id'] ?? showId).toString(),
+      breedName: (header['breed_name'] ?? breedName).toString(),
+      scope: (header['scope'] ?? scope).toString(),
+      showLetter: (header['show_letter'] ?? showLetter).toString(),
+      ruleSource: (header['rule_source'] ?? 'NO_RESULTS').toString(),
+      verificationStatus: (header['verification_status'] ?? 'VERIFIED').toString(),
+      engineType: (header['engine_type'] ?? 'NO_RESULTS').toString(),
       rows: rows,
       sections: const [],
+      noResultsFound: rows.isEmpty,
     );
   }
 }

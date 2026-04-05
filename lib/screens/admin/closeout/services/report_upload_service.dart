@@ -28,33 +28,53 @@ class ReportUploadService {
     return path;
   }
 
-  Future<void> markGenerated({
-    required String artifactId,
-    required String storagePath,
-    required ReportFileResult file,
-  }) async {
-    await supabase.from('show_report_artifacts').update({
-      'artifact_status': 'generated',
-      'storage_bucket': bucket,
-      'storage_path': storagePath,
-      'file_name': file.fileName,
-      'mime_type': file.mimeType,
-      'file_size_bytes': file.bytes.length,
-      'generated_at': DateTime.now().toIso8601String(),
-      'error_count': 0,
-    }).eq('id', artifactId);
-  }
+    Future<void> markGenerated({
+      required String artifactId,
+      required String storagePath,
+      required ReportFileResult file,
+    }) async {
+      final now = DateTime.now().toUtc().toIso8601String();
 
-  Future<void> markFailed({
-    required String artifactId,
-    required Object error,
-  }) async {
-    await supabase.from('show_report_artifacts').update({
-      'artifact_status': 'failed',
-      'error_count': 1,
-      'metadata': {
-        'error_message': error.toString(),
-      },
-    }).eq('id', artifactId);
-  }
+      await supabase
+          .from('show_report_artifacts')
+          .update({
+            'artifact_status': 'generated',
+            'storage_bucket': bucket,
+            'storage_path': storagePath,
+            'file_name': file.fileName,
+            'mime_type': file.mimeType,
+            'file_size_bytes': file.bytes.length,
+            'generated_at': now,
+            'superseded_at': null,
+            'error_count': 0,
+            'warning_count': 0,
+          })
+          .eq('id', artifactId);
+    }
+
+    Future<void> markFailed({
+      required String artifactId,
+      required Object error,
+    }) async {
+      final existing = await supabase
+          .from('show_report_artifacts')
+          .select('metadata')
+          .eq('id', artifactId)
+          .maybeSingle();
+
+      final currentMetadata = existing != null && existing['metadata'] is Map
+          ? Map<String, dynamic>.from(existing['metadata'] as Map)
+          : <String, dynamic>{};
+
+      currentMetadata['error_message'] = error.toString();
+
+      await supabase
+          .from('show_report_artifacts')
+          .update({
+            'artifact_status': 'failed',
+            'error_count': 1,
+            'metadata': currentMetadata,
+          })
+          .eq('id', artifactId);
+    }
 }

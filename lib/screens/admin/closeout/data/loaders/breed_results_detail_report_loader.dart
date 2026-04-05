@@ -60,7 +60,18 @@ class BreedResultsDetailReportLoader {
             .map((e) => Map<String, dynamic>.from(e as Map))
             .toList();
 
-        if (rows.isEmpty) continue;
+        if (rows.isEmpty) {
+          sections.add(
+            BreedResultsDetailSection(
+              showLetter: letter,
+              judgeName: '',
+              breedAwards: const [],
+              varieties: const [],
+              noResultsFound: true,
+            ),
+          );
+          continue;
+        }
 
         final awardsResponse = await repo.supabase.rpc(
           'report_results_awards_for_breed_detail',
@@ -68,7 +79,7 @@ class BreedResultsDetailReportLoader {
             'p_show_id': showId,
             'p_breed_name': breedName,
             'p_scope': scope,
-            'p_show_letter': showLetter,
+            'p_show_letter': letter,
           },
         );
 
@@ -105,13 +116,8 @@ class BreedResultsDetailReportLoader {
             judgeName: judgeName,
             breedAwards: breedAwards,
             varieties: varieties,
+            noResultsFound: false,
           ),
-        );
-      }
-
-      if (sections.isEmpty) {
-        throw Exception(
-          'No breed detail rows found for breed "$breedName" in scope "$scope" across all shows.',
         );
       }
 
@@ -120,10 +126,11 @@ class BreedResultsDetailReportLoader {
         breedName: breedName,
         scope: scope,
         showLetter: 'ALL',
-        judgeName: sections.first.judgeName,
+        judgeName: sections.isNotEmpty ? sections.first.judgeName : '',
         breedAwards: const [],
         varieties: const [],
         sections: sections,
+        noResultsFound: sections.every((s) => s.noResultsFound),
       );
     }
 
@@ -142,8 +149,16 @@ class BreedResultsDetailReportLoader {
         .toList();
 
     if (rows.isEmpty) {
-      throw Exception(
-        'No breed detail rows found for breed "$breedName" in scope "$scope" and show letter "$showLetter".',
+      return BreedResultsDetailReportData(
+        showId: showId,
+        breedName: breedName,
+        scope: scope,
+        showLetter: showLetter,
+        judgeName: '',
+        breedAwards: const [],
+        varieties: const [],
+        sections: const [],
+        noResultsFound: true,
       );
     }
 
@@ -192,6 +207,7 @@ class BreedResultsDetailReportLoader {
       breedAwards: breedAwards,
       varieties: varieties,
       sections: const [],
+      noResultsFound: false,
     );
   }
 

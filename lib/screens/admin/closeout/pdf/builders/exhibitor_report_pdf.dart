@@ -49,58 +49,53 @@ class ExhibitorReportPdfBuilder {
     );
   }
 
-  Future<ReportFileResult> buildFile(
-    List<ExhibitorReportData> data,
-    ReportRequest request,
-  ) async {
-    final theme = await _buildTheme();
-    final pdf = pw.Document(theme: theme);
-    final logoImage = pw.MemoryImage(logoBytes);
+    Future<ReportFileResult> buildFile(
+      ExhibitorReportData data,
+      ReportRequest request,
+    ) async {
+      final theme = await _buildTheme();
+      final pdf = pw.Document(theme: theme);
+      final logoImage = pw.MemoryImage(logoBytes);
 
-    if (data.isEmpty) {
       pdf.addPage(
-        pw.Page(
+        pw.MultiPage(
           pageFormat: PdfPageFormat.letter,
           margin: const pw.EdgeInsets.fromLTRB(24, 24, 24, 34),
           theme: theme,
-          build: (context) => pw.Column(
-            children: [
-              pw.Expanded(
-                child: pw.Center(
-                  child: pw.Text('No exhibitor reports found.'),
-                ),
-              ),
-              _footer(context),
-            ],
-          ),
+          header: (_) => _header(data, logoImage),
+          footer: (context) => _footer(context),
+          build: (_) => [
+            pw.SizedBox(height: 10),
+            _table(data.entries),
+          ],
         ),
       );
-    } else {
-      for (final exhibitor in data) {
-        pdf.addPage(
-          pw.MultiPage(
-            pageFormat: PdfPageFormat.letter,
-            margin: const pw.EdgeInsets.fromLTRB(24, 24, 24, 34),
-            theme: theme,
-            header: (_) => _header(exhibitor, logoImage),
-            footer: (context) => _footer(context),
-            build: (_) => [
-              pw.SizedBox(height: 10),
-              _table(exhibitor.entries),
-            ],
-          ),
-        );
+
+      final bytes = await pdf.save();
+
+      final rawName = (request.exhibitorName ?? data.exhibitorName).trim();
+
+      String cleanFilePart(String input) {
+        return input
+            .replaceAll(RegExp(r'[\\/:*?"<>|]'), '')
+            .replaceAll(RegExp(r'\s+'), ' ')
+            .trim();
       }
+
+      final cleanedShowName =
+          cleanFilePart(data.showName.isEmpty ? 'Show' : data.showName);
+      final cleanedName =
+          cleanFilePart(rawName.isEmpty ? 'Exhibitor' : rawName);
+
+      final fileName =
+          '$cleanedShowName - $cleanedName - Exhibitor Report.pdf';
+
+      return ReportFileResult(
+        fileName: fileName,
+        mimeType: 'application/pdf',
+        bytes: bytes,
+      );
     }
-
-    final bytes = await pdf.save();
-
-    return ReportFileResult(
-      fileName: 'exhibitor_report.pdf',
-      mimeType: 'application/pdf',
-      bytes: bytes,
-    );
-  }
 
   pw.Widget _header(ExhibitorReportData e, pw.MemoryImage logoImage) {
     return pw.Column(
@@ -230,7 +225,7 @@ class ExhibitorReportPdfBuilder {
           r.exhibitorCount?.toString() ?? '',
           r.awardsText,
           r.judgeName,
-          r.earnedLeg ? 'Yes' : '',
+          r.awardsText.isNotEmpty && r.earnedLeg ? 'Yes' : '',
           r.displayPoints.toString(),
           r.specialtyPoints.toString(),
           r.totalPoints.toString(),

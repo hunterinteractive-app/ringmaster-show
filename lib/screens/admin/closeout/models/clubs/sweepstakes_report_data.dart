@@ -10,6 +10,7 @@ class SweepstakesReportData {
   final String engineType;
   final List<SweepstakesReportRow> rows;
   final List<SweepstakesReportSection> sections;
+  final bool noResultsFound;
 
   const SweepstakesReportData({
     required this.showId,
@@ -21,6 +22,7 @@ class SweepstakesReportData {
     required this.engineType,
     required this.rows,
     this.sections = const [],
+    this.noResultsFound = false,
   });
 
   bool get isProvisional =>
@@ -39,6 +41,7 @@ class SweepstakesReportSection {
   final String verificationStatus;
   final String engineType;
   final List<SweepstakesReportRow> rows;
+  final bool noResultsFound;
 
   const SweepstakesReportSection({
     required this.showLetter,
@@ -46,6 +49,7 @@ class SweepstakesReportSection {
     required this.verificationStatus,
     required this.engineType,
     required this.rows,
+    this.noResultsFound = false,
   });
 }
 

@@ -52,6 +52,56 @@ class BreedResultsDetailReportPdf {
         ? 'Unknown Date'
         : request.showDate!.trim();
 
+    if (data.noResultsFound ||
+        (data.breedAwards.isEmpty && data.varieties.isEmpty)) {
+      pdf.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat.letter.landscape,
+          margin: const pw.EdgeInsets.all(24),
+          theme: theme,
+          build: (context) => pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              _buildHeader(
+                breedName: data.breedName,
+                scope: data.scope,
+                showLetter: data.showLetter,
+                judgeName: '',
+                showName: showName,
+                showDate: showDate,
+              ),
+              pw.SizedBox(height: 24),
+              pw.Container(
+                width: double.infinity,
+                padding: const pw.EdgeInsets.all(18),
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: PdfColors.grey400),
+                  borderRadius: pw.BorderRadius.circular(4),
+                ),
+                child: pw.Text(
+                  'No rabbits of this breed were shown in this section.',
+                  style: const pw.TextStyle(fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      final bytes = await pdf.save();
+
+      return ReportFileResult(
+        fileName: _buildFileName(
+          breedName: data.breedName,
+          scope: data.scope,
+          showLetter: data.showLetter,
+          showName: showName,
+        ),
+        mimeType: 'application/pdf',
+        bytes: bytes,
+      );
+    }
+
     final sections = data.sections.isNotEmpty
         ? data.sections
         : [
@@ -64,6 +114,9 @@ class BreedResultsDetailReportPdf {
           ];
 
     for (final section in sections) {
+      final isNoResults = section.noResultsFound ||
+          (section.breedAwards.isEmpty && section.varieties.isEmpty);
+
       pdf.addPage(
         pw.MultiPage(
           pageFormat: PdfPageFormat.letter.landscape,
@@ -80,10 +133,15 @@ class BreedResultsDetailReportPdf {
               showDate: showDate,
             ),
             pw.SizedBox(height: 12),
-            ..._buildSections(
-              breedAwards: section.breedAwards,
-              varieties: section.varieties,
-            ),
+            if (isNoResults)
+              _buildNoResultsBox(
+                'No rabbits of this breed were shown in this section.',
+              )
+            else
+              ..._buildSections(
+                breedAwards: section.breedAwards,
+                varieties: section.varieties,
+              ),
           ],
         ),
       );
@@ -95,8 +153,8 @@ class BreedResultsDetailReportPdf {
       fileName: _buildFileName(
         breedName: data.breedName,
         scope: data.scope,
+        showLetter: data.showLetter,
         showName: showName,
-        isAllShows: data.sections.isNotEmpty,
       ),
       mimeType: 'application/pdf',
       bytes: bytes,
@@ -106,8 +164,8 @@ class BreedResultsDetailReportPdf {
   String _buildFileName({
     required String breedName,
     required String scope,
+    required String showLetter,
     required String showName,
-    required bool isAllShows,
   }) {
     String clean(String input) {
       return input
@@ -116,10 +174,41 @@ class BreedResultsDetailReportPdf {
           .replaceAll(RegExp(r'\s+'), '_');
     }
 
-    final suffix =
-        isAllShows ? 'all_shows_breed_results_detail' : 'breed_results_detail';
+    final safeShowName = clean(showName);
+    final safeBreedName = clean(breedName);
+    final safeScope = clean(scope.toUpperCase());
+    final safeShowLetter = clean(showLetter.toUpperCase());
 
-    return '${clean(showName)}_${clean(breedName)}_${clean(scope.toLowerCase())}_$suffix.pdf';
+    return '${safeShowName}_${safeBreedName}_Breed_Results_Detail_Report_${safeScope}_${safeShowLetter}.pdf';
+  }
+
+  pw.Widget _buildNoResultsBox(String message) {
+    return pw.Container(
+      width: double.infinity,
+      padding: const pw.EdgeInsets.all(18),
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(color: PdfColors.grey500, width: 1),
+        borderRadius: pw.BorderRadius.circular(4),
+        color: PdfColors.grey100,
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(
+            'No Results Reported',
+            style: pw.TextStyle(
+              fontSize: 14,
+              fontWeight: pw.FontWeight.bold,
+            ),
+          ),
+          pw.SizedBox(height: 8),
+          pw.Text(
+            message,
+            style: const pw.TextStyle(fontSize: 11),
+          ),
+        ],
+      ),
+    );
   }
 
   pw.Widget _buildHeader({

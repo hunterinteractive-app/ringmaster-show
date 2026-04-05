@@ -9,6 +9,7 @@ class BreedResultsDetailReportData {
   final List<BreedAward> breedAwards;
   final List<VarietySection> varieties;
   final List<BreedResultsDetailSection> sections;
+  final bool noResultsFound;
 
   const BreedResultsDetailReportData({
     required this.showId,
@@ -19,6 +20,7 @@ class BreedResultsDetailReportData {
     required this.breedAwards,
     required this.varieties,
     this.sections = const [],
+    this.noResultsFound = false,
   });
 }
 
@@ -27,12 +29,14 @@ class BreedResultsDetailSection {
   final String judgeName;
   final List<BreedAward> breedAwards;
   final List<VarietySection> varieties;
+  final bool noResultsFound;
 
   const BreedResultsDetailSection({
     required this.showLetter,
     required this.judgeName,
     required this.breedAwards,
     required this.varieties,
+    this.noResultsFound = false,
   });
 }
 
