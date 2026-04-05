@@ -107,7 +107,7 @@ class LegsReportPdfBuilder {
             margin: const pw.EdgeInsets.all(24),
             theme: theme,
             build: (_) => pw.Center(
-              child: pw.Text('No leg certificates found.'),
+              child: pw.Text('No leg certificates earned.'),
             ),
           ),
         );

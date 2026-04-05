@@ -209,7 +209,6 @@ class ExhibitorReportLoader {
         awardsText: _formatAwards(awards),
         judgeName: judgeNamesByRef[judgeRef] ?? '',
         earnedLeg: earnedLegEntryIds.contains(entryId),
-        displayPoints: pointsByEntryId[entryId]?.displayPoints ?? 0,
         specialtyPoints: pointsByEntryId[entryId]?.specialtyPoints ?? 0,
         totalPoints: pointsByEntryId[entryId]?.totalPoints ?? 0,
       );
@@ -360,58 +359,43 @@ class ExhibitorReportLoader {
     }
   }
 
-  Future<Map<String, _EntryPoints>> _loadPointsByEntryId(String showId) async {
-    try {
-      final rows = await repo.supabase
-          .from('show_points_entries')
-          .select('''
-            exhibitor_id,
-            points_category,
-            total_points,
-            metadata
-          ''')
-          .eq('show_id', showId);
+    Future<Map<String, _EntryPoints>> _loadPointsByEntryId(String showId) async {
+      try {
+        final rows = await repo.supabase
+            .from('show_points_entries')
+            .select('''
+              exhibitor_id,
+              total_points,
+              metadata
+            ''')
+            .eq('show_id', showId);
 
-      final map = <String, _EntryPoints>{};
+        final map = <String, _EntryPoints>{};
 
-      for (final row in List<Map<String, dynamic>>.from(rows)) {
-        final metadataRaw = row['metadata'];
-        Map<String, dynamic> metadata = const {};
+        for (final row in List<Map<String, dynamic>>.from(rows)) {
+          final metadataRaw = row['metadata'];
+          Map<String, dynamic> metadata = const {};
 
-        if (metadataRaw is Map) {
-          metadata = Map<String, dynamic>.from(metadataRaw);
+          if (metadataRaw is Map) {
+            metadata = Map<String, dynamic>.from(metadataRaw);
+          }
+
+          final entryId = _str(metadata['entry_id']);
+          if (entryId.isEmpty) continue;
+
+          final totalPoints = ((row['total_points'] as num?) ?? 0).toInt();
+          final current = map[entryId] ?? const _EntryPoints();
+
+          map[entryId] = _EntryPoints(
+            specialtyPoints: current.specialtyPoints + totalPoints,
+          );
         }
 
-        final entryId = _str(metadata['entry_id']);
-        if (entryId.isEmpty) continue;
-
-        final pointsCategory = _str(row['points_category']).toLowerCase();
-        final totalPoints = (row['total_points'] as num?)?.toInt() ?? 0;
-
-        final current = map[entryId] ?? const _EntryPoints();
-
-        var displayPoints = current.displayPoints;
-        var specialtyPoints = current.specialtyPoints;
-
-        if (pointsCategory.contains('specialty') ||
-            pointsCategory.contains('sweepstakes_specialty') ||
-            pointsCategory.contains('spec')) {
-          specialtyPoints += totalPoints;
-        } else {
-          displayPoints += totalPoints;
-        }
-
-        map[entryId] = _EntryPoints(
-          displayPoints: displayPoints,
-          specialtyPoints: specialtyPoints,
-        );
+        return map;
+      } catch (_) {
+        return {};
       }
-
-      return map;
-    } catch (_) {
-      return {};
     }
-  }
 
   Map<String, _EntryLegContext> _buildEntryContextByShow(
     List<Map<String, dynamic>> rows,
@@ -628,13 +612,11 @@ class _EntryLegContext {
 }
 
 class _EntryPoints {
-  final int displayPoints;
   final int specialtyPoints;
 
   const _EntryPoints({
-    this.displayPoints = 0,
     this.specialtyPoints = 0,
   });
 
-  int get totalPoints => displayPoints + specialtyPoints;
+  int get totalPoints => specialtyPoints;
 }

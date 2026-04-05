@@ -43,7 +43,6 @@ class ExhibitorEntryRow {
   final String judgeName;
   final bool earnedLeg;
 
-  final int displayPoints;
   final int specialtyPoints;
   final int totalPoints;
 
@@ -61,7 +60,6 @@ class ExhibitorEntryRow {
     required this.awardsText,
     required this.judgeName,
     required this.earnedLeg,
-    required this.displayPoints,
     required this.specialtyPoints,
     required this.totalPoints,
   });

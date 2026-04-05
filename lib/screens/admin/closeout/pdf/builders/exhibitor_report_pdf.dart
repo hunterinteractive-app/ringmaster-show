@@ -191,9 +191,8 @@ class ExhibitorReportPdfBuilder {
         9: pw.FlexColumnWidth(0.95), // Awards
         10: pw.FlexColumnWidth(1.20), // Judge
         11: pw.FlexColumnWidth(0.55), // Leg
-        12: pw.FlexColumnWidth(0.55), // Disp
-        13: pw.FlexColumnWidth(0.55), // Spec
-        14: pw.FlexColumnWidth(0.60), // Total
+        12: pw.FlexColumnWidth(0.55), // Spec
+        13: pw.FlexColumnWidth(0.60), // Total
       },
       headers: const [
         'Show',
@@ -208,8 +207,7 @@ class ExhibitorReportPdfBuilder {
         'Awards',
         'Judge',
         'Leg',
-        'Disp',
-        'Spec',
+        'Sweepstakes',
         'Total',
       ],
       data: rows.map((r) {
@@ -226,7 +224,6 @@ class ExhibitorReportPdfBuilder {
           r.awardsText,
           r.judgeName,
           r.awardsText.isNotEmpty && r.earnedLeg ? 'Yes' : '',
-          r.displayPoints.toString(),
           r.specialtyPoints.toString(),
           r.totalPoints.toString(),
         ];
