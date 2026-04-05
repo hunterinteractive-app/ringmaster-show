@@ -563,7 +563,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     super.dispose();
   }
 
-    Future<void> _generateAllReports() async {
+    Future<void> _finalizeShow() async {
       final ready = await _ensureResultsReadyForReports();
       if (!ready) return;
 
@@ -1785,14 +1785,70 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                 ),
                                 onPressed: (_isBusy || reportsBlocked)
                                     ? null
-                                    : _generateAllReports,
+                                    : () async {
+                                        final confirmed = await showDialog<bool>(
+                                              context: context,
+                                              builder: (context) {
+                                                final subjectController = TextEditingController(
+                                                  text: '${widget.showName} - Final Reports',
+                                                );
+                                                final messageController = TextEditingController(
+                                                  text:
+                                                      'Attached are the finalized reports for ${widget.showName}.',
+                                                );
+
+                                                return AlertDialog(
+                                                  title: const Text('Finalize & Send'),
+                                                  content: Column(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      TextField(
+                                                        controller: subjectController,
+                                                        decoration: const InputDecoration(
+                                                          labelText: 'Email Subject (optional)',
+                                                        ),
+                                                      ),
+                                                      const SizedBox(height: 10),
+                                                      TextField(
+                                                        controller: messageController,
+                                                        decoration: const InputDecoration(
+                                                          labelText: 'Email Message (optional)',
+                                                        ),
+                                                        maxLines: 3,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  actions: [
+                                                    TextButton(
+                                                      onPressed: () => Navigator.pop(context, false),
+                                                      child: const Text('Cancel'),
+                                                    ),
+                                                    FilledButton(
+                                                      onPressed: () => Navigator.pop(context, true),
+                                                      child: const Text('Run Finalize'),
+                                                    ),
+                                                  ],
+                                                );
+                                              },
+                                            ) ??
+                                            false;
+
+                                        if (!confirmed) return;
+
+                                        // 🔥 STEP 1: Run finalize (GENERATES artifacts)
+                                        await _finalizeShow();
+
+                                        // 🔥 STEP 2: Send emails AFTER generation
+                                        await _sendAllExhibitorReports();
+                                        await _sendAllClubReports();
+                                      },
                                 icon: const Icon(Icons.auto_awesome),
                                 label: Text(
                                   reportsBlocked
-                                      ? 'Finish Results Before Reports'
+                                      ? 'Finish Results Before Finalize'
                                       : (_dashboard?.dashboard.closeout.isReportsStale == true
-                                          ? 'Generate All Reports'
-                                          : 'All Reports Fresh'),
+                                          ? 'Finalize Show'
+                                          : 'Re-Finalize Show'),
                                 ),
                               ),
                               OutlinedButton.icon(
