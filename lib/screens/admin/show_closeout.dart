@@ -327,6 +327,14 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       return list;
     }
 
+
+    Future<void> _syncClubDeliveryMetadata() async {
+      await supabase.rpc(
+        'prepare_club_delivery_targets',
+        params: {'p_show_id': widget.showId},
+      );
+    }
+
     Future<void> _loadMissingPlacements() async {
       if (_loadingMissingPlacements) return;
 
@@ -565,78 +573,30 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
     Future<void> _finalizeShow() async {
       final ready = await _ensureResultsReadyForReports();
-      if (!ready) return;
 
-      const supportedBulkReports = <String>{
-        'arba_report',
-        'exhibitor_report',
-        'legs',
-        'sweepstakes_report',
-        'breed_results_detail_report',
-      };
-
-      final artifacts = (_dashboard?.reports ?? const <ReportArtifactSummary>[])
-          .where((r) =>
-              r.reportName.isNotEmpty &&
-              r.isCurrent &&
-              supportedBulkReports.contains(r.reportName))
-          .toList()
-        ..sort((a, b) {
-          final aIndex = _reportDisplayOrder.indexOf(a.reportName);
-          final bIndex = _reportDisplayOrder.indexOf(b.reportName);
-
-          if (aIndex == -1 && bIndex == -1) {
-            return a.reportName.compareTo(b.reportName);
-          }
-          if (aIndex == -1) return 1;
-          if (bIndex == -1) return -1;
-          return aIndex.compareTo(bIndex);
-        });
-
-      if (artifacts.isEmpty) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No report artifacts found to generate.')),
-        );
-        return;
+      if (!ready) {
+        throw Exception('Results are not ready for finalize.');
       }
-
-      setState(() {
-        _generatingReport = true;
-      });
 
       try {
-        final confirmed = await showDialog<bool>(
-              context: context,
-              barrierDismissible: false,
-              builder: (context) => _GenerateAllReportsDialog(
-                artifacts: artifacts,
-                onRun: (
-                  onStarted,
-                  onFinished,
-                  onFailed,
-                ) async {
-                  await _runGenerateAllReportsLive(
-                    artifacts,
-                    onStarted: onStarted,
-                    onFinished: onFinished,
-                    onFailed: onFailed,
-                  );
-                },
-              ),
-            ) ??
-            false;
-
-        if (!confirmed) return;
-
-        await _loadData();
-      } finally {
-        if (mounted) {
-          setState(() {
-            _generatingReport = false;
-          });
-        }
+        await supabase.rpc(
+          'finalize_show',
+          params: {'p_show_id': widget.showId},
+        );
+      } catch (e) {
+        rethrow;
       }
+    }
+
+    Future<int> _countQueuedArtifactsForShow() async {
+      final rows = await supabase
+          .from('show_report_artifacts')
+          .select('id')
+          .eq('show_id', widget.showId)
+          .eq('is_current', true)
+          .inFilter('artifact_status', ['queued', 'generated', 'failed']);
+
+      return (rows as List).length;
     }
 
     Future<void> _runGenerateAllReportsLive(
@@ -645,55 +605,33 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       required void Function(String artifactKey) onFinished,
       required void Function(String artifactKey, Object error) onFailed,
     }) async {
-      debugPrint('🧪STEP 1: _runGenerateAllReportsLive entered');
-      debugPrint('🧪STEP 1A: artifact count = ${artifacts.length}');
-
       await _saveArbaDetails();
-      debugPrint('🧪STEP 2: _saveArbaDetails done');
-
       await _ensureLegsBuilder();
-      debugPrint('🧪STEP 3: _ensureLegsBuilder done');
-
       await _ensureExhibitorBuilder();
-      debugPrint('🧪STEP 4: _ensureExhibitorBuilder done');
-
       await _ensureReportLogo();
-      debugPrint('🧪STEP 5: _ensureReportLogo done');
 
       final repository = CloseoutRepository(supabase);
-      debugPrint('🧪STEP 6: repository created');
 
       final arbaLoader = ArbaReportLoader(repository);
       final arbaBuilder = ArbaReportPdfBuilder();
-      debugPrint('🧪STEP 7: ARBA loader/builder ready');
 
       final showBasics = await repository.loadShowBasics(widget.showId);
-      debugPrint('🧪STEP 8: loadShowBasics done -> $showBasics');
-
       final showDate = _formatShowDate(showBasics['start_date']);
-      debugPrint('🧪STEP 8A: showDate = $showDate');
-
       final sanctionNumber = await _loadArbaSanctionNumber(widget.showId);
-      debugPrint('🧪STEP 9: sanction number loaded -> $sanctionNumber');
 
       final legsLoader = LegsReportLoader(repository);
-      debugPrint('🧪STEP 10: legsLoader ready');
-
       final exhibitorLoader = ExhibitorReportLoader(repository);
-      debugPrint('🧪STEP 11: exhibitorLoader ready');
 
       final sweepstakesLoader = SweepstakesReportLoader(repository);
       final sweepstakesBuilder = SweepstakesReportPdf(
         logoBytes: _reportLogoBytes,
       );
-      debugPrint('🧪STEP 12: sweepstakes loader/builder ready');
 
       final breedResultsDetailReportLoader =
           BreedResultsDetailReportLoader(repository);
       final breedResultsDetailReportBuilder = BreedResultsDetailReportPdf(
         logoBytes: _reportLogoBytes,
       );
-      debugPrint('🧪STEP 13: breed detail loader/builder ready');
 
       final registry = ReportRegistry(
         arbaLoader: arbaLoader,
@@ -707,22 +645,16 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         breedResultsDetailReportLoader: breedResultsDetailReportLoader,
         breedResultsDetailReportBuilder: breedResultsDetailReportBuilder,
       );
-      debugPrint('🧪STEP 14: report registry created');
 
       final engine = ReportEngine(registry);
-      debugPrint('🧪STEP 15: report engine created');
-
       final uploadService = ReportUploadService(supabase);
-      debugPrint('🧪STEP 16: upload service created');
 
       final runner = CloseoutRunner(
         engine: engine,
         uploadService: uploadService,
       );
-      debugPrint('🧪STEP 17: closeout runner created');
 
       final latestFinalizeId = _dashboard?.latestFinalize.id ?? 'manual-run';
-      debugPrint('🧪STEP 18: latestFinalizeId = $latestFinalizeId');
 
       String artifactKey(ReportArtifactSummary artifact) {
         final filePart = (artifact.fileName?.trim().isNotEmpty ?? false)
@@ -733,12 +665,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
       Future<void> runSingle(ReportArtifactSummary artifact) async {
         final key = artifactKey(artifact);
-        debugPrint(
-          '🧪ARTIFACT STARTING: report=${artifact.reportName}, id=${artifact.id}, file=${artifact.fileName}, metadata=${artifact.metadata}',
-        );
-
         onStarted(key);
-        debugPrint('🧪ARTIFACT MARKED RUNNING: $key');
 
         try {
           if (artifact.reportName == 'sweepstakes_report' ||
@@ -746,10 +673,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
             final breedName = _artifactMetaString(artifact, 'breed_name');
             final scope = _artifactMetaString(artifact, 'scope');
             final showLetter = _artifactMetaString(artifact, 'show_letter');
-
-            debugPrint(
-              '🧪ARTIFACT CLUB PARAMS: breed=$breedName, scope=$scope, showLetter=$showLetter',
-            );
 
             if (breedName == null || scope == null || showLetter == null) {
               throw Exception(
@@ -775,10 +698,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
             final exhibitorId = _artifactMetaString(artifact, 'exhibitor_id');
             final exhibitorName = _artifactMetaString(artifact, 'exhibitor_name');
 
-            debugPrint(
-              '🧪ARTIFACT EXHIBITOR PARAMS: exhibitorId=$exhibitorId, exhibitorName=$exhibitorName',
-            );
-
             if (exhibitorId == null) {
               throw Exception(
                 'Missing exhibitor_id metadata for ${artifact.reportName} (${artifact.id}).',
@@ -797,8 +716,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
               sanctionNumber: sanctionNumber,
             );
           } else {
-            debugPrint('🧪ARTIFACT STANDARD PARAMS: report=${artifact.reportName}');
-
             await runner.generateSingleReport(
               showId: widget.showId,
               finalizeRunId: latestFinalizeId,
@@ -810,30 +727,40 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
             );
           }
 
-          debugPrint('🧪ARTIFACT FINISHED OK: $key');
           onFinished(key);
-        } catch (e, st) {
-          debugPrint('🧪ARTIFACT FAILED: $key');
-          debugPrint('🧪ARTIFACT ERROR: $e');
-          debugPrint('🧪ARTIFACT STACK: $st');
+        } catch (e) {
           onFailed(key, e);
+          rethrow;
         }
       }
 
-      debugPrint('🧪STEP 19: starting sequential generation for ${artifacts.length} artifacts');
+      final validArtifacts = artifacts.where((a) {
+        if (a.id.isEmpty || a.reportName.isEmpty) return false;
 
-      for (final artifact in artifacts) {
-        await runSingle(artifact);
+        if (_exhibitorReportKeys.contains(a.reportName)) {
+          return _artifactMetaString(a, 'exhibitor_id') != null;
+        }
+
+        if (_clubReportKeys.contains(a.reportName)) {
+          return _artifactMetaString(a, 'breed_name') != null &&
+              _artifactMetaString(a, 'scope') != null &&
+              _artifactMetaString(a, 'show_letter') != null;
+        }
+
+        return true;
+      }).toList();
+
+      const batchSize = 3;
+
+      for (var i = 0; i < validArtifacts.length; i += batchSize) {
+        final batch = validArtifacts.skip(i).take(batchSize).toList();
+        await Future.wait(batch.map(runSingle));
       }
-
-      debugPrint('🧪STEP 20: sequential generation complete');
 
       await supabase.rpc(
         'refresh_show_reports_state',
         params: {'p_show_id': widget.showId},
       );
-
-      debugPrint('🧪STEP 21: refresh_show_reports_state complete');
     }
 
   
@@ -847,6 +774,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     });
 
     try {
+      await _loadData();
+
       final exhibitors = await _loadExhibitorEmailTargets();
 
       if (exhibitors.isEmpty) {
@@ -891,11 +820,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                 'Attached are your exhibitor reports and legs from ${widget.showName}.',
           );
           sentCount++;
-        } catch (e) {
+        } catch (_) {
           failedCount++;
-          debugPrint(
-            '🧪Failed sending exhibitor reports to ${exhibitor.email}: $e',
-          );
         }
       }
 
@@ -921,166 +847,157 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     }
   }
 
-    Future<void> _sendAllClubReports() async {
-      final ready = await _ensureResultsReadyForReports();
-      if (!ready) return;
+  Future<void> _sendAllClubReports() async {
+    final ready = await _ensureResultsReadyForReports();
+    if (!ready) return;
 
-      setState(() {
-        _generatingReport = true;
-      });
+    setState(() {
+      _generatingReport = true;
+    });
 
-      try {
-        final clubs = await _loadClubEmailTargets();
+    try {
+      await _loadData();
+      await _syncClubDeliveryMetadata();
+      await _loadData();
 
-        if (clubs.isEmpty) {
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No club email targets found.')),
-          );
-          return;
+      final clubs = await _loadClubEmailTargets();
+
+      if (clubs.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No club email targets found.')),
+        );
+        return;
+      }
+
+      int sentCount = 0;
+      int skippedCount = 0;
+      int failedCount = 0;
+
+      final grouped = <String, List<_ClubEmailTarget>>{};
+
+      for (final club in clubs) {
+        final key =
+            '${club.clubName.trim().toLowerCase()}|${club.breedName.trim().toLowerCase()}|${club.email.trim().toLowerCase()}';
+        grouped.putIfAbsent(key, () => []);
+        grouped[key]!.add(club);
+      }
+
+      for (final entry in grouped.entries) {
+        final targets = entry.value;
+        if (targets.isEmpty) {
+          skippedCount++;
+          continue;
         }
 
-        int sentCount = 0;
-        int skippedCount = 0;
-        int failedCount = 0;
+        final first = targets.first;
+        final artifactsById = <String, ReportArtifactSummary>{};
 
-        final grouped = <String, List<_ClubEmailTarget>>{};
+        debugPrint(
+          'CLUB GROUP START: ${first.clubName} / ${first.breedName} / ${first.email}',
+        );
 
-        for (final club in clubs) {
-          final key =
-              '${club.clubName.trim().toLowerCase()}|${club.breedName.trim().toLowerCase()}|${club.email.trim().toLowerCase()}';
-          grouped.putIfAbsent(key, () => []);
-          grouped[key]!.add(club);
+        for (final target in targets) {
+          final sweepstakesArtifacts = _allGeneratedArtifactsWhere(
+            'sweepstakes_report',
+            (a) => _artifactMatchesClubTarget(a, target),
+          );
+
+          final breedDetailArtifacts = _allGeneratedArtifactsWhere(
+            'breed_results_detail_report',
+            (a) => _artifactMatchesClubTarget(a, target),
+          );
+
+          for (final a in sweepstakesArtifacts) {
+            artifactsById[a.id] = a;
+          }
+
+          for (final a in breedDetailArtifacts) {
+            artifactsById[a.id] = a;
+          }
+
+          debugPrint(
+            'CLUB GROUP TARGET: ${target.clubName} / ${target.breedName} / ${target.scope} ${target.showLetter} / ${target.email}',
+          );
         }
 
-        for (final entry in grouped.entries) {
-          final targets = entry.value;
-          if (targets.isEmpty) {
-            skippedCount++;
-            continue;
-          }
+        final artifacts = artifactsById.values.toList()
+          ..sort((a, b) {
+            final aScope =
+                (_artifactMetaString(a, 'scope') ?? '').trim().toUpperCase();
+            final bScope =
+                (_artifactMetaString(b, 'scope') ?? '').trim().toUpperCase();
 
-          final first = targets.first;
-          final artifactsById = <String, ReportArtifactSummary>{};
+            final aLetter =
+                (_artifactMetaString(a, 'show_letter') ?? '').trim().toUpperCase();
+            final bLetter =
+                (_artifactMetaString(b, 'show_letter') ?? '').trim().toUpperCase();
 
-          debugPrint(
-            'CLUB GROUP START: ${first.clubName} / ${first.breedName} / ${first.email}',
-          );
+            final scopeCmp = aScope.compareTo(bScope);
+            if (scopeCmp != 0) return scopeCmp;
 
-          for (final target in targets) {
-            final sweepstakesArtifacts = _allGeneratedArtifactsWhere(
-              'sweepstakes_report',
-              (a) => _artifactMatchesClubTarget(a, target),
-            );
+            final letterCmp = aLetter.compareTo(bLetter);
+            if (letterCmp != 0) return letterCmp;
 
-            final breedDetailArtifacts = _allGeneratedArtifactsWhere(
-              'breed_results_detail_report',
-              (a) => _artifactMatchesClubTarget(a, target),
-            );
+            return a.reportName.compareTo(b.reportName);
+          });
 
-            for (final a in sweepstakesArtifacts) {
-              artifactsById[a.id] = a;
-            }
+        final includedSanctionNumbers = artifacts
+            .map((a) => (_artifactMetaString(a, 'sanction_number') ?? '').trim())
+            .where((s) => s.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
 
-            for (final a in breedDetailArtifacts) {
-              artifactsById[a.id] = a;
-            }
-            debugPrint(
-              'CLUB GROUP TARGET: ${target.clubName} / ${target.breedName} / ${target.scope} ${target.showLetter} / ${target.email}',
-            );
-            debugPrint(
-              'CLUB GROUP TARGET ATTACHMENTS: '
-              '${[
-                ...sweepstakesArtifacts.map((a) => 'sweepstakes_report:${a.id}'),
-                ...breedDetailArtifacts.map((a) => 'breed_results_detail_report:${a.id}'),
-              ].join(', ')}',
-            );
-          }
+        if (artifacts.isEmpty) {
+          skippedCount++;
+          continue;
+        }
 
-          final artifacts = artifactsById.values.toList()
-            ..sort((a, b) {
-              final aScope =
-                  (_artifactMetaString(a, 'scope') ?? '').trim().toUpperCase();
-              final bScope =
-                  (_artifactMetaString(b, 'scope') ?? '').trim().toUpperCase();
-
-              final aLetter =
-                  (_artifactMetaString(a, 'show_letter') ?? '').trim().toUpperCase();
-              final bLetter =
-                  (_artifactMetaString(b, 'show_letter') ?? '').trim().toUpperCase();
-
-              final aType = a.reportName;
-              final bType = b.reportName;
-
-              final scopeCmp = aScope.compareTo(bScope);
-              if (scopeCmp != 0) return scopeCmp;
-
-              final letterCmp = aLetter.compareTo(bLetter);
-              if (letterCmp != 0) return letterCmp;
-
-              return aType.compareTo(bType);
-            });
-
-            final includedSanctionNumbers = artifacts
-              .map((a) => (_artifactMetaString(a, 'sanction_number') ?? '').trim())
-              .where((s) => s.isNotEmpty)
-              .toSet()
-              .toList()
-            ..sort();
-
-          debugPrint(
-            'CLUB GROUP FINAL ATTACHMENTS: ${artifacts.map((a) => '${a.reportName}:${a.id}').join(', ')}',
-          );
-
-          if (artifacts.isEmpty) {
-            skippedCount++;
-            continue;
-          }
-
-          try {
-            await _sendClubArtifactsEmail(
-              artifacts: artifacts,
-              to: first.email,
-              subject: '${widget.showName} - ${first.breedName} Club Reports',
-              message:
+        try {
+          await _sendClubArtifactsEmail(
+            artifacts: artifacts,
+            to: first.email,
+            subject: '${widget.showName} - ${first.breedName} Club Reports',
+            message:
                 'Attached are the sweepstakes and breed results detail reports for ${widget.showName}.\n\n'
                 '${includedSanctionNumbers.isNotEmpty ? 'Included shows: ${includedSanctionNumbers.join(', ')}.' : ''}',
-            );
-            sentCount++;
-          } catch (e, st) {
-            failedCount++;
-            debugPrint(
-              'FAILED CLUB GROUP EMAIL: ${first.clubName} / ${first.breedName} / ${first.email}',
-            );
-            debugPrint('FAILED CLUB GROUP EMAIL ERROR: $e');
-            debugPrint('FAILED CLUB GROUP EMAIL STACK: $st');
-          }
-        }
-
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Club report send complete. Sent: $sentCount, skipped: $skippedCount, failed: $failedCount',
-            ),
-          ),
-        );
-      } catch (e, st) {
-        debugPrint('SEND ALL CLUB REPORTS ERROR: $e');
-        debugPrint('SEND ALL CLUB REPORTS STACK: $st');
-
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed sending club reports: $e')),
-        );
-      } finally {
-        if (mounted) {
-          setState(() {
-            _generatingReport = false;
-          });
+          );
+          sentCount++;
+        } catch (e, st) {
+          failedCount++;
+          debugPrint(
+            'FAILED CLUB GROUP EMAIL: ${first.clubName} / ${first.breedName} / ${first.email}',
+          );
+          debugPrint('FAILED CLUB GROUP EMAIL ERROR: $e');
+          debugPrint('FAILED CLUB GROUP EMAIL STACK: $st');
         }
       }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Club report send complete. Sent: $sentCount, skipped: $skippedCount, failed: $failedCount',
+          ),
+        ),
+      );
+    } catch (e, st) {
+      debugPrint('SEND ALL CLUB REPORTS ERROR: $e');
+      debugPrint('SEND ALL CLUB REPORTS STACK: $st');
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed sending club reports: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _generatingReport = false;
+        });
+      }
     }
+  }
 
     bool get _resultsReadyForReports =>
         _dashboard?.resultsReadiness.ready == true;
@@ -1246,8 +1163,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
       final dashboardJson = Map<String, dynamic>.from(dashboardResp as Map);
       final dashboard = CloseoutDashboard.fromJson(dashboardJson);
-
-      debugPrint('🔥🧪 isReportsStale = ${dashboard.dashboard.closeout.isReportsStale}');
 
       await _loadArbaDetails();
       await _ensureLegsBuilder();
@@ -1789,34 +1704,10 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                         final confirmed = await showDialog<bool>(
                                               context: context,
                                               builder: (context) {
-                                                final subjectController = TextEditingController(
-                                                  text: '${widget.showName} - Final Reports',
-                                                );
-                                                final messageController = TextEditingController(
-                                                  text:
-                                                      'Attached are the finalized reports for ${widget.showName}.',
-                                                );
-
                                                 return AlertDialog(
-                                                  title: const Text('Finalize & Send'),
-                                                  content: Column(
-                                                    mainAxisSize: MainAxisSize.min,
-                                                    children: [
-                                                      TextField(
-                                                        controller: subjectController,
-                                                        decoration: const InputDecoration(
-                                                          labelText: 'Email Subject (optional)',
-                                                        ),
-                                                      ),
-                                                      const SizedBox(height: 10),
-                                                      TextField(
-                                                        controller: messageController,
-                                                        decoration: const InputDecoration(
-                                                          labelText: 'Email Message (optional)',
-                                                        ),
-                                                        maxLines: 3,
-                                                      ),
-                                                    ],
+                                                  title: const Text('Finalize & Generate Reports'),
+                                                  content: const Text(
+                                                    'This will finalize the show and generate all Flutter-based closeout reports. Emails will not be sent automatically.',
                                                   ),
                                                   actions: [
                                                     TextButton(
@@ -1825,7 +1716,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                                     ),
                                                     FilledButton(
                                                       onPressed: () => Navigator.pop(context, true),
-                                                      child: const Text('Run Finalize'),
+                                                      child: const Text('Finalize'),
                                                     ),
                                                   ],
                                                 );
@@ -1835,12 +1726,97 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
                                         if (!confirmed) return;
 
-                                        // 🔥 STEP 1: Run finalize (GENERATES artifacts)
-                                        await _finalizeShow();
+                                        setState(() {
+                                          _generatingReport = true;
+                                        });
 
-                                        // 🔥 STEP 2: Send emails AFTER generation
-                                        await _sendAllExhibitorReports();
-                                        await _sendAllClubReports();
+                                        try {
+                                          await _finalizeShow();
+
+                                          final artifactCount = await _countQueuedArtifactsForShow();
+
+                                          if (artifactCount == 0) {
+                                            throw Exception(
+                                              'Finalize completed but no report artifacts were created.',
+                                            );
+                                          }
+
+                                          await _loadData();
+
+                                          final artifactsToGenerate =
+                                              (_dashboard?.reports ?? <ReportArtifactSummary>[])
+                                                  .where((r) => r.isCurrent)
+                                                  .where((r) => r.artifactStatus == 'queued')
+                                                  .where(
+                                                    (r) => {
+                                                      'arba_report',
+                                                      'exhibitor_report',
+                                                      'legs',
+                                                      'sweepstakes_report',
+                                                      'breed_results_detail_report',
+                                                    }.contains(r.reportName),
+                                                  )
+                                                  .toList();
+
+                                          if (artifactsToGenerate.isEmpty) {
+                                            throw Exception(
+                                              'Finalize completed, but there were no queued Flutter-rendered reports to generate.',
+                                            );
+                                          }
+
+                                          final generatedOk = await showDialog<bool>(
+                                            context: context,
+                                            barrierDismissible: false,
+                                            builder: (context) {
+                                              return _GenerateAllReportsDialog(
+                                                artifacts: artifactsToGenerate,
+                                                onRun: (onStarted, onFinished, onFailed) {
+                                                  return _runGenerateAllReportsLive(
+                                                    artifactsToGenerate,
+                                                    onStarted: onStarted,
+                                                    onFinished: onFinished,
+                                                    onFailed: onFailed,
+                                                  );
+                                                },
+                                              );
+                                            },
+                                          );
+
+                                          if (generatedOk != true) {
+                                            throw Exception(
+                                              'Report generation was cancelled or did not finish cleanly.',
+                                            );
+                                          }
+
+                                          await _syncClubDeliveryMetadata();
+                                          await _loadData();
+
+                                          if (_dashboard?.dashboard.closeout.isReportsStale == true) {
+                                            throw Exception(
+                                              'Flutter generation completed, but reports are still marked stale.',
+                                            );
+                                          }
+
+                                          if (!mounted) return;
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(
+                                              content: Text(
+                                                'Finalize and report generation completed. Review reports, then use the send buttons when ready.',
+                                              ),
+                                            ),
+                                          );
+                                        } catch (e) {
+                                          if (!mounted) return;
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text('Finalize flow failed: $e')),
+                                          );
+                                        } finally {
+                                          if (mounted) {
+                                            setState(() {
+                                              _generatingReport = false;
+                                            });
+                                          }
+                                        }
                                       },
                                 icon: const Icon(Icons.auto_awesome),
                                 label: Text(
@@ -2851,158 +2827,152 @@ class _GenerateAllReportsDialogState extends State<_GenerateAllReportsDialog> {
     unawaited(_start());
   }
 
-    Future<void> _start() async {
-      debugPrint('🧪DIALOG: _start called');
+      Future<void> _start() async {
+        try {
+          await widget.onRun(
+            (reportName) {
+              if (!mounted) return;
+              setState(() {
+                _running.add(reportName);
+                _failed.remove(reportName);
+              });
+            },
+            (reportName) {
+              if (!mounted) return;
+              setState(() {
+                _running.remove(reportName);
+                _completed.add(reportName);
+              });
+            },
+            (reportName, error) {
+              if (!mounted) return;
+              setState(() {
+                _running.remove(reportName);
+                _failed[reportName] = error.toString();
+              });
+            },
+          );
 
-      try {
-        debugPrint('🧪DIALOG: calling widget.onRun');
-
-        await widget.onRun(
-          (reportName) {
-            debugPrint('🧪DIALOG CALLBACK onStarted: $reportName');
-            if (!mounted) return;
-            setState(() {
-              _running.add(reportName);
-              _failed.remove(reportName);
-            });
-          },
-          (reportName) {
-            debugPrint('🧪DIALOG CALLBACK onFinished: $reportName');
-            if (!mounted) return;
-            setState(() {
-              _running.remove(reportName);
-              _completed.add(reportName);
-            });
-          },
-          (reportName, error) {
-            debugPrint('🧪DIALOG CALLBACK onFailed: $reportName');
-            debugPrint('🧪DIALOG CALLBACK ERROR: $error');
-            if (!mounted) return;
-            setState(() {
-              _running.remove(reportName);
-              _failed[reportName] = error.toString();
-            });
-          },
-        );
-
-        debugPrint('🧪DIALOG: widget.onRun completed');
-
-        if (!mounted) return;
-        setState(() {
-          _finished = true;
-          if (_failed.isNotEmpty) {
-            _error = '${_failed.length} report(s) failed.';
-          }
-        });
-      } catch (e, st) {
-        debugPrint('🧪DIALOG: _start threw error: $e');
-        debugPrint('🧪DIALOG: _start stack: $st');
-
-        if (!mounted) return;
-        setState(() {
-          _finished = true;
-          _error = e.toString();
-        });
+          if (!mounted) return;
+          setState(() {
+            _finished = true;
+            if (_failed.isNotEmpty) {
+              _error = '${_failed.length} report(s) failed.';
+            }
+          });
+        } catch (e) {
+          if (!mounted) return;
+          setState(() {
+            _finished = true;
+            _error = e.toString();
+          });
+        }
       }
-    }
 
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Generating Reports'),
-      content: SizedBox(
-        width: 520,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            LinearProgressIndicator(value: _finished ? 1 : _progress),
-            const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                '${_completed.length + _failed.length} of ${widget.artifacts.length} reports processed'
+    @override
+    Widget build(BuildContext context) {
+      return AlertDialog(
+        title: const Text('Generating Reports'),
+        content: SizedBox(
+          width: 520,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Please do not leave this window while reports are generating. This could take several minutes.',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.red,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 320),
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: widget.artifacts.length,
-                itemBuilder: (context, index) {
-                  final artifact = widget.artifacts[index];
-                  final key = _artifactKey(artifact);
-                  final isDone = _completed.contains(key);
-                  final isRunning = _running.contains(key);
-                  final failedMessage = _failed[key];
-
-                  IconData icon;
-                  Color color;
-                  String status;
-
-                  if (failedMessage != null) {
-                    icon = Icons.error;
-                    color = Colors.red;
-                    status = 'Failed';
-                  } else if (isDone) {
-                    icon = Icons.check_circle;
-                    color = Colors.green;
-                    status = 'Done';
-                  } else if (isRunning) {
-                    icon = Icons.autorenew;
-                    color = const Color(0xFFD4A623);
-                    status = 'Running';
-                  } else {
-                    icon = Icons.schedule;
-                    color = Colors.grey;
-                    status = 'Queued';
-                  }
-
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ListTile(
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        leading: Icon(icon, color: color),
-                        title: Text(_artifactLabel(artifact)),
-                        subtitle: Text(_friendlyReportName(artifact.reportName)),
-                        trailing: Text(status),
-                      ),
-                      if (failedMessage != null)
-                        Padding(
-                          padding: const EdgeInsets.only(left: 40, bottom: 8),
-                          child: Text(
-                            failedMessage,
-                            style: const TextStyle(
-                              color: Colors.red,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                    ],
-                  );
-                },
-              ),
-            ),
-            if (_error != null) ...[
+              const SizedBox(height: 12),
+              LinearProgressIndicator(value: _finished ? 1 : _progress),
               const SizedBox(height: 12),
               Text(
-                _error!,
-                style: const TextStyle(color: Colors.red),
+                '${_completed.length + _failed.length} of ${widget.artifacts.length} reports processed',
               ),
+              const SizedBox(height: 12),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 320),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: widget.artifacts.length,
+                  itemBuilder: (context, index) {
+                    final artifact = widget.artifacts[index];
+                    final key = _artifactKey(artifact);
+                    final isDone = _completed.contains(key);
+                    final isRunning = _running.contains(key);
+                    final failedMessage = _failed[key];
+
+                    IconData icon;
+                    Color color;
+                    String status;
+
+                    if (failedMessage != null) {
+                      icon = Icons.error;
+                      color = Colors.red;
+                      status = 'Failed';
+                    } else if (isDone) {
+                      icon = Icons.check_circle;
+                      color = Colors.green;
+                      status = 'Done';
+                    } else if (isRunning) {
+                      icon = Icons.autorenew;
+                      color = const Color(0xFFD4A623);
+                      status = 'Running';
+                    } else {
+                      icon = Icons.schedule;
+                      color = Colors.grey;
+                      status = 'Queued';
+                    }
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(icon, color: color),
+                          title: Text(_artifactLabel(artifact)),
+                          subtitle: Text(_friendlyReportName(artifact.reportName)),
+                          trailing: Text(status),
+                        ),
+                        if (failedMessage != null)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 40, bottom: 8),
+                            child: Text(
+                              failedMessage,
+                              style: const TextStyle(
+                                color: Colors.red,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  _error!,
+                  style: const TextStyle(color: Colors.red),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: _finished ? () => Navigator.of(context).pop(true) : null,
-          child: Text(_finished ? 'Close' : 'Working...'),
-        ),
-      ],
-    );
-  }
+        actions: [
+          TextButton(
+            onPressed: _finished ? () => Navigator.of(context).pop(true) : null,
+            child: Text(_finished ? 'Close' : 'Working...'),
+          ),
+        ],
+      );
+    }
 }
 
 class _ExhibitorEmailTarget {
