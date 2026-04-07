@@ -59,6 +59,9 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   String? _selectedClubName;
   bool _loadingClubs = false;
   bool _canSwitchHostingClub = false;
+  bool _canManageHostingClubs = false;
+  static const String _addClubActionValue = '__add_new_club__';
+  static const String _manageClubsActionValue = '__manage_clubs__';
 
   @override
   void initState() {
@@ -148,16 +151,29 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
     try {
       final clubs = await ClubService.loadMyClubs();
       final canSwitch = await ClubService.canSwitchHostingClub();
+      final canManage = clubs.isEmpty ? true : canSwitch;
 
       if (!mounted) return;
       setState(() {
         _clubs = clubs;
         _canSwitchHostingClub = canSwitch;
+        _canManageHostingClubs = canManage;
 
         if ((_selectedClubId == null || _selectedClubId!.isEmpty) &&
             _clubs.isNotEmpty) {
           _selectedClubId = _clubs.first['id']?.toString();
           _selectedClubName = _clubs.first['name']?.toString();
+        }
+
+        if (_selectedClubId != null &&
+            !_clubs.any((club) => club['id']?.toString() == _selectedClubId)) {
+          if (_clubs.isNotEmpty) {
+            _selectedClubId = _clubs.first['id']?.toString();
+            _selectedClubName = _clubs.first['name']?.toString();
+          } else {
+            _selectedClubId = null;
+            _selectedClubName = null;
+          }
         }
 
         if (_selectedClubId != null && _selectedClubId!.isNotEmpty) {
@@ -179,6 +195,219 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
         _loadingClubs = false;
         _msg = 'Failed to load clubs: $e';
       });
+    }
+  }
+
+  Future<void> _showAddClubDialog() async {
+    final controller = TextEditingController();
+    bool submitting = false;
+    String? errorText;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            Future<void> submit() async {
+              final name = controller.text.trim();
+
+              if (name.isEmpty) {
+                setDialogState(() => errorText = 'Club name is required.');
+                return;
+              }
+
+              setDialogState(() {
+                submitting = true;
+                errorText = null;
+              });
+
+              try {
+                final created = await ClubService.createClub(name: name);
+
+                if (!mounted) return;
+
+                await _loadClubs();
+
+                if (!mounted) return;
+                setState(() {
+                  _selectedClubId = created['id']?.toString();
+                  _selectedClubName = created['name']?.toString();
+                  _msg = 'Club added.';
+                });
+
+                Navigator.of(dialogContext).pop();
+              } catch (e) {
+                setDialogState(() {
+                  submitting = false;
+                  errorText = 'Failed to add club: $e';
+                });
+              }
+            }
+
+            return AlertDialog(
+              title: const Text('Add New Club'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: controller,
+                    autofocus: true,
+                    enabled: !submitting,
+                    decoration: InputDecoration(
+                      labelText: 'Club name',
+                      border: const OutlineInputBorder(),
+                      errorText: errorText,
+                    ),
+                    onSubmitted: (_) => submit(),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: submitting
+                      ? null
+                      : () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: submitting ? null : submit,
+                  child: Text(submitting ? 'Adding…' : 'Add Club'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    controller.dispose();
+  }
+
+  Future<void> _showManageClubsDialog() async {
+    final renamedValues = <String, TextEditingController>{};
+
+    for (final club in _clubs) {
+      final id = club['id']?.toString() ?? '';
+      final name = (club['name'] ?? '').toString();
+      renamedValues[id] = TextEditingController(text: name);
+    }
+
+    bool saving = false;
+    String? errorText;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            Future<void> saveChanges() async {
+              setDialogState(() {
+                saving = true;
+                errorText = null;
+              });
+
+              try {
+                for (final club in _clubs) {
+                  final id = club['id']?.toString() ?? '';
+                  final originalName = (club['name'] ?? '').toString();
+                  final updatedName = renamedValues[id]!.text.trim();
+
+                  if (updatedName.isEmpty) {
+                    throw Exception('Club names cannot be blank.');
+                  }
+
+                  if (updatedName != originalName) {
+                    await ClubService.updateClub(
+                      clubId: id,
+                      name: updatedName,
+                    );
+                  }
+                }
+
+                if (!mounted) return;
+
+                await _loadClubs();
+
+                if (!mounted) return;
+                setState(() {
+                  _msg = 'Clubs updated.';
+                });
+
+                Navigator.of(dialogContext).pop();
+              } catch (e) {
+                setDialogState(() {
+                  saving = false;
+                  errorText = 'Failed to update clubs: $e';
+                });
+              }
+            }
+
+            return AlertDialog(
+              title: const Text('Manage Clubs'),
+              content: SizedBox(
+                width: 500,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (errorText != null) ...[
+                        Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withOpacity(.08),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: Colors.red.withOpacity(.25),
+                            ),
+                          ),
+                          child: Text(
+                            errorText!,
+                            style: const TextStyle(
+                              color: Colors.red,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                      for (final club in _clubs) ...[
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: TextField(
+                            controller:
+                                renamedValues[club['id']?.toString() ?? ''],
+                            enabled: !saving,
+                            decoration: const InputDecoration(
+                              labelText: 'Club name',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed:
+                      saving ? null : () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Close'),
+                ),
+                FilledButton(
+                  onPressed: saving ? null : saveChanges,
+                  child: Text(saving ? 'Saving…' : 'Save Changes'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    for (final controller in renamedValues.values) {
+      controller.dispose();
     }
   }
 
@@ -653,39 +882,77 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                               ),
                             ),
                             const SizedBox(height: 12),
-                            if (_loadingClubs) const LinearProgressIndicator(),
-                            DropdownButtonFormField<String>(
-                              value: _clubs.any((club) => club['id']?.toString() == _selectedClubId)
-                                  ? _selectedClubId
-                                  : null,
-                              decoration: InputDecoration(
-                                labelText: 'Hosting Club',
-                                border: const OutlineInputBorder(),
-                                helperText: _canSwitchHostingClub
-                                    ? 'You can switch hosting clubs.'
-                                    : 'Locked to your account. Upgrade to Multi-Club Hosting to change this.',
-                              ),
-                              items: _clubs.map((club) {
+                           if (_loadingClubs) const LinearProgressIndicator(),
+                           DropdownButtonFormField<String>(
+                            value: _clubs.any((club) => club['id']?.toString() == _selectedClubId)
+                                ? _selectedClubId
+                                : null,
+                            decoration: InputDecoration(
+                              labelText: 'Hosting Club',
+                              border: const OutlineInputBorder(),
+                              helperText: _clubs.isEmpty
+                                  ? 'No active clubs found. Add your first hosting club to continue.'
+                                  : _canSwitchHostingClub
+                                      ? 'Select a hosting club, add a new club, or manage your existing clubs.'
+                                      : 'Locked to your account. Upgrade to Multi-Club Hosting to change this.',
+                            ),
+                            items: [
+                              ..._clubs.map((club) {
                                 return DropdownMenuItem<String>(
                                   value: club['id'].toString(),
                                   child: Text((club['name'] ?? 'Club').toString()),
                                 );
-                              }).toList(),
-                              onChanged: (_saving || _loadingClubs || !_canSwitchHostingClub)
-                                  ? null
-                                  : (value) {
-                                      setState(() {
-                                        _selectedClubId = value;
+                              }),
+                              if (_canManageHostingClubs)
+                                const DropdownMenuItem<String>(
+                                  value: _addClubActionValue,
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.add, size: 18),
+                                      SizedBox(width: 8),
+                                      Text('Add New Club'),
+                                    ],
+                                  ),
+                                ),
+                              if (_canSwitchHostingClub && _clubs.isNotEmpty)
+                                const DropdownMenuItem<String>(
+                                  value: _manageClubsActionValue,
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.settings, size: 18),
+                                      SizedBox(width: 8),
+                                      Text('Manage Clubs'),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                            onChanged: (_saving || _loadingClubs || !_canManageHostingClubs)
+                                ? null
+                                : (value) async {
+                                    if (value == null) return;
 
-                                        final selected = _clubs.firstWhere(
-                                          (c) => c['id'].toString() == value,
-                                          orElse: () => <String, dynamic>{},
-                                        );
+                                    if (value == _addClubActionValue) {
+                                      await _showAddClubDialog();
+                                      return;
+                                    }
 
-                                        _selectedClubName = (selected['name'] ?? '').toString();
-                                      });
-                                    },
-                            ),
+                                    if (value == _manageClubsActionValue) {
+                                      await _showManageClubsDialog();
+                                      return;
+                                    }
+
+                                    setState(() {
+                                      _selectedClubId = value;
+
+                                      final selected = _clubs.firstWhere(
+                                        (c) => c['id'].toString() == value,
+                                        orElse: () => <String, dynamic>{},
+                                      );
+
+                                      _selectedClubName = (selected['name'] ?? '').toString();
+                                    });
+                                  },
+                          ),
                           ],
                         ),
 

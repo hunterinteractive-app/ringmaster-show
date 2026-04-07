@@ -1,4 +1,4 @@
-//lib/widgets/exhibitor_dialog.dart
+// lib/widgets/exhibitor_builder_dialog.dart
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -14,7 +14,8 @@ class ExhibitorBuilderDialog extends StatefulWidget {
   });
 
   @override
-  State<ExhibitorBuilderDialog> createState() => _ExhibitorBuilderDialogState();
+  State<ExhibitorBuilderDialog> createState() =>
+      _ExhibitorBuilderDialogState();
 }
 
 class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
@@ -39,6 +40,7 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
   final _zip = TextEditingController();
 
   DateTime? _birthDate;
+  bool _groupShowsAsYouth = false;
 
   bool _showingNameTouched = false;
   bool _isWiringShowingName = false;
@@ -183,6 +185,7 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
         _ensureTrailingBlankGroupMember();
       } else {
         _clearGroupMembers();
+        _groupShowsAsYouth = false;
       }
 
       if (!_showingNameTouched) {
@@ -237,6 +240,61 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
   List<_GroupMemberInput> get _filledGroupMembers =>
       _groupMembers.where((m) => m.hasAnyValue).toList();
 
+  Future<void> _pickGroupMemberBirthDate(_GroupMemberInput member) async {
+    final initial = member.birthDate ?? DateTime(DateTime.now().year - 10, 1, 1);
+
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(1900),
+      lastDate: DateTime.now(),
+    );
+
+    if (picked == null) return;
+
+    setState(() {
+      member.birthDate = DateTime(picked.year, picked.month, picked.day);
+    });
+  }
+
+  Future<void> _prefillFromPrimaryExhibitor(String ownerUserId) async {
+    final rows = await supabase
+        .from('exhibitors')
+        .select(
+          'id, email, phone, address_line1, address_line2, city, state, zip',
+        )
+        .eq('owner_user_id', ownerUserId)
+        .eq('is_active', true)
+        .order('created_at', ascending: true)
+        .limit(1);
+
+    if (rows is! List || rows.isEmpty) return;
+
+    final primary = Map<String, dynamic>.from(rows.first as Map);
+
+    if (_email.text.trim().isEmpty) {
+      _email.text = (primary['email'] ?? '').toString();
+    }
+    if (_phone.text.trim().isEmpty) {
+      _phone.text = (primary['phone'] ?? '').toString();
+    }
+    if (_address1.text.trim().isEmpty) {
+      _address1.text = (primary['address_line1'] ?? '').toString();
+    }
+    if (_address2.text.trim().isEmpty) {
+      _address2.text = (primary['address_line2'] ?? '').toString();
+    }
+    if (_city.text.trim().isEmpty) {
+      _city.text = (primary['city'] ?? '').toString();
+    }
+    if (_state.text.trim().isEmpty) {
+      _state.text = (primary['state'] ?? '').toString();
+    }
+    if (_zip.text.trim().isEmpty) {
+      _zip.text = (primary['zip'] ?? '').toString();
+    }
+  }
+
   Future<void> _loadIfEditing() async {
     final user = supabase.auth.currentUser;
     if (user == null) {
@@ -248,6 +306,12 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
     }
 
     if (!_isEdit) {
+      try {
+        await _prefillFromPrimaryExhibitor(user.id);
+      } catch (_) {
+        // Non-blocking on purpose.
+      }
+
       setState(() {
         _loading = false;
         if (_isGroup) {
@@ -270,7 +334,7 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
             'arba_number, email, phone, birth_date, is_active, '
             'first_name, last_name, '
             'address_line1, address_line2, city, state, zip, '
-            'group_members',
+            'group_members, group_shows_as_youth',
           )
           .eq('id', widget.exhibitorId!)
           .single();
@@ -300,6 +364,7 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
 
       final bd = row['birth_date']?.toString();
       _birthDate = bd == null || bd.isEmpty ? null : DateTime.tryParse(bd);
+      _groupShowsAsYouth = row['group_shows_as_youth'] == true;
 
       _clearGroupMembers();
 
@@ -312,6 +377,11 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
               member.firstName.text = (item['first_name'] ?? '').toString();
               member.lastName.text = (item['last_name'] ?? '').toString();
               member.arbaNumber.text = (item['arba_number'] ?? '').toString();
+
+              final memberBirthDate = item['birth_date']?.toString();
+              member.birthDate = memberBirthDate == null || memberBirthDate.isEmpty
+                  ? null
+                  : DateTime.tryParse(memberBirthDate);
 
               member.firstName.addListener(_onGroupMembersChanged);
               member.lastName.addListener(_onGroupMembersChanged);
@@ -358,6 +428,21 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
     return false;
   }
 
+  bool _isYouthEligible(DateTime birthDate) {
+    final today = DateTime.now();
+    int age = today.year - birthDate.year;
+
+    final hadBirthdayThisYear =
+        (today.month > birthDate.month) ||
+        (today.month == birthDate.month && today.day >= birthDate.day);
+
+    if (!hadBirthdayThisYear) {
+      age--;
+    }
+
+    return age < 19;
+  }
+
   bool _validateGroupMembers() {
     final filled = _filledGroupMembers;
     if (filled.isEmpty) return _fail('Add at least one group member.');
@@ -367,6 +452,24 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
         return _fail(
           'Each group member must include at least a first or last name.',
         );
+      }
+
+      if (_groupShowsAsYouth) {
+        if (m.birthDate == null) {
+          return _fail(
+            'Birth date is required for each youth group/family member.',
+          );
+        }
+
+        if (!_isYouthEligible(m.birthDate!)) {
+          final name =
+              ('${m.firstName.text.trim()} ${m.lastName.text.trim()}').trim();
+          return _fail(
+            name.isEmpty
+                ? 'One group member is not youth-eligible based on birth date.'
+                : '$name is not youth-eligible based on birth date.',
+          );
+        }
       }
     }
 
@@ -401,6 +504,10 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
 
     if (_isYouth && _birthDate == null) {
       return _fail('Birth date is required for Youth.');
+    }
+
+    if (_isYouth && _birthDate != null && !_isYouthEligible(_birthDate!)) {
+      return _fail('This exhibitor is not youth-eligible based on birth date.');
     }
 
     return true;
@@ -446,6 +553,9 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
                     'arba_number': m.arbaNumber.text.trim().isEmpty
                         ? null
                         : m.arbaNumber.text.trim(),
+                    'birth_date': m.birthDate == null
+                        ? null
+                        : m.birthDate!.toIso8601String().substring(0, 10),
                   },
                 )
                 .toList()
@@ -455,6 +565,7 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
         'owner_user_id': user.id,
         'type': _type,
         'is_active': _active,
+        'group_shows_as_youth': _isGroup ? _groupShowsAsYouth : false,
 
         'display_name': showingName,
         'showing_name': showingName,
@@ -466,7 +577,9 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
             : (_arba.text.trim().isEmpty ? null : _arba.text.trim()),
 
         'email': _email.text.trim().isEmpty ? null : _email.text.trim(),
-        'phone': _phone.text.trim().isEmpty ? null : _digitsOnlyPhone(_phone.text),
+        'phone': _phone.text.trim().isEmpty
+            ? null
+            : _digitsOnlyPhone(_phone.text),
 
         'address_line1':
             _address1.text.trim().isEmpty ? null : _address1.text.trim(),
@@ -476,8 +589,9 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
         'state': _state.text.trim().isEmpty ? null : _state.text.trim(),
         'zip': _zip.text.trim().isEmpty ? null : _zip.text.trim(),
 
-        'birth_date':
-            _birthDate == null ? null : _birthDate!.toIso8601String().substring(0, 10),
+        'birth_date': _birthDate == null
+            ? null
+            : _birthDate!.toIso8601String().substring(0, 10),
 
         'group_members': groupMembersPayload,
       };
@@ -492,7 +606,11 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
             .select()
             .single();
       } else {
-        savedRow = await supabase.from('exhibitors').insert(payload).select().single();
+        savedRow = await supabase
+            .from('exhibitors')
+            .insert(payload)
+            .select()
+            .single();
       }
 
       if (!mounted) return;
@@ -582,6 +700,30 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
               border: OutlineInputBorder(),
             ),
           ),
+        if (_groupShowsAsYouth) ...[
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  member.birthDate == null
+                      ? 'Birth date: (not set)'
+                      : 'Birth date: ${member.birthDate!.toIso8601String().substring(0, 10)}',
+                ),
+              ),
+              TextButton(
+                onPressed: _saving ? null : () => _pickGroupMemberBirthDate(member),
+                child: const Text('Pick'),
+              ),
+              TextButton(
+                onPressed: _saving
+                    ? null
+                    : () => setState(() => member.birthDate = null),
+                child: const Text('Clear'),
+              ),
+            ],
+          ),
+        ],
           if (!isTrailingBlank && filledMembers.length > 1)
             Align(
               alignment: Alignment.centerRight,
@@ -631,7 +773,8 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
                         decoration: BoxDecoration(
                           color: Colors.red.withOpacity(.08),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.red.withOpacity(.25)),
+                          border:
+                              Border.all(color: Colors.red.withOpacity(.25)),
                         ),
                         child: Text(
                           _msg!,
@@ -660,13 +803,78 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
                               child: Text('Group / Family'),
                             ),
                           ],
-                          onChanged: _saving
-                              ? null
-                              : (v) => _setType(v ?? 'adult'),
+                          onChanged:
+                              _saving ? null : (v) => _setType(v ?? 'adult'),
                           decoration: const InputDecoration(
                             labelText: 'Type',
                             border: OutlineInputBorder(),
                           ),
+                        ),
+                      ],
+                    ),
+                    _buildSectionCard(
+                      title: 'Birth Date & Status',
+                      children: [
+                        if (_isGroup)
+                          SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Youth Showing Group'),
+                            subtitle: const Text(
+                              'Turn this on when all members of this group/family are youth exhibitors.',
+                            ),
+                            value: _groupShowsAsYouth,
+                            onChanged: _saving
+                                ? null
+                                : (v) => setState(() {
+                                      _groupShowsAsYouth = v;
+                                    }),
+                          ),
+                        if (!_isGroup) ...[
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  _birthDate == null
+                                      ? 'Birth date: (not set)'
+                                      : 'Birth date: ${_birthDate!.toIso8601String().substring(0, 10)}',
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: _saving ? null : _pickBirthDate,
+                                child: const Text('Pick'),
+                              ),
+                              if (_isYouth)
+                                TextButton(
+                                  onPressed: _saving
+                                      ? null
+                                      : () => setState(() => _birthDate = null),
+                                  child: const Text('Clear'),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            _isGroup && _groupShowsAsYouth
+                                ? 'Each youth group/family member must have their own birth date.'
+                                : _isYouth
+                                    ? 'Birth date is required for Youth.'
+                                    : 'Birth date is only required for youth exhibitors. Youth groups require a birth date for each member.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        SwitchListTile(
+                          title: const Text('Active'),
+                          subtitle: const Text(
+                            'Inactive exhibitors won’t show in entry pickers.',
+                          ),
+                          value: _active,
+                          onChanged:
+                              _saving ? null : (v) => setState(() => _active = v),
+                          contentPadding: EdgeInsets.zero,
                         ),
                       ],
                     ),
@@ -732,6 +940,17 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
                     _buildSectionCard(
                       title: 'Contact Information',
                       children: [
+                        if (!_isEdit)
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: Text(
+                                'For additional exhibitors, contact and address fields may be prefilled from the primary profile. You can still change them.',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ),
+                          ),
                         TextField(
                           controller: _email,
                           enabled: !_saving,
@@ -802,55 +1021,6 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
                         ),
                       ],
                     ),
-                    _buildSectionCard(
-                      title: 'Birth Date & Status',
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                _birthDate == null
-                                    ? 'Birth date: (not set)'
-                                    : 'Birth date: ${_birthDate!.toIso8601String().substring(0, 10)}',
-                              ),
-                            ),
-                            TextButton(
-                              onPressed: _saving ? null : _pickBirthDate,
-                              child: const Text('Pick'),
-                            ),
-                            if (_isYouth)
-                              TextButton(
-                                onPressed: _saving
-                                    ? null
-                                    : () => setState(() => _birthDate = null),
-                                child: const Text('Clear'),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            _isYouth
-                                ? 'Birth date is required for Youth.'
-                                : 'Birth date is only required for Youth exhibitors.',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        SwitchListTile(
-                          title: const Text('Active'),
-                          subtitle: const Text(
-                            'Inactive exhibitors won’t show in entry pickers.',
-                          ),
-                          value: _active,
-                          onChanged: _saving
-                              ? null
-                              : (v) => setState(() => _active = v),
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      ],
-                    ),
                   ],
                 ),
               ),
@@ -874,15 +1044,19 @@ class _GroupMemberInput {
   final TextEditingController lastName = TextEditingController();
   final TextEditingController arbaNumber = TextEditingController();
 
+  DateTime? birthDate;
+
   bool get isBlank =>
       firstName.text.trim().isEmpty &&
       lastName.text.trim().isEmpty &&
-      arbaNumber.text.trim().isEmpty;
+      arbaNumber.text.trim().isEmpty &&
+      birthDate == null;
 
   bool get hasAnyValue =>
       firstName.text.trim().isNotEmpty ||
       lastName.text.trim().isNotEmpty ||
-      arbaNumber.text.trim().isNotEmpty;
+      arbaNumber.text.trim().isNotEmpty ||
+      birthDate != null;
 
   bool get hasName =>
       firstName.text.trim().isNotEmpty || lastName.text.trim().isNotEmpty;

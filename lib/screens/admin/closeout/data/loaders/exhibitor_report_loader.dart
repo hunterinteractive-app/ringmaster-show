@@ -33,11 +33,13 @@ class ExhibitorReportLoader {
     final enabledSections =
         List<Map<String, dynamic>>.from(enabledSectionsRaw as List);
 
+    final allEligibleRows = <Map<String, dynamic>>[];
     final rowList = <Map<String, dynamic>>[];
 
     for (final section in enabledSections) {
       final sectionId = _str(section['id']);
       final showLetter = _str(section['letter']).toUpperCase();
+      final sectionKind = _str(section['kind']).toUpperCase();
 
       final rows = await repo.supabase.rpc(
         'report_results_entry_rows',
@@ -51,9 +53,6 @@ class ExhibitorReportLoader {
       for (final raw in (rows as List)) {
         final row = Map<String, dynamic>.from(raw as Map);
 
-        final rowExhibitorId = _str(row['exhibitor_id']);
-        if (rowExhibitorId != exhibitorId) continue;
-
         final scratchedAt = _str(row['scratched_at']);
         final isShown = row['is_shown'] != false;
         final isDisqualified = row['is_disqualified'] == true;
@@ -61,9 +60,14 @@ class ExhibitorReportLoader {
         if (!isShown || isDisqualified || scratchedAt.isNotEmpty) continue;
 
         row['resolved_show_letter'] = showLetter;
-        row['resolved_section_kind'] = _str(section['kind']).toUpperCase();
+        row['resolved_section_kind'] = sectionKind;
 
-        rowList.add(row);
+        allEligibleRows.add(row);
+
+        final rowExhibitorId = _str(row['exhibitor_id']);
+        if (rowExhibitorId == exhibitorId) {
+          rowList.add(row);
+        }
       }
     }
 
@@ -87,7 +91,9 @@ class ExhibitorReportLoader {
 
     final awardsByEntryId = await _loadAwardsByEntryId(showId, entryIds);
     final judgeNamesByRef = await _loadJudgeNamesByShowJudgeId(judgeRefs);
-    final contextByEntryId = _buildEntryContextByShow(rowList);
+    final contextByEntryId = _buildEntryContextByShow(allEligibleRows);
+    final displayPlacementByEntryId =
+        _buildDisplayPlacementByEntryId(allEligibleRows);
     final pointsByEntryId = await _loadPointsByEntryId(showId);
 
     final showName = _str(show['name']);
@@ -203,7 +209,7 @@ class ExhibitorReportLoader {
         variety: _str(row['variety_name']),
         className: _str(row['class_name']),
         sex: _str(row['sex']),
-        placing: _str(row['placement']),
+        placing: displayPlacementByEntryId[entryId] ?? _str(row['placement']),
         classCount: ctx?.classCount,
         exhibitorCount: ctx?.exhibitorCount,
         awardsText: _formatAwards(awards),
@@ -267,6 +273,58 @@ class ExhibitorReportLoader {
     } catch (_) {
       return {};
     }
+  }
+
+  Map<String, String> _buildDisplayPlacementByEntryId(
+    List<Map<String, dynamic>> rows,
+  ) {
+    final result = <String, String>{};
+    final grouped = <String, List<Map<String, dynamic>>>{};
+
+    for (final row in rows) {
+      final entryId = _str(row['entry_id']);
+      final showLetter = _str(row['resolved_show_letter']).toUpperCase();
+      final breed = _str(row['breed_name']);
+      final variety = _str(row['variety_name']);
+      final className = _str(row['class_name']);
+      final sex = _str(row['sex']);
+
+      if (entryId.isEmpty || showLetter.isEmpty) continue;
+
+      final key = '$showLetter|$breed|$variety|$className|$sex';
+      grouped.putIfAbsent(key, () => <Map<String, dynamic>>[]).add(row);
+    }
+
+    for (final rowsInClass in grouped.values) {
+      final classSize = rowsInClass.length;
+
+      rowsInClass.sort((a, b) {
+        final aPlacement = int.tryParse(_str(a['placement'])) ?? 999;
+        final bPlacement = int.tryParse(_str(b['placement'])) ?? 999;
+        final placementCompare = aPlacement.compareTo(bPlacement);
+        if (placementCompare != 0) return placementCompare;
+
+        return _str(a['tattoo']).compareTo(_str(b['tattoo']));
+      });
+
+      for (var i = 0; i < rowsInClass.length; i++) {
+        final row = rowsInClass[i];
+        final entryId = _str(row['entry_id']);
+        if (entryId.isEmpty) continue;
+
+        final storedPlacement = int.tryParse(_str(row['placement']));
+
+        if (storedPlacement != null &&
+            storedPlacement > 0 &&
+            storedPlacement <= classSize) {
+          result[entryId] = '$storedPlacement';
+        } else {
+          result[entryId] = '${i + 1}';
+        }
+      }
+    }
+
+    return result;
   }
 
   Future<Map<String, String>> _loadJudgeNamesByShowJudgeId(
@@ -364,7 +422,6 @@ class ExhibitorReportLoader {
         final rows = await repo.supabase
             .from('show_points_entries')
             .select('''
-              exhibitor_id,
               total_points,
               metadata
             ''')
@@ -467,7 +524,8 @@ class ExhibitorReportLoader {
       final classRows = scopedRows.where((e) {
         return _str(e['breed_name']) == breed &&
             _str(e['variety_name']) == variety &&
-            _str(e['class_name']) == className;
+            _str(e['class_name']) == className &&
+            _str(e['sex']) == sex;
       }).toList();
       final classAnimals = classRows.length;
       final classExhibitors = classRows

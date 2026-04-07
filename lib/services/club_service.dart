@@ -59,4 +59,56 @@ class ClubService {
   static Future<bool> canSwitchHostingClub() async {
     return LicenseService.canSwitchHostingClub();
   }
+
+  static Future<bool> canManageHostingClubs() async {
+    final clubs = await loadMyClubs();
+    if (clubs.isEmpty) return true;
+    return canSwitchHostingClub();
+  }
+
+  static Future<Map<String, dynamic>> createClub({
+    required String name,
+  }) async {
+    final user = supabase.auth.currentUser;
+    if (user == null) {
+      throw Exception('Not signed in.');
+    }
+
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) {
+      throw Exception('Club name is required.');
+    }
+
+    final createdClub = await supabase
+        .from('clubs')
+        .insert({
+          'name': trimmed,
+          'is_active': true,
+        })
+        .select('id, name, is_active')
+        .single();
+
+    await supabase.from('club_members').insert({
+      'club_id': createdClub['id'],
+      'user_id': user.id,
+      'role': 'owner',
+      'is_active': true,
+    });
+
+    return Map<String, dynamic>.from(createdClub);
+  }
+
+  static Future<void> updateClub({
+    required String clubId,
+    required String name,
+  }) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) {
+      throw Exception('Club name is required.');
+    }
+
+    await supabase.from('clubs').update({
+      'name': trimmed,
+    }).eq('id', clubId);
+  }
 }
