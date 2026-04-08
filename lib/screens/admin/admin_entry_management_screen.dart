@@ -1313,7 +1313,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
           'is_active': true,
           'is_local_only': true,
           'created_for_show_id': widget.showId,
-          'owner_user_id': null,
+          'owner_user_id': supabase.auth.currentUser!.id,
         })
         .select(
           'id,showing_name,display_name,first_name,last_name,email,phone,type,owner_user_id,is_active,is_local_only,created_for_show_id',
