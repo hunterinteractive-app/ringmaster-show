@@ -1172,24 +1172,70 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
   Future<void> _loadBreedsForSpecies() async {
     setState(() => _loadingBreeds = true);
 
-    final res = await supabase
-        .from('breeds')
-        .select('id,name')
-        .eq('species', _species)
-        .order('name');
+    try {
+      final globalBreedsRes = await supabase
+          .from('breeds')
+          .select('id,name,species,is_active')
+          .eq('species', _species)
+          .eq('is_active', true)
+          .order('name');
 
-    if (!mounted) return;
-    setState(() {
-      _breedOptions = (res as List)
-          .cast<Map<String, dynamic>>()
+      final globalBreeds =
+          (globalBreedsRes as List).cast<Map<String, dynamic>>();
+
+      final showBreedRes = await supabase
+          .from('show_breeds')
+          .select('breed_id,is_enabled')
+          .eq('show_id', widget.showId);
+
+      final showBreedRows =
+          (showBreedRes as List).cast<Map<String, dynamic>>();
+
+      final showBreedMap = <String, bool>{};
+      for (final row in showBreedRows) {
+        final breedId = (row['breed_id'] ?? '').toString();
+        if (breedId.isEmpty) continue;
+        showBreedMap[breedId] = row['is_enabled'] == true;
+      }
+
+      final effective = globalBreeds.where((b) {
+        final id = (b['id'] ?? '').toString();
+
+        if (showBreedMap.containsKey(id)) {
+          return showBreedMap[id] == true;
+        }
+
+        return true;
+      }).toList()
         ..sort(
           (a, b) => (a['name'] ?? '')
               .toString()
               .toLowerCase()
               .compareTo((b['name'] ?? '').toString().toLowerCase()),
         );
-      _loadingBreeds = false;
-    });
+
+      if (!mounted) return;
+      setState(() {
+        _breedOptions = effective;
+        _loadingBreeds = false;
+
+        final stillValidBreed = _breedId != null &&
+            _breedOptions.any((b) => (b['id'] ?? '').toString() == _breedId);
+
+        if (!stillValidBreed) {
+          _breedId = null;
+          _breed.clear();
+          _variety.clear();
+          _varietyOptions = [];
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadingBreeds = false;
+        _msg = 'Failed to load breeds: $e';
+      });
+    }
   }
 
   Future<void> _loadVarietiesForBreed(String breedId) async {
@@ -1198,43 +1244,124 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
       _varietyOptions = [];
     });
 
-    final matchedBreed = _breedOptions.firstWhere(
-      (b) => (b['id'] ?? '').toString() == breedId,
-      orElse: () => <String, dynamic>{},
-    );
+    try {
+      final matchedBreed = _breedOptions.firstWhere(
+        (b) => (b['id'] ?? '').toString() == breedId,
+        orElse: () => <String, dynamic>{},
+      );
 
-    final breedName = (matchedBreed['name'] ?? '').toString().trim();
+      final breedName = (matchedBreed['name'] ?? '').toString().trim();
 
-    if (_isLopBreedName(breedName)) {
+      if (_isLopBreedName(breedName)) {
+        if (!mounted) return;
+        setState(() {
+          _loadingVarieties = false;
+          _varietyOptions = const [
+            {'id': 'lop_broken', 'name': 'Broken'},
+            {'id': 'lop_solid', 'name': 'Solid'},
+          ];
+        });
+        return;
+      }
+
+      final globalVarietiesRes = await supabase
+          .from('varieties')
+          .select('id,name,breed_id,is_active')
+          .eq('breed_id', breedId)
+          .eq('is_active', true)
+          .order('name');
+
+      final globalVarieties =
+          (globalVarietiesRes as List).cast<Map<String, dynamic>>();
+
+      final showVarietiesRes = await supabase
+          .from('show_varieties')
+          .select('id,variety_id,custom_name,is_enabled')
+          .eq('show_id', widget.showId)
+          .eq('breed_id', breedId);
+
+      final showVarietyRows =
+          (showVarietiesRes as List).cast<Map<String, dynamic>>();
+
+      final showVarietyByGlobalId = <String, Map<String, dynamic>>{};
+      final customRows = <Map<String, dynamic>>[];
+
+      for (final row in showVarietyRows) {
+        final varietyId = row['variety_id']?.toString();
+        final customName = (row['custom_name'] ?? '').toString().trim();
+
+        if (varietyId != null && varietyId.isNotEmpty) {
+          showVarietyByGlobalId[varietyId] = row;
+        } else if (customName.isNotEmpty) {
+          customRows.add(row);
+        }
+      }
+
+      final effective = <Map<String, dynamic>>[];
+
+      for (final global in globalVarieties) {
+        final globalId = (global['id'] ?? '').toString();
+        if (globalId.isEmpty) continue;
+
+        final override = showVarietyByGlobalId[globalId];
+
+        if (override != null) {
+          if (override['is_enabled'] == true) {
+            effective.add({
+              'id': globalId,
+              'name': (global['name'] ?? '').toString(),
+            });
+          }
+        } else {
+          effective.add({
+            'id': globalId,
+            'name': (global['name'] ?? '').toString(),
+          });
+        }
+      }
+
+      for (final row in customRows) {
+        if (row['is_enabled'] == true) {
+          final customName = (row['custom_name'] ?? '').toString().trim();
+          if (customName.isNotEmpty) {
+            effective.add({
+              'id': 'custom_$customName',
+              'name': customName,
+            });
+          }
+        }
+      }
+
+      effective.sort(
+        (a, b) => (a['name'] ?? '')
+            .toString()
+            .toLowerCase()
+            .compareTo((b['name'] ?? '').toString().toLowerCase()),
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _varietyOptions = effective;
+        _loadingVarieties = false;
+
+        final currentVariety = _variety.text.trim().toLowerCase();
+        final stillValidVariety = currentVariety.isNotEmpty &&
+            _varietyOptions.any(
+              (v) => (v['name'] ?? '').toString().trim().toLowerCase() ==
+                  currentVariety,
+            );
+
+        if (!stillValidVariety) {
+          _variety.clear();
+        }
+      });
+    } catch (e) {
       if (!mounted) return;
       setState(() {
         _loadingVarieties = false;
-        _varietyOptions = const [
-          {'id': 'lop_broken', 'name': 'Broken'},
-          {'id': 'lop_solid', 'name': 'Solid'},
-        ];
+        _msg = 'Failed to load varieties: $e';
       });
-      return;
     }
-
-    final res = await supabase
-        .from('varieties')
-        .select('id,name')
-        .eq('breed_id', breedId)
-        .order('name');
-
-    if (!mounted) return;
-    setState(() {
-      _varietyOptions = (res as List)
-          .cast<Map<String, dynamic>>()
-        ..sort(
-          (a, b) => (a['name'] ?? '')
-              .toString()
-              .toLowerCase()
-              .compareTo((b['name'] ?? '').toString().toLowerCase()),
-        );
-      _loadingVarieties = false;
-    });
   }
 
   Future<void> _loadAnimalsForSelectedExhibitor() async {
