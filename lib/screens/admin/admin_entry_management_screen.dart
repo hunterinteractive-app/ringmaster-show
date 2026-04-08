@@ -1051,11 +1051,21 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
   final _phone = TextEditingController();
 
   String _exhibitorType = 'open';
+  String _species = 'rabbit';
 
   final _tattoo = TextEditingController();
   final _breed = TextEditingController();
   final _variety = TextEditingController();
   final _sex = TextEditingController();
+
+  String? _breedId;
+  String? _sexValue;
+
+  List<Map<String, dynamic>> _breedOptions = [];
+  List<Map<String, dynamic>> _varietyOptions = [];
+
+  bool _loadingBreeds = false;
+  bool _loadingVarieties = false;
 
   final _className = TextEditingController();
   final _notes = TextEditingController();
@@ -1064,7 +1074,13 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
   void initState() {
     super.initState();
     _sectionId = widget.initialSectionId;
+    _sexValue = _sexOptions.first;
+    _sex.text = _sexValue ?? '';
     _loadExhibitors();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _loadBreedsForSpecies();
+    });
   }
 
   @override
@@ -1142,6 +1158,81 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
       orElse: () => <String, dynamic>{},
     );
     return (s['kind'] ?? '').toString().toLowerCase();
+  }
+
+  bool _isLopBreedName(String breedName) {
+    return breedName.trim().toLowerCase().endsWith('lop');
+  }
+
+  List<String> get _sexOptions =>
+      _species == 'rabbit' ? const ['Buck', 'Doe'] : const ['Boar', 'Sow'];
+
+  Future<void> _loadBreedsForSpecies() async {
+    setState(() => _loadingBreeds = true);
+
+    final res = await supabase
+        .from('breeds')
+        .select('id,name')
+        .eq('species', _species)
+        .order('name');
+
+    if (!mounted) return;
+    setState(() {
+      _breedOptions = (res as List)
+          .cast<Map<String, dynamic>>()
+        ..sort(
+          (a, b) => (a['name'] ?? '')
+              .toString()
+              .toLowerCase()
+              .compareTo((b['name'] ?? '').toString().toLowerCase()),
+        );
+      _loadingBreeds = false;
+    });
+  }
+
+  Future<void> _loadVarietiesForBreed(String breedId) async {
+    setState(() {
+      _loadingVarieties = true;
+      _varietyOptions = [];
+    });
+
+    final matchedBreed = _breedOptions.firstWhere(
+      (b) => (b['id'] ?? '').toString() == breedId,
+      orElse: () => <String, dynamic>{},
+    );
+
+    final breedName = (matchedBreed['name'] ?? '').toString().trim();
+
+    if (_isLopBreedName(breedName)) {
+      if (!mounted) return;
+      setState(() {
+        _loadingVarieties = false;
+        _varietyOptions = const [
+          {'id': 'lop_broken', 'name': 'Broken'},
+          {'id': 'lop_solid', 'name': 'Solid'},
+        ];
+      });
+      return;
+    }
+
+    final res = await supabase
+        .from('varieties')
+        .select('id,name')
+        .eq('breed_id', breedId)
+        .order('name');
+
+    if (!mounted) return;
+    setState(() {
+      _varietyOptions = (res as List)
+          .cast<Map<String, dynamic>>()
+        ..sort(
+          (a, b) => (a['name'] ?? '')
+              .toString()
+              .toLowerCase()
+              .compareTo((b['name'] ?? '').toString().toLowerCase()),
+        );
+      _loadingVarieties = false;
+    });
   }
 
   Future<void> _loadAnimalsForSelectedExhibitor() async {
@@ -1280,8 +1371,14 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
         if (_tattoo.text.trim().isEmpty) {
           throw Exception('Enter tattoo');
         }
-        if (_breed.text.trim().isEmpty) {
-          throw Exception('Enter breed');
+        if (_breedId == null || _breed.text.trim().isEmpty) {
+          throw Exception('Select breed');
+        }
+        if (_variety.text.trim().isEmpty) {
+          throw Exception('Select variety');
+        }
+        if (_sexValue == null || _sexValue!.trim().isEmpty) {
+          throw Exception('Select sex');
         }
       }
 
@@ -1306,12 +1403,12 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
         'section_id': _sectionId,
         'exhibitor_id': resolvedExhibitorId,
         'animal_id': animalId,
-        'species': _useLocalAnimal ? null : _animal!['species'],
+        'species': _useLocalAnimal ? _species : _animal!['species'],
         'tattoo': _useLocalAnimal ? _tattoo.text.trim() : _animal!['tattoo'],
         'breed': _useLocalAnimal ? _breed.text.trim() : _animal!['breed'],
         'variety':
             _useLocalAnimal ? _variety.text.trim() : _animal!['variety'],
-        'sex': _useLocalAnimal ? _sex.text.trim() : _animal!['sex'],
+        'sex': _useLocalAnimal ? _sexValue : _animal!['sex'],
         'class_name':
             _className.text.trim().isEmpty ? null : _className.text.trim(),
         'notes': _notes.text.trim().isEmpty ? null : _notes.text.trim(),
@@ -1330,15 +1427,22 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
       setState(() {
         _animal = null;
         _animals = _addNewExhibitor ? [] : _animals;
+        _species = 'rabbit';
+        _breedId = null;
+        _breedOptions = [];
+        _varietyOptions = [];
+        _sexValue = _sexOptions.first;
+        _sex.text = _sexValue ?? '';
         _tattoo.clear();
         _breed.clear();
         _variety.clear();
-        _sex.clear();
         _className.clear();
         _notes.clear();
         _saving = false;
         _msg = 'Saved. Add another.';
       });
+
+      await _loadBreedsForSpecies();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -1551,6 +1655,36 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                           },
                   ),
                   if (_useLocalAnimal) ...[
+                    DropdownButtonFormField<String>(
+                      value: _species,
+                      decoration: const InputDecoration(
+                        labelText: 'Species',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'rabbit', child: Text('Rabbit')),
+                        DropdownMenuItem(value: 'cavy', child: Text('Cavy')),
+                      ],
+                      onChanged: _saving
+                          ? null
+                          : (v) async {
+                              final newSpecies = v ?? 'rabbit';
+                              setState(() {
+                                _species = newSpecies;
+                                _sexValue = _sexOptions.first;
+                                _sex.text = _sexValue ?? '';
+                                _breedId = null;
+                                _breedOptions = [];
+                                _varietyOptions = [];
+                                _breed.clear();
+                                _variety.clear();
+                                _msg = null;
+                              });
+
+                              await _loadBreedsForSpecies();
+                            },
+                    ),
+                    const SizedBox(height: 10),
                     TextField(
                       controller: _tattoo,
                       enabled: !_saving,
@@ -1560,33 +1694,96 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                       ),
                     ),
                     const SizedBox(height: 10),
-                    TextField(
-                      controller: _breed,
-                      enabled: !_saving,
+                    if (_loadingBreeds) const LinearProgressIndicator(),
+                    DropdownButtonFormField<String>(
+                      value: _breedId,
                       decoration: const InputDecoration(
                         labelText: 'Breed',
                         border: OutlineInputBorder(),
                       ),
+                      items: _breedOptions
+                          .map(
+                            (b) => DropdownMenuItem<String>(
+                              value: (b['id'] ?? '').toString(),
+                              child: Text((b['name'] ?? '').toString()),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: _saving
+                          ? null
+                          : (value) async {
+                              final selected = _breedOptions.firstWhere(
+                                (b) => (b['id'] ?? '').toString() == value,
+                                orElse: () => <String, dynamic>{},
+                              );
+
+                              setState(() {
+                                _breedId = value;
+                                _breed.text = (selected['name'] ?? '').toString();
+                                _variety.clear();
+                                _varietyOptions = [];
+                                _msg = null;
+                              });
+
+                              if (value != null && value.isNotEmpty) {
+                                await _loadVarietiesForBreed(value);
+                              }
+                            },
                     ),
                     const SizedBox(height: 10),
-                    TextField(
-                      controller: _variety,
-                      enabled: !_saving,
+
+                    if (_breedId != null && _loadingVarieties) const LinearProgressIndicator(),
+                    DropdownButtonFormField<String>(
+                      value: _variety.text.trim().isEmpty ? null : _variety.text.trim(),
                       decoration: const InputDecoration(
                         labelText: 'Variety',
                         border: OutlineInputBorder(),
                       ),
+                      items: _varietyOptions
+                          .map(
+                            (v) => DropdownMenuItem<String>(
+                              value: (v['name'] ?? '').toString(),
+                              child: Text((v['name'] ?? '').toString()),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: _saving || _breedId == null
+                          ? null
+                          : (value) {
+                              setState(() {
+                                _variety.text = value ?? '';
+                                _msg = null;
+                              });
+                            },
                     ),
                     const SizedBox(height: 10),
-                    TextField(
-                      controller: _sex,
-                      enabled: !_saving,
+
+                    DropdownButtonFormField<String>(
+                      value: _sexValue,
                       decoration: const InputDecoration(
                         labelText: 'Sex',
                         border: OutlineInputBorder(),
                       ),
+                      items: _sexOptions
+                          .map(
+                            (sex) => DropdownMenuItem<String>(
+                              value: sex,
+                              child: Text(sex),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: _saving
+                          ? null
+                          : (value) {
+                              setState(() {
+                                _sexValue = value;
+                                _sex.text = value ?? '';
+                                _msg = null;
+                              });
+                            },
                     ),
-                  ] else ...[
+                  ] 
+                  else ...[
                     if (_addNewExhibitor)
                       const Text(
                         'Select "Add New Animal" for a new walk-in exhibitor, or switch back to an existing exhibitor to load saved animals.',
