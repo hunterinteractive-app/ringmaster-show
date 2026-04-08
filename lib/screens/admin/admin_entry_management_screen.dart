@@ -1050,7 +1050,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
   final _email = TextEditingController();
   final _phone = TextEditingController();
 
-  String _exhibitorType = 'open';
+  String _exhibitorType = 'adult';
   String _species = 'rabbit';
 
   final _tattoo = TextEditingController();
@@ -1060,6 +1060,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
 
   String? _breedId;
   String? _sexValue;
+  String? _classValue = 'Senior';
 
   List<Map<String, dynamic>> _breedOptions = [];
   List<Map<String, dynamic>> _varietyOptions = [];
@@ -1076,6 +1077,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     _sectionId = widget.initialSectionId;
     _sexValue = _sexOptions.first;
     _sex.text = _sexValue ?? '';
+    _className.text = _classValue ?? '';
     _loadExhibitors();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -1377,6 +1379,9 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
         if (_variety.text.trim().isEmpty) {
           throw Exception('Select variety');
         }
+        if (_classValue == null || _classValue!.trim().isEmpty) {
+          throw Exception('Select class');
+        }
         if (_sexValue == null || _sexValue!.trim().isEmpty) {
           throw Exception('Select sex');
         }
@@ -1409,8 +1414,9 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
         'variety':
             _useLocalAnimal ? _variety.text.trim() : _animal!['variety'],
         'sex': _useLocalAnimal ? _sexValue : _animal!['sex'],
-        'class_name':
-            _className.text.trim().isEmpty ? null : _className.text.trim(),
+        'class_name': _useLocalAnimal
+            ? _classValue
+            : (_className.text.trim().isEmpty ? null : _className.text.trim()),
         'notes': _notes.text.trim().isEmpty ? null : _notes.text.trim(),
         'status': 'entered',
         'created_at': DateTime.now().toUtc().toIso8601String(),
@@ -1433,10 +1439,11 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
         _varietyOptions = [];
         _sexValue = _sexOptions.first;
         _sex.text = _sexValue ?? '';
+        _classValue = 'Senior';
+        _className.text = _classValue ?? '';
         _tattoo.clear();
         _breed.clear();
         _variety.clear();
-        _className.clear();
         _notes.clear();
         _saving = false;
         _msg = 'Saved. Add another.';
@@ -1601,12 +1608,12 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                         border: OutlineInputBorder(),
                       ),
                       items: const [
-                        DropdownMenuItem(value: 'open', child: Text('Open')),
+                        DropdownMenuItem(value: 'adult', child: Text('Open')),
                         DropdownMenuItem(value: 'youth', child: Text('Youth')),
                       ],
                       onChanged: _saving
                           ? null
-                          : (v) => setState(() => _exhibitorType = v ?? 'open'),
+                          : (v) => setState(() => _exhibitorType = v ?? 'adult'),
                     ),
                   ] else ...[
                     DropdownButtonFormField<String>(
@@ -1816,23 +1823,29 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                       ),
                   ],
                   const SizedBox(height: 12),
-                  TextField(
-                    controller: _className,
-                    enabled: !_saving,
-                    decoration: const InputDecoration(
-                      labelText: 'Class',
-                      border: OutlineInputBorder(),
+                  if (_useLocalAnimal)
+                    DropdownButtonFormField<String>(
+                      value: _classValue,
+                      decoration: const InputDecoration(
+                        labelText: 'Class',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'Senior', child: Text('Senior')),
+                        DropdownMenuItem(value: 'Intermediate', child: Text('Intermediate')),
+                        DropdownMenuItem(value: 'Junior', child: Text('Junior')),
+                      ],
+                      onChanged: _saving
+                          ? null
+                          : (value) {
+                              setState(() {
+                                _classValue = value ?? '';
+                                _className.text = _classValue ?? '';
+                                _msg = null;
+                              });
+                            },
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: _notes,
-                    enabled: !_saving,
-                    decoration: const InputDecoration(
-                      labelText: 'Notes',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
+                  
                   const SizedBox(height: 16),
                   Row(
                     children: [

@@ -45,6 +45,28 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
   }
 
   Future<List<Map<String, dynamic>>> _loadShows() async {
+    final user = supabase.auth.currentUser;
+    if (user == null) return [];
+
+    final superAdminRes = await supabase
+        .from('super_admins')
+        .select('user_id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+    final isSuperAdmin = superAdminRes != null;
+
+    if (isSuperAdmin) {
+      final res = await supabase
+          .from('shows')
+          .select(
+            'id,name,start_date,end_date,location_name,is_published,entry_open_at,entry_close_at,created_at',
+          )
+          .order('start_date');
+
+      return (res as List).cast<Map<String, dynamic>>();
+    }
+
     if (widget.allowedShowIds.isEmpty) return [];
 
     final res = await supabase
