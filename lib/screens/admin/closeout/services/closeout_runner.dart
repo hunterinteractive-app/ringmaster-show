@@ -1,5 +1,3 @@
-// lib/screens/admin/closeout/services/closeout_runner.dart
-
 import '../models/base/report_request.dart';
 import 'report_engine.dart';
 import 'report_upload_service.dart';
@@ -26,6 +24,7 @@ class CloseoutRunner {
     String? sanctionNumber,
     String? exhibitorId,
     String? exhibitorName,
+    bool hideZeroBalances = true,
   }) async {
     final request = ReportRequest(
       showId: showId,
@@ -40,6 +39,7 @@ class CloseoutRunner {
       sanctionNumber: sanctionNumber,
       exhibitorId: exhibitorId,
       exhibitorName: exhibitorName,
+      hideZeroBalances: hideZeroBalances,
     );
 
     try {

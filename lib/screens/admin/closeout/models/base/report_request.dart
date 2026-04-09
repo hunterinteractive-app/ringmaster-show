@@ -14,6 +14,7 @@ class ReportRequest {
     this.sanctionNumber,
     this.exhibitorId,
     this.exhibitorName,
+    this.hideZeroBalances = true,
   });
 
   final String showId;
@@ -31,6 +32,8 @@ class ReportRequest {
   final String? exhibitorId;
   final String? exhibitorName;
 
+  final bool hideZeroBalances;
+
   Map<String, dynamic> toJson() {
     return {
       'showId': showId,
@@ -45,6 +48,7 @@ class ReportRequest {
       'sanctionNumber': sanctionNumber,
       'exhibitorId': exhibitorId,
       'exhibitorName': exhibitorName,
+      'hideZeroBalances': hideZeroBalances,
     };
   }
 
@@ -61,6 +65,7 @@ class ReportRequest {
     String? sanctionNumber,
     String? exhibitorId,
     String? exhibitorName,
+    bool? hideZeroBalances,
   }) {
     return ReportRequest(
       showId: showId ?? this.showId,
@@ -75,6 +80,7 @@ class ReportRequest {
       sanctionNumber: sanctionNumber ?? this.sanctionNumber,
       exhibitorId: exhibitorId ?? this.exhibitorId,
       exhibitorName: exhibitorName ?? this.exhibitorName,
+      hideZeroBalances: hideZeroBalances ?? this.hideZeroBalances,
     );
   }
 }

@@ -377,13 +377,15 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
               payload['club_name'] = null;
               payload['breed_name'] = null;
               break;
+
             case _SanctionRowType.breed:
-              payload['sanctioning_body'] = 'Breed';
+              payload['sanctioning_body'] = 'NATIONAL CLUB';
               payload['club_name'] = null;
               payload['breed_name'] = row.breedName;
               break;
+
             case _SanctionRowType.club:
-              payload['sanctioning_body'] = 'Club';
+              payload['sanctioning_body'] = 'NATIONAL CLUB';
               payload['club_name'] = row.clubName;
               payload['breed_name'] = null;
               break;

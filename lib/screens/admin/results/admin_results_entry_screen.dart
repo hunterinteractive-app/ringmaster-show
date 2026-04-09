@@ -597,7 +597,23 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
   }
 
   bool _showsByGroup(List<Map<String, dynamic>> entries) {
-    return entries.any((e) => e['uses_group_awards'] == true);
+    final usesGroups = entries.any((e) => e['uses_group_awards'] == true);
+    if (!usesGroups) return false;
+
+    final hasRealGroups = entries.any((e) {
+      final groupName = (
+        e['group_name'] ??
+        e['group_display_name'] ??
+        e['group_label'] ??
+        e['group'] ??
+        e['group_code'] ??
+        ''
+      ).toString().trim();
+
+      return groupName.isNotEmpty;
+    });
+
+    return hasRealGroups;
   }
 
   bool _showsByVariety(List<Map<String, dynamic>> entries) {
@@ -670,25 +686,49 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     return !scratched && isShown && !isDisqualified;
   }
 
-  bool showsByGroup(Map<String, dynamic> e) => e['uses_group_awards'] == true;
-  bool showsByVariety(Map<String, dynamic> e) => e['uses_variety_awards'] == true;
+    bool showsByGroup(Map<String, dynamic> e) {
+    if (e['uses_group_awards'] != true) return false;
 
-  String sex(Map<String, dynamic> e) => (e['sex'] ?? '').toString().trim().toLowerCase();
-  String breed(Map<String, dynamic> e) => (e['breed'] ?? '').toString().trim();
-  String variety(Map<String, dynamic> e) => (e['variety'] ?? '').toString().trim();
-  String sectionId(Map<String, dynamic> e) => (e['section_id'] ?? '').toString().trim();
-  String groupName(Map<String, dynamic> e) {
-    return (
-      e['group_name'] ??
-      e['group_display_name'] ??
-      e['group_label'] ??
-      e['group'] ??
-      e['group_code'] ??
-      ''
-    ).toString().trim();
+    final thisBreed = (e['breed'] ?? '').toString().trim().toLowerCase();
+    if (thisBreed.isEmpty) return false;
+
+    final hasRealGroupsForBreed = _entries.any((row) {
+      final rowBreed = (row['breed'] ?? '').toString().trim().toLowerCase();
+      if (rowBreed != thisBreed) return false;
+
+      final groupName = (
+        row['group_name'] ??
+        row['group_display_name'] ??
+        row['group_label'] ??
+        row['group'] ??
+        row['group_code'] ??
+        ''
+      ).toString().trim();
+
+      return groupName.isNotEmpty;
+    });
+
+    return hasRealGroupsForBreed;
   }
-  List<String> awards(Map<String, dynamic> e) =>
-      ((e['_awards'] as List?) ?? const []).map((x) => x.toString()).toList();
+
+    bool showsByVariety(Map<String, dynamic> e) => e['uses_variety_awards'] == true;
+
+    String sex(Map<String, dynamic> e) => (e['sex'] ?? '').toString().trim().toLowerCase();
+    String breed(Map<String, dynamic> e) => (e['breed'] ?? '').toString().trim();
+    String variety(Map<String, dynamic> e) => (e['variety'] ?? '').toString().trim();
+    String sectionId(Map<String, dynamic> e) => (e['section_id'] ?? '').toString().trim();
+    String groupName(Map<String, dynamic> e) {
+      return (
+        e['group_name'] ??
+        e['group_display_name'] ??
+        e['group_label'] ??
+        e['group'] ??
+        e['group_code'] ??
+        ''
+      ).toString().trim();
+    }
+    List<String> awards(Map<String, dynamic> e) =>
+        ((e['_awards'] as List?) ?? const []).map((x) => x.toString()).toList();
 
   final awardBuckets = <String, List<Map<String, dynamic>>>{};
 
@@ -925,20 +965,12 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     final variety = (e['variety'] ?? '').toString().trim();
     final groupName = (e['group_name'] ?? '').toString().trim();
 
-    // 🚨 IMPORTANT: skip grouping fallback if breed uses groups
-    if (groupName.isEmpty && e['uses_group_awards'] == true) {
-      // skip this entry OR assign to a special bucket only if ALL are empty
-      
-    }
-
-    final key = groupName.isEmpty ? '(No Group)' : groupName;
-
     return [
       tattoo.isEmpty ? '(No ear #)' : tattoo,
       breed,
       if (groupName.isNotEmpty) groupName,
-      variety,
-    ].where((x) => x.isNotEmpty).join(' • ');
+      if (variety.isNotEmpty) variety,
+    ].join(' • ');
   }
 
     void _openValidationSheet() {
@@ -1389,7 +1421,8 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
         ''
       ).toString().trim();
 
-      final key = groupName.isEmpty ? '(Unknown Group)' : groupName;
+      if (groupName.isEmpty) continue;
+      final key = groupName;
       out.putIfAbsent(key, () => <Map<String, dynamic>>[]);
       out[key]!.add(e);
     }
@@ -1437,6 +1470,68 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
     if (ids.length == 1) return ids.first;
     return null;
   }
+
+  Future<void> _reloadEntries() async {
+    final ids = _entries
+        .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
+        .where((x) => x.isNotEmpty)
+        .toSet();
+
+    if (ids.isEmpty) return;
+
+    final rows = await supabase.rpc(
+      'report_results_entry_rows',
+      params: {
+        'p_show_id': widget.showId,
+        'p_section_id': null,
+      },
+    );
+
+    final refreshed = (rows as List)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .where((e) {
+          final id = (e['entry_id'] ?? e['id'] ?? '').toString().trim();
+          return ids.contains(id);
+        })
+        .toList();
+
+    final entryIds = refreshed
+        .map((e) => (e['entry_id'] ?? '').toString().trim())
+        .where((x) => x.isNotEmpty)
+        .toList();
+
+    final awardsByEntryId = <String, List<String>>{};
+
+    if (entryIds.isNotEmpty) {
+      final awardRows = await supabase
+          .from('entry_awards')
+          .select('entry_id,award_code')
+          .eq('show_id', widget.showId)
+          .inFilter('entry_id', entryIds);
+
+      for (final row in (awardRows as List).cast<Map<String, dynamic>>()) {
+        final entryId = (row['entry_id'] ?? '').toString().trim();
+        final award = (row['award_code'] ?? '').toString().trim();
+        if (entryId.isEmpty || award.isEmpty) continue;
+        awardsByEntryId.putIfAbsent(entryId, () => <String>[]);
+        awardsByEntryId[entryId]!.add(award);
+      }
+    }
+
+    for (final e in refreshed) {
+      final id = (e['entry_id'] ?? '').toString().trim();
+      e['id'] ??= e['entry_id'];
+      e['breed'] ??= e['breed_name'];
+      e['variety'] ??= e['variety_name'];
+      e['_awards'] = awardsByEntryId[id] ?? <String>[];
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _entries = refreshed;
+    });
+    }
 
   Future<void> _applyJudgeToEntries(List<Map<String, dynamic>> entries, String? judgeId) async {
     setState(() {
@@ -1642,8 +1737,7 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
                         );
                       }
 
-                      if (!mounted) return;
-                      setState(() {});
+                      await _reloadEntries();
                     },
                   ),
                 );
@@ -1745,6 +1839,68 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
 
     if (ids.length == 1) return ids.first;
     return null;
+  }
+
+  Future<void> _reloadEntries() async {
+    final ids = _entries
+        .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
+        .where((x) => x.isNotEmpty)
+        .toSet();
+
+    if (ids.isEmpty) return;
+
+    final rows = await supabase.rpc(
+      'report_results_entry_rows',
+      params: {
+        'p_show_id': widget.showId,
+        'p_section_id': null,
+      },
+    );
+
+    final refreshed = (rows as List)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .where((e) {
+          final id = (e['entry_id'] ?? e['id'] ?? '').toString().trim();
+          return ids.contains(id);
+        })
+        .toList();
+
+    final entryIds = refreshed
+        .map((e) => (e['entry_id'] ?? '').toString().trim())
+        .where((x) => x.isNotEmpty)
+        .toList();
+
+    final awardsByEntryId = <String, List<String>>{};
+
+    if (entryIds.isNotEmpty) {
+      final awardRows = await supabase
+          .from('entry_awards')
+          .select('entry_id,award_code')
+          .eq('show_id', widget.showId)
+          .inFilter('entry_id', entryIds);
+
+      for (final row in (awardRows as List).cast<Map<String, dynamic>>()) {
+        final entryId = (row['entry_id'] ?? '').toString().trim();
+        final award = (row['award_code'] ?? '').toString().trim();
+        if (entryId.isEmpty || award.isEmpty) continue;
+        awardsByEntryId.putIfAbsent(entryId, () => <String>[]);
+        awardsByEntryId[entryId]!.add(award);
+      }
+    }
+
+    for (final e in refreshed) {
+      final id = (e['entry_id'] ?? '').toString().trim();
+      e['id'] ??= e['entry_id'];
+      e['breed'] ??= e['breed_name'];
+      e['variety'] ??= e['variety_name'];
+      e['_awards'] = awardsByEntryId[id] ?? <String>[];
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _entries = refreshed;
+    });
   }
 
   Future<void> _applyJudgeToEntries(List<Map<String, dynamic>> entries, String? judgeId) async {
@@ -1931,15 +2087,25 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
                             judges: widget.judges,
                             breedClassSystems: widget.breedClassSystems,
                             finalAwardMode: widget.finalAwardMode,
-                            showsByGroup: varietyEntries.any(
-                              (e) => e['uses_group_awards'] == true,
-                            ),
+                            showsByGroup: varietyEntries.any((e) {
+                              final usesGroups = e['uses_group_awards'] == true;
+                              final groupName = (
+                                e['group_name'] ??
+                                e['group_display_name'] ??
+                                e['group_label'] ??
+                                e['group'] ??
+                                e['group_code'] ??
+                                ''
+                              ).toString().trim();
+
+                              return usesGroups && groupName.isNotEmpty;
+                            }),
                             showsByVariety: true,
                           ),
                         ),
                       );
-                      if (!mounted) return;
-                      setState(() {});
+
+                      await _reloadEntries();
                     },
                   ),
                 );
@@ -2079,6 +2245,68 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
 
     if (ids.length == 1) return ids.first;
     return null;
+  }
+
+  Future<void> _reloadEntries() async {
+    final ids = _entries
+        .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
+        .where((x) => x.isNotEmpty)
+        .toSet();
+
+    if (ids.isEmpty) return;
+
+    final rows = await supabase.rpc(
+      'report_results_entry_rows',
+      params: {
+        'p_show_id': widget.showId,
+        'p_section_id': null,
+      },
+    );
+
+    final refreshed = (rows as List)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .where((e) {
+          final id = (e['entry_id'] ?? e['id'] ?? '').toString().trim();
+          return ids.contains(id);
+        })
+        .toList();
+
+    final entryIds = refreshed
+        .map((e) => (e['entry_id'] ?? '').toString().trim())
+        .where((x) => x.isNotEmpty)
+        .toList();
+
+    final awardsByEntryId = <String, List<String>>{};
+
+    if (entryIds.isNotEmpty) {
+      final awardRows = await supabase
+          .from('entry_awards')
+          .select('entry_id,award_code')
+          .eq('show_id', widget.showId)
+          .inFilter('entry_id', entryIds);
+
+      for (final row in (awardRows as List).cast<Map<String, dynamic>>()) {
+        final entryId = (row['entry_id'] ?? '').toString().trim();
+        final award = (row['award_code'] ?? '').toString().trim();
+        if (entryId.isEmpty || award.isEmpty) continue;
+        awardsByEntryId.putIfAbsent(entryId, () => <String>[]);
+        awardsByEntryId[entryId]!.add(award);
+      }
+    }
+
+    for (final e in refreshed) {
+      final id = (e['entry_id'] ?? '').toString().trim();
+      e['id'] ??= e['entry_id'];
+      e['breed'] ??= e['breed_name'];
+      e['variety'] ??= e['variety_name'];
+      e['_awards'] = awardsByEntryId[id] ?? <String>[];
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _entries = refreshed;
+    });
   }
 
   Future<void> _applyJudgeToEntries(List<Map<String, dynamic>> entries, String? judgeId) async {
@@ -2247,8 +2475,8 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
                           ),
                         ),
                       );
-                      if (!mounted) return;
-                      setState(() {});
+
+                      await _reloadEntries();
                     },
                   ),
                 );
