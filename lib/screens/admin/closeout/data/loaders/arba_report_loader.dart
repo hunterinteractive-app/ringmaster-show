@@ -1,3 +1,5 @@
+// lib/screens/admin/closeout/data/loaders/arba_report_loader.dart
+
 import '../../models/arba/arba_report_data.dart';
 import '../../models/base/report_request.dart';
 import '../closeout_repository.dart';
@@ -8,10 +10,19 @@ class ArbaReportLoader {
   final CloseoutRepository repo;
 
   Future<ArbaReportData> load(ReportRequest request) async {
+    final artifactContext = await _loadArtifactContext(request);
+
+    final sectionId = artifactContext.sectionId;
+    final showLetter = artifactContext.showLetter;
+
     final show = await repo.loadShowBasics(request.showId);
     final arbaDetails = await _loadArbaDetails(request.showId);
 
-    final showName = _str(show['name']);
+    final showNameBase = _str(show['name']);
+    final showName = [
+      showNameBase,
+      if (showLetter.isNotEmpty) showLetter,
+    ].where((e) => e.isNotEmpty).join(' - ');
 
     final secretaryName = _firstNonEmpty([
       _str(arbaDetails?['secretary_name']),
@@ -44,11 +55,27 @@ class ArbaReportLoader {
     final arbaReportFiled =
         officialProtest && arbaDetails?['arba_report_filed'] == true;
 
-    final sanctionNumber = await _loadSanctionNumber(request.showId);
-    final clubName = await _loadClubName(request.showId);
+    final sanctionNumber = await _loadSanctionNumber(
+      request.showId,
+      sectionId: sectionId,
+    );
 
-    final rabbitsShown = await _countShownSpecies(request.showId, 'rabbit');
-    final caviesShown = await _countShownSpecies(request.showId, 'cavy');
+    final clubName = await _loadClubName(
+      request.showId,
+      sectionId: sectionId,
+    );
+
+    final rabbitsShown = await _countShownSpecies(
+      request.showId,
+      'rabbit',
+      sectionId: sectionId,
+    );
+
+    final caviesShown = await _countShownSpecies(
+      request.showId,
+      'cavy',
+      sectionId: sectionId,
+    );
 
     final showDate = _tryParseDate(show['start_date']);
     final reportDate = DateTime.now();
@@ -68,14 +95,20 @@ class ArbaReportLoader {
       const ['newsletter_show_report', 'exh_total_points', 'exh_by_breed'],
     );
 
-    final judges = await _loadJudgeNames(request.showId);
+    final judges = await _loadJudgeNames(
+      request.showId,
+      sectionId: sectionId,
+    );
 
     final signedBy =
         secretaryName.isNotEmpty ? secretaryName : await _loadSignedByName();
 
     final filedDate = DateTime.now();
 
-    final bisRabbit = await _loadBisRabbit(request.showId);
+    final bisRabbit = await _loadBisRabbit(
+      request.showId,
+      sectionId: sectionId,
+    );
 
     return ArbaReportData(
       showName: showName,
@@ -86,7 +119,7 @@ class ArbaReportLoader {
       reportDate: reportDate,
       rabbitsShown: rabbitsShown,
       caviesShown: caviesShown,
-      clubName: clubName.isNotEmpty ? clubName : showName,
+      clubName: clubName.isNotEmpty ? clubName : showNameBase,
       showDate: showDate,
       showLocation: showLocation,
       secretaryAddress: secretaryAddress,
@@ -134,15 +167,71 @@ class ArbaReportLoader {
     }
   }
 
-  Future<String> _loadSanctionNumber(String showId) async {
+  Future<_ArbaArtifactContext> _loadArtifactContext(
+    ReportRequest request,
+  ) async {
     try {
+      final artifactId = _reportArtifactIdFromRequest(request);
+      if (artifactId.isEmpty) {
+        return const _ArbaArtifactContext.empty();
+      }
+
       final row = await repo.supabase
-          .from('show_sanctions')
-          .select('sanction_number')
-          .eq('show_id', showId)
-          .eq('sanctioning_body', 'ARBA')
-          .limit(1)
+          .from('show_report_artifacts')
+          .select('id, metadata')
+          .eq('id', artifactId)
           .maybeSingle();
+
+      if (row == null) {
+        return const _ArbaArtifactContext.empty();
+      }
+
+      final metadata = row['metadata'] is Map
+          ? Map<String, dynamic>.from(row['metadata'] as Map)
+          : <String, dynamic>{};
+
+      return _ArbaArtifactContext(
+        artifactId: artifactId,
+        sectionId: _str(metadata['section_id']),
+        showLetter: _str(metadata['show_letter']),
+        sectionLabel: _str(metadata['section_label']),
+        scope: _str(metadata['scope']),
+      );
+    } catch (_) {
+      return const _ArbaArtifactContext.empty();
+    }
+  }
+
+  String _reportArtifactIdFromRequest(ReportRequest request) {
+    try {
+      final dynamic raw = (request as dynamic).artifactId;
+      return _str(raw);
+    } catch (_) {
+      return '';
+    }
+  }
+
+  Future<String> _loadSanctionNumber(
+    String showId, {
+    String? sectionId,
+  }) async {
+    try {
+      final row = (sectionId != null && sectionId.trim().isNotEmpty)
+          ? await repo.supabase
+              .from('show_sanctions')
+              .select('sanction_number')
+              .eq('show_id', showId)
+              .eq('sanctioning_body', 'ARBA')
+              .eq('section_id', sectionId.trim())
+              .limit(1)
+              .maybeSingle()
+          : await repo.supabase
+              .from('show_sanctions')
+              .select('sanction_number')
+              .eq('show_id', showId)
+              .eq('sanctioning_body', 'ARBA')
+              .limit(1)
+              .maybeSingle();
 
       if (row == null) return '';
       return _str(row['sanction_number']);
@@ -151,15 +240,27 @@ class ArbaReportLoader {
     }
   }
 
-  Future<String> _loadClubName(String showId) async {
+  Future<String> _loadClubName(
+    String showId, {
+    String? sectionId,
+  }) async {
     try {
-      final row = await repo.supabase
-          .from('show_sanctions')
-          .select('club_name')
-          .eq('show_id', showId)
-          .eq('sanctioning_body', 'ARBA')
-          .limit(1)
-          .maybeSingle();
+      final row = (sectionId != null && sectionId.trim().isNotEmpty)
+          ? await repo.supabase
+              .from('show_sanctions')
+              .select('club_name')
+              .eq('show_id', showId)
+              .eq('sanctioning_body', 'ARBA')
+              .eq('section_id', sectionId.trim())
+              .limit(1)
+              .maybeSingle()
+          : await repo.supabase
+              .from('show_sanctions')
+              .select('club_name')
+              .eq('show_id', showId)
+              .eq('sanctioning_body', 'ARBA')
+              .limit(1)
+              .maybeSingle();
 
       if (row == null) return '';
       return _str(row['club_name']);
@@ -168,16 +269,28 @@ class ArbaReportLoader {
     }
   }
 
-  Future<int> _countShownSpecies(String showId, String species) async {
+  Future<int> _countShownSpecies(
+    String showId,
+    String species, {
+    String? sectionId,
+  }) async {
     try {
-      final rows = await repo.supabase
-          .from('entries')
-          .select('id')
-          .eq('show_id', showId)
-          .eq('is_shown', true)
-          .eq('species', species);
+      final rows = (sectionId != null && sectionId.trim().isNotEmpty)
+          ? await repo.supabase
+              .from('entries')
+              .select('id')
+              .eq('show_id', showId)
+              .eq('is_shown', true)
+              .eq('species', species)
+              .eq('section_id', sectionId.trim())
+          : await repo.supabase
+              .from('entries')
+              .select('id')
+              .eq('show_id', showId)
+              .eq('is_shown', true)
+              .eq('species', species);
 
-      return rows.length;
+      return (rows as List).length;
     } catch (_) {
       return 0;
     }
@@ -266,15 +379,34 @@ class ArbaReportLoader {
     }
   }
 
-  Future<List<String>> _loadJudgeNames(String showId) async {
+  Future<List<String>> _loadJudgeNames(
+    String showId, {
+    String? sectionId,
+  }) async {
     try {
-      final assignmentRows = await repo.supabase
-          .from('judge_assignments')
-          .select('judge_id, assignment_label, created_at')
-          .eq('show_id', showId)
-          .order('created_at');
+      Future<List<Map<String, dynamic>>> loadAssignments({bool filterSection = false}) async {
+        var query = repo.supabase
+            .from('judge_assignments')
+            .select('judge_id, assignment_label, created_at, section_id')
+            .eq('show_id', showId);
 
-      final assignments = List<Map<String, dynamic>>.from(assignmentRows);
+        if (filterSection && sectionId != null && sectionId.trim().isNotEmpty) {
+          query = query.eq('section_id', sectionId.trim());
+        }
+
+        final rows = await query.order('created_at');
+        return List<Map<String, dynamic>>.from(rows);
+      }
+
+      var assignments = await loadAssignments(
+        filterSection: sectionId != null && sectionId.trim().isNotEmpty,
+      );
+
+      // Fallback: if nothing matched the section, use all judges for the show
+      if (assignments.isEmpty) {
+        assignments = await loadAssignments(filterSection: false);
+      }
+
       if (assignments.isEmpty) return const [];
 
       final judgeIds = assignments
@@ -354,7 +486,10 @@ class ArbaReportLoader {
     }
   }
 
-  Future<_BisRabbitInfo> _loadBisRabbit(String showId) async {
+  Future<_BisRabbitInfo> _loadBisRabbit(
+    String showId, {
+    String? sectionId,
+  }) async {
     try {
       final rows = await repo.supabase
           .from('entry_awards')
@@ -366,7 +501,8 @@ class ArbaReportLoader {
               species,
               tattoo,
               breed,
-              exhibitor_id
+              exhibitor_id,
+              section_id
             )
           ''')
           .eq('show_id', showId);
@@ -380,6 +516,13 @@ class ArbaReportLoader {
         final entry = row['entries'];
 
         if (entry is! Map<String, dynamic>) continue;
+
+        final entrySectionId = _str(entry['section_id']);
+        if (sectionId != null &&
+            sectionId.trim().isNotEmpty &&
+            entrySectionId != sectionId.trim()) {
+          continue;
+        }
 
         final species = _str(entry['species']).toLowerCase();
 
@@ -408,7 +551,7 @@ class ArbaReportLoader {
       if (exhibitorId.isNotEmpty) {
         final exhibitor = await repo.supabase
             .from('exhibitors')
-            .select('display_name, first_name, last_name, city, state')
+            .select('display_name, first_name, last_name, city, state, user_id')
             .eq('id', exhibitorId)
             .maybeSingle();
 
@@ -420,10 +563,26 @@ class ArbaReportLoader {
                   _str(exhibitor['last_name']),
                 ].where((e) => e.isNotEmpty).join(' ');
 
-          cityState = [
-            _str(exhibitor['city']),
-            _str(exhibitor['state']),
-          ].where((e) => e.isNotEmpty).join(', ');
+          var city = _str(exhibitor['city']);
+          var state = _str(exhibitor['state']);
+
+          if (city.isEmpty || state.isEmpty) {
+            final userId = _str(exhibitor['user_id']);
+            if (userId.isNotEmpty) {
+              final profile = await repo.supabase
+                  .from('user_profiles')
+                  .select('city, state')
+                  .eq('user_id', userId)
+                  .maybeSingle();
+
+              if (profile != null) {
+                if (city.isEmpty) city = _str(profile['city']);
+                if (state.isEmpty) state = _str(profile['state']);
+              }
+            }
+          }
+
+          cityState = [city, state].where((e) => e.isNotEmpty).join(', ');
         }
       }
 
@@ -462,6 +621,29 @@ class ArbaReportLoader {
     if (value is DateTime) return value;
     return DateTime.tryParse(value.toString());
   }
+}
+
+class _ArbaArtifactContext {
+  final String artifactId;
+  final String sectionId;
+  final String showLetter;
+  final String sectionLabel;
+  final String scope;
+
+  const _ArbaArtifactContext({
+    required this.artifactId,
+    required this.sectionId,
+    required this.showLetter,
+    required this.sectionLabel,
+    required this.scope,
+  });
+
+  const _ArbaArtifactContext.empty()
+      : artifactId = '',
+        sectionId = '',
+        showLetter = '',
+        sectionLabel = '',
+        scope = '';
 }
 
 class _BisRabbitInfo {

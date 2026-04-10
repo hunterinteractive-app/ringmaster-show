@@ -69,7 +69,7 @@ class _CartScreenState extends State<CartScreen> {
       final fee = await supabase
           .from('show_fee_settings')
           .select(
-            'show_id,currency,fee_per_entry,fee_per_show,'
+            'show_id,currency,fee_per_entry,fee_per_show,fur_fee,'
             'multi_show_discount_enabled,multi_show_discount_type,multi_show_discount_value',
           )
           .eq('show_id', widget.showId)
@@ -84,7 +84,7 @@ class _CartScreenState extends State<CartScreen> {
       final items = await supabase
           .from('entry_cart_items')
           .select(
-            'id,exhibitor_id,section_id,animal_id,species,breed,variety,sex,tattoo,class_name,created_at',
+            'id,exhibitor_id,section_id,animal_id,species,breed,variety,sex,tattoo,class_name,created_at,is_fur',
           )
           .eq('cart_id', widget.cartId)
           .order('created_at');
@@ -220,6 +220,7 @@ class _CartScreenState extends State<CartScreen> {
     final currency = (_feeSettings?['currency'] ?? 'USD').toString();
     final feePerEntry = _asDouble(_feeSettings?['fee_per_entry']);
     final feePerShow = _asDouble(_feeSettings?['fee_per_show']);
+    final furFee = _asDouble(_feeSettings?['fur_fee']);
 
     final discountEnabled =
         _feeSettings?['multi_show_discount_enabled'] == true;
@@ -230,7 +231,10 @@ class _CartScreenState extends State<CartScreen> {
         _asDouble(_feeSettings?['multi_show_discount_value']);
 
     final entryCount = items.length;
+    final furCount = items.where((it) => it['is_fur'] == true).length;
+
     final entriesSubtotal = feePerEntry * entryCount;
+    final furSubtotal = furFee * furCount;
 
     final Map<String, int> perAnimalCounts = {};
     for (final it in items) {
@@ -259,14 +263,17 @@ class _CartScreenState extends State<CartScreen> {
       if (discountAmount < 0) discountAmount = 0;
     }
 
-    final total = (entriesSubtotal + feePerShow) - discountAmount;
+    final total = (entriesSubtotal + furSubtotal + feePerShow) - discountAmount;
 
     return {
       'currency': currency,
       'fee_per_entry': feePerEntry,
       'fee_per_show': feePerShow,
+      'fur_fee': furFee,
       'entry_count': entryCount,
+      'fur_count': furCount,
       'entries_subtotal': entriesSubtotal,
+      'fur_subtotal': furSubtotal,
       'additional_entries': additionalEntries,
       'discount_enabled': discountEnabled,
       'discount_type': discountType,
@@ -596,6 +603,14 @@ class _CartScreenState extends State<CartScreen> {
                                     '${overallFee['entry_count']} entries × ${_money(overallFee['fee_per_entry'] as double, currency: currency)} = '
                                     '${_money(overallFee['entries_subtotal'] as double, currency: currency)}',
                                   ),
+                                  if ((overallFee['fur_count'] as int) > 0)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 4),
+                                      child: Text(
+                                        '${overallFee['fur_count']} Fur/Wool add-ons × ${_money(overallFee['fur_fee'] as double, currency: currency)} = '
+                                        '${_money(overallFee['fur_subtotal'] as double, currency: currency)}',
+                                      ),
+                                    ),
                                   if ((overallFee['show_fee'] as double) > 0)
                                     Padding(
                                       padding: const EdgeInsets.only(top: 4),
@@ -603,8 +618,7 @@ class _CartScreenState extends State<CartScreen> {
                                         'Per-show fee: ${_money(overallFee['show_fee'] as double, currency: currency)}',
                                       ),
                                     ),
-                                  if ((overallFee['discount_amount'] as double) >
-                                      0)
+                                  if ((overallFee['discount_amount'] as double) > 0)
                                     Padding(
                                       padding: const EdgeInsets.only(top: 4),
                                       child: Text(
@@ -689,6 +703,8 @@ class _CartScreenState extends State<CartScreen> {
                                           (sec?['display_name'] ?? 'Section')
                                               .toString();
 
+                                      final isFur = it['is_fur'] == true;
+
                                       final animalLabel =
                                           '${(it['breed'] ?? '').toString()} • ${(it['variety'] ?? '').toString()} • ${(it['sex'] ?? '').toString()}';
 
@@ -703,7 +719,7 @@ class _CartScreenState extends State<CartScreen> {
                                           ),
                                         ),
                                         subtitle: Text(
-                                          '$animalLabel\n${_buildClassDisplay(it)}',
+                                          '$animalLabel\n${_buildClassDisplay(it)}${isFur ? '\nFur/Wool: Yes' : ''}',
                                         ),
                                         isThreeLine: true,
                                         trailing: IconButton(
@@ -765,15 +781,27 @@ class _CartScreenState extends State<CartScreen> {
     final f = _calculateFeesForItems(exhibitorItems);
 
     final entriesSubtotal = f['entries_subtotal'] as double;
+    final furSubtotal = f['fur_subtotal'] as double;
     final discountAmount = f['discount_amount'] as double;
-    final total = (entriesSubtotal - discountAmount);
+    final total = (entriesSubtotal + furSubtotal - discountAmount);
     final count = f['entry_count'] as int;
+    final furCount = f['fur_count'] as int;
+
+    final parts = <String>[
+      '$count entries: ${_money(entriesSubtotal, currency: currency)}',
+    ];
+
+    if (furCount > 0) {
+      parts.add('$furCount Fur/Wool: ${_money(furSubtotal, currency: currency)}');
+    }
 
     if (discountAmount > 0) {
-      return '$count entries: ${_money(entriesSubtotal, currency: currency)} '
-          '- ${_money(discountAmount, currency: currency)} = ${_money(total, currency: currency)}';
+      parts.add('- ${_money(discountAmount, currency: currency)}');
     }
-    return '$count entries: ${_money(entriesSubtotal, currency: currency)}';
+
+    parts.add('= ${_money(total, currency: currency)}');
+
+    return parts.join(' • ');
   }
 }
 

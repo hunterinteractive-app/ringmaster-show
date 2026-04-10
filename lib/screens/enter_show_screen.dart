@@ -44,6 +44,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
 
   final Set<String> _selectedSectionIds = {};
   final Map<String, Map<String, dynamic>> _sectionById = {};
+  final Map<String, Set<String>> _furSectionIdsByAnimal = {};
 
   List<Map<String, dynamic>> _exhibitors = [];
   String? _selectedExhibitorId;
@@ -891,6 +892,9 @@ String _sectionConflictLabelForAnimal(String animalId) {
 
     setState(() {
       _selected[id] = isSelected;
+      if (!isSelected) {
+        _furSectionIdsByAnimal.remove(id);
+      }
       _msg = null;
     });
 
@@ -908,7 +912,34 @@ String _sectionConflictLabelForAnimal(String animalId) {
   void _clearSectionSelection() {
     setState(() {
       _selectedSectionIds.clear();
+      _furSectionIdsByAnimal.clear();
       _msg = null;
+    });
+  }
+
+  bool _isFurSelectedForAnimalSection(String animalId, String sectionId) {
+    return _furSectionIdsByAnimal[animalId]?.contains(sectionId) ?? false;
+  }
+
+  void _toggleFurForAnimalSection({
+    required String animalId,
+    required String sectionId,
+    required bool value,
+  }) {
+    setState(() {
+      final set = _furSectionIdsByAnimal.putIfAbsent(
+        animalId,
+        () => <String>{},
+      );
+
+      if (value) {
+        set.add(sectionId);
+      } else {
+        set.remove(sectionId);
+        if (set.isEmpty) {
+          _furSectionIdsByAnimal.remove(animalId);
+        }
+      }
     });
   }
 
@@ -921,6 +952,14 @@ String _sectionConflictLabelForAnimal(String animalId) {
 
       if (_selectedSectionIds.contains(sectionId)) {
         _selectedSectionIds.remove(sectionId);
+
+        for (final animalId in _furSectionIdsByAnimal.keys.toList()) {
+          final set = _furSectionIdsByAnimal[animalId];
+          set?.remove(sectionId);
+          if (set == null || set.isEmpty) {
+            _furSectionIdsByAnimal.remove(animalId);
+          }
+        }
       } else {
         _selectedSectionIds.add(sectionId);
       }
@@ -1178,9 +1217,20 @@ String _sectionConflictLabelForAnimal(String animalId) {
                 ),
                 const SizedBox(height: 6),
                 ...chosen.map(
-                  (a) => Text(
-                    '• ${_displayAnimalTitle(a)} — ${_classControllerFor((a['id'] ?? '').toString()).text.trim()}',
-                  ),
+                  (a) {
+                    final animalId = (a['id'] ?? '').toString();
+                    final furLabels = _selectedSectionIds
+                        .where((sectionId) => _isFurSelectedForAnimalSection(animalId, sectionId))
+                        .map(_sectionLabelForId)
+                        .toList()
+                      ..sort();
+
+                    final furText = furLabels.isEmpty ? '' : ' • Fur/Wool: ${furLabels.join(', ')}';
+
+                    return Text(
+                      '• ${_displayAnimalTitle(a)} — ${_classControllerFor(animalId).text.trim()}$furText',
+                    );
+                  },
                 ),
               ],
             ),
@@ -1289,6 +1339,7 @@ String _sectionConflictLabelForAnimal(String animalId) {
             'variety': a['variety'],
             'sex': a['sex'],
             'class_name': className.isNotEmpty ? className : null,
+            'is_fur': _isFurSelectedForAnimalSection(animalId, sectionId),
           });
         }
       }
@@ -1311,7 +1362,9 @@ String _sectionConflictLabelForAnimal(String animalId) {
 
       setState(() {
         for (final a in chosen) {
-          _selected[a['id'] as String] = false;
+          final animalId = a['id'] as String;
+          _selected[animalId] = false;
+          _furSectionIdsByAnimal.remove(animalId);
         }
         _selectedSectionIds.clear();
       });
@@ -1449,10 +1502,34 @@ String _sectionConflictLabelForAnimal(String animalId) {
                 onPressed: (_submitting || disabled)
                     ? null
                     : () => _editProjectedClass(a),
-                child: const Text('Change'),
+                child: const Text('Select Class'),
               ),
             ],
           ),
+
+          if (_selected[id] == true && _selectedSectionIds.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _selectedSectionIds.map((sectionId) {
+                final label = _sectionLabelForId(sectionId);
+                final furSelected = _isFurSelectedForAnimalSection(id, sectionId);
+
+                return FilterChip(
+                  label: Text('$label Fur/Wool'),
+                  selected: furSelected,
+                  onSelected: (_submitting || disabled)
+                      ? null
+                      : (value) => _toggleFurForAnimalSection(
+                            animalId: id,
+                            sectionId: sectionId,
+                            value: value,
+                          ),
+                );
+              }).toList(),
+            ),
+          ],
           if (alreadyEnteredInSelectedSection || hasSectionConflict || inCart)
             Text(
               alreadyEnteredInSelectedSection

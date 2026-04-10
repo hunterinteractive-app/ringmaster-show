@@ -42,6 +42,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
 
   final _feePerEntry = TextEditingController();
   final _feePerShow = TextEditingController();
+  final _furFee = TextEditingController();
 
   bool _discountEnabled = false;
   String _discountType = 'amount';
@@ -59,6 +60,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
   void dispose() {
     _feePerEntry.dispose();
     _feePerShow.dispose();
+    _furFee.dispose();
     _discountValue.dispose();
     super.dispose();
   }
@@ -75,6 +77,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
           .select(
             'fee_per_entry,'
             'fee_per_show,'
+            'fur_fee,'
             'multi_show_discount_enabled,'
             'multi_show_discount_type,'
             'multi_show_discount_value',
@@ -85,6 +88,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
       if (feeRow == null) {
         _feePerEntry.text = '0';
         _feePerShow.text = '';
+        _furFee.text = '0';
         _discountEnabled = false;
         _discountType = 'amount';
         _discountValue.text = '0';
@@ -93,6 +97,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
         _feePerShow.text = feeRow['fee_per_show'] == null
             ? ''
             : feeRow['fee_per_show'].toString();
+        _furFee.text = (feeRow['fur_fee'] ?? 0).toString();
         _discountEnabled = feeRow['multi_show_discount_enabled'] == true;
         _discountType =
             (feeRow['multi_show_discount_type'] ?? 'amount').toString();
@@ -136,6 +141,12 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
         );
         return false;
       }
+    }
+
+    final furFee = _parseMoney(_furFee.text);
+    if (furFee == null) {
+      setState(() => _msg = 'Fur/Wool fee must be 0 or greater.');
+      return false;
     }
 
     final disc = _parseMoney(_discountValue.text);
@@ -267,6 +278,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
         'fee_per_show': _feePerShow.text.trim().isEmpty
             ? null
             : double.parse(_feePerShow.text.trim()),
+        'fur_fee': double.parse(_furFee.text.trim()),
         'multi_show_discount_enabled': _discountEnabled,
         'multi_show_discount_type': _discountType,
         'multi_show_discount_value': double.parse(_discountValue.text.trim()),
@@ -621,6 +633,18 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
                                         ),
                                         decoration: const InputDecoration(
                                           labelText: 'Fee per animal / entry',
+                                          border: OutlineInputBorder(),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      TextField(
+                                        controller: _furFee,
+                                        keyboardType:
+                                            const TextInputType.numberWithOptions(
+                                          decimal: true,
+                                        ),
+                                        decoration: const InputDecoration(
+                                          labelText: 'Fur / Wool fee',
                                           border: OutlineInputBorder(),
                                         ),
                                       ),

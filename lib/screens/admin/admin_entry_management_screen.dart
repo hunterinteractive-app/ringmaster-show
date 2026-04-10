@@ -110,6 +110,7 @@ class _AdminEntryManagementScreenState
         .select(
           'id,show_id,section_id,exhibitor_id,exhibitor_user_id,animal_id,species,'
           'tattoo,breed,variety,sex,class_name,notes,status,created_at,updated_at,scratched_at,'
+          'is_fur,fur_placement,fur_notes,'
           'show_sections(id,letter,display_name,kind),'
           'exhibitors!entries_exhibitor_id_fkey(id,display_name,first_name,last_name)',
         )
@@ -179,6 +180,7 @@ class _AdminEntryManagementScreenState
       (e['class_name'] ?? '').toString(),
       (e['notes'] ?? '').toString(),
       (e['species'] ?? '').toString(),
+      ((e['is_fur'] == true) ? 'fur wool fur/wool' : ''),
     ].join(' ').toLowerCase();
 
     return fields.contains(q);
@@ -577,6 +579,8 @@ class _AdminEntryManagementScreenState
                                               ? '(no tattoo)'
                                               : tattoo;
 
+                                          final isFur = e['is_fur'] == true;
+
                                           final subtitle = [
                                             if (breed.isNotEmpty)
                                               'Breed: $breed',
@@ -584,6 +588,7 @@ class _AdminEntryManagementScreenState
                                               'Variety: $variety',
                                             if (sex.isNotEmpty) 'Sex: $sex',
                                             if (cls.isNotEmpty) 'Class: $cls',
+                                            if (isFur) 'Fur/Wool',
                                             if (letter.isNotEmpty)
                                               'Show: $letter',
                                             if (isScratched)
@@ -696,6 +701,8 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
   late final TextEditingController _sex;
   late final TextEditingController _className;
   late final TextEditingController _notes;
+  bool _isFur = false;
+  late final TextEditingController _furNotes;
 
   @override
   void initState() {
@@ -711,6 +718,10 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
         text: (widget.entry['class_name'] ?? '').toString());
     _notes =
         TextEditingController(text: (widget.entry['notes'] ?? '').toString());
+    _isFur = widget.entry['is_fur'] == true;
+    _furNotes = TextEditingController(
+      text: (widget.entry['fur_notes'] ?? '').toString(),
+    );
   }
 
   @override
@@ -721,6 +732,7 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
     _sex.dispose();
     _className.dispose();
     _notes.dispose();
+    _furNotes.dispose();
     super.dispose();
   }
 
@@ -741,6 +753,10 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
         'class_name':
             _className.text.trim().isEmpty ? null : _className.text.trim(),
         'notes': _notes.text.trim().isEmpty ? null : _notes.text.trim(),
+        'is_fur': _isFur,
+        'fur_notes': _isFur && _furNotes.text.trim().isNotEmpty
+            ? _furNotes.text.trim()
+            : null,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       }).eq('id', id);
 
@@ -833,6 +849,30 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
                 border: OutlineInputBorder(),
               ),
             ),
+            const SizedBox(height: 10),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Fur / Wool Entry'),
+              value: _isFur,
+              onChanged: _saving
+                  ? null
+                  : (v) => setState(() {
+                        _isFur = v;
+                      }),
+            ),
+            if (_isFur) ...[
+              const SizedBox(height: 10),
+              TextField(
+                controller: _furNotes,
+                enabled: !_saving,
+                minLines: 2,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  labelText: 'Fur / Wool Notes',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
             const SizedBox(height: 10),
             TextField(
               controller: _notes,
@@ -1070,6 +1110,9 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
 
   final _className = TextEditingController();
   final _notes = TextEditingController();
+  final _furNotes = TextEditingController();
+
+  bool _isFur = false;
 
   @override
   void initState() {
@@ -1099,6 +1142,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     _sex.dispose();
     _className.dispose();
     _notes.dispose();
+    _furNotes.dispose();
     super.dispose();
   }
 
@@ -1545,6 +1589,10 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
             ? _classValue
             : (_className.text.trim().isEmpty ? null : _className.text.trim()),
         'notes': _notes.text.trim().isEmpty ? null : _notes.text.trim(),
+        'is_fur': _isFur,
+        'fur_notes': _isFur && _furNotes.text.trim().isNotEmpty
+            ? _furNotes.text.trim()
+            : null,
         'status': 'entered',
         'created_at': DateTime.now().toUtc().toIso8601String(),
         'updated_at': DateTime.now().toUtc().toIso8601String(),
@@ -1572,6 +1620,8 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
         _breed.clear();
         _variety.clear();
         _notes.clear();
+        _furNotes.clear();
+        _isFur = false;
         _saving = false;
         _msg = 'Saved. Add another.';
       });
@@ -1972,7 +2022,47 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                               });
                             },
                     ),
-                  
+
+                  const SizedBox(height: 12),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Fur / Wool Entry'),
+                    subtitle: const Text(
+                      'Mark this animal as entered in Fur/Wool for this section',
+                    ),
+                    value: _isFur,
+                    onChanged: _saving
+                        ? null
+                        : (v) => setState(() {
+                              _isFur = v;
+                              _msg = null;
+                            }),
+                  ),
+                  if (_isFur) ...[
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _furNotes,
+                      enabled: !_saving,
+                      minLines: 2,
+                      maxLines: 4,
+                      decoration: const InputDecoration(
+                        labelText: 'Fur / Wool Notes',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ],
+
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _notes,
+                    enabled: !_saving,
+                    minLines: 2,
+                    maxLines: 4,
+                    decoration: const InputDecoration(
+                      labelText: 'Notes',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
                   const SizedBox(height: 16),
                   Row(
                     children: [

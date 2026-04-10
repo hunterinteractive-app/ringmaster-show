@@ -957,7 +957,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                         ),
 
                         _buildSectionCard(
-                          title: 'Dates',
+                          title: 'Show Date',
                           children: [
                             Row(
                               children: [
@@ -1211,7 +1211,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
 //                            ),
                             _buildSettingsActionTile(
                               icon: Icons.archive,
-                              title: 'Close Show',
+                              title: 'Close Show/Reports',
                               subtitle:
                                   'Finalize, send reports, and lock/download copy',
                               onTap: _saving ? null : _openShowCloseout,
@@ -1231,9 +1231,9 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                             ),
                             _buildSettingsActionTile(
                               icon: Icons.view_module,
-                              title: 'Show Sections',
+                              title: 'Modify Number of Shows',
                               subtitle:
-                                  'Open A/B, Youth A/B, and enabled section setup',
+                                  'Open A/B, Youth A/B, and setup',
                               onTap:
                                   _saving
                                       ? null

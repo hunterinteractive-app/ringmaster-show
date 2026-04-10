@@ -564,23 +564,23 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
                         ],
                       ),
 
-                      _buildSectionCard(
-                        icon: Icons.sell_outlined,
-                        title: 'Coop Tags',
-                        subtitle: 'Optional feature coming next.',
-                        children: const [
-                          Text('Coop tag generation will be added here.'),
-                        ],
-                      ),
+//                      _buildSectionCard(
+//                        icon: Icons.sell_outlined,
+//                        title: 'Coop Tags',
+//                        subtitle: 'Optional feature coming next.',
+//                        children: const [
+//                          Text('Coop tag generation will be added here.'),
+//                        ],
+//                      ),
 
-                      _buildSectionCard(
-                        icon: Icons.rate_review_outlined,
-                        title: 'Comment Cards',
-                        subtitle: 'Optional feature coming next.',
-                        children: const [
-                          Text('Comment card generation will be added here.'),
-                        ],
-                      ),
+//                      _buildSectionCard(
+//                        icon: Icons.rate_review_outlined,
+//                        title: 'Comment Cards',
+//                        subtitle: 'Optional feature coming next.',
+//                        children: const [
+//                          Text('Comment card generation will be added here.'),
+//                        ],
+//                      ),
                     ],
                   ),
                 ),

@@ -26,11 +26,6 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
 
   DateTime? _entryCloseAt;
 
-  bool _isSingleBreedShow = false;
-  String? _singleBreedId;
-  bool _loadingBreeds = false;
-  List<Map<String, dynamic>> _breedOptions = [];
-
   List<Map<String, dynamic>> _clubs = [];
   String? _selectedClubId;
   String? _selectedClubName;
@@ -45,7 +40,6 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
   @override
   void initState() {
     super.initState();
-    _loadBreeds();
     _loadClubs();
   }
 
@@ -92,31 +86,6 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
       setState(() {
         _loadingClubs = false;
         _msg = 'Failed to load clubs: $e';
-      });
-    }
-  }
-
-  Future<void> _loadBreeds() async {
-    setState(() => _loadingBreeds = true);
-
-    try {
-      final List data = await supabase
-          .from('breeds')
-          .select('id,name,species,is_active')
-          .eq('is_active', true)
-          .order('species')
-          .order('name');
-
-      if (!mounted) return;
-      setState(() {
-        _breedOptions = data.cast<Map<String, dynamic>>();
-        _loadingBreeds = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _loadingBreeds = false;
-        _msg = 'Failed to load breeds: $e';
       });
     }
   }
@@ -218,12 +187,6 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
       return false;
     }
 
-    if (_isSingleBreedShow &&
-        (_singleBreedId == null || _singleBreedId!.isEmpty)) {
-      setState(() => _msg = 'Select the breed for this single-breed show.');
-      return false;
-    }
-
     if (_entryCloseAt != null) {
       final showEndLocal = DateTime(_end.year, _end.month, _end.day, 23, 59);
       if (_entryCloseAt!.isAfter(showEndLocal)) {
@@ -253,6 +216,8 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
           'display_name': '$label $letter',
           'is_enabled': true,
           'sort_order': baseSort + (i * 10),
+          'breed_scope': 'all',
+          'allowed_breed_ids': null,
         });
       }
     }
@@ -358,8 +323,6 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
         'timezone': 'America/Indiana/Indianapolis',
         'is_published': _published,
         'entry_close_at': _entryCloseAt?.toUtc().toIso8601String(),
-        'is_single_breed_show': _isSingleBreedShow,
-        'single_breed_id': _isSingleBreedShow ? _singleBreedId : null,
         'club_id': clubId,
         'club_name': clubName,
       }).eq('id', showId);
@@ -721,49 +684,11 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                SwitchListTile(
-                                  contentPadding: EdgeInsets.zero,
-                                  title: const Text('Single breed show'),
-                                  subtitle: const Text(
-                                    'Only one breed can be entered for this show.',
-                                  ),
-                                  value: _isSingleBreedShow,
-                                  onChanged: _saving
-                                      ? null
-                                      : (v) {
-                                          setState(() {
-                                            _isSingleBreedShow = v;
-                                            if (!v) _singleBreedId = null;
-                                          });
-                                        },
+                                Text(
+                                  'This creates Open A/B/C and Youth A/B/C sections. '
+                                  'Breed restrictions are managed per section in Show Settings → Modify Number of Shows.',
+                                  style: Theme.of(context).textTheme.bodySmall,
                                 ),
-                                if (_isSingleBreedShow) ...[
-                                  if (_loadingBreeds) const LinearProgressIndicator(),
-                                  const SizedBox(height: 12),
-                                  DropdownButtonFormField<String>(
-                                    value: _singleBreedId,
-                                    items: _breedOptions.map((b) {
-                                      final label =
-                                          '${(b['species'] ?? '').toString().toUpperCase()} — ${(b['name'] ?? '').toString()}';
-                                      return DropdownMenuItem<String>(
-                                        value: b['id'].toString(),
-                                        child: Text(label),
-                                      );
-                                    }).toList(),
-                                    onChanged: _saving
-                                        ? null
-                                        : (v) => setState(() => _singleBreedId = v),
-                                    decoration: const InputDecoration(
-                                      labelText: 'Allowed breed (required)',
-                                      border: OutlineInputBorder(),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'Tip: Breed Settings can auto-lock to this breed.',
-                                    style: Theme.of(context).textTheme.bodySmall,
-                                  ),
-                                ],
                               ],
                             ),
                           ),

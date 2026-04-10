@@ -40,16 +40,19 @@ class _ShowSectionsDialog extends StatefulWidget {
 class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
   bool _loading = true;
   bool _saving = false;
+  bool _loadingBreeds = false;
   String? _msg;
+  
 
   final List<_EditableSection> _sections = [];
   final Set<String> _deletedIds = <String>{};
+  List<Map<String, dynamic>> _breedOptions = [];
 
-  @override
-  void initState() {
-    super.initState();
-    _loadSections();
-  }
+    @override
+    void initState() {
+      super.initState();
+      _loadAll();
+    }
 
   @override
   void dispose() {
@@ -58,6 +61,46 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
     }
     super.dispose();
   }
+
+    Future<void> _loadAll() async {
+      if (!mounted) return;
+      setState(() {
+        _loading = true;
+        _msg = null;
+      });
+
+      try {
+        await Future.wait([
+          _loadBreeds(),
+          _loadSections(),
+        ]);
+
+        if (!mounted) return;
+        setState(() {
+          _loading = false;
+        });
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _loading = false;
+          _msg = 'Load failed: $e';
+        });
+      }
+    }
+
+    Future<void> _loadBreeds() async {
+      _loadingBreeds = true;
+
+      final res = await supabase
+          .from('breeds')
+          .select('id, name, species, is_active')
+          .eq('is_active', true)
+          .order('species')
+          .order('name');
+
+      _breedOptions = (res as List).cast<Map<String, dynamic>>();
+      _loadingBreeds = false;
+    }
 
   Future<void> _loadSections() async {
     setState(() {
@@ -69,7 +112,7 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
       final res = await supabase
           .from('show_sections')
           .select(
-            'id, show_id, kind, letter, display_name, is_enabled, sort_order',
+            'id, show_id, kind, letter, display_name, is_enabled, sort_order, breed_scope, allowed_breed_ids',
           )
           .eq('show_id', widget.showId);
 
@@ -222,28 +265,42 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
     });
   }
 
-  bool _validate() {
-    if (_sections.isEmpty) {
-      setState(() => _msg = 'Add at least one section.');
-      return false;
-    }
-
-    final enabled = _sections.where((s) => s.isEnabled).toList();
-    if (enabled.isEmpty) {
-      setState(() => _msg = 'At least one section must be enabled.');
-      return false;
-    }
-
-    for (final s in _sections) {
-      final name = s.displayNameCtrl.text.trim();
-      if (name.isEmpty) {
-        setState(() => _msg = 'Every section needs a display name.');
+    bool _validate() {
+      if (_sections.isEmpty) {
+        setState(() => _msg = 'Add at least one section.');
         return false;
       }
-    }
 
-    return true;
-  }
+      final enabled = _sections.where((s) => s.isEnabled).toList();
+      if (enabled.isEmpty) {
+        setState(() => _msg = 'At least one section must be enabled.');
+        return false;
+      }
+
+      for (final s in _sections) {
+        final name = s.displayNameCtrl.text.trim();
+        if (name.isEmpty) {
+          setState(() => _msg = 'Every section needs a display name.');
+          return false;
+        }
+
+        if (s.breedScope == 'single' && s.allowedBreedIds.length != 1) {
+          setState(() => _msg =
+              '${name.isEmpty ? "A section" : name} must have exactly 1 breed selected.');
+          return false;
+        }
+
+        if (s.breedScope == 'limited') {
+          if (s.allowedBreedIds.isEmpty) {
+            setState(() => _msg =
+                '${name.isEmpty ? "A section" : name} must have at least 1 allowed breed.');
+            return false;
+          }
+        }
+      }
+
+      return true;
+    }
 
   Future<void> _saveAll() async {
     if (!_validate()) return;
@@ -270,6 +327,9 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
           'display_name': s.displayNameCtrl.text.trim(),
           'is_enabled': s.isEnabled,
           'sort_order': s.sortOrder,
+          'breed_scope': s.breedScope,
+          'allowed_breed_ids':
+              s.allowedBreedIds.isEmpty ? null : s.allowedBreedIds,
         };
 
         if (s.id != null && s.id!.isNotEmpty) {
@@ -319,6 +379,212 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
       ),
     );
   }
+
+    String _breedLabelFromId(String breedId) {
+      final match = _breedOptions.cast<Map<String, dynamic>?>().firstWhere(
+        (b) => b?['id']?.toString() == breedId,
+        orElse: () => null,
+      );
+
+      if (match == null) return breedId;
+
+      final species = (match['species'] ?? '').toString().trim();
+      final name = (match['name'] ?? '').toString().trim();
+
+      if (species.isEmpty) return name;
+      return '${species.toUpperCase()} — $name';
+    }
+
+    Future<void> _pickBreedsForSection(_EditableSection s) async {
+      if (_loadingBreeds) return;
+
+      final working = Set<String>.from(s.allowedBreedIds);
+
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) {
+          return StatefulBuilder(
+            builder: (context, setInnerState) {
+              return AlertDialog(
+                title: Text(
+                  s.breedScope == 'single'
+                      ? 'Select breed'
+                      : 'Select allowed breeds',
+                ),
+                content: SizedBox(
+                  width: 520,
+                  height: 420,
+                  child: _loadingBreeds
+                      ? const Center(child: CircularProgressIndicator())
+                      : ListView.builder(
+                          itemCount: _breedOptions.length,
+                          itemBuilder: (context, index) {
+                            final breed = _breedOptions[index];
+                            final breedId = breed['id'].toString();
+                            final species =
+                                (breed['species'] ?? '').toString().toUpperCase();
+                            final name = (breed['name'] ?? '').toString();
+                            final checked = working.contains(breedId);
+
+                            if (s.breedScope == 'single') {
+                              return RadioListTile<String>(
+                                value: breedId,
+                                groupValue:
+                                    working.isEmpty ? null : working.first,
+                                title: Text('$species — $name'),
+                                onChanged: (value) {
+                                  if (value == null) return;
+                                  setInnerState(() {
+                                    working
+                                      ..clear()
+                                      ..add(value);
+                                  });
+                                },
+                              );
+                            }
+
+                            return CheckboxListTile(
+                              value: checked,
+                              title: Text('$species — $name'),
+                              subtitle: const Text(
+                                'Choose the breeds allowed in this show.',
+                              ),
+                              onChanged: (value) {
+                                setInnerState(() {
+                                  if (value == true) {
+                                    working.add(breedId);
+                                  } else {
+                                    working.remove(breedId);
+                                  }
+                                });
+                              },
+                            );
+                          },
+                        ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      working.clear();
+                      Navigator.pop(ctx);
+                    },
+                    child: const Text('Clear'),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: () {
+                      setState(() {
+                        s.allowedBreedIds = working.toList();
+                      });
+                      Navigator.pop(ctx);
+                    },
+                    child: const Text('Apply'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+    }
+
+    Widget _buildBreedScopeSelector(_EditableSection s) {
+      return DropdownButtonFormField<String>(
+        value: s.breedScope,
+        decoration: const InputDecoration(
+          labelText: 'Breed scope',
+          border: OutlineInputBorder(),
+          isDense: true,
+        ),
+        items: const [
+          DropdownMenuItem(
+            value: 'all',
+            child: Text('All breeds'),
+          ),
+          DropdownMenuItem(
+            value: 'single',
+            child: Text('Single breed'),
+          ),
+          DropdownMenuItem(
+            value: 'limited',
+            child: Text('Selected breeds'),
+          ),
+        ],
+        onChanged: _saving
+            ? null
+            : (value) {
+                if (value == null) return;
+                setState(() {
+                  s.breedScope = value;
+                  if (value == 'all') {
+                    s.allowedBreedIds = [];
+                  } else if (value == 'single' && s.allowedBreedIds.length > 1) {
+                    s.allowedBreedIds = [s.allowedBreedIds.first];
+                  }
+                });
+              },
+      );
+    }
+
+    Widget _buildAllowedBreedSummary(_EditableSection s) {
+      if (s.breedScope == 'all') {
+        return Text(
+          'This section accepts all breeds.',
+          style: Theme.of(context).textTheme.bodySmall,
+        );
+      }
+
+      final labels = s.allowedBreedIds.map(_breedLabelFromId).toList();
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: labels.isEmpty
+                ? [
+                    const Chip(
+                      label: Text('No breeds selected'),
+                    ),
+                  ]
+                : labels
+                    .map(
+                      (x) => Chip(
+                        label: Text(
+                          x,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    )
+                    .toList(),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              OutlinedButton.icon(
+                onPressed: _saving ? null : () => _pickBreedsForSection(s),
+                icon: const Icon(Icons.pets),
+                label: Text(
+                  s.breedScope == 'single' ? 'Choose Breed' : 'Choose Breeds',
+                ),
+              ),
+              if (s.allowedBreedIds.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed:
+                      _saving ? null : () => setState(() => s.allowedBreedIds = []),
+                  child: const Text('Clear'),
+                ),
+              ],
+            ],
+          ),
+        ],
+      );
+    }
 
   Widget _sectionCard(int index) {
     final s = _sections[index];
@@ -401,6 +667,10 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
                 ),
               ],
             ),
+            const SizedBox(height: 12),
+            _buildBreedScopeSelector(s),
+            const SizedBox(height: 10),
+            _buildAllowedBreedSummary(s),
             const SizedBox(height: 8),
             SwitchListTile(
               dense: true,
@@ -492,7 +762,7 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Set the show order, enable or disable sections, and customize names like Open A or Youth B.',
+                          'Set the show order, enable or disable sections, customize names, and control which breeds are allowed in each letter show.',
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
                         const SizedBox(height: 14),
@@ -532,11 +802,10 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
                               label: const Text('Add Youth'),
                             ),
                             OutlinedButton.icon(
-                              onPressed: _saving ? null : _loadSections,
+                              onPressed: _saving ? null : _loadAll,
                               icon: const Icon(Icons.refresh),
                               label: const Text('Reload'),
-                            ),
-                          ],
+                            ),                          ],
                         ),
                         const SizedBox(height: 14),
                         Expanded(
@@ -598,6 +867,8 @@ class _EditableSection {
   String kind;
   bool isEnabled;
   int sortOrder;
+  String breedScope;
+  List<String> allowedBreedIds;
   final TextEditingController letterCtrl;
   final TextEditingController displayNameCtrl;
 
@@ -606,16 +877,29 @@ class _EditableSection {
     required this.kind,
     required this.isEnabled,
     required this.sortOrder,
+    required this.breedScope,
+    required this.allowedBreedIds,
     required this.letterCtrl,
     required this.displayNameCtrl,
   });
 
   factory _EditableSection.fromDb(Map<String, dynamic> row) {
+    final rawAllowed = row['allowed_breed_ids'];
+    final allowed = <String>[];
+
+    if (rawAllowed is List) {
+      allowed.addAll(
+        rawAllowed.map((e) => e.toString()).where((e) => e.trim().isNotEmpty),
+      );
+    }
+
     return _EditableSection(
       id: (row['id'] ?? '').toString(),
       kind: (row['kind'] ?? 'open').toString().trim().toLowerCase(),
       isEnabled: row['is_enabled'] == true,
       sortOrder: int.tryParse((row['sort_order'] ?? '').toString()) ?? 0,
+      breedScope: (row['breed_scope'] ?? 'all').toString().trim().toLowerCase(),
+      allowedBreedIds: allowed,
       letterCtrl: TextEditingController(
         text: (row['letter'] ?? '').toString(),
       ),
@@ -634,6 +918,8 @@ class _EditableSection {
       kind: kind,
       isEnabled: true,
       sortOrder: 0,
+      breedScope: 'all',
+      allowedBreedIds: <String>[],
       letterCtrl: TextEditingController(),
       displayNameCtrl: TextEditingController(text: displayName),
     );
