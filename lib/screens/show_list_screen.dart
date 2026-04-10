@@ -316,7 +316,7 @@ class ShowListScreen extends StatelessWidget {
                                     ),
                                     if (isAdminForShow)
                                       const PopupMenuItem(
-                                        value: 'admin',
+                                        value: 'Show Secretary',
                                         child: Text('Admin Settings'),
                                       ),
                                   ],
