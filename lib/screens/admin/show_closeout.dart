@@ -195,9 +195,15 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       final artifactShowLetter =
           (_artifactMetaString(artifact, 'show_letter') ?? '').trim().toUpperCase();
 
-      return artifactBreed == target.breedName.trim().toLowerCase() &&
-          artifactScope == target.scope.trim().toUpperCase() &&
-          artifactShowLetter == target.showLetter.trim().toUpperCase();
+      if (artifactScope != target.scope.trim().toUpperCase()) return false;
+      if (artifactShowLetter != target.showLetter.trim().toUpperCase()) return false;
+
+      // State clubs are section-wide, so they match all breeds in that section.
+      if (target.sanctioningBody == 'STATE CLUB') {
+        return true;
+      }
+
+      return artifactBreed == target.breedName.trim().toLowerCase();
     }
 
         Future<List<_ExhibitorEmailTarget>> _loadExhibitorEmailTargets() async {
@@ -254,8 +260,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         }
 
     Future<List<_ClubEmailTarget>> _loadClubEmailTargets() async {
-      // IMPORTANT:
-      // Adjust these selected field names if your show_sanctions table uses different names.
       final rows = await supabase
           .from('show_sanctions')
           .select('''
@@ -280,8 +284,13 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         final sanctioningBody =
             (row['sanctioning_body'] ?? '').toString().trim().toUpperCase();
 
-        // Skip ARBA here. This button is for breed/club reports.
         if (sanctioningBody == 'ARBA') continue;
+
+        if (sanctioningBody != 'NATIONAL CLUB' &&
+            sanctioningBody != 'STATE BREED CLUB' &&
+            sanctioningBody != 'STATE CLUB') {
+          continue;
+        }
 
         final clubName = (row['club_name'] ?? '').toString().trim();
         final breedName = (row['breed_name'] ?? '').toString().trim();
@@ -294,15 +303,18 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         final scope = (section['kind'] ?? '').toString().trim().toUpperCase();
         final showLetter = (section['letter'] ?? '').toString().trim().toUpperCase();
 
-        if (clubName.isEmpty ||
-            breedName.isEmpty ||
-            scope.isEmpty ||
-            showLetter.isEmpty ||
-            email.isEmpty) {
+        if (clubName.isEmpty || scope.isEmpty || showLetter.isEmpty || email.isEmpty) {
           continue;
         }
 
-        final key = '$clubName|$breedName|$scope|$showLetter|$email';
+        // Breed is required for national + state breed clubs, but not for state clubs.
+        if (sanctioningBody != 'STATE CLUB' && breedName.isEmpty) {
+          continue;
+        }
+
+        final key = sanctioningBody == 'STATE CLUB'
+            ? '$sanctioningBody|$clubName|$scope|$showLetter|$email'
+            : '$sanctioningBody|$clubName|$breedName|$scope|$showLetter|$email';
 
         out[key] = _ClubEmailTarget(
           clubName: clubName,
@@ -310,11 +322,16 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           scope: scope,
           showLetter: showLetter,
           email: email,
+          sanctioningBody: sanctioningBody,
         );
       }
 
       final list = out.values.toList()
         ..sort((a, b) {
+          final bodyCmp =
+              a.sanctioningBody.toLowerCase().compareTo(b.sanctioningBody.toLowerCase());
+          if (bodyCmp != 0) return bodyCmp;
+
           final clubCmp =
               a.clubName.toLowerCase().compareTo(b.clubName.toLowerCase());
           if (clubCmp != 0) return clubCmp;
@@ -886,8 +903,10 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       final grouped = <String, List<_ClubEmailTarget>>{};
 
       for (final club in clubs) {
-        final key =
-            '${club.clubName.trim().toLowerCase()}|${club.breedName.trim().toLowerCase()}|${club.email.trim().toLowerCase()}';
+        final key = club.sanctioningBody == 'STATE CLUB'
+            ? '${club.sanctioningBody.trim().toLowerCase()}|${club.clubName.trim().toLowerCase()}|${club.scope.trim().toUpperCase()}|${club.showLetter.trim().toUpperCase()}|${club.email.trim().toLowerCase()}'
+            : '${club.sanctioningBody.trim().toLowerCase()}|${club.clubName.trim().toLowerCase()}|${club.breedName.trim().toLowerCase()}|${club.scope.trim().toUpperCase()}|${club.showLetter.trim().toUpperCase()}|${club.email.trim().toLowerCase()}';
+
         grouped.putIfAbsent(key, () => []);
         grouped[key]!.add(club);
       }
@@ -964,13 +983,22 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         }
 
         try {
+          final subject = first.sanctioningBody == 'STATE CLUB'
+              ? '${widget.showName} - ${first.clubName} Club Reports'
+              : '${widget.showName} - ${first.breedName} Club Reports';
+
+          final message = first.sanctioningBody == 'STATE CLUB'
+              ? 'Attached are the club reports for ${widget.showName} for ${first.scope} ${first.showLetter}.\n\n'
+                  '${includedSanctionNumbers.isNotEmpty ? 'Included shows: ${includedSanctionNumbers.join(', ')}.' : ''}'
+              : 'Attached are the sweepstakes and breed results detail reports for ${widget.showName}.\n\n'
+                  '${includedSanctionNumbers.isNotEmpty ? 'Included shows: ${includedSanctionNumbers.join(', ')}.' : ''}';
+
           await _sendClubArtifactsEmail(
             artifacts: artifacts,
             to: first.email,
-            subject: '${widget.showName} - ${first.breedName} Club Reports',
-            message:
-                'Attached are the sweepstakes and breed results detail reports for ${widget.showName}.\n\n'
-                '${includedSanctionNumbers.isNotEmpty ? 'Included shows: ${includedSanctionNumbers.join(', ')}.' : ''}',
+            //to: 'zaynetort2@gmail.com',
+            subject: subject,
+            message: message,
           );
           sentCount++;
         } catch (e, st) {
@@ -3298,6 +3326,7 @@ class _ClubEmailTarget {
   final String scope; // OPEN / YOUTH
   final String showLetter;
   final String email;
+  final String sanctioningBody; // NATIONAL CLUB / STATE BREED CLUB / STATE CLUB
 
   const _ClubEmailTarget({
     required this.clubName,
@@ -3305,6 +3334,7 @@ class _ClubEmailTarget {
     required this.scope,
     required this.showLetter,
     required this.email,
+    required this.sanctioningBody,
   });
 }
 

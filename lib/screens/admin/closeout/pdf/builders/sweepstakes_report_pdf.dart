@@ -87,7 +87,7 @@ class SweepstakesReportPdf {
             pw.SizedBox(height: 14),
             if (isNoResults)
               _buildNoResultsBox(
-                'No rabbits of this breed were shown in this section.',
+                'No rabbits of this breed were shown in this Show.',
               )
             else ...[
               _buildResultsTable(

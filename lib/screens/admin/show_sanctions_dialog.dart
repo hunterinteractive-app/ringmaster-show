@@ -161,19 +161,33 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
 
   String _normalizedClubType(Map<String, dynamic> row) {
     final rawClubType = (row['club_type'] ?? '').toString().trim().toUpperCase();
-    final rawBody =
-        (row['sanctioning_body'] ?? '').toString().trim().toUpperCase();
+    final rawBody = (row['sanctioning_body'] ?? '').toString().trim().toUpperCase();
 
-    if (rawClubType.isNotEmpty) return rawClubType;
-    if (rawBody == 'ARBA') return 'ARBA';
+    if (rawClubType == 'NATIONAL BREED CLUB' ||
+        rawClubType == 'NATIONAL CLUB') {
+      return 'NATIONAL BREED CLUB';
+    }
+    if (rawClubType == 'STATE BREED CLUB') {
+      return 'STATE BREED CLUB';
+    }
+    if (rawClubType == 'STATE CLUB') {
+      return 'STATE CLUB';
+    }
+    if (rawClubType == 'ARBA') {
+      return 'ARBA';
+    }
+
     if (rawBody == 'NATIONAL CLUB') return 'NATIONAL BREED CLUB';
+    if (rawBody == 'STATE BREED CLUB') return 'STATE BREED CLUB';
+    if (rawBody == 'STATE CLUB') return 'STATE CLUB';
+    if (rawBody == 'ARBA') return 'ARBA';
+
     return '';
   }
 
   _SanctionTabKind? _tabKindFromClubType(String clubType) {
     switch (clubType) {
       case 'NATIONAL BREED CLUB':
-      case 'NATIONAL CLUB':
         return _SanctionTabKind.nationalBreed;
       case 'STATE BREED CLUB':
         return _SanctionTabKind.stateBreed;
@@ -219,10 +233,6 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
         .order('name');
 
     final allBreedRows = (allBreedsRes as List).cast<Map<String, dynamic>>();
-
-    final breedsById = <String, Map<String, dynamic>>{
-      for (final b in allBreedRows) (b['id'] ?? '').toString(): b,
-    };
 
     final breedNameById = <String, String>{
       for (final b in allBreedRows)
@@ -286,9 +296,7 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
 
     final contactsRes = await supabase
         .from('breed_club_contacts')
-        .select(
-          'id,breed_club_id,email,is_primary,is_active',
-        )
+        .select('id,breed_club_id,email,is_primary,is_active')
         .eq('is_active', true)
         .order('is_primary', ascending: false);
 
@@ -339,10 +347,11 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
 
       if (allowedSectionIds.isEmpty) continue;
 
-      final speciesRank =
-          speciesRankByBreedName[breedName.toLowerCase()] ?? 0;
+      final speciesRank = speciesRankByBreedName[breedName.toLowerCase()] ?? 0;
+      final dedupeKey =
+          '$clubType|${clubName.toLowerCase()}|${breedName.toLowerCase()}|${(club['state_code'] ?? '').toString().trim().toUpperCase()}';
 
-      rowMap[clubId] = _SanctionRowModel(
+      rowMap[dedupeKey] = _SanctionRowModel(
         key: 'club::$clubId',
         label: clubName,
         rowType: _SanctionRowType.club,
@@ -350,6 +359,7 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
         breedClubId: clubId,
         breedName: breedName.isEmpty ? null : breedName,
         clubName: clubName,
+        clubType: clubType,
         defaultEmail: primaryEmailByClubId[clubId],
         stateCode: (club['state_code'] ?? '').toString().trim(),
         allowedSectionIds: allowedSectionIds,
@@ -363,8 +373,14 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
         final rank = a.rowRank.compareTo(b.rowRank);
         if (rank != 0) return rank;
 
-        final s = a.speciesRank.compareTo(b.speciesRank);
-        if (s != 0) return s;
+        if (a.tabKind == _SanctionTabKind.stateClub &&
+            b.tabKind == _SanctionTabKind.stateClub) {
+          return a.label.toLowerCase().compareTo(b.label.toLowerCase());
+        }
+
+        final breedCompare =
+            (a.breedName ?? '').toLowerCase().compareTo((b.breedName ?? '').toLowerCase());
+        if (breedCompare != 0) return breedCompare;
 
         return a.label.toLowerCase().compareTo(b.label.toLowerCase());
       });
@@ -407,14 +423,12 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
 
           switch (row.rowType) {
             case _SanctionRowType.arba:
-              return (r['sanctioning_body'] ?? '')
-                      .toString()
-                      .trim()
-                      .toLowerCase() ==
+              return (r['sanctioning_body'] ?? '').toString().trim().toLowerCase() ==
                   'arba';
+            case _SanctionRowType.groupHeader:
+              return false;
             case _SanctionRowType.club:
-              final savedBreedClubId =
-                  (r['breed_club_id'] ?? '').toString().trim();
+              final savedBreedClubId = (r['breed_club_id'] ?? '').toString().trim();
               if (savedBreedClubId.isNotEmpty &&
                   savedBreedClubId == (row.breedClubId ?? '')) {
                 return true;
@@ -485,12 +499,61 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
 
   List<_SanctionRowModel> get _visibleRows {
     final tab = _SanctionTabKind.values[_selectedTabIndex];
-    return _rows.where((r) {
-      if (r.rowType == _SanctionRowType.arba) return false;
-      return r.tabKind == tab;
-    }).toList();
-  }
+    final tabRows = _rows.where((r) => r.tabKind == tab).toList();
 
+    // National Breed Clubs = flat list sorted by breed, then club
+    if (tab == _SanctionTabKind.nationalBreed) {
+      return tabRows
+        ..sort((a, b) {
+          final breedCompare = (a.breedName ?? '')
+              .toLowerCase()
+              .compareTo((b.breedName ?? '').toLowerCase());
+          if (breedCompare != 0) return breedCompare;
+
+          return a.label.toLowerCase().compareTo(b.label.toLowerCase());
+        });
+    }
+
+    // State Clubs = flat alphabetical list
+    if (tab == _SanctionTabKind.stateClub) {
+      return tabRows
+        ..sort((a, b) => a.label.toLowerCase().compareTo(b.label.toLowerCase()));
+    }
+
+    // State Breed Clubs = grouped by breed
+    final result = <_SanctionRowModel>[];
+    String? currentBreed;
+
+    final sorted = [...tabRows]
+      ..sort((a, b) {
+        final breedCompare = (a.breedName ?? '')
+            .toLowerCase()
+            .compareTo((b.breedName ?? '').toLowerCase());
+        if (breedCompare != 0) return breedCompare;
+        return a.label.toLowerCase().compareTo(b.label.toLowerCase());
+      });
+
+    for (final row in sorted) {
+      final breed = row.breedName ?? '';
+      if (breed.isNotEmpty && breed != currentBreed) {
+        currentBreed = breed;
+        result.add(
+          _SanctionRowModel(
+            key: 'header::$tab::$breed',
+            label: breed,
+            rowType: _SanctionRowType.groupHeader,
+            tabKind: tab,
+            breedName: breed,
+            speciesRank: row.speciesRank,
+            rowRank: row.rowRank - 1,
+          ),
+        );
+      }
+      result.add(row);
+    }
+
+    return result;
+  }
   Future<void> _saveAll() async {
     setState(() {
       _saving = true;
@@ -499,6 +562,8 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
 
     try {
       for (final row in _rows) {
+        if (row.rowType == _SanctionRowType.groupHeader) continue;
+
         for (final section in _sections) {
           if (row.rowType != _SanctionRowType.arba &&
               !row.allowedSectionIds.contains(section.id)) {
@@ -541,6 +606,9 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
               payload['breed_club_id'] = _arbaBreedClubId;
               payload['use_arba_number'] = false;
               payload['sweepstakes_email'] = _arbaDefaultEmail;
+              break;
+
+            case _SanctionRowType.groupHeader:
               break;
 
             case _SanctionRowType.club:
@@ -702,6 +770,25 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                       ],
                     ),
                     ...visibleRows.map((row) {
+                      if (row.rowType == _SanctionRowType.groupHeader) {
+                        return TableRow(
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade200,
+                          ),
+                          children: [
+                            _labelCell(
+                              row.label,
+                              height: smallRowHeight,
+                              isBold: true,
+                            ),
+                            _centerCell(const SizedBox.shrink(), height: smallRowHeight),
+                            ..._sections.map(
+                              (_) => _centerCell(const SizedBox.shrink(), height: smallRowHeight),
+                            ),
+                          ],
+                        );
+                      }
+
                       final useArba = _useArbaByRowKey[row.key] ?? false;
 
                       return TableRow(
@@ -1018,6 +1105,7 @@ class _SectionColumn {
 enum _SanctionRowType {
   arba,
   club,
+  groupHeader,
 }
 
 enum _SanctionTabKind {
@@ -1034,6 +1122,7 @@ class _SanctionRowModel {
   final String? breedClubId;
   final String? breedName;
   final String? clubName;
+  final String? clubType;
   final String? defaultEmail;
   final String? stateCode;
   final Set<String> allowedSectionIds;
@@ -1048,6 +1137,7 @@ class _SanctionRowModel {
     this.breedClubId,
     this.breedName,
     this.clubName,
+    this.clubType,
     this.defaultEmail,
     this.stateCode,
     this.allowedSectionIds = const {},

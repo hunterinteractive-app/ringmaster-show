@@ -79,7 +79,7 @@ class BreedResultsDetailReportPdf {
                   borderRadius: pw.BorderRadius.circular(4),
                 ),
                 child: pw.Text(
-                  'No rabbits of this breed were shown in this section.',
+                  'No rabbits of this breed were shown in this Show.',
                   style: const pw.TextStyle(fontSize: 12),
                 ),
               ),
@@ -135,7 +135,7 @@ class BreedResultsDetailReportPdf {
             pw.SizedBox(height: 12),
             if (isNoResults)
               _buildNoResultsBox(
-                'No rabbits of this breed were shown in this section.',
+                'No rabbits of this breed were shown in this Show.',
               )
             else
               ..._buildSections(
