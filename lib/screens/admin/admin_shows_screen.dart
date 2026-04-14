@@ -3,6 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'admin_resources_screen.dart';
+
 import '../create_show_screen.dart';
 import 'edit_show_settings_screen.dart';
 import '../../screens/show_list_screen.dart';
@@ -196,6 +198,13 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
     );
   }
 
+  void _openResources() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AdminResourcesScreen()),
+    );
+  }
+
   Widget _buildLicenseBanner(_ShowCreationStatus license) {
     String text;
 
@@ -255,6 +264,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
             onShows: _openShows,
             onAnimals: _openAnimals,
             onEntries: _openEntries,
+            onResources: _openResources,
             onAccount: _openAccount,
             onReload: snap.connectionState == ConnectionState.waiting
                 ? null
@@ -400,6 +410,7 @@ class _AdminShowsAppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback onShows;
   final VoidCallback onAnimals;
   final VoidCallback onEntries;
+  final VoidCallback onResources;
   final VoidCallback onAccount;
   final VoidCallback? onReload;
   final VoidCallback? onCreate;
@@ -409,6 +420,7 @@ class _AdminShowsAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.onShows,
     required this.onAnimals,
     required this.onEntries,
+    required this.onResources,
     required this.onAccount,
     required this.onReload,
     required this.onCreate,
@@ -478,6 +490,12 @@ class _AdminShowsAppBar extends StatelessWidget implements PreferredSizeWidget {
           label: 'Entries',
           showLabel: showLabels,
           onTap: onEntries,
+        ),
+        _TopBarAction(
+          icon: Icons.perm_media_outlined,
+          label: 'Resources',
+          showLabel: showLabels,
+          onTap: onResources,
         ),
         _TopBarAction(
           icon: Icons.manage_accounts,
