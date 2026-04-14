@@ -813,7 +813,7 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
             : null;
 
     return AlertDialog(
-      title: Text(_isEdit ? 'Edit Animal' : 'Add Animal'),
+      title: const Text('Add Animal'),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -861,30 +861,25 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
             ),
             const SizedBox(height: 12),
             if (_loadingBreeds) const LinearProgressIndicator(),
-            DropdownButtonFormField<String>(
-              value: _sexValue != null && _sexOptions.contains(_sexValue)
-                  ? _sexValue
-                  : null,
-              decoration: const InputDecoration(
-                labelText: 'Sex (required)',
-              ),
-              items: _sexOptions
-                  .map(
-                    (sex) => DropdownMenuItem<String>(
-                      value: sex,
-                      child: Text(sex),
-                    ),
-                  )
-                  .toList(),
-              onChanged: _saving
-                  ? null
-                  : (value) {
-                      setState(() {
-                        _sexValue = value;
-                        _sexText.text = value ?? '';
-                        _msg = null;
-                      });
-                    },
+            _FocusOpenAutocomplete(
+              textController: _breedText,
+              focusNode: _breedFocus,
+              labelText: 'Breed (required)',
+              hintText: 'Type to search and select a breed…',
+              options: _breedOptions,
+              displayStringForOption: (opt) => (opt['name'] ?? '').toString(),
+              onSelectedAsync: (opt) async {
+                setState(() {
+                  _breedId = opt['id'] as String;
+                  _breedText.text = (opt['name'] as String);
+                  _varietyText.clear();
+                  _msg = null;
+                });
+                await _loadVarietiesForBreed(_breedId!);
+                if (mounted) {
+                  FocusScope.of(context).requestFocus(_varietyFocus);
+                }
+              },
             ),
             if (invalidBreedWarning != null) ...[
               const SizedBox(height: 6),
@@ -943,20 +938,30 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
               ),
             ],
             const SizedBox(height: 12),
-            _FocusOpenAutocomplete(
-              textController: _sexText,
-              focusNode: _sexFocus,
-              labelText: 'Sex (required)',
-              hintText: _species == 'rabbit' ? 'Buck or Doe' : 'Boar or Sow',
-              options: _sexOptions.map((s) => {'name': s}).toList(),
-              displayStringForOption: (opt) => (opt['name'] ?? '').toString(),
-              onSelected: (opt) {
-                setState(() {
-                  _sexValue = (opt['name'] ?? '').toString();
-                  _sexText.text = _sexValue ?? '';
-                  _msg = null;
-                });
-              },
+            DropdownButtonFormField<String>(
+              value: _sexValue != null && _sexOptions.contains(_sexValue)
+                  ? _sexValue
+                  : null,
+              decoration: const InputDecoration(
+                labelText: 'Sex (required)',
+              ),
+              items: _sexOptions
+                  .map(
+                    (sex) => DropdownMenuItem<String>(
+                      value: sex,
+                      child: Text(sex),
+                    ),
+                  )
+                  .toList(),
+              onChanged: _saving
+                  ? null
+                  : (value) {
+                      setState(() {
+                        _sexValue = value;
+                        _sexText.text = value ?? '';
+                        _msg = null;
+                      });
+                    },
             ),
             if (invalidSexWarning != null) ...[
               const SizedBox(height: 6),
