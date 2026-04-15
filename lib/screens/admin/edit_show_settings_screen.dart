@@ -963,7 +963,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                               children: [
                                 Expanded(
                                   child: Text(
-                                    'Start: ${_startDate == null ? '(required)' : _fmtDate(_startDate)}',
+                                    'Show Start: ${_startDate == null ? '(required)' : _fmtDate(_startDate)}',
                                   ),
                                 ),
                                 TextButton(
@@ -976,7 +976,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                               children: [
                                 Expanded(
                                   child: Text(
-                                    'End: ${_endDate == null ? '(required)' : _fmtDate(_endDate)}',
+                                    'Show End: ${_endDate == null ? '(required)' : _fmtDate(_endDate)}',
                                   ),
                                 ),
                                 TextButton(

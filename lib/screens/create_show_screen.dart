@@ -494,7 +494,7 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
                                   children: [
                                     Expanded(
                                       child: Text(
-                                        'Start: ${_start.toIso8601String().substring(0, 10)}',
+                                        'Show Start: ${_start.toIso8601String().substring(0, 10)}',
                                         style: const TextStyle(
                                           fontWeight: FontWeight.w500,
                                         ),
@@ -511,7 +511,7 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
                                   children: [
                                     Expanded(
                                       child: Text(
-                                        'End: ${_end.toIso8601String().substring(0, 10)}',
+                                        'Show End: ${_end.toIso8601String().substring(0, 10)}',
                                         style: const TextStyle(
                                           fontWeight: FontWeight.w500,
                                         ),
