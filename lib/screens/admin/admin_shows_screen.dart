@@ -40,9 +40,12 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
   Future<_AdminShowsPageData> _loadPage() async {
     final shows = await _loadShows();
     final license = await _loadLicenseStatus();
+    final entryCounts = await _loadEntryCounts(shows);
+
     return _AdminShowsPageData(
       shows: shows,
       license: license,
+      entryCounts: entryCounts,
     );
   }
 
@@ -64,7 +67,8 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
           .select(
             'id,name,start_date,end_date,location_name,is_published,entry_open_at,entry_close_at,created_at',
           )
-          .order('start_date');
+          .order('start_date')
+          .order('location_name');
 
       return (res as List).cast<Map<String, dynamic>>();
     }
@@ -77,9 +81,68 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
           'id,name,start_date,end_date,location_name,is_published,entry_open_at,entry_close_at,created_at',
         )
         .inFilter('id', widget.allowedShowIds)
-        .order('start_date');
+        .order('start_date')
+        .order('location_name');
 
     return (res as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, _ShowEntryCounts>> _loadEntryCounts(
+    List<Map<String, dynamic>> shows,
+  ) async {
+    if (shows.isEmpty) return {};
+
+    final showIds = shows.map((s) => s['id'].toString()).toList();
+
+    final rows = await supabase
+        .from('show_sections')
+        .select('''
+          show_id,
+          kind,
+          letter,
+          display_name,
+          sort_order,
+          entries!left(id)
+        ''')
+        .inFilter('show_id', showIds)
+        .eq('is_enabled', true)
+        .order('show_id')
+        .order('sort_order');
+
+    final countsByShow = <String, _ShowEntryCounts>{};
+
+    for (final raw in (rows as List)) {
+      final row = Map<String, dynamic>.from(raw as Map);
+
+      final showId = row['show_id']?.toString();
+      if (showId == null || showId.isEmpty) continue;
+
+      final displayName = (row['display_name'] ?? '').toString().trim();
+      if (displayName.isEmpty) continue;
+
+      final kind = (row['kind'] ?? '').toString().trim();
+      final letter = (row['letter'] ?? '').toString().trim();
+      final sortOrder = (row['sort_order'] as num?)?.toInt() ?? 999999;
+
+      final entriesRaw = row['entries'];
+      final entryCount = entriesRaw is List ? entriesRaw.length : 0;
+
+      final counts = countsByShow.putIfAbsent(showId, _ShowEntryCounts.new);
+      counts.addCount(
+        displayName,
+        entryCount,
+        kind: kind,
+        letter: letter,
+        sortOrder: sortOrder,
+      );
+    }
+
+    for (final s in shows) {
+      final showId = s['id'].toString();
+      countsByShow.putIfAbsent(showId, _ShowEntryCounts.new);
+    }
+
+    return countsByShow;
   }
 
   Future<_ShowCreationStatus> _loadLicenseStatus() async {
@@ -242,6 +305,30 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
     );
   }
 
+  Widget _buildShowCounts(_ShowEntryCounts counts) {
+    return Wrap(
+      spacing: 20,
+      runSpacing: 10,
+      children: [
+        for (final sectionName in counts.orderedSectionNames)
+          Text(
+            '$sectionName: ${counts.bySection[sectionName] ?? 0}',
+            style: const TextStyle(
+              color: Colors.black,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        Text(
+          'Grand Total All Active Sections: ${counts.grandTotal}',
+          style: const TextStyle(
+            color: Colors.black,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<_AdminShowsPageData>(
@@ -310,6 +397,9 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
                                   final s = page.shows[i];
 
                                   final showId = s['id'].toString();
+                                  final counts = page.entryCounts[showId] ??
+                                      _ShowEntryCounts();
+
                                   final name = (s['name'] ?? '').toString();
                                   final start =
                                       _fmtDate((s['start_date'] ?? '').toString());
@@ -361,9 +451,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
                                               ),
                                             ],
                                           ),
-                                          const SizedBox(
-                                            height: AppSpacing.sm,
-                                          ),
+                                          const SizedBox(height: AppSpacing.sm),
                                           Text(
                                             '$start${end != '—' ? ' → $end' : ''} • $loc',
                                             style: Theme.of(context)
@@ -373,9 +461,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
                                                   color: AppColors.muted,
                                                 ),
                                           ),
-                                          const SizedBox(
-                                            height: AppSpacing.md,
-                                          ),
+                                          const SizedBox(height: AppSpacing.md),
                                           Wrap(
                                             spacing: AppSpacing.sm,
                                             runSpacing: AppSpacing.sm,
@@ -390,6 +476,8 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
                                               ),
                                             ],
                                           ),
+                                          const SizedBox(height: AppSpacing.md),
+                                          _buildShowCounts(counts),
                                         ],
                                       ),
                                     ),
@@ -571,10 +659,12 @@ class _TopBarAction extends StatelessWidget {
 class _AdminShowsPageData {
   final List<Map<String, dynamic>> shows;
   final _ShowCreationStatus license;
+  final Map<String, _ShowEntryCounts> entryCounts;
 
   const _AdminShowsPageData({
     required this.shows,
     required this.license,
+    required this.entryCounts,
   });
 }
 
@@ -601,5 +691,97 @@ class _ShowCreationStatus {
       unlimitedExpiresAt: row['unlimited_expires_at']?.toString(),
       message: row['message']?.toString(),
     );
+  }
+}
+
+class _ShowEntryCounts {
+  final Map<String, int> bySection;
+  final Map<String, _SectionMeta> metaBySection;
+
+  _ShowEntryCounts({
+    Map<String, int>? bySection,
+    Map<String, _SectionMeta>? metaBySection,
+  })  : bySection = bySection ?? <String, int>{},
+        metaBySection = metaBySection ?? <String, _SectionMeta>{};
+
+  int get grandTotal =>
+      bySection.values.fold(0, (sum, value) => sum + value);
+
+  void addCount(
+    String sectionName,
+    int count, {
+    required String kind,
+    required String letter,
+    required int sortOrder,
+  }) {
+    bySection[sectionName] = (bySection[sectionName] ?? 0) + count;
+    metaBySection.putIfAbsent(
+      sectionName,
+      () => _SectionMeta(
+        name: sectionName,
+        kind: kind,
+        letter: letter,
+        sortOrder: sortOrder,
+      ),
+    );
+  }
+
+  List<String> get orderedSectionNames {
+    final names = bySection.keys.toList();
+
+    names.sort((a, b) {
+      final am = metaBySection[a]!;
+      final bm = metaBySection[b]!;
+
+      final aRank = am.displayRank;
+      final bRank = bm.displayRank;
+      if (aRank != bRank) return aRank.compareTo(bRank);
+
+      final aLetterRank = am.letterRank;
+      final bLetterRank = bm.letterRank;
+      if (aLetterRank != bLetterRank) {
+        return aLetterRank.compareTo(bLetterRank);
+      }
+
+      if (am.sortOrder != bm.sortOrder) {
+        return am.sortOrder.compareTo(bm.sortOrder);
+      }
+
+      return a.toLowerCase().compareTo(b.toLowerCase());
+    });
+
+    return names;
+  }
+}
+
+class _SectionMeta {
+  final String name;
+  final String kind;
+  final String letter;
+  final int sortOrder;
+
+  const _SectionMeta({
+    required this.name,
+    required this.kind,
+    required this.letter,
+    required this.sortOrder,
+  });
+
+  int get displayRank {
+    final k = kind.toLowerCase().trim();
+    if (k == 'open') return 0;
+    if (k == 'youth') return 1;
+    return 2;
+  }
+
+  int get letterRank {
+    final l = letter.toUpperCase().trim();
+    if (l.isEmpty) return 999;
+
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    final idx = letters.indexOf(l);
+    if (idx >= 0) return idx;
+
+    return 999;
   }
 }
