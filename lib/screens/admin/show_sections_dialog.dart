@@ -112,7 +112,7 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
       final res = await supabase
           .from('show_sections')
           .select(
-            'id, show_id, kind, letter, display_name, is_enabled, sort_order, breed_scope, allowed_breed_ids',
+            'id, show_id, kind, letter, display_name, is_enabled, sort_order, breed_scope, allowed_breed_ids, allow_meat_classes',
           )
           .eq('show_id', widget.showId);
 
@@ -330,6 +330,7 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
           'breed_scope': s.breedScope,
           'allowed_breed_ids':
               s.allowedBreedIds.isEmpty ? null : s.allowedBreedIds,
+          'allow_meat_classes': s.allowMeatClasses,
         };
 
         if (s.id != null && s.id!.isNotEmpty) {
@@ -502,15 +503,19 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
         items: const [
           DropdownMenuItem(
             value: 'all',
-            child: Text('All breeds'),
+            child: Text('All Breeds'),
           ),
           DropdownMenuItem(
             value: 'single',
-            child: Text('Single breed'),
+            child: Text('Single Breed'),
           ),
           DropdownMenuItem(
             value: 'limited',
-            child: Text('Selected breeds'),
+            child: Text('Selected Breeds'),
+          ),
+          DropdownMenuItem(
+            value: 'meat_only',
+            child: Text('Meat Classes Only'),
           ),
         ],
         onChanged: _saving
@@ -524,12 +529,23 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
                   } else if (value == 'single' && s.allowedBreedIds.length > 1) {
                     s.allowedBreedIds = [s.allowedBreedIds.first];
                   }
+                  if (value == 'meat_only') {
+                    s.allowedBreedIds = [];
+                    s.allowMeatClasses = true; // force on
+                  }
                 });
               },
       );
     }
 
     Widget _buildAllowedBreedSummary(_EditableSection s) {
+      if (s.breedScope == 'meat_only') {
+        return Text(
+          'This section is for commercial (meat) classes only.',
+          style: Theme.of(context).textTheme.bodySmall,
+        );
+      }
+      
       if (s.breedScope == 'all') {
         return Text(
           'This section accepts all breeds.',
@@ -672,6 +688,22 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
             const SizedBox(height: 10),
             _buildAllowedBreedSummary(s),
             const SizedBox(height: 8),
+            SwitchListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              value: s.allowMeatClasses,
+              onChanged: _saving
+                  ? null
+                  : (v) {
+                      setState(() {
+                        s.allowMeatClasses = v;
+                      });
+                    },
+              title: const Text('Allow Meat Classes'),
+              subtitle: const Text(
+                'Show commercial entries like Fryer, Roaster, Stewer, and Meat Pen for this section.',
+              ),
+            ),
             SwitchListTile(
               dense: true,
               contentPadding: EdgeInsets.zero,
@@ -866,6 +898,7 @@ class _EditableSection {
   String? id;
   String kind;
   bool isEnabled;
+  bool allowMeatClasses;
   int sortOrder;
   String breedScope;
   List<String> allowedBreedIds;
@@ -876,6 +909,7 @@ class _EditableSection {
     required this.id,
     required this.kind,
     required this.isEnabled,
+    required this.allowMeatClasses,
     required this.sortOrder,
     required this.breedScope,
     required this.allowedBreedIds,
@@ -897,6 +931,7 @@ class _EditableSection {
       id: (row['id'] ?? '').toString(),
       kind: (row['kind'] ?? 'open').toString().trim().toLowerCase(),
       isEnabled: row['is_enabled'] == true,
+      allowMeatClasses: row['allow_meat_classes'] == true,
       sortOrder: int.tryParse((row['sort_order'] ?? '').toString()) ?? 0,
       breedScope: (row['breed_scope'] ?? 'all').toString().trim().toLowerCase(),
       allowedBreedIds: allowed,
@@ -917,6 +952,7 @@ class _EditableSection {
       id: null,
       kind: kind,
       isEnabled: true,
+      allowMeatClasses: false,
       sortOrder: 0,
       breedScope: 'all',
       allowedBreedIds: <String>[],

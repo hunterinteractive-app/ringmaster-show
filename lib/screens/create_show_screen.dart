@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../services/club_service.dart';
+import '../widgets/rm_timezone_notice_banner.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -399,6 +400,7 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
+                  const RMTimezoneNoticeBanner(),
                   Expanded(
                     child: SingleChildScrollView(
                       child: Column(

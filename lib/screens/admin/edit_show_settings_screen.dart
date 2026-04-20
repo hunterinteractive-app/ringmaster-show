@@ -10,6 +10,7 @@ import 'show_fees_dialog.dart';
 import 'show_rules_dialog.dart';
 import 'show_sections_dialog.dart';
 import 'show_judges_dialog.dart';
+import '../../widgets/rm_timezone_notice_banner.dart';
 
 // ✅ Admin Operations (Pre-show) screens
 import 'admin_entry_management_screen.dart';
@@ -834,6 +835,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        const RMTimezoneNoticeBanner(),
                         if (_msg != null)
                           Container(
                             width: double.infinity,

@@ -39,6 +39,7 @@ class _CartScreenState extends State<CartScreen> {
   Map<String, dynamic>? _show;
   Map<String, Map<String, dynamic>> _sectionById = {};
   Map<String, dynamic>? _feeSettings;
+  Map<String, Map<String, dynamic>> _sectionFeeBySectionId = {};
   Map<String, dynamic>? _stripeStatus;
 
   final Map<String, String> _exhibitorLabelById = {};
@@ -75,11 +76,29 @@ class _CartScreenState extends State<CartScreen> {
           .eq('show_id', widget.showId)
           .maybeSingle();
 
-      final sections = await supabase
+      final sectionsRes = await supabase
           .from('show_sections')
           .select('id,display_name,kind,letter,sort_order')
           .eq('show_id', widget.showId)
           .order('sort_order');
+
+      final sections = (sectionsRes as List).cast<Map<String, dynamic>>();
+      final sectionIds = sections
+          .map((s) => s['id'].toString())
+          .where((id) => id.isNotEmpty)
+          .toList();
+
+      final sectionFeesRes = sectionIds.isEmpty
+          ? <Map<String, dynamic>>[]
+          : await supabase
+              .from('show_section_fee_settings')
+              .select(
+                'section_id,fee_per_entry,fee_per_show,fur_fee,updated_at',
+              )
+              .inFilter('section_id', sectionIds);
+
+      final sectionFees =
+          (sectionFeesRes as List).cast<Map<String, dynamic>>();
 
       final items = await supabase
           .from('entry_cart_items')
@@ -91,14 +110,18 @@ class _CartScreenState extends State<CartScreen> {
 
       Map<String, dynamic>? stripeStatus;
       try {
-        stripeStatus = await StripeConnectService.getAccountStatus(widget.showId);
+        stripeStatus =
+            await StripeConnectService.getAccountStatus(widget.showId);
       } catch (_) {
         stripeStatus = null;
       }
 
       final parsedSections = {
-        for (final s in (sections as List).cast<Map<String, dynamic>>())
-          s['id'].toString(): s,
+        for (final s in sections) s['id'].toString(): s,
+      };
+
+      final parsedSectionFees = {
+        for (final row in sectionFees) row['section_id'].toString(): row,
       };
 
       final parsedItems = (items as List).cast<Map<String, dynamic>>();
@@ -112,6 +135,7 @@ class _CartScreenState extends State<CartScreen> {
         _sectionById = parsedSections;
         _items = parsedItems;
         _stripeStatus = stripeStatus;
+        _sectionFeeBySectionId = parsedSectionFees;
         _loading = false;
       });
     } catch (e) {
@@ -216,11 +240,10 @@ class _CartScreenState extends State<CartScreen> {
         _stripeConnected;
   }
 
-  Map<String, dynamic> _calculateFeesForItems(List<Map<String, dynamic>> items) {
+  Map<String, dynamic> _calculateFeesForItems(
+    List<Map<String, dynamic>> items,
+  ) {
     final currency = (_feeSettings?['currency'] ?? 'USD').toString();
-    final feePerEntry = _asDouble(_feeSettings?['fee_per_entry']);
-    final feePerShow = _asDouble(_feeSettings?['fee_per_show']);
-    final furFee = _asDouble(_feeSettings?['fur_fee']);
 
     final discountEnabled =
         _feeSettings?['multi_show_discount_enabled'] == true;
@@ -230,17 +253,41 @@ class _CartScreenState extends State<CartScreen> {
     final discountValue =
         _asDouble(_feeSettings?['multi_show_discount_value']);
 
-    final entryCount = items.length;
-    final furCount = items.where((it) => it['is_fur'] == true).length;
+    double entriesSubtotal = 0.0;
+    double furSubtotal = 0.0;
+    double showFeeSubtotal = 0.0;
 
-    final entriesSubtotal = feePerEntry * entryCount;
-    final furSubtotal = furFee * furCount;
+    int furCount = 0;
 
     final Map<String, int> perAnimalCounts = {};
+    final Set<String> chargedShowFeeSectionIds = {};
+
     for (final it in items) {
+      final sectionId = (it['section_id'] ?? '').toString();
+      final sectionFee = _sectionFeeBySectionId[sectionId];
+
+      final feePerEntry = _asDouble(sectionFee?['fee_per_entry']);
+      final feePerShow = _asDouble(sectionFee?['fee_per_show']);
+      final furFee = _asDouble(sectionFee?['fur_fee']);
+
+      entriesSubtotal += feePerEntry;
+
+      if (it['is_fur'] == true) {
+        furSubtotal += furFee;
+        furCount += 1;
+      }
+
+      if (sectionId.isNotEmpty &&
+          !chargedShowFeeSectionIds.contains(sectionId) &&
+          feePerShow > 0) {
+        chargedShowFeeSectionIds.add(sectionId);
+        showFeeSubtotal += feePerShow;
+      }
+
       final animalId = it['animal_id']?.toString();
-      if (animalId == null || animalId.isEmpty) continue;
-      perAnimalCounts[animalId] = (perAnimalCounts[animalId] ?? 0) + 1;
+      if (animalId != null && animalId.isNotEmpty) {
+        perAnimalCounts[animalId] = (perAnimalCounts[animalId] ?? 0) + 1;
+      }
     }
 
     int additionalEntries = 0;
@@ -249,37 +296,40 @@ class _CartScreenState extends State<CartScreen> {
     });
 
     double discountAmount = 0.0;
-    if (discountEnabled && additionalEntries > 0 && feePerEntry > 0) {
+    if (discountEnabled && additionalEntries > 0) {
+      double averageEntryFee = 0.0;
+      if (items.isNotEmpty) {
+        averageEntryFee = entriesSubtotal / items.length;
+      }
+
       if (discountType == 'percent') {
         final pct =
             (discountValue <= 1.0) ? discountValue : (discountValue / 100.0);
-        discountAmount = (feePerEntry * additionalEntries) * pct;
+        discountAmount = (averageEntryFee * additionalEntries) * pct;
       } else if (discountType == 'amount') {
         discountAmount = additionalEntries * discountValue;
       }
 
-      final maxDiscount = feePerEntry * additionalEntries;
+      final maxDiscount = averageEntryFee * additionalEntries;
       if (discountAmount > maxDiscount) discountAmount = maxDiscount;
       if (discountAmount < 0) discountAmount = 0;
     }
 
-    final total = (entriesSubtotal + furSubtotal + feePerShow) - discountAmount;
+    final total =
+        (entriesSubtotal + furSubtotal + showFeeSubtotal) - discountAmount;
 
     return {
       'currency': currency,
-      'fee_per_entry': feePerEntry,
-      'fee_per_show': feePerShow,
-      'fur_fee': furFee,
-      'entry_count': entryCount,
+      'entry_count': items.length,
       'fur_count': furCount,
       'entries_subtotal': entriesSubtotal,
       'fur_subtotal': furSubtotal,
+      'show_fee': showFeeSubtotal,
       'additional_entries': additionalEntries,
       'discount_enabled': discountEnabled,
       'discount_type': discountType,
       'discount_value': discountValue,
       'discount_amount': discountAmount,
-      'show_fee': feePerShow,
       'total': total < 0 ? 0.0 : total,
     };
   }
@@ -311,6 +361,71 @@ class _CartScreenState extends State<CartScreen> {
     return ordered;
   }
 
+  bool _isCommercialEntry(Map<String, dynamic> item) {
+    final breed = (item['breed'] ?? '').toString().trim().toLowerCase();
+    return breed == 'commercial';
+  }
+
+  bool _isMeatPenEntry(Map<String, dynamic> item) {
+    final className =
+        (item['class_name'] ?? '').toString().trim().toLowerCase();
+    final variety = (item['variety'] ?? '').toString().trim().toLowerCase();
+    return className == 'meat pen' || variety == 'meat pen';
+  }
+
+  String _cartItemTitle(Map<String, dynamic> item, String sectionName) {
+    final tattoo = (item['tattoo'] ?? '').toString().trim();
+    final animalId = (item['animal_id'] ?? '').toString().trim();
+
+    if (_isMeatPenEntry(item)) {
+      return '$sectionName — Meat Pen';
+    }
+
+    if (_isCommercialEntry(item)) {
+      final label = (item['class_name'] ?? item['variety'] ?? 'Commercial')
+          .toString()
+          .trim();
+      return tattoo.isNotEmpty
+          ? '$sectionName — $label ($tattoo)'
+          : '$sectionName — $label';
+    }
+
+    return '$sectionName — ${tattoo.isEmpty ? animalId : tattoo}';
+  }
+
+  String _cartItemSubtitle(Map<String, dynamic> item) {
+    if (_isMeatPenEntry(item)) {
+      final tattoo = (item['tattoo'] ?? '').toString().trim();
+      return tattoo.isEmpty
+          ? 'Commercial • Meat Pen'
+          : 'Commercial • Meat Pen\nTattoos: $tattoo';
+    }
+
+    if (_isCommercialEntry(item)) {
+      final label = (item['class_name'] ?? item['variety'] ?? 'Commercial')
+          .toString()
+          .trim();
+      final sex = (item['sex'] ?? '').toString().trim();
+
+      if (sex.isNotEmpty) {
+        return 'Commercial • $label • $sex';
+      }
+      return 'Commercial • $label';
+    }
+
+    final animalLabel =
+        '${(item['breed'] ?? '').toString()} • ${(item['variety'] ?? '').toString()} • ${(item['sex'] ?? '').toString()}';
+    final isFur = item['is_fur'] == true;
+
+    return '$animalLabel\n${_buildClassDisplay(item)}${isFur ? '\nFur/Wool: Yes' : ''}';
+  }
+
+  bool _cartItemIsThreeLine(Map<String, dynamic> item) {
+    if (_isMeatPenEntry(item)) return true;
+    if (_isCommercialEntry(item)) return false;
+    return true;
+  }
+
   Future<void> _removeItem(String itemId) async {
     try {
       await supabase.from('entry_cart_items').delete().eq('id', itemId);
@@ -326,7 +441,8 @@ class _CartScreenState extends State<CartScreen> {
 
     final uri = Uri.base;
     final returnCartId = (uri.queryParameters['cart_id'] ?? '').trim();
-    final stripeStatus = (uri.queryParameters['stripe'] ?? '').trim().toLowerCase();
+    final stripeStatus =
+        (uri.queryParameters['stripe'] ?? '').trim().toLowerCase();
 
     if (returnCartId.isEmpty || returnCartId != widget.cartId) {
       return;
@@ -354,17 +470,19 @@ class _CartScreenState extends State<CartScreen> {
             actions: [
               TextButton(
                 onPressed: () {
-                  Navigator.pop(context); // close dialog
-                  Navigator.pop(context, true); // leave cart
+                  Navigator.pop(context);
+                  Navigator.pop(context, true);
                 },
                 child: const Text('Back to Show'),
               ),
               FilledButton(
                 onPressed: () {
-                  Navigator.pop(context); // close dialog
+                  Navigator.pop(context);
                   Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const MyEntriesScreen()),
-                );
+                    MaterialPageRoute(
+                      builder: (_) => const MyEntriesScreen(),
+                    ),
+                  );
                 },
                 child: const Text('View My Entries'),
               ),
@@ -514,11 +632,50 @@ class _CartScreenState extends State<CartScreen> {
     }
   }
 
+  String _buildExhibitorFeeLine({
+    required List<Map<String, dynamic>> exhibitorItems,
+    required String currency,
+  }) {
+    final f = _calculateFeesForItems(exhibitorItems);
+
+    final entriesSubtotal = f['entries_subtotal'] as double;
+    final furSubtotal = f['fur_subtotal'] as double;
+    final showFee = f['show_fee'] as double;
+    final discountAmount = f['discount_amount'] as double;
+    final total = (entriesSubtotal + furSubtotal + showFee - discountAmount);
+    final count = f['entry_count'] as int;
+    final furCount = f['fur_count'] as int;
+
+    final parts = <String>[
+      '$count entries: ${_money(entriesSubtotal, currency: currency)}',
+    ];
+
+    if (furCount > 0) {
+      parts.add(
+        '$furCount Fur/Wool: ${_money(furSubtotal, currency: currency)}',
+      );
+    }
+
+    if (showFee > 0) {
+      parts.add('Show fees: ${_money(showFee, currency: currency)}');
+    }
+
+    if (discountAmount > 0) {
+      parts.add('- ${_money(discountAmount, currency: currency)}');
+    }
+
+    parts.add('= ${_money(total, currency: currency)}');
+
+    return parts.join(' • ');
+  }
+
   @override
   Widget build(BuildContext context) {
     final overallFee = _calculateFeesForItems(_items);
     final currency = overallFee['currency'] as String;
     final grouped = _groupItemsByExhibitor();
+    final hasFeeConfig =
+        _feeSettings != null && _sectionFeeBySectionId.isNotEmpty;
 
     return RingMasterPageShell(
       title: widget.showName,
@@ -591,39 +748,37 @@ class _CartScreenState extends State<CartScreen> {
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                         const SizedBox(height: 8),
-                        _feeSettings == null
+                        !hasFeeConfig
                             ? Text(
-                                'No show fee settings found yet. (show_fee_settings row missing)',
+                                'Fee settings are incomplete for this show.',
                                 style: Theme.of(context).textTheme.bodySmall,
                               )
                             : Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    '${overallFee['entry_count']} entries × ${_money(overallFee['fee_per_entry'] as double, currency: currency)} = '
-                                    '${_money(overallFee['entries_subtotal'] as double, currency: currency)}',
+                                    '${overallFee['entry_count']} entries = ${_money(overallFee['entries_subtotal'] as double, currency: currency)}',
                                   ),
                                   if ((overallFee['fur_count'] as int) > 0)
                                     Padding(
                                       padding: const EdgeInsets.only(top: 4),
                                       child: Text(
-                                        '${overallFee['fur_count']} Fur/Wool add-ons × ${_money(overallFee['fur_fee'] as double, currency: currency)} = '
-                                        '${_money(overallFee['fur_subtotal'] as double, currency: currency)}',
+                                        '${overallFee['fur_count']} Fur/Wool add-ons = ${_money(overallFee['fur_subtotal'] as double, currency: currency)}',
                                       ),
                                     ),
                                   if ((overallFee['show_fee'] as double) > 0)
                                     Padding(
                                       padding: const EdgeInsets.only(top: 4),
                                       child: Text(
-                                        'Per-show fee: ${_money(overallFee['show_fee'] as double, currency: currency)}',
+                                        'Per-show fees: ${_money(overallFee['show_fee'] as double, currency: currency)}',
                                       ),
                                     ),
-                                  if ((overallFee['discount_amount'] as double) > 0)
+                                  if ((overallFee['discount_amount'] as double) >
+                                      0)
                                     Padding(
                                       padding: const EdgeInsets.only(top: 4),
                                       child: Text(
-                                        'Multi-show discount (${overallFee['additional_entries']} additional entries): '
-                                        '-${_money(overallFee['discount_amount'] as double, currency: currency)}',
+                                        'Multi-show discount (${overallFee['additional_entries']} additional entries): -${_money(overallFee['discount_amount'] as double, currency: currency)}',
                                       ),
                                     ),
                                   const SizedBox(height: 8),
@@ -686,13 +841,13 @@ class _CartScreenState extends State<CartScreen> {
                                           ? 'Unassigned Exhibitor'
                                           : (_exhibitorLabelById[entry.key] ??
                                               'Exhibitor'),
-                                      feeSettingsExists: _feeSettings != null,
-                                      feeLine: _feeSettings == null
-                                          ? null
-                                          : _buildExhibitorFeeLine(
+                                      feeSettingsExists: hasFeeConfig,
+                                      feeLine: hasFeeConfig
+                                          ? _buildExhibitorFeeLine(
                                               exhibitorItems: entry.value,
                                               currency: currency,
-                                            ),
+                                            )
+                                          : null,
                                     ),
                                     const Divider(height: 1),
                                     ...entry.value.map((it) {
@@ -703,36 +858,27 @@ class _CartScreenState extends State<CartScreen> {
                                           (sec?['display_name'] ?? 'Section')
                                               .toString();
 
-                                      final isFur = it['is_fur'] == true;
-
-                                      final animalLabel =
-                                          '${(it['breed'] ?? '').toString()} • ${(it['variety'] ?? '').toString()} • ${(it['sex'] ?? '').toString()}';
-
-                                      final top =
-                                          '${(it['tattoo'] ?? '').toString().trim().isEmpty ? it['animal_id'] : it['tattoo']}';
-
                                       return ListTile(
                                         title: Text(
-                                          '$secName — $top',
+                                          _cartItemTitle(it, secName),
                                           style: const TextStyle(
                                             fontWeight: FontWeight.w600,
                                           ),
                                         ),
-                                        subtitle: Text(
-                                          '$animalLabel\n${_buildClassDisplay(it)}${isFur ? '\nFur/Wool: Yes' : ''}',
-                                        ),
-                                        isThreeLine: true,
+                                        subtitle: Text(_cartItemSubtitle(it)),
+                                        isThreeLine:
+                                            _cartItemIsThreeLine(it),
                                         trailing: IconButton(
                                           tooltip: 'Remove',
                                           icon: const Icon(
                                             Icons.delete_outline,
                                           ),
-                                          onPressed: (_confirming ||
-                                                  _payingOnline)
-                                              ? null
-                                              : () => _removeItem(
-                                                    it['id'].toString(),
-                                                  ),
+                                          onPressed:
+                                              (_confirming || _payingOnline)
+                                                  ? null
+                                                  : () => _removeItem(
+                                                        it['id'].toString(),
+                                                      ),
                                         ),
                                       );
                                     }),
@@ -752,15 +898,18 @@ class _CartScreenState extends State<CartScreen> {
                             onPressed: _canPayOnline ? _payOnline : null,
                             icon: const Icon(Icons.credit_card),
                             label: Text(
-                              _payingOnline ? 'Opening Checkout…' : 'Pay Online',
+                              _payingOnline
+                                  ? 'Opening Checkout…'
+                                  : 'Pay Online',
                             ),
                           )
                         : FilledButton(
-                            onPressed: (_confirming ||
-                                    _deadlinePassed() ||
-                                    _items.isEmpty)
-                                ? null
-                                : _confirmDayOf,
+                            onPressed:
+                                (_confirming ||
+                                        _deadlinePassed() ||
+                                        _items.isEmpty)
+                                    ? null
+                                    : _confirmDayOf,
                             child: Text(
                               _confirming
                                   ? 'Confirming…'
@@ -772,36 +921,6 @@ class _CartScreenState extends State<CartScreen> {
               ],
             ),
     );
-  }
-
-  String _buildExhibitorFeeLine({
-    required List<Map<String, dynamic>> exhibitorItems,
-    required String currency,
-  }) {
-    final f = _calculateFeesForItems(exhibitorItems);
-
-    final entriesSubtotal = f['entries_subtotal'] as double;
-    final furSubtotal = f['fur_subtotal'] as double;
-    final discountAmount = f['discount_amount'] as double;
-    final total = (entriesSubtotal + furSubtotal - discountAmount);
-    final count = f['entry_count'] as int;
-    final furCount = f['fur_count'] as int;
-
-    final parts = <String>[
-      '$count entries: ${_money(entriesSubtotal, currency: currency)}',
-    ];
-
-    if (furCount > 0) {
-      parts.add('$furCount Fur/Wool: ${_money(furSubtotal, currency: currency)}');
-    }
-
-    if (discountAmount > 0) {
-      parts.add('- ${_money(discountAmount, currency: currency)}');
-    }
-
-    parts.add('= ${_money(total, currency: currency)}');
-
-    return parts.join(' • ');
   }
 }
 

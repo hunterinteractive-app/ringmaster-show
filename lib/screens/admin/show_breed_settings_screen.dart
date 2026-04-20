@@ -49,6 +49,31 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
 
   bool _loading = true;
 
+  final List<Map<String, dynamic>> _commercialDefaults = const [
+    {
+      'class_code': 'single_fryer',
+      'display_name': 'Single Fryers',
+      'sort_order': 10,
+    },
+    {
+      'class_code': 'roaster',
+      'display_name': 'Roasters',
+      'sort_order': 20,
+    },
+    {
+      'class_code': 'stewer',
+      'display_name': 'Stewers',
+      'sort_order': 30,
+    },
+    {
+      'class_code': 'meat_pen',
+      'display_name': 'Meat Pens',
+      'sort_order': 40,
+    },
+  ];
+
+  final Map<String, Map<String, dynamic>> _showCommercialByCode = {};
+
   @override
   void initState() {
     super.initState();
@@ -195,6 +220,7 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
       _showHasBreedRows = showBreedData.isNotEmpty;
 
       await _ensureSingleBreedEnabledRow();
+      await _loadCommercialClasses();
 
       final List showVarData = await supabase
           .from('show_varieties')
@@ -527,6 +553,138 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
     }
   }
 
+  Future<void> _loadCommercialClasses() async {
+    final rows = await supabase
+        .from('show_commercial_classes')
+        .select('class_code,display_name,is_enabled,sort_order')
+        .eq('show_id', widget.showId)
+        .order('sort_order');
+
+    _showCommercialByCode.clear();
+    for (final row in (rows as List).cast<Map<String, dynamic>>()) {
+      final code = (row['class_code'] ?? '').toString();
+      if (code.isEmpty) continue;
+      _showCommercialByCode[code] = row;
+    }
+  }
+
+  bool _commercialEnabled(String classCode) {
+    final row = _showCommercialByCode[classCode];
+    if (row == null) return false;
+    return row['is_enabled'] == true;
+  }
+
+  Future<void> _setCommercialEnabled({
+    required String classCode,
+    required String displayName,
+    required int sortOrder,
+    required bool enabled,
+  }) async {
+    try {
+      await supabase.from('show_commercial_classes').upsert({
+        'show_id': widget.showId,
+        'class_code': classCode,
+        'display_name': displayName,
+        'is_enabled': enabled,
+        'sort_order': sortOrder,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      });
+
+      _showCommercialByCode[classCode] = {
+        'class_code': classCode,
+        'display_name': displayName,
+        'is_enabled': enabled,
+        'sort_order': sortOrder,
+      };
+
+      if (!mounted) return;
+      setState(() {
+        _msg = enabled
+            ? '$displayName enabled for this show'
+            : '$displayName disabled for this show';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _msg = 'Commercial class update failed: $e');
+    }
+  }
+
+  Widget _buildCommercialClassesCard() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(.05),
+              blurRadius: 12,
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Commercial Classes',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Enable special commercial rabbit entry types for this show.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            ..._commercialDefaults.map((item) {
+              final code = item['class_code']!.toString();
+              final name = item['display_name']!.toString();
+              final sortOrder = item['sort_order'] as int;
+              final enabled = _commercialEnabled(code);
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFD),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.black.withOpacity(.06)),
+                ),
+                child: SwitchListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 2,
+                  ),
+                  title: Text(
+                    name,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: Text(
+                    code == 'meat_pen'
+                        ? 'Special entry with 3 tattoos'
+                        : 'Commercial single-rabbit class',
+                  ),
+                  value: enabled,
+                  onChanged: _loading
+                      ? null
+                      : (v) => _setCommercialEnabled(
+                            classCode: code,
+                            displayName: name,
+                            sortOrder: sortOrder,
+                            enabled: v,
+                          ),
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final lockBanner = _isSingleBreedShow
@@ -715,6 +873,7 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
                 ),
 
                 const SizedBox(height: 4),
+                _buildCommercialClassesCard(),
 
                 Expanded(
                 child: _loading

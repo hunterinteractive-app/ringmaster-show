@@ -1,3 +1,6 @@
+// lib/screens/admin/show_fees_dialog.dart
+
+
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -40,14 +43,15 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
   bool _loadingStripeStatus = false;
   String? _msg;
 
-  final _feePerEntry = TextEditingController();
-  final _feePerShow = TextEditingController();
-  final _furFee = TextEditingController();
-
   bool _discountEnabled = false;
   String _discountType = 'amount';
   final _discountValue = TextEditingController();
 
+  final Map<String, TextEditingController> _feePerEntryBySection = {};
+  final Map<String, TextEditingController> _feePerShowBySection = {};
+  final Map<String, TextEditingController> _furFeeBySection = {};
+
+  List<Map<String, dynamic>> _sections = [];
   Map<String, dynamic>? _stripeStatus;
 
   @override
@@ -58,11 +62,40 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
 
   @override
   void dispose() {
-    _feePerEntry.dispose();
-    _feePerShow.dispose();
-    _furFee.dispose();
     _discountValue.dispose();
+
+    for (final c in _feePerEntryBySection.values) {
+      c.dispose();
+    }
+    for (final c in _feePerShowBySection.values) {
+      c.dispose();
+    }
+    for (final c in _furFeeBySection.values) {
+      c.dispose();
+    }
+
     super.dispose();
+  }
+
+  TextEditingController _entryControllerFor(String sectionId) {
+    return _feePerEntryBySection.putIfAbsent(
+      sectionId,
+      () => TextEditingController(),
+    );
+  }
+
+  TextEditingController _showControllerFor(String sectionId) {
+    return _feePerShowBySection.putIfAbsent(
+      sectionId,
+      () => TextEditingController(),
+    );
+  }
+
+  TextEditingController _furControllerFor(String sectionId) {
+    return _furFeeBySection.putIfAbsent(
+      sectionId,
+      () => TextEditingController(),
+    );
   }
 
   Future<void> _load() async {
@@ -75,9 +108,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
       final feeRow = await StripeConnectService.supabase
           .from('show_fee_settings')
           .select(
-            'fee_per_entry,'
-            'fee_per_show,'
-            'fur_fee,'
+            'currency,'
             'multi_show_discount_enabled,'
             'multi_show_discount_type,'
             'multi_show_discount_value',
@@ -85,30 +116,59 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
           .eq('show_id', widget.showId)
           .maybeSingle();
 
-      if (feeRow == null) {
-        _feePerEntry.text = '0';
-        _feePerShow.text = '';
-        _furFee.text = '0';
-        _discountEnabled = false;
-        _discountType = 'amount';
-        _discountValue.text = '0';
-      } else {
-        _feePerEntry.text = (feeRow['fee_per_entry'] ?? 0).toString();
-        _feePerShow.text = feeRow['fee_per_show'] == null
+      final sectionsRes = await StripeConnectService.supabase
+          .from('show_sections')
+          .select('id,display_name,kind,letter,sort_order')
+          .eq('show_id', widget.showId)
+          .eq('is_enabled', true)
+          .order('sort_order');
+
+      final sections = (sectionsRes as List).cast<Map<String, dynamic>>();
+
+      final sectionIds = sections
+          .map((s) => s['id'].toString())
+          .where((id) => id.isNotEmpty)
+          .toList();
+
+      final sectionFeeRes = sectionIds.isEmpty
+          ? <Map<String, dynamic>>[]
+          : await StripeConnectService.supabase
+              .from('show_section_fee_settings')
+              .select('section_id,fee_per_entry,fee_per_show,fur_fee')
+              .inFilter('section_id', sectionIds);
+
+      final sectionFeeRows =
+          (sectionFeeRes as List).cast<Map<String, dynamic>>();
+      final feeBySectionId = {
+        for (final row in sectionFeeRows) row['section_id'].toString(): row,
+      };
+
+      _discountEnabled = feeRow?['multi_show_discount_enabled'] == true;
+      _discountType =
+          (feeRow?['multi_show_discount_type'] ?? 'amount').toString();
+      _discountValue.text =
+          (feeRow?['multi_show_discount_value'] ?? 0).toString();
+
+      for (final section in sections) {
+        final sectionId = section['id'].toString();
+        final row = feeBySectionId[sectionId];
+
+        _entryControllerFor(sectionId).text =
+            (row?['fee_per_entry'] ?? 0).toString();
+
+        _showControllerFor(sectionId).text = row?['fee_per_show'] == null
             ? ''
-            : feeRow['fee_per_show'].toString();
-        _furFee.text = (feeRow['fur_fee'] ?? 0).toString();
-        _discountEnabled = feeRow['multi_show_discount_enabled'] == true;
-        _discountType =
-            (feeRow['multi_show_discount_type'] ?? 'amount').toString();
-        _discountValue.text =
-            (feeRow['multi_show_discount_value'] ?? 0).toString();
+            : row!['fee_per_show'].toString();
+
+        _furControllerFor(sectionId).text =
+            (row?['fur_fee'] ?? 0).toString();
       }
 
       await _loadStripeStatus(showErrorInBanner: false);
 
       if (!mounted) return;
       setState(() {
+        _sections = sections;
         _loading = false;
       });
     } catch (e) {
@@ -126,27 +186,48 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
     return x;
   }
 
-  bool _validate() {
-    final perEntry = _parseMoney(_feePerEntry.text);
-    if (perEntry == null) {
-      setState(() => _msg = 'Fee per entry must be 0 or greater.');
-      return false;
-    }
+  String _sectionLabel(Map<String, dynamic> section) {
+    final display = (section['display_name'] ?? '').toString().trim();
+    if (display.isNotEmpty) return display;
 
-    if (_feePerShow.text.trim().isNotEmpty) {
-      final perShow = _parseMoney(_feePerShow.text);
-      if (perShow == null) {
-        setState(
-          () => _msg = 'Fee per show must be 0 or greater, or left blank.',
-        );
+    final kind = (section['kind'] ?? '').toString().trim().toLowerCase();
+    final letter = (section['letter'] ?? '').toString().trim().toUpperCase();
+
+    final kindLabel = kind == 'youth'
+        ? 'Youth'
+        : kind == 'open'
+            ? 'Open'
+            : 'Section';
+
+    return letter.isEmpty ? kindLabel : '$kindLabel $letter';
+  }
+
+  bool _validate() {
+    for (final section in _sections) {
+      final sectionId = section['id'].toString();
+      final sectionName = _sectionLabel(section);
+
+      final perEntry = _parseMoney(_entryControllerFor(sectionId).text);
+      if (perEntry == null) {
+        setState(() => _msg = '$sectionName fee per entry must be 0 or greater.');
         return false;
       }
-    }
 
-    final furFee = _parseMoney(_furFee.text);
-    if (furFee == null) {
-      setState(() => _msg = 'Fur/Wool fee must be 0 or greater.');
-      return false;
+      final feePerShowText = _showControllerFor(sectionId).text.trim();
+      if (feePerShowText.isNotEmpty) {
+        final perShow = _parseMoney(feePerShowText);
+        if (perShow == null) {
+          setState(() => _msg =
+              '$sectionName fee per show must be 0 or greater, or left blank.');
+          return false;
+        }
+      }
+
+      final furFee = _parseMoney(_furControllerFor(sectionId).text);
+      if (furFee == null) {
+        setState(() => _msg = '$sectionName Fur/Wool fee must be 0 or greater.');
+        return false;
+      }
     }
 
     final disc = _parseMoney(_discountValue.text);
@@ -274,16 +355,32 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
     try {
       await StripeConnectService.supabase.from('show_fee_settings').upsert({
         'show_id': widget.showId,
-        'fee_per_entry': double.parse(_feePerEntry.text.trim()),
-        'fee_per_show': _feePerShow.text.trim().isEmpty
-            ? null
-            : double.parse(_feePerShow.text.trim()),
-        'fur_fee': double.parse(_furFee.text.trim()),
         'multi_show_discount_enabled': _discountEnabled,
         'multi_show_discount_type': _discountType,
         'multi_show_discount_value': double.parse(_discountValue.text.trim()),
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       });
+
+      final sectionRows = _sections.map((section) {
+        final sectionId = section['id'].toString();
+
+        return {
+          'section_id': sectionId,
+          'fee_per_entry':
+              double.parse(_entryControllerFor(sectionId).text.trim()),
+          'fee_per_show': _showControllerFor(sectionId).text.trim().isEmpty
+              ? null
+              : double.parse(_showControllerFor(sectionId).text.trim()),
+          'fur_fee': double.parse(_furControllerFor(sectionId).text.trim()),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        };
+      }).toList();
+
+      if (sectionRows.isNotEmpty) {
+        await StripeConnectService.supabase
+            .from('show_section_fee_settings')
+            .upsert(sectionRows);
+      }
 
       if (!mounted) return;
       setState(() {
@@ -536,6 +633,40 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
     ]);
   }
 
+  Widget _buildSectionFeeCard(Map<String, dynamic> section) {
+    final sectionId = section['id'].toString();
+    final title = _sectionLabel(section);
+
+    return _section(title, [
+      TextField(
+        controller: _entryControllerFor(sectionId),
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: const InputDecoration(
+          labelText: 'Fee per animal / entry',
+          border: OutlineInputBorder(),
+        ),
+      ),
+      const SizedBox(height: 12),
+      TextField(
+        controller: _furControllerFor(sectionId),
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: const InputDecoration(
+          labelText: 'Fur / Wool fee',
+          border: OutlineInputBorder(),
+        ),
+      ),
+      const SizedBox(height: 12),
+      TextField(
+        controller: _showControllerFor(sectionId),
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: const InputDecoration(
+          labelText: 'Optional: Fee per show',
+          border: OutlineInputBorder(),
+        ),
+      ),
+    ]);
+  }
+
   @override
   Widget build(BuildContext context) {
     final success = _msg == 'Saved.';
@@ -545,8 +676,8 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
       backgroundColor: Colors.transparent,
       child: Container(
         constraints: const BoxConstraints(
-          maxWidth: 600,
-          maxHeight: 720,
+          maxWidth: 700,
+          maxHeight: 760,
         ),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
@@ -624,43 +755,12 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
                               child: SingleChildScrollView(
                                 child: Column(
                                   children: [
-                                    _section('Entry Fees', [
-                                      TextField(
-                                        controller: _feePerEntry,
-                                        keyboardType:
-                                            const TextInputType.numberWithOptions(
-                                          decimal: true,
-                                        ),
-                                        decoration: const InputDecoration(
-                                          labelText: 'Fee per animal / entry',
-                                          border: OutlineInputBorder(),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 12),
-                                      TextField(
-                                        controller: _furFee,
-                                        keyboardType:
-                                            const TextInputType.numberWithOptions(
-                                          decimal: true,
-                                        ),
-                                        decoration: const InputDecoration(
-                                          labelText: 'Fur / Wool fee',
-                                          border: OutlineInputBorder(),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 12),
-                                      TextField(
-                                        controller: _feePerShow,
-                                        keyboardType:
-                                            const TextInputType.numberWithOptions(
-                                          decimal: true,
-                                        ),
-                                        decoration: const InputDecoration(
-                                          labelText: 'Optional: Fee per show',
-                                          border: OutlineInputBorder(),
-                                        ),
-                                      ),
-                                    ]),
+                                    if (_sections.isEmpty)
+                                      _section('Entry Fees', const [
+                                        Text('No enabled show sections found.'),
+                                      ])
+                                    else
+                                      ..._sections.map(_buildSectionFeeCard),
                                     _section('Discounts', [
                                       SwitchListTile(
                                         contentPadding: EdgeInsets.zero,

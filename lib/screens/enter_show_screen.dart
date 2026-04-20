@@ -1,4 +1,4 @@
-//lib/screens/enter_show_screen.dart
+// lib/screens/enter_show_screen.dart
 
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
@@ -30,10 +30,44 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
 
   String? _msg;
   bool _submitting = false;
+  bool get _hasCommercialClasses => _commercialByCode.isNotEmpty;
 
   DateTime? _showDate;
 
   final Map<String, String> _rabbitBreedClassSystem = {};
+
+  bool _sectionAllowsMeatClasses(String? sectionId) {
+    final id = (sectionId ?? '').trim();
+    if (id.isEmpty) return false;
+    return _sectionById[id]?['allow_meat_classes'] == true;
+  }
+
+  bool _sectionIsMeatOnly(String? sectionId) {
+    final id = (sectionId ?? '').trim();
+    if (id.isEmpty) return false;
+    return _sectionById[id]?['breed_scope'] == 'meat_only';
+  }
+
+  bool get _selectedSectionsAllowMeatClasses {
+    if (_selectedSectionIds.isEmpty) return false;
+    return _selectedSectionIds.any((id) {
+      final s = _sectionById[id];
+      if (s == null) return false;
+      return s['breed_scope'] == 'meat_only' || s['allow_meat_classes'] == true;
+    });
+  }
+
+  List<String> get _selectedMeatAllowedSectionIds {
+    return _selectedSectionIds.where((id) {
+      final s = _sectionById[id];
+      if (s == null) return false;
+
+      final isMeatOnly = s['breed_scope'] == 'meat_only';
+      final allowsToggle = s['allow_meat_classes'] == true;
+
+      return isMeatOnly || allowsToggle;
+    }).toList();
+  }
 
   bool _showHasBreedRows = false;
   final Set<String> _enabledRabbitBreeds = {};
@@ -53,8 +87,72 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   final Set<String> _animalIdsInCart = {};
   final Map<String, Set<String>> _enteredAnimalIdsBySection = {};
   final Map<String, Set<String>> _enteredSectionsByAnimal = {};
+  final Map<String, Map<String, dynamic>> _commercialByCode = {};
+
+  final List<Map<String, String>> _commercialDefaults = const [
+    {
+      'class_code': 'single_fryer',
+      'display_name': 'Single Fryers',
+    },
+    {
+      'class_code': 'roaster',
+      'display_name': 'Roasters',
+    },
+    {
+      'class_code': 'stewer',
+      'display_name': 'Stewers',
+    },
+    {
+      'class_code': 'meat_pen',
+      'display_name': 'Meat Pens',
+    },
+  ];
+
+  static const double _singleFryerMinWeight = 3.5;
+  static const double _singleFryerMaxWeight = 5.5;
+  static const int _singleFryerMaxAgeDays = 70;
+
+  static const double _roasterMinWeightExclusive = 5.5;
+  static const double _roasterMaxWeight = 8.0;
+  static const int _roasterMaxAgeDaysExclusive = 180; // under 6 months
+
+  static const double _stewerMinWeightExclusive = 8.0;
+  static const int _stewerMinAgeDays = 180; // 6 months and over
 
   Future<_EnterShowLoadBundle>? _loadFuture;
+
+  Future<void> _loadCommercialClasses() async {
+    final rows = await supabase
+        .from('show_commercial_classes')
+        .select('class_code,display_name,is_enabled,sort_order')
+        .eq('show_id', widget.showId)
+        .eq('is_enabled', true)
+        .order('sort_order');
+
+    _commercialByCode.clear();
+    for (final row in (rows as List).cast<Map<String, dynamic>>()) {
+      final code = (row['class_code'] ?? '').toString().trim();
+      if (code.isEmpty) continue;
+      _commercialByCode[code] = row;
+    }
+  }
+
+  String _commercialLabel(String classCode) {
+    final row = _commercialByCode[classCode];
+    if (row != null) {
+      final label = (row['display_name'] ?? '').toString().trim();
+      if (label.isNotEmpty) return label;
+    }
+
+    final fallback = _commercialDefaults.where(
+      (x) => x['class_code'] == classCode,
+    );
+    if (fallback.isNotEmpty) {
+      return fallback.first['display_name']!;
+    }
+
+    return classCode;
+  }
 
   TextEditingController _classControllerFor(String animalId) {
     return _classControllers.putIfAbsent(
@@ -148,54 +246,54 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   }
 
   bool _hasSectionConflictForAnimal(String animalId) {
-  final existingSectionIds = _enteredSectionsByAnimal[animalId];
-  if (existingSectionIds == null || existingSectionIds.isEmpty) return false;
+    final existingSectionIds = _enteredSectionsByAnimal[animalId];
+    if (existingSectionIds == null || existingSectionIds.isEmpty) return false;
 
-  for (final selectedSectionId in _selectedSectionIds) {
-    final selectedKind = _sectionKindForId(selectedSectionId);
-    final selectedLetter = _sectionLetterForId(selectedSectionId);
+    for (final selectedSectionId in _selectedSectionIds) {
+      final selectedKind = _sectionKindForId(selectedSectionId);
+      final selectedLetter = _sectionLetterForId(selectedSectionId);
 
-    if (selectedKind.isEmpty || selectedLetter.isEmpty) continue;
+      if (selectedKind.isEmpty || selectedLetter.isEmpty) continue;
 
-    for (final existingSectionId in existingSectionIds) {
-      final existingKind = _sectionKindForId(existingSectionId);
-      final existingLetter = _sectionLetterForId(existingSectionId);
+      for (final existingSectionId in existingSectionIds) {
+        final existingKind = _sectionKindForId(existingSectionId);
+        final existingLetter = _sectionLetterForId(existingSectionId);
 
-      if (existingKind.isEmpty || existingLetter.isEmpty) continue;
+        if (existingKind.isEmpty || existingLetter.isEmpty) continue;
 
-      if (selectedLetter == existingLetter && selectedKind != existingKind) {
-        return true;
+        if (selectedLetter == existingLetter && selectedKind != existingKind) {
+          return true;
+        }
       }
     }
+
+    return false;
   }
 
-  return false;
-}
+  String _sectionConflictLabelForAnimal(String animalId) {
+    final existingSectionIds = _enteredSectionsByAnimal[animalId];
+    if (existingSectionIds == null || existingSectionIds.isEmpty) return '';
 
-String _sectionConflictLabelForAnimal(String animalId) {
-  final existingSectionIds = _enteredSectionsByAnimal[animalId];
-  if (existingSectionIds == null || existingSectionIds.isEmpty) return '';
+    for (final selectedSectionId in _selectedSectionIds) {
+      final selectedKind = _sectionKindForId(selectedSectionId);
+      final selectedLetter = _sectionLetterForId(selectedSectionId);
 
-  for (final selectedSectionId in _selectedSectionIds) {
-    final selectedKind = _sectionKindForId(selectedSectionId);
-    final selectedLetter = _sectionLetterForId(selectedSectionId);
+      if (selectedKind.isEmpty || selectedLetter.isEmpty) continue;
 
-    if (selectedKind.isEmpty || selectedLetter.isEmpty) continue;
+      for (final existingSectionId in existingSectionIds) {
+        final existingKind = _sectionKindForId(existingSectionId);
+        final existingLetter = _sectionLetterForId(existingSectionId);
 
-    for (final existingSectionId in existingSectionIds) {
-      final existingKind = _sectionKindForId(existingSectionId);
-      final existingLetter = _sectionLetterForId(existingSectionId);
+        if (existingKind.isEmpty || existingLetter.isEmpty) continue;
 
-      if (existingKind.isEmpty || existingLetter.isEmpty) continue;
-
-      if (selectedLetter == existingLetter && selectedKind != existingKind) {
-        return _sectionLabelForId(existingSectionId);
+        if (selectedLetter == existingLetter && selectedKind != existingKind) {
+          return _sectionLabelForId(existingSectionId);
+        }
       }
     }
-  }
 
-  return '';
-}
+    return '';
+  }
 
   bool _isSixClassBreed(String breedName) {
     final classSystem =
@@ -313,6 +411,7 @@ String _sectionConflictLabelForAnimal(String animalId) {
 
   Future<_EnterShowLoadBundle> _loadAll() async {
     await _loadShowContext();
+    await _loadCommercialClasses();
     final animals = await _loadAnimals();
     final sections = await _loadEnabledSections();
     final exhibitors = await _loadActiveExhibitors();
@@ -659,7 +758,7 @@ String _sectionConflictLabelForAnimal(String animalId) {
   Future<List<Map<String, dynamic>>> _loadEnabledSections() async {
     final List rows = await supabase
         .from('show_sections')
-        .select('id,kind,letter,display_name,sort_order')
+        .select('id,kind,letter,display_name,sort_order,allow_meat_classes,breed_scope')
         .eq('show_id', widget.showId)
         .eq('is_enabled', true);
 
@@ -978,11 +1077,6 @@ String _sectionConflictLabelForAnimal(String animalId) {
   }) {
     final errors = <String>[];
 
-    if (_selectedSectionIds.isEmpty) {
-      errors.add('Select at least one show.');
-      return errors;
-    }
-
     if (_selectionIncludesYouth && !_isYouthExhibitor(exhibitor)) {
       errors.add(
         'Only youth exhibitors can be used when any youth section is selected.',
@@ -1026,7 +1120,9 @@ String _sectionConflictLabelForAnimal(String animalId) {
       }
 
       if (!_breedAllowed(species, breed)) {
-        errors.add('$title is not eligible because "$breed" is not enabled for this show.');
+        errors.add(
+          '$title is not eligible because "$breed" is not enabled for this show.',
+        );
       }
 
       if (variety.isEmpty) {
@@ -1220,12 +1316,15 @@ String _sectionConflictLabelForAnimal(String animalId) {
                   (a) {
                     final animalId = (a['id'] ?? '').toString();
                     final furLabels = _selectedSectionIds
-                        .where((sectionId) => _isFurSelectedForAnimalSection(animalId, sectionId))
+                        .where((sectionId) =>
+                            _isFurSelectedForAnimalSection(animalId, sectionId))
                         .map(_sectionLabelForId)
                         .toList()
                       ..sort();
 
-                    final furText = furLabels.isEmpty ? '' : ' • Fur/Wool: ${furLabels.join(', ')}';
+                    final furText = furLabels.isEmpty
+                        ? ''
+                        : ' • Fur/Wool: ${furLabels.join(', ')}';
 
                     return Text(
                       '• ${_displayAnimalTitle(a)} — ${_classControllerFor(animalId).text.trim()}$furText',
@@ -1328,6 +1427,7 @@ String _sectionConflictLabelForAnimal(String animalId) {
         final String className = _classControllerFor(animalId).text.trim();
 
         for (final sectionId in _selectedSectionIds) {
+          if (_sectionIsMeatOnly(sectionId)) continue;
           itemsToAdd.add({
             'cart_id': cartId,
             'section_id': sectionId,
@@ -1506,13 +1606,14 @@ String _sectionConflictLabelForAnimal(String animalId) {
               ),
             ],
           ),
-
           if (_selected[id] == true && _selectedSectionIds.isNotEmpty) ...[
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: _selectedSectionIds.map((sectionId) {
+              children: _selectedSectionIds
+                  .where((sectionId) => !_sectionIsMeatOnly(sectionId))
+                  .map((sectionId) {
                 final label = _sectionLabelForId(sectionId);
                 final furSelected = _isFurSelectedForAnimalSection(id, sectionId);
 
@@ -1559,6 +1660,533 @@ String _sectionConflictLabelForAnimal(String animalId) {
         ),
         const Divider(height: 1),
       ],
+    );
+  }
+
+  bool _animalHasExactDob(Map<String, dynamic> animal) {
+    if (_showDate == null) return false;
+    if (animal['is_dob_unknown'] == true) return false;
+    final raw = animal['birth_date']?.toString();
+    if (raw == null || raw.trim().isEmpty) return false;
+    return DateTime.tryParse(raw) != null;
+  }
+
+  int? _animalAgeDaysOnShowDate(Map<String, dynamic> animal) {
+    if (!_animalHasExactDob(animal) || _showDate == null) return null;
+    final raw = animal['birth_date']?.toString();
+    final birthDate = raw == null ? null : DateTime.tryParse(raw);
+    if (birthDate == null) return null;
+    return _ageInDays(birthDate, _showDate!);
+  }
+
+  String _formatWeight(double value) {
+    return value.toStringAsFixed(
+      value.truncateToDouble() == value ? 0 : 1,
+    );
+  }
+
+  String _commercialRuleText(String classCode) {
+    switch (classCode) {
+      case 'single_fryer':
+        return 'Single Fryer: not over 70 days old and ${_formatWeight(_singleFryerMinWeight)}–${_formatWeight(_singleFryerMaxWeight)} lb.';
+      case 'roaster':
+        return 'Roaster: under 6 months old and over ${_formatWeight(_roasterMinWeightExclusive)} lb up to ${_formatWeight(_roasterMaxWeight)} lb.';
+      case 'stewer':
+        return 'Stewer: 6 months of age or older and over ${_formatWeight(_stewerMinWeightExclusive)} lb.';
+      case 'meat_pen':
+        return 'Meat Pen: special 3-rabbit entry with 3 tattoos.';
+      default:
+        return '';
+    }
+  }
+
+  _CommercialValidationResult _validateCommercialAnimal({
+    required Map<String, dynamic> animal,
+    required String classCode,
+  }) {
+    final ageDays = _animalAgeDaysOnShowDate(animal);
+
+    if (ageDays == null) {
+      return const _CommercialValidationResult(
+        ok: true,
+        dobMissing: true,
+        message: 'DOB missing.',
+      );
+    }
+
+    switch (classCode) {
+      case 'single_fryer':
+        if (ageDays > _singleFryerMaxAgeDays) {
+          return _CommercialValidationResult(
+            ok: false,
+            ageDays: ageDays,
+            message:
+                'Single Fryer failed age check. Rabbit is $ageDays days old and must be not over $_singleFryerMaxAgeDays days.',
+          );
+        }
+        return _CommercialValidationResult(
+          ok: true,
+          ageDays: ageDays,
+        );
+
+      case 'roaster':
+        if (ageDays >= _roasterMaxAgeDaysExclusive) {
+          return _CommercialValidationResult(
+            ok: false,
+            ageDays: ageDays,
+            message:
+                'Roaster failed age check. Rabbit is $ageDays days old and must be under 6 months.',
+          );
+        }
+        return _CommercialValidationResult(
+          ok: true,
+          ageDays: ageDays,
+        );
+
+      case 'stewer':
+        if (ageDays < _stewerMinAgeDays) {
+          return _CommercialValidationResult(
+            ok: false,
+            ageDays: ageDays,
+            message:
+                'Stewer failed age check. Rabbit is $ageDays days old and must be 6 months of age or older.',
+          );
+        }
+        return _CommercialValidationResult(
+          ok: true,
+          ageDays: ageDays,
+        );
+
+      default:
+        return const _CommercialValidationResult(
+          ok: false,
+          message: 'Unknown commercial class.',
+        );
+    }
+  }
+
+  Future<_CommercialSingleEntryInput?> _openCommercialSingleAnimalDialog({
+    required Map<String, dynamic> animal,
+    required String classCode,
+  }) async {
+    String? localError;
+
+    final result = await showDialog<_CommercialSingleEntryInput>(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (context, setLocalState) {
+          final title = _commercialLabel(classCode);
+          final animalTitle = _displayAnimalTitle(animal);
+          final ageDays = _animalAgeDaysOnShowDate(animal);
+
+          return AlertDialog(
+            title: Text('Add $title'),
+            content: SizedBox(
+              width: 460,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Rabbit: $animalTitle'),
+                  const SizedBox(height: 6),
+                  Text(
+                    _commercialRuleText(classCode),
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    ageDays == null
+                        ? 'DOB missing'
+                        : 'Age validated for this class',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: ageDays == null ? Colors.orange : null,
+                      fontWeight: ageDays == null ? FontWeight.w600 : null,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Weight will be verified at show.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  if (localError != null) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      localError!,
+                      style: const TextStyle(
+                        color: Colors.red,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final validation = _validateCommercialAnimal(
+                    animal: animal,
+                    classCode: classCode,
+                  );
+
+                  if (!validation.ok) {
+                    setLocalState(() {
+                      localError = validation.message;
+                    });
+                    return;
+                  }
+
+                  final detailLabel = validation.dobMissing
+                      ? '$title • DOB verify'
+                      : title;
+
+                  Navigator.pop(
+                    context,
+                    _CommercialSingleEntryInput(
+                      ageDays: validation.ageDays,
+                      dobMissing: validation.dobMissing,
+                      detailLabel: detailLabel,
+                    ),
+                  );
+                },
+                child: const Text('Add'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    return result;
+  }
+
+Future<_MeatPenInput?> _openMeatPenDialog() {
+  return showDialog<_MeatPenInput>(
+    context: context,
+    builder: (_) => _MeatPenDialog(),
+  );
+}
+
+  Future<void> _addCommercialSingleAnimalToCart({
+    required Map<String, dynamic> animal,
+    required String classCode,
+  }) async {
+    final user = supabase.auth.currentUser;
+    if (user == null) {
+      setState(() => _msg = 'Not signed in.');
+      return;
+    }
+
+    if (_selectedSectionIds.isEmpty) {
+      setState(() => _msg = 'Select at least one show section first.');
+      return;
+    }
+
+    if (_selectedExhibitorId == null || _selectedExhibitorId!.isEmpty) {
+      setState(() => _msg = 'Select an exhibitor first.');
+      return;
+    }
+
+    final animalId = (animal['id'] ?? '').toString();
+    if (animalId.isEmpty) {
+      setState(() => _msg = 'Invalid animal.');
+      return;
+    }
+
+    if (_isAnimalInCart(animalId)) {
+      setState(() => _msg = 'That animal is already in the cart.');
+      return;
+    }
+
+    if (_isAnimalAlreadyEnteredInAnySelectedSection(animalId)) {
+      setState(() {
+        _msg = 'That animal is already entered in one of the selected sections.';
+      });
+      return;
+    }
+
+    if (_hasSectionConflictForAnimal(animalId)) {
+      setState(() {
+        _msg = 'That animal conflicts with an existing Open/Youth section.';
+      });
+      return;
+    }
+
+    final commercialInput = await _openCommercialSingleAnimalDialog(
+      animal: animal,
+      classCode: classCode,
+    );
+
+    if (commercialInput == null) return;
+
+    setState(() {
+      _submitting = true;
+      _msg = null;
+    });
+
+    try {
+      final cartId = await _getOrCreateActiveCartId(
+        showId: widget.showId,
+        userId: user.id,
+      );
+      _activeCartId = cartId;
+
+      final label = _commercialLabel(classCode);
+      final detailLabel = commercialInput.detailLabel;
+
+      final allowedSectionIds = _selectedMeatAllowedSectionIds;
+      if (allowedSectionIds.isEmpty) {
+        setState(() {
+          _msg = 'Select at least one section that allows Meat Classes first.';
+        });
+        return;
+      }
+
+      final rows = allowedSectionIds.map((sectionId) {
+        return {
+          'cart_id': cartId,
+          'section_id': sectionId,
+          'animal_id': animalId,
+          'exhibitor_id': _selectedExhibitorId,
+          'species': animal['species'],
+          'tattoo': animal['tattoo'],
+          'breed': 'Commercial',
+          'variety': label,
+          'sex': animal['sex'],
+          'class_name': detailLabel,
+          'is_fur': false,
+        };
+      }).toList();
+
+      await supabase.from('entry_cart_items').insert(rows);
+
+      await _refreshAnimalsInCart();
+
+      if (!mounted) return;
+      setState(() {
+        _selected[animalId] = false;
+        _furSectionIdsByAnimal.remove(animalId);
+        _msg = '${_commercialLabel(classCode)} entry added to cart.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _msg = 'Commercial entry failed: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _submitting = false);
+      }
+    }
+  }
+
+  Future<void> _addMeatPenToCart() async {
+    final user = supabase.auth.currentUser;
+    if (user == null) {
+      setState(() => _msg = 'Not signed in.');
+      return;
+    }
+
+    if (_selectedSectionIds.isEmpty) {
+      setState(() => _msg = 'Select at least one show section first.');
+      return;
+    }
+
+    if (_selectedExhibitorId == null || _selectedExhibitorId!.isEmpty) {
+      setState(() => _msg = 'Select an exhibitor first.');
+      return;
+    }
+
+    final allowedSectionIds = _selectedMeatAllowedSectionIds;
+    if (allowedSectionIds.isEmpty) {
+      setState(() => _msg = 'Select at least one section that allows Meat Classes first.');
+      return;
+    }
+
+    final meatPenInput = await _openMeatPenDialog();
+    if (meatPenInput == null) return;
+
+    setState(() {
+      _submitting = true;
+      _msg = null;
+    });
+
+    try {
+      final cartId = await _getOrCreateActiveCartId(
+        showId: widget.showId,
+        userId: user.id,
+      );
+      _activeCartId = cartId;
+
+      final tattooText = meatPenInput.tattoos.join(' / ');
+
+      final allowedSectionIds = _selectedMeatAllowedSectionIds;
+      if (allowedSectionIds.isEmpty) {
+        setState(() => _msg = 'Select at least one section that allows Meat Classes first.');
+        return;
+      }
+
+      final rows = allowedSectionIds.map((sectionId) {
+        return {
+          'cart_id': cartId,
+          'section_id': sectionId,
+          'animal_id': null,
+          'exhibitor_id': _selectedExhibitorId,
+          'species': 'rabbit',
+          'tattoo': tattooText,
+          'breed': meatPenInput.breed,
+          'variety': meatPenInput.variety,
+          'sex': null,
+          'class_name': 'Meat Pen',
+          'is_fur': false,
+        };
+      }).toList();
+
+      await supabase.from('entry_cart_items').insert(rows);
+
+      if (!mounted) return;
+      setState(() {
+        _msg = 'Meat Pen added to cart.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _msg = 'Meat Pen entry failed: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _submitting = false);
+      }
+    }
+  }
+
+  Widget _buildCommercialCard(List<Map<String, dynamic>> animals) {
+    final rabbitAnimals = animals
+        .where((a) => _safeString(a, 'species').toLowerCase() == 'rabbit')
+        .toList();
+
+    if (!_hasCommercialClasses || !_selectedSectionsAllowMeatClasses) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.05),
+            blurRadius: 10,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Commercial Entries',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Use these for Single Fryers, Roasters, Stewers, and Meat Pens.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 12),
+          ..._commercialByCode.keys.map((classCode) {
+            final label = _commercialLabel(classCode);
+
+            if (classCode == 'meat_pen') {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _submitting ? null : _addMeatPenToCart,
+                    icon: const Icon(Icons.set_meal),
+                    label: Text('Add $label'),
+                  ),
+                ),
+              );
+            }
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: PopupMenuButton<String>(
+                enabled: !_submitting && rabbitAnimals.isNotEmpty,
+                tooltip: 'Select rabbit for $label',
+                onSelected: (animalId) {
+                  final animal = rabbitAnimals.firstWhere(
+                    (a) => (a['id'] ?? '').toString() == animalId,
+                  );
+                  _addCommercialSingleAnimalToCart(
+                    animal: animal,
+                    classCode: classCode,
+                  );
+                },
+                itemBuilder: (_) => rabbitAnimals.map((a) {
+                  final animalId = (a['id'] ?? '').toString();
+                  final ageDays = _animalAgeDaysOnShowDate(a);
+
+                  return PopupMenuItem<String>(
+                    value: animalId,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(_displayAnimalTitle(a)),
+                        const SizedBox(height: 2),
+                        Text(
+                          ageDays == null
+                              ? 'DOB missing'
+                              : 'Age eligible for this class',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.black.withOpacity(.12)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.pets),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Add $label Using Rabbit'),
+                            const SizedBox(height: 2),
+                            Text(
+                              _commercialRuleText(classCode),
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.arrow_drop_down),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }),
+        ],
+      ),
     );
   }
 
@@ -1611,183 +2239,202 @@ String _sectionConflictLabelForAnimal(String animalId) {
                 onWillPop: _confirmLeaveIfNeeded,
                 child: Column(
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(.05),
-                              blurRadius: 10,
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Show Date: $showDateText',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
+                    Expanded(
+                      child: ListView(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(.05),
+                                    blurRadius: 10,
+                                  ),
+                                ],
                               ),
-                            ),
-                            const SizedBox(height: 12),
-                            DropdownButtonFormField<String>(
-                              value: allowedExhibitors.any(
-                                      (e) =>
-                                          e['id'].toString() ==
-                                          _selectedExhibitorId)
-                                  ? _selectedExhibitorId
-                                  : null,
-                              decoration: const InputDecoration(
-                                labelText: 'Exhibitor',
-                                border: OutlineInputBorder(),
-                              ),
-                              items: allowedExhibitors.map((e) {
-                                return DropdownMenuItem<String>(
-                                  value: e['id'].toString(),
-                                  child: Text(_exhibitorLabel(e)),
-                                );
-                              }).toList(),
-                              onChanged: _submitting
-                                  ? null
-                                  : (v) {
-                                      setState(() {
-                                        _selectedExhibitorId = v;
-                                        _msg = null;
-                                      });
-                                    },
-                            ),
-                            const SizedBox(height: 10),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: [
-                                OutlinedButton.icon(
-                                  onPressed:
-                                      _submitting ? null : _openAddExhibitorDialog,
-                                  icon: const Icon(Icons.person_add_alt_1),
-                                  label: const Text('Add Exhibitor'),
-                                ),
-                              ],
-                            ),
-                            if (_selectionIncludesYouth) ...[
-                              const SizedBox(height: 8),
-                              Text(
-                                'Youth sections selected. Only youth exhibitors may be used.',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(
-                                      color: Colors.red,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Show Date: $showDateText',
+                                    style: const TextStyle(
                                       fontWeight: FontWeight.w600,
                                     ),
-                              ),
-                            ],
-                            const SizedBox(height: 12),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: [
-                                OutlinedButton.icon(
-                                  onPressed: _openAddAnimalDialog,
-                                  icon: const Icon(Icons.add),
-                                  label: const Text('Add Animal'),
-                                ),
-                                OutlinedButton.icon(
-                                  onPressed: _viewCart,
-                                  icon: const Icon(Icons.shopping_cart_outlined),
-                                  label: const Text('View Cart'),
-                                ),
-                                if (_selectedSectionIds.isNotEmpty)
-                                  OutlinedButton.icon(
-                                    onPressed: _submitting
-                                        ? null
-                                        : _clearSectionSelection,
-                                    icon: const Icon(Icons.clear_all),
-                                    label: const Text('Clear Sections'),
                                   ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: sections.map((s) {
-                            final id = s['id'].toString();
-                            final selected = _selectedSectionIds.contains(id);
-
-                            return FilterChip(
-                              label: Text(_sectionChipLabel(s)),
-                              selected: selected,
-                              onSelected: _submitting
-                                  ? null
-                                  : (_) => _toggleSection(
-                                        sectionId: id,
-                                        kind: (s['kind'] ?? '').toString(),
-                                      ),
-                            );
-                          }).toList(),
-                        ),
-                      ),
-                    ),
-                    if (_msg != null)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.red.withOpacity(.08),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: Colors.red.withOpacity(.25),
-                            ),
-                          ),
-                          child: Text(
-                            _msg!,
-                            style: const TextStyle(
-                              color: Colors.red,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: 12),
-                    Expanded(
-                      child: animals.isEmpty
-                          ? const Center(child: Text('No animals found.'))
-                          : ListView(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 16),
-                              children: animals.map((a) {
-                                return Container(
-                                  margin: const EdgeInsets.only(bottom: 10),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(14),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(.04),
-                                        blurRadius: 8,
+                                  const SizedBox(height: 12),
+                                  DropdownButtonFormField<String>(
+                                    value: allowedExhibitors.any(
+                                            (e) =>
+                                                e['id'].toString() ==
+                                                _selectedExhibitorId)
+                                        ? _selectedExhibitorId
+                                        : null,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Exhibitor',
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    items: allowedExhibitors.map((e) {
+                                      return DropdownMenuItem<String>(
+                                        value: e['id'].toString(),
+                                        child: Text(_exhibitorLabel(e)),
+                                      );
+                                    }).toList(),
+                                    onChanged: _submitting
+                                        ? null
+                                        : (v) {
+                                            setState(() {
+                                              _selectedExhibitorId = v;
+                                              _msg = null;
+                                            });
+                                          },
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: [
+                                      OutlinedButton.icon(
+                                        onPressed: _submitting
+                                            ? null
+                                            : _openAddExhibitorDialog,
+                                        icon:
+                                            const Icon(Icons.person_add_alt_1),
+                                        label: const Text('Add Exhibitor'),
                                       ),
                                     ],
                                   ),
-                                  child: _buildAnimalTile(a),
-                                );
-                              }).toList(),
+                                  if (_selectionIncludesYouth) ...[
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Youth sections selected. Only youth exhibitors may be used.',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: Colors.red,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                    ),
+                                  ],
+                                  const SizedBox(height: 12),
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: [
+                                      OutlinedButton.icon(
+                                        onPressed: _openAddAnimalDialog,
+                                        icon: const Icon(Icons.add),
+                                        label: const Text('Add Animal'),
+                                      ),
+                                      OutlinedButton.icon(
+                                        onPressed: _viewCart,
+                                        icon: const Icon(
+                                          Icons.shopping_cart_outlined,
+                                        ),
+                                        label: const Text('View Cart'),
+                                      ),
+                                      if (_selectedSectionIds.isNotEmpty)
+                                        OutlinedButton.icon(
+                                          onPressed: _submitting
+                                              ? null
+                                              : _clearSectionSelection,
+                                          icon: const Icon(Icons.clear_all),
+                                          label: const Text('Clear Sections'),
+                                        ),
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: sections.map((s) {
+                                  final id = s['id'].toString();
+                                  final selected =
+                                      _selectedSectionIds.contains(id);
+
+                                  return FilterChip(
+                                    label: Text(_sectionChipLabel(s)),
+                                    selected: selected,
+                                    onSelected: _submitting
+                                        ? null
+                                        : (_) => _toggleSection(
+                                              sectionId: id,
+                                              kind: (s['kind'] ?? '')
+                                                  .toString(),
+                                            ),
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                          ),
+                          _buildCommercialCard(animals),
+                          if (_msg != null)
+                            Padding(
+                              padding:
+                                  const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.withOpacity(.08),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: Colors.red.withOpacity(.25),
+                                  ),
+                                ),
+                                child: Text(
+                                  _msg!,
+                                  style: const TextStyle(
+                                    color: Colors.red,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          const SizedBox(height: 12),
+                          if (animals.isEmpty)
+                            const Padding(
+                              padding: EdgeInsets.only(top: 48),
+                              child: Center(child: Text('No animals found.')),
+                            )
+                          else
+                            Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
+                              child: Column(
+                                children: animals.map((a) {
+                                  return Container(
+                                    margin: const EdgeInsets.only(bottom: 10),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(14),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(.04),
+                                          blurRadius: 8,
+                                        ),
+                                      ],
+                                    ),
+                                    child: _buildAnimalTile(a),
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                     Padding(
                       padding: const EdgeInsets.all(16),
@@ -1825,6 +2472,371 @@ class _EnterShowLoadBundle {
     required this.exhibitors,
   });
 }
+
+class _CommercialValidationResult {
+  final bool ok;
+  final bool dobMissing;
+  final String? message;
+  final int? ageDays;
+
+  const _CommercialValidationResult({
+    required this.ok,
+    this.dobMissing = false,
+    this.message,
+    this.ageDays,
+  });
+}
+
+class _CommercialSingleEntryInput {
+  final int? ageDays;
+  final bool dobMissing;
+  final String detailLabel;
+
+  const _CommercialSingleEntryInput({
+    required this.ageDays,
+    required this.dobMissing,
+    required this.detailLabel,
+  });
+}
+
+class _MeatPenInput {
+  final String breed;
+  final String variety;
+  final List<String> tattoos;
+
+  const _MeatPenInput({
+    required this.breed,
+    required this.variety,
+    required this.tattoos,
+  });
+}
+
+class _MeatPenDialog extends StatefulWidget {
+  const _MeatPenDialog({super.key});
+
+  @override
+  State<_MeatPenDialog> createState() => _MeatPenDialogState();
+}
+
+class _MeatPenDialogState extends State<_MeatPenDialog> {
+  final _breedText = TextEditingController();
+  final _varietyText = TextEditingController();
+
+  final _breedFocus = FocusNode();
+  final _varietyFocus = FocusNode();
+
+  final _tattoo1 = TextEditingController();
+  final _tattoo2 = TextEditingController();
+  final _tattoo3 = TextEditingController();
+
+  List<Map<String, dynamic>> _breedOptions = [];
+  List<Map<String, dynamic>> _varietyOptions = [];
+
+  String? _breedId;
+  String? _msg;
+
+  bool _loadingBreeds = true;
+  bool _loadingVarieties = false;
+
+  bool _isLopBreedName(String breedName) {
+    return breedName.trim().toLowerCase().endsWith('lop');
+  }
+
+  bool get _hasValidBreedSelection {
+    if (_breedId == null) return false;
+    final breedName = _breedText.text.trim().toLowerCase();
+
+    return _breedOptions.any((b) {
+      return (b['id']?.toString() == _breedId) &&
+          ((b['name'] ?? '').toString().trim().toLowerCase() == breedName);
+    });
+  }
+
+  bool get _hasValidVarietySelection {
+    final varietyName = _varietyText.text.trim().toLowerCase();
+    if (varietyName.isEmpty) return false;
+
+    return _varietyOptions.any((v) {
+      return ((v['name'] ?? '').toString().trim().toLowerCase() ==
+          varietyName);
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBreeds();
+
+    _breedText.addListener(() {
+      final typed = _breedText.text.trim().toLowerCase();
+
+      if (typed.isEmpty) {
+        if (_breedId != null ||
+            _varietyText.text.isNotEmpty ||
+            _varietyOptions.isNotEmpty) {
+          setState(() {
+            _breedId = null;
+            _varietyOptions = [];
+            _varietyText.clear();
+            _msg = null;
+          });
+        }
+        return;
+      }
+
+      final match = _breedOptions.where((b) {
+        final name = (b['name'] ?? '').toString().trim().toLowerCase();
+        return name == typed;
+      }).toList();
+
+      if (match.isNotEmpty) {
+        final newId = (match.first['id'] ?? '').toString();
+        if (newId.isNotEmpty && newId != _breedId) {
+          _breedId = newId;
+          _varietyText.clear();
+          _loadVarietiesForBreed(newId);
+        }
+      } else {
+        if (_breedId != null ||
+            _varietyText.text.isNotEmpty ||
+            _varietyOptions.isNotEmpty) {
+          setState(() {
+            _breedId = null;
+            _varietyOptions = [];
+            _varietyText.clear();
+            _msg = null;
+          });
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _breedText.dispose();
+    _varietyText.dispose();
+    _breedFocus.dispose();
+    _varietyFocus.dispose();
+    _tattoo1.dispose();
+    _tattoo2.dispose();
+    _tattoo3.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadBreeds() async {
+    setState(() {
+      _loadingBreeds = true;
+    });
+
+    final res = await supabase
+        .from('breeds')
+        .select('id,name,species')
+        .eq('species', 'rabbit')
+        .order('name');
+
+    if (!mounted) return;
+
+    setState(() {
+      _breedOptions = (res as List).cast<Map<String, dynamic>>();
+      _loadingBreeds = false;
+    });
+  }
+
+  Future<void> _loadVarietiesForBreed(String selectedBreedId) async {
+    setState(() {
+      _loadingVarieties = true;
+      _varietyOptions = [];
+      _varietyText.clear();
+      _msg = null;
+    });
+
+    final matchedBreed = _breedOptions.firstWhere(
+      (b) => (b['id'] ?? '').toString() == selectedBreedId,
+      orElse: () => <String, dynamic>{},
+    );
+
+    final breedName = (matchedBreed['name'] ?? '').toString().trim();
+
+    if (_isLopBreedName(breedName)) {
+      if (!mounted) return;
+      setState(() {
+        _varietyOptions = const [
+          {'id': 'lop_broken', 'name': 'Broken'},
+          {'id': 'lop_solid', 'name': 'Solid'},
+        ];
+        _loadingVarieties = false;
+      });
+      return;
+    }
+
+    final res = await supabase
+        .from('varieties')
+        .select('id,name')
+        .eq('breed_id', selectedBreedId)
+        .order('name');
+
+    if (!mounted) return;
+
+    setState(() {
+      _varietyOptions = (res as List).cast<Map<String, dynamic>>();
+      _loadingVarieties = false;
+    });
+  }
+
+  Future<void> _save() async {
+    final breed = _breedText.text.trim();
+    final variety = _varietyText.text.trim();
+    final t1 = _tattoo1.text.trim().toUpperCase();
+    final t2 = _tattoo2.text.trim().toUpperCase();
+    final t3 = _tattoo3.text.trim().toUpperCase();
+
+    if (breed.isEmpty) {
+      setState(() => _msg = 'Breed is required.');
+      return;
+    }
+
+    if (!_hasValidBreedSelection) {
+      setState(() => _msg = 'Please select a valid breed from the list.');
+      return;
+    }
+
+    if (variety.isEmpty) {
+      setState(() => _msg = 'Variety is required.');
+      return;
+    }
+
+    if (!_hasValidVarietySelection) {
+      setState(() => _msg = 'Please select a valid variety from the list.');
+      return;
+    }
+
+    if (t1.isEmpty || t2.isEmpty || t3.isEmpty) {
+      setState(() => _msg = 'All 3 tattoos are required.');
+      return;
+    }
+
+    FocusManager.instance.primaryFocus?.unfocus();
+    await Future.delayed(const Duration(milliseconds: 10));
+
+    if (!mounted) return;
+
+    Navigator.pop(
+      context,
+      _MeatPenInput(
+        breed: breed,
+        variety: variety,
+        tattoos: [t1, t2, t3],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Add Meat Pen'),
+      content: SizedBox(
+        width: 520,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'All 3 rabbits must be the same breed and variety. Weight verified at show.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+              if (_loadingBreeds) const LinearProgressIndicator(),
+              _FocusOpenAutocomplete(
+                textController: _breedText,
+                focusNode: _breedFocus,
+                labelText: 'Breed (required)',
+                hintText: 'Type to search and select a breed…',
+                options: _breedOptions,
+                displayStringForOption: (opt) => (opt['name'] ?? '').toString(),
+                onSelectedAsync: (opt) async {
+                  setState(() {
+                    _breedId = (opt['id'] ?? '').toString();
+                    _breedText.text = (opt['name'] ?? '').toString();
+                    _msg = null;
+                  });
+                  await _loadVarietiesForBreed(_breedId!);
+                  if (mounted) {
+                    FocusScope.of(context).requestFocus(_varietyFocus);
+                  }
+                },
+              ),
+              const SizedBox(height: 12),
+              if (_breedId != null && _loadingVarieties)
+                const LinearProgressIndicator(),
+              _FocusOpenAutocomplete(
+                textController: _varietyText,
+                focusNode: _varietyFocus,
+                labelText: 'Variety (required)',
+                hintText: _breedId == null
+                    ? 'Select a breed first'
+                    : 'Type to search and select a variety…',
+                options: _breedId == null ? const [] : _varietyOptions,
+                displayStringForOption: (opt) => (opt['name'] ?? '').toString(),
+                enabled: _breedId != null,
+                readOnly: _breedId == null,
+                onSelected: (_) {
+                  setState(() {
+                    _msg = null;
+                  });
+                },
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _tattoo1,
+                textCapitalization: TextCapitalization.characters,
+                decoration: const InputDecoration(labelText: 'Tattoo 1'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _tattoo2,
+                textCapitalization: TextCapitalization.characters,
+                decoration: const InputDecoration(labelText: 'Tattoo 2'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _tattoo3,
+                textCapitalization: TextCapitalization.characters,
+                decoration: const InputDecoration(labelText: 'Tattoo 3'),
+              ),
+              if (_msg != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  _msg!,
+                  style: const TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () async {
+            FocusManager.instance.primaryFocus?.unfocus();
+            await Future.delayed(const Duration(milliseconds: 10));
+            if (!mounted) return;
+            Navigator.pop(context);
+          },
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _save,
+          child: const Text('Save'),
+        ),
+      ],
+    );
+  }
+}
+
 
 class _InlineAnimalEditorDialog extends StatefulWidget {
   const _InlineAnimalEditorDialog();
@@ -1882,7 +2894,8 @@ class _InlineAnimalEditorDialogState extends State<_InlineAnimalEditorDialog> {
     final varietyName = _varietyText.text.trim().toLowerCase();
     if (varietyName.isEmpty) return false;
     return _varietyOptions.any((v) {
-      return ((v['name'] ?? '').toString().trim().toLowerCase() == varietyName);
+      return ((v['name'] ?? '').toString().trim().toLowerCase() ==
+          varietyName);
     });
   }
 
@@ -2430,120 +3443,24 @@ class _FocusOpenAutocomplete extends StatefulWidget {
 }
 
 class _FocusOpenAutocompleteState extends State<_FocusOpenAutocomplete> {
-  late final TextEditingController _fieldController;
-
-  bool _syncingFromExternal = false;
-  bool _syncingToExternal = false;
-
   List<Map<String, dynamic>> _lastOptions = const [];
   int _highlightedIndex = 0;
   void Function(Map<String, dynamic>)? _rawOnSelected;
 
-  @override
-  void initState() {
-    super.initState();
-    _fieldController = TextEditingController(text: widget.textController.text);
-
-    widget.textController.addListener(_handleExternalTextChanged);
-    _fieldController.addListener(_handleFieldTextChanged);
-    widget.focusNode.addListener(_handleFocusChanged);
-  }
-
-  @override
-  void didUpdateWidget(covariant _FocusOpenAutocomplete oldWidget) {
-    super.didUpdateWidget(oldWidget);
-
-    if (oldWidget.textController != widget.textController) {
-      oldWidget.textController.removeListener(_handleExternalTextChanged);
-      widget.textController.addListener(_handleExternalTextChanged);
-
-      _syncingFromExternal = true;
-      _fieldController.value = widget.textController.value;
-      _syncingFromExternal = false;
-    }
-
-    if (oldWidget.focusNode != widget.focusNode) {
-      oldWidget.focusNode.removeListener(_handleFocusChanged);
-      widget.focusNode.addListener(_handleFocusChanged);
-    }
-  }
-
-  @override
-  void dispose() {
-    widget.textController.removeListener(_handleExternalTextChanged);
-    widget.focusNode.removeListener(_handleFocusChanged);
-    _fieldController.removeListener(_handleFieldTextChanged);
-    _fieldController.dispose();
-    super.dispose();
-  }
-
-  void _handleExternalTextChanged() {
-    if (_syncingToExternal) return;
-    if (_fieldController.text == widget.textController.text) return;
-
-    _syncingFromExternal = true;
-    _fieldController.value = widget.textController.value;
-    _syncingFromExternal = false;
-  }
-
-  void _handleFieldTextChanged() {
-    if (_syncingFromExternal) return;
-    if (widget.textController.text == _fieldController.text) return;
-
-    _syncingToExternal = true;
-    widget.textController.value = _fieldController.value;
-    _syncingToExternal = false;
-  }
-
-  void _handleFocusChanged() {
-    if (!widget.focusNode.hasFocus) return;
-    if (!widget.enabled || widget.readOnly) return;
-    _openOptions();
-  }
-
-  void _openOptions() {
-    final currentText = _fieldController.text;
-    final currentSelection = _fieldController.selection;
-
-    _syncingToExternal = true;
-    _fieldController.value = TextEditingValue(
-      text: '$currentText ',
-      selection: TextSelection.collapsed(offset: currentText.length + 1),
-    );
-    _syncingToExternal = false;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-
-      _syncingToExternal = true;
-      _fieldController.value = TextEditingValue(
-        text: currentText,
-        selection: currentSelection.isValid
-            ? currentSelection
-            : TextSelection.collapsed(offset: currentText.length),
-      );
-      _syncingToExternal = false;
-
-      widget.textController.value = _fieldController.value;
-    });
-  }
-
   void _commitHighlightedOption() {
     if (_lastOptions.isEmpty || _rawOnSelected == null) return;
-
     final index = _highlightedIndex.clamp(0, _lastOptions.length - 1);
-    final selected = _lastOptions[index];
-    _rawOnSelected!(selected);
+    _rawOnSelected!(_lastOptions[index]);
   }
 
   @override
   Widget build(BuildContext context) {
     return RawAutocomplete<Map<String, dynamic>>(
-      textEditingController: _fieldController,
+      textEditingController: widget.textController,
       focusNode: widget.focusNode,
       displayStringForOption: widget.displayStringForOption,
       optionsBuilder: (TextEditingValue textEditingValue) {
-        if (!widget.enabled) {
+        if (!widget.enabled || widget.readOnly) {
           _lastOptions = const [];
           _highlightedIndex = 0;
           return const Iterable<Map<String, dynamic>>.empty();
@@ -2572,18 +3489,15 @@ class _FocusOpenAutocompleteState extends State<_FocusOpenAutocomplete> {
       onSelected: (opt) async {
         final label = widget.displayStringForOption(opt);
 
-        _syncingToExternal = true;
-        _fieldController.value = TextEditingValue(
+        widget.textController.value = TextEditingValue(
           text: label,
           selection: TextSelection.collapsed(offset: label.length),
         );
-        _syncingToExternal = false;
-
-        widget.textController.value = _fieldController.value;
 
         if (widget.onSelected != null) {
           widget.onSelected!(opt);
         }
+
         if (widget.onSelectedAsync != null) {
           await widget.onSelectedAsync!(opt);
         }
@@ -2595,44 +3509,33 @@ class _FocusOpenAutocompleteState extends State<_FocusOpenAutocomplete> {
         onFieldSubmitted,
       ) {
         return Focus(
-          canRequestFocus: false,
-          skipTraversal: true,
           onKeyEvent: (node, event) {
             if (event is! KeyDownEvent) return KeyEventResult.ignored;
 
-            if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-              if (_lastOptions.isNotEmpty) {
-                setState(() {
-                  _highlightedIndex =
-                      (_highlightedIndex + 1) % _lastOptions.length;
-                });
-                return KeyEventResult.handled;
-              }
+            if (event.logicalKey == LogicalKeyboardKey.arrowDown &&
+                _lastOptions.isNotEmpty) {
+              setState(() {
+                _highlightedIndex =
+                    (_highlightedIndex + 1) % _lastOptions.length;
+              });
+              return KeyEventResult.handled;
             }
 
-            if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-              if (_lastOptions.isNotEmpty) {
-                setState(() {
-                  _highlightedIndex =
-                      (_highlightedIndex - 1 + _lastOptions.length) %
-                          _lastOptions.length;
-                });
-                return KeyEventResult.handled;
-              }
+            if (event.logicalKey == LogicalKeyboardKey.arrowUp &&
+                _lastOptions.isNotEmpty) {
+              setState(() {
+                _highlightedIndex =
+                    (_highlightedIndex - 1 + _lastOptions.length) %
+                        _lastOptions.length;
+              });
+              return KeyEventResult.handled;
             }
 
-            if (event.logicalKey == LogicalKeyboardKey.tab) {
-              if (_lastOptions.isNotEmpty) {
-                _commitHighlightedOption();
-                return KeyEventResult.handled;
-              }
-            }
-
-            if (event.logicalKey == LogicalKeyboardKey.enter) {
-              if (_lastOptions.isNotEmpty) {
-                _commitHighlightedOption();
-                return KeyEventResult.handled;
-              }
+            if ((event.logicalKey == LogicalKeyboardKey.enter ||
+                    event.logicalKey == LogicalKeyboardKey.tab) &&
+                _lastOptions.isNotEmpty) {
+              _commitHighlightedOption();
+              return KeyEventResult.handled;
             }
 
             return KeyEventResult.ignored;
@@ -2643,12 +3546,7 @@ class _FocusOpenAutocompleteState extends State<_FocusOpenAutocomplete> {
             enabled: widget.enabled,
             readOnly: widget.readOnly,
             textInputAction: TextInputAction.next,
-            onTap: () {
-              widget.onFieldTap?.call();
-              if (widget.enabled && !widget.readOnly) {
-                _openOptions();
-              }
-            },
+            onTap: widget.onFieldTap,
             onSubmitted: (_) => onFieldSubmitted(),
             decoration: InputDecoration(
               labelText: widget.labelText,

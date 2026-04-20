@@ -18,6 +18,7 @@ import '../utils/date_time_utils.dart';
 import '../theme/app_theme.dart';
 import '../widgets/rm_widgets.dart';
 import '../widgets/ringmaster_page_shell.dart';
+import '../widgets/rm_timezone_notice_banner.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -237,124 +238,139 @@ class ShowListScreen extends StatelessWidget {
             ),
             body: Builder(
               builder: (_) {
+                Widget content;
+
                 if (snap.connectionState != ConnectionState.done) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+                  content = const Center(child: CircularProgressIndicator());
+                } else if (snap.hasError) {
+                  content = Center(child: Text('Error: ${snap.error}'));
+                } else {
+                  final bundle = snap.data!;
+                  final shows = bundle.shows;
 
-                if (snap.hasError) {
-                  return Center(child: Text('Error: ${snap.error}'));
-                }
+                  if (shows.isEmpty) {
+                    content = _UpcomingShowsEmptyState(
+                      showAdminButton: bundle.canSeeAdminButton,
+                      onAdmin: () => _openAdmin(context, bundle),
+                    );
+                  } else {
+                    content = ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.lg,
+                        0,
+                        AppSpacing.lg,
+                        AppSpacing.xl,
+                      ),
+                      itemCount: shows.length,
+                      itemBuilder: (context, i) {
+                        final s = shows[i];
+                        final showId = s['id'].toString();
+                        final showName = (s['name'] ?? '').toString();
+                        final startDate = (s['start_date'] ?? '').toString();
+                        final location = (s['location_name'] ?? '').toString();
 
-                final bundle = snap.data!;
-                final shows = bundle.shows;
+                        final entryDeadlineText =
+                            formatLocalDateTime(s['entry_close_at']?.toString());
 
-                if (shows.isEmpty) {
-                  return _UpcomingShowsEmptyState(
-                    showAdminButton: bundle.canSeeAdminButton,
-                    onAdmin: () => _openAdmin(context, bundle),
-                  );
-                }
+                        final deadlinePassed = s['entry_close_at'] != null &&
+                            DateTime.parse(
+                              s['entry_close_at'].toString(),
+                            ).toLocal().isBefore(DateTime.now());
 
-                return ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.lg,
-                    AppSpacing.lg,
-                    AppSpacing.lg,
-                    AppSpacing.xl,
-                  ),
-                  itemCount: shows.length,
-                  itemBuilder: (context, i) {
-                    final s = shows[i];
-                    final showId = s['id'].toString();
-                    final showName = (s['name'] ?? '').toString();
-                    final startDate = (s['start_date'] ?? '').toString();
-                    final location = (s['location_name'] ?? '').toString();
+                        final isAdminForShow =
+                            bundle.isSuperAdmin || bundle.adminShowIds.contains(showId);
 
-                    final entryDeadlineText =
-                        formatLocalDateTime(s['entry_close_at']?.toString());
-
-                    final deadlinePassed = s['entry_close_at'] != null &&
-                        DateTime.parse(
-                          s['entry_close_at'].toString(),
-                        ).toLocal().isBefore(DateTime.now());
-
-                    final isAdminForShow =
-                        bundle.isSuperAdmin || bundle.adminShowIds.contains(showId);
-
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                      child: RMCard(
-                        onTap: () => _openEnterShow(context, showId, showName),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                          child: RMCard(
+                            onTap: () => _openEnterShow(context, showId, showName),
+                            child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Expanded(
-                                  child: Text(
-                                    showName,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium
-                                        ?.copyWith(fontWeight: FontWeight.w700),
-                                  ),
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        showName,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium
+                                            ?.copyWith(fontWeight: FontWeight.w700),
+                                      ),
+                                    ),
+                                    PopupMenuButton<String>(
+                                      tooltip: 'Actions',
+                                      onSelected: (v) {
+                                        if (v == 'enter') {
+                                          _openEnterShow(context, showId, showName);
+                                        } else if (v == 'admin') {
+                                          _openEditShow(context, showId);
+                                        }
+                                      },
+                                      itemBuilder: (_) => [
+                                        const PopupMenuItem(
+                                          value: 'enter',
+                                          child: Text('Enter Show'),
+                                        ),
+                                        if (isAdminForShow)
+                                          const PopupMenuItem(
+                                            value: 'admin',
+                                            child: Text('Admin Settings'),
+                                          ),
+                                      ],
+                                    ),
+                                  ],
                                 ),
-                                PopupMenuButton<String>(
-                                  tooltip: 'Actions',
-                                  onSelected: (v) {
-                                    if (v == 'enter') {
-                                      _openEnterShow(context, showId, showName);
-                                    } else if (v == 'admin') {
-                                      _openEditShow(context, showId);
-                                    }
-                                  },
-                                  itemBuilder: (_) => [
-                                    const PopupMenuItem(
-                                      value: 'enter',
-                                      child: Text('Enter Show'),
+                                const SizedBox(height: AppSpacing.sm),
+                                Text(
+                                  '$startDate • $location',
+                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                        color: AppColors.muted,
+                                      ),
+                                ),
+                                const SizedBox(height: AppSpacing.md),
+                                Wrap(
+                                  spacing: AppSpacing.sm,
+                                  runSpacing: AppSpacing.sm,
+                                  children: [
+                                    RMBadge(
+                                      text: deadlinePassed
+                                          ? 'Entry Closed'
+                                          : 'Entry Deadline: $entryDeadlineText',
+                                      icon: Icons.event_available,
+                                      danger: deadlinePassed,
+                                      success: !deadlinePassed,
                                     ),
                                     if (isAdminForShow)
-                                      const PopupMenuItem(
-                                        value: 'Show Secretary',
-                                        child: Text('Admin Settings'),
+                                      const RMBadge(
+                                        text: 'Admin Access',
+                                        icon: Icons.admin_panel_settings,
                                       ),
                                   ],
                                 ),
                               ],
                             ),
-                            const SizedBox(height: AppSpacing.sm),
-                            Text(
-                              '$startDate • $location',
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: AppColors.muted,
-                                  ),
-                            ),
-                            const SizedBox(height: AppSpacing.md),
-                            Wrap(
-                              spacing: AppSpacing.sm,
-                              runSpacing: AppSpacing.sm,
-                              children: [
-                                RMBadge(
-                                  text: deadlinePassed
-                                      ? 'Entry Closed'
-                                      : 'Entry Deadline: $entryDeadlineText',
-                                  icon: Icons.event_available,
-                                  danger: deadlinePassed,
-                                  success: !deadlinePassed,
-                                ),
-                                if (isAdminForShow)
-                                  const RMBadge(
-                                    text: 'Admin Access',
-                                    icon: Icons.admin_panel_settings,
-                                  ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
+                          ),
+                        );
+                      },
                     );
-                  },
+                  }
+                }
+
+                return Column(
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        AppSpacing.lg,
+                        AppSpacing.lg,
+                        AppSpacing.lg,
+                        12,
+                      ),
+                      child: RMTimezoneNoticeBanner(),
+                    ),
+                    Expanded(child: content),
+                  ],
                 );
               },
             ),
