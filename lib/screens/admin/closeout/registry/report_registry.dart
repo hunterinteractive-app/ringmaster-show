@@ -1,21 +1,29 @@
+// lib/screens/admin/closeout/registry/report_registry.dart
+
 import '../data/loaders/arba_report_loader.dart';
 import '../data/loaders/breed_results_detail_report_loader.dart';
+import '../data/loaders/entered_exhibitors_contact_report_loader.dart';
 import '../data/loaders/exhibitor_report_loader.dart';
 import '../data/loaders/legs_report_loader.dart';
+import '../data/loaders/ribbon_payout_report_loader.dart';
 import '../data/loaders/sweepstakes_report_loader.dart';
 import '../data/loaders/unpaid_balances_report_loader.dart';
 
 import '../models/arba/arba_report_data.dart';
 import '../models/clubs/breed_results_detail_report_data.dart';
 import '../models/clubs/sweepstakes_report_data.dart';
+import '../models/exhibitor/entered_exhibitors_contact_report_data.dart';
 import '../models/exhibitor/exhibitor_report_data.dart';
+import '../models/exhibitor/ribbon_payout_report_data.dart';
 import '../models/legs/legs_certificate_data.dart';
 import '../models/unpaid/unpaid_balances_report_data.dart';
 
 import '../pdf/builders/arba_report_pdf.dart';
 import '../pdf/builders/breed_results_detail_report_pdf.dart';
+import '../pdf/builders/entered_exhibitors_contact_report_pdf.dart';
 import '../pdf/builders/exhibitor_report_pdf.dart';
 import '../pdf/builders/legs_report_pdf.dart';
+import '../pdf/builders/ribbon_payout_report_pdf.dart';
 import '../pdf/builders/sweepstakes_report_pdf.dart';
 import '../pdf/builders/unpaid_balances_report_pdf.dart';
 
@@ -37,6 +45,10 @@ class ReportRegistry {
     required BreedResultsDetailReportPdf breedResultsDetailReportBuilder,
     required UnpaidBalancesReportLoader unpaidBalancesLoader,
     required UnpaidBalancesReportPdfBuilder unpaidBalancesBuilder,
+    required EnteredExhibitorsContactReportLoader enteredExhibitorsContactLoader,
+    required EnteredExhibitorsContactReportPdf enteredExhibitorsContactBuilder,
+    required RibbonPayoutReportLoader ribbonPayoutLoader,
+    required RibbonPayoutReportPdf ribbonPayoutBuilder,
   }) : definitions = {
           'arba_report': ReportDefinition(
             reportName: 'arba_report',
@@ -93,6 +105,26 @@ class ReportRegistry {
             builder: (data, req) async =>
                 await unpaidBalancesBuilder.buildFile(
                   data as UnpaidBalancesReportData,
+                  req,
+                ),
+          ),
+          'entered_exhibitors_contact_report': ReportDefinition(
+            reportName: 'entered_exhibitors_contact_report',
+            outputType: 'pdf',
+            loader: (req) async => await enteredExhibitorsContactLoader.load(req),
+            builder: (data, req) async =>
+                await enteredExhibitorsContactBuilder.buildFile(
+                  data as EnteredExhibitorsContactReportData,
+                  req,
+                ),
+          ),
+          'ribbon_payout_report': ReportDefinition(
+            reportName: 'ribbon_payout_report',
+            outputType: 'pdf',
+            loader: (req) async => await ribbonPayoutLoader.load(req),
+            builder: (data, req) async =>
+                await ribbonPayoutBuilder.buildFile(
+                  data as RibbonPayoutReportData,
                   req,
                 ),
           ),

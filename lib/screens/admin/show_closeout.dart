@@ -22,12 +22,16 @@ import 'closeout/data/loaders/exhibitor_report_loader.dart';
 import 'closeout/data/loaders/sweepstakes_report_loader.dart';
 import 'closeout/data/loaders/breed_results_detail_report_loader.dart';
 import 'closeout/data/loaders/unpaid_balances_report_loader.dart';
+import 'closeout/data/loaders/entered_exhibitors_contact_report_loader.dart';
+import 'closeout/data/loaders/ribbon_payout_report_loader.dart';
 
 import 'closeout/pdf/builders/legs_report_pdf.dart';
 import 'closeout/pdf/builders/exhibitor_report_pdf.dart';
 import 'closeout/pdf/builders/sweepstakes_report_pdf.dart';
 import 'closeout/pdf/builders/breed_results_detail_report_pdf.dart';
 import 'closeout/pdf/builders/unpaid_balances_report_pdf.dart';
+import 'closeout/pdf/builders/entered_exhibitors_contact_report_pdf.dart';
+import 'closeout/pdf/builders/ribbon_payout_report_pdf.dart';
 
 import '../../../utils/date_time_utils.dart';
 
@@ -73,6 +77,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   LegsReportPdfBuilder? _legsBuilder;
   ExhibitorReportPdfBuilder? _exhibitorBuilder;
   UnpaidBalancesReportPdfBuilder? _unpaidBalancesBuilder;
+  EnteredExhibitorsContactReportPdf? _enteredExhibitorsContactBuilder;
+  RibbonPayoutReportPdf? _ribbonPayoutBuilder;
 
   static const Set<String> _exhibitorReportKeys = {
     'exhibitor_report',
@@ -98,8 +104,10 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     static const List<String> _reportDisplayOrder = [
       'arba_report',
       'exhibitor_report',
+      'entered_exhibitors_contact_report',
       'legs',
       'newsletter_show_report',
+      'ribbon_payout_report',
       'exh_total_points',
       'exh_by_breed',
       'details_by_breed',
@@ -119,6 +127,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       'points_report_csv',
       'commercial_class_points',
       'newsletter',
+      'entered_exhibitors_contact_report',
+      'ribbon_payout_report',
     ];
 
     String? _artifactMetaString(ReportArtifactSummary artifact, String key) {
@@ -632,6 +642,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       await _ensureExhibitorBuilder();
       await _ensureUnpaidBalancesBuilder();
       await _ensureReportLogo();
+      await _ensureEnteredExhibitorsContactBuilder();
+      await _ensureRibbonPayoutBuilder();
 
       final repository = CloseoutRepository(supabase);
 
@@ -658,6 +670,11 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
       final unpaidBalancesLoader = UnpaidBalancesReportLoader(repository);
 
+      final enteredExhibitorsContactLoader =
+          EnteredExhibitorsContactReportLoader(supabase);
+
+      final ribbonPayoutLoader = RibbonPayoutReportLoader(repository);
+
       final registry = ReportRegistry(
         arbaLoader: arbaLoader,
         arbaBuilder: arbaBuilder,
@@ -671,6 +688,10 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         breedResultsDetailReportBuilder: breedResultsDetailReportBuilder,
         unpaidBalancesLoader: unpaidBalancesLoader,
         unpaidBalancesBuilder: _unpaidBalancesBuilder!,
+        enteredExhibitorsContactLoader: enteredExhibitorsContactLoader,
+        enteredExhibitorsContactBuilder: _enteredExhibitorsContactBuilder!,
+        ribbonPayoutLoader: ribbonPayoutLoader,
+        ribbonPayoutBuilder: _ribbonPayoutBuilder!,
       );
 
       final engine = ReportEngine(registry);
@@ -789,6 +810,15 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         'refresh_show_reports_state',
         params: {'p_show_id': widget.showId},
       );
+    }
+
+    Future<void> _ensureEnteredExhibitorsContactBuilder() async {
+      _enteredExhibitorsContactBuilder ??=
+          EnteredExhibitorsContactReportPdf();
+    }
+
+    Future<void> _ensureRibbonPayoutBuilder() async {
+      _ribbonPayoutBuilder ??= RibbonPayoutReportPdf();
     }
 
   Future<void> _sendAllExhibitorReports() async {
@@ -1211,6 +1241,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       await _ensureExhibitorBuilder();
       await _ensureUnpaidBalancesBuilder();
       await _ensureReportLogo();
+      await _ensureEnteredExhibitorsContactBuilder();
+      await _ensureRibbonPayoutBuilder();
 
       if (!mounted) return;
       setState(() {
@@ -1404,6 +1436,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         await _ensureExhibitorBuilder();
         await _ensureUnpaidBalancesBuilder();
         await _ensureReportLogo();
+        await _ensureEnteredExhibitorsContactBuilder();
+        await _ensureRibbonPayoutBuilder();
 
         final repository = CloseoutRepository(supabase);
         final arbaLoader = ArbaReportLoader(repository);
@@ -1429,6 +1463,11 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
         final unpaidBalancesLoader = UnpaidBalancesReportLoader(repository);
 
+        final enteredExhibitorsContactLoader =
+            EnteredExhibitorsContactReportLoader(supabase);
+
+        final ribbonPayoutLoader = RibbonPayoutReportLoader(repository);
+
         final registry = ReportRegistry(
           arbaLoader: arbaLoader,
           arbaBuilder: arbaBuilder,
@@ -1442,6 +1481,10 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           breedResultsDetailReportBuilder: breedResultsDetailReportBuilder,
           unpaidBalancesLoader: unpaidBalancesLoader,
           unpaidBalancesBuilder: _unpaidBalancesBuilder!,
+          enteredExhibitorsContactLoader: enteredExhibitorsContactLoader,
+          enteredExhibitorsContactBuilder: _enteredExhibitorsContactBuilder!,
+          ribbonPayoutLoader: ribbonPayoutLoader,
+          ribbonPayoutBuilder: _ribbonPayoutBuilder!,
         );
 
         final engine = ReportEngine(registry);
@@ -1685,6 +1728,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       } else if (groupKey == 'other') {
         const otherManualReports = <String>{
           'unpaid_balances_report',
+          'entered_exhibitors_contact_report',
+          'ribbon_payout_report',
         };
 
         for (final name in otherManualReports) {
@@ -3422,6 +3467,10 @@ String _friendlyReportName(String? key) {
       return 'Exhibitor Total Points';
     case 'newsletter':
       return 'Newsletter';
+    case 'entered_exhibitors_contact_report':
+      return 'Entered Exhibitors Contact Report';
+    case 'ribbon_payout_report':
+      return 'Ribbon Report';
     case null:
       return '-';
     default:
