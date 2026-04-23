@@ -499,7 +499,7 @@ class _CartScreenState extends State<CartScreen> {
 
   Future<void> _payOnline() async {
     if (_items.isEmpty) {
-      setState(() => _msg = 'Your cart is empty.');
+      setState(() => _msg = 'Your cart is empty. If you are looking for completed entries please return to the upcoming shows tab and select Entries.');
       return;
     }
 

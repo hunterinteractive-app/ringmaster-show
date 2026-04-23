@@ -1,5 +1,8 @@
 // lib/screens/admin/admin_entry_management_screen.dart
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 final supabase = Supabase.instance.client;
@@ -409,10 +412,13 @@ class _AdminEntryManagementScreenState
           ],
         ),
         actions: [
-          IconButton(
-            tooltip: 'Add Entry',
-            icon: const Icon(Icons.add),
-            onPressed: _loading || _sections.isEmpty ? null : _openAddEntry,
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: ElevatedButton.icon(
+              icon: const Icon(Icons.add),
+              label: const Text('Add Entry'),
+              onPressed: _loading || _sections.isEmpty ? null : _openAddEntry,
+            ),
           ),
           IconButton(
             tooltip: 'Reload',
@@ -552,7 +558,7 @@ class _AdminEntryManagementScreenState
                                         const Divider(height: 1),
                                         ...exEntries.map((e) {
                                           final tattoo =
-                                              (e['tattoo'] ?? '').toString();
+                                              (e['tattoo'] ?? '').toString().trim().toUpperCase();
                                           final breed =
                                               (e['breed'] ?? '').toString();
                                           final variety =
@@ -707,8 +713,9 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
   @override
   void initState() {
     super.initState();
-    _tattoo =
-        TextEditingController(text: (widget.entry['tattoo'] ?? '').toString());
+    _tattoo = TextEditingController(
+        text: (widget.entry['tattoo'] ?? '').toString().trim().toUpperCase(),
+      );
     _breed =
         TextEditingController(text: (widget.entry['breed'] ?? '').toString());
     _variety = TextEditingController(
@@ -746,7 +753,9 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
       final id = widget.entry['id'].toString();
 
       await supabase.from('entries').update({
-        'tattoo': _tattoo.text.trim().isEmpty ? null : _tattoo.text.trim(),
+        'tattoo': _tattoo.text.trim().isEmpty
+            ? null
+            : _tattoo.text.trim().toUpperCase(),
         'breed': _breed.text.trim().isEmpty ? null : _breed.text.trim(),
         'variety': _variety.text.trim().isEmpty ? null : _variety.text.trim(),
         'sex': _sex.text.trim().isEmpty ? null : _sex.text.trim(),
@@ -808,6 +817,8 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
             TextField(
               controller: _tattoo,
               enabled: !_saving,
+              textCapitalization: TextCapitalization.characters,
+              inputFormatters: [UpperCaseTextFormatter()],
               decoration: const InputDecoration(
                 labelText: 'Tattoo / Ear #',
                 border: OutlineInputBorder(),
@@ -1122,6 +1133,8 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     _sex.text = _sexValue ?? '';
     _className.text = _classValue ?? '';
     _loadExhibitors();
+    _firstName.addListener(_autoFillShowingName);
+    _lastName.addListener(_autoFillShowingName);
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _loadBreedsForSpecies();
@@ -1144,6 +1157,20 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     _notes.dispose();
     _furNotes.dispose();
     super.dispose();
+  }
+
+  void _autoFillShowingName() {
+    // Don't overwrite if user already typed something custom
+    if (_showingName.text.trim().isNotEmpty) return;
+
+    final first = _firstName.text.trim();
+    final last = _lastName.text.trim();
+
+    final combined = [first, last].where((s) => s.isNotEmpty).join(' ');
+
+    if (combined.isNotEmpty) {
+      _showingName.text = combined;
+    }
   }
 
   Future<void> _loadExhibitors() async {
@@ -1185,7 +1212,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
   }
 
   String _animalLabel(Map<String, dynamic> a) {
-    final tattoo = (a['tattoo'] ?? '').toString().trim();
+    final tattoo = (a['tattoo'] ?? '').toString().trim().toUpperCase();
     final breed = (a['breed'] ?? '').toString().trim();
     final variety = (a['variety'] ?? '').toString().trim();
     final name = (a['name'] ?? '').toString().trim();
@@ -1297,13 +1324,26 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
       final breedName = (matchedBreed['name'] ?? '').toString().trim();
 
       if (_isLopBreedName(breedName)) {
+        const lopOptions = [
+          {'id': 'lop_broken', 'name': 'Broken'},
+          {'id': 'lop_solid', 'name': 'Solid'},
+        ];
+
         if (!mounted) return;
         setState(() {
           _loadingVarieties = false;
-          _varietyOptions = const [
-            {'id': 'lop_broken', 'name': 'Broken'},
-            {'id': 'lop_solid', 'name': 'Solid'},
-          ];
+          _varietyOptions = lopOptions;
+
+          final currentVariety = _variety.text.trim().toLowerCase();
+          final stillValidVariety = currentVariety.isNotEmpty &&
+              _varietyOptions.any(
+                (v) => (v['name'] ?? '').toString().trim().toLowerCase() ==
+                    currentVariety,
+              );
+
+          if (!stillValidVariety) {
+            _variety.clear();
+          }
         });
         return;
       }
@@ -1388,15 +1428,19 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
         _varietyOptions = effective;
         _loadingVarieties = false;
 
-        final currentVariety = _variety.text.trim().toLowerCase();
-        final stillValidVariety = currentVariety.isNotEmpty &&
-            _varietyOptions.any(
-              (v) => (v['name'] ?? '').toString().trim().toLowerCase() ==
-                  currentVariety,
-            );
+        if (effective.length == 1) {
+          _variety.text = (effective.first['name'] ?? '').toString();
+        } else {
+          final currentVariety = _variety.text.trim().toLowerCase();
+          final stillValidVariety = currentVariety.isNotEmpty &&
+              _varietyOptions.any(
+                (v) => (v['name'] ?? '').toString().trim().toLowerCase() ==
+                    currentVariety,
+              );
 
-        if (!stillValidVariety) {
-          _variety.clear();
+          if (!stillValidVariety) {
+            _variety.clear();
+          }
         }
       });
     } catch (e) {
@@ -1458,7 +1502,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
 
   Future<String> _createNewExhibitor() async {
     final showing = _showingName.text.trim();
-    final display = _displayName.text.trim();
+    final display = showing;
     final first = _firstName.text.trim();
     final last = _lastName.text.trim();
     final email = _email.text.trim();
@@ -1473,11 +1517,22 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
       );
     }
 
+    final existing = await supabase
+        .from('exhibitors')
+        .select('id')
+        .eq('showing_name', showing)
+        .eq('created_for_show_id', widget.showId)
+        .maybeSingle();
+
+    if (existing != null) {
+      return existing['id'].toString();
+    }
+
     final inserted = await supabase
         .from('exhibitors')
         .insert({
           'showing_name': showing.isEmpty ? null : showing,
-          'display_name': display.isEmpty ? null : display,
+          'display_name': showing.isEmpty ? null : showing,
           'first_name': first.isEmpty ? null : first,
           'last_name': last.isEmpty ? null : last,
           'email': email.isEmpty ? null : email,
@@ -1486,7 +1541,8 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
           'is_active': true,
           'is_local_only': true,
           'created_for_show_id': widget.showId,
-          'owner_user_id': supabase.auth.currentUser!.id,
+          'owner_user_id': null,
+          'email': email.isEmpty ? null : email.toLowerCase(),
         })
         .select(
           'id,showing_name,display_name,first_name,last_name,email,phone,type,owner_user_id,is_active,is_local_only,created_for_show_id',
@@ -1580,7 +1636,9 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
         'exhibitor_id': resolvedExhibitorId,
         'animal_id': animalId,
         'species': _useLocalAnimal ? _species : _animal!['species'],
-        'tattoo': _useLocalAnimal ? _tattoo.text.trim() : _animal!['tattoo'],
+        'tattoo': _useLocalAnimal
+            ? _tattoo.text.trim().toUpperCase()
+            : (_animal!['tattoo'] ?? '').toString().trim().toUpperCase(),
         'breed': _useLocalAnimal ? _breed.text.trim() : _animal!['breed'],
         'variety':
             _useLocalAnimal ? _variety.text.trim() : _animal!['variety'],
@@ -1725,15 +1783,6 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                       ),
                     ),
                     const SizedBox(height: 10),
-                    TextField(
-                      controller: _displayName,
-                      enabled: !_saving,
-                      decoration: const InputDecoration(
-                        labelText: 'Display Name',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
                     Row(
                       children: [
                         Expanded(
@@ -1872,6 +1921,8 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                     TextField(
                       controller: _tattoo,
                       enabled: !_saving,
+                      textCapitalization: TextCapitalization.characters,
+                      inputFormatters: [UpperCaseTextFormatter()],
                       decoration: const InputDecoration(
                         labelText: 'Tattoo',
                         border: OutlineInputBorder(),
@@ -2067,12 +2118,14 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                   Row(
                     children: [
                       Expanded(
+                        child: OutlinedButton(
+                          onPressed: _saving ? null : () => Navigator.pop(context),
+                          child: const Text('Cancel'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
                         child: FilledButton(
-                          style: FilledButton.styleFrom(
-                            backgroundColor: const Color(0xFFD4A623),
-                            foregroundColor: Colors.black87,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                          ),
                           onPressed: _saving ? null : () => _save(),
                           child: Text(_saving ? 'Saving…' : 'Save'),
                         ),
@@ -2085,10 +2138,22 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                         ),
                       ),
                     ],
-                  ),
+                  )
                 ],
               ),
             ),
+    );
+  }
+}
+class UpperCaseTextFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    return newValue.copyWith(
+      text: newValue.text.toUpperCase(),
+      selection: newValue.selection,
     );
   }
 }

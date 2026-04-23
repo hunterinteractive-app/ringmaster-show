@@ -55,13 +55,26 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
     });
 
     try {
-      final srows = await supabase
-          .from('show_sections')
-          .select('id,letter,display_name,kind,is_enabled,sort_order')
-          .eq('show_id', widget.showId)
-          .eq('is_enabled', true);
+      final resp = await supabase.rpc(
+        'report_entries_by_breed_section_bundle',
+        params: {
+          'p_show_id': widget.showId,
+          'p_include_scratched': widget.includeScratched,
+        },
+      );
 
-      _sections = (srows as List).cast<Map<String, dynamic>>();
+      final json = Map<String, dynamic>.from(resp as Map);
+
+      final sectionRows = (json['sections'] as List? ?? const [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+
+      final entryRows = (json['rows'] as List? ?? const [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+
+      _sections = sectionRows;
+
       _sections.sort((a, b) {
         int kindRank(String k) {
           switch (k) {
@@ -92,32 +105,23 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
         return al.compareTo(bl);
       });
 
-      final rows = await supabase.rpc(
-        'report_entries_by_breed_section',
-        params: {
-          'p_show_id': widget.showId,
-          'p_include_scratched': widget.includeScratched,
-        },
-      );
+      entryRows.sort((a, b) {
+        int cmp(String key) =>
+            ((a[key] ?? '').toString()).compareTo((b[key] ?? '').toString());
 
-      final entries = (rows as List).cast<Map<String, dynamic>>()
-        ..sort((a, b) {
-          int cmp(String key) =>
-              ((a[key] ?? '').toString()).compareTo((b[key] ?? '').toString());
+        final breedCmp = cmp('breed');
+        if (breedCmp != 0) return breedCmp;
 
-          final breedCmp = cmp('breed');
-          if (breedCmp != 0) return breedCmp;
+        final varietyCmp = cmp('variety');
+        if (varietyCmp != 0) return varietyCmp;
 
-          final varietyCmp = cmp('variety');
-          if (varietyCmp != 0) return varietyCmp;
+        final classCmp = cmp('class_name');
+        if (classCmp != 0) return classCmp;
 
-          final classCmp = cmp('class_name');
-          if (classCmp != 0) return classCmp;
+        return cmp('sex');
+      });
 
-          return cmp('sex');
-        });
-
-      final groups = _buildGroups(entries);
+      final groups = _buildGroups(entryRows);
 
       if (!mounted) return;
       setState(() {

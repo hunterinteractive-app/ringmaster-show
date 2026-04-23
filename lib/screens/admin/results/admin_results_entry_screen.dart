@@ -10,6 +10,16 @@ final supabase = Supabase.instance.client;
 /// - bis_ris
 const String kDefaultFinalAwardMode = 'four_six_bis';
 
+const List<String> kResultStatuses = [
+  'Shown',
+  'No Show',
+  'Wrong Sex',
+  'Wrong Variety',
+  'Wrong Class',
+  'Disqualified',
+  'Unworthy of Award',
+];
+
 class AdminResultsEntryScreen extends StatefulWidget {
   final String showId;
   final String showName;
@@ -681,9 +691,25 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
 
   bool isEligibleForAwards(Map<String, dynamic> e) {
     final scratched = (e['scratched_at'] ?? '').toString().trim().isNotEmpty;
+    if (scratched) return false;
+
+    final status = (e['result_status'] ?? '').toString().trim();
     final isShown = e['is_shown'] != false;
     final isDisqualified = e['is_disqualified'] == true;
-    return !scratched && isShown && !isDisqualified;
+
+    if (!isShown) return false;
+    if (isDisqualified) return false;
+
+    if (status == 'No Show' ||
+        status == 'Wrong Sex' ||
+        status == 'Wrong Variety' ||
+        status == 'Wrong Class' ||
+        status == 'Disqualified' ||
+        status == 'Unworthy of Award') {
+      return false;
+    }
+
+    return true;
   }
 
     bool showsByGroup(Map<String, dynamic> e) {
@@ -2189,6 +2215,29 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
     return 99;
   }
 
+  int _labelSortKey(String label) {
+    final parts = label.split(' ');
+    final classPart = parts.isNotEmpty ? parts.first : '';
+    final sexPart = parts.length > 1 ? parts.sublist(1).join(' ') : '';
+
+    final classRank = _classRank(classPart);
+    final sexRank = _sexRank(sexPart);
+
+    return (classRank * 10) + sexRank;
+  }
+
+  List<String> _sortedLabels(Map<String, List<Map<String, dynamic>>> grouped) {
+    final labels = grouped.keys.toList()
+      ..sort((a, b) {
+        final aKey = _labelSortKey(a);
+        final bKey = _labelSortKey(b);
+        if (aKey != bKey) return aKey.compareTo(bKey);
+        return a.toLowerCase().compareTo(b.toLowerCase());
+      });
+
+    return labels;
+  }
+
   Map<String, List<Map<String, dynamic>>> _groupByClassSex() {
     final out = <String, List<Map<String, dynamic>>>{};
     for (final e in _entries) {
@@ -2354,20 +2403,7 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
   @override
   Widget build(BuildContext context) {
     final grouped = _groupByClassSex();
-    final labels = grouped.keys.toList()
-      ..sort((a, b) {
-        final ap = a.split(' ');
-        final bp = b.split(' ');
-        final aClass = ap.isNotEmpty ? ap.first : '';
-        final bClass = bp.isNotEmpty ? bp.first : '';
-        final aSex = ap.length > 1 ? ap.sublist(1).join(' ') : '';
-        final bSex = bp.length > 1 ? bp.sublist(1).join(' ') : '';
-
-        final cr = _classRank(aClass).compareTo(_classRank(bClass));
-        if (cr != 0) return cr;
-
-        return _sexRank(aSex).compareTo(_sexRank(bSex));
-      });
+    final labels = _sortedLabels(grouped);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6FB),
@@ -2454,7 +2490,9 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
                     ),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () async {
-                      await Navigator.push(
+                      final currentIndex = labels.indexOf(label);
+
+                      final completed = await Navigator.push<bool>(
                         context,
                         MaterialPageRoute(
                           builder: (_) => _ResultsAnimalsScreen(
@@ -2477,6 +2515,49 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
                       );
 
                       await _reloadEntries();
+                      if (!mounted) return;
+
+                      if (completed == true) {
+                        final refreshedGrouped = _groupByClassSex();
+                        final refreshedLabels = _sortedLabels(refreshedGrouped);
+
+                        final nextIndex = currentIndex + 1;
+                        if (nextIndex < refreshedLabels.length) {
+                          final nextLabel = refreshedLabels[nextIndex];
+                          final nextEntries = refreshedGrouped[nextLabel] ?? const <Map<String, dynamic>>[];
+
+                          if (nextEntries.isNotEmpty) {
+                            WidgetsBinding.instance.addPostFrameCallback((_) async {
+                              if (!mounted) return;
+
+                              await Navigator.push<bool>(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => _ResultsAnimalsScreen(
+                                    showId: widget.showId,
+                                    showName: widget.showName,
+                                    sectionLabel: widget.sectionLabel,
+                                    breed: widget.breed,
+                                    variety: widget.variety,
+                                    classSexLabel: nextLabel,
+                                    entries: nextEntries,
+                                    judges: widget.judges,
+                                    onBulkJudgeApply: _applyJudgeToEntries,
+                                    initialJudgeId: _singleJudgeId(nextEntries),
+                                    breedClassSystems: widget.breedClassSystems,
+                                    finalAwardMode: widget.finalAwardMode,
+                                    showsByGroup: widget.showsByGroup,
+                                    showsByVariety: widget.showsByVariety,
+                                  ),
+                                ),
+                              );
+
+                              await _reloadEntries();
+                              if (mounted) setState(() {});
+                            });
+                          }
+                        }
+                      }
                     },
                   ),
                 );
@@ -2534,6 +2615,88 @@ class _ResultsAnimalsScreenState extends State<_ResultsAnimalsScreen> {
   bool _savingJudge = false;
   String? _currentJudgeId;
   bool _didAutoOpenInitialEntry = false;
+
+  bool _allEntriesComplete() {
+    return _entries.every(_isEntryComplete);
+  }
+
+  bool _isScratched(Map<String, dynamic> e) {
+    return (e['scratched_at'] ?? '').toString().trim().isNotEmpty;
+  }
+
+  bool _entryIsPlacementEligible(Map<String, dynamic> e) {
+    final scratched = _isScratched(e);
+    final isShown = e['is_shown'] != false;
+    final isDisqualified = e['is_disqualified'] == true;
+    final status = (e['result_status'] ?? '').toString().trim();
+
+    if (scratched) return false;
+    if (!isShown) return false;
+    if (isDisqualified) return false;
+    if (status == 'No Show' ||
+        status == 'Wrong Sex' ||
+        status == 'Wrong Variety' ||
+        status == 'Wrong Class' ||
+        status == 'Disqualified') {
+      return false;
+    }
+
+    return true;
+  }
+
+  bool _entryIsAwardEligible(Map<String, dynamic> e) {
+    final scratched = _isScratched(e);
+    final isShown = e['is_shown'] != false;
+    final isDisqualified = e['is_disqualified'] == true;
+    final status = (e['result_status'] ?? '').toString().trim();
+
+    if (scratched) return false;
+    if (!isShown) return false;
+    if (isDisqualified) return false;
+    if (status == 'No Show' ||
+        status == 'Wrong Sex' ||
+        status == 'Wrong Variety' ||
+        status == 'Wrong Class' ||
+        status == 'Disqualified' ||
+        status == 'Unworthy of Award') {
+      return false;
+    }
+
+    return true;
+  }
+
+  bool _isEntryComplete(Map<String, dynamic> e) {
+    final scratched = _isScratched(e);
+    if (scratched) return true;
+
+    final judgeId = (e['judged_by_show_judge_id'] ?? '').toString().trim();
+    if (judgeId.isEmpty) return false;
+
+    final status = (e['result_status'] ?? '').toString().trim();
+    final placement = (e['placement'] ?? '').toString().trim();
+
+    if (status.isEmpty) return false;
+
+    if (_entryIsPlacementEligible(e)) {
+      return placement.isNotEmpty;
+    }
+
+    return true;
+  }
+
+  Color _rowTint(Map<String, dynamic> e) {
+    if (_isEntryComplete(e)) {
+      return Colors.green.withOpacity(.10);
+    }
+    return Colors.red.withOpacity(.08);
+  }
+
+  Color _rowBorder(Map<String, dynamic> e) {
+    if (_isEntryComplete(e)) {
+      return Colors.green.withOpacity(.22);
+    }
+    return Colors.red.withOpacity(.18);
+  }
 
   @override
   void initState() {
@@ -2688,14 +2851,28 @@ class _ResultsAnimalsScreenState extends State<_ResultsAnimalsScreen> {
     _openInitialEntryIfNeeded();
   }
 
-  int _shownCount() {
-    return _entries.where((e) {
-      final scratched = (e['scratched_at'] ?? '').toString().trim().isNotEmpty;
-      final isShown = e['is_shown'] != false;
-      final isDisqualified = e['is_disqualified'] == true;
-      return !scratched && isShown && !isDisqualified;
-    }).length;
-  }
+    int _shownCount() {
+      return _entries.where((e) {
+        final scratched = (e['scratched_at'] ?? '').toString().trim().isNotEmpty;
+        final isShown = e['is_shown'] != false;
+        final isDisqualified = e['is_disqualified'] == true;
+        final status = (e['result_status'] ?? '').toString().trim();
+
+        if (scratched) return false;
+        if (!isShown) return false;
+        if (isDisqualified) return false;
+
+        if (status == 'No Show' ||
+            status == 'Wrong Sex' ||
+            status == 'Wrong Variety' ||
+            status == 'Wrong Class' ||
+            status == 'Disqualified') {
+          return false;
+        }
+
+        return true;
+      }).length;
+    }
 
   List<String> _availablePlacements({String? excludingEntryId}) {
     final shownCount = _shownCount();
@@ -2708,10 +2885,7 @@ class _ResultsAnimalsScreenState extends State<_ResultsAnimalsScreen> {
         continue;
       }
 
-      final scratched = (e['scratched_at'] ?? '').toString().trim().isNotEmpty;
-      final isShown = e['is_shown'] != false;
-      final isDisqualified = e['is_disqualified'] == true;
-      if (scratched || !isShown || isDisqualified) continue;
+      if (!_entryIsPlacementEligible(e)) continue;
 
       final placement = (e['placement'] ?? '').toString().trim();
       if (placement.isNotEmpty) used.add(placement);
@@ -2758,7 +2932,8 @@ class _ResultsAnimalsScreenState extends State<_ResultsAnimalsScreen> {
         classEntries: _entries,
         judges: widget.judges,
         availablePlacements: _availablePlacements(
-          excludingEntryId: (entry['entry_id'] ?? entry['id'] ?? '').toString().trim(),
+          excludingEntryId:
+              (entry['entry_id'] ?? entry['id'] ?? '').toString().trim(),
         ),
         shownCount: _shownCount(),
         currentIndex: index,
@@ -2780,15 +2955,21 @@ class _ResultsAnimalsScreenState extends State<_ResultsAnimalsScreen> {
       _msg = 'Results updated.';
     });
 
-    if (result.goNext) {
-      final nextIndex = index + 1;
-      if (nextIndex < _entries.length) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            _openResultEntryAt(nextIndex);
-          }
-        });
-      }
+    if (!result.goNext) return;
+
+    final nextIndex = index + 1;
+    if (nextIndex < _entries.length) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _openResultEntryAt(nextIndex);
+        }
+      });
+      return;
+    }
+
+    if (_allEntriesComplete()) {
+      if (!mounted) return;
+      Navigator.pop(context, true);
     }
   }
 
@@ -2910,24 +3091,28 @@ class _ResultsAnimalsScreenState extends State<_ResultsAnimalsScreen> {
                 final isShown = e['is_shown'] != false;
                 final isDisqualified = e['is_disqualified'] == true;
                 final scratched = (e['scratched_at'] ?? '').toString().trim().isNotEmpty;
+                final resultStatus = (e['result_status'] ?? '').toString().trim();
                 final judgeId = (e['judged_by_show_judge_id'] ?? '').toString().trim();
                 final judgeName = _judgeNameById(judgeId);
 
                 final subtitleParts = <String>[
                   if (exhibitor.isNotEmpty) exhibitor,
+                  if (resultStatus.isNotEmpty) 'Status: $resultStatus',
                   if (placement.isNotEmpty) 'Place: $placement',
                   if (awardsText.isNotEmpty) 'Awards: $awardsText',
                   if (judgeId.isNotEmpty) 'Judge: ${judgeName.isEmpty ? judgeId : judgeName}',
-                  if (!isShown) 'Not shown',
-                  if (isDisqualified) 'Disqualified',
+                  if (!isShown && resultStatus.isEmpty) 'Not shown',
+                  if (isDisqualified && resultStatus.isEmpty) 'Disqualified',
                   if (scratched) 'Scratched',
                 ];
 
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
                   elevation: 0,
+                  color: _rowTint(e),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
+                    side: BorderSide(color: _rowBorder(e)),
                   ),
                   child: ListTile(
                     contentPadding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
@@ -2971,9 +3156,11 @@ class _ResultsAnimalsScreenState extends State<_ResultsAnimalsScreen> {
 
 class _ResultsEntryOutcome {
   final bool goNext;
+  final bool classComplete;
 
   const _ResultsEntryOutcome({
     required this.goNext,
+    required this.classComplete,
   });
 }
 
@@ -3014,10 +3201,7 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
   bool _saving = false;
   String? _msg;
 
-  late final TextEditingController _dqReason;
-
-  late bool _isShown;
-  late bool _isDisqualified;
+  String? _resultStatus;
 
   String? _placement;
   String? _judgeId;
@@ -3032,12 +3216,32 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
   void initState() {
     super.initState();
 
-    _dqReason = TextEditingController(
-      text: (widget.entry['disqualified_reason'] ?? '').toString(),
-    );
+    final storedStatus = (widget.entry['result_status'] ?? '').toString().trim();
 
-    _isShown = widget.entry['is_shown'] != false;
-    _isDisqualified = widget.entry['is_disqualified'] == true;
+    if (storedStatus.isNotEmpty && kResultStatuses.contains(storedStatus)) {
+      _resultStatus = storedStatus;
+    } else {
+      final isShown = widget.entry['is_shown'] != false;
+      final isDisqualified = widget.entry['is_disqualified'] == true;
+      final dqReason =
+          (widget.entry['disqualified_reason'] ?? '').toString().trim();
+
+      if (!isShown) {
+        _resultStatus = 'No Show';
+      } else if (isDisqualified) {
+        if (dqReason == 'Wrong Sex' ||
+            dqReason == 'Wrong Variety' ||
+            dqReason == 'Wrong Class' ||
+            dqReason == 'Unworthy of Award' ||
+            dqReason == 'Disqualified') {
+          _resultStatus = dqReason;
+        } else {
+          _resultStatus = 'Disqualified';
+        }
+      } else {
+        _resultStatus = 'Shown';
+      }
+    }
 
     final storedJudgeId =
         (widget.entry['judged_by_show_judge_id'] ?? '').toString().trim();
@@ -3070,8 +3274,7 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
 
     if ((_placement == null || _placement!.isEmpty) &&
         widget.shownCount == 1 &&
-        _isShown &&
-        !_isDisqualified &&
+        _resultStatus == 'Shown' &&
         !_isScratched(widget.entry)) {
       _placement = '1';
     }
@@ -3079,7 +3282,6 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
 
   @override
   void dispose() {
-    _dqReason.dispose();
     super.dispose();
   }
 
@@ -3113,11 +3315,74 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
       (((e['_awards'] as List?) ?? const []).map((x) => x.toString().trim()).where((x) => x.isNotEmpty))
           .toList();
 
+  String _effectiveStatusFor(Map<String, dynamic> e) {
+    if (_entryId(e) == _entryUuid) {
+      return (_resultStatus ?? 'Shown').trim();
+    }
+    return (e['result_status'] ?? '').toString().trim();
+  }
+
+  String _effectivePlacementFor(Map<String, dynamic> e) {
+    if (_entryId(e) == _entryUuid) {
+      return (_placement ?? '').trim();
+    }
+    return (e['placement'] ?? '').toString().trim();
+  }
+
+  bool _placedFirst(Map<String, dynamic> e) {
+    return _effectivePlacementFor(e) == '1';
+  }
+
+  bool _hasAnyAward(Set<String> selected, List<String> codes) {
+    return codes.any(selected.contains);
+  }
+
+  List<String> _pairedAwardsFor(String award) {
+    switch (award) {
+      case 'BOV':
+      case 'BOSV':
+        return const ['BOV', 'BOSV'];
+      case 'BOG':
+      case 'BOSG':
+        return const ['BOG', 'BOSG'];
+      case 'BOB':
+      case 'BOSB':
+        return const ['BOB', 'BOSB'];
+      case 'Best 4-Class':
+      case 'Best 6-Class':
+        return const ['Best 4-Class', 'Best 6-Class'];
+      case 'Best In Show':
+      case 'Reserve In Show':
+        return const ['Best In Show', 'Reserve In Show'];
+      default:
+        return const [];
+    }
+  }
+
+  bool _sameRabbitAlreadyHasConflictingStageAward(String award) {
+    final pair = _pairedAwardsFor(award);
+    if (pair.isEmpty) return false;
+
+    final others = pair.where((a) => a != award);
+    return others.any(_selectedAwards.contains);
+  }
+
   bool _isEligibleForAwards(Map<String, dynamic> e) {
     final scratched = _isScratched(e);
-    final isShown = e['is_shown'] != false;
-    final isDisqualified = e['is_disqualified'] == true;
-    return !scratched && isShown && !isDisqualified;
+    if (scratched) return false;
+
+    final status = _effectiveStatusFor(e);
+
+    if (status == 'No Show' ||
+        status == 'Wrong Sex' ||
+        status == 'Wrong Variety' ||
+        status == 'Wrong Class' ||
+        status == 'Disqualified' ||
+        status == 'Unworthy of Award') {
+      return false;
+    }
+
+    return true;
   }
 
   String _classSystemForEntry(Map<String, dynamic> e) {
@@ -3189,17 +3454,26 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
 
   bool _canUseAward(String award) {
     if (!_isEligibleForAwards(widget.entry)) return false;
+    if (!_placedFirst(widget.entry)) return false;
+    if (_sameRabbitAlreadyHasConflictingStageAward(award)) return false;
 
     final currentAwards = _selectedAwards;
 
     switch (award) {
-      case 'BOG':
-      case 'BOSG':
-        return _breedUsesGroups();
-
       case 'BOV':
       case 'BOSV':
         return _showsByVariety;
+
+      case 'BOG':
+      case 'BOSG':
+        if (!_breedUsesGroups()) return false;
+
+        // If this breed also uses variety awards, group awards should only
+        // become available after the rabbit has already won at variety level.
+        if (_showsByVariety) {
+          return currentAwards.contains('BOV') || currentAwards.contains('BOSV');
+        }
+        return true;
 
       case 'BOB':
       case 'BOSB':
@@ -3212,20 +3486,24 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
         return true;
 
       case 'Best 4-Class':
-        return _classSystemForEntry(widget.entry) == 'four' && currentAwards.contains('BOB');
+        return _classSystemForEntry(widget.entry) == 'four' &&
+            currentAwards.contains('BOB');
 
       case 'Best 6-Class':
-        return _classSystemForEntry(widget.entry) == 'six' && currentAwards.contains('BOB');
+        return _classSystemForEntry(widget.entry) == 'six' &&
+            currentAwards.contains('BOB');
 
       case 'Best In Show':
         if (widget.finalAwardMode == 'four_six_bis') {
-          return currentAwards.contains('Best 4-Class') || currentAwards.contains('Best 6-Class');
+          return currentAwards.contains('Best 4-Class') ||
+              currentAwards.contains('Best 6-Class');
         }
         return currentAwards.contains('BOB');
 
       case 'Reserve In Show':
         if (widget.finalAwardMode == 'bis_ris') {
-          return currentAwards.contains('BOB');
+          return currentAwards.contains('BOB') &&
+              !currentAwards.contains('Best In Show');
         }
         return false;
     }
@@ -3235,7 +3513,11 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
 
   String? _validateAwards() {
     if (!_isEligibleForAwards(widget.entry) && _selectedAwards.isNotEmpty) {
-      return 'This rabbit cannot receive awards because it is scratched, disqualified, or not shown.';
+      return 'This rabbit cannot receive awards because it is scratched, disqualified, not shown, or unworthy of award.';
+    }
+
+    if (_selectedAwards.isNotEmpty && !_placedFirst(widget.entry)) {
+      return 'Only first-place rabbits can receive awards.';
     }
 
     bool sameVariety(Map<String, dynamic> e) =>
@@ -3252,40 +3534,78 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
         _sectionId(e) == _sectionId(widget.entry) &&
         _breed(e).toLowerCase() == _breed(widget.entry).toLowerCase();
 
-    bool sameSection(Map<String, dynamic> e) => _sectionId(e) == _sectionId(widget.entry);
+    bool sameSection(Map<String, dynamic> e) =>
+        _sectionId(e) == _sectionId(widget.entry);
+
+    // Same rabbit cannot hold both sides of a paired award stage.
+    for (final award in _selectedAwards) {
+      if (_sameRabbitAlreadyHasConflictingStageAward(award)) {
+        return 'A rabbit can only hold one award in the same award stage.';
+      }
+    }
 
     if (_hasAward('BOV')) {
-      final existing = _winnerForAwardInScope(award: 'BOV', sameScope: sameVariety);
+      final existing = _winnerForAwardInScope(
+        award: 'BOV',
+        sameScope: sameVariety,
+      );
       if (existing != null) return 'BOV is already assigned for this variety.';
-      final bosv = _winnerForAwardInScope(award: 'BOSV', sameScope: sameVariety);
+      final bosv = _winnerForAwardInScope(
+        award: 'BOSV',
+        sameScope: sameVariety,
+      );
       if (!_isOppositeSexOf(bosv)) return 'BOV and BOSV must be opposite sex.';
     }
 
     if (_hasAward('BOSV')) {
-      final existing = _winnerForAwardInScope(award: 'BOSV', sameScope: sameVariety);
+      final existing = _winnerForAwardInScope(
+        award: 'BOSV',
+        sameScope: sameVariety,
+      );
       if (existing != null) return 'BOSV is already assigned for this variety.';
-      final bov = _winnerForAwardInScope(award: 'BOV', sameScope: sameVariety);
+      final bov = _winnerForAwardInScope(
+        award: 'BOV',
+        sameScope: sameVariety,
+      );
       if (!_isOppositeSexOf(bov)) return 'BOV and BOSV must be opposite sex.';
     }
 
     if (_hasAward('BOG')) {
-      final existing = _winnerForAwardInScope(award: 'BOG', sameScope: sameGroup);
+      final existing = _winnerForAwardInScope(
+        award: 'BOG',
+        sameScope: sameGroup,
+      );
       if (existing != null) return 'BOG is already assigned for this group.';
-      final bosg = _winnerForAwardInScope(award: 'BOSG', sameScope: sameGroup);
+      final bosg = _winnerForAwardInScope(
+        award: 'BOSG',
+        sameScope: sameGroup,
+      );
       if (!_isOppositeSexOf(bosg)) return 'BOG and BOSG must be opposite sex.';
     }
 
     if (_hasAward('BOSG')) {
-      final existing = _winnerForAwardInScope(award: 'BOSG', sameScope: sameGroup);
+      final existing = _winnerForAwardInScope(
+        award: 'BOSG',
+        sameScope: sameGroup,
+      );
       if (existing != null) return 'BOSG is already assigned for this group.';
-      final bog = _winnerForAwardInScope(award: 'BOG', sameScope: sameGroup);
+      final bog = _winnerForAwardInScope(
+        award: 'BOG',
+        sameScope: sameGroup,
+      );
       if (!_isOppositeSexOf(bog)) return 'BOG and BOSG must be opposite sex.';
     }
 
     if (_hasAward('BOB')) {
-      final existing = _winnerForAwardInScope(award: 'BOB', sameScope: sameBreed);
+      final existing = _winnerForAwardInScope(
+        award: 'BOB',
+        sameScope: sameBreed,
+      );
       if (existing != null) return 'BOB is already assigned for this breed.';
-      final bosb = _winnerForAwardInScope(award: 'BOSB', sameScope: sameBreed);
+      final bosb = _winnerForAwardInScope(
+        award: 'BOSB',
+        sameScope: sameBreed,
+      );
       if (!_isOppositeSexOf(bosb)) return 'BOB and BOSB must be opposite sex.';
 
       if (_breedUsesGroups()) {
@@ -3300,9 +3620,15 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
     }
 
     if (_hasAward('BOSB')) {
-      final existing = _winnerForAwardInScope(award: 'BOSB', sameScope: sameBreed);
+      final existing = _winnerForAwardInScope(
+        award: 'BOSB',
+        sameScope: sameBreed,
+      );
       if (existing != null) return 'BOSB is already assigned for this breed.';
-      final bob = _winnerForAwardInScope(award: 'BOB', sameScope: sameBreed);
+      final bob = _winnerForAwardInScope(
+        award: 'BOB',
+        sameScope: sameBreed,
+      );
       if (!_isOppositeSexOf(bob)) return 'BOB and BOSB must be opposite sex.';
 
       if (_breedUsesGroups()) {
@@ -3317,34 +3643,56 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
     }
 
     if (_hasAward('Best 4-Class')) {
-      final existing = _winnerForAwardInScope(award: 'Best 4-Class', sameScope: sameSection);
-      if (existing != null) return 'Best 4-Class is already assigned in this section.';
-      if (!_canUseAward('Best 4-Class')) return 'Best 4-Class requires a 4-class breed and BOB.';
+      final existing = _winnerForAwardInScope(
+        award: 'Best 4-Class',
+        sameScope: sameSection,
+      );
+      if (existing != null) {
+        return 'Best 4-Class is already assigned in this section.';
+      }
+      if (!_canUseAward('Best 4-Class')) {
+        return 'Best 4-Class requires a first-place BOB from a 4-class breed.';
+      }
     }
 
     if (_hasAward('Best 6-Class')) {
-      final existing = _winnerForAwardInScope(award: 'Best 6-Class', sameScope: sameSection);
-      if (existing != null) return 'Best 6-Class is already assigned in this section.';
-      if (!_canUseAward('Best 6-Class')) return 'Best 6-Class requires a 6-class breed and BOB.';
+      final existing = _winnerForAwardInScope(
+        award: 'Best 6-Class',
+        sameScope: sameSection,
+      );
+      if (existing != null) {
+        return 'Best 6-Class is already assigned in this section.';
+      }
+      if (!_canUseAward('Best 6-Class')) {
+        return 'Best 6-Class requires a first-place BOB from a 6-class breed.';
+      }
     }
 
     if (_hasAward('Best In Show')) {
-      final existing = _winnerForAwardInScope(award: 'Best In Show', sameScope: sameSection);
+      final existing = _winnerForAwardInScope(
+        award: 'Best In Show',
+        sameScope: sameSection,
+      );
       if (existing != null) return 'Best In Show is already assigned in this section.';
       if (!_canUseAward('Best In Show')) {
         return widget.finalAwardMode == 'four_six_bis'
             ? 'Best In Show must come from Best 4-Class or Best 6-Class.'
-            : 'Best In Show must come from a breed winner.';
+            : 'Best In Show must come from a first-place breed winner.';
       }
     }
 
     if (_hasAward('Reserve In Show')) {
-      final existing = _winnerForAwardInScope(award: 'Reserve In Show', sameScope: sameSection);
-      if (existing != null) return 'Reserve In Show is already assigned in this section.';
-      if (!_canUseAward('Reserve In Show')) return 'Reserve In Show is only available in BIS/RIS mode.';
-      if (_hasAward('Best In Show')) return 'This rabbit cannot be both Best In Show and Reserve In Show.';
-      final bis = _winnerForAwardInScope(award: 'Best In Show', sameScope: sameSection);
-      if (bis != null && _entryId(bis) == _entryId(widget.entry)) {
+      final existing = _winnerForAwardInScope(
+        award: 'Reserve In Show',
+        sameScope: sameSection,
+      );
+      if (existing != null) {
+        return 'Reserve In Show is already assigned in this section.';
+      }
+      if (!_canUseAward('Reserve In Show')) {
+        return 'Reserve In Show must come from a first-place breed winner and cannot also be BIS.';
+      }
+      if (_hasAward('Best In Show')) {
         return 'This rabbit cannot be both Best In Show and Reserve In Show.';
       }
     }
@@ -3353,10 +3701,20 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
   }
 
   String _awardDisabledReason(String award) {
+    if (!_placedFirst(widget.entry)) {
+      return 'Only first-place rabbits can receive awards.';
+    }
+
+    if (_sameRabbitAlreadyHasConflictingStageAward(award)) {
+      return 'This rabbit already has the opposite award at this stage.';
+    }
+
     switch (award) {
       case 'BOG':
       case 'BOSG':
-        return 'Only for breeds judged by group.';
+        return _showsByVariety
+            ? 'Requires a prior variety win, and only for breeds judged by group.'
+            : 'Only for breeds judged by group.';
       case 'BOV':
       case 'BOSV':
         return 'Only for breeds with variety awards.';
@@ -3364,15 +3722,15 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
       case 'BOSB':
         return 'Requires BOV/BOSV or BOG/BOSG first.';
       case 'Best 4-Class':
-        return 'Requires BOB from a 4-class breed.';
+        return 'Requires first-place BOB from a 4-class breed.';
       case 'Best 6-Class':
-        return 'Requires BOB from a 6-class breed.';
+        return 'Requires first-place BOB from a 6-class breed.';
       case 'Best In Show':
         return widget.finalAwardMode == 'four_six_bis'
             ? 'Requires Best 4-Class or Best 6-Class.'
-            : 'Requires breed winner.';
+            : 'Requires first-place breed winner.';
       case 'Reserve In Show':
-        return 'Only used in BIS/RIS mode.';
+        return 'Only used in BIS/RIS mode and cannot be on the BIS rabbit.';
       default:
         return 'Not eligible right now.';
     }
@@ -3396,7 +3754,9 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
       debugPrint('SAVE DEBUG auth.currentUser.id=${user?.id}');
       debugPrint('SAVE DEBUG auth.session.exists=${session != null}');
       debugPrint('SAVE DEBUG entryId=$entryId');
-      debugPrint('SAVE DEBUG showId=${widget.entry['show_id'] ?? '(missing from entry row)'}');
+      debugPrint(
+        'SAVE DEBUG showId=${widget.entry['show_id'] ?? '(missing from entry row)'}',
+      );
 
       if (user == null || session == null) {
         throw Exception(
@@ -3406,7 +3766,9 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
       }
 
       final scratched = _isScratched(widget.entry);
-      final shouldClearPlacement = !_isShown || _isDisqualified || scratched;
+      final effectiveStatus = (_resultStatus ?? 'Shown').trim();
+
+      final shouldClearPlacement = scratched || effectiveStatus != 'Shown';
 
       final awardError = _validateAwards();
       if (awardError != null) {
@@ -3438,15 +3800,24 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
         normalizedJudgeId ??= rawJudgeId;
       }
 
-      final normalizedDqReason = _isDisqualified
-          ? (_dqReason.text.trim().isEmpty ? null : _dqReason.text.trim())
-          : null;
+      final normalizedDqReason =
+          (effectiveStatus == 'Disqualified' ||
+                  effectiveStatus == 'Wrong Sex' ||
+                  effectiveStatus == 'Wrong Variety' ||
+                  effectiveStatus == 'Wrong Class' ||
+                  effectiveStatus == 'Unworthy of Award')
+              ? effectiveStatus
+              : null;
 
       final payload = <String, dynamic>{
         'placement': normalizedPlacement,
+        'result_status': effectiveStatus,
         'disqualified_reason': normalizedDqReason,
-        'is_shown': _isShown,
-        'is_disqualified': _isDisqualified,
+        'is_shown': effectiveStatus != 'No Show',
+        'is_disqualified': effectiveStatus == 'Disqualified' ||
+            effectiveStatus == 'Wrong Sex' ||
+            effectiveStatus == 'Wrong Variety' ||
+            effectiveStatus == 'Wrong Class',
         'judged_by_show_judge_id': normalizedJudgeId,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       };
@@ -3454,14 +3825,13 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
       debugPrint('SAVE DEBUG entryId=$entryId');
       debugPrint('SAVE DEBUG payload=$payload');
 
-      await supabase
-          .from('entries')
-          .update(payload)
-          .eq('id', entryId);
+      await supabase.from('entries').update(payload).eq('id', entryId);
 
       final reread = await supabase
           .from('entries')
-          .select('id, placement, judged_by_show_judge_id, is_shown, is_disqualified, updated_at')
+          .select(
+            'id, placement, result_status, judged_by_show_judge_id, is_shown, is_disqualified, updated_at',
+          )
           .eq('id', entryId)
           .single();
 
@@ -3488,7 +3858,10 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
       if (!mounted) return;
       Navigator.pop(
         context,
-        _ResultsEntryOutcome(goNext: goNext),
+        _ResultsEntryOutcome(
+          goNext: goNext,
+          classComplete: goNext,
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -3511,8 +3884,9 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     final placementOptions = _placementOptions();
-    final canPlace = !scratched && _isShown && !_isDisqualified;
-    final canAward = !scratched && _isShown && !_isDisqualified;
+    final canPlace = !scratched && _resultStatus == 'Shown';
+    final canAward =
+        !scratched && _resultStatus == 'Shown' && (_placement ?? '').trim() == '1';
 
     return Padding(
       padding: EdgeInsets.only(
@@ -3614,37 +3988,35 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
                       },
               ),
               const SizedBox(height: 8),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                value: _isShown,
+              DropdownButtonFormField<String>(
+                value: _resultStatus,
+                decoration: const InputDecoration(
+                  labelText: 'Result Status',
+                ),
+                items: kResultStatuses
+                    .map(
+                      (status) => DropdownMenuItem<String>(
+                        value: status,
+                        child: Text(status),
+                      ),
+                    )
+                    .toList(),
                 onChanged: scratched || _saving
                     ? null
-                    : (v) {
+                    : (value) {
+                        if (value == null) return;
                         setState(() {
-                          _isShown = v;
-                          if (!_isShown) {
+                          _resultStatus = value;
+
+                          if (_resultStatus != 'Shown') {
                             _placement = null;
+                          }
+
+                          if (_resultStatus != 'Shown') {
                             _selectedAwards.clear();
                           }
                         });
                       },
-                title: const Text('Animal was shown'),
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                value: _isDisqualified,
-                onChanged: scratched || _saving
-                    ? null
-                    : (v) {
-                        setState(() {
-                          _isDisqualified = v;
-                          if (_isDisqualified) {
-                            _placement = null;
-                            _selectedAwards.clear();
-                          }
-                        });
-                      },
-                title: const Text('Disqualified'),
               ),
               const SizedBox(height: 10),
               if (canPlace)
@@ -3695,7 +4067,14 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
                       ? null
                       : (v) {
                           setState(() {
+                            final pair = _pairedAwardsFor(award);
+
                             if (v == true) {
+                              for (final other in pair) {
+                                if (other != award) {
+                                  _selectedAwards.remove(other);
+                                }
+                              }
                               _selectedAwards.add(award);
                             } else {
                               _selectedAwards.remove(award);
@@ -3704,18 +4083,6 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
                         },
                 );
               }),
-              if (_isDisqualified) ...[
-                const SizedBox(height: 10),
-                TextField(
-                  controller: _dqReason,
-                  enabled: !_saving,
-                  minLines: 2,
-                  maxLines: 4,
-                  decoration: const InputDecoration(
-                    labelText: 'Disqualification Reason',
-                  ),
-                ),
-              ],
               const SizedBox(height: 16),
               Row(
                 children: [

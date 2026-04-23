@@ -17,13 +17,96 @@ import '../services/role_service.dart';
 import '../utils/date_time_utils.dart';
 import '../theme/app_theme.dart';
 import '../widgets/rm_widgets.dart';
-import '../widgets/ringmaster_page_shell.dart';
 import '../widgets/rm_timezone_notice_banner.dart';
 
 final supabase = Supabase.instance.client;
 
-class ShowListScreen extends StatelessWidget {
+class ShowListScreen extends StatefulWidget {
   const ShowListScreen({super.key});
+
+  @override
+  State<ShowListScreen> createState() => _ShowListScreenState();
+}
+
+class _ShowListScreenState extends State<ShowListScreen> {
+  final TextEditingController _searchController = TextEditingController();
+
+  late Future<_ShowListBundle> _bundleFuture;
+
+  String _searchQuery = '';
+  String _sortMode = 'date';
+  String _stateFilter = 'All';
+
+  static const Map<String, String> _stateAbbreviationToName = {
+    'AL': 'Alabama',
+    'AK': 'Alaska',
+    'AZ': 'Arizona',
+    'AR': 'Arkansas',
+    'CA': 'California',
+    'CO': 'Colorado',
+    'CT': 'Connecticut',
+    'DE': 'Delaware',
+    'FL': 'Florida',
+    'GA': 'Georgia',
+    'HI': 'Hawaii',
+    'ID': 'Idaho',
+    'IL': 'Illinois',
+    'IN': 'Indiana',
+    'IA': 'Iowa',
+    'KS': 'Kansas',
+    'KY': 'Kentucky',
+    'LA': 'Louisiana',
+    'ME': 'Maine',
+    'MD': 'Maryland',
+    'MA': 'Massachusetts',
+    'MI': 'Michigan',
+    'MN': 'Minnesota',
+    'MS': 'Mississippi',
+    'MO': 'Missouri',
+    'MT': 'Montana',
+    'NE': 'Nebraska',
+    'NV': 'Nevada',
+    'NH': 'New Hampshire',
+    'NJ': 'New Jersey',
+    'NM': 'New Mexico',
+    'NY': 'New York',
+    'NC': 'North Carolina',
+    'ND': 'North Dakota',
+    'OH': 'Ohio',
+    'OK': 'Oklahoma',
+    'OR': 'Oregon',
+    'PA': 'Pennsylvania',
+    'RI': 'Rhode Island',
+    'SC': 'South Carolina',
+    'SD': 'South Dakota',
+    'TN': 'Tennessee',
+    'TX': 'Texas',
+    'UT': 'Utah',
+    'VT': 'Vermont',
+    'VA': 'Virginia',
+    'WA': 'Washington',
+    'WV': 'West Virginia',
+    'WI': 'Wisconsin',
+    'WY': 'Wyoming',
+    'DC': 'District of Columbia',
+  };
+
+  static final Map<String, String> _stateNameLookup = {
+    for (final entry in _stateAbbreviationToName.entries)
+      entry.value.toUpperCase(): entry.value,
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _bundleFuture = _loadBundle();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   Future<List<Map<String, dynamic>>> _loadShows() async {
     final now = DateTime.now().toUtc().toIso8601String();
@@ -153,6 +236,148 @@ class ShowListScreen extends StatelessWidget {
     return (res as List).cast<Map<String, dynamic>>();
   }
 
+  String _extractState(String location) {
+    final raw = location.trim();
+    if (raw.isEmpty) return '';
+
+    final upper = raw.toUpperCase();
+
+    // Look for ", ST 12345" or ", ST" or " ST 12345"
+    final abbrPattern = RegExp(
+      r'(?:^|,|\s)([A-Z]{2})(?=\s+\d{5}(?:-\d{4})?$|$)',
+    );
+    for (final match in abbrPattern.allMatches(upper)) {
+      final abbr = match.group(1);
+      if (abbr != null && _stateAbbreviationToName.containsKey(abbr)) {
+        return _stateAbbreviationToName[abbr]!;
+      }
+    }
+
+    // Look for full state names anywhere in the string, longest first
+    final stateNames = _stateNameLookup.keys.toList()
+      ..sort((a, b) => b.length.compareTo(a.length));
+
+    for (final upperStateName in stateNames) {
+      final pattern = RegExp(
+        r'(^|[^A-Z])' + RegExp.escape(upperStateName) + r'([^A-Z]|$)',
+      );
+      if (pattern.hasMatch(upper)) {
+        return _stateNameLookup[upperStateName]!;
+      }
+    }
+
+    // Fallback: inspect comma-separated parts from right to left
+    final parts = raw
+        .split(',')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList()
+        .reversed;
+
+    for (final part in parts) {
+      final partUpper = part.toUpperCase();
+
+      final firstTokenMatch =
+          RegExp(r'^([A-Z]{2})(?:\s|$)').firstMatch(partUpper);
+      if (firstTokenMatch != null) {
+        final abbr = firstTokenMatch.group(1)!;
+        if (_stateAbbreviationToName.containsKey(abbr)) {
+          return _stateAbbreviationToName[abbr]!;
+        }
+      }
+
+      if (_stateNameLookup.containsKey(partUpper)) {
+        return _stateNameLookup[partUpper]!;
+      }
+    }
+
+    return '';
+  }
+
+  DateTime? _parseDate(String raw) {
+    if (raw.trim().isEmpty) return null;
+    return DateTime.tryParse(raw);
+  }
+
+  List<String> _availableStates(List<Map<String, dynamic>> shows) {
+    final values = shows
+        .map((s) => _extractState((s['location_name'] ?? '').toString()))
+        .where((s) => s.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+
+    return ['All', ...values];
+  }
+
+  List<Map<String, dynamic>> _applyFiltersAndSort(
+    List<Map<String, dynamic>> shows,
+  ) {
+    final query = _searchQuery.trim().toLowerCase();
+
+    final filtered = shows.where((s) {
+      final name = (s['name'] ?? '').toString();
+      final location = (s['location_name'] ?? '').toString();
+      final state = _extractState(location);
+      final startDate = (s['start_date'] ?? '').toString();
+
+      final matchesState = _stateFilter == 'All' || state == _stateFilter;
+
+      final haystack = [
+        name,
+        location,
+        state,
+        startDate,
+      ].join(' ').toLowerCase();
+
+      final matchesSearch = query.isEmpty || haystack.contains(query);
+
+      return matchesState && matchesSearch;
+    }).toList();
+
+    filtered.sort((a, b) {
+      final aDate = _parseDate((a['start_date'] ?? '').toString());
+      final bDate = _parseDate((b['start_date'] ?? '').toString());
+      final aState = _extractState((a['location_name'] ?? '').toString());
+      final bState = _extractState((b['location_name'] ?? '').toString());
+      final aName = (a['name'] ?? '').toString().toLowerCase();
+      final bName = (b['name'] ?? '').toString().toLowerCase();
+
+      if (_sortMode == 'state') {
+        final stateCmp = aState.compareTo(bState);
+        if (stateCmp != 0) return stateCmp;
+
+        if (aDate != null && bDate != null) {
+          final dateCmp = aDate.compareTo(bDate);
+          if (dateCmp != 0) return dateCmp;
+        } else if (aDate != null) {
+          return -1;
+        } else if (bDate != null) {
+          return 1;
+        }
+
+        return aName.compareTo(bName);
+      }
+
+      // Default: show date, then state alphabetically, then show name
+      if (aDate != null && bDate != null) {
+        final dateCmp = aDate.compareTo(bDate);
+        if (dateCmp != 0) return dateCmp;
+      } else if (aDate != null) {
+        return -1;
+      } else if (bDate != null) {
+        return 1;
+      }
+
+      final stateCmp = aState.compareTo(bState);
+      if (stateCmp != 0) return stateCmp;
+
+      return aName.compareTo(bName);
+    });
+
+    return filtered;
+  }
+
   Future<void> _logout(BuildContext context) async {
     await supabase.auth.signOut();
     if (!context.mounted) return;
@@ -198,186 +423,353 @@ class ShowListScreen extends StatelessWidget {
     );
   }
 
-    @override
-    Widget build(BuildContext context) {
-      return FutureBuilder<_ShowListBundle>(
-        future: _loadBundle(),
-        builder: (context, snap) {
-          final bundle = snap.data;
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<_ShowListBundle>(
+      future: _bundleFuture,
+      builder: (context, snap) {
+        final bundle = snap.data;
 
-          return Scaffold(
-            appBar: _ResponsiveShowAppBar(
-              bundle: bundle,
-              showAdmin: bundle?.canSeeAdminButton == true,
-              onAdmin: bundle == null ? null : () => _openAdmin(context, bundle),
-              onAnimals: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const MyAnimalsScreen()),
-                );
-              },
-              onEntries: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const MyEntriesScreen()),
-                );
-              },
-              onSuperAdmin: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const SuperadminHomeScreen()),
-                );
-              },
-              onAccount: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AccountSettingsScreen()),
-                );
-              },
-              onLogout: () => _logout(context),
-            ),
-            body: Builder(
-              builder: (_) {
-                Widget content;
+        return Scaffold(
+          appBar: _ResponsiveShowAppBar(
+            bundle: bundle,
+            showAdmin: bundle?.canSeeAdminButton == true,
+            onAdmin: bundle == null ? null : () => _openAdmin(context, bundle),
+            onAnimals: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const MyAnimalsScreen()),
+              );
+            },
+            onEntries: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const MyEntriesScreen()),
+              );
+            },
+            onSuperAdmin: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SuperadminHomeScreen()),
+              );
+            },
+            onAccount: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const AccountSettingsScreen(),
+                ),
+              );
+            },
+            onLogout: () => _logout(context),
+          ),
+          body: Builder(
+            builder: (_) {
+              Widget content;
 
-                if (snap.connectionState != ConnectionState.done) {
-                  content = const Center(child: CircularProgressIndicator());
-                } else if (snap.hasError) {
-                  content = Center(child: Text('Error: ${snap.error}'));
+              if (snap.connectionState != ConnectionState.done) {
+                content = const Center(child: CircularProgressIndicator());
+              } else if (snap.hasError) {
+                content = Center(child: Text('Error: ${snap.error}'));
+              } else {
+                final bundle = snap.data!;
+                final allShows = bundle.shows;
+                final stateOptions = _availableStates(allShows);
+                final shows = _applyFiltersAndSort(allShows);
+
+                if (allShows.isEmpty) {
+                  content = _UpcomingShowsEmptyState(
+                    showAdminButton: bundle.canSeeAdminButton,
+                    onAdmin: () => _openAdmin(context, bundle),
+                  );
                 } else {
-                  final bundle = snap.data!;
-                  final shows = bundle.shows;
-
-                  if (shows.isEmpty) {
-                    content = _UpcomingShowsEmptyState(
-                      showAdminButton: bundle.canSeeAdminButton,
-                      onAdmin: () => _openAdmin(context, bundle),
-                    );
-                  } else {
-                    content = ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.lg,
-                        0,
-                        AppSpacing.lg,
-                        AppSpacing.xl,
-                      ),
-                      itemCount: shows.length,
-                      itemBuilder: (context, i) {
-                        final s = shows[i];
-                        final showId = s['id'].toString();
-                        final showName = (s['name'] ?? '').toString();
-                        final startDate = (s['start_date'] ?? '').toString();
-                        final location = (s['location_name'] ?? '').toString();
-
-                        final entryDeadlineText =
-                            formatLocalDateTime(s['entry_close_at']?.toString());
-
-                        final deadlinePassed = s['entry_close_at'] != null &&
-                            DateTime.parse(
-                              s['entry_close_at'].toString(),
-                            ).toLocal().isBefore(DateTime.now());
-
-                        final isAdminForShow =
-                            bundle.isSuperAdmin || bundle.adminShowIds.contains(showId);
-
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                          child: RMCard(
-                            onTap: () => _openEnterShow(context, showId, showName),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        showName,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium
-                                            ?.copyWith(fontWeight: FontWeight.w700),
-                                      ),
-                                    ),
-                                    PopupMenuButton<String>(
-                                      tooltip: 'Actions',
-                                      onSelected: (v) {
-                                        if (v == 'enter') {
-                                          _openEnterShow(context, showId, showName);
-                                        } else if (v == 'admin') {
-                                          _openEditShow(context, showId);
-                                        }
-                                      },
-                                      itemBuilder: (_) => [
-                                        const PopupMenuItem(
-                                          value: 'enter',
-                                          child: Text('Enter Show'),
+                  content = Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(
+                          AppSpacing.lg,
+                          0,
+                          AppSpacing.lg,
+                          AppSpacing.md,
+                        ),
+                        child: RMCard(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              TextField(
+                                controller: _searchController,
+                                decoration: InputDecoration(
+                                  labelText: 'Search shows',
+                                  hintText:
+                                      'Search by show name, location, state, or date',
+                                  prefixIcon: const Icon(Icons.search),
+                                  suffixIcon: _searchQuery.isEmpty
+                                      ? null
+                                      : IconButton(
+                                          icon: const Icon(Icons.clear),
+                                          onPressed: () {
+                                            setState(() {
+                                              _searchController.clear();
+                                              _searchQuery = '';
+                                            });
+                                          },
                                         ),
-                                        if (isAdminForShow)
-                                          const PopupMenuItem(
-                                            value: 'admin',
-                                            child: Text('Admin Settings'),
-                                          ),
-                                      ],
-                                    ),
-                                  ],
+                                  border: const OutlineInputBorder(),
                                 ),
-                                const SizedBox(height: AppSpacing.sm),
-                                Text(
-                                  '$startDate • $location',
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                        color: AppColors.muted,
-                                      ),
-                                ),
-                                const SizedBox(height: AppSpacing.md),
-                                Wrap(
-                                  spacing: AppSpacing.sm,
-                                  runSpacing: AppSpacing.sm,
+                                onChanged: (value) {
+                                  setState(() {
+                                    _searchQuery = value;
+                                  });
+                                },
+                              ),
+                              const SizedBox(height: AppSpacing.md),
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: Wrap(
+                                  spacing: AppSpacing.md,
+                                  runSpacing: AppSpacing.md,
                                   children: [
-                                    RMBadge(
-                                      text: deadlinePassed
-                                          ? 'Entry Closed'
-                                          : 'Entry Deadline: $entryDeadlineText',
-                                      icon: Icons.event_available,
-                                      danger: deadlinePassed,
-                                      success: !deadlinePassed,
-                                    ),
-                                    if (isAdminForShow)
-                                      const RMBadge(
-                                        text: 'Admin Access',
-                                        icon: Icons.admin_panel_settings,
+                                    SizedBox(
+                                      width: 220,
+                                      child: DropdownButtonFormField<String>(
+                                        value: _sortMode,
+                                        decoration: const InputDecoration(
+                                          labelText: 'Sort by',
+                                          border: OutlineInputBorder(),
+                                        ),
+                                        items: const [
+                                          DropdownMenuItem(
+                                            value: 'date',
+                                            child: Text('Show Date'),
+                                          ),
+                                          DropdownMenuItem(
+                                            value: 'state',
+                                            child: Text('State'),
+                                          ),
+                                        ],
+                                        onChanged: (value) {
+                                          if (value == null) return;
+                                          setState(() {
+                                            _sortMode = value;
+                                          });
+                                        },
                                       ),
+                                    ),
+                                    SizedBox(
+                                      width: 220,
+                                      child: DropdownButtonFormField<String>(
+                                        value: stateOptions.contains(_stateFilter)
+                                            ? _stateFilter
+                                            : 'All',
+                                        decoration: const InputDecoration(
+                                          labelText: 'Filter by State',
+                                          border: OutlineInputBorder(),
+                                        ),
+                                        items: stateOptions
+                                            .map(
+                                              (state) => DropdownMenuItem<String>(
+                                                value: state,
+                                                child: Text(state),
+                                              ),
+                                            )
+                                            .toList(),
+                                        onChanged: (value) {
+                                          if (value == null) return;
+                                          setState(() {
+                                            _stateFilter = value;
+                                          });
+                                        },
+                                      ),
+                                    ),
                                   ],
                                 ),
-                              ],
-                            ),
+                              ),
+                              const SizedBox(height: AppSpacing.sm),
+                              Text(
+                                '${shows.length} show${shows.length == 1 ? '' : 's'} found',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(color: AppColors.muted),
+                              ),
+                            ],
                           ),
-                        );
-                      },
-                    );
-                  }
-                }
-
-                return Column(
-                  children: [
-                    const Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        AppSpacing.lg,
-                        AppSpacing.lg,
-                        AppSpacing.lg,
-                        12,
+                        ),
                       ),
-                      child: RMTimezoneNoticeBanner(),
+                      Expanded(
+                        child: shows.isEmpty
+                            ? Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(AppSpacing.xl),
+                                  child: Text(
+                                    'No shows match your current search or filters.',
+                                    style: Theme.of(context).textTheme.bodyMedium,
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              )
+                            : ListView.builder(
+                                padding: const EdgeInsets.fromLTRB(
+                                  AppSpacing.lg,
+                                  0,
+                                  AppSpacing.lg,
+                                  AppSpacing.xl,
+                                ),
+                                itemCount: shows.length,
+                                itemBuilder: (context, i) {
+                                  final s = shows[i];
+                                  final showId = s['id'].toString();
+                                  final showName = (s['name'] ?? '').toString();
+                                  final location =
+                                      (s['location_name'] ?? '').toString();
+
+                                  final formattedStartDate =
+                                      formatLocalDateTime(
+                                    s['start_date']?.toString(),
+                                  );
+
+                                  final entryDeadlineText =
+                                      formatLocalDateTime(
+                                    s['entry_close_at']?.toString(),
+                                  );
+
+                                  final deadlinePassed =
+                                      s['entry_close_at'] != null &&
+                                          DateTime.parse(
+                                            s['entry_close_at'].toString(),
+                                          )
+                                              .toLocal()
+                                              .isBefore(DateTime.now());
+
+                                  final isAdminForShow = bundle.isSuperAdmin ||
+                                      bundle.adminShowIds.contains(showId);
+
+                                  return Padding(
+                                    padding: const EdgeInsets.only(
+                                      bottom: AppSpacing.md,
+                                    ),
+                                    child: RMCard(
+                                      onTap: () => _openEnterShow(
+                                        context,
+                                        showId,
+                                        showName,
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  showName,
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .titleMedium
+                                                      ?.copyWith(
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                      ),
+                                                ),
+                                              ),
+                                              PopupMenuButton<String>(
+                                                tooltip: 'Actions',
+                                                onSelected: (v) {
+                                                  if (v == 'enter') {
+                                                    _openEnterShow(
+                                                      context,
+                                                      showId,
+                                                      showName,
+                                                    );
+                                                  } else if (v == 'admin') {
+                                                    _openEditShow(
+                                                      context,
+                                                      showId,
+                                                    );
+                                                  }
+                                                },
+                                                itemBuilder: (_) => [
+                                                  const PopupMenuItem(
+                                                    value: 'enter',
+                                                    child: Text('Enter Show'),
+                                                  ),
+                                                  if (isAdminForShow)
+                                                    const PopupMenuItem(
+                                                      value: 'admin',
+                                                      child: Text(
+                                                        'Admin Settings',
+                                                      ),
+                                                    ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: AppSpacing.sm),
+                                          Text(
+                                            '$formattedStartDate • $location',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall
+                                                ?.copyWith(
+                                                  color: AppColors.muted,
+                                                ),
+                                          ),
+                                          const SizedBox(
+                                            height: AppSpacing.md,
+                                          ),
+                                          Wrap(
+                                            spacing: AppSpacing.sm,
+                                            runSpacing: AppSpacing.sm,
+                                            children: [
+                                              RMBadge(
+                                                text: deadlinePassed
+                                                    ? 'Entry Closed'
+                                                    : 'Entry Deadline: $entryDeadlineText',
+                                                icon: Icons.event_available,
+                                                danger: deadlinePassed,
+                                                success: !deadlinePassed,
+                                              ),
+                                              if (isAdminForShow)
+                                                const RMBadge(
+                                                  text: 'Admin Access',
+                                                  icon: Icons.admin_panel_settings,
+                                                ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                      ),
+                    ],
+                  );
+                }
+              }
+
+              return Column(
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      AppSpacing.lg,
+                      AppSpacing.lg,
+                      AppSpacing.lg,
+                      12,
                     ),
-                    Expanded(child: content),
-                  ],
-                );
-              },
-            ),
-          );
-        },
-      );
-    }
+                    child: RMTimezoneNoticeBanner(),
+                  ),
+                  Expanded(child: content),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
 }
 
 class _ResponsiveShowAppBar extends StatelessWidget

@@ -1,3 +1,5 @@
+// lib/screens/my_animals_screen.dart
+
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -42,7 +44,7 @@ class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
 
   Future<void> _confirmDeleteAnimal(Map<String, dynamic> animal) async {
     final name = (animal['name'] ?? '').toString().trim();
-    final tattoo = (animal['tattoo'] ?? '').toString().trim();
+    final tattoo = (animal['tattoo'] ?? '').toString().trim().toUpperCase();
     final breed = (animal['breed'] ?? '').toString().trim();
 
     final label = name.isNotEmpty
@@ -157,7 +159,7 @@ class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
               final breed = (a['breed'] ?? '').toString();
               final variety = (a['variety'] ?? '').toString();
               final sex = (a['sex'] ?? '').toString();
-              final tattoo = (a['tattoo'] ?? '').toString().trim();
+              final tattoo = (a['tattoo'] ?? '').toString().trim().toUpperCase();
               final name = (a['name'] ?? '').toString().trim();
 
               final title = name.isEmpty
@@ -472,7 +474,7 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
     if (e != null) {
       _species = (e['species'] ?? 'rabbit').toString();
       _name.text = (e['name'] ?? '').toString();
-      _tattoo.text = (e['tattoo'] ?? '').toString();
+      _tattoo.text = (e['tattoo'] ?? '').toString().toUpperCase();
       _breedText.text = (e['breed'] ?? '').toString();
       _varietyText.text = (e['variety'] ?? '').toString();
 
@@ -592,13 +594,26 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
     final breedName = (matchedBreed['name'] ?? '').toString().trim();
 
     if (_isLopBreedName(breedName)) {
+      const lopOptions = [
+        {'id': 'lop_broken', 'name': 'Broken'},
+        {'id': 'lop_solid', 'name': 'Solid'},
+      ];
+
       if (!mounted) return;
       setState(() {
         _loadingVarieties = false;
-        _varietyOptions = const [
-          {'id': 'lop_broken', 'name': 'Broken'},
-          {'id': 'lop_solid', 'name': 'Solid'},
-        ];
+        _varietyOptions = lopOptions;
+
+        final currentVariety = _varietyText.text.trim().toLowerCase();
+        final stillValidVariety = currentVariety.isNotEmpty &&
+            _varietyOptions.any(
+              (v) => (v['name'] ?? '').toString().trim().toLowerCase() ==
+                  currentVariety,
+            );
+
+        if (!stillValidVariety) {
+          _varietyText.clear();
+        }
       });
       return;
     }
@@ -609,17 +624,34 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
         .eq('breed_id', breedId)
         .order('name');
 
+    final effective = (res as List)
+        .cast<Map<String, dynamic>>()
+      ..sort(
+        (a, b) => (a['name'] ?? '')
+            .toString()
+            .toLowerCase()
+            .compareTo((b['name'] ?? '').toString().toLowerCase()),
+      );
+
     if (!mounted) return;
     setState(() {
-      _varietyOptions = (res as List)
-          .cast<Map<String, dynamic>>()
-        ..sort(
-          (a, b) => (a['name'] ?? '')
-              .toString()
-              .toLowerCase()
-              .compareTo((b['name'] ?? '').toString().toLowerCase()),
-        );
+      _varietyOptions = effective;
       _loadingVarieties = false;
+
+      if (effective.length == 1) {
+        _varietyText.text = (effective.first['name'] ?? '').toString();
+      } else {
+        final currentVariety = _varietyText.text.trim().toLowerCase();
+        final stillValidVariety = currentVariety.isNotEmpty &&
+            _varietyOptions.any(
+              (v) => (v['name'] ?? '').toString().trim().toLowerCase() ==
+                  currentVariety,
+            );
+
+        if (!stillValidVariety) {
+          _varietyText.clear();
+        }
+      }
     });
   }
 
@@ -764,7 +796,7 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
       'owner_user_id': user.id,
       'species': _species,
       'name': _name.text.trim().isEmpty ? null : _name.text.trim(),
-      'tattoo': _tattoo.text.trim(),
+      'tattoo': _tattoo.text.trim().toUpperCase(),
       'breed': _breedText.text.trim(),
       'variety': _varietyText.text.trim(),
       'sex': _sexValue,
@@ -854,6 +886,8 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
               controller: _tattoo,
               focusNode: _tattooFocus,
               textInputAction: TextInputAction.next,
+              textCapitalization: TextCapitalization.characters,
+              inputFormatters: [UpperCaseTextFormatter()],
               onSubmitted: (_) =>
                   FocusScope.of(context).requestFocus(_breedFocus),
               decoration:
@@ -1056,6 +1090,19 @@ class _FocusOpenAutocomplete extends StatefulWidget {
 
   @override
   State<_FocusOpenAutocomplete> createState() => _FocusOpenAutocompleteState();
+}
+
+class UpperCaseTextFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    return newValue.copyWith(
+      text: newValue.text.toUpperCase(),
+      selection: newValue.selection,
+    );
+  }
 }
 
 class _FocusOpenAutocompleteState extends State<_FocusOpenAutocomplete> {

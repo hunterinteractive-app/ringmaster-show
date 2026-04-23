@@ -315,64 +315,6 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     return const ['Open Boar', 'Open Sow'];
   }
 
-  Future<void> _editProjectedClass(Map<String, dynamic> animal) async {
-    final animalId = (animal['id'] ?? '').toString();
-    final options = _allowedClassOptionsForAnimal(animal);
-
-    if (options.isEmpty) return;
-
-    final current = _classControllerFor(animalId).text.trim();
-    String selectedValue = options.contains(current) ? current : options.first;
-
-    final saved = await showDialog<String>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Change Class'),
-        content: StatefulBuilder(
-          builder: (context, setLocalState) {
-            return DropdownButtonFormField<String>(
-              value: selectedValue,
-              items: options
-                  .map(
-                    (opt) => DropdownMenuItem<String>(
-                      value: opt,
-                      child: Text(opt),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (v) {
-                if (v == null) return;
-                setLocalState(() {
-                  selectedValue = v;
-                });
-              },
-              decoration: const InputDecoration(
-                labelText: 'Class',
-                border: OutlineInputBorder(),
-              ),
-            );
-          },
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, selectedValue),
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
-
-    if (saved != null) {
-      setState(() {
-        _classControllerFor(animalId).text = saved;
-      });
-    }
-  }
-
   Future<void> _viewCart() async {
     final user = supabase.auth.currentUser;
     if (user == null) {
@@ -958,27 +900,23 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     return 'Open $sex';
   }
 
-  String _classDisplayForAnimal(Map<String, dynamic> animal) {
-    final animalId = (animal['id'] ?? '').toString();
-    final controller = _classControllerFor(animalId);
-    final manualValue = controller.text.trim();
+    String? _selectedOrSuggestedClassForAnimal(Map<String, dynamic> animal) {
+      final animalId = (animal['id'] ?? '').toString();
+      final controller = _classControllerFor(animalId);
+      final manualValue = controller.text.trim();
 
-    if (manualValue.isNotEmpty) {
-      final suggested = _suggestClassForAnimal(animal);
-      if (suggested != null && suggested == manualValue) {
-        return 'Projected Class: $manualValue';
+      if (manualValue.isNotEmpty) {
+        return manualValue;
       }
-      return 'Class: $manualValue';
-    }
 
-    final suggested = _suggestClassForAnimal(animal);
-    if (suggested != null && suggested.isNotEmpty) {
-      controller.text = suggested;
-      return 'Projected Class: $suggested';
-    }
+      final suggested = _suggestClassForAnimal(animal);
+      if (suggested != null && suggested.isNotEmpty) {
+        controller.text = suggested;
+        return suggested;
+      }
 
-    return 'Class: Needs Validation';
-  }
+      return null;
+    }
 
   void _toggleSelected(Map<String, dynamic> animal, bool isSelected) {
     final id = animal['id'] as String;
@@ -1551,117 +1489,128 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     return list;
   }
 
-  Widget _buildAnimalTile(Map<String, dynamic> a) {
-    final id = a['id'] as String;
-    final checked = _selected[id] ?? false;
-    final inCart = _isAnimalInCart(id);
-    final alreadyEnteredInSelectedSection =
-        _isAnimalAlreadyEnteredInAnySelectedSection(id);
-    final hasSectionConflict = _hasSectionConflictForAnimal(id);
-    final disabled = inCart || alreadyEnteredInSelectedSection || hasSectionConflict;
+    Widget _buildAnimalTile(Map<String, dynamic> a) {
+      final id = a['id'] as String;
+      final checked = _selected[id] ?? false;
+      final inCart = _isAnimalInCart(id);
+      final alreadyEnteredInSelectedSection =
+          _isAnimalAlreadyEnteredInAnySelectedSection(id);
+      final hasSectionConflict = _hasSectionConflictForAnimal(id);
+      final disabled =
+          inCart || alreadyEnteredInSelectedSection || hasSectionConflict;
 
-    final alreadyEnteredLabel = _alreadyEnteredSectionLabel(id);
-    final conflictLabel = _sectionConflictLabelForAnimal(id);
+      final alreadyEnteredLabel = _alreadyEnteredSectionLabel(id);
+      final conflictLabel = _sectionConflictLabelForAnimal(id);
 
-    final tile = ListTile(
-      leading: Checkbox(
-        value: checked,
-        onChanged: (_submitting || disabled)
-            ? null
-            : (v) => _toggleSelected(a, v ?? false),
-      ),
-      title: Text(_displayAnimalTitle(a)),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '${_safeString(a, 'species').toUpperCase()} • ${_safeString(a, 'breed')} • ${_safeString(a, 'variety')} • ${_safeString(a, 'sex')}',
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Builder(
-                builder: (context) {
-                  final classLabel = _classDisplayForAnimal(a);
-                  final needsValidation =
-                      classLabel == 'Class: Needs Validation';
+      final classOptions = _allowedClassOptionsForAnimal(a);
+      final selectedClass = _selectedOrSuggestedClassForAnimal(a);
+      final needsValidation = selectedClass == null || selectedClass.isEmpty;
 
-                  return Expanded(
-                    child: Text(
-                      classLabel,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: needsValidation ? Colors.red : null,
-                            fontWeight:
-                                needsValidation ? FontWeight.w600 : null,
-                          ),
-                    ),
-                  );
-                },
+      final tile = ListTile(
+        leading: Checkbox(
+          value: checked,
+          onChanged: (_submitting || disabled)
+              ? null
+              : (v) => _toggleSelected(a, v ?? false),
+        ),
+        title: Text(_displayAnimalTitle(a)),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${_safeString(a, 'species').toUpperCase()} • ${_safeString(a, 'breed')} • ${_safeString(a, 'variety')} • ${_safeString(a, 'sex')}',
+            ),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              value: classOptions.contains(selectedClass) ? selectedClass : null,
+              decoration: InputDecoration(
+                labelText: 'Class',
+                helperText: needsValidation
+                    ? 'Select the class for this animal.'
+                    : 'Projected class selected.',
+                helperStyle: TextStyle(
+                  color: needsValidation ? Colors.red : null,
+                  fontWeight: needsValidation ? FontWeight.w600 : null,
+                ),
+                border: const OutlineInputBorder(),
+                isDense: true,
               ),
-              TextButton(
-                onPressed: (_submitting || disabled)
-                    ? null
-                    : () => _editProjectedClass(a),
-                child: const Text('Select Class'),
+              items: classOptions
+                  .map(
+                    (opt) => DropdownMenuItem<String>(
+                      value: opt,
+                      child: Text(opt),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (_submitting || disabled)
+                  ? null
+                  : (value) {
+                      if (value == null) return;
+                      setState(() {
+                        _classControllerFor(id).text = value;
+                        _msg = null;
+                      });
+                    },
+            ),
+            if (_selected[id] == true && _selectedSectionIds.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _selectedSectionIds
+                    .where((sectionId) => !_sectionIsMeatOnly(sectionId))
+                    .map((sectionId) {
+                  final label = _sectionLabelForId(sectionId);
+                  final furSelected = _isFurSelectedForAnimalSection(id, sectionId);
+
+                  return FilterChip(
+                    label: Text('$label Fur/Wool'),
+                    selected: furSelected,
+                    onSelected: (_submitting || disabled)
+                        ? null
+                        : (value) => _toggleFurForAnimalSection(
+                              animalId: id,
+                              sectionId: sectionId,
+                              value: value,
+                            ),
+                  );
+                }).toList(),
               ),
             ],
-          ),
-          if (_selected[id] == true && _selectedSectionIds.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _selectedSectionIds
-                  .where((sectionId) => !_sectionIsMeatOnly(sectionId))
-                  .map((sectionId) {
-                final label = _sectionLabelForId(sectionId);
-                final furSelected = _isFurSelectedForAnimalSection(id, sectionId);
-
-                return FilterChip(
-                  label: Text('$label Fur/Wool'),
-                  selected: furSelected,
-                  onSelected: (_submitting || disabled)
-                      ? null
-                      : (value) => _toggleFurForAnimalSection(
-                            animalId: id,
-                            sectionId: sectionId,
-                            value: value,
-                          ),
-                );
-              }).toList(),
-            ),
+            if (alreadyEnteredInSelectedSection || hasSectionConflict || inCart) ...[
+              const SizedBox(height: 8),
+              Text(
+                alreadyEnteredInSelectedSection
+                    ? (alreadyEnteredLabel.isEmpty
+                        ? 'Already entered in one of the selected sections'
+                        : 'Already entered in $alreadyEnteredLabel')
+                    : hasSectionConflict
+                        ? (conflictLabel.isEmpty
+                            ? 'Cannot enter the same letter in both Open and Youth'
+                            : 'Conflicts with existing $conflictLabel')
+                        : 'Already in cart',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Colors.red,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+            ],
           ],
-          if (alreadyEnteredInSelectedSection || hasSectionConflict || inCart)
-            Text(
-              alreadyEnteredInSelectedSection
-                  ? (alreadyEnteredLabel.isEmpty
-                      ? 'Already entered in one of the selected sections'
-                      : 'Already entered in $alreadyEnteredLabel')
-                  : hasSectionConflict
-                      ? (conflictLabel.isEmpty
-                          ? 'Cannot enter the same letter in both Open and Youth'
-                          : 'Conflicts with existing $conflictLabel')
-                      : 'Already in cart',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.red,
-                    fontWeight: FontWeight.w600,
-                  ),
-            ),
-        ],
-      ),
-      isThreeLine: true,
-    );
-
-    return Column(
-      children: [
-        Opacity(
-          opacity: disabled ? 0.45 : 1.0,
-          child: tile,
         ),
-        const Divider(height: 1),
-      ],
-    );
-  }
+        isThreeLine: false,
+      );
+
+      return Column(
+        children: [
+          Opacity(
+            opacity: disabled ? 0.45 : 1.0,
+            child: tile,
+          ),
+          const Divider(height: 1),
+        ],
+      );
+    }
 
   bool _animalHasExactDob(Map<String, dynamic> animal) {
     if (_showDate == null) return false;
@@ -2355,28 +2304,62 @@ Future<_MeatPenInput?> _openMeatPenDialog() {
                           ),
                           Padding(
                             padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: sections.map((s) {
-                                  final id = s['id'].toString();
-                                  final selected =
-                                      _selectedSectionIds.contains(id);
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(.05),
+                                    blurRadius: 10,
+                                  ),
+                                ],
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Select show(s) to enter',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    'Choose the section(s) you want to enter for this show, such as Youth A, Youth B, Open A, or Open B.',
+                                    style: Theme.of(context).textTheme.bodySmall,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: sections.map((s) {
+                                        final id = s['id'].toString();
+                                        final selected =
+                                            _selectedSectionIds.contains(id);
 
-                                  return FilterChip(
-                                    label: Text(_sectionChipLabel(s)),
-                                    selected: selected,
-                                    onSelected: _submitting
-                                        ? null
-                                        : (_) => _toggleSection(
-                                              sectionId: id,
-                                              kind: (s['kind'] ?? '')
-                                                  .toString(),
-                                            ),
-                                  );
-                                }).toList(),
+                                        return FilterChip(
+                                          label: Text(_sectionChipLabel(s)),
+                                          selected: selected,
+                                          onSelected: _submitting
+                                              ? null
+                                              : (_) => _toggleSection(
+                                                    sectionId: id,
+                                                    kind: (s['kind'] ?? '')
+                                                        .toString(),
+                                                  ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
@@ -2642,29 +2625,40 @@ class _MeatPenDialogState extends State<_MeatPenDialog> {
     });
   }
 
-  Future<void> _loadVarietiesForBreed(String selectedBreedId) async {
+  Future<void> _loadVarietiesForBreed(String breedId) async {
     setState(() {
       _loadingVarieties = true;
       _varietyOptions = [];
-      _varietyText.clear();
-      _msg = null;
     });
 
     final matchedBreed = _breedOptions.firstWhere(
-      (b) => (b['id'] ?? '').toString() == selectedBreedId,
+      (b) => (b['id'] ?? '').toString() == breedId,
       orElse: () => <String, dynamic>{},
     );
 
     final breedName = (matchedBreed['name'] ?? '').toString().trim();
 
     if (_isLopBreedName(breedName)) {
+      const lopOptions = [
+        {'id': 'lop_broken', 'name': 'Broken'},
+        {'id': 'lop_solid', 'name': 'Solid'},
+      ];
+
       if (!mounted) return;
       setState(() {
-        _varietyOptions = const [
-          {'id': 'lop_broken', 'name': 'Broken'},
-          {'id': 'lop_solid', 'name': 'Solid'},
-        ];
+        _varietyOptions = lopOptions;
         _loadingVarieties = false;
+
+        final currentVariety = _varietyText.text.trim().toLowerCase();
+        final stillValidVariety = currentVariety.isNotEmpty &&
+            _varietyOptions.any(
+              (v) => (v['name'] ?? '').toString().trim().toLowerCase() ==
+                  currentVariety,
+            );
+
+        if (!stillValidVariety) {
+          _varietyText.clear();
+        }
       });
       return;
     }
@@ -2672,14 +2666,37 @@ class _MeatPenDialogState extends State<_MeatPenDialog> {
     final res = await supabase
         .from('varieties')
         .select('id,name')
-        .eq('breed_id', selectedBreedId)
+        .eq('breed_id', breedId)
         .order('name');
 
-    if (!mounted) return;
+    final effective = (res as List)
+        .cast<Map<String, dynamic>>()
+      ..sort(
+        (a, b) => (a['name'] ?? '')
+            .toString()
+            .toLowerCase()
+            .compareTo((b['name'] ?? '').toString().toLowerCase()),
+      );
 
+    if (!mounted) return;
     setState(() {
-      _varietyOptions = (res as List).cast<Map<String, dynamic>>();
+      _varietyOptions = effective;
       _loadingVarieties = false;
+
+      if (effective.length == 1) {
+        _varietyText.text = (effective.first['name'] ?? '').toString();
+      } else {
+        final currentVariety = _varietyText.text.trim().toLowerCase();
+        final stillValidVariety = currentVariety.isNotEmpty &&
+            _varietyOptions.any(
+              (v) => (v['name'] ?? '').toString().trim().toLowerCase() ==
+                  currentVariety,
+            );
+
+        if (!stillValidVariety) {
+          _varietyText.clear();
+        }
+      }
     });
   }
 
@@ -2790,18 +2807,21 @@ class _MeatPenDialogState extends State<_MeatPenDialog> {
               TextField(
                 controller: _tattoo1,
                 textCapitalization: TextCapitalization.characters,
+                inputFormatters: [UpperCaseTextFormatter()],
                 decoration: const InputDecoration(labelText: 'Tattoo 1'),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: _tattoo2,
                 textCapitalization: TextCapitalization.characters,
+                inputFormatters: [UpperCaseTextFormatter()],
                 decoration: const InputDecoration(labelText: 'Tattoo 2'),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: _tattoo3,
                 textCapitalization: TextCapitalization.characters,
+                inputFormatters: [UpperCaseTextFormatter()],
                 decoration: const InputDecoration(labelText: 'Tattoo 3'),
               ),
               if (_msg != null) ...[
@@ -3155,7 +3175,7 @@ class _InlineAnimalEditorDialogState extends State<_InlineAnimalEditorDialog> {
       'owner_user_id': user.id,
       'species': _species,
       'name': _name.text.trim().isEmpty ? null : _name.text.trim(),
-      'tattoo': _tattoo.text.trim(),
+      'tattoo': _tattoo.text.trim().toUpperCase(),
       'breed': _breedText.text.trim(),
       'variety': _varietyText.text.trim(),
       'sex': _sexValue,
@@ -3238,6 +3258,8 @@ class _InlineAnimalEditorDialogState extends State<_InlineAnimalEditorDialog> {
               controller: _tattoo,
               focusNode: _tattooFocus,
               textInputAction: TextInputAction.next,
+              textCapitalization: TextCapitalization.characters,
+              inputFormatters: [UpperCaseTextFormatter()],
               onSubmitted: (_) =>
                   FocusScope.of(context).requestFocus(_breedFocus),
               decoration:
@@ -3402,7 +3424,7 @@ class _InlineAnimalEditorDialogState extends State<_InlineAnimalEditorDialog> {
         ),
         FilledButton(
           onPressed: _saving ? null : _save,
-          child: Text(_saving ? 'Save & Add to Entry' : 'Save & Add to Entry'),
+          child: Text(_saving ? 'Saving…' : 'Save & Add to Entry'),
         ),
       ],
     );
@@ -3609,6 +3631,19 @@ class _FocusOpenAutocompleteState extends State<_FocusOpenAutocomplete> {
           ),
         );
       },
+    );
+  }
+}
+
+class UpperCaseTextFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    return newValue.copyWith(
+      text: newValue.text.toUpperCase(),
+      selection: newValue.selection,
     );
   }
 }
