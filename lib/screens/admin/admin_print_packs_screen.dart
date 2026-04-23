@@ -657,10 +657,58 @@ class _ControlSheetsGeneratorSheetState
     final s = raw.trim();
     if (s.isEmpty) return '';
     final l = s.toLowerCase();
+
+    if (l.contains('wool')) return 'Wool';
+    if (l.contains('fur')) return 'Fur';
+
     if (l.contains('senior')) return 'Senior';
     if (l.contains('intermediate')) return 'Intermediate';
     if (l.contains('junior')) return 'Junior';
     return s;
+  }
+
+  bool _isFurOrWoolRow(Map<String, dynamic> row) {
+    final className = _safe(row, 'class_name').toLowerCase();
+    final groupName = _safe(row, 'group_name').toLowerCase();
+    final variety = _safe(row, 'variety').toLowerCase();
+
+    return className.contains('fur') ||
+        className.contains('wool') ||
+        groupName.contains('fur') ||
+        groupName.contains('wool') ||
+        variety.contains('fur') ||
+        variety.contains('wool');
+  }
+
+  String _furWoolLabel(Map<String, dynamic> row) {
+    final className = _safe(row, 'class_name').toLowerCase();
+    final groupName = _safe(row, 'group_name').toLowerCase();
+    final variety = _safe(row, 'variety').toLowerCase();
+
+    if (className.contains('wool') ||
+        groupName.contains('wool') ||
+        variety.contains('wool')) {
+      return 'Wool';
+    }
+
+    if (className.contains('fur') ||
+        groupName.contains('fur') ||
+        variety.contains('fur')) {
+      return 'Fur';
+    }
+
+    return 'Fur/Wool';
+  }
+
+  int _classSortRankForPrint(String className) {
+    final c = className.toLowerCase();
+    if (c == 'senior') return 0;
+    if (c == 'intermediate') return 1;
+    if (c == 'junior') return 2;
+    if (c == 'fur') return 1000;
+    if (c == 'wool') return 1001;
+    if (c == 'fur/wool') return 1002;
+    return 99;
   }
 
   Future<List<Map<String, dynamic>>> _fetchEntries() async {
@@ -710,6 +758,10 @@ class _ControlSheetsGeneratorSheetState
   }
 
   List<String> _specialsForRow(Map<String, dynamic> row) {
+    if (_isFurOrWoolRow(row)) {
+      return const <String>[];
+    }
+
     final usesGroupAwards = row['uses_group_awards'] == true;
     final usesVarietyAwards = row['uses_variety_awards'] == true;
 
@@ -766,9 +818,14 @@ class _ControlSheetsGeneratorSheetState
 
         for (final row in sectionEntries) {
           final breed = _safe(row, 'breed');
-          final color = _colorLabel(row);
-          final cls = _ageOnly(_safe(row, 'class_name'));
-          final sex = _safe(row, 'sex');
+
+          final isFurOrWool = _isFurOrWoolRow(row);
+
+          final color = isFurOrWool ? '' : _colorLabel(row);
+          final cls = isFurOrWool
+              ? _furWoolLabel(row)
+              : _ageOnly(_safe(row, 'class_name'));
+          final sex = isFurOrWool ? '' : _safe(row, 'sex');
 
           final key = [
             breed.toLowerCase(),
@@ -781,7 +838,49 @@ class _ControlSheetsGeneratorSheetState
           grouped[key]!.add(row);
         }
 
-        final keys = grouped.keys.toList()..sort();
+        final keys = grouped.keys.toList()
+          ..sort((a, b) {
+            final aParts = a.split('|');
+            final bParts = b.split('|');
+
+            final aBreed = aParts.isNotEmpty ? aParts[0] : '';
+            final bBreed = bParts.isNotEmpty ? bParts[0] : '';
+            final breedCmp = aBreed.compareTo(bBreed);
+            if (breedCmp != 0) return breedCmp;
+
+            final aColor = aParts.length > 1 ? aParts[1] : '';
+            final bColor = bParts.length > 1 ? bParts[1] : '';
+
+            final aClass = aParts.length > 2 ? aParts[2] : '';
+            final bClass = bParts.length > 2 ? bParts[2] : '';
+
+            final aSex = aParts.length > 3 ? aParts[3] : '';
+            final bSex = bParts.length > 3 ? bParts[3] : '';
+
+            final aIsFurOrWool = _classSortRankForPrint(aClass) >= 1000;
+            final bIsFurOrWool = _classSortRankForPrint(bClass) >= 1000;
+
+            if (aIsFurOrWool != bIsFurOrWool) {
+              return aIsFurOrWool ? 1 : -1;
+            }
+
+            if (!aIsFurOrWool && !bIsFurOrWool) {
+              final colorCmp = aColor.compareTo(bColor);
+              if (colorCmp != 0) return colorCmp;
+
+              final classCmp = _classSortRankForPrint(aClass)
+                  .compareTo(_classSortRankForPrint(bClass));
+              if (classCmp != 0) return classCmp;
+
+              return aSex.compareTo(bSex);
+            }
+
+            final furClassCmp = _classSortRankForPrint(aClass)
+                .compareTo(_classSortRankForPrint(bClass));
+            if (furClassCmp != 0) return furClassCmp;
+
+            return aColor.compareTo(bColor);
+          });
 
         for (final key in keys) {
           final groupRows = grouped[key]!;
@@ -795,18 +894,23 @@ class _ControlSheetsGeneratorSheetState
             if (exId.isNotEmpty) exhibitorIds.add(exId);
           }
 
+          final isFurOrWool = _isFurOrWoolRow(first);
+
           allPages.add({
             'sectionTitle': widget.combineSections
                 ? _sectionTitleFromRow(first)
                 : widget.sectionLabel,
             'breed': _safe(first, 'breed'),
-            'color': _colorLabel(first),
-            'class': _ageOnly(_safe(first, 'class_name')),
-            'sex': _safe(first, 'sex'),
+            'color': isFurOrWool ? '' : _colorLabel(first),
+            'class': isFurOrWool
+                ? _furWoolLabel(first)
+                : _ageOnly(_safe(first, 'class_name')),
+            'sex': isFurOrWool ? '' : _safe(first, 'sex'),
             'rabbitCount': groupRows.length,
             'exhibitorCount': exhibitorIds.length,
             'rows': groupRows,
             'specials': _specialsForRow(first),
+            'isFurOrWool': isFurOrWool,
           });
         }
       }
@@ -931,10 +1035,59 @@ class _ControlSheetsGeneratorSheetState
       pw.Widget _judgingTable({
         required List<Map<String, dynamic>> groupEntries,
         required List<String> specialsList,
+        required bool isFurOrWool,
       }) {
         final h = pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold);
         final c = pw.TextStyle(fontSize: 9);
         final specialsText = specialsList.join(', ');
+
+        if (isFurOrWool) {
+          return pw.Table(
+            border: pw.TableBorder.all(width: 0.8),
+            columnWidths: {
+              0: const pw.FixedColumnWidth(80),
+              1: const pw.FlexColumnWidth(1),
+              2: const pw.FixedColumnWidth(150),
+            },
+            children: [
+              pw.TableRow(
+                decoration: const pw.BoxDecoration(color: PdfColors.grey300),
+                children: [
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(6),
+                    child: pw.Text('Ear #', style: h),
+                  ),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(6),
+                    child: pw.Text('Exhibitor', style: h),
+                  ),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(6),
+                    child: pw.Text('Place / DQ', style: h),
+                  ),
+                ],
+              ),
+              ...groupEntries.map((row) {
+                return pw.TableRow(
+                  children: [
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Text(_safe(row, 'tattoo'), style: c),
+                    ),
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Text(_safe(row, 'exhibitor_label'), style: c),
+                    ),
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Text('', style: c),
+                    ),
+                  ],
+                );
+              }),
+            ],
+          );
+        }
 
         return pw.Table(
           border: pw.TableBorder.all(width: 0.8),
@@ -991,9 +1144,9 @@ class _ControlSheetsGeneratorSheetState
           ],
         );
       }
-
       for (var i = 0; i < allPages.length; i++) {
         final p = allPages[i];
+        final isFurOrWool = p['isFurOrWool'] == true;
 
         doc.addPage(
           pw.Page(
@@ -1018,12 +1171,23 @@ class _ControlSheetsGeneratorSheetState
                     rabbitCount: (p['rabbitCount'] as int?) ?? 0,
                     exhibitorCount: (p['exhibitorCount'] as int?) ?? 0,
                   ),
+                  if (isFurOrWool) ...[
+                    pw.SizedBox(height: 6),
+                    pw.Text(
+                      'Fur/Wool Sheet — placements only',
+                      style: pw.TextStyle(
+                        fontSize: 10,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                  ],
                   pw.SizedBox(height: 14),
                   _judgingTable(
                     groupEntries:
                         (p['rows'] as List).cast<Map<String, dynamic>>(),
                     specialsList:
                         (p['specials'] as List).map((x) => x.toString()).toList(),
+                    isFurOrWool: isFurOrWool,
                   ),
                 ],
               );
@@ -1031,7 +1195,6 @@ class _ControlSheetsGeneratorSheetState
           ),
         );
       }
-
       return doc;
     }
 
