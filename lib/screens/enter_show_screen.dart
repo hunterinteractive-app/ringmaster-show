@@ -337,29 +337,13 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   List<String> _allowedClassOptionsForAnimal(Map<String, dynamic> animal) {
     final species = (animal['species'] ?? '').toString().trim().toLowerCase();
     final breed = (animal['breed'] ?? '').toString().trim();
-    final sex = _normalizedRabbitSex(animal['sex']?.toString());
 
     if (species == 'rabbit') {
       final isSixClass = _isSixClassBreed(breed);
       final hasPreJunior = _breedHasPreJunior(breed);
 
-      if (_isGiantChinchilla(breed)) {
-        if (sex == 'buck') {
-          return const [
-            'Pre-Junior Buck',
-            'Junior',
-            'Intermediate',
-            'Senior',
-          ];
-        }
-        if (sex == 'doe') {
-          return const [
-            'Pre-Junior Doe',
-            'Junior',
-            'Intermediate',
-            'Senior',
-          ];
-        }
+      if (_isGiantChinchilla(breed) && hasPreJunior) {
+        return const ['Pre-Junior', 'Junior', 'Intermediate', 'Senior'];
       }
 
       if (isSixClass) {
@@ -945,13 +929,13 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
           final maxAge =
               (meta['prejunior_buck_age_max_months'] as num?)?.toDouble();
           if (maxAge != null && months < maxAge) {
-            return 'Pre-Junior Buck';
+            return 'Pre-Junior';
           }
         } else if (sex == 'doe') {
           final maxAge =
               (meta['prejunior_doe_age_max_months'] as num?)?.toDouble();
           if (maxAge != null && months < maxAge) {
-            return 'Pre-Junior Doe';
+            return 'Pre-Junior';
           }
         }
       } else {
@@ -1000,23 +984,23 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     return 'Open $sexLabel';
   }
 
-    String? _selectedOrSuggestedClassForAnimal(Map<String, dynamic> animal) {
-      final animalId = (animal['id'] ?? '').toString();
-      final controller = _classControllerFor(animalId);
-      final manualValue = controller.text.trim();
+  String? _selectedOrSuggestedClassForAnimal(Map<String, dynamic> animal) {
+    final animalId = (animal['id'] ?? '').toString();
+    final controller = _classControllerFor(animalId);
+    final manualValue = controller.text.trim();
 
-      if (manualValue.isNotEmpty) {
-        return manualValue;
-      }
-
-      final suggested = _suggestClassForAnimal(animal);
-      if (suggested != null && suggested.isNotEmpty) {
-        controller.text = suggested;
-        return suggested;
-      }
-
-      return null;
+    if (manualValue.isNotEmpty) {
+      return manualValue;
     }
+
+    final suggested = _suggestClassForAnimal(animal);
+    if (suggested != null && suggested.isNotEmpty) {
+      controller.text = suggested;
+      return suggested;
+    }
+
+    return null;
+  }
 
   void _toggleSelected(Map<String, dynamic> animal, bool isSelected) {
     final id = animal['id'] as String;
@@ -1031,6 +1015,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
       _selected[id] = isSelected;
       if (!isSelected) {
         _furSectionIdsByAnimal.remove(id);
+        _furVarietyByAnimalSection.remove(id);
       }
       _msg = null;
     });
@@ -1050,6 +1035,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     setState(() {
       _selectedSectionIds.clear();
       _furSectionIdsByAnimal.clear();
+      _furVarietyByAnimalSection.clear();
       _msg = null;
     });
   }
@@ -1076,19 +1062,24 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
         if (set.isEmpty) {
           _furSectionIdsByAnimal.remove(animalId);
         }
+
+        _furVarietyByAnimalSection[animalId]?.remove(sectionId);
+        if (_furVarietyByAnimalSection[animalId]?.isEmpty ?? false) {
+          _furVarietyByAnimalSection.remove(animalId);
+        }
       }
     });
   }
 
-String? _furVarietyForAnimalSection(String animalId, String sectionId) {
-  return _furVarietyByAnimalSection[animalId]?[sectionId];
-}
+  String? _furVarietyForAnimalSection(String animalId, String sectionId) {
+    return _furVarietyByAnimalSection[animalId]?[sectionId];
+  }
 
-void _setFurVarietyForAnimalSection({
-  required String animalId,
-  required String sectionId,
-  required String? value,
-}) {
+  void _setFurVarietyForAnimalSection({
+    required String animalId,
+    required String sectionId,
+    required String? value,
+  }) {
   setState(() {
     if (value == null || value.trim().isEmpty) {
       _furVarietyByAnimalSection[animalId]?.remove(sectionId);
@@ -1121,6 +1112,11 @@ void _setFurVarietyForAnimalSection({
           set?.remove(sectionId);
           if (set == null || set.isEmpty) {
             _furSectionIdsByAnimal.remove(animalId);
+          }
+
+          _furVarietyByAnimalSection[animalId]?.remove(sectionId);
+          if (_furVarietyByAnimalSection[animalId]?.isEmpty ?? false) {
+            _furVarietyByAnimalSection.remove(animalId);
           }
         }
       } else {
@@ -1195,6 +1191,19 @@ void _setFurVarietyForAnimalSection({
         errors.add(
           '$title is not eligible because "$variety" is not an allowed variety for $breed at this show.',
         );
+      }
+      for (final sectionId in _selectedSectionIds) {
+        if (!_isFurSelectedForAnimalSection(animalId, sectionId)) continue;
+
+        if (_breedUsesWhiteColoredFur(breed)) {
+          final furVariety = _furVarietyForAnimalSection(animalId, sectionId);
+          if (furVariety == null ||
+              (furVariety != 'White' && furVariety != 'Colored')) {
+            errors.add(
+              '$title must have a Fur/Wool class of White or Colored for ${_sectionLabelForId(sectionId)}.',
+            );
+          }
+        }
       }
 
       if (_isAnimalInCart(animalId)) {
@@ -1379,16 +1388,23 @@ void _setFurVarietyForAnimalSection({
                 ...chosen.map(
                   (a) {
                     final animalId = (a['id'] ?? '').toString();
-                    final furLabels = _selectedSectionIds
+
+                    final furDescriptions = _selectedSectionIds
                         .where((sectionId) =>
                             _isFurSelectedForAnimalSection(animalId, sectionId))
-                        .map(_sectionLabelForId)
-                        .toList()
+                        .map((sectionId) {
+                          final sectionLabel = _sectionLabelForId(sectionId);
+                          final furVariety = _furVarietyForAnimalSection(animalId, sectionId);
+                          if (furVariety != null && furVariety.isNotEmpty) {
+                            return '$sectionLabel ($furVariety)';
+                          }
+                          return sectionLabel;
+                        }).toList()
                       ..sort();
 
-                    final furText = furLabels.isEmpty
+                    final furText = furDescriptions.isEmpty
                         ? ''
-                        : ' • Fur/Wool: ${furLabels.join(', ')}';
+                        : ' • Fur/Wool: ${furDescriptions.join(', ')}';
 
                     return Text(
                       '• ${_displayAnimalTitle(a)} — ${_classControllerFor(animalId).text.trim()}$furText',
@@ -1492,6 +1508,9 @@ void _setFurVarietyForAnimalSection({
 
         for (final sectionId in _selectedSectionIds) {
           if (_sectionIsMeatOnly(sectionId)) continue;
+          final isFur = _isFurSelectedForAnimalSection(animalId, sectionId);
+          final breedName = (a['breed'] ?? '').toString().trim();
+
           itemsToAdd.add({
             'cart_id': cartId,
             'section_id': sectionId,
@@ -1501,9 +1520,12 @@ void _setFurVarietyForAnimalSection({
             'tattoo': a['tattoo'],
             'breed': a['breed'],
             'variety': a['variety'],
+            'fur_variety': isFur && _breedUsesWhiteColoredFur(breedName)
+                ? _furVarietyForAnimalSection(animalId, sectionId)
+                : null,
             'sex': a['sex'],
             'class_name': className.isNotEmpty ? className : null,
-            'is_fur': _isFurSelectedForAnimalSection(animalId, sectionId),
+            'is_fur': isFur,
           });
         }
       }
@@ -1529,6 +1551,7 @@ void _setFurVarietyForAnimalSection({
           final animalId = a['id'] as String;
           _selected[animalId] = false;
           _furSectionIdsByAnimal.remove(animalId);
+          _furVarietyByAnimalSection.remove(animalId);
         }
         _selectedSectionIds.clear();
       });
@@ -1681,29 +1704,77 @@ void _setFurVarietyForAnimalSection({
             ),
             if (_selected[id] == true && _selectedSectionIds.isNotEmpty) ...[
               const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _selectedSectionIds
-                    .where((sectionId) => !_sectionIsMeatOnly(sectionId))
-                    .map((sectionId) {
-                  final label = _sectionLabelForId(sectionId);
-                  final furSelected = _isFurSelectedForAnimalSection(id, sectionId);
+             Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _selectedSectionIds
+                  .where((sectionId) => !_sectionIsMeatOnly(sectionId))
+                  .map((sectionId) {
+                    final label = _sectionLabelForId(sectionId);
+                    final furSelected =
+                        _isFurSelectedForAnimalSection(id, sectionId);
+                    final breedName = _safeString(a, 'breed');
+                    final needsWhiteColored =
+                        _breedUsesWhiteColoredFur(breedName);
+                    final selectedFurVariety =
+                        _furVarietyForAnimalSection(id, sectionId);
 
-                  return FilterChip(
-                    label: Text('$label Fur/Wool'),
-                    selected: furSelected,
-                    onSelected: (_submitting || disabled)
-                        ? null
-                        : (value) => _toggleFurForAnimalSection(
-                              animalId: id,
-                              sectionId: sectionId,
-                              value: value,
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        FilterChip(
+                          label: Text('$label Fur/Wool'),
+                          selected: furSelected,
+                          onSelected: (_submitting || disabled)
+                              ? null
+                              : (value) => _toggleFurForAnimalSection(
+                                    animalId: id,
+                                    sectionId: sectionId,
+                                    value: value,
+                                  ),
+                        ),
+                        if (furSelected && needsWhiteColored) ...[
+                          const SizedBox(height: 6),
+                          SizedBox(
+                            width: 180,
+                            child: DropdownButtonFormField<String>(
+                              value: (selectedFurVariety == 'White' ||
+                                      selectedFurVariety == 'Colored')
+                                  ? selectedFurVariety
+                                  : null,
+                              decoration: const InputDecoration(
+                                labelText: 'Fur/Wool Class',
+                                border: OutlineInputBorder(),
+                                isDense: true,
+                              ),
+                              items: const [
+                                DropdownMenuItem(
+                                  value: 'White',
+                                  child: Text('White'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'Colored',
+                                  child: Text('Colored'),
+                                ),
+                              ],
+                              onChanged: (_submitting || disabled)
+                                  ? null
+                                  : (value) {
+                                      _setFurVarietyForAnimalSection(
+                                        animalId: id,
+                                        sectionId: sectionId,
+                                        value: value,
+                                      );
+                                    },
                             ),
-                  );
-                }).toList(),
-              ),
-            ],
+                          ),
+                        ],
+                      ],
+                    );
+                  }).toList(),
+            ),
+          ],
             if (alreadyEnteredInSelectedSection || hasSectionConflict || inCart) ...[
               const SizedBox(height: 8),
               Text(

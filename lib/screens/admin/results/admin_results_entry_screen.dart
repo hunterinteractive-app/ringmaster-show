@@ -132,7 +132,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
         .from('judge_assignments')
         .select(
           'id,judge_id,assignment_label,'
-          'judges(id,display_name,name,first_name,last_name,judge_type,is_active)',
+          'judges(id,display_name,name,first_name,last_name,judge_type,is_active,arba_judge_number)',
         )
         .eq('show_id', widget.showId);
 
@@ -260,6 +260,17 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
             breed: issue.breed,
             variety: issue.variety ?? '',
             classSexLabel: issue.classSexLabel,
+            isFurOrWoolClass: working.any((e) {
+              final rawClass = (e['class_name'] ?? '').toString().toLowerCase();
+              final rawGroup = (e['group_name'] ?? '').toString().toLowerCase();
+              final rawVariety = (e['variety'] ?? '').toString().toLowerCase();
+              return rawClass.contains('fur') ||
+                  rawClass.contains('wool') ||
+                  rawGroup.contains('fur') ||
+                  rawGroup.contains('wool') ||
+                  rawVariety.contains('fur') ||
+                  rawVariety.contains('wool');
+            }),
             entries: working,
             judges: _judges,
             onBulkJudgeApply: (entries, judgeId) async {
@@ -477,6 +488,17 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
             breed: breed,
             variety: issueVariety,
             classSexLabel: classSexLabel,
+            isFurOrWoolClass: working.any((e) {
+              final rawClass = (e['class_name'] ?? '').toString().toLowerCase();
+              final rawGroup = (e['group_name'] ?? '').toString().toLowerCase();
+              final rawVariety = (e['variety'] ?? '').toString().toLowerCase();
+              return rawClass.contains('fur') ||
+                  rawClass.contains('wool') ||
+                  rawGroup.contains('fur') ||
+                  rawGroup.contains('wool') ||
+                  rawVariety.contains('fur') ||
+                  rawVariety.contains('wool');
+            }),
             entries: working,
             judges: _judges,
             onBulkJudgeApply: (entries, judgeId) async {
@@ -2200,6 +2222,34 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
     _entries = [...widget.entries];
   }
 
+  bool _isFurOrWoolEntry(Map<String, dynamic> e) {
+    final rawClass = (e['class_name'] ?? '').toString().trim().toLowerCase();
+    final rawGroup = (e['group_name'] ?? '').toString().trim().toLowerCase();
+    final rawVariety = (e['variety'] ?? '').toString().trim().toLowerCase();
+
+    return rawClass.contains('fur') ||
+        rawClass.contains('wool') ||
+        rawGroup.contains('fur') ||
+        rawGroup.contains('wool') ||
+        rawVariety.contains('fur') ||
+        rawVariety.contains('wool');
+  }
+
+  String _furWoolBucketLabel(Map<String, dynamic> e) {
+    final rawClass = (e['class_name'] ?? '').toString().trim();
+    final rawLower = rawClass.toLowerCase();
+
+    if (rawLower.contains('wool')) return 'Wool';
+    if (rawLower.contains('fur')) return 'Fur';
+
+    final rawGroup = (e['group_name'] ?? '').toString().trim();
+    final groupLower = rawGroup.toLowerCase();
+    if (groupLower.contains('wool')) return 'Wool';
+    if (groupLower.contains('fur')) return 'Fur';
+
+    return 'Fur/Wool';
+  }
+
   String _ageClassOnly(String raw) {
     final s = raw.trim();
     if (s.isEmpty) return '';
@@ -2228,6 +2278,12 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
   }
 
   int _labelSortKey(String label) {
+    final lower = label.trim().toLowerCase();
+
+    if (lower == 'fur') return 1000;
+    if (lower == 'wool') return 1001;
+    if (lower == 'fur/wool') return 1002;
+
     final parts = label.split(' ');
     final classPart = parts.isNotEmpty ? parts.first : '';
     final sexPart = parts.length > 1 ? parts.sublist(1).join(' ') : '';
@@ -2250,21 +2306,30 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
     return labels;
   }
 
-  Map<String, List<Map<String, dynamic>>> _groupByClassSex() {
-    final out = <String, List<Map<String, dynamic>>>{};
-    for (final e in _entries) {
-      final cls = _ageClassOnly((e['class_name'] ?? '').toString());
-      final sex = (e['sex'] ?? '').toString().trim();
-      final label = [
-        if (cls.isNotEmpty) cls,
-        if (sex.isNotEmpty) sex,
-      ].join(' ');
-      final key = label.isEmpty ? '(Unknown Class)' : label;
-      out.putIfAbsent(key, () => <Map<String, dynamic>>[]);
-      out[key]!.add(e);
+    Map<String, List<Map<String, dynamic>>> _groupByClassSex() {
+      final out = <String, List<Map<String, dynamic>>>{};
+
+      for (final e in _entries) {
+        String key;
+
+        if (_isFurOrWoolEntry(e)) {
+          key = _furWoolBucketLabel(e);
+        } else {
+          final cls = _ageClassOnly((e['class_name'] ?? '').toString());
+          final sex = (e['sex'] ?? '').toString().trim();
+          final label = [
+            if (cls.isNotEmpty) cls,
+            if (sex.isNotEmpty) sex,
+          ].join(' ');
+          key = label.isEmpty ? '(Unknown Class)' : label;
+        }
+
+        out.putIfAbsent(key, () => <Map<String, dynamic>>[]);
+        out[key]!.add(e);
+      }
+
+      return out;
     }
-    return out;
-  }
 
   String _judgeNameById(String? judgeId) {
     if (judgeId == null || judgeId.isEmpty) return '';
@@ -2514,6 +2579,9 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
                             breed: widget.breed,
                             variety: widget.variety,
                             classSexLabel: label,
+                            isFurOrWoolClass: label.toLowerCase() == 'fur' ||
+                                label.toLowerCase() == 'wool' ||
+                                label.toLowerCase() == 'fur/wool',
                             entries: classEntries,
                             judges: widget.judges,
                             onBulkJudgeApply: _applyJudgeToEntries,
@@ -2552,6 +2620,9 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
                                     breed: widget.breed,
                                     variety: widget.variety,
                                     classSexLabel: nextLabel,
+                                    isFurOrWoolClass: nextLabel.toLowerCase() == 'fur' ||
+                                        nextLabel.toLowerCase() == 'wool' ||
+                                        nextLabel.toLowerCase() == 'fur/wool',
                                     entries: nextEntries,
                                     judges: widget.judges,
                                     onBulkJudgeApply: _applyJudgeToEntries,
@@ -2589,6 +2660,7 @@ class _ResultsAnimalsScreen extends StatefulWidget {
   final String breed;
   final String variety;
   final String classSexLabel;
+  final bool isFurOrWoolClass;
   final String? initialEntryIdToOpen;
   final List<Map<String, dynamic>> entries;
   final List<Map<String, dynamic>> judges;
@@ -2599,6 +2671,7 @@ class _ResultsAnimalsScreen extends StatefulWidget {
   final bool showsByGroup;
   final bool showsByVariety;
 
+
   const _ResultsAnimalsScreen({
     required this.showId,
     required this.showName,
@@ -2606,6 +2679,7 @@ class _ResultsAnimalsScreen extends StatefulWidget {
     required this.breed,
     required this.variety,
     required this.classSexLabel,
+    required this.isFurOrWoolClass,
     required this.entries,
     required this.judges,
     required this.onBulkJudgeApply,
@@ -3201,6 +3275,7 @@ class _ResultsAnimalsScreenState extends State<_ResultsAnimalsScreen> {
         finalAwardMode: widget.finalAwardMode,
         showsByGroup: widget.showsByGroup,
         showsByVariety: widget.showsByVariety,
+        isFurOrWoolClass: widget.isFurOrWoolClass,
       ),
     );
 
@@ -3436,6 +3511,7 @@ class _ResultsEntrySheet extends StatefulWidget {
   final String finalAwardMode;
   final bool showsByGroup;
   final bool showsByVariety;
+  final bool isFurOrWoolClass;
 
   const _ResultsEntrySheet({
     required this.showId,
@@ -3450,6 +3526,7 @@ class _ResultsEntrySheet extends StatefulWidget {
     required this.finalAwardMode,
     required this.showsByGroup,
     required this.showsByVariety,
+    required this.isFurOrWoolClass,
   });
 
   @override
@@ -3511,11 +3588,14 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
       String? matched;
 
       for (final j in widget.judges) {
-        final assignmentId = (j['id'] ?? '').toString().trim();
-        final legacyJudgeId = (j['judge_id'] ?? '').toString().trim();
+        final savedJudgeId = (j['id'] ?? '').toString().trim();
+        final masterJudgeId = (j['judge_id'] ?? '').toString().trim();
+        final assignmentId = (j['assignment_id'] ?? '').toString().trim();
 
-        if (storedJudgeId == assignmentId || storedJudgeId == legacyJudgeId) {
-          matched = assignmentId;
+        if (storedJudgeId == savedJudgeId ||
+            storedJudgeId == masterJudgeId ||
+            storedJudgeId == assignmentId) {
+          matched = savedJudgeId;
           break;
         }
       }
@@ -4029,7 +4109,7 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
 
       final shouldClearPlacement = scratched || effectiveStatus != 'Shown';
 
-      final awardError = _validateAwards();
+      final awardError = widget.isFurOrWoolClass ? null : _validateAwards();
       if (awardError != null) {
         setState(() {
           _saving = false;
@@ -4047,11 +4127,14 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
         final rawJudgeId = _judgeId!.trim();
 
         for (final j in widget.judges) {
-          final assignmentId = (j['id'] ?? '').toString().trim();
-          final legacyJudgeId = (j['judge_id'] ?? '').toString().trim();
+          final savedJudgeId = (j['id'] ?? '').toString().trim();
+          final masterJudgeId = (j['judge_id'] ?? '').toString().trim();
+          final assignmentId = (j['assignment_id'] ?? '').toString().trim();
 
-          if (rawJudgeId == assignmentId || rawJudgeId == legacyJudgeId) {
-            normalizedJudgeId = assignmentId;
+          if (rawJudgeId == savedJudgeId ||
+              rawJudgeId == masterJudgeId ||
+              rawJudgeId == assignmentId) {
+            normalizedJudgeId = savedJudgeId;
             break;
           }
         }
@@ -4102,7 +4185,7 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
           .eq('show_id', widget.showId)
           .eq('entry_id', entryId);
 
-      if (_selectedAwards.isNotEmpty) {
+      if (!widget.isFurOrWoolClass && _selectedAwards.isNotEmpty) {
         await supabase.from('entry_awards').insert(
               _selectedAwards.map((award) {
                 return {

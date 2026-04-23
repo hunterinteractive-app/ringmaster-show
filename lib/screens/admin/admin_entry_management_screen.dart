@@ -112,7 +112,7 @@ class _AdminEntryManagementScreenState
         .from('entries')
         .select(
           'id,show_id,section_id,exhibitor_id,exhibitor_user_id,animal_id,species,'
-          'tattoo,breed,variety,sex,class_name,notes,status,created_at,updated_at,scratched_at,'
+          'tattoo,breed,variety,fur_variety,sex,class_name,notes,status,created_at,updated_at,scratched_at,'
           'is_fur,fur_placement,fur_notes,'
           'show_sections(id,letter,display_name,kind),'
           'exhibitors!entries_exhibitor_id_fkey(id,display_name,first_name,last_name)',
@@ -179,6 +179,7 @@ class _AdminEntryManagementScreenState
       (e['tattoo'] ?? '').toString(),
       (e['breed'] ?? '').toString(),
       (e['variety'] ?? '').toString(),
+      (e['fur_variety'] ?? '').toString(), 
       (e['sex'] ?? '').toString(),
       (e['class_name'] ?? '').toString(),
       (e['notes'] ?? '').toString(),
@@ -561,8 +562,10 @@ class _AdminEntryManagementScreenState
                                               (e['tattoo'] ?? '').toString().trim().toUpperCase();
                                           final breed =
                                               (e['breed'] ?? '').toString();
-                                          final variety =
+                                          final variety = 
                                               (e['variety'] ?? '').toString();
+                                          final furVariety = 
+                                              (e['fur_variety'] ?? '').toString();
                                           final sex =
                                               (e['sex'] ?? '').toString();
                                           final cls =
@@ -592,9 +595,10 @@ class _AdminEntryManagementScreenState
                                               'Breed: $breed',
                                             if (variety.isNotEmpty)
                                               'Variety: $variety',
-                                            if (sex.isNotEmpty) 'Sex: $sex',
-                                            if (cls.isNotEmpty) 'Class: $cls',
-                                            if (isFur) 'Fur/Wool',
+                                            if (isFur)
+                                              furVariety.isNotEmpty
+                                                  ? 'Fur/Wool: $furVariety'
+                                                  : 'Fur/Wool',
                                             if (letter.isNotEmpty)
                                               'Show: $letter',
                                             if (isScratched)
@@ -709,6 +713,7 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
   late final TextEditingController _notes;
   bool _isFur = false;
   late final TextEditingController _furNotes;
+  late final TextEditingController _furVariety;
 
   @override
   void initState() {
@@ -729,6 +734,9 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
     _furNotes = TextEditingController(
       text: (widget.entry['fur_notes'] ?? '').toString(),
     );
+    _furVariety = TextEditingController(
+      text: (widget.entry['fur_variety'] ?? '').toString(),
+    );
   }
 
   @override
@@ -740,6 +748,7 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
     _className.dispose();
     _notes.dispose();
     _furNotes.dispose();
+    _furVariety.dispose();
     super.dispose();
   }
 
@@ -763,6 +772,9 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
             _className.text.trim().isEmpty ? null : _className.text.trim(),
         'notes': _notes.text.trim().isEmpty ? null : _notes.text.trim(),
         'is_fur': _isFur,
+        'fur_variety': _isFur && _furVariety.text.trim().isNotEmpty
+            ? _furVariety.text.trim()
+            : null,
         'fur_notes': _isFur && _furNotes.text.trim().isNotEmpty
             ? _furNotes.text.trim()
             : null,
@@ -873,6 +885,25 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
             ),
             if (_isFur) ...[
               const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                value: _furVariety.text.trim().isEmpty ? null : _furVariety.text.trim(),
+                decoration: const InputDecoration(
+                  labelText: 'Fur / Wool Class',
+                  border: OutlineInputBorder(),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'White', child: Text('White')),
+                  DropdownMenuItem(value: 'Colored', child: Text('Colored')),
+                ],
+                onChanged: _saving
+                    ? null
+                    : (value) {
+                        setState(() {
+                          _furVariety.text = value ?? '';
+                        });
+                      },
+              ),
+              const SizedBox(height: 10),
               TextField(
                 controller: _furNotes,
                 enabled: !_saving,
@@ -930,7 +961,6 @@ class _MoveEntrySheetState extends State<_MoveEntrySheet> {
   String? _msg;
 
   String? _sectionId;
-  final Set<String> _selectedSectionIds = <String>{};
   late final TextEditingController _className;
 
   @override
@@ -960,8 +990,8 @@ class _MoveEntrySheetState extends State<_MoveEntrySheet> {
     final entryId = widget.entry['id']?.toString() ?? '';
     if (entryId.isEmpty) return;
 
-    if (_selectedSectionIds.isEmpty) {
-      setState(() => _msg = 'Select at least one section.');
+    if (_sectionId == null || _sectionId!.isEmpty) {
+      setState(() => _msg = 'Select a section.');
       return;
     }
 
@@ -1097,7 +1127,6 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
   bool _useLocalAnimal = false;
 
   final _showingName = TextEditingController();
-  final _displayName = TextEditingController();
   final _firstName = TextEditingController();
   final _lastName = TextEditingController();
   final _email = TextEditingController();
@@ -1114,6 +1143,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
   String? _breedId;
   String? _sexValue;
   String? _classValue;
+  String? _furVarietyValue;
 
   List<Map<String, dynamic>> _breedOptions = [];
   List<Map<String, dynamic>> _varietyOptions = [];
@@ -1153,7 +1183,6 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
   void initState() {
     super.initState();
     _sectionId = widget.initialSectionId;
-    _sectionId = widget.initialSectionId;
     if (_sectionId != null && _sectionId!.isNotEmpty) {
       _selectedSectionIds.add(_sectionId!);
     }
@@ -1172,7 +1201,6 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
   @override
   void dispose() {
     _showingName.dispose();
-    _displayName.dispose();
     _firstName.dispose();
     _lastName.dispose();
     _email.dispose();
@@ -1563,7 +1591,6 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
           'display_name': showing.isEmpty ? null : showing,
           'first_name': first.isEmpty ? null : first,
           'last_name': last.isEmpty ? null : last,
-          'email': email.isEmpty ? null : email,
           'phone': phone.isEmpty ? null : phone,
           'type': _exhibitorType,
           'is_active': true,
@@ -1613,26 +1640,16 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
 
       final type = (exhibitor['type'] ?? '').toString().toLowerCase();
 
-      for (final sectionId in _selectedSectionIds) {
-        final kind = _sectionKindById(sectionId);
+      final hasYouthSection = _selectedSectionIds.any(
+        (sectionId) => _sectionKindById(sectionId) == 'youth',
+      );
 
-        if (kind == 'youth' && type != 'youth') {
-          setState(() {
-            _saving = false;
-            _msg =
-                'Open exhibitors cannot enter youth show sections. Remove ${_sectionDisplayLabelById(sectionId)}.';
-          });
-          return;
-        }
-
-        if (kind == 'open' && type == 'youth') {
-          setState(() {
-            _saving = false;
-            _msg =
-                'Youth exhibitors cannot enter open show sections. Remove ${_sectionDisplayLabelById(sectionId)}.';
-          });
-          return;
-        }
+      if (hasYouthSection && type != 'youth') {
+        setState(() {
+          _saving = false;
+          _msg = 'Only youth exhibitors can be used when any youth section is selected.';
+        });
+        return;
       }
 
       if (!_useLocalAnimal && _animal == null) {
@@ -1695,6 +1712,9 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
               : (_className.text.trim().isEmpty ? null : _className.text.trim()),
           'notes': _notes.text.trim().isEmpty ? null : _notes.text.trim(),
           'is_fur': _isFur,
+          'fur_variety': _isFur && (_furVarietyValue?.trim().isNotEmpty == true)
+              ? _furVarietyValue!.trim()
+              : null,
           'fur_notes': _isFur && _furNotes.text.trim().isNotEmpty
               ? _furNotes.text.trim()
               : null,
@@ -1723,6 +1743,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
         _sexValue = _sexOptions.first;
         _sex.text = _sexValue ?? '';
         _classValue = null;
+        _furVarietyValue = null;
         _className.clear();
         _tattoo.clear();
         _breed.clear();
@@ -2173,6 +2194,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                         ? null
                         : (v) => setState(() {
                               _isFur = v;
+                              if (!_isFur) _furVarietyValue = null;
                               _msg = null;
                             }),
                   ),
@@ -2187,6 +2209,26 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                         labelText: 'Fur / Wool Notes',
                         border: OutlineInputBorder(),
                       ),
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      value: _furVarietyValue,
+                      decoration: const InputDecoration(
+                        labelText: 'Fur / Wool Class',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'White', child: Text('White')),
+                        DropdownMenuItem(value: 'Colored', child: Text('Colored')),
+                      ],
+                      onChanged: _saving
+                          ? null
+                          : (value) {
+                              setState(() {
+                                _furVarietyValue = value;
+                                _msg = null;
+                              });
+                            },
                     ),
                   ],
 

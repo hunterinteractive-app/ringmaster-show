@@ -103,7 +103,7 @@ class _CartScreenState extends State<CartScreen> {
       final items = await supabase
           .from('entry_cart_items')
           .select(
-            'id,exhibitor_id,section_id,animal_id,species,breed,variety,sex,tattoo,class_name,created_at,is_fur',
+            'id,exhibitor_id,section_id,animal_id,species,breed,variety,fur_variety,sex,tattoo,class_name,created_at,is_fur',
           )
           .eq('cart_id', widget.cartId)
           .order('created_at');
@@ -213,6 +213,17 @@ class _CartScreenState extends State<CartScreen> {
   String _money(double v, {String? currency}) {
     final sym = _currencySymbol(currency);
     return '$sym${v.toStringAsFixed(2)}';
+  }
+
+  String? _buildFurDisplay(Map<String, dynamic> it) {
+    if (it['is_fur'] != true) return null;
+
+    final furVariety = (it['fur_variety'] ?? '').toString().trim();
+    if (furVariety.isNotEmpty) {
+      return 'Fur/Wool: $furVariety';
+    }
+
+    return 'Fur/Wool: Yes';
   }
 
   String _buildClassDisplay(Map<String, dynamic> it) {
@@ -376,6 +387,7 @@ class _CartScreenState extends State<CartScreen> {
   String _cartItemTitle(Map<String, dynamic> item, String sectionName) {
     final tattoo = (item['tattoo'] ?? '').toString().trim();
     final animalId = (item['animal_id'] ?? '').toString().trim();
+    final furVariety = (item['fur_variety'] ?? '').toString().trim();
 
     if (_isMeatPenEntry(item)) {
       return '$sectionName — Meat Pen';
@@ -390,7 +402,14 @@ class _CartScreenState extends State<CartScreen> {
           : '$sectionName — $label';
     }
 
-    return '$sectionName — ${tattoo.isEmpty ? animalId : tattoo}';
+    final baseTitle =
+        '$sectionName — ${tattoo.isEmpty ? animalId : tattoo}';
+
+    if (item['is_fur'] == true && furVariety.isNotEmpty) {
+      return '$baseTitle ($furVariety)';
+    }
+
+    return baseTitle;
   }
 
   String _cartItemSubtitle(Map<String, dynamic> item) {
@@ -415,9 +434,14 @@ class _CartScreenState extends State<CartScreen> {
 
     final animalLabel =
         '${(item['breed'] ?? '').toString()} • ${(item['variety'] ?? '').toString()} • ${(item['sex'] ?? '').toString()}';
-    final isFur = item['is_fur'] == true;
 
-    return '$animalLabel\n${_buildClassDisplay(item)}${isFur ? '\nFur/Wool: Yes' : ''}';
+    final furDisplay = _buildFurDisplay(item);
+
+    if (furDisplay != null) {
+      return '$animalLabel\n${_buildClassDisplay(item)}\n$furDisplay';
+    }
+
+    return '$animalLabel\n${_buildClassDisplay(item)}';
   }
 
   bool _cartItemIsThreeLine(Map<String, dynamic> item) {
