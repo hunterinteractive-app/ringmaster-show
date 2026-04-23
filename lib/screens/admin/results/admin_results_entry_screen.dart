@@ -761,6 +761,18 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
   for (final e in _entries) {
     final entryAwards = awards(e);
 
+    final placement = (e['placement'] ?? '').toString().trim();
+    if (entryAwards.isNotEmpty && placement != '1') {
+      issues.add(
+        makeIssue(
+          code: 'award_requires_first',
+          title: 'Awards require first place',
+          message: '${_entryLabel(e)} has awards assigned but is not placed 1st.',
+          entry: e,
+        ),
+      );
+    }
+
     if (!isEligibleForAwards(e) && entryAwards.isNotEmpty) {
       issues.add(
         makeIssue(
@@ -2665,6 +2677,245 @@ class _ResultsAnimalsScreenState extends State<_ResultsAnimalsScreen> {
     return true;
   }
 
+  List<String> _awardsForEntry(Map<String, dynamic> e) {
+    return ((e['_awards'] as List?) ?? const [])
+        .map((x) => x.toString().trim())
+        .where((x) => x.isNotEmpty)
+        .toList();
+  }
+
+  String _entryId(Map<String, dynamic> e) =>
+      (e['entry_id'] ?? e['id'] ?? '').toString().trim();
+
+  String _entryBreed(Map<String, dynamic> e) =>
+      (e['breed'] ?? '').toString().trim();
+
+  String _entryVariety(Map<String, dynamic> e) =>
+      (e['variety'] ?? '').toString().trim();
+
+  String _entryGroupName(Map<String, dynamic> e) {
+    return (
+      e['group_name'] ??
+      e['group_display_name'] ??
+      e['group_label'] ??
+      e['group'] ??
+      e['group_code'] ??
+      ''
+    ).toString().trim();
+  }
+
+  String _entrySectionId(Map<String, dynamic> e) =>
+      (e['section_id'] ?? '').toString().trim();
+
+  String _entrySex(Map<String, dynamic> e) =>
+      (e['sex'] ?? '').toString().trim().toLowerCase();
+
+  bool _placedFirst(Map<String, dynamic> e) {
+    return (e['placement'] ?? '').toString().trim() == '1';
+  }
+
+  bool _sameRabbitHasPairedConflict(Map<String, dynamic> e) {
+    final awards = _awardsForEntry(e).toSet();
+
+    bool hasBoth(String a, String b) => awards.contains(a) && awards.contains(b);
+
+    return hasBoth('BOV', 'BOSV') ||
+        hasBoth('BOG', 'BOSG') ||
+        hasBoth('BOB', 'BOSB') ||
+        hasBoth('Best 4-Class', 'Best 6-Class') ||
+        hasBoth('Best In Show', 'Reserve In Show');
+  }
+
+  Map<String, dynamic>? _otherWinnerInScope({
+    required Map<String, dynamic> entry,
+    required String award,
+    required bool Function(Map<String, dynamic>) sameScope,
+  }) {
+    for (final row in _entries) {
+      if (_entryId(row) == _entryId(entry)) continue;
+      if (!sameScope(row)) continue;
+      if (_awardsForEntry(row).contains(award)) return row;
+    }
+    return null;
+  }
+
+  bool _oppositeSex(Map<String, dynamic> a, Map<String, dynamic>? b) {
+    if (b == null) return true;
+    final sa = _entrySex(a);
+    final sb = _entrySex(b);
+    if (sa.isEmpty || sb.isEmpty) return true;
+    return sa != sb;
+  }
+
+  bool _entryHasValidationProblem(Map<String, dynamic> e) {
+    final awards = _awardsForEntry(e);
+    if (awards.isEmpty) return false;
+
+    if (!_entryIsAwardEligible(e)) return true;
+    if (!_placedFirst(e)) return true;
+    if (_sameRabbitHasPairedConflict(e)) return true;
+
+    final breedLower = _entryBreed(e).toLowerCase();
+    final classSystem = widget.breedClassSystems[breedLower] ?? 'four';
+
+    bool sameVariety(Map<String, dynamic> row) =>
+        _entrySectionId(row) == _entrySectionId(e) &&
+        _entryBreed(row).toLowerCase() == _entryBreed(e).toLowerCase() &&
+        _entryVariety(row).toLowerCase() == _entryVariety(e).toLowerCase();
+
+    bool sameGroup(Map<String, dynamic> row) =>
+        _entrySectionId(row) == _entrySectionId(e) &&
+        _entryBreed(row).toLowerCase() == _entryBreed(e).toLowerCase() &&
+        _entryGroupName(row).toLowerCase() == _entryGroupName(e).toLowerCase();
+
+    bool sameBreed(Map<String, dynamic> row) =>
+        _entrySectionId(row) == _entrySectionId(e) &&
+        _entryBreed(row).toLowerCase() == _entryBreed(e).toLowerCase();
+
+    bool sameSection(Map<String, dynamic> row) =>
+        _entrySectionId(row) == _entrySectionId(e);
+
+    if (awards.contains('BOV')) {
+      if (_otherWinnerInScope(entry: e, award: 'BOV', sameScope: sameVariety) != null) {
+        return true;
+      }
+      final bosv =
+          _otherWinnerInScope(entry: e, award: 'BOSV', sameScope: sameVariety);
+      if (!_oppositeSex(e, bosv)) return true;
+    }
+
+    if (awards.contains('BOSV')) {
+      if (_otherWinnerInScope(entry: e, award: 'BOSV', sameScope: sameVariety) != null) {
+        return true;
+      }
+      final bov =
+          _otherWinnerInScope(entry: e, award: 'BOV', sameScope: sameVariety);
+      if (!_oppositeSex(e, bov)) return true;
+    }
+
+    if (awards.contains('BOG')) {
+      if (_otherWinnerInScope(entry: e, award: 'BOG', sameScope: sameGroup) != null) {
+        return true;
+      }
+      final bosg =
+          _otherWinnerInScope(entry: e, award: 'BOSG', sameScope: sameGroup);
+      if (!_oppositeSex(e, bosg)) return true;
+    }
+
+    if (awards.contains('BOSG')) {
+      if (_otherWinnerInScope(entry: e, award: 'BOSG', sameScope: sameGroup) != null) {
+        return true;
+      }
+      final bog =
+          _otherWinnerInScope(entry: e, award: 'BOG', sameScope: sameGroup);
+      if (!_oppositeSex(e, bog)) return true;
+    }
+
+    if (awards.contains('BOB')) {
+      if (_otherWinnerInScope(entry: e, award: 'BOB', sameScope: sameBreed) != null) {
+        return true;
+      }
+      final bosb =
+          _otherWinnerInScope(entry: e, award: 'BOSB', sameScope: sameBreed);
+      if (!_oppositeSex(e, bosb)) return true;
+
+      if (widget.showsByGroup) {
+        if (!(awards.contains('BOG') || awards.contains('BOSG'))) return true;
+      } else if (widget.showsByVariety) {
+        if (!(awards.contains('BOV') || awards.contains('BOSV'))) return true;
+      }
+    }
+
+    if (awards.contains('BOSB')) {
+      if (_otherWinnerInScope(entry: e, award: 'BOSB', sameScope: sameBreed) != null) {
+        return true;
+      }
+      final bob =
+          _otherWinnerInScope(entry: e, award: 'BOB', sameScope: sameBreed);
+      if (!_oppositeSex(e, bob)) return true;
+
+      if (widget.showsByGroup) {
+        if (!(awards.contains('BOG') || awards.contains('BOSG'))) return true;
+      } else if (widget.showsByVariety) {
+        if (!(awards.contains('BOV') || awards.contains('BOSV'))) return true;
+      }
+    }
+
+    if (awards.contains('Best 4-Class')) {
+      if (_otherWinnerInScope(
+            entry: e,
+            award: 'Best 4-Class',
+            sameScope: sameSection,
+          ) !=
+          null) {
+        return true;
+      }
+      if (!awards.contains('BOB')) return true;
+      if (classSystem != 'four') return true;
+    }
+
+    if (awards.contains('Best 6-Class')) {
+      if (_otherWinnerInScope(
+            entry: e,
+            award: 'Best 6-Class',
+            sameScope: sameSection,
+          ) !=
+          null) {
+        return true;
+      }
+      if (!awards.contains('BOB')) return true;
+      if (classSystem != 'six') return true;
+    }
+
+    if (awards.contains('Best In Show')) {
+      if (_otherWinnerInScope(
+            entry: e,
+            award: 'Best In Show',
+            sameScope: sameSection,
+          ) !=
+          null) {
+        return true;
+      }
+
+      if (widget.finalAwardMode == 'four_six_bis') {
+        if (!(awards.contains('Best 4-Class') || awards.contains('Best 6-Class'))) {
+          return true;
+        }
+      } else {
+        if (!awards.contains('BOB')) return true;
+      }
+    }
+
+    if (awards.contains('Reserve In Show')) {
+      if (_otherWinnerInScope(
+            entry: e,
+            award: 'Reserve In Show',
+            sameScope: sameSection,
+          ) !=
+          null) {
+        return true;
+      }
+
+      if (widget.finalAwardMode != 'bis_ris') return true;
+      if (!awards.contains('BOB')) return true;
+      if (awards.contains('Best In Show')) return true;
+    }
+
+    return false;
+  }
+
+  bool _awardDecisionComplete(Map<String, dynamic> e) {
+    if (!_entryIsAwardEligible(e)) return true;
+    if (!_placedFirst(e)) return true;
+
+    final awards = _awardsForEntry(e);
+    if (awards.isNotEmpty) {
+      return !_entryHasValidationProblem(e);
+    }
+
+    return false;
+  }
+
   bool _isEntryComplete(Map<String, dynamic> e) {
     final scratched = _isScratched(e);
     if (scratched) return true;
@@ -2677,8 +2928,16 @@ class _ResultsAnimalsScreenState extends State<_ResultsAnimalsScreen> {
 
     if (status.isEmpty) return false;
 
-    if (_entryIsPlacementEligible(e)) {
-      return placement.isNotEmpty;
+    if (_entryIsPlacementEligible(e) && placement.isEmpty) {
+      return false;
+    }
+
+    if (!_awardDecisionComplete(e)) {
+      return false;
+    }
+
+    if (_entryHasValidationProblem(e)) {
+      return false;
     }
 
     return true;
