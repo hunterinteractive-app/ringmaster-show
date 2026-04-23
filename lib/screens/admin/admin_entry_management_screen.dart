@@ -1229,6 +1229,44 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     }
   }
 
+  Future<Map<String, dynamic>?> _findExistingShowExhibitor() async {
+    final showing = _showingName.text.trim();
+    final first = _firstName.text.trim();
+    final last = _lastName.text.trim();
+
+    if (showing.isEmpty && first.isEmpty && last.isEmpty) return null;
+
+    dynamic existing;
+
+    if (showing.isNotEmpty) {
+      existing = await supabase
+          .from('exhibitors')
+          .select(
+            'id,showing_name,display_name,first_name,last_name,email,phone,type,owner_user_id,is_active,is_local_only,created_for_show_id',
+          )
+          .eq('created_for_show_id', widget.showId)
+          .eq('is_active', true)
+          .eq('showing_name', showing)
+          .maybeSingle();
+    }
+
+    if (existing == null && first.isNotEmpty && last.isNotEmpty) {
+      existing = await supabase
+          .from('exhibitors')
+          .select(
+            'id,showing_name,display_name,first_name,last_name,email,phone,type,owner_user_id,is_active,is_local_only,created_for_show_id',
+          )
+          .eq('created_for_show_id', widget.showId)
+          .eq('is_active', true)
+          .eq('first_name', first)
+          .eq('last_name', last)
+          .maybeSingle();
+    }
+
+    if (existing == null) return null;
+    return Map<String, dynamic>.from(existing as Map);
+  }
+
   Future<void> _loadExhibitors() async {
     try {
       final res = await supabase
@@ -1574,15 +1612,36 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     }
 
     final existing = await supabase
-        .from('exhibitors')
-        .select('id')
-        .eq('showing_name', showing)
-        .eq('created_for_show_id', widget.showId)
-        .maybeSingle();
+      .from('exhibitors')
+      .select(
+        'id,showing_name,display_name,first_name,last_name,email,phone,type,owner_user_id,is_active,is_local_only,created_for_show_id',
+      )
+      .eq('showing_name', showing)
+      .eq('created_for_show_id', widget.showId)
+      .maybeSingle();
 
-    if (existing != null) {
-      return existing['id'].toString();
+  if (existing != null) {
+    final existingType =
+        (existing['type'] ?? '').toString().trim().toLowerCase();
+    final wantedType = _exhibitorType.trim().toLowerCase();
+
+    if (existingType == wantedType) {
+      final row = Map<String, dynamic>.from(existing);
+      final alreadyLoaded = _exhibitors.any(
+        (e) => (e['id'] ?? '').toString() == (row['id'] ?? '').toString(),
+      );
+      if (!alreadyLoaded) {
+        _exhibitors.add(row);
+      }
+      return row['id'].toString();
     }
+
+  throw Exception(
+    'An exhibitor named "$showing" already exists for this show as '
+    '${existingType.isEmpty ? 'a different type' : existingType}. '
+    'Please use the existing exhibitor or change the showing name.',
+  );
+}
 
     final inserted = await supabase
         .from('exhibitors')
@@ -1622,16 +1681,54 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     });
 
     try {
-      String resolvedExhibitorId;
+    String resolvedExhibitorId;
 
-      if (_addNewExhibitor) {
-        resolvedExhibitorId = await _createNewExhibitor();
-      } else {
-        if (_exhibitorId == null || _exhibitorId!.isEmpty) {
-          throw Exception('Select exhibitor');
+    if (_addNewExhibitor) {
+      final existing = await _findExistingShowExhibitor();
+
+      if (existing != null) {
+        final existingId = (existing['id'] ?? '').toString();
+        final existingType =
+            (existing['type'] ?? '').toString().trim().toLowerCase();
+
+        final hasYouthSection = _selectedSectionIds.any(
+          (sectionId) => _sectionKindById(sectionId) == 'youth',
+        );
+
+        if (hasYouthSection && existingType != 'youth') {
+          setState(() {
+            _saving = false;
+            _msg =
+                'This exhibitor already exists as an open exhibitor. Select that exhibitor or create a separate youth exhibitor record.';
+          });
+          return;
         }
-        resolvedExhibitorId = _exhibitorId!;
+
+        final alreadyLoaded = _exhibitors.any(
+          (e) => (e['id'] ?? '').toString() == existingId,
+        );
+        if (!alreadyLoaded) {
+          _exhibitors.add(existing);
+        }
+
+        setState(() {
+          _addNewExhibitor = false;
+          _exhibitorId = existingId;
+          _msg =
+              'Existing exhibitor found. Select one of their animals below or turn on "Add New Animal".';
+        });
+
+        await _loadAnimalsForSelectedExhibitor();
+        return;
       }
+
+      resolvedExhibitorId = await _createNewExhibitor();
+    } else {
+      if (_exhibitorId == null || _exhibitorId!.isEmpty) {
+        throw Exception('Select exhibitor');
+      }
+      resolvedExhibitorId = _exhibitorId!;
+    }
 
       final exhibitor = _exhibitors.firstWhere(
         (e) => e['id'].toString() == resolvedExhibitorId,
