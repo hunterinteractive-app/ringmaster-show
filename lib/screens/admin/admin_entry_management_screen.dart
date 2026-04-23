@@ -930,6 +930,7 @@ class _MoveEntrySheetState extends State<_MoveEntrySheet> {
   String? _msg;
 
   String? _sectionId;
+  final Set<String> _selectedSectionIds = <String>{};
   late final TextEditingController _className;
 
   @override
@@ -959,8 +960,8 @@ class _MoveEntrySheetState extends State<_MoveEntrySheet> {
     final entryId = widget.entry['id']?.toString() ?? '';
     if (entryId.isEmpty) return;
 
-    if (_sectionId == null || _sectionId!.isEmpty) {
-      setState(() => _msg = 'Select a section.');
+    if (_selectedSectionIds.isEmpty) {
+      setState(() => _msg = 'Select at least one section.');
       return;
     }
 
@@ -1089,6 +1090,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
 
   String? _exhibitorId;
   String? _sectionId;
+  final Set<String> _selectedSectionIds = <String>{};
   Map<String, dynamic>? _animal;
 
   bool _addNewExhibitor = false;
@@ -1111,7 +1113,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
 
   String? _breedId;
   String? _sexValue;
-  String? _classValue = 'Senior';
+  String? _classValue;
 
   List<Map<String, dynamic>> _breedOptions = [];
   List<Map<String, dynamic>> _varietyOptions = [];
@@ -1125,10 +1127,36 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
 
   bool _isFur = false;
 
+  Map<String, dynamic> _sectionById(String id) {
+    return widget.sections.firstWhere(
+      (x) => x['id']?.toString() == id,
+      orElse: () => <String, dynamic>{},
+    );
+  }
+
+  String _sectionKindById(String id) {
+    final s = _sectionById(id);
+    return (s['kind'] ?? '').toString().toLowerCase();
+  }
+
+  String _sectionDisplayLabelById(String id) {
+    final s = _sectionById(id);
+    final dn = (s['display_name'] ?? '').toString().trim();
+    final letter = (s['letter'] ?? '').toString().trim();
+    if (dn.isNotEmpty && letter.isNotEmpty) return '$dn ($letter)';
+    if (dn.isNotEmpty) return dn;
+    if (letter.isNotEmpty) return 'Show $letter';
+    return 'Section';
+  }
+
   @override
   void initState() {
     super.initState();
     _sectionId = widget.initialSectionId;
+    _sectionId = widget.initialSectionId;
+    if (_sectionId != null && _sectionId!.isNotEmpty) {
+      _selectedSectionIds.add(_sectionId!);
+    }
     _sexValue = _sexOptions.first;
     _sex.text = _sexValue ?? '';
     _className.text = _classValue ?? '';
@@ -1584,12 +1612,27 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
       );
 
       final type = (exhibitor['type'] ?? '').toString().toLowerCase();
-      if (_sectionKind() == 'youth' && type != 'youth') {
-        setState(() {
-          _saving = false;
-          _msg = 'Open exhibitors cannot enter a youth show section.';
-        });
-        return;
+
+      for (final sectionId in _selectedSectionIds) {
+        final kind = _sectionKindById(sectionId);
+
+        if (kind == 'youth' && type != 'youth') {
+          setState(() {
+            _saving = false;
+            _msg =
+                'Open exhibitors cannot enter youth show sections. Remove ${_sectionDisplayLabelById(sectionId)}.';
+          });
+          return;
+        }
+
+        if (kind == 'open' && type == 'youth') {
+          setState(() {
+            _saving = false;
+            _msg =
+                'Youth exhibitors cannot enter open show sections. Remove ${_sectionDisplayLabelById(sectionId)}.';
+          });
+          return;
+        }
       }
 
       if (!_useLocalAnimal && _animal == null) {
@@ -1617,44 +1660,51 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
       final animalId = _useLocalAnimal ? null : _animal!['id'];
 
       if (animalId != null) {
-        final dup = await supabase
-            .from('entries')
-            .select('id')
-            .eq('show_id', widget.showId)
-            .eq('section_id', _sectionId!)
-            .eq('animal_id', animalId)
-            .maybeSingle();
+        for (final sectionId in _selectedSectionIds) {
+          final dup = await supabase
+              .from('entries')
+              .select('id')
+              .eq('show_id', widget.showId)
+              .eq('section_id', sectionId)
+              .eq('animal_id', animalId)
+              .maybeSingle();
 
-        if (dup != null) {
-          throw Exception('Animal already entered in this section');
+          if (dup != null) {
+            throw Exception(
+              'Animal already entered in ${_sectionDisplayLabelById(sectionId)}',
+            );
+          }
         }
       }
 
-      await supabase.from('entries').insert({
-        'show_id': widget.showId,
-        'section_id': _sectionId,
-        'exhibitor_id': resolvedExhibitorId,
-        'animal_id': animalId,
-        'species': _useLocalAnimal ? _species : _animal!['species'],
-        'tattoo': _useLocalAnimal
-            ? _tattoo.text.trim().toUpperCase()
-            : (_animal!['tattoo'] ?? '').toString().trim().toUpperCase(),
-        'breed': _useLocalAnimal ? _breed.text.trim() : _animal!['breed'],
-        'variety':
-            _useLocalAnimal ? _variety.text.trim() : _animal!['variety'],
-        'sex': _useLocalAnimal ? _sexValue : _animal!['sex'],
-        'class_name': _useLocalAnimal
-            ? _classValue
-            : (_className.text.trim().isEmpty ? null : _className.text.trim()),
-        'notes': _notes.text.trim().isEmpty ? null : _notes.text.trim(),
-        'is_fur': _isFur,
-        'fur_notes': _isFur && _furNotes.text.trim().isNotEmpty
-            ? _furNotes.text.trim()
-            : null,
-        'status': 'entered',
-        'created_at': DateTime.now().toUtc().toIso8601String(),
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      });
+      final rows = _selectedSectionIds.map((sectionId) {
+        return {
+          'show_id': widget.showId,
+          'section_id': sectionId,
+          'exhibitor_id': resolvedExhibitorId,
+          'animal_id': animalId,
+          'species': _useLocalAnimal ? _species : _animal!['species'],
+          'tattoo': _useLocalAnimal
+              ? _tattoo.text.trim().toUpperCase()
+              : (_animal!['tattoo'] ?? '').toString().trim().toUpperCase(),
+          'breed': _useLocalAnimal ? _breed.text.trim() : _animal!['breed'],
+          'variety': _useLocalAnimal ? _variety.text.trim() : _animal!['variety'],
+          'sex': _useLocalAnimal ? _sexValue : _animal!['sex'],
+          'class_name': _useLocalAnimal
+              ? _classValue
+              : (_className.text.trim().isEmpty ? null : _className.text.trim()),
+          'notes': _notes.text.trim().isEmpty ? null : _notes.text.trim(),
+          'is_fur': _isFur,
+          'fur_notes': _isFur && _furNotes.text.trim().isNotEmpty
+              ? _furNotes.text.trim()
+              : null,
+          'status': 'entered',
+          'created_at': DateTime.now().toUtc().toIso8601String(),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        };
+      }).toList();
+
+      await supabase.from('entries').insert(rows);
 
       if (!mounted) return;
 
@@ -1672,8 +1722,8 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
         _varietyOptions = [];
         _sexValue = _sexOptions.first;
         _sex.text = _sexValue ?? '';
-        _classValue = 'Senior';
-        _className.text = _classValue ?? '';
+        _classValue = null;
+        _className.clear();
         _tattoo.clear();
         _breed.clear();
         _variety.clear();
@@ -1735,23 +1785,62 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                         ),
                       ),
                     ),
-                  DropdownButtonFormField<String>(
-                    value: _sectionId,
-                    decoration: const InputDecoration(
-                      labelText: 'Section',
-                      border: OutlineInputBorder(),
+                  Text(
+                    'Show Letters / Sections',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.black12),
                     ),
-                    items: widget.sections
-                        .map(
-                          (s) => DropdownMenuItem<String>(
-                            value: s['id'].toString(),
-                            child:
-                                Text((s['display_name'] ?? s['letter']).toString()),
+                    child: Column(
+                      children: [
+                        ...widget.sections.map((s) {
+                          final id = s['id'].toString();
+                          final checked = _selectedSectionIds.contains(id);
+
+                          return CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                            value: checked,
+                            title: Text((s['display_name'] ?? s['letter']).toString()),
+                            onChanged: _saving
+                                ? null
+                                : (v) {
+                                    setState(() {
+                                      if (v == true) {
+                                        _selectedSectionIds.add(id);
+                                        _sectionId = id;
+                                      } else {
+                                        _selectedSectionIds.remove(id);
+                                        if (_sectionId == id) {
+                                          _sectionId = _selectedSectionIds.isEmpty
+                                              ? null
+                                              : _selectedSectionIds.first;
+                                        }
+                                      }
+                                      _msg = null;
+                                    });
+                                  },
+                          );
+                        }),
+                        if (_selectedSectionIds.isEmpty)
+                          const Align(
+                            alignment: Alignment.centerLeft,
+                            child: Padding(
+                              padding: EdgeInsets.only(top: 6),
+                              child: Text(
+                                'Select at least one section.',
+                                style: TextStyle(color: Colors.red),
+                              ),
+                            ),
                           ),
-                        )
-                        .toList(),
-                    onChanged:
-                        _saving ? null : (v) => setState(() => _sectionId = v),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 14),
                   SwitchListTile(
@@ -1966,7 +2055,6 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                             },
                     ),
                     const SizedBox(height: 10),
-
                     if (_breedId != null && _loadingVarieties) const LinearProgressIndicator(),
                     DropdownButtonFormField<String>(
                       value: _variety.text.trim().isEmpty ? null : _variety.text.trim(),
@@ -1992,7 +2080,29 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                             },
                     ),
                     const SizedBox(height: 10),
-
+                    DropdownButtonFormField<String>(
+                      value: _classValue,
+                      decoration: const InputDecoration(
+                        labelText: 'Class',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'Senior', child: Text('Senior')),
+                        DropdownMenuItem(value: 'Intermediate', child: Text('Intermediate')),
+                        DropdownMenuItem(value: 'Junior', child: Text('Junior')),
+                        DropdownMenuItem(value: 'Pre-Junior', child: Text('Pre-Junior')),
+                      ],
+                      onChanged: _saving
+                          ? null
+                          : (value) {
+                              setState(() {
+                                _classValue = value ?? '';
+                                _className.text = _classValue ?? '';
+                                _msg = null;
+                              });
+                            },
+                    ),
+                    const SizedBox(height: 10),
                     DropdownButtonFormField<String>(
                       value: _sexValue,
                       decoration: const InputDecoration(
@@ -2017,62 +2127,39 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                               });
                             },
                     ),
-                  ] 
-                  else ...[
-                    if (_addNewExhibitor)
-                      const Text(
-                        'Select "Add New Animal" for a new walk-in exhibitor, or switch back to an existing exhibitor to load saved animals.',
-                      )
-                    else if (_exhibitorId == null)
-                      const Text(
-                        'Select an exhibitor first to load their animals.',
-                      )
-                    else if (_animals.isEmpty)
-                      const Text(
-                        'No saved animals found for this exhibitor. Use "Add New Animal" to enter one locally.',
-                      )
-                    else
-                      DropdownButtonFormField<Map<String, dynamic>>(
-                        value: _animal,
-                        decoration: const InputDecoration(
-                          labelText: 'Animal',
-                          border: OutlineInputBorder(),
+                    ] 
+                    else ...[
+                      if (_addNewExhibitor)
+                        const Text(
+                          'Select "Add New Animal" for a new walk-in exhibitor, or switch back to an existing exhibitor to load saved animals.',
+                        )
+                      else if (_exhibitorId == null)
+                        const Text(
+                          'Select an exhibitor first to load their animals.',
+                        )
+                      else if (_animals.isEmpty)
+                        const Text(
+                          'No saved animals found for this exhibitor. Use "Add New Animal" to enter one locally.',
+                        )
+                      else
+                        DropdownButtonFormField<Map<String, dynamic>>(
+                          value: _animal,
+                          decoration: const InputDecoration(
+                            labelText: 'Animal',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: _animals
+                              .map(
+                                (a) => DropdownMenuItem<Map<String, dynamic>>(
+                                  value: a,
+                                  child: Text(_animalLabel(a)),
+                                ),
+                              )
+                              .toList(),
+                          onChanged:
+                              _saving ? null : (v) => setState(() => _animal = v),
                         ),
-                        items: _animals
-                            .map(
-                              (a) => DropdownMenuItem<Map<String, dynamic>>(
-                                value: a,
-                                child: Text(_animalLabel(a)),
-                              ),
-                            )
-                            .toList(),
-                        onChanged:
-                            _saving ? null : (v) => setState(() => _animal = v),
-                      ),
-                  ],
-                  const SizedBox(height: 12),
-                  if (_useLocalAnimal)
-                    DropdownButtonFormField<String>(
-                      value: _classValue,
-                      decoration: const InputDecoration(
-                        labelText: 'Class',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: const [
-                        DropdownMenuItem(value: 'Senior', child: Text('Senior')),
-                        DropdownMenuItem(value: 'Intermediate', child: Text('Intermediate')),
-                        DropdownMenuItem(value: 'Junior', child: Text('Junior')),
-                      ],
-                      onChanged: _saving
-                          ? null
-                          : (value) {
-                              setState(() {
-                                _classValue = value ?? '';
-                                _className.text = _classValue ?? '';
-                                _msg = null;
-                              });
-                            },
-                    ),
+                    ],
 
                   const SizedBox(height: 12),
                   SwitchListTile(

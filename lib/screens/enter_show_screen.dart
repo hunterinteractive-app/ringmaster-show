@@ -36,6 +36,8 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
 
   final Map<String, String> _rabbitBreedClassSystem = {};
 
+  final Map<String, Map<String, dynamic>> _rabbitBreedMeta = {};
+
   bool _sectionAllowsMeatClasses(String? sectionId) {
     final id = (sectionId ?? '').trim();
     if (id.isEmpty) return false;
@@ -79,6 +81,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   final Set<String> _selectedSectionIds = {};
   final Map<String, Map<String, dynamic>> _sectionById = {};
   final Map<String, Set<String>> _furSectionIdsByAnimal = {};
+  final Map<String, Map<String, String>> _furVarietyByAnimalSection = {};
 
   List<Map<String, dynamic>> _exhibitors = [];
   String? _selectedExhibitorId;
@@ -301,13 +304,73 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     return classSystem == 'six';
   }
 
+  Map<String, dynamic>? _rabbitBreedRule(String breedName) {
+    final key = breedName.trim().toLowerCase();
+    if (key.isEmpty) return null;
+    return _rabbitBreedMeta[key];
+  }
+
+  bool _breedHasPreJunior(String breedName) {
+    return _rabbitBreedRule(breedName)?['has_prejunior'] == true;
+  }
+
+  bool _breedUsesWhiteColoredFur(String breedName) {
+    final mode =
+        (_rabbitBreedRule(breedName)?['fur_entry_variety_mode'] ?? '')
+            .toString()
+            .trim()
+            .toLowerCase();
+    return mode == 'white_colored';
+  }
+
+  bool _isGiantChinchilla(String breedName) {
+    return breedName.trim().toLowerCase() == 'giant chinchilla';
+  }
+
+  String _normalizedRabbitSex(String? raw) {
+    final s = (raw ?? '').trim().toLowerCase();
+    if (s == 'buck' || s.startsWith('b')) return 'buck';
+    if (s == 'doe' || s.startsWith('d')) return 'doe';
+    return '';
+  }
+
   List<String> _allowedClassOptionsForAnimal(Map<String, dynamic> animal) {
     final species = (animal['species'] ?? '').toString().trim().toLowerCase();
     final breed = (animal['breed'] ?? '').toString().trim();
+    final sex = _normalizedRabbitSex(animal['sex']?.toString());
 
     if (species == 'rabbit') {
-      if (_isSixClassBreed(breed)) {
+      final isSixClass = _isSixClassBreed(breed);
+      final hasPreJunior = _breedHasPreJunior(breed);
+
+      if (_isGiantChinchilla(breed)) {
+        if (sex == 'buck') {
+          return const [
+            'Pre-Junior Buck',
+            'Junior',
+            'Intermediate',
+            'Senior',
+          ];
+        }
+        if (sex == 'doe') {
+          return const [
+            'Pre-Junior Doe',
+            'Junior',
+            'Intermediate',
+            'Senior',
+          ];
+        }
+      }
+
+      if (isSixClass) {
+        if (hasPreJunior) {
+          return const ['Pre-Junior', 'Junior', 'Intermediate', 'Senior'];
+        }
         return const ['Junior', 'Intermediate', 'Senior'];
+      }
+
+      if (hasPreJunior) {
+        return const ['Pre-Junior', 'Junior', 'Senior'];
       }
       return const ['Junior', 'Senior'];
     }
@@ -580,7 +643,13 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
 
     final breeds = await supabase
         .from('breeds')
-        .select('id,name,species,class_system,is_active')
+        .select(
+          'id,name,species,class_system,is_active,'
+          'has_prejunior,prejunior_age_max_months,prejunior_weight_min,prejunior_weight_max,'
+          'prejunior_buck_age_max_months,prejunior_buck_weight_min,prejunior_buck_weight_max,'
+          'prejunior_doe_age_max_months,prejunior_doe_weight_min,prejunior_doe_weight_max,'
+          'fur_entry_variety_mode',
+        )
         .eq('is_active', true)
         .order('name');
 
@@ -590,12 +659,19 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     };
 
     _rabbitBreedClassSystem.clear();
+    _rabbitBreedMeta.clear();
     for (final b in breedRows) {
       final species = (b['species'] ?? '').toString();
       if (species != 'rabbit') continue;
+
       final name = (b['name'] ?? '').toString().trim();
+      if (name.isEmpty) continue;
+
+      final lower = name.toLowerCase();
       final cs = (b['class_system'] ?? 'four').toString();
-      if (name.isNotEmpty) _rabbitBreedClassSystem[name.toLowerCase()] = cs;
+
+      _rabbitBreedClassSystem[lower] = cs;
+      _rabbitBreedMeta[lower] = Map<String, dynamic>.from(b);
     }
 
     final showBreeds = await supabase
@@ -854,19 +930,45 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
 
   String _suggestRabbitDivision({
     required String breedName,
+    required String sex,
     required DateTime birthDate,
     required DateTime showDate,
   }) {
     final months = _ageInMonthsApprox(birthDate, showDate);
-    final classSystem =
-        _rabbitBreedClassSystem[breedName.trim().toLowerCase()] ?? 'four';
+    final breedKey = breedName.trim().toLowerCase();
+    final classSystem = _rabbitBreedClassSystem[breedKey] ?? 'four';
+    final meta = _rabbitBreedMeta[breedKey];
 
-    if (months < 6.0) return 'Jr';
-    if (classSystem == 'six') {
-      if (months <= 8.0) return 'Int';
-      return 'Sr';
+    if (meta != null && meta['has_prejunior'] == true) {
+      if (_isGiantChinchilla(breedName)) {
+        if (sex == 'buck') {
+          final maxAge =
+              (meta['prejunior_buck_age_max_months'] as num?)?.toDouble();
+          if (maxAge != null && months < maxAge) {
+            return 'Pre-Junior Buck';
+          }
+        } else if (sex == 'doe') {
+          final maxAge =
+              (meta['prejunior_doe_age_max_months'] as num?)?.toDouble();
+          if (maxAge != null && months < maxAge) {
+            return 'Pre-Junior Doe';
+          }
+        }
+      } else {
+        final maxAge =
+            (meta['prejunior_age_max_months'] as num?)?.toDouble();
+        if (maxAge != null && months < maxAge) {
+          return 'Pre-Junior';
+        }
+      }
     }
-    return 'Sr';
+
+    if (months < 6.0) return 'Junior';
+    if (classSystem == 'six') {
+      if (months <= 8.0) return 'Intermediate';
+      return 'Senior';
+    }
+    return 'Senior';
   }
 
   String? _suggestClassForAnimal(Map<String, dynamic> a) {
@@ -880,24 +982,22 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     final birthDate = bdRaw == null ? null : DateTime.tryParse(bdRaw);
     if (birthDate == null) return null;
 
-    final sex = _sexLabel(species, a['sex']?.toString());
+    final sex = _normalizedRabbitSex(a['sex']?.toString());
 
     if (species == 'rabbit') {
       final breed = (a['breed'] ?? '').toString();
       if (breed.trim().isEmpty) return null;
-      final div = _suggestRabbitDivision(
+
+      return _suggestRabbitDivision(
         breedName: breed,
+        sex: sex,
         birthDate: birthDate,
         showDate: _showDate!,
       );
-      return div == 'Jr'
-          ? 'Junior'
-          : div == 'Int'
-              ? 'Intermediate'
-              : 'Senior';
     }
 
-    return 'Open $sex';
+    final sexLabel = _sexLabel(species, a['sex']?.toString());
+    return 'Open $sexLabel';
   }
 
     String? _selectedOrSuggestedClassForAnimal(Map<String, dynamic> animal) {
@@ -979,6 +1079,32 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
       }
     });
   }
+
+String? _furVarietyForAnimalSection(String animalId, String sectionId) {
+  return _furVarietyByAnimalSection[animalId]?[sectionId];
+}
+
+void _setFurVarietyForAnimalSection({
+  required String animalId,
+  required String sectionId,
+  required String? value,
+}) {
+  setState(() {
+    if (value == null || value.trim().isEmpty) {
+      _furVarietyByAnimalSection[animalId]?.remove(sectionId);
+      if (_furVarietyByAnimalSection[animalId]?.isEmpty ?? false) {
+        _furVarietyByAnimalSection.remove(animalId);
+      }
+      return;
+    }
+
+    final bySection = _furVarietyByAnimalSection.putIfAbsent(
+      animalId,
+      () => <String, String>{},
+    );
+    bySection[sectionId] = value.trim();
+  });
+}
 
   void _toggleSection({
     required String sectionId,
