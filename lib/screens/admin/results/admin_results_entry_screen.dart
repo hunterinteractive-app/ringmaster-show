@@ -335,12 +335,17 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     Future<List<Map<String, dynamic>>> _fetchHydratedEntries({
       String? sectionId,
     }) async {
+      final params = <String, dynamic>{
+        'p_show_id': widget.showId,
+      };
+
+      if (sectionId != null && sectionId.isNotEmpty) {
+        params['p_section_id'] = sectionId;
+      }
+
       final rows = await supabase.rpc(
         'report_results_entry_rows',
-        params: {
-          'p_show_id': widget.showId,
-          'p_section_id': (sectionId == null || sectionId.isEmpty) ? null : sectionId,
-        },
+        params: params,
       );
 
       final entries = (rows as List)
@@ -354,14 +359,26 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
 
       final awardsByEntryId = <String, List<String>>{};
 
+      // 🔥 CHUNKED QUERY FIX (prevents PostgREST 400 from large inFilter lists)
+      // TODO: Refactor into shared helper if reused in multiple loaders
       if (entryIds.isNotEmpty) {
-        final awardRows = await supabase
-            .from('entry_awards')
-            .select('entry_id,award_code')
-            .eq('show_id', widget.showId)
-            .inFilter('entry_id', entryIds);
+        final allAwardRows = <Map<String, dynamic>>[];
 
-        for (final row in (awardRows as List).cast<Map<String, dynamic>>()) {
+        for (var i = 0; i < entryIds.length; i += 100) {
+          final chunk = entryIds.skip(i).take(100).toList();
+
+          final rows = await supabase
+              .from('entry_awards')
+              .select('entry_id,award_code')
+              .eq('show_id', widget.showId)
+              .inFilter('entry_id', chunk);
+
+          allAwardRows.addAll(
+            (rows as List).map((e) => Map<String, dynamic>.from(e as Map)),
+          );
+        }
+
+        for (final row in allAwardRows) {
           final entryId = (row['entry_id'] ?? '').toString();
           final award = (row['award_code'] ?? '').toString().trim();
           if (entryId.isEmpty || award.isEmpty) continue;
@@ -1543,7 +1560,6 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
       'report_results_entry_rows',
       params: {
         'p_show_id': widget.showId,
-        'p_section_id': null,
       },
     );
 
@@ -1913,7 +1929,6 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
       'report_results_entry_rows',
       params: {
         'p_show_id': widget.showId,
-        'p_section_id': null,
       },
     );
 
@@ -2385,7 +2400,6 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
       'report_results_entry_rows',
       params: {
         'p_show_id': widget.showId,
-        'p_section_id': null,
       },
     );
 
@@ -3121,7 +3135,6 @@ class _ResultsAnimalsScreenState extends State<_ResultsAnimalsScreen> {
       'report_results_entry_rows',
       params: {
         'p_show_id': widget.showId,
-        'p_section_id': null,
       },
     );
 
