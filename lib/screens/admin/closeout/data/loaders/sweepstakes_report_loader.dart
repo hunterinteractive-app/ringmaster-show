@@ -9,6 +9,23 @@ class SweepstakesReportLoader {
 
   final CloseoutRepository repo;
 
+  static const String _headerSelect = '''
+    show_id,
+    breed_name,
+    scope,
+    show_letter,
+    rule_source,
+    verification_status,
+    engine_type,
+    arba_sanction_number,
+    national_club_sanction_number,
+    host_club_name,
+    show_location,
+    secretary_name,
+    secretary_email,
+    secretary_phone
+  ''';
+
   Future<SweepstakesReportData> load(ReportRequest request) async {
     final showId = request.showId;
     final breedName = (request.breedName ?? '').trim();
@@ -18,14 +35,20 @@ class SweepstakesReportLoader {
     if (breedName.isEmpty) {
       throw Exception('Sweepstakes report requires breedName.');
     }
-
     if (scope.isEmpty) {
       throw Exception('Sweepstakes report requires scope.');
     }
-
     if (showLetter.isEmpty) {
       throw Exception('Sweepstakes report requires showLetter.');
     }
+
+    final showHeader = await _loadShowHeader(showId);
+    final breedSanctionNumber = await _loadBreedSanctionNumber(
+      showId: showId,
+      breedName: breedName,
+      scope: scope,
+      showLetter: showLetter,
+    );
 
     if (showLetter == 'ALL') {
       final lettersResponse = await repo.supabase
@@ -44,13 +67,14 @@ class SweepstakesReportLoader {
         ..sort();
 
       final sections = <SweepstakesReportSection>[];
+      Map<String, dynamic>? firstHeader;
 
       for (final letter in letters) {
         final rowsResponse = await repo.supabase
             .from('v_sweepstakes_pdf_rows')
             .select()
             .eq('show_id', showId)
-            .eq('breed_name', breedName)
+            .ilike('breed_name', breedName)
             .eq('scope', scope)
             .eq('show_letter', letter)
             .order('rank', ascending: true);
@@ -61,11 +85,9 @@ class SweepstakesReportLoader {
 
         final headerResponse = await repo.supabase
             .from('v_sweepstakes_pdf_rows')
-            .select(
-              'show_id, breed_name, scope, show_letter, rule_source, verification_status, engine_type',
-            )
+            .select(_headerSelect)
             .eq('show_id', showId)
-            .eq('breed_name', breedName)
+            .ilike('breed_name', breedName)
             .eq('scope', scope)
             .eq('show_letter', letter)
             .limit(1)
@@ -83,6 +105,8 @@ class SweepstakesReportLoader {
               }
             : Map<String, dynamic>.from(headerResponse);
 
+        firstHeader ??= header;
+
         sections.add(
           SweepstakesReportSection(
             showLetter: (header['show_letter'] ?? letter).toString(),
@@ -96,16 +120,41 @@ class SweepstakesReportLoader {
         );
       }
 
+      final header = firstHeader ?? <String, dynamic>{};
+
       return SweepstakesReportData(
         showId: showId,
         breedName: breedName,
         scope: scope,
         showLetter: 'ALL',
         ruleSource: sections.isNotEmpty ? sections.first.ruleSource : 'NO_RESULTS',
-        verificationStatus: sections.isNotEmpty
-            ? sections.first.verificationStatus
-            : 'VERIFIED',
+        verificationStatus:
+            sections.isNotEmpty ? sections.first.verificationStatus : 'VERIFIED',
         engineType: sections.isNotEmpty ? sections.first.engineType : 'NO_RESULTS',
+        arbaSanction: (header['arba_sanction_number'] ?? '').toString(),
+        nationalClubSanction:
+            (header['national_club_sanction_number'] ?? '').toString(),
+        breedSanctionNumber: breedSanctionNumber,
+        hostClubName: _firstNotEmpty(
+          (header['host_club_name'] ?? '').toString(),
+          showHeader.hostClubName,
+        ),
+        showLocation: _firstNotEmpty(
+          (header['show_location'] ?? '').toString(),
+          showHeader.showLocation,
+        ),
+        secretaryName: _firstNotEmpty(
+        showHeader.secretaryName,
+        (header['secretary_name'] ?? '').toString(),
+      ),
+      secretaryEmail: _firstNotEmpty(
+        showHeader.secretaryEmail,
+        (header['secretary_email'] ?? '').toString(),
+      ),
+      secretaryPhone: _firstNotEmpty(
+        showHeader.secretaryPhone,
+        (header['secretary_phone'] ?? '').toString(),
+      ),
         rows: const [],
         sections: sections,
         noResultsFound: sections.every((s) => s.noResultsFound),
@@ -116,7 +165,7 @@ class SweepstakesReportLoader {
         .from('v_sweepstakes_pdf_rows')
         .select()
         .eq('show_id', showId)
-        .eq('breed_name', breedName)
+        .ilike('breed_name', breedName)
         .eq('scope', scope)
         .eq('show_letter', showLetter)
         .order('rank', ascending: true);
@@ -127,11 +176,9 @@ class SweepstakesReportLoader {
 
     final headerResponse = await repo.supabase
         .from('v_sweepstakes_pdf_rows')
-        .select(
-          'show_id, breed_name, scope, show_letter, rule_source, verification_status, engine_type',
-        )
+        .select(_headerSelect)
         .eq('show_id', showId)
-        .eq('breed_name', breedName)
+        .ilike('breed_name', breedName)
         .eq('scope', scope)
         .eq('show_letter', showLetter)
         .limit(1)
@@ -157,9 +204,144 @@ class SweepstakesReportLoader {
       ruleSource: (header['rule_source'] ?? 'NO_RESULTS').toString(),
       verificationStatus: (header['verification_status'] ?? 'VERIFIED').toString(),
       engineType: (header['engine_type'] ?? 'NO_RESULTS').toString(),
+      arbaSanction: (header['arba_sanction_number'] ?? '').toString(),
+      nationalClubSanction:
+          (header['national_club_sanction_number'] ?? '').toString(),
+      breedSanctionNumber: breedSanctionNumber,
+      hostClubName: _firstNotEmpty(
+        (header['host_club_name'] ?? '').toString(),
+        showHeader.hostClubName,
+      ),
+      showLocation: _firstNotEmpty(
+        (header['show_location'] ?? '').toString(),
+        showHeader.showLocation,
+      ),
+      secretaryName: _firstNotEmpty(
+      showHeader.secretaryName,
+      (header['secretary_name'] ?? '').toString(),
+    ),
+    secretaryEmail: _firstNotEmpty(
+      showHeader.secretaryEmail,
+      (header['secretary_email'] ?? '').toString(),
+    ),
+    secretaryPhone: _firstNotEmpty(
+      showHeader.secretaryPhone,
+      (header['secretary_phone'] ?? '').toString(),
+    ),
       rows: rows,
       sections: const [],
       noResultsFound: rows.isEmpty,
     );
   }
+
+  Future<String> _loadBreedSanctionNumber({
+    required String showId,
+    required String breedName,
+    required String scope,
+    required String showLetter,
+  }) async {
+    final sectionQuery = repo.supabase
+        .from('show_sections')
+        .select('id')
+        .eq('show_id', showId)
+        .eq('kind', scope.toLowerCase());
+
+    final sectionResponse = showLetter == 'ALL'
+        ? await sectionQuery.limit(1).maybeSingle()
+        : await sectionQuery.eq('letter', showLetter).maybeSingle();
+
+    final sectionId = sectionResponse == null
+        ? ''
+        : (Map<String, dynamic>.from(sectionResponse)['id'] ?? '').toString();
+
+    var query = repo.supabase
+        .from('show_sanctions')
+        .select('sanction_number')
+        .eq('show_id', showId)
+        .ilike('breed_name', breedName)
+        .neq('sanctioning_body', 'ARBA');
+
+    if (sectionId.isNotEmpty) {
+      query = query.eq('section_id', sectionId);
+    }
+
+    final response = await query.limit(1).maybeSingle();
+    if (response == null) return '';
+
+    return (Map<String, dynamic>.from(response)['sanction_number'] ?? '')
+        .toString()
+        .trim();
+  }
+
+  Future<_ShowHeader> _loadShowHeader(String showId) async {
+    final showResponse = await repo.supabase
+        .from('shows')
+        .select('club_id, location_name, secretary_email, secretary_phone')
+        .eq('id', showId)
+        .maybeSingle();
+
+    if (showResponse == null) return const _ShowHeader();
+
+    final show = Map<String, dynamic>.from(showResponse);
+    final clubId = (show['club_id'] ?? '').toString();
+
+    String hostClubName = '';
+
+    if (clubId.isNotEmpty) {
+      final clubResponse = await repo.supabase
+          .from('clubs')
+          .select('name')
+          .eq('id', clubId)
+          .maybeSingle();
+
+      if (clubResponse != null) {
+        final club = Map<String, dynamic>.from(clubResponse);
+        hostClubName = (club['name'] ?? '').toString();
+      }
+    }
+
+    final arbaDetailsResponse = await repo.supabase
+        .from('show_arba_report_details')
+        .select('secretary_name, secretary_email, secretary_phone')
+        .eq('show_id', showId)
+        .maybeSingle();
+
+    final arbaDetails = arbaDetailsResponse == null
+        ? <String, dynamic>{}
+        : Map<String, dynamic>.from(arbaDetailsResponse);
+
+    return _ShowHeader(
+      hostClubName: hostClubName,
+      showLocation: (show['location_name'] ?? '').toString(),
+      secretaryName: _firstNotEmpty(
+        (arbaDetails['secretary_name'] ?? '').toString(),
+        '',
+      ),
+      secretaryEmail: _firstNotEmpty(
+        (arbaDetails['secretary_email'] ?? '').toString(),
+        (show['secretary_email'] ?? '').toString(),
+      ),
+    );
+  }
+
+  String _firstNotEmpty(String first, String second) {
+    final a = first.trim();
+    return a.isNotEmpty ? a : second.trim();
+  }
+}
+
+class _ShowHeader {
+  final String hostClubName;
+  final String showLocation;
+  final String secretaryName;
+  final String secretaryEmail;
+  final String secretaryPhone;
+
+  const _ShowHeader({
+    this.hostClubName = '',
+    this.showLocation = '',
+    this.secretaryName = '',
+    this.secretaryEmail = '',
+    this.secretaryPhone = '',
+  });
 }

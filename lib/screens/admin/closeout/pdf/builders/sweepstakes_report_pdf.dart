@@ -52,8 +52,6 @@ class SweepstakesReportPdf {
         ? 'Unknown Date'
         : request.showDate!.trim();
 
-    final sanctionNumber = (request.sanctionNumber ?? '').trim();
-
     final sections = data.sections.isNotEmpty
         ? data.sections
         : [
@@ -71,7 +69,7 @@ class SweepstakesReportPdf {
 
       pdf.addPage(
         pw.MultiPage(
-          pageFormat: PdfPageFormat.letter.landscape,
+          pageFormat: PdfPageFormat.letter,
           margin: const pw.EdgeInsets.all(24),
           theme: theme,
           footer: (context) => _footer(context),
@@ -82,7 +80,12 @@ class SweepstakesReportPdf {
               showLetter: section.showLetter,
               showName: showName,
               showDate: showDate,
-              sanctionNumber: sanctionNumber,
+              breedSanctionNumber: data.breedSanctionNumber,
+              hostClubName: data.hostClubName,
+              showLocation: data.showLocation,
+              secretaryName: data.secretaryName,
+              secretaryEmail: data.secretaryEmail,
+              secretaryPhone: data.secretaryPhone,
             ),
             pw.SizedBox(height: 14),
             if (isNoResults)
@@ -158,33 +161,59 @@ class SweepstakesReportPdf {
     required String showLetter,
     required String showName,
     required String showDate,
-    required String sanctionNumber,
+    required String breedSanctionNumber,
+    required String hostClubName,
+    required String showLocation,
+    required String secretaryName,
+    required String secretaryEmail,
+    required String secretaryPhone,
   }) {
-    pw.Widget infoRow(String label, String value) {
-      return pw.Padding(
-        padding: const pw.EdgeInsets.only(bottom: 3),
-        child: pw.Row(
-          children: [
-            pw.Container(
-              width: 100,
-              child: pw.Text(
-                label,
-                style: pw.TextStyle(
-                  fontSize: 10,
-                  fontWeight: pw.FontWeight.bold,
-                ),
-              ),
-            ),
-            pw.Expanded(
-              child: pw.Text(
-                value,
-                style: const pw.TextStyle(fontSize: 10),
-              ),
-            ),
-          ],
-        ),
-      );
+  pw.Widget infoCell(String label, String value) {
+    if (label.trim().isEmpty && value.trim().isEmpty) {
+      return pw.SizedBox();
     }
+
+    return pw.Padding(
+      padding: const pw.EdgeInsets.only(bottom: 4),
+      child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Container(
+            width: 78,
+            child: pw.Text(
+              label,
+              style: pw.TextStyle(
+                fontSize: 8.5,
+                fontWeight: pw.FontWeight.bold,
+              ),
+            ),
+          ),
+          pw.Expanded(
+            child: pw.Text(
+              value,
+              style: const pw.TextStyle(fontSize: 8.5),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget infoRow2(
+    String leftLabel,
+    String leftValue,
+    String rightLabel,
+    String rightValue,
+  ) {
+    return pw.Row(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Expanded(child: infoCell(leftLabel, leftValue)),
+        pw.SizedBox(width: 12),
+        pw.Expanded(child: infoCell(rightLabel, rightValue)),
+      ],
+    );
+  }
 
     return pw.Row(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -220,13 +249,19 @@ class SweepstakesReportPdf {
                 child: pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    infoRow('Show Name', showName),
-                    infoRow('Show Date', showDate),
-                    infoRow('Breed', breedName),
-                    infoRow('Scope', scope),
-                    infoRow('Show Letter', showLetter),
-                    if (sanctionNumber.isNotEmpty)
-                      infoRow('Sanction #', sanctionNumber),
+                    infoRow2('Show Name', showName, 'Show Date', showDate),
+                    infoRow2('Host Club', hostClubName, 'Location', showLocation),
+                    infoRow2('Breed', breedName, 'Show', '$scope - $showLetter'),
+                    infoRow2('Breed Sanction', breedSanctionNumber, '', ''),
+                    infoRow2(
+                      'Secretary',
+                      secretaryName,
+                      'Contact',
+                      [
+                        if (secretaryEmail.trim().isNotEmpty) secretaryEmail.trim(),
+                        if (secretaryPhone.trim().isNotEmpty) secretaryPhone.trim(),
+                      ].join(' / '),
+                    ),
                   ],
                 ),
               ),
@@ -277,12 +312,8 @@ class SweepstakesReportPdf {
     final headers = <String>[
       'Rank',
       'Exhibitor',
-      'Class',
-      if (showVarietyPoints) 'Variety',
-      if (showGroupPoints) 'Group',
-      if (showBobPoints) 'BOB/BOS',
-      if (showBisPoints) 'BIS/BRIS',
-      if (showFurPoints) 'Fur/Wool',
+      'Address',
+      'ARBA Class Pts',
       'Total',
     ];
 
@@ -290,12 +321,8 @@ class SweepstakesReportPdf {
       return [
         row.rank.toString(),
         row.exhibitorName,
-        _fmt(row.classPoints),
-        if (showVarietyPoints) _fmt(row.varietyPoints),
-        if (showGroupPoints) _fmt(row.groupPoints),
-        if (showBobPoints) _fmt(row.bobPoints),
-        if (showBisPoints) _fmt(row.bisPoints),
-        if (showFurPoints) _fmt(row.furPoints),
+        row.exhibitorAddress,
+        _fmt(row.arbaClassPoints),
         _fmt(row.totalPoints),
       ];
     }).toList();
@@ -308,18 +335,21 @@ class SweepstakesReportPdf {
       ),
       headerStyle: pw.TextStyle(
         color: PdfColors.white,
-        fontSize: 10,
+        fontSize: 8,
         fontWeight: pw.FontWeight.bold,
       ),
-      cellStyle: const pw.TextStyle(fontSize: 9),
+      cellStyle: const pw.TextStyle(fontSize: 7.5),
       border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
       oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
       cellAlignment: pw.Alignment.centerLeft,
       headerAlignment: pw.Alignment.centerLeft,
-      cellPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+      cellPadding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       columnWidths: {
-        0: const pw.FixedColumnWidth(36),
-        1: const pw.FlexColumnWidth(3.0),
+        0: const pw.FixedColumnWidth(30),
+        1: const pw.FlexColumnWidth(2.2),
+        2: const pw.FlexColumnWidth(3.2),
+        3: const pw.FixedColumnWidth(62),
+        4: const pw.FixedColumnWidth(44),
       },
     );
   }

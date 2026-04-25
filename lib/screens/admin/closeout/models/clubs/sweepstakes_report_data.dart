@@ -8,6 +8,16 @@ class SweepstakesReportData {
   final String ruleSource;
   final String verificationStatus;
   final String engineType;
+
+  final String arbaSanction;
+  final String nationalClubSanction;
+  final String breedSanctionNumber;
+  final String hostClubName;
+  final String showLocation;
+  final String secretaryName;
+  final String secretaryEmail;
+  final String secretaryPhone;
+
   final List<SweepstakesReportRow> rows;
   final List<SweepstakesReportSection> sections;
   final bool noResultsFound;
@@ -20,6 +30,14 @@ class SweepstakesReportData {
     required this.ruleSource,
     required this.verificationStatus,
     required this.engineType,
+    this.arbaSanction = '',
+    this.nationalClubSanction = '',
+    this.breedSanctionNumber = '',
+    this.hostClubName = '',
+    this.showLocation = '',
+    this.secretaryName = '',
+    this.secretaryEmail = '',
+    this.secretaryPhone = '',
     required this.rows,
     this.sections = const [],
     this.noResultsFound = false,
@@ -56,7 +74,9 @@ class SweepstakesReportSection {
 class SweepstakesReportRow {
   final int rank;
   final String exhibitorName;
+  final String exhibitorAddress;
   final double classPoints;
+  final double arbaClassPoints;
   final double varietyPoints;
   final double groupPoints;
   final double bobPoints;
@@ -67,7 +87,9 @@ class SweepstakesReportRow {
   const SweepstakesReportRow({
     required this.rank,
     required this.exhibitorName,
+    required this.exhibitorAddress,
     required this.classPoints,
+    required this.arbaClassPoints,
     required this.varietyPoints,
     required this.groupPoints,
     required this.bobPoints,
@@ -85,7 +107,9 @@ class SweepstakesReportRow {
     return SweepstakesReportRow(
       rank: ((map['rank'] ?? 0) as num).toInt(),
       exhibitorName: (map['exhibitor_name'] ?? '').toString(),
+      exhibitorAddress: (map['exhibitor_address'] ?? '').toString(),
       classPoints: asDouble(map['class_points']),
+      arbaClassPoints: asDouble(map['arba_class_points']),
       varietyPoints: asDouble(map['variety_points']),
       groupPoints: asDouble(map['group_points']),
       bobPoints: asDouble(map['bob_points']),

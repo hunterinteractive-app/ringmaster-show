@@ -585,6 +585,29 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       );
     }
 
+    Future<void> _loadDataUntilFinalizeVisible({
+      required String previousFinalizeId,
+    }) async {
+      for (var attempt = 0; attempt < 10; attempt++) {
+        await _loadData();
+
+        final latestId = _dashboard?.latestFinalize.id;
+
+        final hasNewFinalize = latestId != null && latestId != previousFinalizeId;
+
+        final hasCurrentReports = (_dashboard?.reports ?? const <ReportArtifactSummary>[])
+            .any((r) => r.isCurrent);
+
+        if (hasNewFinalize && hasCurrentReports) {
+          return;
+        }
+
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+
+      await _loadData();
+    }
+
   @override
   void initState() {
     super.initState();
@@ -702,8 +725,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         uploadService: uploadService,
       );
 
-      final latestFinalizeId = _dashboard?.latestFinalize.id ?? 'manual-run';
-
       String artifactKey(ReportArtifactSummary artifact) {
         final filePart = (artifact.fileName?.trim().isNotEmpty ?? false)
             ? ' • ${artifact.fileName!.trim()}'
@@ -714,6 +735,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       Future<void> runSingle(ReportArtifactSummary artifact) async {
         final key = artifactKey(artifact);
         onStarted(key);
+
+        final runId =
+            artifact.finalizeRunId ?? _dashboard?.latestFinalize.id ?? 'manual-run';
 
         try {
           if (artifact.reportName == 'sweepstakes_report' ||
@@ -731,7 +755,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
             await runner.generateSingleReport(
               showId: widget.showId,
-              finalizeRunId: latestFinalizeId,
+              finalizeRunId: runId,
               reportName: artifact.reportName,
               artifactId: artifact.id,
               breedName: breedName,
@@ -754,7 +778,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
             await runner.generateSingleReport(
               showId: widget.showId,
-              finalizeRunId: latestFinalizeId,
+              finalizeRunId: runId,
               reportName: artifact.reportName,
               artifactId: artifact.id,
               exhibitorId: exhibitorId,
@@ -766,7 +790,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           } else {
             await runner.generateSingleReport(
               showId: widget.showId,
-              finalizeRunId: latestFinalizeId,
+              finalizeRunId: runId,
               reportName: artifact.reportName,
               artifactId: artifact.id,
               showName: widget.showName,
@@ -1329,6 +1353,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           })
           .select('''
             id,
+            finalize_run_id,
             report_name,
             artifact_status,
             file_name,
@@ -1899,22 +1924,21 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                         });
 
                                         try {
+                                          final previousFinalizeId = _dashboard?.latestFinalize.id ?? '';
                                           await _finalizeShow();
-
+                                          await _loadDataUntilFinalizeVisible(
+                                            previousFinalizeId: previousFinalizeId,
+                                          );
                                           final artifactCount = await _countQueuedArtifactsForShow();
-
                                           if (artifactCount == 0) {
                                             throw Exception(
                                               'Finalize completed but no report artifacts were created.',
                                             );
                                           }
-
-                                          await _loadData();
-
                                           final artifactsToGenerate =
                                               (_dashboard?.reports ?? <ReportArtifactSummary>[])
                                                   .where((r) => r.isCurrent)
-                                                  .where((r) => r.artifactStatus == 'queued')
+                                                  .where((r) => r.artifactStatus == 'queued' || r.artifactStatus == 'failed')
                                                   .where(
                                                     (r) => {
                                                       'arba_report',
@@ -3643,6 +3667,7 @@ class LatestFinalize {
 
 class ReportArtifactSummary {
   final String id;
+  final String? finalizeRunId;
   final String reportName;
   final String artifactStatus;
   final String? fileName;
@@ -3654,6 +3679,7 @@ class ReportArtifactSummary {
 
   ReportArtifactSummary({
     required this.id,
+    this.finalizeRunId,
     required this.reportName,
     required this.artifactStatus,
     this.fileName,
@@ -3667,6 +3693,7 @@ class ReportArtifactSummary {
   factory ReportArtifactSummary.fromJson(Map<String, dynamic> json) {
     return ReportArtifactSummary(
       id: (json['id'] ?? '') as String,
+      finalizeRunId: json['finalize_run_id'] as String?,
       reportName: (json['report_name'] ?? '') as String,
       artifactStatus: (json['artifact_status'] ?? 'queued') as String,
       fileName: json['file_name'] as String?,

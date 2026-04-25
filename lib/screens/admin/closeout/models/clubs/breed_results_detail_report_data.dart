@@ -6,6 +6,16 @@ class BreedResultsDetailReportData {
   final String scope;
   final String showLetter;
   final String judgeName;
+
+  final String arbaSanction;
+  final String nationalClubSanction;
+  final String breedSanctionNumber;
+  final String hostClubName;
+  final String showLocation;
+  final String secretaryName;
+  final String secretaryEmail;
+  final String secretaryPhone;
+
   final List<BreedAward> breedAwards;
   final List<VarietySection> varieties;
   final List<BreedResultsDetailSection> sections;
@@ -17,6 +27,14 @@ class BreedResultsDetailReportData {
     required this.scope,
     required this.showLetter,
     required this.judgeName,
+    this.arbaSanction = '',
+    this.nationalClubSanction = '',
+    this.breedSanctionNumber = '',
+    this.hostClubName = '',
+    this.showLocation = '',
+    this.secretaryName = '',
+    this.secretaryEmail = '',
+    this.secretaryPhone = '',
     required this.breedAwards,
     required this.varieties,
     this.sections = const [],
@@ -45,12 +63,20 @@ class BreedAward {
   final String animal;
   final String className;
   final String exhibitorName;
+  final String sex;
+  final String variety;
+  final int animalsJudged;
+  final int exhibitorsJudged;
 
   const BreedAward({
     required this.award,
     required this.animal,
     required this.className,
     required this.exhibitorName,
+    this.sex = '',
+    this.variety = '',
+    this.animalsJudged = 0,
+    this.exhibitorsJudged = 0,
   });
 }
 
@@ -70,12 +96,16 @@ class ClassSection {
   final String className;
   final int entryCount;
   final int placedCount;
+  final int animalsJudged;
+  final int exhibitorsJudged;
   final List<ClassEntry> rows;
 
   const ClassSection({
     required this.className,
     required this.entryCount,
     required this.placedCount,
+    required this.animalsJudged,
+    required this.exhibitorsJudged,
     required this.rows,
   });
 }
@@ -84,10 +114,16 @@ class ClassEntry {
   final String place;
   final String animal;
   final String exhibitorName;
+  final String sex;
+  final String variety;
+  final String status;
 
   const ClassEntry({
     required this.place,
     required this.animal,
     required this.exhibitorName,
+    this.sex = '',
+    this.variety = '',
+    this.status = '',
   });
 }
