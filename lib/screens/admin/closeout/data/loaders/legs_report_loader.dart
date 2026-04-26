@@ -541,7 +541,9 @@ class LegsReportLoader {
   }) {
     final normalized = awardCode.toUpperCase();
 
-    if ((normalized == 'BIS' || normalized == 'BEST_IN_SHOW') &&
+    if ((normalized == 'BIS' ||
+            normalized == 'BEST_IN_SHOW' ||
+            normalized == 'BEST IN SHOW') &&
         ctx.showAnimals >= 5 &&
         ctx.showExhibitors >= 3) {
       return _LegRuleMatch(
@@ -629,14 +631,19 @@ class LegsReportLoader {
       );
     }
 
-    if ((normalized == 'BEST_4_CLASS' || normalized == 'BEST_6_CLASS') &&
-        ctx.classAnimals >= 5 &&
-        ctx.classExhibitors >= 3) {
+    if ((normalized == 'BEST_4_CLASS' ||
+            normalized == 'BEST_6_CLASS' ||
+            normalized == 'BEST4CLASS' ||
+            normalized == 'BEST6CLASS' ||
+            normalized == 'B4C' ||
+            normalized == 'B6C') &&
+        ctx.showAnimals >= 5 &&
+        ctx.showExhibitors >= 3) {
       return _LegRuleMatch(
         rule: 9,
         priority: 9,
-        animalsCount: ctx.classAnimals,
-        exhibitorsCount: ctx.classExhibitors,
+        animalsCount: ctx.showAnimals,
+        exhibitorsCount: ctx.showExhibitors,
       );
     }
 

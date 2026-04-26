@@ -698,7 +698,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
 
     final id = ids.first;
     final name = _judgeNameById(id);
-    return 'Judge: ${name.isEmpty ? id : name}';
+    return name.isEmpty ? 'Judge: Not set' : 'Judge: $name';
   }
 
   List<_ValidationIssue> _buildValidationIssues() {
@@ -1535,7 +1535,7 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
 
     final id = ids.first;
     final name = _judgeNameById(id);
-    return 'Judge: ${name.isEmpty ? id : name}';
+    return name.isEmpty ? 'Judge: Not set' : 'Judge: $name';
   }
 
   String? _singleJudgeId(List<Map<String, dynamic>> entries) {
@@ -1904,7 +1904,7 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
 
     final id = ids.first;
     final name = _judgeNameById(id);
-    return 'Judge: ${name.isEmpty ? id : name}';
+    return name.isEmpty ? 'Judge: Not set' : 'Judge: $name';
   }
 
   String? _singleJudgeId(List<Map<String, dynamic>> entries) {
@@ -2375,7 +2375,7 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
 
     final id = ids.first;
     final name = _judgeNameById(id);
-    return 'Judge: ${name.isEmpty ? id : name}';
+    return name.isEmpty ? 'Judge: Not set' : 'Judge: $name';
   }
 
   String? _singleJudgeId(List<Map<String, dynamic>> entries) {
