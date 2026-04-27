@@ -175,13 +175,15 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
         if (label.isEmpty) label = masterJudgeId;
       }
 
-      result.add({
+      if (!result.any((j) => (j['id'] ?? '').toString().trim() == masterJudgeId)) {
+        result.add({
         'id': masterJudgeId,           // THIS is what gets saved
         'judge_id': masterJudgeId,     // same saved id
         'assignment_id': assignmentId, // only for fallback matching
         'name': label,
       });
     }
+  }
 
     result.sort((a, b) {
       final an = (a['name'] ?? '').toString().toLowerCase();

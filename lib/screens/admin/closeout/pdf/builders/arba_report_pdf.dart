@@ -494,8 +494,8 @@ class ArbaReportPdfBuilder {
         pw.TableRow(
           decoration: const pw.BoxDecoration(color: PdfColors.grey300),
           children: [
-            _headerCell('JUDGE/S & LICENSE NUMBER'),
-            _headerCell('JUDGE/S & LICENSE NUMBER'),
+            _headerCell('JUDGES & LICENSE NUMBER'),
+            _headerCell('JUDGES & LICENSE NUMBER'),
           ],
         ),
         for (var i = 0; i < 6; i++)

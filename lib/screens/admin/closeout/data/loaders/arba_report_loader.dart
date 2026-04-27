@@ -92,10 +92,10 @@ class ArbaReportLoader {
 
     final sweepstakesReportsFiledAt = await _loadGeneratedAt(
       request.showId,
-      const ['newsletter_show_report', 'exh_total_points', 'exh_by_breed'],
+      const ['sweepstakes_report'],
     );
 
-    final judges = await _loadJudgeNames(
+    final judges = await _loadJudgeNamesFromEntries(
       request.showId,
       sectionId: sectionId,
     );
@@ -140,6 +140,54 @@ class ArbaReportLoader {
       bisRabbitBreed: bisRabbit.breed,
       bisRabbitEarNumber: bisRabbit.earNumber,
     );
+  }
+
+  Future<List<String>> _loadJudgeNamesFromEntries(
+    String showId, {
+    String? sectionId,
+  }) async {
+    try {
+      var query = repo.supabase
+          .from('entries')
+          .select('judged_by_show_judge_id')
+          .eq('show_id', showId)
+          .not('judged_by_show_judge_id', 'is', null);
+
+      if (sectionId != null && sectionId.trim().isNotEmpty) {
+        query = query.eq('section_id', sectionId.trim());
+      }
+
+      final rows = await query;
+
+      final judgeIds = List<Map<String, dynamic>>.from(rows)
+          .map((e) => _str(e['judged_by_show_judge_id']))
+          .where((e) => e.isNotEmpty)
+          .toSet()
+          .toList();
+
+      if (judgeIds.isEmpty) return const [];
+
+      final judgeRows = await repo.supabase
+          .from('judges')
+          .select('id, name, display_name, first_name, last_name, arba_judge_number')
+          .inFilter('id', judgeIds);
+
+      return List<Map<String, dynamic>>.from(judgeRows).map((j) {
+        final name = _firstNonEmpty([
+          _str(j['display_name']),
+          _str(j['name']),
+          [
+            _str(j['first_name']),
+            _str(j['last_name']),
+          ].where((e) => e.isNotEmpty).join(' '),
+        ]);
+
+        final number = _str(j['arba_judge_number']);
+        return number.isEmpty ? name : '$name - $number';
+      }).where((e) => e.trim().isNotEmpty).toList();
+    } catch (_) {
+      return const [];
+    }
   }
 
   Future<Map<String, dynamic>?> _loadArbaDetails(String showId) async {
@@ -491,105 +539,97 @@ class ArbaReportLoader {
     String? sectionId,
   }) async {
     try {
-      final rows = await repo.supabase
+      final rows = await repo.supabase.rpc(
+        'report_results_entry_rows',
+        params: {'p_show_id': showId},
+      );
+
+      final entries = (rows as List)
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+
+      final entryIds = entries
+          .map((e) => _str(e['entry_id']))
+          .where((e) => e.isNotEmpty)
+          .toList();
+
+      if (entryIds.isEmpty) return const _BisRabbitInfo.empty();
+
+      final awardRows = await repo.supabase
           .from('entry_awards')
-          .select('''
-            award_code,
-            entry_id,
-            entries!entry_awards_entry_id_fkey (
-              id,
-              species,
-              tattoo,
-              breed,
-              exhibitor_id,
-              section_id
-            )
-          ''')
-          .eq('show_id', showId);
+          .select('entry_id, award_code')
+          .eq('show_id', showId)
+          .inFilter('entry_id', entryIds);
 
-      final awards = List<Map<String, dynamic>>.from(rows);
+      String? bisEntryId;
 
-      Map<String, dynamic>? bisAward;
+      for (final raw in (awardRows as List)) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        final award = _str(row['award_code'])
+            .toLowerCase()
+            .replaceAll('_', ' ')
+            .replaceAll('-', ' ')
+            .trim();
 
-      for (final row in awards) {
-        final awardCode = _str(row['award_code']).toLowerCase();
-        final entry = row['entries'];
-
-        if (entry is! Map<String, dynamic>) continue;
-
-        final entrySectionId = _str(entry['section_id']);
-        if (sectionId != null &&
-            sectionId.trim().isNotEmpty &&
-            entrySectionId != sectionId.trim()) {
-          continue;
-        }
-
-        final species = _str(entry['species']).toLowerCase();
-
-        final isBisRabbit = species == 'rabbit' &&
-            (awardCode == 'bis' ||
-                awardCode == 'best_in_show' ||
-                awardCode == 'best in show' ||
-                awardCode == 'bis_rabbit');
-
-        if (isBisRabbit) {
-          bisAward = row;
+        if (award == 'best in show' || award == 'bis' || award == 'bis rabbit') {
+          bisEntryId = _str(row['entry_id']);
           break;
         }
       }
 
-      if (bisAward == null) {
+      // Single-breed specialty fallback:
+      // If no explicit BIS was saved, use the BOB rabbit as BIS.
+      if (bisEntryId == null || bisEntryId.isEmpty) {
+        for (final raw in (awardRows as List)) {
+          final row = Map<String, dynamic>.from(raw as Map);
+          final award = _str(row['award_code']).toUpperCase().trim();
+
+          if (award == 'BOB') {
+            bisEntryId = _str(row['entry_id']);
+            break;
+          }
+        }
+      }
+
+      if (bisEntryId == null || bisEntryId.isEmpty) {
         return const _BisRabbitInfo.empty();
       }
 
-      final entry = Map<String, dynamic>.from(bisAward['entries'] as Map);
-      final exhibitorId = _str(entry['exhibitor_id']);
+      final entry = entries.firstWhere(
+        (e) => _str(e['entry_id']) == bisEntryId,
+        orElse: () => <String, dynamic>{},
+      );
 
-      String owner = '';
-      String cityState = '';
+      if (entry.isEmpty) return const _BisRabbitInfo.empty();
 
-      if (exhibitorId.isNotEmpty) {
-        final exhibitor = await repo.supabase
-            .from('exhibitors')
-            .select('display_name, first_name, last_name, city, state, user_id')
-            .eq('id', exhibitorId)
-            .maybeSingle();
-
-        if (exhibitor != null) {
-          owner = _str(exhibitor['display_name']).isNotEmpty
-              ? _str(exhibitor['display_name'])
-              : [
-                  _str(exhibitor['first_name']),
-                  _str(exhibitor['last_name']),
-                ].where((e) => e.isNotEmpty).join(' ');
-
-          var city = _str(exhibitor['city']);
-          var state = _str(exhibitor['state']);
-
-          if (city.isEmpty || state.isEmpty) {
-            final userId = _str(exhibitor['user_id']);
-            if (userId.isNotEmpty) {
-              final profile = await repo.supabase
-                  .from('user_profiles')
-                  .select('city, state')
-                  .eq('user_id', userId)
-                  .maybeSingle();
-
-              if (profile != null) {
-                if (city.isEmpty) city = _str(profile['city']);
-                if (state.isEmpty) state = _str(profile['state']);
-              }
-            }
-          }
-
-          cityState = [city, state].where((e) => e.isNotEmpty).join(', ');
-        }
+      final entrySectionId = _str(entry['section_id']);
+      if (sectionId != null &&
+          sectionId.trim().isNotEmpty &&
+          entrySectionId != sectionId.trim()) {
+        return const _BisRabbitInfo.empty();
       }
+
+      final owner = _firstNonEmpty([
+        _str(entry['exhibitor_showing_name']),
+        _str(entry['exhibitor_label']),
+        [
+          _str(entry['exhibitor_first_name']),
+          _str(entry['exhibitor_last_name']),
+        ].where((e) => e.isNotEmpty).join(' '),
+      ]);
+
+      final cityState = [
+        _str(entry['exhibitor_city']),
+        _str(entry['exhibitor_state']),
+      ].where((e) => e.isNotEmpty).join(', ');
 
       return _BisRabbitInfo(
         owner: owner,
         cityState: cityState,
-        breed: _str(entry['breed']),
+        breed: _firstNonEmpty([
+          _str(entry['breed_name']),
+          _str(entry['breed']),
+        ]),
         earNumber: _str(entry['tattoo']),
       );
     } catch (_) {
