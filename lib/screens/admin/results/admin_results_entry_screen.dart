@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
+import 'package:ringmaster_show/services/show_lock_service.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -297,6 +298,8 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                   .toList();
               if (ids.isEmpty) return;
 
+              await ShowLockService.assertShowUnlocked(widget.showId);
+
               await supabase
                   .from('entries')
                   .update({
@@ -542,6 +545,8 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                   .toList();
               if (ids.isEmpty) return;
 
+              await ShowLockService.assertShowUnlocked(widget.showId);
+
               await supabase
                   .from('entries')
                   .update({
@@ -581,6 +586,14 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
       final s = raw.trim();
       if (s.isEmpty) return '';
       final lower = s.toLowerCase();
+      if (lower.contains('pre-junior') ||
+          lower.contains('pre junior') ||
+          lower.contains('prejunior') ||
+          lower.startsWith('pre jr') ||
+          lower.startsWith('pre-jr')) {
+        return 'Pre-Junior';
+      }
+
       if (lower.contains('senior') || lower.startsWith('sr')) return 'Senior';
       if (lower.contains('intermediate') || lower.startsWith('int')) return 'Intermediate';
       if (lower.contains('junior') || lower.startsWith('jr')) return 'Junior';
@@ -1643,6 +1656,8 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
         .toList();
       if (ids.isEmpty) return;
 
+      await ShowLockService.assertShowUnlocked(widget.showId);
+
       await supabase
           .from('entries')
           .update({
@@ -2290,6 +2305,15 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
     final s = raw.trim();
     if (s.isEmpty) return '';
     final lower = s.toLowerCase();
+
+      if (lower.contains('pre-junior') ||
+          lower.contains('pre junior') ||
+          lower.contains('prejunior') ||
+          lower.startsWith('pre jr') ||
+          lower.startsWith('pre-jr')) {
+        return 'Pre-Junior';
+      }
+
     if (lower.contains('senior') || lower.startsWith('sr')) return 'Senior';
     if (lower.contains('intermediate') || lower.startsWith('int')) return 'Intermediate';
     if (lower.contains('junior') || lower.startsWith('jr')) return 'Junior';
@@ -2299,6 +2323,7 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
 
   int _classRank(String v) {
     final x = v.toLowerCase();
+    if (x == 'pre-junior' || x == 'pre junior' || x == 'prejunior') return 0;
     if (x == 'junior') return 0;
     if (x == 'intermediate') return 1;
     if (x == 'senior') return 2;
@@ -4106,6 +4131,8 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
     });
 
     try {
+      await ShowLockService.assertShowUnlocked(widget.showId);
+
       final entryId = _entryUuid;
       if (entryId.isEmpty) {
         throw Exception('Entry ID is missing.');
