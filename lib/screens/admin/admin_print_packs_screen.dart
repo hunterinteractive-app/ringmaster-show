@@ -1,6 +1,7 @@
 // lib/screens/admin/admin_print_packs_screen.dart
 
 import 'dart:typed_data';
+import 'dart:convert';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
@@ -1194,7 +1195,8 @@ class _ControlSheetsGeneratorSheetState
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final isSuccess = _msg != null &&
-        (_msg == 'Save canceled.' || _msg!.startsWith('PDF saved to:'));
+        _msg!.startsWith('Email complete') &&
+        _msg!.contains('Skipped with no email: 0');
 
     return Padding(
       padding: EdgeInsets.only(
@@ -1332,6 +1334,124 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
     );
 
     return (rows as List).cast<Map<String, dynamic>>();
+  }
+
+  bool _emailing = false;
+
+  String _money(dynamic value) {
+    final n = value is num ? value : num.tryParse(value?.toString() ?? '');
+    if (n == null) return r'$—';
+    return '\$${n.toStringAsFixed(2)}';
+  }
+    
+  String _emailForExhibitor(List<Map<String, dynamic>> entries) {
+    for (final e in entries) {
+      final email = _safe(e, 'email');
+      if (email.isNotEmpty && email.contains('@')) return email;
+
+      final exhibitorEmail = _safe(e, 'exhibitor_email');
+      if (exhibitorEmail.isNotEmpty && exhibitorEmail.contains('@')) {
+        return exhibitorEmail;
+      }
+    }
+    return '';
+  }
+
+  String _safeFileName(String value) {
+    return value
+        .replaceAll(RegExp(r'[^A-Za-z0-9_\-]+'), '_')
+        .replaceAll(RegExp(r'_+'), '_')
+        .replaceAll(RegExp(r'^_|_$'), '');
+  }
+
+  Future<Uint8List> _buildPdfBytesForEntries(
+    List<Map<String, dynamic>> entries,
+  ) async {
+    await _loadShowContact();
+
+    final theme = await _buildPdfTheme();
+    final doc = _buildPdf(
+      entries: entries,
+      theme: theme,
+    );
+
+    return Uint8List.fromList(await doc.save());
+  }
+
+  Future<void> _emailCheckInSheets() async {
+    if (_emailing || _building) return;
+
+    setState(() {
+      _emailing = true;
+      _msg = null;
+    });
+
+    try {
+      final entries = await _fetchEntries();
+
+      if (entries.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _emailing = false;
+          _msg = 'No entries found for this selection.';
+        });
+        return;
+      }
+
+      await _loadShowContact();
+
+      final grouped = _groupByExhibitor(entries);
+      var sent = 0;
+      var skipped = 0;
+
+      for (final entryList in grouped.values) {
+        if (entryList.isEmpty) continue;
+
+        final email = _emailForExhibitor(entryList);
+        if (email.isEmpty) {
+          skipped++;
+          continue;
+        }
+
+        final exhibitorName = _exhibitorNameFromEntry(entryList.first);
+        final pdfBytes = await _buildPdfBytesForEntries(entryList);
+
+        final filename =
+            'check_in_${_safeFileName(widget.showName)}_${_safeFileName(exhibitorName)}.pdf';
+
+        final response = await supabase.functions.invoke(
+          'send-checkin-sheet-email',
+          body: {
+            'show_id': widget.showId,
+            'show_name': widget.showName,
+            'section_label': widget.sectionLabel,
+            'exhibitor_id': (entryList.first['exhibitor_id'] ?? '').toString(),
+            'exhibitor_name': exhibitorName,
+            'to_email': email,
+            'filename': filename,
+            'pdf_base64': base64Encode(pdfBytes),
+          },
+        );
+
+        if (response.status < 200 || response.status >= 300) {
+          throw Exception('Email failed for $exhibitorName: ${response.data}');
+        }
+
+        sent++;
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _emailing = false;
+        _msg = 'Email complete. Sent: $sent. Skipped with no email: $skipped.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _emailing = false;
+        _msg = 'Email failed: $e';
+      });
+    }
   }
 
   String _safe(Map<String, dynamic> e, String k) =>
@@ -1780,8 +1900,8 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
       final exMap = exEntries.first;
       final exName = _exhibitorNameFromEntry(exMap);
       final numberEntered = exEntries.length;
-      const allShows = r'$—';
-      const thisShow = r'$—';
+      final allShows = _money(exMap['balance_due_all_shows']);
+      final thisShow = _money(exMap['balance_due_this_show']);
       final multi = _isMultiSection(exEntries);
 
       doc.addPage(
@@ -1852,7 +1972,7 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
               pw.Row(
                 children: [
                   pw.Text(
-                    '${multi ? '☑' : '☐'} Entered in multiple shows',
+                    '${multi ? '[X]' : '[ ]'} Entered in multiple shows',
                     style: pw.TextStyle(fontSize: 10),
                   ),
                 ],
@@ -1983,8 +2103,14 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final isEmailComplete = _msg != null && _msg!.startsWith('Email complete');
+    final isFullEmailSuccess =
+        isEmailComplete && _msg!.contains('Skipped with no email: 0.');
+
     final isSuccess = _msg != null &&
-        (_msg == 'Save canceled.' || _msg!.startsWith('PDF saved to:'));
+        (_msg == 'Save canceled.' ||
+            _msg!.startsWith('PDF saved to:') ||
+            isFullEmailSuccess);
 
     return Padding(
       padding: EdgeInsets.only(
@@ -2056,9 +2182,22 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
               icon: const Icon(Icons.picture_as_pdf),
               label: Text(_building ? 'Building PDF…' : 'Generate PDF'),
             ),
+
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF11285A),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+              onPressed: (_building || _emailing) ? null : _emailCheckInSheets,
+              icon: const Icon(Icons.email_outlined),
+              label: Text(_emailing ? 'Emailing…' : 'Email Check-In Sheets'),
+            ),
+
             const SizedBox(height: 8),
             OutlinedButton(
-              onPressed: _building ? null : () => Navigator.pop(context),
+              onPressed: (_building || _emailing) ? null : () => Navigator.pop(context),
               child: const Text('Close'),
             ),
           ],

@@ -396,28 +396,73 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
     }
   }
 
-  Widget _section(String title, List<Widget> children) {
+    Widget _section(
+    String title,
+    List<Widget> children, {
+    String? subtitle,
+    IconData? icon,
+  }) {
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(.05),
-            blurRadius: 10,
+            blurRadius: 12,
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 12),
+          Row(
+            children: [
+              if (icon != null) ...[
+                Icon(icon, size: 20, color: const Color(0xFF11285A)),
+                const SizedBox(width: 8),
+              ],
+              Expanded(
+                child: Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ),
+            ],
+          ),
+          if (subtitle != null && subtitle.trim().isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+          const SizedBox(height: 14),
           ...children,
         ],
+      ),
+    );
+  }
+
+  Widget _moneyField({
+    required TextEditingController controller,
+    required String label,
+    String? helper,
+  }) {
+    return TextField(
+      controller: controller,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      textInputAction: TextInputAction.next,
+      decoration: InputDecoration(
+        labelText: label,
+        helperText: helper,
+        prefixText: '\$ ',
+        border: const OutlineInputBorder(),
       ),
     );
   }
@@ -444,20 +489,19 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
   }
 
   Widget _buildStripeStatusRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 150,
-            child: Text(
-              '$label:',
-              style: const TextStyle(fontWeight: FontWeight.w600),
+    return Container(
+      width: 210,
+      margin: const EdgeInsets.only(right: 10, bottom: 8),
+      child: Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(
+              text: '$label: ',
+              style: const TextStyle(fontWeight: FontWeight.w700),
             ),
-          ),
-          Expanded(child: Text(value)),
-        ],
+            TextSpan(text: value),
+          ],
+        ),
       ),
     );
   }
@@ -499,6 +543,180 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
         .join(' ');
   }
 
+  Widget _buildSectionFeesSection() {
+    if (_sections.isEmpty) {
+      return _section(
+        'Entry Fees',
+        const [Text('No enabled show sections found.')],
+        icon: Icons.confirmation_number_outlined,
+      );
+    }
+
+    return _section(
+      'Entry Fees by Show Section',
+      [
+        Text(
+          'Set the standard animal entry fee, optional flat show fee, and Fur/Wool fee for each enabled section.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 14),
+        ..._sections.map((section) {
+          final sectionId = section['id'].toString();
+          final title = _sectionLabel(section);
+
+          return Container(
+            margin: const EdgeInsets.only(bottom: 14),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFD),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.black.withOpacity(.06)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final stack = constraints.maxWidth < 620;
+
+                    final fields = [
+                      _moneyField(
+                        controller: _entryControllerFor(sectionId),
+                        label: 'Fee per animal / entry',
+                      ),
+                      _moneyField(
+                        controller: _furControllerFor(sectionId),
+                        label: 'Fur / Wool fee',
+                      ),
+//                      _moneyField(
+//                        controller: _showControllerFor(sectionId),
+//                        label: 'Optional fee per show',
+//                        helper: 'Leave blank if not used',
+//                      ),
+                    ];
+
+                    if (stack) {
+                      return Column(
+                        children: [
+                          for (final field in fields) ...[
+                            field,
+                            const SizedBox(height: 12),
+                          ],
+                        ],
+                      );
+                    }
+
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (var i = 0; i < fields.length; i++) ...[
+                          Expanded(child: fields[i]),
+                          if (i != fields.length - 1)
+                            const SizedBox(width: 12),
+                        ],
+                      ],
+                    );
+                  },
+                ),
+              ],
+            ),
+          );
+        }),
+      ],
+      icon: Icons.attach_money,
+    );
+  }
+
+  Widget _buildDiscountSection() {
+    return _section(
+      'Discounts',
+      [
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text(
+            'Enable multi-show discount',
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
+          subtitle: const Text(
+            'Applies a discount when an exhibitor enters multiple show sections.',
+          ),
+          value: _discountEnabled,
+          onChanged: _saving
+              ? null
+              : (v) => setState(() => _discountEnabled = v),
+        ),
+        if (_discountEnabled) ...[
+          const SizedBox(height: 10),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final stack = constraints.maxWidth < 520;
+
+              final typeField = DropdownButtonFormField<String>(
+                value: _discountType,
+                items: const [
+                  DropdownMenuItem(
+                    value: 'amount',
+                    child: Text('Amount (\$ off)'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'percent',
+                    child: Text('Percent (% off)'),
+                  ),
+                ],
+                onChanged: _saving
+                    ? null
+                    : (v) => setState(() => _discountType = v ?? 'amount'),
+                decoration: const InputDecoration(
+                  labelText: 'Discount type',
+                  border: OutlineInputBorder(),
+                ),
+              );
+
+              final valueField = TextField(
+                controller: _discountValue,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  labelText: 'Discount value',
+                  prefixText: _discountType == 'amount' ? '\$ ' : null,
+                  suffixText: _discountType == 'percent' ? '%' : null,
+                  border: const OutlineInputBorder(),
+                ),
+              );
+
+              if (stack) {
+                return Column(
+                  children: [
+                    typeField,
+                    const SizedBox(height: 12),
+                    valueField,
+                  ],
+                );
+              }
+
+              return Row(
+                children: [
+                  Expanded(child: typeField),
+                  const SizedBox(width: 12),
+                  Expanded(child: valueField),
+                ],
+              );
+            },
+          ),
+        ],
+      ],
+      icon: Icons.discount_outlined,
+    );
+  }
+
   Widget _buildStripeSection() {
     final status = (_stripeStatus?['status'] ?? 'not_connected').toString();
     final color = _statusColor(status);
@@ -527,70 +745,97 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
     final isReady = status == 'ready';
     final needsSetup = connected && !isReady;
 
-    return _section('Online Payments', [
-      const Text(
-        'Connect Stripe so exhibitors can pay online. RingMaster uses a Stripe Connect marketplace flow so clubs receive funds directly, while RingMaster keeps a 2% platform fee from the club payout.',
-      ),
-      const SizedBox(height: 12),
-      if (_loadingStripeStatus)
-        const LinearProgressIndicator()
-      else ...[
-        Row(
-          children: [
-            _buildStripeStatusPill(
-              text: label,
-              color: color,
+    return _section(
+      'Online Payments',
+      [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF11285A).withOpacity(.05),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: const Color(0xFF11285A).withOpacity(.10),
+            ),
+          ),
+          child: const Text(
+            'Connect Stripe so exhibitors can pay online. Clubs receive funds through Stripe Connect, and RingMaster keeps a 2% platform fee from the club payout.',
+            style: TextStyle(fontWeight: FontWeight.w500),
+          ),
+        ),
+        const SizedBox(height: 14),
+        if (_loadingStripeStatus)
+          const LinearProgressIndicator()
+        else ...[
+          Row(
+            children: [
+              _buildStripeStatusPill(text: label, color: color),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            children: [
+              _buildStripeStatusRow(
+                'Stripe account',
+                providerAccountId.isEmpty ? '—' : providerAccountId,
+              ),
+              _buildStripeStatusRow(
+                'Charges',
+                chargesEnabled ? 'Enabled' : 'Not enabled',
+              ),
+              _buildStripeStatusRow(
+                'Payouts',
+                payoutsEnabled ? 'Enabled' : 'Not enabled',
+              ),
+              _buildStripeStatusRow(
+                'Details',
+                detailsSubmitted ? 'Submitted' : 'Not submitted',
+              ),
+            ],
+          ),
+          if (currentlyDue.isNotEmpty ||
+              pastDue.isNotEmpty ||
+              pendingVerification.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.orange.withOpacity(.20)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Stripe requirements',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 6),
+                  if (currentlyDue.isNotEmpty)
+                    Text(
+                      'Currently due: ${currentlyDue.map((e) => _prettyRequirement(e.toString())).join(', ')}',
+                    ),
+                  if (pastDue.isNotEmpty)
+                    Text(
+                      'Past due: ${pastDue.map((e) => _prettyRequirement(e.toString())).join(', ')}',
+                    ),
+                  if (pendingVerification.isNotEmpty)
+                    Text(
+                      'Pending verification: ${pendingVerification.map((e) => _prettyRequirement(e.toString())).join(', ')}',
+                    ),
+                ],
+              ),
             ),
           ],
-        ),
-        const SizedBox(height: 12),
-        _buildStripeStatusRow(
-          'Stripe account',
-          providerAccountId.isEmpty ? '—' : providerAccountId,
-        ),
-        _buildStripeStatusRow(
-          'Charges enabled',
-          chargesEnabled ? 'Yes' : 'No',
-        ),
-        _buildStripeStatusRow(
-          'Payouts enabled',
-          payoutsEnabled ? 'Yes' : 'No',
-        ),
-        _buildStripeStatusRow(
-          'Details submitted',
-          detailsSubmitted ? 'Yes' : 'No',
-        ),
-        if (currentlyDue.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          _buildStripeStatusRow(
-            'Currently due',
-            currentlyDue
-                .map((e) => _prettyRequirement(e.toString()))
-                .join(', '),
-          ),
         ],
-        if (pastDue.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          _buildStripeStatusRow(
-            'Past due',
-            pastDue.map((e) => _prettyRequirement(e.toString())).join(', '),
-          ),
-        ],
-        if (pendingVerification.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          _buildStripeStatusRow(
-            'Pending verification',
-            pendingVerification
-                .map((e) => _prettyRequirement(e.toString()))
-                .join(', '),
-          ),
-        ],
-      ],
-      const SizedBox(height: 12),
-      Row(
-        children: [
-          Expanded(
-            child: FilledButton.icon(
+        const SizedBox(height: 14),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final stack = constraints.maxWidth < 520;
+
+            final primary = FilledButton.icon(
               icon: const Icon(Icons.account_balance),
               label: Text(
                 _connectingStripe
@@ -601,70 +846,48 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
                             ? 'Continue Stripe Setup'
                             : 'Open Stripe Dashboard',
               ),
-              onPressed:
-                  (_saving || _connectingStripe || _loadingStripeStatus)
-                      ? null
-                      : () async {
-                          if (!connected || needsSetup) {
-                            await _connectStripe();
-                          } else {
-                            await _openStripeDashboard();
-                          }
-                        },
-            ),
-          ),
-        ],
-      ),
-      const SizedBox(height: 10),
-      Row(
-        children: [
-          Expanded(
-            child: OutlinedButton.icon(
+              onPressed: (_saving || _connectingStripe || _loadingStripeStatus)
+                  ? null
+                  : () async {
+                      if (!connected || needsSetup) {
+                        await _connectStripe();
+                      } else {
+                        await _openStripeDashboard();
+                      }
+                    },
+            );
+
+            final refresh = OutlinedButton.icon(
               icon: const Icon(Icons.refresh),
-              label: const Text('Refresh Stripe Status'),
-              onPressed:
-                  (_saving || _connectingStripe || _loadingStripeStatus)
-                      ? null
-                      : _refreshStripeStatus,
-            ),
-          ),
-        ],
-      ),
-    ]);
-  }
+              label: const Text('Refresh Status'),
+              onPressed: (_saving || _connectingStripe || _loadingStripeStatus)
+                  ? null
+                  : _refreshStripeStatus,
+            );
 
-  Widget _buildSectionFeeCard(Map<String, dynamic> section) {
-    final sectionId = section['id'].toString();
-    final title = _sectionLabel(section);
+            if (stack) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  primary,
+                  const SizedBox(height: 10),
+                  refresh,
+                ],
+              );
+            }
 
-    return _section(title, [
-      TextField(
-        controller: _entryControllerFor(sectionId),
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        decoration: const InputDecoration(
-          labelText: 'Fee per animal / entry',
-          border: OutlineInputBorder(),
+            return Row(
+              children: [
+                Expanded(child: primary),
+                const SizedBox(width: 12),
+                Expanded(child: refresh),
+              ],
+            );
+          },
         ),
-      ),
-      const SizedBox(height: 12),
-      TextField(
-        controller: _furControllerFor(sectionId),
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        decoration: const InputDecoration(
-          labelText: 'Fur / Wool fee',
-          border: OutlineInputBorder(),
-        ),
-      ),
-      const SizedBox(height: 12),
-      TextField(
-        controller: _showControllerFor(sectionId),
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        decoration: const InputDecoration(
-          labelText: 'Optional: Fee per show',
-          border: OutlineInputBorder(),
-        ),
-      ),
-    ]);
+      ],
+      icon: Icons.payments_outlined,
+    );
   }
 
   @override
@@ -677,8 +900,8 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
       backgroundColor: Colors.transparent,
       child: Container(
         constraints: BoxConstraints(
-          maxWidth: media.width < 700 ? media.width - 16 : 700,
-          maxHeight: media.height < 820 ? media.height * 0.94 : 760,
+          maxWidth: media.width < 760 ? media.width - 16 : 760,
+          maxHeight: media.height < 840 ? media.height * 0.94 : 800,
         ),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
@@ -702,10 +925,12 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Fee Settings — ${widget.showName}',
+                      'Show Fees & Payments — ${widget.showName}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: Colors.white,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w800,
                         fontSize: 20,
                       ),
                     ),
@@ -743,11 +968,17 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
                                       ? Colors.green.withOpacity(.08)
                                       : Colors.red.withOpacity(.08),
                                   borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: success
+                                        ? Colors.green.withOpacity(.25)
+                                        : Colors.red.withOpacity(.25),
+                                  ),
                                 ),
                                 child: Text(
                                   _msg!,
                                   style: TextStyle(
-                                    color: success ? Colors.green : Colors.red,
+                                    color:
+                                        success ? Colors.green.shade700 : Colors.red,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
@@ -756,64 +987,8 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
                               child: SingleChildScrollView(
                                 child: Column(
                                   children: [
-                                    if (_sections.isEmpty)
-                                      _section('Entry Fees', const [
-                                        Text('No enabled show sections found.'),
-                                      ])
-                                    else
-                                      ..._sections.map(_buildSectionFeeCard),
-                                    _section('Discounts', [
-                                      SwitchListTile(
-                                        contentPadding: EdgeInsets.zero,
-                                        title: const Text(
-                                          'Enable multi-show discount',
-                                        ),
-                                        value: _discountEnabled,
-                                        onChanged: _saving
-                                            ? null
-                                            : (v) => setState(
-                                                  () => _discountEnabled = v,
-                                                ),
-                                      ),
-                                      if (_discountEnabled) ...[
-                                        const SizedBox(height: 8),
-                                        DropdownButtonFormField<String>(
-                                          value: _discountType,
-                                          items: const [
-                                            DropdownMenuItem(
-                                              value: 'amount',
-                                              child: Text('Amount (\$ off)'),
-                                            ),
-                                            DropdownMenuItem(
-                                              value: 'percent',
-                                              child: Text('Percent (% off)'),
-                                            ),
-                                          ],
-                                          onChanged: _saving
-                                              ? null
-                                              : (v) => setState(
-                                                    () => _discountType =
-                                                        v ?? 'amount',
-                                                  ),
-                                          decoration: const InputDecoration(
-                                            labelText: 'Discount type',
-                                            border: OutlineInputBorder(),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 12),
-                                        TextField(
-                                          controller: _discountValue,
-                                          keyboardType:
-                                              const TextInputType.numberWithOptions(
-                                            decimal: true,
-                                          ),
-                                          decoration: const InputDecoration(
-                                            labelText: 'Discount value',
-                                            border: OutlineInputBorder(),
-                                          ),
-                                        ),
-                                      ],
-                                    ]),
+                                    _buildSectionFeesSection(),
+                                    _buildDiscountSection(),
                                     _buildStripeSection(),
                                   ],
                                 ),
@@ -832,18 +1007,19 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
                                 ),
                                 const SizedBox(width: 12),
                                 Expanded(
-                                  child: FilledButton(
+                                  child: FilledButton.icon(
                                     style: FilledButton.styleFrom(
                                       backgroundColor: const Color(0xFFD4A623),
+                                      foregroundColor: Colors.black87,
                                       padding: const EdgeInsets.symmetric(
                                         vertical: 16,
                                       ),
                                     ),
-                                    onPressed:
-                                        (_saving || _connectingStripe)
-                                            ? null
-                                            : _save,
-                                    child: Text(_saving ? 'Saving…' : 'Save'),
+                                    onPressed: (_saving || _connectingStripe)
+                                        ? null
+                                        : _save,
+                                    icon: const Icon(Icons.save_outlined),
+                                    label: Text(_saving ? 'Saving…' : 'Save Changes'),
                                   ),
                                 ),
                               ],

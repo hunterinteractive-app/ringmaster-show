@@ -1678,15 +1678,168 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     }
   }
 
-  Future<void> _emailReportByName(String reportName) async {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Email ${_friendlyReportName(reportName)} coming next.',
-        ),
-      ),
+  Map<String, dynamic> _normalizeFunctionData(dynamic raw) {
+    if (raw is Map<String, dynamic>) return raw;
+    if (raw is Map) {
+      return raw.map((k, v) => MapEntry(k.toString(), v));
+    }
+    return <String, dynamic>{};
+  }
+
+  Future<void> _sendReportArtifactEmail({
+    required ReportArtifactSummary artifact,
+    required String mode, // exhibitor, club, single
+  }) async {
+    final response = await supabase.functions.invoke(
+      'send-closeout-report-email',
+      body: {
+        'show_id': widget.showId,
+        'show_name': widget.showName,
+        'artifact_id': artifact.id,
+        'report_name': artifact.reportName,
+        'mode': mode,
+      },
     );
+
+    final data = _normalizeFunctionData(response.data);
+
+    if (response.status < 200 || response.status >= 300) {
+      throw Exception(
+        data['error']?.toString() ??
+            data['message']?.toString() ??
+            'Email failed.',
+      );
+    }
+  }
+
+  Future<void> _emailReportByName(
+    String reportName, {
+    String? exhibitorId,
+    String? exhibitorEmail,
+    String? breedName,
+    String? scope,
+    String? showLetter,
+  }) async {
+    try {
+      var artifacts = (_dashboard?.reports ?? const <ReportArtifactSummary>[])
+          .where((r) => r.reportName == reportName)
+          .where(_artifactIsUsableCurrent);
+
+      if ((reportName == 'exhibitor_report' || reportName == 'legs') &&
+          exhibitorId != null &&
+          exhibitorId.trim().isNotEmpty) {
+        artifacts = artifacts.where(
+          (r) =>
+              (r.metadata['exhibitor_id'] ?? '').toString().trim() ==
+              exhibitorId.trim(),
+        );
+      }
+
+      final list = artifacts.toList()
+        ..sort((a, b) {
+          final aDt = DateTime.tryParse(a.generatedAt ?? '') ??
+              DateTime.fromMillisecondsSinceEpoch(0);
+          final bDt = DateTime.tryParse(b.generatedAt ?? '') ??
+              DateTime.fromMillisecondsSinceEpoch(0);
+          return bDt.compareTo(aDt);
+        });
+
+      if (list.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'No generated ${_friendlyReportName(reportName)} found to email.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      final artifact = list.first;
+
+      final isClubReport = reportName == 'sweepstakes_report' ||
+          reportName == 'breed_results_detail_report';
+
+      if (isClubReport) {
+        final clubTargets = await _loadClubEmailTargets();
+
+        final matchingTargets = clubTargets.where((target) {
+          return target.breedName.trim().toLowerCase() ==
+                  (breedName ?? '').trim().toLowerCase() &&
+              target.scope.trim().toUpperCase() ==
+                  (scope ?? '').trim().toUpperCase() &&
+              target.showLetter.trim().toUpperCase() ==
+                  (showLetter ?? '').trim().toUpperCase();
+        }).toList();
+
+        if (matchingTargets.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No club email found for this report.')),
+          );
+          return;
+        }
+
+        await _sendClubArtifactsEmail(
+          artifacts: [artifact],
+          to: matchingTargets.first.email,
+          subject: '${widget.showName} - ${matchingTargets.first.breedName} Club Report',
+          message: 'Attached is the club report from ${widget.showName}.',
+        );
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${_friendlyReportName(reportName)} emailed.')),
+        );
+        return;
+      }
+
+      final email = (exhibitorEmail ??
+              artifact.metadata['exhibitor_email'] ??
+              artifact.metadata['email'] ??
+              '')
+          .toString()
+          .trim();
+
+      if (email.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No email found for this exhibitor.'),
+          ),
+        );
+        return;
+      }
+
+      final response = await supabase.functions.invoke(
+        'send-exhibitor-report-email',
+        body: {
+          'show_id': widget.showId,
+          'artifact_ids': [artifact.id],
+          'to': email,
+        },
+      );
+
+      final data = _normalizeFunctionData(response.data);
+
+      if (response.status < 200 || response.status >= 300) {
+        throw Exception(
+          data['error']?.toString() ??
+              data['message']?.toString() ??
+              'Email failed.',
+        );
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${_friendlyReportName(reportName)} emailed.'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Email failed: $e')),
+      );
+    }
   }
 
   List<ReportArtifactSummary> _allGeneratedArtifactsWhere(
@@ -2419,7 +2572,14 @@ class _ReportActionsCard extends StatefulWidget {
     String? exhibitorName,
   }) onGenerate;
   final Future<void> Function(String reportName, {String? exhibitorId,}) onDownload;
-  final Future<void> Function(String reportName) onEmail;
+  final Future<void> Function(
+    String reportName, {
+    String? exhibitorId,
+    String? exhibitorEmail,
+    String? breedName,
+    String? scope,
+    String? showLetter,
+  }) onEmail;
   final bool loading;
   final String showId;
   final bool reportsBlocked;
@@ -2451,6 +2611,7 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
   bool _loadingShowLetters = false;
   String? _selectedExhibitorId;
   String? _selectedExhibitorName;
+  String? _selectedExhibitorEmail;
   List<_ExhibitorPickItem> _availableExhibitors = [];
   bool _loadingExhibitors = false;
 
@@ -2512,8 +2673,13 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
   bool get _selectedReportIgnoresResultsReadiness =>
     _selectedReportName == 'unpaid_balances_report';
   
-  bool get _selectedReportCanEmail =>
-    _selectedReportName == 'arba_report';
+  bool get _selectedReportCanEmail {
+    return _selectedReportName == 'arba_report' ||
+        _selectedReportName == 'exhibitor_report' ||
+        _selectedReportName == 'legs' ||
+        _selectedReportName == 'sweepstakes_report' ||
+        _selectedReportName == 'breed_results_detail_report';
+  }
   
   bool get _selectedReportBlocked =>
     widget.reportsBlocked && !_selectedReportIgnoresResultsReadiness;
@@ -2550,7 +2716,8 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
               id,
               display_name,
               first_name,
-              last_name
+              last_name,
+              email
             )
           ''')
           .eq('show_id', widget.showId);
@@ -2568,6 +2735,7 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
         final displayName = (exhibitor['display_name'] ?? '').toString().trim();
         final first = (exhibitor['first_name'] ?? '').toString().trim();
         final last = (exhibitor['last_name'] ?? '').toString().trim();
+        final email = (exhibitor['email'] ?? '').toString().trim();
 
         final name = displayName.isNotEmpty
             ? displayName
@@ -2578,6 +2746,7 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
         map[exhibitorId] = _ExhibitorPickItem(
           exhibitorId: exhibitorId,
           exhibitorName: name,
+          email: email,
         );
       }
 
@@ -2595,10 +2764,13 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
           if (!stillExists) {
             _selectedExhibitorId = list.first.exhibitorId;
             _selectedExhibitorName = list.first.exhibitorName;
+            _selectedExhibitorEmail = list.first.email;
           }
         } else {
           _selectedExhibitorId = null;
           _selectedExhibitorName = null;
+          _selectedExhibitorEmail = null;
+          _selectedExhibitorEmail = null;
         }
       });
     } catch (e) {
@@ -2608,6 +2780,7 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
         _availableExhibitors = [];
         _selectedExhibitorId = null;
         _selectedExhibitorName = null;
+        _selectedExhibitorEmail = null;
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2816,6 +2989,7 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
                 _selectedExhibitorId = null;
                 _selectedExhibitorName = null;
                 _availableExhibitors = [];
+                _selectedExhibitorEmail = null;
               }
             });
 
@@ -2857,6 +3031,7 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
                       _selectedExhibitorId = null;
                       _selectedExhibitorName = null;
                       _availableExhibitors = [];
+                      _selectedExhibitorEmail = null;
                     }
                   });
 
@@ -3008,6 +3183,7 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
                     setState(() {
                       _selectedExhibitorId = selected.exhibitorId;
                       _selectedExhibitorName = selected.exhibitorName;
+                      _selectedExhibitorEmail = selected.email;
                     });
                   },
           ),
@@ -3098,7 +3274,24 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
               onPressed: _selectedReportCanEmail &&
                       _canDownload &&
                       _selectedReportName != null
-                  ? () => widget.onEmail(_selectedReportName!)
+                  ? () => widget.onEmail(
+                            _selectedReportName!,
+                            exhibitorId: _selectedReportNeedsExhibitor
+                                ? _selectedExhibitorId
+                                : null,
+                            exhibitorEmail: _selectedReportNeedsExhibitor
+                                ? _selectedExhibitorEmail
+                                : null,
+                            breedName: _selectedReportNeedsBreedScope
+                                ? _breedController.text.trim()
+                                : null,
+                            scope: _selectedReportNeedsBreedScope
+                                ? _selectedScope
+                                : null,
+                            showLetter: _selectedReportNeedsBreedScope
+                                ? _selectedShowLetter
+                                : null,
+                          )
                   : null,
               icon: const Icon(Icons.email_outlined),
               label: const Text('Email'),
@@ -3113,10 +3306,12 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
 class _ExhibitorPickItem {
   final String exhibitorId;
   final String exhibitorName;
+  final String email;
 
   const _ExhibitorPickItem({
     required this.exhibitorId,
     required this.exhibitorName,
+    required this.email,
   });
 }
 

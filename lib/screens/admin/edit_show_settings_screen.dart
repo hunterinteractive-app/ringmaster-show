@@ -167,15 +167,17 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
           _selectedClubName = _clubs.first['name']?.toString();
         }
 
+        // Keep the show's saved hosting club even if it is not in the user's club list.
+        // This prevents existing shows from "falling back" to the first club on your account.
         if (_selectedClubId != null &&
+            _selectedClubId!.isNotEmpty &&
             !_clubs.any((club) => club['id']?.toString() == _selectedClubId)) {
-          if (_clubs.isNotEmpty) {
-            _selectedClubId = _clubs.first['id']?.toString();
-            _selectedClubName = _clubs.first['name']?.toString();
-          } else {
-            _selectedClubId = null;
-            _selectedClubName = null;
-          }
+          _clubs.insert(0, {
+            'id': _selectedClubId,
+            'name': (_selectedClubName == null || _selectedClubName!.trim().isEmpty)
+                ? 'Current Hosting Club'
+                : _selectedClubName,
+          });
         }
 
         if (_selectedClubId != null && _selectedClubId!.isNotEmpty) {

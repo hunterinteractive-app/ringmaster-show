@@ -30,11 +30,19 @@ class AdminShowsScreen extends StatefulWidget {
 
 class _AdminShowsScreenState extends State<AdminShowsScreen> {
   late Future<_AdminShowsPageData> _pageFuture;
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _pageFuture = _loadPage();
+    _searchController.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<_AdminShowsPageData> _loadPage() async {
@@ -61,28 +69,18 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
 
     final isSuperAdmin = superAdminRes != null;
 
-    if (isSuperAdmin) {
-      final res = await supabase
-          .from('shows')
-          .select(
-            'id,name,start_date,end_date,location_name,is_published,entry_open_at,entry_close_at,created_at',
-          )
-          .order('start_date')
-          .order('location_name');
-
-      return (res as List).cast<Map<String, dynamic>>();
-    }
-
-    if (widget.allowedShowIds.isEmpty) return [];
-
-    final res = await supabase
-        .from('shows')
-        .select(
+    final query = supabase.from('shows').select(
           'id,name,start_date,end_date,location_name,is_published,entry_open_at,entry_close_at,created_at',
-        )
-        .inFilter('id', widget.allowedShowIds)
-        .order('start_date')
-        .order('location_name');
+        );
+
+    final res = isSuperAdmin
+        ? await query.order('start_date').order('location_name')
+        : widget.allowedShowIds.isEmpty
+            ? []
+            : await query
+                .inFilter('id', widget.allowedShowIds)
+                .order('start_date')
+                .order('location_name');
 
     return (res as List).cast<Map<String, dynamic>>();
   }
@@ -164,8 +162,9 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
       );
 
       if (result is List && result.isNotEmpty) {
-        final row = Map<String, dynamic>.from(result.first as Map);
-        return _ShowCreationStatus.fromMap(row);
+        return _ShowCreationStatus.fromMap(
+          Map<String, dynamic>.from(result.first as Map),
+        );
       }
 
       if (result is Map) {
@@ -190,6 +189,52 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
         message: 'License check failed: $e',
       );
     }
+  }
+
+  DateTime _showSortDate(Map<String, dynamic> show) {
+    final start = DateTime.tryParse((show['start_date'] ?? '').toString());
+    final created = DateTime.tryParse((show['created_at'] ?? '').toString());
+    return start ?? created ?? DateTime(1900);
+  }
+
+  List<Map<String, dynamic>> _filteredAndSortedShows(
+    List<Map<String, dynamic>> shows,
+  ) {
+    final q = _searchController.text.trim().toLowerCase();
+
+    final filtered = shows.where((s) {
+      if (q.isEmpty) return true;
+
+      final published = s['is_published'] == true ? 'published' : 'draft';
+
+      final haystack = [
+        s['name'],
+        s['location_name'],
+        s['start_date'],
+        s['end_date'],
+        s['entry_open_at'],
+        s['entry_close_at'],
+        published,
+      ].map((x) => (x ?? '').toString().toLowerCase()).join(' ');
+
+      return haystack.contains(q);
+    }).toList();
+
+    filtered.sort((a, b) {
+      final dateCmp = _showSortDate(a).compareTo(_showSortDate(b));
+      if (dateCmp != 0) return dateCmp;
+
+      final nameA = (a['name'] ?? '').toString().toLowerCase();
+      final nameB = (b['name'] ?? '').toString().toLowerCase();
+      final nameCmp = nameA.compareTo(nameB);
+      if (nameCmp != 0) return nameCmp;
+
+      final locA = (a['location_name'] ?? '').toString().toLowerCase();
+      final locB = (b['location_name'] ?? '').toString().toLowerCase();
+      return locA.compareTo(locB);
+    });
+
+    return filtered;
   }
 
   String _fmtDate(String? v) {
@@ -269,17 +314,9 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
   }
 
   Widget _buildLicenseBanner(_ShowCreationStatus license) {
-    String text;
-
-    if (license.unlimitedActive) {
-      final expires = license.unlimitedExpiresAt == null
-          ? ''
-          : ' • Expires ${_fmtTs(license.unlimitedExpiresAt)}';
-      text = 'Unlimited plan active$expires';
-    } else {
-      final days = license.remainingShowDays;
-      text = '$days show day${days == 1 ? '' : 's'} remaining';
-    }
+    final text = license.unlimitedActive
+        ? 'Unlimited plan active${license.unlimitedExpiresAt == null ? '' : ' • Expires ${_fmtTs(license.unlimitedExpiresAt)}'}'
+        : '${license.remainingShowDays} show day${license.remainingShowDays == 1 ? '' : 's'} remaining';
 
     return RMCard(
       child: Row(
@@ -335,6 +372,8 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
       future: _pageFuture,
       builder: (context, snap) {
         final page = snap.data;
+        final shows = _filteredAndSortedShows(page?.shows ?? const []);
+
         final license = page?.license ??
             const _ShowCreationStatus(
               canCreate: false,
@@ -353,9 +392,8 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
             onEntries: _openEntries,
             onResources: _openResources,
             onAccount: _openAccount,
-            onReload: snap.connectionState == ConnectionState.waiting
-                ? null
-                : _reload,
+            onReload:
+                snap.connectionState == ConnectionState.waiting ? null : _reload,
             onCreate: (snap.connectionState == ConnectionState.waiting ||
                     !license.canCreate)
                 ? null
@@ -370,6 +408,19 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
                       child: Column(
                         children: [
                           _buildLicenseBanner(license),
+                          const SizedBox(height: AppSpacing.md),
+                          RMCard(
+                            child: TextField(
+                              controller: _searchController,
+                              decoration: const InputDecoration(
+                                labelText: 'Search shows',
+                                hintText:
+                                    'Show name, location, date, published, draft...',
+                                prefixIcon: Icon(Icons.search),
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
                           const SizedBox(height: AppSpacing.md),
                           if (widget.allowedShowIds.isEmpty)
                             const Expanded(
@@ -389,22 +440,32 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
                                 icon: Icons.event_busy_outlined,
                               ),
                             )
+                          else if (shows.isEmpty)
+                            const Expanded(
+                              child: RMEmptyState(
+                                title: 'No matching shows',
+                                subtitle: 'Try a different search term.',
+                                icon: Icons.search_off,
+                              ),
+                            )
                           else
                             Expanded(
                               child: ListView.builder(
-                                itemCount: page!.shows.length,
+                                itemCount: shows.length,
                                 itemBuilder: (context, i) {
-                                  final s = page.shows[i];
+                                  final s = shows[i];
 
                                   final showId = s['id'].toString();
-                                  final counts = page.entryCounts[showId] ??
+                                  final counts = page!.entryCounts[showId] ??
                                       _ShowEntryCounts();
 
                                   final name = (s['name'] ?? '').toString();
-                                  final start =
-                                      _fmtDate((s['start_date'] ?? '').toString());
-                                  final end =
-                                      _fmtDate((s['end_date'] ?? '').toString());
+                                  final start = _fmtDate(
+                                    (s['start_date'] ?? '').toString(),
+                                  );
+                                  final end = _fmtDate(
+                                    (s['end_date'] ?? '').toString(),
+                                  );
                                   final loc =
                                       (s['location_name'] ?? '').toString();
                                   final published = s['is_published'] == true;
@@ -580,12 +641,36 @@ class _AdminShowsAppBar extends StatelessWidget implements PreferredSizeWidget {
                 showLabel: true,
                 onTap: onCreate,
               ),
-              _TopBarAction(icon: Icons.event, label: 'Shows', showLabel: true, onTap: onShows),
-              _TopBarAction(icon: Icons.pets, label: 'Animals', showLabel: true, onTap: onAnimals),
-              _TopBarAction(icon: Icons.receipt_long, label: 'Entries', showLabel: true, onTap: onEntries),
-              _TopBarAction(icon: Icons.perm_media_outlined, label: 'Resources', showLabel: true, onTap: onResources),
-              _TopBarAction(icon: Icons.manage_accounts, label: 'Account', showLabel: true, onTap: onAccount),
-              
+              _TopBarAction(
+                icon: Icons.event,
+                label: 'Shows',
+                showLabel: true,
+                onTap: onShows,
+              ),
+              _TopBarAction(
+                icon: Icons.pets,
+                label: 'Animals',
+                showLabel: true,
+                onTap: onAnimals,
+              ),
+              _TopBarAction(
+                icon: Icons.receipt_long,
+                label: 'Entries',
+                showLabel: true,
+                onTap: onEntries,
+              ),
+              _TopBarAction(
+                icon: Icons.perm_media_outlined,
+                label: 'Resources',
+                showLabel: true,
+                onTap: onResources,
+              ),
+              _TopBarAction(
+                icon: Icons.manage_accounts,
+                label: 'Account',
+                showLabel: true,
+                onTap: onAccount,
+              ),
               const SizedBox(width: 10),
             ]
           : [
