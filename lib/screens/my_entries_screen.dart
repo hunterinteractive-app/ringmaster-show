@@ -5,7 +5,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
 import 'my_animals_screen.dart';
-import 'show_list_screen.dart';
 import 'account_settings_screen.dart';
 import '../theme/app_theme.dart';
 import '../utils/date_time_utils.dart';
@@ -380,12 +379,6 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
     return out;
   }
 
-  void _openUpcomingShows(BuildContext context) {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const ShowListScreen()),
-    );
-  }
-
   void _openAnimals(BuildContext context) {
     Navigator.push(
       context,
@@ -407,18 +400,27 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
     final visibleShowIds = grouped.keys
         .where((showId) => !_hideShowAfter48h(showId))
         .toList()
-      ..sort((a, b) => _showTitle(a).compareTo(_showTitle(b)));
+      ..sort((a, b) {
+        final aDate = _showStartDate(a);
+        final bDate = _showStartDate(b);
+
+        if (aDate != null && bDate != null) {
+          return aDate.compareTo(bDate);
+        } else if (aDate != null) {
+          return -1;
+        } else if (bDate != null) {
+          return 1;
+        }
+
+        return _showTitle(a).compareTo(_showTitle(b));
+      });
 
     return RingMasterPageShell(
       title: 'RingMaster Show',
       subtitle: 'My Entries',
       showBackButton: true,
+      useScrollView: false,
       actions: [
-        IconButton(
-          tooltip: 'Shows',
-          icon: const Icon(Icons.event),
-          onPressed: () => _openUpcomingShows(context),
-        ),
         IconButton(
           tooltip: 'Animals',
           icon: const Icon(Icons.pets),

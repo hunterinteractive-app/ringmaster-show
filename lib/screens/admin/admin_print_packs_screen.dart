@@ -6,6 +6,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -346,223 +347,166 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
             (_selectedSectionId != null && _selectedSectionId!.isNotEmpty));
     final hasSections = _sections.isNotEmpty;
 
-    return Scaffold(
-      appBar: AppBar(
-        toolbarHeight: 70,
-        titleSpacing: 0,
-        title: Row(
-          children: [
-            const SizedBox(width: 12),
-            Image.asset(
-              'assets/images/ringmaster_show_logo.png',
-              height: 42,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'Print Packs — ${widget.showName}',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 18,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
+    return RingMasterPageShell(
+      title: 'RingMaster Show',
+      subtitle: 'Print Packs — ${widget.showName}',
+      showBackButton: true,
+      showHomeButton: true,
+      useScrollView: false,
+      bodyPadding: EdgeInsets.zero,
+      actions: [
+        IconButton(
+          tooltip: 'Reload sections',
+          onPressed: _loading ? null : _loadSections,
+          icon: const Icon(Icons.refresh),
         ),
-        actions: [
-          IconButton(
-            tooltip: 'Reload sections',
-            onPressed: _loading ? null : _loadSections,
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
-      ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Color(0xFF11285A),
-              Color(0xFF0B1C43),
-            ],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-        ),
-        child: _loading
-            ? const Center(
-                child: CircularProgressIndicator(color: Colors.white),
-              )
-            : SafeArea(
-                child: Container(
-                  margin: const EdgeInsets.only(top: 8),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFF4F6FB),
-                    borderRadius:
-                        BorderRadius.vertical(top: Radius.circular(24)),
-                  ),
-                  child: ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      _messageBanner(),
+      ],
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                _messageBanner(),
 
-                      _buildSectionCard(
-                        icon: Icons.description_outlined,
-                        title: 'Control Sheets',
-                        subtitle:
-                            'Generate judge control sheets as PDF files. These are always built one section at a time.',
-                        children: [
-                          SwitchListTile(
-                            value: _includeScratched,
-                            contentPadding: EdgeInsets.zero,
-                            onChanged: (v) =>
-                                setState(() => _includeScratched = v),
-                            title: const Text('Include scratched entries'),
-                          ),
-                          const SizedBox(height: 8),
-                          if (!hasSections)
-                            const Text(
-                              'No enabled show sections found.',
-                              style: TextStyle(color: Colors.red),
-                            )
-                          else
-                            ..._sections.map(
-                              (section) => Padding(
-                                padding: const EdgeInsets.only(bottom: 10),
-                                child: SizedBox(
-                                  width: double.infinity,
-                                  child: FilledButton.icon(
-                                    style: FilledButton.styleFrom(
-                                      backgroundColor:
-                                          const Color(0xFFD4A623),
-                                      foregroundColor: Colors.black87,
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 16,
-                                      ),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(14),
-                                      ),
-                                    ),
-                                    onPressed: () =>
-                                        _openControlSheetsGeneratorForSection(
-                                      section,
-                                    ),
-                                    icon: const Icon(Icons.download),
-                                    label: Text(
-                                      'Download Control Sheets — ${_sectionLabel(section)}',
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-
-                      _buildSectionCard(
-                        icon: Icons.checklist_outlined,
-                        title: 'Check-In Sheets',
-                        subtitle:
-                            'Generate exhibitor check-in sheets as PDF files.',
-                        children: [
-                          SwitchListTile(
-                            value: _combineSections,
-                            contentPadding: EdgeInsets.zero,
-                            onChanged: (v) {
-                              setState(() {
-                                _combineSections = v;
-                                if (!v &&
-                                    (_selectedSectionId == null ||
-                                        _selectedSectionId!.isEmpty) &&
-                                    _sections.isNotEmpty) {
-                                  _selectedSectionId =
-                                      _sections.first['id']?.toString();
-                                }
-                              });
-                            },
-                            title: const Text('Combine sections'),
-                            subtitle: const Text(
-                              'One sheet per exhibitor across Open/Youth A/B/...',
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          if (!_combineSections) ...[
-                            DropdownButtonFormField<String>(
-                              isExpanded: true,
-                              value: (_selectedSectionId != null &&
-                                      _sections.any((s) =>
-                                          s['id']?.toString() ==
-                                          _selectedSectionId))
-                                  ? _selectedSectionId
-                                  : null,
-                              hint: const Text('Select a section'),
-                              decoration: const InputDecoration(
-                                labelText: 'Show Letter / Section',
-                                border: OutlineInputBorder(),
-                              ),
-                              items: _sections
-                                  .map(
-                                    (s) => DropdownMenuItem<String>(
-                                      value: s['id']?.toString(),
-                                      child: Text(_sectionLabel(s)),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged: _sections.isEmpty
-                                  ? null
-                                  : (v) {
-                                      setState(() {
-                                        _selectedSectionId = v;
-                                      });
-                                    },
-                            ),
-                            const SizedBox(height: 12),
-                          ] else ...[
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(.03),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                'Sections included: ${_sections.isEmpty ? '(none)' : _sections.map(_sectionLabel).join(', ')}',
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                          ],
-                          SwitchListTile(
-                            value: _includeScratched,
-                            contentPadding: EdgeInsets.zero,
-                            onChanged: (v) =>
-                                setState(() => _includeScratched = v),
-                            title: const Text('Include scratched entries'),
-                          ),
-                          const SizedBox(height: 10),
-                          SizedBox(
+                _buildSectionCard(
+                  icon: Icons.description_outlined,
+                  title: 'Control Sheets',
+                  subtitle:
+                      'Generate judge control sheets as PDF files. These are always built one section at a time.',
+                  children: [
+                    SwitchListTile(
+                      value: _includeScratched,
+                      contentPadding: EdgeInsets.zero,
+                      onChanged: (v) => setState(() => _includeScratched = v),
+                      title: const Text('Include scratched entries'),
+                    ),
+                    const SizedBox(height: 8),
+                    if (!hasSections)
+                      const Text(
+                        'No enabled show sections found.',
+                        style: TextStyle(color: Colors.red),
+                      )
+                    else
+                      ..._sections.map(
+                        (section) => Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: SizedBox(
                             width: double.infinity,
                             child: FilledButton.icon(
                               style: FilledButton.styleFrom(
                                 backgroundColor: const Color(0xFFD4A623),
                                 foregroundColor: Colors.black87,
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 16),
+                                padding: const EdgeInsets.symmetric(vertical: 16),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(14),
                                 ),
                               ),
-                              onPressed:
-                                  canOpenCheckIn ? _openCheckInGenerator : null,
-                              icon: const Icon(Icons.picture_as_pdf),
+                              onPressed: () =>
+                                  _openControlSheetsGeneratorForSection(section),
+                              icon: const Icon(Icons.download),
                               label: Text(
-                                _combineSections
-                                    ? 'Generate Check-In Sheets (Combined)'
-                                    : 'Generate Check-In Sheets',
+                                'Download Control Sheets — ${_sectionLabel(section)}',
                               ),
                             ),
                           ),
-                        ],
+                        ),
                       ),
+                  ],
+                ),
+
+                _buildSectionCard(
+                  icon: Icons.checklist_outlined,
+                  title: 'Check-In Sheets',
+                  subtitle: 'Generate exhibitor check-in sheets as PDF files.',
+                  children: [
+                    SwitchListTile(
+                      value: _combineSections,
+                      contentPadding: EdgeInsets.zero,
+                      onChanged: (v) {
+                        setState(() {
+                          _combineSections = v;
+                          if (!v &&
+                              (_selectedSectionId == null ||
+                                  _selectedSectionId!.isEmpty) &&
+                              _sections.isNotEmpty) {
+                            _selectedSectionId = _sections.first['id']?.toString();
+                          }
+                        });
+                      },
+                      title: const Text('Combine sections'),
+                      subtitle: const Text(
+                        'One sheet per exhibitor across Open/Youth A/B/...',
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    if (!_combineSections) ...[
+                      DropdownButtonFormField<String>(
+                        isExpanded: true,
+                        value: (_selectedSectionId != null &&
+                                _sections.any((s) =>
+                                    s['id']?.toString() == _selectedSectionId))
+                            ? _selectedSectionId
+                            : null,
+                        hint: const Text('Select a section'),
+                        decoration: const InputDecoration(
+                          labelText: 'Show Letter / Section',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: _sections
+                            .map(
+                              (s) => DropdownMenuItem<String>(
+                                value: s['id']?.toString(),
+                                child: Text(_sectionLabel(s)),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: _sections.isEmpty
+                            ? null
+                            : (v) => setState(() => _selectedSectionId = v),
+                      ),
+                      const SizedBox(height: 12),
+                    ] else ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(.03),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          'Sections included: ${_sections.isEmpty ? '(none)' : _sections.map(_sectionLabel).join(', ')}',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    SwitchListTile(
+                      value: _includeScratched,
+                      contentPadding: EdgeInsets.zero,
+                      onChanged: (v) => setState(() => _includeScratched = v),
+                      title: const Text('Include scratched entries'),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFFD4A623),
+                          foregroundColor: Colors.black87,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        onPressed: canOpenCheckIn ? _openCheckInGenerator : null,
+                        icon: const Icon(Icons.picture_as_pdf),
+                        label: Text(
+                          _combineSections
+                              ? 'Generate Check-In Sheets (Combined)'
+                              : 'Generate Check-In Sheets',
+                        ),
+                      ),
+                    ),
 
 //                      _buildSectionCard(
 //                        icon: Icons.sell_outlined,
@@ -581,11 +525,10 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
 //                          Text('Comment card generation will be added here.'),
 //                        ],
 //                      ),
-                    ],
-                  ),
+                  ],
                 ),
-              ),
-      ),
+              ],
+            ),
     );
   }
 }

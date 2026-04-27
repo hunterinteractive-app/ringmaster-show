@@ -2345,6 +2345,19 @@ Future<_MeatPenInput?> _openMeatPenDialog() {
           title: widget.showName,
           subtitle: 'Enter Show',
           showBackButton: true,
+          useScrollView: false,
+          actions: [
+            IconButton(
+              tooltip: 'Add Animal',
+              icon: const Icon(Icons.add),
+              onPressed: _submitting ? null : _openAddAnimalDialog,
+            ),
+            IconButton(
+              tooltip: 'View Cart',
+              icon: const Icon(Icons.shopping_cart_outlined),
+              onPressed: _submitting ? null : _viewCart,
+            ),
+          ],
           body: Builder(
             builder: (context) {
               if (snap.connectionState != ConnectionState.done) {
@@ -2473,18 +2486,6 @@ Future<_MeatPenInput?> _openMeatPenDialog() {
                                     spacing: 8,
                                     runSpacing: 8,
                                     children: [
-                                      OutlinedButton.icon(
-                                        onPressed: _openAddAnimalDialog,
-                                        icon: const Icon(Icons.add),
-                                        label: const Text('Add Animal'),
-                                      ),
-                                      OutlinedButton.icon(
-                                        onPressed: _viewCart,
-                                        icon: const Icon(
-                                          Icons.shopping_cart_outlined,
-                                        ),
-                                        label: const Text('View Cart'),
-                                      ),
                                       if (_selectedSectionIds.isNotEmpty)
                                         OutlinedButton.icon(
                                           onPressed: _submitting

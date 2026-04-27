@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
 import 'account_profile_setup_screen.dart';
 import '../widgets/exhibitor_builder_dialog.dart';
@@ -124,188 +125,133 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   // ------------------------------
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        toolbarHeight: 70,
-        titleSpacing: 0,
-        title: Row(
-          children: [
-            const SizedBox(width: 12),
-            Image.asset(
-              'assets/images/ringmaster_show_logo.png',
-              height: 42,
-            ),
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Text(
-                'Account Settings',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 18,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
+    return RingMasterPageShell(
+      title: 'RingMaster Show',
+      subtitle: 'Account Settings',
+      showBackButton: true,
+      useScrollView: false,
+      actions: [
+        IconButton(
+          tooltip: 'Add Exhibitor',
+          icon: const Icon(Icons.person_add_alt_1),
+          onPressed: _loading ? null : () => _openExhibitorEditor(),
         ),
-        actions: [
-          IconButton(
-            tooltip: 'Add Exhibitor',
-            icon: const Icon(Icons.person_add_alt_1),
-            onPressed: _loading ? null : () => _openExhibitorEditor(),
-          ),
-          IconButton(
-            tooltip: 'Reload',
-            icon: const Icon(Icons.refresh),
-            onPressed: _loading ? null : _load,
-          ),
-        ],
-      ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Color(0xFF11285A),
-              Color(0xFF0B1C43),
-            ],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
+        IconButton(
+          tooltip: 'Reload',
+          icon: const Icon(Icons.refresh),
+          onPressed: _loading ? null : _load,
         ),
-        child: _loading
-            ? const Center(
-                child: CircularProgressIndicator(color: Colors.white),
-              )
-            : SafeArea(
-                child: Container(
-                  margin: const EdgeInsets.only(top: 8),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFF4F6FB),
-                    borderRadius:
-                        BorderRadius.vertical(top: Radius.circular(24)),
-                  ),
-                  child: Column(
-                    children: [
-                      if (_msg != null)
-                        Padding(
-                          padding:
-                              const EdgeInsets.fromLTRB(12, 12, 12, 0),
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.red.withOpacity(.08),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: Colors.red.withOpacity(.25),
-                              ),
-                            ),
-                            child: Text(
-                              _msg!,
-                              style: const TextStyle(
-                                color: Colors.red,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
+      ],
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : Column(
+              children: [
+                if (_msg != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(.08),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.red.withOpacity(.25),
                         ),
-
-                      Expanded(
-                        child: _exhibitors.isEmpty
-                            ? const Center(
-                                child: Text(
-                                  'No exhibitors yet.\nTap + to add one.',
-                                  textAlign: TextAlign.center,
-                                ),
-                              )
-                            : ListView.builder(
-                                padding: const EdgeInsets.all(12),
-                                itemCount: _exhibitors.length,
-                                itemBuilder: (context, i) {
-                                  final e = _exhibitors[i];
-                                  final id = e['id'].toString();
-                                  final type =
-                                      (e['type'] ?? '').toString();
-                                  final name =
-                                      (e['display_name'] ?? '').toString();
-                                  final active = e['is_active'] == true;
-                                  final bd = e['birth_date']?.toString();
-
-                                  return Container(
-                                    margin:
-                                        const EdgeInsets.only(bottom: 10),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius:
-                                          BorderRadius.circular(16),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color:
-                                              Colors.black.withOpacity(.05),
-                                          blurRadius: 10,
-                                        ),
-                                      ],
-                                    ),
-                                    child: ListTile(
-                                      contentPadding:
-                                          const EdgeInsets.symmetric(
-                                        horizontal: 16,
-                                        vertical: 8,
-                                      ),
-                                      title: Text(
-                                        name,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      subtitle: Text(
-                                        'Type: ${type.toUpperCase()}'
-                                        '${bd == null ? '' : ' • DOB: $bd'}'
-                                        '${active ? '' : ' • INACTIVE'}',
-                                      ),
-                                      onTap: () =>
-                                          _openExhibitorEditor(existing: e),
-                                      trailing:
-                                          PopupMenuButton<String>(
-                                        onSelected: (v) {
-                                          if (v == 'edit') {
-                                            _openExhibitorEditor(
-                                                existing: e);
-                                          }
-                                          if (v == 'deactivate') {
-                                            _toggleActive(id, false);
-                                          }
-                                          if (v == 'activate') {
-                                            _toggleActive(id, true);
-                                          }
-                                        },
-                                        itemBuilder: (_) => [
-                                          const PopupMenuItem(
-                                            value: 'edit',
-                                            child: Text('Edit'),
-                                          ),
-                                          if (active)
-                                            const PopupMenuItem(
-                                              value: 'deactivate',
-                                              child: Text('Deactivate'),
-                                            )
-                                          else
-                                            const PopupMenuItem(
-                                              value: 'activate',
-                                              child: Text('Activate'),
-                                            ),
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
                       ),
-                    ],
+                      child: Text(
+                        _msg!,
+                        style: const TextStyle(
+                          color: Colors.red,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
                   ),
+                Expanded(
+                  child: _exhibitors.isEmpty
+                      ? const Center(
+                          child: Text(
+                            'No exhibitors yet.\nTap + to add one.',
+                            textAlign: TextAlign.center,
+                          ),
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.all(12),
+                          itemCount: _exhibitors.length,
+                          itemBuilder: (context, i) {
+                            final e = _exhibitors[i];
+                            final id = e['id'].toString();
+                            final type = (e['type'] ?? '').toString();
+                            final name = (e['display_name'] ?? '').toString();
+                            final active = e['is_active'] == true;
+                            final bd = e['birth_date']?.toString();
+
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 10),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(.05),
+                                    blurRadius: 10,
+                                  ),
+                                ],
+                              ),
+                              child: ListTile(
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 8,
+                                ),
+                                title: Text(
+                                  name,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  'Type: ${type.toUpperCase()}'
+                                  '${bd == null ? '' : ' • DOB: $bd'}'
+                                  '${active ? '' : ' • INACTIVE'}',
+                                ),
+                                onTap: () => _openExhibitorEditor(existing: e),
+                                trailing: PopupMenuButton<String>(
+                                  onSelected: (v) {
+                                    if (v == 'edit') {
+                                      _openExhibitorEditor(existing: e);
+                                    }
+                                    if (v == 'deactivate') {
+                                      _toggleActive(id, false);
+                                    }
+                                    if (v == 'activate') {
+                                      _toggleActive(id, true);
+                                    }
+                                  },
+                                  itemBuilder: (_) => [
+                                    const PopupMenuItem(
+                                      value: 'edit',
+                                      child: Text('Edit'),
+                                    ),
+                                    if (active)
+                                      const PopupMenuItem(
+                                        value: 'deactivate',
+                                        child: Text('Deactivate'),
+                                      )
+                                    else
+                                      const PopupMenuItem(
+                                        value: 'activate',
+                                        child: Text('Activate'),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
                 ),
-              ),
-      ),
+              ],
+            ),
     );
   }
 }

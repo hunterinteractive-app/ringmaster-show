@@ -4,8 +4,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
-import 'show_list_screen.dart';
 import 'my_entries_screen.dart';
 import 'account_settings_screen.dart';
 import '../theme/app_theme.dart';
@@ -85,12 +85,6 @@ class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
     }
   }
 
-  void _openShows(BuildContext context) {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const ShowListScreen()),
-    );
-  }
-
   void _openEntries(BuildContext context) {
     Navigator.push(
       context,
@@ -123,29 +117,45 @@ class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: _MyAnimalsAppBar(
-        onShows: () => _openShows(context),
-        onEntries: () => _openEntries(context),
-        onAccount: () => _openAccount(context),
-        onAdd: () => _openAnimalEditor(),
-      ),
+    return RingMasterPageShell(
+      title: 'RingMaster Show',
+      subtitle: 'My Animals',
+      showBackButton: true,
+      useScrollView: false,
+      actions: [
+        IconButton(
+          tooltip: 'Entries',
+          icon: const Icon(Icons.receipt_long),
+          onPressed: () => _openEntries(context),
+        ),
+        IconButton(
+          tooltip: 'Account',
+          icon: const Icon(Icons.manage_accounts),
+          onPressed: () => _openAccount(context),
+        ),
+        IconButton(
+          tooltip: 'Add Animal',
+          icon: const Icon(Icons.add),
+          onPressed: () => _openAnimalEditor(),
+        ),
+      ],
       body: FutureBuilder<List<Map<String, dynamic>>>(
         future: _loadAnimals(),
         builder: (context, snap) {
           if (snap.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
           }
+
           if (snap.hasError) {
             return Center(child: Text('Error: ${snap.error}'));
           }
 
           final animals = snap.data ?? [];
+
           if (animals.isEmpty) {
             return const RMEmptyState(
               title: 'No animals yet',
-              subtitle:
-                  'Add your animals here so they are ready when entering shows.',
+              subtitle: 'Add your animals here so they are ready when entering shows.',
               icon: Icons.pets_outlined,
             );
           }
@@ -159,7 +169,8 @@ class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
               final breed = (a['breed'] ?? '').toString();
               final variety = (a['variety'] ?? '').toString();
               final sex = (a['sex'] ?? '').toString();
-              final tattoo = (a['tattoo'] ?? '').toString().trim().toUpperCase();
+              final tattoo =
+                  (a['tattoo'] ?? '').toString().trim().toUpperCase();
               final name = (a['name'] ?? '').toString().trim();
 
               final title = name.isEmpty
@@ -239,142 +250,6 @@ class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
             },
           );
         },
-      ),
-    );
-  }
-}
-
-class _MyAnimalsAppBar extends StatelessWidget implements PreferredSizeWidget {
-  final VoidCallback onShows;
-  final VoidCallback onEntries;
-  final VoidCallback onAccount;
-  final VoidCallback onAdd;
-
-  const _MyAnimalsAppBar({
-    required this.onShows,
-    required this.onEntries,
-    required this.onAccount,
-    required this.onAdd,
-  });
-
-  @override
-  Size get preferredSize => const Size.fromHeight(92);
-
-  @override
-  Widget build(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
-    final showLabels = width >= 1100;
-
-    return AppBar(
-      toolbarHeight: 92,
-      titleSpacing: 16,
-      title: Row(
-        children: [
-          Image.asset(
-            'assets/images/ringmaster_show_logo.png',
-            height: 48,
-            fit: BoxFit.contain,
-            filterQuality: FilterQuality.high,
-          ),
-          const SizedBox(width: 14),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'RingMaster Show',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
-                    ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'My Animals',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.white.withOpacity(.9),
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                    ),
-              ),
-            ],
-          ),
-        ],
-      ),
-      actions: [
-        _TopBarAction(
-          icon: Icons.event,
-          label: 'Shows',
-          showLabel: showLabels,
-          onTap: onShows,
-        ),
-        _TopBarAction(
-          icon: Icons.receipt_long,
-          label: 'Entries',
-          showLabel: showLabels,
-          onTap: onEntries,
-        ),
-        _TopBarAction(
-          icon: Icons.manage_accounts,
-          label: 'Account',
-          showLabel: showLabels,
-          onTap: onAccount,
-        ),
-        _TopBarAction(
-          icon: Icons.add,
-          label: 'Add Animal',
-          showLabel: showLabels,
-          onTap: onAdd,
-        ),
-        const SizedBox(width: 10),
-      ],
-    );
-  }
-}
-
-class _TopBarAction extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool showLabel;
-  final VoidCallback onTap;
-
-  const _TopBarAction({
-    required this.icon,
-    required this.label,
-    required this.showLabel,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (!showLabel) {
-      return IconButton(
-        tooltip: label,
-        icon: Icon(icon, color: Colors.white),
-        onPressed: onTap,
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: TextButton.icon(
-        onPressed: onTap,
-        style: TextButton.styleFrom(
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.sm),
-          ),
-        ),
-        icon: Icon(icon, size: 18, color: Colors.white),
-        label: Text(
-          label,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
       ),
     );
   }

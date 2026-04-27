@@ -27,9 +27,13 @@ class ShowJudgesDialog extends StatefulWidget {
         insetPadding: const EdgeInsets.all(16),
         backgroundColor: Colors.transparent,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            maxWidth: 1180,
-            maxHeight: 820,
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.of(context).size.width < 700
+                ? MediaQuery.of(context).size.width - 16
+                : 1180,
+            maxHeight: MediaQuery.of(context).size.height < 900
+                ? MediaQuery.of(context).size.height * 0.94
+                : 820,
           ),
           child: ShowJudgesDialog(
             showId: showId,

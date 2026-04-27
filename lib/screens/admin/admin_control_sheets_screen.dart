@@ -1,6 +1,7 @@
 // lib/screens/admin/admin_control_sheets_screen.dart
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -477,62 +478,106 @@ class _AdminControlSheetsScreenState extends State<AdminControlSheetsScreen> {
   Widget build(BuildContext context) {
     final ready = !_loading && _sections.isNotEmpty;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Control sheets — ${widget.showName}'),
-        actions: [
-          IconButton(
-            tooltip: 'Reload',
-            onPressed: _loading ? null : _load,
-            icon: Icon(Icons.refresh),
-          ),
-        ],
-      ),
+    return RingMasterPageShell(
+      title: 'RingMaster Show',
+      subtitle: 'Control Sheets — ${widget.showName}',
+      showBackButton: true,
+      showHomeButton: true,
+      useScrollView: false,
+      bodyPadding: EdgeInsets.zero,
+      actions: [
+        IconButton(
+          tooltip: 'Reload',
+          onPressed: _loading ? null : _load,
+          icon: const Icon(Icons.refresh),
+        ),
+      ],
       body: _loading
-          ? Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator())
           : ListView(
-              padding: EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
               children: [
                 if (_msg != null) ...[
-                  Text(_msg!, style: TextStyle(color: Colors.red)),
-                  SizedBox(height: 10),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.red.withOpacity(.25),
+                      ),
+                    ),
+                    child: Text(
+                      _msg!,
+                      style: const TextStyle(
+                        color: Colors.red,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                 ],
 
-                DropdownButtonFormField<String>(
-                  value: _selectedSectionId,
-                  decoration: InputDecoration(labelText: 'Show Section'),
-                  items: _sections
-                      .map(
-                        (s) => DropdownMenuItem<String>(
-                          value: s['id']?.toString(),
-                          child: Text(_sectionLabel(s)),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(.05),
+                        blurRadius: 12,
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      DropdownButtonFormField<String>(
+                        value: _selectedSectionId,
+                        decoration: const InputDecoration(
+                          labelText: 'Show Section',
+                          border: OutlineInputBorder(),
                         ),
-                      )
-                      .toList(),
-                  onChanged: _sections.isEmpty ? null : (v) => setState(() => _selectedSectionId = v),
-                ),
-
-                SizedBox(height: 10),
-
-                SwitchListTile(
-                  value: _includeScratched,
-                  onChanged: (v) => setState(() => _includeScratched = v),
-                  title: Text('Include scratched entries'),
-                ),
-
-                SizedBox(height: 12),
-
-                FilledButton.icon(
-                  onPressed: (!ready || _building) ? null : _generate,
-                  icon: Icon(Icons.picture_as_pdf),
-                  label: Text(_building ? 'Building PDF…' : 'Generate Control Sheets (PDF)'),
-                ),
-
-                SizedBox(height: 10),
-
-                Text(
-                  'Format matches “Judging Sheet - Breed Class” style (Breed + Color + Class + Sex).',
-                  style: Theme.of(context).textTheme.bodySmall,
+                        items: _sections
+                            .map(
+                              (s) => DropdownMenuItem<String>(
+                                value: s['id']?.toString(),
+                                child: Text(_sectionLabel(s)),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: _sections.isEmpty
+                            ? null
+                            : (v) => setState(() => _selectedSectionId = v),
+                      ),
+                      const SizedBox(height: 10),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        value: _includeScratched,
+                        onChanged: (v) =>
+                            setState(() => _includeScratched = v),
+                        title: const Text('Include scratched entries'),
+                      ),
+                      const SizedBox(height: 12),
+                      FilledButton.icon(
+                        onPressed: (!ready || _building) ? null : _generate,
+                        icon: const Icon(Icons.picture_as_pdf),
+                        label: Text(
+                          _building
+                              ? 'Building PDF…'
+                              : 'Generate Control Sheets (PDF)',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Format matches “Judging Sheet - Breed Class” style.',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),

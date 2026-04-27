@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -87,45 +88,33 @@ class _BreedEditorScreenState extends State<BreedEditorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF4F6FB),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF11285A),
-        foregroundColor: Colors.white,
-        elevation: 0,
-        title: Text(_isEdit ? 'Edit Breed' : 'Add Breed'),
-      ),
+    final speciesLabel =
+        '${widget.species[0].toUpperCase()}${widget.species.substring(1)}';
+
+    return RingMasterPageShell(
+      title: 'RingMaster Show',
+      subtitle: _isEdit ? 'Edit Breed' : 'Add Breed',
+      showBackButton: true,
+      useScrollView: false,
       body: Column(
         children: [
-          Container(
-            width: double.infinity,
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Color(0xFF11285A),
-                  Color(0xFF0B1C43),
-                ],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: SizedBox(
+              width: double.infinity,
+              child: Text(
+                _isEdit ? 'Update Breed Details' : 'Create New Breed',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
               ),
             ),
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _isEdit ? 'Update Breed Details' : 'Create New Breed',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                      ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Species: ${widget.species[0].toUpperCase()}${widget.species.substring(1)}',
-                  style: const TextStyle(color: Colors.white70),
-                ),
-              ],
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
+            child: SizedBox(
+              width: double.infinity,
+              child: Text('Species: $speciesLabel'),
             ),
           ),
           Expanded(
@@ -168,7 +157,11 @@ class _BreedEditorScreenState extends State<BreedEditorScreen> {
                           ],
                           onChanged: _saving
                               ? null
-                              : (v) => setState(() => _classSystem = v ?? 'four'),
+                              : (v) {
+                                  setState(() {
+                                    _classSystem = v ?? 'four';
+                                  });
+                                },
                         ),
                         const SizedBox(height: 8),
                         SwitchListTile(
@@ -178,8 +171,13 @@ class _BreedEditorScreenState extends State<BreedEditorScreen> {
                             'Inactive breeds stay in the database but are hidden from normal use.',
                           ),
                           value: _active,
-                          onChanged:
-                              _saving ? null : (v) => setState(() => _active = v),
+                          onChanged: _saving
+                              ? null
+                              : (v) {
+                                  setState(() {
+                                    _active = v;
+                                  });
+                                },
                         ),
                       ],
                     ),

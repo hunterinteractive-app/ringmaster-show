@@ -1,12 +1,14 @@
 // lib/widgets/ringmaster_page_shell.dart
 
 import 'package:flutter/material.dart';
+import 'package:ringmaster_show/screens/show_list_screen.dart';
 
 class RingMasterPageShell extends StatelessWidget {
   final String title;
   final String? subtitle;
   final Widget body;
 
+  final bool showHomeButton;
   final bool showBackButton;
   final VoidCallback? onBack;
 
@@ -26,6 +28,7 @@ class RingMasterPageShell extends StatelessWidget {
     required this.title,
     required this.body,
     this.subtitle,
+    this.showHomeButton = true,
     this.showBackButton = true,
     this.onBack,
     this.actions,
@@ -70,8 +73,9 @@ class RingMasterPageShell extends StatelessWidget {
             ? 58.0
             : 64.0;
 
+  // Mobile header size
     final titleSize = isMobile
-        ? 30.0
+        ? 24.0
         : isTablet
             ? 34.0
             : 38.0;
@@ -97,6 +101,23 @@ class RingMasterPageShell extends StatelessWidget {
             child: body,
           );
 
+    final resolvedActions = <Widget>[
+      if (showHomeButton)
+        IconButton(
+          tooltip: 'Home',
+          icon: const Icon(Icons.home_outlined),
+          onPressed: () {
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(
+                builder: (_) => const ShowListScreen(),
+              ),
+              (route) => false,
+            );
+          },
+        ),
+      ...(actions ?? const []),
+    ];
+
     return Scaffold(
       backgroundColor: topColor,
       floatingActionButton: floatingActionButton,
@@ -121,7 +142,7 @@ class RingMasterPageShell extends StatelessWidget {
                       leading: leading,
                       showBack: shouldShowBack,
                       onBack: onBack,
-                      actions: actions ?? const [],
+                      actions: resolvedActions,
                       topColor: topColor,
                       logoSize: logoSize,
                       titleSize: titleSize,
@@ -135,7 +156,7 @@ class RingMasterPageShell extends StatelessWidget {
                       leading: leading,
                       showBack: shouldShowBack,
                       onBack: onBack,
-                      actions: actions ?? const [],
+                      actions: resolvedActions,
                       topColor: topColor,
                       logoSize: logoSize,
                       titleSize: titleSize,

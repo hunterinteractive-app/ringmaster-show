@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
 import 'breed_editor_screen.dart';
 
@@ -480,60 +481,66 @@ class _BreedCatalogScreenState extends State<BreedCatalogScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF4F6FB),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF11285A),
-        foregroundColor: Colors.white,
-        elevation: 0,
-        title: const Text('Breed Catalog'),
-        actions: [
-          IconButton(
-            tooltip: 'Add Rabbit Breed',
-            onPressed: () => _openBreedEditor(species: 'rabbit'),
-            icon: const Icon(Icons.pets),
+    return RingMasterPageShell(
+      title: 'RingMaster Show',
+      subtitle: 'Breed Catalog',
+      showBackButton: true,
+      useScrollView: false,
+      actions: [
+        IconButton(
+          tooltip: 'Add Rabbit Breed',
+          onPressed: () => _openBreedEditor(species: 'rabbit'),
+          icon: const Icon(Icons.pets),
+        ),
+        IconButton(
+          tooltip: 'Add Cavy Breed',
+          onPressed: () => _openBreedEditor(species: 'cavy'),
+          icon: const Icon(Icons.add),
+        ),
+      ],
+      floatingActionButton: PopupMenuButton<String>(
+        tooltip: 'Add breed',
+        onSelected: (value) => _openBreedEditor(species: value),
+        itemBuilder: (_) => const [
+          PopupMenuItem(
+            value: 'rabbit',
+            child: Text('Add Rabbit Breed'),
           ),
-          IconButton(
-            tooltip: 'Add Cavy Breed',
-            onPressed: () => _openBreedEditor(species: 'cavy'),
-            icon: const Icon(Icons.add),
+          PopupMenuItem(
+            value: 'cavy',
+            child: Text('Add Cavy Breed'),
           ),
         ],
+        child: FloatingActionButton(
+          backgroundColor: Color(0xFFD4A623),
+          foregroundColor: Colors.black,
+          onPressed: null,
+          child: Icon(Icons.add),
+        ),
       ),
       body: Column(
         children: [
-          Container(
-            width: double.infinity,
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Color(0xFF11285A),
-                  Color(0xFF0B1C43),
-                ],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
+            child: SizedBox(
+              width: double.infinity,
+              child: Text(
+                'Global Breed & Variety Catalog',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
               ),
             ),
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Global Breed & Variety Catalog',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                      ),
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  'Manage the shared breed and variety list used throughout the system.',
-                  style: TextStyle(color: Colors.white70),
-                ),
-              ],
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: SizedBox(
+              width: double.infinity,
+              child: Text(
+                'Manage the shared breed and variety list used throughout the system.',
+              ),
             ),
           ),
-          const SizedBox(height: 12),
           _messageBanner(),
           _filterBar(),
           Expanded(
@@ -562,28 +569,6 @@ class _BreedCatalogScreenState extends State<BreedCatalogScreen> {
             ),
           ),
         ],
-      ),
-      floatingActionButton: PopupMenuButton<String>(
-        tooltip: 'Add breed',
-        onSelected: (value) {
-          _openBreedEditor(species: value);
-        },
-        itemBuilder: (_) => const [
-          PopupMenuItem(
-            value: 'rabbit',
-            child: Text('Add Rabbit Breed'),
-          ),
-          PopupMenuItem(
-            value: 'cavy',
-            child: Text('Add Cavy Breed'),
-          ),
-        ],
-        child: FloatingActionButton(
-          backgroundColor: const Color(0xFFD4A623),
-          foregroundColor: Colors.black,
-          onPressed: null,
-          child: const Icon(Icons.add),
-        ),
       ),
     );
   }

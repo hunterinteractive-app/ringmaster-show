@@ -711,6 +711,20 @@ class _CartScreenState extends State<CartScreen> {
           icon: const Icon(Icons.refresh),
           onPressed: (_confirming || _payingOnline) ? null : _load,
         ),
+        IconButton(
+          tooltip: 'My Entries',
+          icon: const Icon(Icons.list_alt),
+          onPressed: (_confirming || _payingOnline)
+              ? null
+              : () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const MyEntriesScreen(),
+                    ),
+                  );
+                },
+        ),
       ],
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -924,7 +938,7 @@ class _CartScreenState extends State<CartScreen> {
                             label: Text(
                               _payingOnline
                                   ? 'Opening Checkout…'
-                                  : 'Pay Online',
+                                  : 'Pay ${_money(overallFee['total'] as double, currency: currency)} Online',
                             ),
                           )
                         : FilledButton(

@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
 import 'breed_catalog_screen.dart';
 
@@ -79,94 +80,59 @@ class _SuperadminHomeScreenState extends State<SuperadminHomeScreen> {
     }
   }
 
-  Widget _toolCard({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required VoidCallback? onTap,
-    Widget? leadingOverride,
-  }) {
-    return Card(
-      child: ListTile(
-        leading: leadingOverride ?? Icon(icon),
-        title: Text(title),
-        subtitle: Text(subtitle),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: onTap,
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final success = _msg != null && _msg!.startsWith('ARBA judges imported');
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF4F6FB),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF11285A),
-        foregroundColor: Colors.white,
-        elevation: 0,
-        title: const Text('Superadmin'),
-      ),
+    return RingMasterPageShell(
+      title: 'RingMaster Show',
+      subtitle: 'Superadmin',
+      showBackButton: true,
+      useScrollView: false,
       body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: double.infinity,
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Color(0xFF11285A),
-                  Color(0xFF0B1C43),
-                ],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-              ),
-            ),
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Global Admin Tools',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                      ),
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  'Manage shared catalogs and system-wide imports.',
-                  style: TextStyle(
-                    color: Colors.white70,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: Text(
+              'Global Admin Tools',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
                   ),
-                ),
-                if (_msg != null) ...[
-                  const SizedBox(height: 14),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(.10),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: Colors.white.withOpacity(.18),
-                      ),
-                    ),
-                    child: Text(
-                      _msg!,
-                      style: TextStyle(
-                        color: success
-                            ? Colors.white
-                            : const Color(0xFFFFD7D7),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ],
             ),
           ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 6, 16, 12),
+            child: Text(
+              'Manage shared catalogs and system-wide imports.',
+            ),
+          ),
+          if (_msg != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: success
+                      ? Colors.green.withOpacity(.08)
+                      : Colors.red.withOpacity(.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: success
+                        ? Colors.green.withOpacity(.25)
+                        : Colors.red.withOpacity(.25),
+                  ),
+                ),
+                child: Text(
+                  _msg!,
+                  style: TextStyle(
+                    color: success ? Colors.green.shade800 : Colors.red,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.all(16),

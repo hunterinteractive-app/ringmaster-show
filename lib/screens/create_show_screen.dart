@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
 import '../services/club_service.dart';
 import '../widgets/rm_timezone_notice_banner.dart';
@@ -353,388 +354,348 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
       (club) => club['id']?.toString() == _selectedClubId,
     );
 
-    return Scaffold(
-      appBar: AppBar(
-        toolbarHeight: 70,
-        titleSpacing: 0,
-        title: Row(
+    return RingMasterPageShell(
+      title: 'RingMaster Show',
+      subtitle: 'Create Show',
+      showBackButton: true,
+      useScrollView: false,
+      bodyPadding: EdgeInsets.zero,
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
           children: [
-            const SizedBox(width: 12),
-            Image.asset(
-              'assets/images/ringmaster_show_logo.png',
-              height: 42,
-            ),
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Text(
-                'Create Show',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 18,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-      ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Color(0xFF11285A),
-              Color(0xFF0B1C43),
-            ],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-        ),
-        child: SafeArea(
-          child: Container(
-            margin: const EdgeInsets.only(top: 8),
-            decoration: const BoxDecoration(
-              color: Color(0xFFF4F6FB),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  const RMTimezoneNoticeBanner(),
-                  Expanded(
-                    child: SingleChildScrollView(
+            const RMTimezoneNoticeBanner(),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(.05),
+                            blurRadius: 10,
+                          ),
+                        ],
+                      ),
                       child: Column(
                         children: [
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(.05),
-                                  blurRadius: 10,
-                                ),
-                              ],
-                            ),
-                            child: Column(
-                              children: [
-                                TextField(
-                                  controller: _name,
-                                  enabled: !_saving,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Show name (required)',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                TextField(
-                                  controller: _location,
-                                  enabled: !_saving,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Location (required)',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                if (_loadingClubs) const LinearProgressIndicator(),
-                                if (!_hasLockedHostingClub) ...[
-                                  TextField(
-                                    controller: _hostingClubName,
-                                    enabled: !_saving,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Hosting Club Name (required)',
-                                      border: OutlineInputBorder(),
-                                      helperText:
-                                          'This will be saved as your default hosting club.',
-                                    ),
-                                  ),
-                                ] else ...[
-                                  DropdownButtonFormField<String>(
-                                    value: selectedClubExists ? _selectedClubId : null,
-                                    decoration: InputDecoration(
-                                      labelText: 'Hosting Club',
-                                      border: const OutlineInputBorder(),
-                                      helperText: _canSwitchHostingClub
-                                          ? 'You can switch hosting clubs.'
-                                          : 'Locked to your account. Upgrade to Multi-Club Hosting to change this.',
-                                    ),
-                                    items: _clubs.map((club) {
-                                      return DropdownMenuItem<String>(
-                                        value: club['id'].toString(),
-                                        child: Text(
-                                          (club['name'] ?? 'Club').toString(),
-                                        ),
-                                      );
-                                    }).toList(),
-                                    onChanged:
-                                        (_saving ||
-                                                _loadingClubs ||
-                                                !_canSwitchHostingClub)
-                                            ? null
-                                            : (value) {
-                                                setState(() {
-                                                  _selectedClubId = value;
-
-                                                  final selected =
-                                                      _clubs.firstWhere(
-                                                    (c) =>
-                                                        c['id'].toString() ==
-                                                        value,
-                                                    orElse: () => <String, dynamic>{},
-                                                  );
-
-                                                  _selectedClubName =
-                                                      (selected['name'] ?? '')
-                                                          .toString();
-                                                });
-                                              },
-                                  ),
-                                ],
-                                const SizedBox(height: 16),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        'Show Start: ${_start.toIso8601String().substring(0, 10)}',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ),
-                                    TextButton(
-                                      onPressed:
-                                          _saving ? null : () => _pickDate(true),
-                                      child: const Text('Pick'),
-                                    ),
-                                  ],
-                                ),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        'Show End: ${_end.toIso8601String().substring(0, 10)}',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ),
-                                    TextButton(
-                                      onPressed:
-                                          _saving ? null : () => _pickDate(false),
-                                      child: const Text('Pick'),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                SwitchListTile(
-                                  contentPadding: EdgeInsets.zero,
-                                  title: const Text('Published'),
-                                  value: _published,
-                                  onChanged: _saving
-                                      ? null
-                                      : (v) => setState(() => _published = v),
-                                ),
-                              ],
+                          TextField(
+                            controller: _name,
+                            enabled: !_saving,
+                            decoration: const InputDecoration(
+                              labelText: 'Show name (required)',
+                              border: OutlineInputBorder(),
                             ),
                           ),
-                          const SizedBox(height: 16),
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(.05),
-                                  blurRadius: 10,
-                                ),
-                              ],
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Entry Deadline',
-                                  style: Theme.of(context).textTheme.titleMedium,
-                                ),
-                                const SizedBox(height: 10),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        'Entry close: ${_fmtDateTime(_entryCloseAt)}',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ),
-                                    TextButton(
-                                      onPressed:
-                                          _saving ? null : _pickEntryCloseAt,
-                                      child: const Text('Pick'),
-                                    ),
-                                    TextButton(
-                                      onPressed: _saving
-                                          ? null
-                                          : () => setState(() => _entryCloseAt = null),
-                                      child: const Text('Clear'),
-                                    ),
-                                  ],
-                                ),
-                              ],
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _location,
+                            enabled: !_saving,
+                            decoration: const InputDecoration(
+                              labelText: 'Location (required)',
+                              border: OutlineInputBorder(),
                             ),
                           ),
-                          const SizedBox(height: 16),
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(.05),
-                                  blurRadius: 10,
-                                ),
-                              ],
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Show Types / Sections',
-                                  style: Theme.of(context).textTheme.titleMedium,
-                                ),
-                                const SizedBox(height: 10),
-                                DropdownButtonFormField<int>(
-                                  value: _openCount,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Open shows',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  items: List.generate(6, (i) {
-                                    if (i == 0) {
-                                      return const DropdownMenuItem<int>(
-                                        value: 0,
-                                        child: Text('0 (No Open shows)'),
-                                      );
-                                    }
-                                    final letters = List.generate(
-                                      i,
-                                      (x) => String.fromCharCode(65 + x),
-                                    ).join(', ');
-                                    return DropdownMenuItem<int>(
-                                      value: i,
-                                      child: Text('$i (Open $letters)'),
-                                    );
-                                  }),
-                                  onChanged: _saving
-                                      ? null
-                                      : (v) => setState(() => _openCount = v ?? 0),
-                                ),
-                                const SizedBox(height: 12),
-                                DropdownButtonFormField<int>(
-                                  value: _youthCount,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Youth shows',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  items: List.generate(6, (i) {
-                                    if (i == 0) {
-                                      return const DropdownMenuItem<int>(
-                                        value: 0,
-                                        child: Text('0 (No Youth shows)'),
-                                      );
-                                    }
-                                    final letters = List.generate(
-                                      i,
-                                      (x) => String.fromCharCode(65 + x),
-                                    ).join(', ');
-                                    return DropdownMenuItem<int>(
-                                      value: i,
-                                      child: Text('$i (Youth $letters)'),
-                                    );
-                                  }),
-                                  onChanged: _saving
-                                      ? null
-                                      : (v) => setState(() => _youthCount = v ?? 0),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'This will create sections like Open A / Open B / Youth A / Youth B.',
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(.05),
-                                  blurRadius: 10,
-                                ),
-                              ],
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'This creates Open A/B/C and Youth A/B/C sections. '
-                                  'Breed restrictions are managed per section in Show Settings → Modify Number of Shows.',
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                ),
-                              ],
-                            ),
-                          ),
-                          if (_msg != null) ...[
-                            const SizedBox(height: 12),
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.red.withOpacity(.08),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: Colors.red.withOpacity(.25),
-                                ),
+                          const SizedBox(height: 12),
+                          if (_loadingClubs) const LinearProgressIndicator(),
+                          if (!_hasLockedHostingClub) ...[
+                            TextField(
+                              controller: _hostingClubName,
+                              enabled: !_saving,
+                              decoration: const InputDecoration(
+                                labelText: 'Hosting Club Name (required)',
+                                border: OutlineInputBorder(),
+                                helperText:
+                                    'This will be saved as your default hosting club.',
                               ),
-                              child: Text(
-                                _msg!,
-                                style: const TextStyle(
-                                  color: Colors.red,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                            ),
+                          ] else ...[
+                            DropdownButtonFormField<String>(
+                              value: selectedClubExists ? _selectedClubId : null,
+                              decoration: InputDecoration(
+                                labelText: 'Hosting Club',
+                                border: const OutlineInputBorder(),
+                                helperText: _canSwitchHostingClub
+                                    ? 'You can switch hosting clubs.'
+                                    : 'Locked to your account. Upgrade to Multi-Club Hosting to change this.',
                               ),
+                              items: _clubs.map((club) {
+                                return DropdownMenuItem<String>(
+                                  value: club['id'].toString(),
+                                  child: Text(
+                                    (club['name'] ?? 'Club').toString(),
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged:
+                                  (_saving ||
+                                          _loadingClubs ||
+                                          !_canSwitchHostingClub)
+                                      ? null
+                                      : (value) {
+                                          setState(() {
+                                            _selectedClubId = value;
+
+                                            final selected =
+                                                _clubs.firstWhere(
+                                              (c) =>
+                                                  c['id'].toString() ==
+                                                  value,
+                                              orElse: () => <String, dynamic>{},
+                                            );
+
+                                            _selectedClubName =
+                                                (selected['name'] ?? '')
+                                                    .toString();
+                                          });
+                                        },
                             ),
                           ],
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Show Start: ${_start.toIso8601String().substring(0, 10)}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed:
+                                    _saving ? null : () => _pickDate(true),
+                                child: const Text('Pick'),
+                              ),
+                            ],
+                          ),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Show End: ${_end.toIso8601String().substring(0, 10)}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed:
+                                    _saving ? null : () => _pickDate(false),
+                                child: const Text('Pick'),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Published'),
+                            value: _published,
+                            onChanged: _saving
+                                ? null
+                                : (v) => setState(() => _published = v),
+                          ),
                         ],
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFFD4A623),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
+                    const SizedBox(height: 16),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(.05),
+                            blurRadius: 10,
+                          ),
+                        ],
                       ),
-                      onPressed: _saving ? null : _create,
-                      child: Text(_saving ? 'Creating…' : 'Create'),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Entry Deadline',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Entry close: ${_fmtDateTime(_entryCloseAt)}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed:
+                                    _saving ? null : _pickEntryCloseAt,
+                                child: const Text('Pick'),
+                              ),
+                              TextButton(
+                                onPressed: _saving
+                                    ? null
+                                    : () => setState(() => _entryCloseAt = null),
+                                child: const Text('Clear'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 16),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(.05),
+                            blurRadius: 10,
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Show Types / Sections',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 10),
+                          DropdownButtonFormField<int>(
+                            value: _openCount,
+                            decoration: const InputDecoration(
+                              labelText: 'Open shows',
+                              border: OutlineInputBorder(),
+                            ),
+                            items: List.generate(6, (i) {
+                              if (i == 0) {
+                                return const DropdownMenuItem<int>(
+                                  value: 0,
+                                  child: Text('0 (No Open shows)'),
+                                );
+                              }
+                              final letters = List.generate(
+                                i,
+                                (x) => String.fromCharCode(65 + x),
+                              ).join(', ');
+                              return DropdownMenuItem<int>(
+                                value: i,
+                                child: Text('$i (Open $letters)'),
+                              );
+                            }),
+                            onChanged: _saving
+                                ? null
+                                : (v) => setState(() => _openCount = v ?? 0),
+                          ),
+                          const SizedBox(height: 12),
+                          DropdownButtonFormField<int>(
+                            value: _youthCount,
+                            decoration: const InputDecoration(
+                              labelText: 'Youth shows',
+                              border: OutlineInputBorder(),
+                            ),
+                            items: List.generate(6, (i) {
+                              if (i == 0) {
+                                return const DropdownMenuItem<int>(
+                                  value: 0,
+                                  child: Text('0 (No Youth shows)'),
+                                );
+                              }
+                              final letters = List.generate(
+                                i,
+                                (x) => String.fromCharCode(65 + x),
+                              ).join(', ');
+                              return DropdownMenuItem<int>(
+                                value: i,
+                                child: Text('$i (Youth $letters)'),
+                              );
+                            }),
+                            onChanged: _saving
+                                ? null
+                                : (v) => setState(() => _youthCount = v ?? 0),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'This will create sections like Open A / Open B / Youth A / Youth B.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(.05),
+                            blurRadius: 10,
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'This creates Open A/B/C and Youth A/B/C sections. '
+                            'Breed restrictions are managed per section in Show Settings → Modify Number of Shows.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (_msg != null) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(.08),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.red.withOpacity(.25),
+                          ),
+                        ),
+                        child: Text(
+                          _msg!,
+                          style: const TextStyle(
+                            color: Colors.red,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ),
-          ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFD4A623),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                onPressed: _saving ? null : _create,
+                child: Text(_saving ? 'Creating…' : 'Create'),
+              ),
+            ),
+          ],
         ),
       ),
     );

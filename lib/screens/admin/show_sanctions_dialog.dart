@@ -933,8 +933,9 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context).size;
-    final dialogWidth = media.width * 0.94;
-    final dialogHeight = media.height * 0.88;
+    final isMobile = media.width < 700;
+    final dialogWidth = isMobile ? media.width - 16 : media.width * 0.94;
+    final dialogHeight = isMobile ? media.height * 0.94 : media.height * 0.88;
 
     final savedMessage = _msg == 'Saved.';
 

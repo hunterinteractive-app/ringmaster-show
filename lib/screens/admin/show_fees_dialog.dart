@@ -669,15 +669,16 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final media = MediaQuery.of(context).size;
     final success = _msg == 'Saved.';
 
     return Dialog(
       insetPadding: const EdgeInsets.all(16),
       backgroundColor: Colors.transparent,
       child: Container(
-        constraints: const BoxConstraints(
-          maxWidth: 700,
-          maxHeight: 760,
+        constraints: BoxConstraints(
+          maxWidth: media.width < 700 ? media.width - 16 : 700,
+          maxHeight: media.height < 820 ? media.height * 0.94 : 760,
         ),
         decoration: BoxDecoration(
           gradient: const LinearGradient(

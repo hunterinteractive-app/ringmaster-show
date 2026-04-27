@@ -122,6 +122,7 @@ class _LoginScreenState extends State<LoginScreen>
         .eq('is_published', true)
         .gte('start_date', today)
         .order('start_date')
+        // Change how many can be seen.
         .limit(50);
 
     return (res as List).cast<Map<String, dynamic>>();

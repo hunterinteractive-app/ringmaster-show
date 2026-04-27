@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../show_list_screen.dart';
 import '../../services/club_service.dart';
 import 'show_breed_settings_screen.dart';
 import 'show_sanctions_dialog.dart';
@@ -801,6 +802,20 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'Home',
+            icon: const Icon(Icons.home_outlined),
+            onPressed: _saving
+                ? null
+                : () {
+                    Navigator.of(context).pushAndRemoveUntil(
+                      MaterialPageRoute(
+                        builder: (_) => const ShowListScreen(),
+                      ),
+                      (route) => false,
+                    );
+                  },
+          ),
           IconButton(
             tooltip: 'Reload',
             icon: const Icon(Icons.refresh),

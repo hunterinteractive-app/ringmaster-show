@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-
+import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 final supabase = Supabase.instance.client;
@@ -388,279 +388,218 @@ class _AdminEntryManagementScreenState
       return _sectionLabel(s);
     }();
 
-    return Scaffold(
-      appBar: AppBar(
-        toolbarHeight: 70,
-        titleSpacing: 0,
-        title: Row(
-          children: [
-            const SizedBox(width: 12),
-            Image.asset(
-              'assets/images/ringmaster_show_logo.png',
-              height: 42,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'Entry Mgmt — ${widget.showName}',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 18,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
+    return RingMasterPageShell(
+      title: 'RingMaster Show',
+      subtitle: 'Entry Mgmt — ${widget.showName}',
+      showBackButton: true,
+      showHomeButton: true,
+      useScrollView: false,
+      bodyPadding: EdgeInsets.zero,
+      actions: [
+        IconButton(
+          tooltip: 'Add Entry',
+          icon: const Icon(Icons.add),
+          onPressed: _loading || _sections.isEmpty ? null : _openAddEntry,
         ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: ElevatedButton.icon(
-              icon: const Icon(Icons.add),
-              label: const Text('Add Entry'),
-              onPressed: _loading || _sections.isEmpty ? null : _openAddEntry,
-            ),
-          ),
-          IconButton(
-            tooltip: 'Reload',
-            icon: const Icon(Icons.refresh),
-            onPressed: _loading ? null : _loadAll,
-          ),
-        ],
-      ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Color(0xFF11285A),
-              Color(0xFF0B1C43),
-            ],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
+        IconButton(
+          tooltip: 'Reload',
+          icon: const Icon(Icons.refresh),
+          onPressed: _loading ? null : _loadAll,
         ),
-        child: _loading
-            ? const Center(
-                child: CircularProgressIndicator(color: Colors.white),
-              )
-            : SafeArea(
-                child: Container(
-                  margin: const EdgeInsets.only(top: 8),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFF4F6FB),
-                    borderRadius:
-                        BorderRadius.vertical(top: Radius.circular(24)),
-                  ),
+      ],
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : Column(
+              children: [
+                _messageBanner(),
+                _summaryCard(
+                  title: 'Filters',
                   child: Column(
                     children: [
-                      _messageBanner(),
-                      _summaryCard(
-                        title: 'Filters',
-                        child: Column(
-                          children: [
-                            DropdownButtonFormField<String>(
-                              value: _selectedSectionId,
-                              decoration: const InputDecoration(
-                                labelText: 'Show Letter / Section',
-                                border: OutlineInputBorder(),
+                      DropdownButtonFormField<String>(
+                        value: _selectedSectionId,
+                        decoration: const InputDecoration(
+                          labelText: 'Show Letter / Section',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: _sections
+                            .map(
+                              (s) => DropdownMenuItem<String>(
+                                value: s['id']?.toString(),
+                                child: Text(_sectionLabel(s)),
                               ),
-                              items: _sections
-                                  .map(
-                                    (s) => DropdownMenuItem<String>(
-                                      value: s['id']?.toString(),
-                                      child: Text(_sectionLabel(s)),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged:
-                                  _sections.isEmpty ? null : _onChangeSection,
-                            ),
-                            const SizedBox(height: 12),
-                            TextField(
-                              controller: _search,
-                              decoration: const InputDecoration(
-                                labelText:
-                                    'Search entries (includes exhibitor name)',
-                                hintText:
-                                    'Exhibitor, tattoo, breed, variety, sex, class, notes…',
-                                prefixIcon: Icon(Icons.search),
-                                border: OutlineInputBorder(),
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                sectionTitle.isEmpty
-                                    ? 'Showing: ${filtered.length} entries • ${grouped.length} exhibitors'
-                                    : 'Showing: ${filtered.length} entries • ${grouped.length} exhibitors • $sectionTitle',
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            ),
-                          ],
+                            )
+                            .toList(),
+                        onChanged: _sections.isEmpty ? null : _onChangeSection,
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _search,
+                        decoration: const InputDecoration(
+                          labelText: 'Search entries (includes exhibitor name)',
+                          hintText:
+                              'Exhibitor, tattoo, breed, variety, sex, class, notes…',
+                          prefixIcon: Icon(Icons.search),
+                          border: OutlineInputBorder(),
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      Expanded(
-                        child: filtered.isEmpty
-                            ? const Center(
-                                child:
-                                    Text('No entries found for this filter.'),
-                              )
-                            : ListView.builder(
-                                padding:
-                                    const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                                itemCount: exhibitorKeys.length,
-                                itemBuilder: (context, idx) {
-                                  final exKey = exhibitorKeys[idx];
-                                  final exEntries = grouped[exKey] ?? [];
-                                  if (exEntries.isEmpty) {
-                                    return const SizedBox.shrink();
-                                  }
-
-                                  final exhibitorName =
-                                      _exhibitorDisplayName(exEntries.first);
-                                  final isExpanded =
-                                      _expandedExhibitorIds.contains(exKey);
-
-                                  return Container(
-                                    margin: const EdgeInsets.only(bottom: 12),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(18),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withOpacity(.05),
-                                          blurRadius: 12,
-                                        ),
-                                      ],
-                                    ),
-                                    child: ExpansionTile(
-                                      initiallyExpanded: isExpanded,
-                                      onExpansionChanged: (v) {
-                                        setState(() {
-                                          if (v) {
-                                            _expandedExhibitorIds.add(exKey);
-                                          } else {
-                                            _expandedExhibitorIds.remove(exKey);
-                                          }
-                                        });
-                                      },
-                                      title: Text(
-                                        exhibitorName,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      subtitle: Text(
-                                        '${exEntries.length} entr${exEntries.length == 1 ? 'y' : 'ies'}',
-                                      ),
-                                      children: [
-                                        const Divider(height: 1),
-                                        ...exEntries.map((e) {
-                                          final tattoo =
-                                              (e['tattoo'] ?? '').toString().trim().toUpperCase();
-                                          final breed =
-                                              (e['breed'] ?? '').toString();
-                                          final variety = 
-                                              (e['variety'] ?? '').toString();
-                                          final furVariety = 
-                                              (e['fur_variety'] ?? '').toString();
-                                          final sex =
-                                              (e['sex'] ?? '').toString();
-                                          final cls =
-                                              (e['class_name'] ?? '').toString();
-                                          final notes =
-                                              (e['notes'] ?? '').toString();
-                                          final scratchedAt =
-                                              e['scratched_at']?.toString();
-                                          final isScratched = scratchedAt !=
-                                                  null &&
-                                              scratchedAt.isNotEmpty;
-
-                                          final section = e['show_sections'];
-                                          final letter = (section is Map
-                                                  ? (section['letter'] ?? '')
-                                                  : '')
-                                              .toString();
-
-                                          final titleLeft = tattoo.isEmpty
-                                              ? '(no tattoo)'
-                                              : tattoo;
-
-                                          final isFur = e['is_fur'] == true;
-
-                                          final subtitle = [
-                                            if (breed.isNotEmpty)
-                                              'Breed: $breed',
-                                            if (variety.isNotEmpty)
-                                              'Variety: $variety',
-                                            if (isFur)
-                                              furVariety.isNotEmpty
-                                                  ? 'Fur/Wool: $furVariety'
-                                                  : 'Fur/Wool',
-                                            if (letter.isNotEmpty)
-                                              'Show: $letter',
-                                            if (isScratched)
-                                              'SCRATCHED: ${_dateOnly(scratchedAt)}',
-                                            if (notes.isNotEmpty)
-                                              'Notes: $notes',
-                                          ].join(' • ');
-
-                                          return ListTile(
-                                            title: Text(
-                                              titleLeft,
-                                              style: TextStyle(
-                                                decoration: isScratched
-                                                    ? TextDecoration.lineThrough
-                                                    : null,
-                                              ),
-                                            ),
-                                            subtitle: subtitle.isEmpty
-                                                ? null
-                                                : Text(subtitle),
-                                            isThreeLine: subtitle.length > 80,
-                                            trailing:
-                                                PopupMenuButton<String>(
-                                              tooltip: 'Actions',
-                                              onSelected: (v) {
-                                                if (v == 'edit') _openEdit(e);
-                                                if (v == 'move') _openMove(e);
-                                                if (v == 'scratch') {
-                                                  _toggleScratch(e);
-                                                }
-                                              },
-                                              itemBuilder: (_) => [
-                                                const PopupMenuItem(
-                                                  value: 'edit',
-                                                  child: Text('Edit'),
-                                                ),
-                                                const PopupMenuItem(
-                                                  value: 'move',
-                                                  child: Text('Move Animal'),
-                                                ),
-                                                PopupMenuItem(
-                                                  value: 'scratch',
-                                                  child: Text(isScratched
-                                                      ? 'Un-scratch'
-                                                      : 'Scratch'),
-                                                ),
-                                              ],
-                                            ),
-                                            onTap: () => _openEdit(e),
-                                          );
-                                        }),
-                                      ],
-                                    ),
-                                  );
-                                },
-                              ),
+                      const SizedBox(height: 10),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          sectionTitle.isEmpty
+                              ? 'Showing: ${filtered.length} entries • ${grouped.length} exhibitors'
+                              : 'Showing: ${filtered.length} entries • ${grouped.length} exhibitors • $sectionTitle',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
                       ),
                     ],
                   ),
                 ),
-              ),
-      ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: filtered.isEmpty
+                      ? const Center(
+                          child: Text('No entries found for this filter.'),
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                          itemCount: exhibitorKeys.length,
+                          itemBuilder: (context, idx) {
+                            final exKey = exhibitorKeys[idx];
+                            final exEntries = grouped[exKey] ?? [];
+                            if (exEntries.isEmpty) {
+                              return const SizedBox.shrink();
+                            }
+
+                            final exhibitorName =
+                                _exhibitorDisplayName(exEntries.first);
+                            final isExpanded =
+                                _expandedExhibitorIds.contains(exKey);
+
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(18),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(.05),
+                                    blurRadius: 12,
+                                  ),
+                                ],
+                              ),
+                              child: ExpansionTile(
+                                initiallyExpanded: isExpanded,
+                                onExpansionChanged: (v) {
+                                  setState(() {
+                                    if (v) {
+                                      _expandedExhibitorIds.add(exKey);
+                                    } else {
+                                      _expandedExhibitorIds.remove(exKey);
+                                    }
+                                  });
+                                },
+                                title: Text(
+                                  exhibitorName,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  '${exEntries.length} entr${exEntries.length == 1 ? 'y' : 'ies'}',
+                                ),
+                                children: [
+                                  const Divider(height: 1),
+                                  ...exEntries.map((e) {
+                                    final tattoo = (e['tattoo'] ?? '')
+                                        .toString()
+                                        .trim()
+                                        .toUpperCase();
+                                    final breed = (e['breed'] ?? '').toString();
+                                    final variety =
+                                        (e['variety'] ?? '').toString();
+                                    final furVariety =
+                                        (e['fur_variety'] ?? '').toString();
+                                    final notes = (e['notes'] ?? '').toString();
+                                    final scratchedAt =
+                                        e['scratched_at']?.toString();
+                                    final isScratched = scratchedAt != null &&
+                                        scratchedAt.isNotEmpty;
+
+                                    final section = e['show_sections'];
+                                    final letter = (section is Map
+                                            ? (section['letter'] ?? '')
+                                            : '')
+                                        .toString();
+
+                                    final titleLeft =
+                                        tattoo.isEmpty ? '(no tattoo)' : tattoo;
+
+                                    final isFur = e['is_fur'] == true;
+
+                                    final subtitle = [
+                                      if (breed.isNotEmpty) 'Breed: $breed',
+                                      if (variety.isNotEmpty) 'Variety: $variety',
+                                      if (isFur)
+                                        furVariety.isNotEmpty
+                                            ? 'Fur/Wool: $furVariety'
+                                            : 'Fur/Wool',
+                                      if (letter.isNotEmpty) 'Show: $letter',
+                                      if (isScratched)
+                                        'SCRATCHED: ${_dateOnly(scratchedAt)}',
+                                      if (notes.isNotEmpty) 'Notes: $notes',
+                                    ].join(' • ');
+
+                                    return ListTile(
+                                      title: Text(
+                                        titleLeft,
+                                        style: TextStyle(
+                                          decoration: isScratched
+                                              ? TextDecoration.lineThrough
+                                              : null,
+                                        ),
+                                      ),
+                                      subtitle:
+                                          subtitle.isEmpty ? null : Text(subtitle),
+                                      isThreeLine: subtitle.length > 80,
+                                      trailing: PopupMenuButton<String>(
+                                        tooltip: 'Actions',
+                                        onSelected: (v) {
+                                          if (v == 'edit') _openEdit(e);
+                                          if (v == 'move') _openMove(e);
+                                          if (v == 'scratch') _toggleScratch(e);
+                                        },
+                                        itemBuilder: (_) => [
+                                          const PopupMenuItem(
+                                            value: 'edit',
+                                            child: Text('Edit'),
+                                          ),
+                                          const PopupMenuItem(
+                                            value: 'move',
+                                            child: Text('Move Animal'),
+                                          ),
+                                          PopupMenuItem(
+                                            value: 'scratch',
+                                            child: Text(
+                                              isScratched
+                                                  ? 'Un-scratch'
+                                                  : 'Scratch',
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      onTap: () => _openEdit(e),
+                                    );
+                                  }),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
     );
   }
 }

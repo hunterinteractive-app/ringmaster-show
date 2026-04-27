@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -1161,301 +1162,308 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
 
     final issues = _buildValidationIssues();
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF4F6FB),
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: const Color(0xFF11285A),
-        foregroundColor: Colors.white,
-        title: Text('Results Entry — ${widget.showName}'),
-        actions: [
-          IconButton(
-            tooltip: 'Validation',
-            onPressed: _loading ? null : _openValidationSheet,
-            icon: const Icon(Icons.rule_folder_outlined),
-          ),
-          IconButton(
-            tooltip: 'Reload',
-            onPressed: _loading ? null : _loadAll,
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
-      ),
+    return RingMasterPageShell(
+      title: 'RingMaster Show',
+      subtitle: 'Results Entry — ${widget.showName}',
+      showBackButton: true,
+      showHomeButton: true,
+      useScrollView: false,
+      bodyPadding: EdgeInsets.zero,
+      actions: [
+        IconButton(
+          tooltip: 'Validation',
+          onPressed: _loading ? null : _openValidationSheet,
+          icon: const Icon(Icons.rule_folder_outlined),
+        ),
+        IconButton(
+          tooltip: 'Reload',
+          onPressed: _loading ? null : _loadAll,
+          icon: const Icon(Icons.refresh),
+        ),
+      ],
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : SafeArea(
-              child: Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                    child: Container(
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [
-                            Color(0xFF11285A),
-                            Color(0xFF0B1C43),
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(24),
+          : Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  child: Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [
+                          Color(0xFF11285A),
+                          Color(0xFF0B1C43),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Results Workflow',
-                              style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Results Workflow',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
                             ),
-                            const SizedBox(height: 6),
-                            Text(
-                              widget.showName,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 24,
-                                fontWeight: FontWeight.w800,
-                              ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            widget.showName,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.w800,
                             ),
-                            const SizedBox(height: 10),
-                            Text(
-                              _finalAwardMode == 'bis_ris'
-                                  ? 'Final awards: Best in Show / Reserve in Show'
-                                  : 'Final awards: Best 4-Class / Best 6-Class / Best in Show',
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 14,
-                              ),
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            _finalAwardMode == 'bis_ris'
+                                ? 'Final awards: Best in Show / Reserve in Show'
+                                : 'Final awards: Best 4-Class / Best 6-Class / Best in Show',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 14,
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                  if (_msg != null)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.red.withOpacity(.08),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: Colors.red.withOpacity(.20)),
-                        ),
-                        child: Text(
-                          _msg!,
-                          style: const TextStyle(
-                            color: Colors.red,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
+                ),
+                if (_msg != null)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                    child: Card(
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(.08),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.red.withOpacity(.20)),
                       ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          children: [
-                            DropdownButtonFormField<String>(
-                              value: _selectedSectionId ?? '',
-                              decoration: const InputDecoration(
-                                labelText: 'Show Letter / Section',
-                              ),
-                              items: [
-                                const DropdownMenuItem<String>(
-                                  value: '',
-                                  child: Text('All Sections'),
-                                ),
-                                ..._sections.map(
-                                  (s) => DropdownMenuItem<String>(
-                                    value: s['id']?.toString(),
-                                    child: Text(_sectionLabel(s)),
-                                  ),
-                                ),
-                              ],
-                              onChanged: _onChangeSection,
-                            ),
-                            const SizedBox(height: 14),
-                            Container(
-                              decoration: BoxDecoration(
-                                color: issues.isEmpty
-                                    ? Colors.green.withOpacity(.08)
-                                    : Colors.orange.withOpacity(.10),
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: issues.isEmpty
-                                      ? Colors.green.withOpacity(.20)
-                                      : Colors.orange.withOpacity(.22),
-                                ),
-                              ),
-                              child: ListTile(
-                                leading: Icon(
-                                  issues.isEmpty
-                                      ? Icons.check_circle_outline
-                                      : Icons.warning_amber_rounded,
-                                  color: issues.isEmpty ? Colors.green : Colors.orange,
-                                ),
-                                title: Text(
-                                  issues.isEmpty
-                                      ? 'Validation looks good'
-                                      : 'Validation issues found',
-                                  style: const TextStyle(fontWeight: FontWeight.w700),
-                                ),
-                                subtitle: Text(
-                                  issues.isEmpty
-                                      ? 'No current award/result conflicts found.'
-                                      : '${issues.length} issue${issues.length == 1 ? '' : 's'} to review.',
-                                ),
-                                trailing: const Icon(Icons.chevron_right),
-                                onTap: _openValidationSheet,
-                              ),
-                            ),
-                          ],
+                      child: Text(
+                        _msg!,
+                        style: const TextStyle(
+                          color: Colors.red,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  Expanded(
-                    child: breeds.isEmpty
-                        ? const Center(
-                            child: Text('No entries found for this section.'),
-                          )
-                        : ListView.builder(
-                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                            itemCount: breeds.length,
-                            itemBuilder: (context, i) {
-                              final breed = breeds[i];
-                              final breedEntries = grouped[breed]!;
-                              final count = breedEntries.length;
-                              final byGroup = _showsByGroup(breedEntries);
-                              final byVariety = _showsByVariety(breedEntries);
-
-                              final sectionName =
-                                  (_selectedSectionId == null || _selectedSectionId!.isEmpty)
-                                      ? 'All Sections'
-                                      : (() {
-                                          final section = _sections.firstWhere(
-                                            (s) => s['id']?.toString() == _selectedSectionId,
-                                            orElse: () => <String, dynamic>{},
-                                          );
-                                          return section.isEmpty
-                                              ? 'Section'
-                                              : _sectionLabel(section);
-                                        })();
-
-                              String flowLabel;
-                              if (byGroup && byVariety) {
-                                flowLabel = 'Group → Variety';
-                              } else if (byGroup) {
-                                flowLabel = 'Group';
-                              } else if (byVariety) {
-                                flowLabel = 'Variety';
-                              } else {
-                                flowLabel = 'Class';
-                              }
-
-                              return Card(
-                                margin: const EdgeInsets.only(bottom: 12),
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(20),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  child: Card(
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          DropdownButtonFormField<String>(
+                            value: _selectedSectionId ?? '',
+                            decoration: const InputDecoration(
+                              labelText: 'Show Letter / Section',
+                            ),
+                            items: [
+                              const DropdownMenuItem<String>(
+                                value: '',
+                                child: Text('All Sections'),
+                              ),
+                              ..._sections.map(
+                                (s) => DropdownMenuItem<String>(
+                                  value: s['id']?.toString(),
+                                  child: Text(_sectionLabel(s)),
                                 ),
-                                child: ListTile(
-                                  contentPadding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
-                                  title: Text(
-                                    breed,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  subtitle: Padding(
-                                    padding: const EdgeInsets.only(top: 6),
-                                    child: Text(
-                                      '$count entr${count == 1 ? 'y' : 'ies'} • $flowLabel • ${_judgeSummary(breedEntries)}',
-                                    ),
-                                  ),
-                                  trailing: const Icon(Icons.chevron_right),
-                                  onTap: () async {
-                                    if (byGroup) {
-                                      await Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => _ResultsGroupScreen(
-                                            showId: widget.showId,
-                                            showName: widget.showName,
-                                            sectionLabel: sectionName,
-                                            breed: breed,
-                                            entries: breedEntries,
-                                            judges: _judges,
-                                            breedClassSystems: _breedClassSystems,
-                                            finalAwardMode: _finalAwardMode,
-                                            showsByVariety: byVariety,
-                                          ),
-                                        ),
-                                      );
-                                    } else if (byVariety) {
-                                      await Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => _ResultsVarietyScreen(
-                                            showId: widget.showId,
-                                            showName: widget.showName,
-                                            sectionLabel: sectionName,
-                                            breed: breed,
-                                            entries: breedEntries,
-                                            judges: _judges,
-                                            breedClassSystems: _breedClassSystems,
-                                            finalAwardMode: _finalAwardMode,
-                                            parentGroupLabel: null,
-                                          ),
-                                        ),
-                                      );
-                                    } else {
-                                      await Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => _ResultsClassSexScreen(
-                                            showId: widget.showId,
-                                            showName: widget.showName,
-                                            sectionLabel: sectionName,
-                                            breed: breed,
-                                            variety: '',
-                                            contextLabel: breed,
-                                            entries: breedEntries,
-                                            judges: _judges,
-                                            breedClassSystems: _breedClassSystems,
-                                            finalAwardMode: _finalAwardMode,
-                                            showsByGroup: false,
-                                            showsByVariety: false,
-                                          ),
-                                        ),
-                                      );
-                                    }
-
-                                    await _loadEntries();
-                                    if (mounted) setState(() {});
-                                  },
-                                ),
-                              );
-                            },
+                              ),
+                            ],
+                            onChanged: _onChangeSection,
                           ),
+                          const SizedBox(height: 14),
+                          Container(
+                            decoration: BoxDecoration(
+                              color: issues.isEmpty
+                                  ? Colors.green.withOpacity(.08)
+                                  : Colors.orange.withOpacity(.10),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: issues.isEmpty
+                                    ? Colors.green.withOpacity(.20)
+                                    : Colors.orange.withOpacity(.22),
+                              ),
+                            ),
+                            child: ListTile(
+                              leading: Icon(
+                                issues.isEmpty
+                                    ? Icons.check_circle_outline
+                                    : Icons.warning_amber_rounded,
+                                color:
+                                    issues.isEmpty ? Colors.green : Colors.orange,
+                              ),
+                              title: Text(
+                                issues.isEmpty
+                                    ? 'Validation looks good'
+                                    : 'Validation issues found',
+                                style:
+                                    const TextStyle(fontWeight: FontWeight.w700),
+                              ),
+                              subtitle: Text(
+                                issues.isEmpty
+                                    ? 'No current award/result conflicts found.'
+                                    : '${issues.length} issue${issues.length == 1 ? '' : 's'} to review.',
+                              ),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: _openValidationSheet,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: breeds.isEmpty
+                      ? const Center(
+                          child: Text('No entries found for this section.'),
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                          itemCount: breeds.length,
+                          itemBuilder: (context, i) {
+                            final breed = breeds[i];
+                            final breedEntries = grouped[breed]!;
+                            final count = breedEntries.length;
+                            final byGroup = _showsByGroup(breedEntries);
+                            final byVariety = _showsByVariety(breedEntries);
+
+                            final sectionName =
+                                (_selectedSectionId == null ||
+                                        _selectedSectionId!.isEmpty)
+                                    ? 'All Sections'
+                                    : (() {
+                                        final section = _sections.firstWhere(
+                                          (s) =>
+                                              s['id']?.toString() ==
+                                              _selectedSectionId,
+                                          orElse: () => <String, dynamic>{},
+                                        );
+                                        return section.isEmpty
+                                            ? 'Section'
+                                            : _sectionLabel(section);
+                                      })();
+
+                            String flowLabel;
+                            if (byGroup && byVariety) {
+                              flowLabel = 'Group → Variety';
+                            } else if (byGroup) {
+                              flowLabel = 'Group';
+                            } else if (byVariety) {
+                              flowLabel = 'Variety';
+                            } else {
+                              flowLabel = 'Class';
+                            }
+
+                            return Card(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: ListTile(
+                                contentPadding: const EdgeInsets.fromLTRB(
+                                  18,
+                                  14,
+                                  18,
+                                  14,
+                                ),
+                                title: Text(
+                                  breed,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                subtitle: Padding(
+                                  padding: const EdgeInsets.only(top: 6),
+                                  child: Text(
+                                    '$count entr${count == 1 ? 'y' : 'ies'} • $flowLabel • ${_judgeSummary(breedEntries)}',
+                                  ),
+                                ),
+                                trailing: const Icon(Icons.chevron_right),
+                                onTap: () async {
+                                  if (byGroup) {
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => _ResultsGroupScreen(
+                                          showId: widget.showId,
+                                          showName: widget.showName,
+                                          sectionLabel: sectionName,
+                                          breed: breed,
+                                          entries: breedEntries,
+                                          judges: _judges,
+                                          breedClassSystems: _breedClassSystems,
+                                          finalAwardMode: _finalAwardMode,
+                                          showsByVariety: byVariety,
+                                        ),
+                                      ),
+                                    );
+                                  } else if (byVariety) {
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => _ResultsVarietyScreen(
+                                          showId: widget.showId,
+                                          showName: widget.showName,
+                                          sectionLabel: sectionName,
+                                          breed: breed,
+                                          entries: breedEntries,
+                                          judges: _judges,
+                                          breedClassSystems: _breedClassSystems,
+                                          finalAwardMode: _finalAwardMode,
+                                          parentGroupLabel: null,
+                                        ),
+                                      ),
+                                    );
+                                  } else {
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => _ResultsClassSexScreen(
+                                          showId: widget.showId,
+                                          showName: widget.showName,
+                                          sectionLabel: sectionName,
+                                          breed: breed,
+                                          variety: '',
+                                          contextLabel: breed,
+                                          entries: breedEntries,
+                                          judges: _judges,
+                                          breedClassSystems: _breedClassSystems,
+                                          finalAwardMode: _finalAwardMode,
+                                          showsByGroup: false,
+                                          showsByVariety: false,
+                                        ),
+                                      ),
+                                    );
+                                  }
+
+                                  await _loadEntries();
+                                  if (mounted) setState(() {});
+                                },
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
             ),
     );
   }

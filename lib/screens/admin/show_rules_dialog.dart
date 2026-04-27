@@ -255,8 +255,8 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
       backgroundColor: Colors.transparent,
       child: ConstrainedBox(
         constraints: BoxConstraints(
-          maxWidth: media.width * 0.76,
-          maxHeight: media.height * 0.90,
+          maxWidth: media.width < 700 ? media.width - 16 : media.width * 0.76,
+          maxHeight: media.height * 0.92,
         ),
         child: Container(
           decoration: BoxDecoration(

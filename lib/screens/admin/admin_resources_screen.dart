@@ -3,9 +3,15 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
 import '../../theme/app_theme.dart';
 import '../../widgets/rm_widgets.dart';
+import '../show_list_screen.dart';
+import '../my_animals_screen.dart';
+import '../my_entries_screen.dart';
+import '../account_settings_screen.dart';
+import '../create_show_screen.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -18,6 +24,40 @@ class AdminResourcesScreen extends StatefulWidget {
 
 class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
   late Future<List<Map<String, dynamic>>> _future;
+
+  void _openShows() {
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const ShowListScreen()),
+    );
+  }
+
+  void _openAnimals() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const MyAnimalsScreen()),
+    );
+  }
+
+  void _openEntries() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const MyEntriesScreen()),
+    );
+  }
+
+  void _openAccount() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AccountSettingsScreen()),
+    );
+  }
+
+  Future<void> _openCreate() async {
+    await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const CreateShowScreen()),
+    );
+  }
 
   @override
   void initState() {
@@ -94,16 +134,20 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Secretary Resources'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _reload,
-          ),
-        ],
-      ),
+    return RingMasterPageShell(
+      title: 'RingMaster Show',
+      subtitle: 'Secretary Resources',
+      showBackButton: true,
+      showHomeButton: true,
+      useScrollView: false,
+      bodyPadding: EdgeInsets.zero,
+      actions: [
+        IconButton(
+          tooltip: 'Reload',
+          icon: const Icon(Icons.refresh),
+          onPressed: _reload,
+        ),
+      ],
       body: FutureBuilder<List<Map<String, dynamic>>>(
         future: _future,
         builder: (context, snap) {
@@ -132,8 +176,7 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
             padding: const EdgeInsets.all(AppSpacing.lg),
             child: ListView.separated(
               itemCount: items.length,
-              separatorBuilder: (_, __) =>
-                  const SizedBox(height: AppSpacing.md),
+              separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.md),
               itemBuilder: (context, i) {
                 final item = items[i];
                 final title = (item['title'] ?? '').toString();

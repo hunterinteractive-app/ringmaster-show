@@ -732,8 +732,8 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
       backgroundColor: Colors.transparent,
       child: ConstrainedBox(
         constraints: BoxConstraints(
-          maxWidth: media.width * 0.76,
-          maxHeight: media.height * 0.90,
+          maxWidth: media.width < 700 ? media.width - 16 : media.width * 0.76,
+          maxHeight: media.height * 0.92,
         ),
         child: Container(
           decoration: BoxDecoration(
@@ -837,7 +837,8 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
                               onPressed: _saving ? null : _loadAll,
                               icon: const Icon(Icons.refresh),
                               label: const Text('Reload'),
-                            ),                          ],
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 14),
                         Expanded(

@@ -1777,308 +1777,371 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       return names;
     }
 
-  @override
-  Widget build(BuildContext context) {
-    final reportsBlocked = !_resultsReadyForReports;
-    final reportsBlockedMessage = _resultsReadinessMessage();
+    @override
+    Widget build(BuildContext context) {
+      final reportsBlocked = !_resultsReadyForReports;
+      final reportsBlockedMessage = _resultsReadinessMessage();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('${widget.showName} • Closeout'),
-        actions: [
-          IconButton(
-            onPressed: (_loading || _generatingReport) ? null : _loadData,
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh',
-          ),
-        ],
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? _ErrorView(message: _error!, onRetry: _loadData)
-              : _dashboard == null
-                  ? const Center(child: Text('No closeout data found.'))
-                  : RefreshIndicator(
-                      onRefresh: _generatingReport ? () async {} : _loadData,
-                      child: ListView(
-                        padding: const EdgeInsets.all(16),
-                        children: [
-                          _ArbaCloseoutCard(
-                            secretaryNameController: _secretaryNameController,
-                            secretaryAddressController: _secretaryAddressController,
-                            secretaryEmailController: _secretaryEmailController,
-                            secretaryPhoneController: _secretaryPhoneController,
-                            superintendentController: _superintendentController,
-                            superintendentNumberController: _superintendentNumberController,
-                            sweepstakesIssue: _sweepstakesIssue,
-                            sweepstakesClubController: _sweepstakesClubController,
-                            onSweepstakesChanged: (v) {
-                              setState(() {
-                                _sweepstakesIssue = v;
-                                if (!v) {
-                                  _sweepstakesClubController.clear();
-                                }
-                              });
-                            },
-                            onSweepstakesClubChanged: (_) {},
-                            officialProtest: _officialProtest,
-                            onOfficialProtestChanged: (v) {
-                              setState(() {
-                                _officialProtest = v;
-                                if (!v) {
-                                  _arbaReportFiled = false;
-                                }
-                              });
-                            },
-                            arbaReportFiled: _arbaReportFiled,
-                            onArbaReportFiledChanged: (v) {
-                              setState(() => _arbaReportFiled = v);
-                            },
-                            onSave: _saveArbaDetails,
-                          ),
-                          const SizedBox(height: 16),
+      return Scaffold(
+        appBar: AppBar(
+          title: Text('${widget.showName} • Closeout'),
+          actions: [
+            IconButton(
+              onPressed: (_loading || _generatingReport) ? null : _loadData,
+              icon: const Icon(Icons.refresh),
+              tooltip: 'Refresh',
+            ),
+          ],
+        ),
+        body: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : _error != null
+                ? _ErrorView(message: _error!, onRetry: _loadData)
+                : _dashboard == null
+                    ? const Center(child: Text('No closeout data found.'))
+                    : RefreshIndicator(
+                        onRefresh: _generatingReport ? () async {} : _loadData,
+                        child: ListView(
+                          padding: const EdgeInsets.all(16),
+                          children: [
+                            _ArbaCloseoutCard(
+                              secretaryNameController: _secretaryNameController,
+                              secretaryAddressController:
+                                  _secretaryAddressController,
+                              secretaryEmailController:
+                                  _secretaryEmailController,
+                              secretaryPhoneController:
+                                  _secretaryPhoneController,
+                              superintendentController:
+                                  _superintendentController,
+                              superintendentNumberController:
+                                  _superintendentNumberController,
+                              sweepstakesIssue: _sweepstakesIssue,
+                              sweepstakesClubController:
+                                  _sweepstakesClubController,
+                              onSweepstakesChanged: (v) {
+                                setState(() {
+                                  _sweepstakesIssue = v;
+                                  if (!v) {
+                                    _sweepstakesClubController.clear();
+                                  }
+                                });
+                              },
+                              onSweepstakesClubChanged: (_) {},
+                              officialProtest: _officialProtest,
+                              onOfficialProtestChanged: (v) {
+                                setState(() {
+                                  _officialProtest = v;
+                                  if (!v) {
+                                    _arbaReportFiled = false;
+                                  }
+                                });
+                              },
+                              arbaReportFiled: _arbaReportFiled,
+                              onArbaReportFiledChanged: (v) {
+                                setState(() => _arbaReportFiled = v);
+                              },
+                              onSave: _saveArbaDetails,
+                            ),
 
-                          // ✅ NEW BULK ACTION BUTTONS (ADD THIS BLOCK)
-                          if (reportsBlocked) ...[
-                            Container(
-                              width: double.infinity,
-                              margin: const EdgeInsets.only(bottom: 12),
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.orange.withOpacity(.10),
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(
-                                  color: Colors.orange.withOpacity(.22),
-                                ),
-                              ),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Icon(
-                                    Icons.warning_amber_rounded,
-                                    color: Colors.orange,
+                            const SizedBox(height: 16),
+
+                            if (reportsBlocked) ...[
+                              Container(
+                                width: double.infinity,
+                                margin: const EdgeInsets.only(bottom: 12),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.withOpacity(.10),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: Colors.orange.withOpacity(.22),
                                   ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text(
-                                      reportsBlockedMessage,
-                                      style: const TextStyle(
-                                        color: Colors.orange,
-                                        fontWeight: FontWeight.w600,
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Icon(
+                                      Icons.warning_amber_rounded,
+                                      color: Colors.orange,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        reportsBlockedMessage,
+                                        style: const TextStyle(
+                                          color: Colors.orange,
+                                          fontWeight: FontWeight.w600,
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            _buildMissingPlacementsPanel(),
-                          ],
-
-                          Wrap(
-                            spacing: 10,
-                            runSpacing: 10,
-                            children: [
-                              FilledButton.icon(
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: reportsBlocked
-                                      ? Colors.grey
-                                      : (_dashboard?.dashboard.closeout.isReportsStale == true
-                                          ? const Color(0xFFD4A623)
-                                          : Colors.green),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 18,
-                                    vertical: 14,
-                                  ),
+                                  ],
                                 ),
-                                onPressed: (_isBusy || reportsBlocked)
-                                    ? null
-                                    : () async {
-                                        final confirmed = await showDialog<bool>(
+                              ),
+                              _buildMissingPlacementsPanel(),
+                              const SizedBox(height: 16),
+                            ],
+
+                            Wrap(
+                              spacing: 10,
+                              runSpacing: 10,
+                              children: [
+                                FilledButton.icon(
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: reportsBlocked
+                                        ? Colors.grey
+                                        : (_dashboard?.dashboard.closeout
+                                                    .isReportsStale ==
+                                                true
+                                            ? const Color(0xFFD4A623)
+                                            : Colors.green),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 18,
+                                      vertical: 14,
+                                    ),
+                                  ),
+                                  onPressed: (_isBusy || reportsBlocked)
+                                      ? null
+                                      : () async {
+                                          final confirmed =
+                                              await showDialog<bool>(
+                                                    context: context,
+                                                    builder: (context) {
+                                                      return AlertDialog(
+                                                        title: const Text(
+                                                          'Finalize & Generate Reports',
+                                                        ),
+                                                        content: const Text(
+                                                          'This will finalize the show and generate all Flutter-based closeout reports. Emails will not be sent automatically.',
+                                                        ),
+                                                        actions: [
+                                                          TextButton(
+                                                            onPressed: () =>
+                                                                Navigator.pop(
+                                                              context,
+                                                              false,
+                                                            ),
+                                                            child: const Text(
+                                                              'Cancel',
+                                                            ),
+                                                          ),
+                                                          FilledButton(
+                                                            onPressed: () =>
+                                                                Navigator.pop(
+                                                              context,
+                                                              true,
+                                                            ),
+                                                            child: const Text(
+                                                              'Finalize',
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      );
+                                                    },
+                                                  ) ??
+                                                  false;
+
+                                          if (!confirmed) return;
+
+                                          setState(() {
+                                            _generatingReport = true;
+                                          });
+
+                                          try {
+                                            final previousFinalizeId =
+                                                _dashboard?.latestFinalize.id ??
+                                                    '';
+
+                                            await _finalizeShow();
+
+                                            await _loadDataUntilFinalizeVisible(
+                                              previousFinalizeId:
+                                                  previousFinalizeId,
+                                            );
+
+                                            final artifactCount =
+                                                await _countQueuedArtifactsForShow();
+
+                                            if (artifactCount == 0) {
+                                              throw Exception(
+                                                'Finalize completed but no report artifacts were created.',
+                                              );
+                                            }
+
+                                            final artifactsToGenerate =
+                                                (_dashboard?.reports ??
+                                                        <ReportArtifactSummary>[])
+                                                    .where((r) => r.isCurrent)
+                                                    .where(
+                                                      (r) =>
+                                                          r.artifactStatus ==
+                                                              'queued' ||
+                                                          r.artifactStatus ==
+                                                              'failed',
+                                                    )
+                                                    .where(
+                                                      (r) => {
+                                                        'arba_report',
+                                                        'exhibitor_report',
+                                                        'legs',
+                                                        'sweepstakes_report',
+                                                        'breed_results_detail_report',
+                                                      }.contains(r.reportName),
+                                                    )
+                                                    .toList();
+
+                                            if (artifactsToGenerate.isEmpty) {
+                                              throw Exception(
+                                                'Finalize completed, but there were no queued Flutter-rendered reports to generate.',
+                                              );
+                                            }
+
+                                            final generatedOk =
+                                                await showDialog<bool>(
                                               context: context,
+                                              barrierDismissible: false,
                                               builder: (context) {
-                                                return AlertDialog(
-                                                  title: const Text('Finalize & Generate Reports'),
-                                                  content: const Text(
-                                                    'This will finalize the show and generate all Flutter-based closeout reports. Emails will not be sent automatically.',
-                                                  ),
-                                                  actions: [
-                                                    TextButton(
-                                                      onPressed: () => Navigator.pop(context, false),
-                                                      child: const Text('Cancel'),
-                                                    ),
-                                                    FilledButton(
-                                                      onPressed: () => Navigator.pop(context, true),
-                                                      child: const Text('Finalize'),
-                                                    ),
-                                                  ],
+                                                return _GenerateAllReportsDialog(
+                                                  artifacts: artifactsToGenerate,
+                                                  onRun: (
+                                                    onStarted,
+                                                    onFinished,
+                                                    onFailed,
+                                                  ) {
+                                                    return _runGenerateAllReportsLive(
+                                                      artifactsToGenerate,
+                                                      onStarted: onStarted,
+                                                      onFinished: onFinished,
+                                                      onFailed: onFailed,
+                                                    );
+                                                  },
                                                 );
                                               },
-                                            ) ??
-                                            false;
-
-                                        if (!confirmed) return;
-
-                                        setState(() {
-                                          _generatingReport = true;
-                                        });
-
-                                        try {
-                                          final previousFinalizeId = _dashboard?.latestFinalize.id ?? '';
-                                          await _finalizeShow();
-                                          await _loadDataUntilFinalizeVisible(
-                                            previousFinalizeId: previousFinalizeId,
-                                          );
-                                          final artifactCount = await _countQueuedArtifactsForShow();
-                                          if (artifactCount == 0) {
-                                            throw Exception(
-                                              'Finalize completed but no report artifacts were created.',
                                             );
-                                          }
-                                          final artifactsToGenerate =
-                                              (_dashboard?.reports ?? <ReportArtifactSummary>[])
-                                                  .where((r) => r.isCurrent)
-                                                  .where((r) => r.artifactStatus == 'queued' || r.artifactStatus == 'failed')
-                                                  .where(
-                                                    (r) => {
-                                                      'arba_report',
-                                                      'exhibitor_report',
-                                                      'legs',
-                                                      'sweepstakes_report',
-                                                      'breed_results_detail_report',
-                                                    }.contains(r.reportName),
-                                                  )
-                                                  .toList();
 
-                                          if (artifactsToGenerate.isEmpty) {
-                                            throw Exception(
-                                              'Finalize completed, but there were no queued Flutter-rendered reports to generate.',
-                                            );
-                                          }
-
-                                          final generatedOk = await showDialog<bool>(
-                                            context: context,
-                                            barrierDismissible: false,
-                                            builder: (context) {
-                                              return _GenerateAllReportsDialog(
-                                                artifacts: artifactsToGenerate,
-                                                onRun: (onStarted, onFinished, onFailed) {
-                                                  return _runGenerateAllReportsLive(
-                                                    artifactsToGenerate,
-                                                    onStarted: onStarted,
-                                                    onFinished: onFinished,
-                                                    onFailed: onFailed,
-                                                  );
-                                                },
+                                            if (generatedOk != true) {
+                                              throw Exception(
+                                                'Report generation was cancelled or did not finish cleanly.',
                                               );
-                                            },
-                                          );
+                                            }
 
-                                          if (generatedOk != true) {
-                                            throw Exception(
-                                              'Report generation was cancelled or did not finish cleanly.',
-                                            );
-                                          }
+                                            await _syncClubDeliveryMetadata();
+                                            await _loadData();
 
-                                          await _syncClubDeliveryMetadata();
-                                          await _loadData();
+                                            if (_dashboard?.dashboard.closeout
+                                                    .isReportsStale ==
+                                                true) {
+                                              throw Exception(
+                                                'Flutter generation completed, but reports are still marked stale.',
+                                              );
+                                            }
 
-                                          if (_dashboard?.dashboard.closeout.isReportsStale == true) {
-                                            throw Exception(
-                                              'Flutter generation completed, but reports are still marked stale.',
-                                            );
-                                          }
+                                            if (!mounted) return;
 
-                                          if (!mounted) return;
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            const SnackBar(
-                                              content: Text(
-                                                'Finalize and report generation completed. Review reports, then use the send buttons when ready.',
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              const SnackBar(
+                                                content: Text(
+                                                  'Finalize and report generation completed. Review reports, then use the send buttons when ready.',
+                                                ),
                                               ),
-                                            ),
-                                          );
-                                        } catch (e) {
-                                          if (!mounted) return;
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(content: Text('Finalize flow failed: $e')),
-                                          );
-                                        } finally {
-                                          if (mounted) {
-                                            setState(() {
-                                              _generatingReport = false;
-                                            });
+                                            );
+                                          } catch (e) {
+                                            if (!mounted) return;
+
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                  'Finalize flow failed: $e',
+                                                ),
+                                              ),
+                                            );
+                                          } finally {
+                                            if (mounted) {
+                                              setState(() {
+                                                _generatingReport = false;
+                                              });
+                                            }
                                           }
-                                        }
-                                      },
-                                icon: const Icon(Icons.auto_awesome),
-                                label: Text(
-                                  reportsBlocked
-                                      ? 'Finish Results Before Finalize'
-                                      : (_dashboard?.dashboard.closeout.isReportsStale == true
-                                          ? 'Finalize Show'
-                                          : 'Re-Finalize Show'),
+                                        },
+                                  icon: const Icon(Icons.auto_awesome),
+                                  label: Text(
+                                    reportsBlocked
+                                        ? 'Finish Results Before Finalize'
+                                        : (_dashboard?.dashboard.closeout
+                                                    .isReportsStale ==
+                                                true
+                                            ? 'Finalize Show'
+                                            : 'Re-Finalize Show'),
+                                  ),
                                 ),
-                              ),
-                              OutlinedButton.icon(
-                                onPressed: _isBusy ? null : _sendAllExhibitorReports,
-                                icon: const Icon(Icons.send_outlined),
-                                label: const Text('Send All Exhibitor Reports'),
-                              ),
-                              OutlinedButton.icon(
-                                onPressed: _isBusy ? null : _sendAllClubReports,
-                                icon: const Icon(Icons.group_outlined),
-                                label: const Text('Send All Club Reports'),
-                              ),
-                            ],
-                          ),
 
-                          const SizedBox(height: 16),
+                                OutlinedButton.icon(
+                                  onPressed: _isBusy
+                                      ? null
+                                      : _sendAllExhibitorReports,
+                                  icon: const Icon(Icons.send_outlined),
+                                  label: const Text(
+                                    'Send All Exhibitor Reports',
+                                  ),
+                                ),
 
-                          // ✅ EXISTING CARD (DO NOT CHANGE)
-                          _ReportActionsCard(
-                            showId: widget.showId,
-                            reports: _dashboard?.reports ??
-                                const <ReportArtifactSummary>[],
-                            groupedReportNames: {
-                              'arba': _reportNamesForGroup('arba'),
-                              'exhibitor': _reportNamesForGroup('exhibitor'),
-                              'club': _reportNamesForGroup('club'),
-                              'other': _reportNamesForGroup('other'),
-                            },
-                            onGenerate: (
-                              reportName, {
-                              String? breedName,
-                              String? scope,
-                              String? showLetter,
-                              String? exhibitorId,
-                              String? exhibitorName,
-                            }) =>
-                                _generateReportByName(
-                                  reportName,
-                                  breedName: breedName,
-                                  scope: scope,
-                                  showLetter: showLetter,
-                                  exhibitorId: exhibitorId,
-                                  exhibitorName: exhibitorName,
+                                OutlinedButton.icon(
+                                  onPressed:
+                                      _isBusy ? null : _sendAllClubReports,
+                                  icon: const Icon(Icons.group_outlined),
+                                  label: const Text('Send All Club Reports'),
                                 ),
-                            onDownload: (
-                              reportName, {
-                              String? exhibitorId,
-                            }) =>
-                                _downloadReportByName(
-                                  reportName,
-                                  exhibitorId: exhibitorId,
-                                ),
-                            onEmail: _emailReportByName,
-                            loading: _generatingReport,
-                            reportsBlocked: reportsBlocked,
-                            reportsBlockedMessage: reportsBlockedMessage,
-                          ),
-                        ],
+                              ],
+                            ),
+
+                            const SizedBox(height: 16),
+
+                            _ReportActionsCard(
+                              showId: widget.showId,
+                              reports: _dashboard?.reports ??
+                                  const <ReportArtifactSummary>[],
+                              groupedReportNames: {
+                                'arba': _reportNamesForGroup('arba'),
+                                'exhibitor': _reportNamesForGroup('exhibitor'),
+                                'club': _reportNamesForGroup('club'),
+                                'other': _reportNamesForGroup('other'),
+                              },
+                              onGenerate: (
+                                reportName, {
+                                String? breedName,
+                                String? scope,
+                                String? showLetter,
+                                String? exhibitorId,
+                                String? exhibitorName,
+                              }) =>
+                                  _generateReportByName(
+                                reportName,
+                                breedName: breedName,
+                                scope: scope,
+                                showLetter: showLetter,
+                                exhibitorId: exhibitorId,
+                                exhibitorName: exhibitorName,
+                              ),
+                              onDownload: (
+                                reportName, {
+                                String? exhibitorId,
+                              }) =>
+                                  _downloadReportByName(
+                                reportName,
+                                exhibitorId: exhibitorId,
+                              ),
+                              onEmail: _emailReportByName,
+                              loading: _generatingReport,
+                              reportsBlocked: reportsBlocked,
+                              reportsBlockedMessage: reportsBlockedMessage,
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-    );
-  }
+      );
+    }
 }
 class _CloseoutSectionCard extends StatelessWidget {
   final String title;

@@ -809,19 +809,16 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
                             ),
                             const SizedBox(height: 8),
                             _breedSummaryBar(breed),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                _countChip('Exhibitors', breed.exhibitorCount),
+                                _countChip('Rabbits', breed.rabbitCount),
+                              ],
+                            ),
                           ],
-                        ),
-                        trailing: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 260),
-                          child: Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            alignment: WrapAlignment.end,
-                            children: [
-                              _countChip('Exhibitors', breed.exhibitorCount),
-                              _countChip('Rabbits', breed.rabbitCount),
-                            ],
-                          ),
                         ),
                         children: [
                           const SizedBox(height: 8),
@@ -840,8 +837,7 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
                                   horizontal: 16,
                                   vertical: 6,
                                 ),
-                                childrenPadding:
-                                    const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                                childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
                                 title: Text(
                                   variety.variety,
                                   style: const TextStyle(fontWeight: FontWeight.w600),
@@ -852,19 +848,16 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
                                     Text('${variety.classes.length} age/sex classes'),
                                     const SizedBox(height: 8),
                                     _varietySummaryBar(variety),
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: [
+                                        _countChip('Exhibitors', variety.exhibitorCount),
+                                        _countChip('Rabbits', variety.rabbitCount),
+                                      ],
+                                    ),
                                   ],
-                                ),
-                                trailing: ConstrainedBox(
-                                  constraints: const BoxConstraints(maxWidth: 260),
-                                  child: Wrap(
-                                    spacing: 8,
-                                    runSpacing: 8,
-                                    alignment: WrapAlignment.end,
-                                    children: [
-                                      _countChip('Exhibitors', variety.exhibitorCount),
-                                      _countChip('Rabbits', variety.rabbitCount),
-                                    ],
-                                  ),
                                 ),
                                 children: [
                                   const SizedBox(height: 8),

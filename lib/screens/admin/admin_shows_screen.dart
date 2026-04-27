@@ -5,9 +5,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'admin_resources_screen.dart';
 
+import '../show_list_screen.dart';
 import '../create_show_screen.dart';
 import 'edit_show_settings_screen.dart';
-import '../../screens/show_list_screen.dart';
 import '../../screens/my_animals_screen.dart';
 import '../../screens/my_entries_screen.dart';
 import '../../screens/account_settings_screen.dart';
@@ -521,90 +521,146 @@ class _AdminShowsAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
-    final showLabels = width >= 1100;
+    final showFullNav = width >= 900;
 
     return AppBar(
       toolbarHeight: 92,
-      titleSpacing: 16,
+      titleSpacing: 12,
       title: Row(
         children: [
           Image.asset(
             'assets/images/ringmaster_show_logo.png',
-            height: 48,
+            height: width < 500 ? 38 : 48,
             fit: BoxFit.contain,
             filterQuality: FilterQuality.high,
           ),
-          const SizedBox(width: 14),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'RingMaster Show',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
-                    ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'Admin Shows',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.white.withOpacity(.9),
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                    ),
-              ),
-            ],
+          const SizedBox(width: 12),
+          Flexible(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'RingMaster Show',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: Colors.white,
+                        fontSize: width < 500 ? 20 : 28,
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Admin Shows',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Colors.white.withOpacity(.9),
+                        fontSize: width < 500 ? 13 : 15,
+                        fontWeight: FontWeight.w500,
+                      ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
-      actions: [
-        _TopBarAction(
-          icon: Icons.event,
-          label: 'Shows',
-          showLabel: showLabels,
-          onTap: onShows,
-        ),
-        _TopBarAction(
-          icon: Icons.pets,
-          label: 'Animals',
-          showLabel: showLabels,
-          onTap: onAnimals,
-        ),
-        _TopBarAction(
-          icon: Icons.receipt_long,
-          label: 'Entries',
-          showLabel: showLabels,
-          onTap: onEntries,
-        ),
-        _TopBarAction(
-          icon: Icons.perm_media_outlined,
-          label: 'Resources',
-          showLabel: showLabels,
-          onTap: onResources,
-        ),
-        _TopBarAction(
-          icon: Icons.manage_accounts,
-          label: 'Account',
-          showLabel: showLabels,
-          onTap: onAccount,
-        ),
-        _TopBarAction(
-          icon: Icons.refresh,
-          label: 'Reload',
-          showLabel: showLabels,
-          onTap: onReload,
-        ),
-        _TopBarAction(
-          icon: Icons.add,
-          label: 'Create Show',
-          showLabel: showLabels,
-          onTap: onCreate,
-        ),
-        const SizedBox(width: 10),
-      ],
+      actions: showFullNav
+          ? [
+              _TopBarAction(
+                icon: Icons.refresh,
+                label: 'Reload',
+                showLabel: true,
+                onTap: onReload,
+              ),
+              _TopBarAction(
+                icon: Icons.add,
+                label: 'Create Show',
+                showLabel: true,
+                onTap: onCreate,
+              ),
+              _TopBarAction(icon: Icons.event, label: 'Shows', showLabel: true, onTap: onShows),
+              _TopBarAction(icon: Icons.pets, label: 'Animals', showLabel: true, onTap: onAnimals),
+              _TopBarAction(icon: Icons.receipt_long, label: 'Entries', showLabel: true, onTap: onEntries),
+              _TopBarAction(icon: Icons.perm_media_outlined, label: 'Resources', showLabel: true, onTap: onResources),
+              _TopBarAction(icon: Icons.manage_accounts, label: 'Account', showLabel: true, onTap: onAccount),
+              
+              const SizedBox(width: 10),
+            ]
+          : [
+              IconButton(
+                tooltip: 'Reload',
+                icon: const Icon(Icons.refresh, color: Colors.white),
+                onPressed: onReload,
+              ),
+              IconButton(
+                tooltip: 'Create Show',
+                icon: const Icon(Icons.add, color: Colors.white),
+                onPressed: onCreate,
+              ),
+              PopupMenuButton<String>(
+                tooltip: 'Menu',
+                icon: const Icon(Icons.more_vert, color: Colors.white),
+                onSelected: (value) {
+                  switch (value) {
+                    case 'shows':
+                      onShows();
+                      break;
+                    case 'animals':
+                      onAnimals();
+                      break;
+                    case 'entries':
+                      onEntries();
+                      break;
+                    case 'resources':
+                      onResources();
+                      break;
+                    case 'account':
+                      onAccount();
+                      break;
+                  }
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                    value: 'shows',
+                    child: ListTile(
+                      leading: Icon(Icons.event),
+                      title: Text('Shows'),
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'animals',
+                    child: ListTile(
+                      leading: Icon(Icons.pets),
+                      title: Text('Animals'),
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'entries',
+                    child: ListTile(
+                      leading: Icon(Icons.receipt_long),
+                      title: Text('Entries'),
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'resources',
+                    child: ListTile(
+                      leading: Icon(Icons.perm_media_outlined),
+                      title: Text('Resources'),
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'account',
+                    child: ListTile(
+                      leading: Icon(Icons.manage_accounts),
+                      title: Text('Account'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 6),
+            ],
     );
   }
 }
