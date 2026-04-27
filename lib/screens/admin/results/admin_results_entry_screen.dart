@@ -13,12 +13,26 @@ const String kDefaultFinalAwardMode = 'four_six_bis';
 const List<String> kResultStatuses = [
   'Shown',
   'No Show',
-  'Wrong Sex',
-  'Wrong Variety',
-  'Wrong Class',
-  'Disqualified',
+  'Disqualified - Wrong Sex',
+  'Disqualified - Wrong Variety',
+  'Disqualified - Wrong Class',
+  'Disqualified - Other',
   'Unworthy of Award',
 ];
+
+bool _isDisqualifiedStatus(String status) {
+  return status.trim().toLowerCase().startsWith('disqualified');
+}
+
+String _dqReasonFromStatus(String status) {
+  final trimmed = status.trim();
+  if (!_isDisqualifiedStatus(trimmed)) return '';
+
+  final parts = trimmed.split('-');
+  if (parts.length < 2) return 'Other';
+
+  return parts.sublist(1).join('-').trim();
+}
 
 class AdminResultsEntryScreen extends StatefulWidget {
   final String showId;
@@ -742,10 +756,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     if (isDisqualified) return false;
 
     if (status == 'No Show' ||
-        status == 'Wrong Sex' ||
-        status == 'Wrong Variety' ||
-        status == 'Wrong Class' ||
-        status == 'Disqualified' ||
+        _isDisqualifiedStatus(status) ||
         status == 'Unworthy of Award') {
       return false;
     }
@@ -2736,10 +2747,8 @@ class _ResultsAnimalsScreenState extends State<_ResultsAnimalsScreen> {
     if (!isShown) return false;
     if (isDisqualified) return false;
     if (status == 'No Show' ||
-        status == 'Wrong Sex' ||
-        status == 'Wrong Variety' ||
-        status == 'Wrong Class' ||
-        status == 'Disqualified') {
+        _isDisqualifiedStatus(status) ||
+        status == 'Unworthy of Award') {
       return false;
     }
 
@@ -2756,10 +2765,7 @@ class _ResultsAnimalsScreenState extends State<_ResultsAnimalsScreen> {
     if (!isShown) return false;
     if (isDisqualified) return false;
     if (status == 'No Show' ||
-        status == 'Wrong Sex' ||
-        status == 'Wrong Variety' ||
-        status == 'Wrong Class' ||
-        status == 'Disqualified' ||
+        _isDisqualifiedStatus(status) ||
         status == 'Unworthy of Award') {
       return false;
     }
@@ -3211,10 +3217,8 @@ class _ResultsAnimalsScreenState extends State<_ResultsAnimalsScreen> {
         if (isDisqualified) return false;
 
         if (status == 'No Show' ||
-            status == 'Wrong Sex' ||
-            status == 'Wrong Variety' ||
-            status == 'Wrong Class' ||
-            status == 'Disqualified') {
+            _isDisqualifiedStatus(status) ||
+            status == 'Unworthy of Award') {
           return false;
         }
 
@@ -3580,14 +3584,14 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
       if (!isShown) {
         _resultStatus = 'No Show';
       } else if (isDisqualified) {
-        if (dqReason == 'Wrong Sex' ||
-            dqReason == 'Wrong Variety' ||
-            dqReason == 'Wrong Class' ||
-            dqReason == 'Unworthy of Award' ||
-            dqReason == 'Disqualified') {
-          _resultStatus = dqReason;
+        if (dqReason == 'Wrong Sex') {
+          _resultStatus = 'Disqualified - Wrong Sex';
+        } else if (dqReason == 'Wrong Variety') {
+          _resultStatus = 'Disqualified - Wrong Variety';
+        } else if (dqReason == 'Wrong Class') {
+          _resultStatus = 'Disqualified - Wrong Class';
         } else {
-          _resultStatus = 'Disqualified';
+          _resultStatus = 'Disqualified - Other';
         }
       } else {
         _resultStatus = 'Shown';
@@ -3728,10 +3732,7 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
     final status = _effectiveStatusFor(e);
 
     if (status == 'No Show' ||
-        status == 'Wrong Sex' ||
-        status == 'Wrong Variety' ||
-        status == 'Wrong Class' ||
-        status == 'Disqualified' ||
+        _isDisqualifiedStatus(status) ||
         status == 'Unworthy of Award') {
       return false;
     }
@@ -4158,12 +4159,8 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
       }
 
       final normalizedDqReason =
-          (effectiveStatus == 'Disqualified' ||
-                  effectiveStatus == 'Wrong Sex' ||
-                  effectiveStatus == 'Wrong Variety' ||
-                  effectiveStatus == 'Wrong Class' ||
-                  effectiveStatus == 'Unworthy of Award')
-              ? effectiveStatus
+          _isDisqualifiedStatus(effectiveStatus)
+              ? _dqReasonFromStatus(effectiveStatus)
               : null;
 
       final payload = <String, dynamic>{
@@ -4171,10 +4168,7 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
         'result_status': effectiveStatus,
         'disqualified_reason': normalizedDqReason,
         'is_shown': effectiveStatus != 'No Show',
-        'is_disqualified': effectiveStatus == 'Disqualified' ||
-            effectiveStatus == 'Wrong Sex' ||
-            effectiveStatus == 'Wrong Variety' ||
-            effectiveStatus == 'Wrong Class',
+        'is_disqualified': _isDisqualifiedStatus(effectiveStatus),
         'judged_by_show_judge_id': normalizedJudgeId,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       };

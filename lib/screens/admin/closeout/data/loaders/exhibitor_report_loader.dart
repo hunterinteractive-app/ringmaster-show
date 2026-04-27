@@ -57,7 +57,9 @@ class ExhibitorReportLoader {
         final isShown = row['is_shown'] != false;
         final isDisqualified = row['is_disqualified'] == true;
 
-        if (!isShown || isDisqualified || scratchedAt.isNotEmpty) continue;
+        // Keep DQ / No Show / Wrong Class / Wrong Sex rows on the exhibitor report.
+        // Only omit truly scratched entries.
+        if (scratchedAt.isNotEmpty) continue;
 
         row['resolved_show_letter'] = showLetter;
         row['resolved_section_kind'] = sectionKind;
@@ -209,7 +211,7 @@ class ExhibitorReportLoader {
         variety: _str(row['variety_name']),
         className: _str(row['class_name']),
         sex: _str(row['sex']),
-        placing: displayPlacementByEntryId[entryId] ?? _str(row['placement']),
+        placing: _displayResultOrPlacement(row, displayPlacementByEntryId),
         classCount: ctx?.classCount,
         exhibitorCount: ctx?.exhibitorCount,
         awardsText: _formatAwards(awards),
@@ -554,6 +556,33 @@ class ExhibitorReportLoader {
     }
 
     return byEntryIdAndShow;
+  }
+
+  String _displayResultOrPlacement(
+    Map<String, dynamic> row,
+    Map<String, String> displayPlacementByEntryId,
+  ) {
+    final entryId = _str(row['entry_id']);
+    final status = _str(row['result_status']);
+    final dqReason = _str(row['disqualified_reason']);
+    final isDisqualified = row['is_disqualified'] == true;
+    final isShown = row['is_shown'] != false;
+
+    if (!isShown || status == 'No Show') {
+      return 'No Show';
+    }
+
+    if (isDisqualified || status.startsWith('Disqualified')) {
+      if (status.startsWith('Disqualified - ')) return status;
+      if (dqReason.isNotEmpty) return 'Disqualified - $dqReason';
+      return 'Disqualified';
+    }
+
+    if (status == 'Unworthy of Award') {
+      return 'Unworthy of Award';
+    }
+
+    return displayPlacementByEntryId[entryId] ?? _str(row['placement']);
   }
 
   String _formatAwards(Set<String> awards) {
