@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/show_lock_service.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -42,6 +43,10 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
   bool _saving = false;
   bool _loadingBreeds = false;
   String? _msg;
+  bool _isLocked = false;
+  bool _isFinalized = false;
+
+  bool get _isReadOnly => _isLocked || _isFinalized;
   
 
   final List<_EditableSection> _sections = [];
@@ -70,6 +75,16 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
       });
 
       try {
+        final show = await supabase
+            .from('shows')
+            .select('is_locked,finalized_at')
+            .eq('id', widget.showId)
+            .single();
+
+        _isLocked = show['is_locked'] == true;
+        _isFinalized =
+            (show['finalized_at'] ?? '').toString().trim().isNotEmpty;
+
         await Future.wait([
           _loadBreeds(),
           _loadSections(),
@@ -311,6 +326,8 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
     });
 
     try {
+      await ShowLockService.assertShowUnlocked(widget.showId);
+
       for (final id in _deletedIds) {
         await supabase.from('show_sections').delete().eq('id', id);
       }
@@ -433,7 +450,9 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
                                 groupValue:
                                     working.isEmpty ? null : working.first,
                                 title: Text('$species — $name'),
-                                onChanged: (value) {
+                                onChanged: _isReadOnly
+                                    ? null
+                                    : (value) {
                                   if (value == null) return;
                                   setInnerState(() {
                                     working
@@ -465,10 +484,12 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
                 ),
                 actions: [
                   TextButton(
-                    onPressed: () {
-                      working.clear();
-                      Navigator.pop(ctx);
-                    },
+                    onPressed: _isReadOnly
+                        ? null
+                        : () {
+                            working.clear();
+                            Navigator.pop(ctx);
+                          },
                     child: const Text('Clear'),
                   ),
                   TextButton(
@@ -476,12 +497,14 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
                     child: const Text('Cancel'),
                   ),
                   FilledButton(
-                    onPressed: () {
-                      setState(() {
-                        s.allowedBreedIds = working.toList();
-                      });
-                      Navigator.pop(ctx);
-                    },
+                    onPressed: _isReadOnly
+                        ? null
+                        : () {
+                            setState(() {
+                              s.allowedBreedIds = working.toList();
+                            });
+                            Navigator.pop(ctx);
+                          },
                     child: const Text('Apply'),
                   ),
                 ],
@@ -518,7 +541,7 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
             child: Text('Meat Classes Only'),
           ),
         ],
-        onChanged: _saving
+        onChanged: (_saving || _isReadOnly)
             ? null
             : (value) {
                 if (value == null) return;
@@ -582,7 +605,7 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
           Row(
             children: [
               OutlinedButton.icon(
-                onPressed: _saving ? null : () => _pickBreedsForSection(s),
+                onPressed: (_saving || _isReadOnly) ? null : () => _pickBreedsForSection(s),
                 icon: const Icon(Icons.pets),
                 label: Text(
                   s.breedScope == 'single' ? 'Choose Breed' : 'Choose Breeds',
@@ -592,7 +615,7 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
                 const SizedBox(width: 8),
                 TextButton(
                   onPressed:
-                      _saving ? null : () => setState(() => s.allowedBreedIds = []),
+                      (_saving || _isReadOnly) ? null : () => setState(() => s.allowedBreedIds = []),
                   child: const Text('Clear'),
                 ),
               ],
@@ -636,19 +659,19 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
                 ),
                 IconButton(
                   tooltip: 'Move up',
-                  onPressed: _saving || index == 0 ? null : () => _moveUp(index),
+                  onPressed: (_saving || _isReadOnly || index == 0) ? null : () => _moveUp(index),
                   icon: const Icon(Icons.arrow_upward),
                 ),
                 IconButton(
                   tooltip: 'Move down',
-                  onPressed: _saving || index == _sections.length - 1
+                  onPressed: (_saving || _isReadOnly || index == _sections.length - 1)
                       ? null
                       : () => _moveDown(index),
                   icon: const Icon(Icons.arrow_downward),
                 ),
                 IconButton(
                   tooltip: 'Delete',
-                  onPressed: _saving ? null : () => _removeSection(index),
+                  onPressed: (_saving || _isReadOnly) ? null : () => _removeSection(index),
                   icon: const Icon(Icons.delete_outline),
                 ),
               ],
@@ -672,7 +695,7 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
                 Expanded(
                   child: TextField(
                     controller: s.displayNameCtrl,
-                    enabled: !_saving,
+                    enabled: !_saving && !_isReadOnly,
                     decoration: const InputDecoration(
                       labelText: 'Display Name',
                       hintText: 'Example: Open A or Sweepstakes Youth',
@@ -692,7 +715,7 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
               dense: true,
               contentPadding: EdgeInsets.zero,
               value: s.allowMeatClasses,
-              onChanged: _saving
+              onChanged: (_saving || _isReadOnly)
                   ? null
                   : (v) {
                       setState(() {
@@ -708,7 +731,7 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
               dense: true,
               contentPadding: EdgeInsets.zero,
               value: s.isEnabled,
-              onChanged: _saving
+              onChanged: (_saving || _isReadOnly)
                   ? null
                   : (v) {
                       setState(() {
@@ -824,12 +847,12 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
                           runSpacing: 8,
                           children: [
                             FilledButton.icon(
-                              onPressed: _saving ? null : () => _addSection('open'),
+                              onPressed: (_saving || _isReadOnly) ? null : () => _addSection('open'),
                               icon: const Icon(Icons.add),
                               label: const Text('Add Open'),
                             ),
                             FilledButton.icon(
-                              onPressed: _saving ? null : () => _addSection('youth'),
+                              onPressed: (_saving || _isReadOnly) ? null : () => _addSection('youth'),
                               icon: const Icon(Icons.add),
                               label: const Text('Add Youth'),
                             ),
@@ -876,7 +899,7 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
                                   padding:
                                       const EdgeInsets.symmetric(vertical: 16),
                                 ),
-                                onPressed: _saving ? null : _saveAll,
+                                onPressed: (_saving || _isReadOnly) ? null : _saveAll,
                                 child: Text(_saving ? 'Saving…' : 'Save'),
                               ),
                             ),

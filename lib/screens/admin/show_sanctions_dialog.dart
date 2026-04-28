@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/show_lock_service.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -41,6 +42,10 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
   bool _loading = true;
   bool _saving = false;
   String? _msg;
+  bool _isLocked = false;
+  bool _isFinalized = false;
+
+  bool get _isReadOnly => _isLocked || _isFinalized;
 
   final List<_SectionColumn> _sections = [];
   final List<_SanctionRowModel> _rows = [];
@@ -74,6 +79,16 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
     });
 
     try {
+      final show = await supabase
+          .from('shows')
+          .select('is_locked,finalized_at')
+          .eq('id', widget.showId)
+          .single();
+
+      _isLocked = show['is_locked'] == true;
+      _isFinalized =
+          (show['finalized_at'] ?? '').toString().trim().isNotEmpty;
+
       await _loadSections();
       await _buildPrebuiltRows();
       await _loadSavedSanctions();
@@ -561,6 +576,8 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
     });
 
     try {
+      await ShowLockService.assertShowUnlocked(widget.showId);
+
       for (final row in _rows) {
         if (row.rowType == _SanctionRowType.groupHeader) continue;
 
@@ -762,7 +779,7 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                           final c = _controllerFor('__ARBA__', s.id);
                           return _inputCell(
                             controller: c,
-                            enabled: !_saving,
+                            enabled: !_saving && !_isReadOnly,
                             height: rowHeight,
                             hintText: '',
                           );
@@ -801,7 +818,7 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                             Checkbox(
                               value: useArba,
                               visualDensity: VisualDensity.compact,
-                              onChanged: _saving
+                              onChanged: (_saving || _isReadOnly)
                                   ? null
                                   : (v) {
                                       setState(() {
@@ -839,7 +856,7 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
 
                             return _inputCell(
                               controller: c,
-                              enabled: !_saving && !locked,
+                              enabled: !_saving && !_isReadOnly && !locked,
                               height: smallRowHeight,
                               hintText: '',
                             );
@@ -1072,7 +1089,7 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                                   padding:
                                       const EdgeInsets.symmetric(vertical: 16),
                                 ),
-                                onPressed: _saving ? null : _saveAll,
+                                onPressed: (_saving || _isReadOnly) ? null : _saveAll,
                                 child: Text(_saving ? 'Saving…' : 'Save'),
                               ),
                             ),

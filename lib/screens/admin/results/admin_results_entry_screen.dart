@@ -1514,12 +1514,6 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
   String? _msg;
   bool _savingJudge = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _entries = [...widget.entries];
-  }
-
   Map<String, List<Map<String, dynamic>>> _groupByGroupName() {
     final out = <String, List<Map<String, dynamic>>>{};
     for (final e in _entries) {
@@ -2027,6 +2021,8 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
         .toList();
       if (ids.isEmpty) return;
 
+      await ShowLockService.assertShowUnlocked(widget.showId);
+
       await supabase
           .from('entries')
           .update({
@@ -2324,10 +2320,10 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
   int _classRank(String v) {
     final x = v.toLowerCase();
     if (x == 'pre-junior' || x == 'pre junior' || x == 'prejunior') return 0;
-    if (x == 'junior') return 0;
-    if (x == 'intermediate') return 1;
-    if (x == 'senior') return 2;
-    if (x == 'open') return 3;
+    if (x == 'junior') return 1;
+    if (x == 'intermediate') return 2;
+    if (x == 'senior') return 3;
+    if (x == 'open') return 4;
     return 99;
   }
 
@@ -2507,6 +2503,8 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
         .where((x) => x.isNotEmpty)
         .toList();
       if (ids.isEmpty) return;
+
+      await ShowLockService.assertShowUnlocked(widget.showId);
 
       await supabase
           .from('entries')
@@ -3722,10 +3720,6 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
 
   bool _placedFirst(Map<String, dynamic> e) {
     return _effectivePlacementFor(e) == '1';
-  }
-
-  bool _hasAnyAward(Set<String> selected, List<String> codes) {
-    return codes.any(selected.contains);
   }
 
   List<String> _pairedAwardsFor(String award) {

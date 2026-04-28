@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/show_lock_service.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -36,6 +37,10 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
   bool _loading = true;
   bool _saving = false;
   String? _msg;
+  bool _isLocked = false;
+  bool _isFinalized = false;
+
+  bool get _isReadOnly => _isLocked || _isFinalized;
 
   bool requireTattoo = true;
   bool requireSex = true;
@@ -94,12 +99,14 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
 
       final showData = await supabase
           .from('shows')
-          .select('final_award_mode')
+          .select('final_award_mode,is_locked,finalized_at')
           .eq('id', widget.showId)
           .single();
 
       _finalAwardMode =
           (showData['final_award_mode'] ?? 'four_six_bis').toString();
+      _isLocked = showData['is_locked'] == true;
+      _isFinalized = (showData['finalized_at'] ?? '').toString().trim().isNotEmpty;
 
       if (rulesData == null) {
         _maxEntriesPerExhibitor.text = '';
@@ -179,6 +186,7 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
     final maxPerAnimal = int.parse(_maxEntriesPerAnimal.text.trim());
 
     try {
+      await ShowLockService.assertShowUnlocked(widget.showId);
       await supabase.from('show_rule_settings').upsert({
         'show_id': widget.showId,
         'require_tattoo': requireTattoo,
@@ -350,7 +358,7 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
                                             contentPadding: EdgeInsets.zero,
                                             title: const Text('Tattoo / ID required'),
                                             value: requireTattoo,
-                                            onChanged: _saving
+                                            onChanged: (_saving || _isReadOnly)
                                                 ? null
                                                 : (v) => setState(() => requireTattoo = v),
                                           ),
@@ -358,7 +366,7 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
                                             contentPadding: EdgeInsets.zero,
                                             title: const Text('Sex required'),
                                             value: requireSex,
-                                            onChanged: _saving
+                                            onChanged: (_saving || _isReadOnly)
                                                 ? null
                                                 : (v) => setState(() => requireSex = v),
                                           ),
@@ -366,7 +374,7 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
                                             contentPadding: EdgeInsets.zero,
                                             title: const Text('Birth date required'),
                                             value: requireBirthDate,
-                                            onChanged: _saving
+                                            onChanged: (_saving || _isReadOnly)
                                                 ? null
                                                 : (v) => setState(() => requireBirthDate = v),
                                           ),
@@ -374,7 +382,7 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
                                             contentPadding: EdgeInsets.zero,
                                             title: const Text('Breed required'),
                                             value: requireBreed,
-                                            onChanged: _saving
+                                            onChanged: (_saving || _isReadOnly)
                                                 ? null
                                                 : (v) => setState(() => requireBreed = v),
                                           ),
@@ -382,7 +390,7 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
                                             contentPadding: EdgeInsets.zero,
                                             title: const Text('Variety required'),
                                             value: requireVariety,
-                                            onChanged: _saving
+                                            onChanged: (_saving || _isReadOnly)
                                                 ? null
                                                 : (v) => setState(() => requireVariety = v),
                                           ),
@@ -393,7 +401,7 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
                                               'Default is OFF so animal name stays optional.',
                                             ),
                                             value: requireName,
-                                            onChanged: _saving
+                                            onChanged: (_saving || _isReadOnly)
                                                 ? null
                                                 : (v) => setState(() => requireName = v),
                                           ),
@@ -405,7 +413,7 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
                                         children: [
                                           TextField(
                                             controller: _maxEntriesPerExhibitor,
-                                            enabled: !_saving,
+                                            enabled: !_saving && !_isReadOnly,
                                             keyboardType: TextInputType.number,
                                             decoration: const InputDecoration(
                                               labelText:
@@ -417,7 +425,7 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
                                           const SizedBox(height: 12),
                                           TextField(
                                             controller: _maxEntriesPerAnimal,
-                                            enabled: !_saving,
+                                            enabled: !_saving && !_isReadOnly,
                                             keyboardType: TextInputType.number,
                                             decoration: const InputDecoration(
                                               labelText: 'Max entries per animal',
@@ -453,7 +461,7 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
                                                 ),
                                               ),
                                             ],
-                                            onChanged: _saving
+                                            onChanged: (_saving || _isReadOnly)
                                                 ? null
                                                 : (v) {
                                                     setState(() {
@@ -484,7 +492,7 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
                                               'Block entries outside entry window',
                                             ),
                                             value: blockOutsideWindow,
-                                            onChanged: _saving
+                                            onChanged: (_saving || _isReadOnly)
                                                 ? null
                                                 : (v) => setState(
                                                     () => blockOutsideWindow = v,
@@ -496,7 +504,7 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
                                               'Block entries when show is unpublished',
                                             ),
                                             value: blockUnpublished,
-                                            onChanged: _saving
+                                            onChanged: (_saving || _isReadOnly)
                                                 ? null
                                                 : (v) => setState(
                                                     () => blockUnpublished = v,
@@ -527,7 +535,7 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
                                           vertical: 16,
                                         ),
                                       ),
-                                      onPressed: _saving ? null : _save,
+                                      onPressed: (_saving || _isReadOnly) ? null : _save,
                                       child: Text(_saving ? 'Saving…' : 'Save'),
                                     ),
                                   ),

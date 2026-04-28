@@ -51,6 +51,10 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   DateTime? _entryCloseAt;
 
   bool _published = false;
+  bool _isLocked = false;
+  bool _isFinalized = false;
+
+  bool get _isReadOnly => _isLocked || _isFinalized;
 
   String _timezone = 'America/Indiana/Indianapolis';
   String _showNameForTitle = 'Show';
@@ -144,6 +148,62 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
       case 'four_six_bis':
       default:
         return 'Best 4-Class / Best 6-Class / Best in Show';
+    }
+  }
+
+  Future<void> _toggleShowLock() async {
+    if (_isFinalized) return;
+
+    final nextLocked = !_isLocked;
+
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: Text(nextLocked ? 'Lock Show?' : 'Unlock Show?'),
+            content: Text(
+              nextLocked
+                  ? 'This will prevent setup changes like sections, fees, judges, sanctions, rules, and show details. You can unlock it later.'
+                  : 'This will allow setup changes again. Only unlock if corrections are needed.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: Text(nextLocked ? 'Lock Show' : 'Unlock Show'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (!confirmed) return;
+
+    setState(() {
+      _saving = true;
+      _msg = null;
+    });
+
+    try {
+      await supabase.from('shows').update({
+        'is_locked': nextLocked,
+        'locked_at': nextLocked ? DateTime.now().toUtc().toIso8601String() : null,
+      }).eq('id', widget.showId);
+
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _isLocked = nextLocked;
+        _msg = nextLocked ? 'Show locked.' : 'Show unlocked.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _msg = 'Failed to update lock status: $e';
+      });
     }
   }
 
@@ -425,7 +485,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
       final show = await supabase
           .from('shows')
           .select(
-            'id,name,location_name,start_date,end_date,timezone,is_published,entry_open_at,entry_close_at,final_award_mode,club_id,club_name',
+            'id,name,location_name,start_date,end_date,timezone,is_published,entry_open_at,entry_close_at,final_award_mode,club_id,club_name,is_locked,locked_at,finalized_at',
           )
           .eq('id', widget.showId)
           .single();
@@ -440,6 +500,10 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
 
       _timezone = (show['timezone'] ?? _timezone).toString();
       _published = show['is_published'] == true;
+      _isLocked = show['is_locked'] == true;
+
+      final finalizedAt = (show['finalized_at'] ?? '').toString().trim();
+      _isFinalized = finalizedAt.isNotEmpty;
 
       _entryOpenAt = _parseTs(show['entry_open_at']?.toString());
       _entryCloseAt = _parseTs(show['entry_close_at']?.toString());
@@ -777,6 +841,71 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
     );
   }
 
+  Widget _statusBadge({
+    required String text,
+    required IconData icon,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(.10),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withOpacity(.30)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusBanner() {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.black.withOpacity(.05)),
+      ),
+      child: Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        children: [
+          _statusBadge(
+            text: _published ? 'Published' : 'Draft',
+            icon: _published ? Icons.public : Icons.edit_note,
+            color: _published ? Colors.green : Colors.grey,
+          ),
+          if (_isFinalized)
+            _statusBadge(
+              text: 'Finalized',
+              icon: Icons.verified,
+              color: Colors.green,
+            )
+          else if (_isLocked)
+            _statusBadge(
+              text: 'Locked',
+              icon: Icons.lock,
+              color: Colors.orange,
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -853,18 +982,23 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         const RMTimezoneNoticeBanner(),
+                        _buildStatusBanner(),
                         if (_msg != null)
                           Container(
                             width: double.infinity,
                             margin: const EdgeInsets.only(bottom: 16),
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: (_msg == 'Saved.')
+                              color: (_msg == 'Saved.' ||
+                                      _msg == 'Show locked.' ||
+                                      _msg == 'Show unlocked.')
                                   ? Colors.green.withOpacity(.08)
                                   : Colors.red.withOpacity(.08),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                color: (_msg == 'Saved.')
+                                color: (_msg == 'Saved.' ||
+                                        _msg == 'Show locked.' ||
+                                        _msg == 'Show unlocked.')
                                     ? Colors.green.withOpacity(.25)
                                     : Colors.red.withOpacity(.25),
                               ),
@@ -872,7 +1006,9 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                             child: Text(
                               _msg!,
                               style: TextStyle(
-                                color: (_msg == 'Saved.')
+                                color: (_msg == 'Saved.' ||
+                                        _msg == 'Show locked.' ||
+                                        _msg == 'Show unlocked.')
                                     ? Colors.green
                                     : Colors.red,
                                 fontWeight: FontWeight.w600,
@@ -885,7 +1021,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                           children: [
                             TextField(
                               controller: _name,
-                              enabled: !_saving,
+                              enabled: !_saving && !_isReadOnly,
                               decoration: const InputDecoration(
                                 labelText: 'Show name (required)',
                                 border: OutlineInputBorder(),
@@ -894,7 +1030,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                             const SizedBox(height: 12),
                             TextField(
                               controller: _location,
-                              enabled: !_saving,
+                              enabled: !_saving && !_isReadOnly,
                               decoration: const InputDecoration(
                                 labelText: 'Location (required)',
                                 border: OutlineInputBorder(),
@@ -945,7 +1081,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                   ),
                                 ),
                             ],
-                            onChanged: (_saving || _loadingClubs || !_canManageHostingClubs)
+                            onChanged: (_saving || _isReadOnly || _loadingClubs || !_canManageHostingClubs)
                                 ? null
                                 : (value) async {
                                     if (value == null) return;
@@ -986,7 +1122,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                   ),
                                 ),
                                 TextButton(
-                                  onPressed: _saving ? null : _pickStartDate,
+                                  onPressed: (_saving || _isReadOnly) ? null : _pickStartDate,
                                   child: const Text('Pick'),
                                 ),
                               ],
@@ -999,7 +1135,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                   ),
                                 ),
                                 TextButton(
-                                  onPressed: _saving ? null : _pickEndDate,
+                                  onPressed: (_saving || _isReadOnly) ? null : _pickEndDate,
                                   child: const Text('Pick'),
                                 ),
                               ],
@@ -1020,15 +1156,11 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                   ),
                                 ),
                                 TextButton(
-                                  onPressed: _saving ? null : _pickEntryOpenAt,
+                                  onPressed: (_saving || _isReadOnly) ? null : _pickEntryOpenAt,
                                   child: const Text('Pick'),
                                 ),
                                 TextButton(
-                                  onPressed:
-                                      _saving
-                                          ? null
-                                          : () =>
-                                              setState(() => _entryOpenAt = null),
+                                  onPressed: (_saving || _isReadOnly) ? null : () => setState(() => _entryOpenAt = null),
                                   child: const Text('Clear'),
                                 ),
                               ],
@@ -1041,17 +1173,11 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                   ),
                                 ),
                                 TextButton(
-                                  onPressed:
-                                      _saving ? null : _pickEntryCloseAt,
+                                  onPressed: (_saving || _isReadOnly) ? null : _pickEntryCloseAt,
                                   child: const Text('Pick'),
                                 ),
                                 TextButton(
-                                  onPressed:
-                                      _saving
-                                          ? null
-                                          : () => setState(
-                                            () => _entryCloseAt = null,
-                                          ),
+                                  onPressed: (_saving || _isReadOnly) ? null : () => setState(() => _entryCloseAt = null),
                                   child: const Text('Clear'),
                                 ),
                               ],
@@ -1074,7 +1200,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                 'Controls whether this show is published.',
                               ),
                               value: _published,
-                              onChanged: _saving
+                              onChanged: (_saving || _isReadOnly)
                                   ? null
                                   : (v) async {
                                       final previous = _published;
@@ -1132,7 +1258,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                 ),
                               ],
                               onChanged:
-                                  _saving
+                                  (_saving || _isReadOnly)
                                       ? null
                                       : (v) => setState(
                                         () =>
@@ -1178,20 +1304,20 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                               title: 'Entry Management',
                               subtitle:
                                   'Search, edit, scratch, move class, add notes',
-                              onTap: _saving ? null : _openEntryManagement,
+                              onTap: (_saving || _isReadOnly) ? null : _openEntryManagement,
                             ),
                             _buildSettingsActionTile(
                               icon: Icons.bar_chart,
                               title: 'Breed Counts',
                               subtitle: 'Totals by breed/show',
-                              onTap: _saving ? null : _openShowReports,
+                              onTap: (_saving || _isReadOnly) ? null : _openShowReports,
                             ),
                             _buildSettingsActionTile(
                               icon: Icons.print,
                               title: 'Print Packs',
                               subtitle:
                                   'Check-In Sheets, Control Sheets, Coop Tags, Comment Cards',
-                              onTap: _saving ? null : _openPrintPacks,
+                              onTap: (_saving || _isReadOnly) ? null : _openPrintPacks,
                             ),
                           ],
                         ),
@@ -1204,21 +1330,21 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                               title: 'Results Entry',
                               subtitle:
                                   'Enter placements, DQs, and specials by class',
-                              onTap: _saving ? null : _openResultsEntry,
+                              onTap: (_saving || _isReadOnly) ? null : _openResultsEntry,
                             ),
 //                            _buildSettingsActionTile(
 //                              icon: Icons.verified,
 //                              title: 'Results Validation',
 //                              subtitle:
 //                                  'Check for missing or inconsistent results before publishing',
-//                              onTap: _saving ? null : _openResultsValidation,
+//                              onTap: (_saving || _isReadOnly) ? null : _openResultsValidation,
 //                            ),
 //                            _buildSettingsActionTile(
 //                              icon: Icons.public,
 //                              title: 'Publish Results',
 //                              subtitle:
 //                                  'Future: make finalized results visible to exhibitors and the public',
-//                              onTap: _saving ? null : _openPublishResultsFuture,
+//                              onTap: (_saving || _isReadOnly) ? null : _openPublishResultsFuture,
 //                            ),
 //                            _buildSettingsActionTile(
 //                              icon: Icons.request_quote,
@@ -1235,6 +1361,16 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                   'Finalize, send reports, and lock/download copy',
                               onTap: _saving ? null : _openShowCloseout,
                             ),
+                            _buildSettingsActionTile(
+                              icon: _isLocked ? Icons.lock_open : Icons.lock,
+                              title: _isLocked ? 'Unlock Show' : 'Lock Show',
+                              subtitle: _isFinalized
+                                  ? 'Finalized shows cannot be unlocked.'
+                                  : _isLocked
+                                      ? 'Allow setup changes again if corrections are needed'
+                                      : 'Prevent further setup changes before closeout',
+                              onTap: (_saving || _isFinalized) ? null : _toggleShowLock,
+                            ),
                           ],
                         ),
 
@@ -1246,7 +1382,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                               title: 'Breed Settings',
                               subtitle:
                                   'Manage allowed breeds and varieties for this show',
-                              onTap: _saving ? null : _openBreedSettings,
+                              onTap: (_saving || _isReadOnly) ? null : _openBreedSettings,
                             ),
                             _buildSettingsActionTile(
                               icon: Icons.view_module,
@@ -1254,7 +1390,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                               subtitle:
                                   'Open A/B, Youth A/B, and setup',
                               onTap:
-                                  _saving
+                                  (_saving || _isReadOnly)
                                       ? null
                                       : () async {
                                         await ShowSectionsDialog.open(
@@ -1272,21 +1408,21 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                               title: 'Sanction Numbers',
                               subtitle:
                                   'Add or edit ARBA and breed/club sanction numbers',
-                              onTap: _saving ? null : _openSanctions,
+                              onTap: (_saving || _isReadOnly) ? null : _openSanctions,
                             ),
                             _buildSettingsActionTile(
                               icon: Icons.attach_money,
                               title: 'Show Fees & Payments',
                               subtitle:
                                   'Per-animal fees, discounts, day-of-show, and online payment setup',
-                              onTap: _saving ? null : _openFees,
+                              onTap: (_saving || _isReadOnly) ? null : _openFees,
                             ),
                             _buildSettingsActionTile(
                               icon: Icons.rule,
                               title: 'Show Rules',
                               subtitle:
                                   'Validations like tattoo required, limits, and required fields',
-                              onTap: _saving ? null : _openRules,
+                              onTap: (_saving || _isReadOnly) ? null : _openRules,
                             ),
                           ],
                         ),
@@ -1298,7 +1434,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                             backgroundColor: const Color(0xFFD4A623),
                             padding: const EdgeInsets.symmetric(vertical: 16),
                           ),
-                          onPressed: _saving ? null : _save,
+                          onPressed: (_saving || _isReadOnly) ? null : _save,
                           child: Text(_saving ? 'Saving…' : 'Save Changes'),
                         ),
                       ],

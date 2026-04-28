@@ -1,7 +1,10 @@
 // lib/screens/admin/show_judges_dialog.dart
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/show_lock_service.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -52,6 +55,10 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
   bool _loading = true;
   bool _saving = false;
   String? _msg;
+  bool _isLocked = false;
+  bool _isFinalized = false;
+
+  bool get _isReadOnly => _isLocked || _isFinalized;
 
   final TextEditingController _search = TextEditingController();
 
@@ -66,13 +73,14 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
   @override
   void initState() {
     super.initState();
-    _search.addListener(_runSearch);
+    _search.addListener(() {
+      unawaited(_runSearch());
+    });
     _loadAll();
   }
 
   @override
   void dispose() {
-    _search.removeListener(_runSearch);
     _search.dispose();
     super.dispose();
   }
@@ -84,6 +92,14 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
     });
 
     try {
+      final show = await supabase
+          .from('shows')
+          .select('is_locked,finalized_at')
+          .eq('id', widget.showId)
+          .single();
+
+      _isLocked = show['is_locked'] == true;
+      _isFinalized = (show['finalized_at'] ?? '').toString().trim().isNotEmpty;
       await Future.wait([
         _loadAssigned(),
         _loadActiveJudges(),
@@ -296,6 +312,7 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
     });
 
     try {
+      await ShowLockService.assertShowUnlocked(widget.showId);
       await supabase.from('judge_assignments').insert({
         'show_id': widget.showId,
         'judge_id': judgeId,
@@ -354,6 +371,7 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
     });
 
     try {
+      await ShowLockService.assertShowUnlocked(widget.showId);
       await supabase.from('judge_assignments').delete().eq('id', assignmentId);
 
       await _loadAssigned();
@@ -667,7 +685,7 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
                                                   icon: const Icon(
                                                     Icons.remove_circle_outline,
                                                   ),
-                                                  onPressed: _saving
+                                                  onPressed: (_saving || _isReadOnly)
                                                       ? null
                                                       : () => _removeAssignment(
                                                             assignment,
@@ -718,7 +736,7 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
                                                   icon: const Icon(
                                                     Icons.add_circle_outline,
                                                   ),
-                                                  onPressed: _saving
+                                                  onPressed: (_saving || _isReadOnly)
                                                       ? null
                                                       : () => _assignJudge(
                                                             judge,

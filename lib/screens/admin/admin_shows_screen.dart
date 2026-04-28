@@ -70,7 +70,8 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
     final isSuperAdmin = superAdminRes != null;
 
     final query = supabase.from('shows').select(
-          'id,name,start_date,end_date,location_name,is_published,entry_open_at,entry_close_at,created_at',
+          'id,name,start_date,end_date,location_name,is_published,entry_open_at,entry_close_at,created_at,'
+          'is_locked,locked_at,finalized_at',
         );
 
     final res = isSuperAdmin
@@ -469,6 +470,9 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
                                   final loc =
                                       (s['location_name'] ?? '').toString();
                                   final published = s['is_published'] == true;
+                                  final isLocked = s['is_locked'] == true;
+                                  final finalizedAt = (s['finalized_at'] ?? '').toString();
+                                  final isFinalized = finalizedAt.isNotEmpty;
 
                                   final openAt =
                                       _fmtTs(s['entry_open_at']?.toString());
@@ -501,14 +505,28 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
                                                       ),
                                                 ),
                                               ),
-                                              RMBadge(
-                                                text: published
-                                                    ? 'Published'
-                                                    : 'Draft',
-                                                icon: published
-                                                    ? Icons.public
-                                                    : Icons.edit_note,
-                                                success: published,
+                                              Wrap(
+                                                spacing: 8,
+                                                runSpacing: 8,
+                                                alignment: WrapAlignment.end,
+                                                children: [
+                                                  RMBadge(
+                                                    text: published ? 'Published' : 'Draft',
+                                                    icon: published ? Icons.public : Icons.edit_note,
+                                                    success: published,
+                                                  ),
+                                                  if (isFinalized)
+                                                    const RMBadge(
+                                                      text: 'Finalized',
+                                                      icon: Icons.verified,
+                                                      success: true,
+                                                    )
+                                                  else if (isLocked)
+                                                    const RMBadge(
+                                                      text: 'Locked',
+                                                      icon: Icons.lock,
+                                                    ),
+                                                ],
                                               ),
                                             ],
                                           ),

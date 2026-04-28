@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
+import 'package:ringmaster_show/services/show_lock_service.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -49,6 +50,10 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
   List<Map<String, dynamic>> _breeds = [];
 
   bool _loading = true;
+  bool _isLocked = false;
+  bool _isFinalized = false;
+
+  bool get _isReadOnly => _isLocked || _isFinalized;
 
   final List<Map<String, dynamic>> _commercialDefaults = const [
     {
@@ -90,12 +95,15 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
   Future<void> _loadShowLock() async {
     final show = await supabase
         .from('shows')
-        .select('is_single_breed_show,single_breed_id')
+        .select('is_single_breed_show,single_breed_id,is_locked,finalized_at')
         .eq('id', widget.showId)
         .single();
 
     _isSingleBreedShow = show['is_single_breed_show'] == true;
     _singleBreedId = show['single_breed_id']?.toString();
+
+    _isLocked = show['is_locked'] == true;
+    _isFinalized = (show['finalized_at'] ?? '').toString().trim().isNotEmpty;
   }
 
   Future<void> _ensureSingleBreedEnabledRow() async {
@@ -108,6 +116,8 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
     if (existing != null && existing['is_enabled'] == true) return;
 
     try {
+      await ShowLockService.assertShowUnlocked(widget.showId);
+
       if (existing == null) {
         await supabase.from('show_breeds').insert({
           'show_id': widget.showId,
@@ -267,6 +277,7 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
     }
 
     try {
+      await ShowLockService.assertShowUnlocked(widget.showId);
       final existing = _showBreedByBreedId[breedId];
       if (existing == null) {
         await supabase.from('show_breeds').insert({
@@ -374,6 +385,7 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
 
   Future<void> _setClassOverride(String breedId, String value) async {
     try {
+      await ShowLockService.assertShowUnlocked(widget.showId);
       final dynamic newOverride = (value == 'inherit') ? null : value;
 
       final existing = _showBreedByBreedId[breedId];
@@ -437,6 +449,7 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
     }).toList();
 
     try {
+      await ShowLockService.assertShowUnlocked(widget.showId);
       await supabase.from('show_varieties').insert(payload);
     } catch (_) {
       for (final row in payload) {
@@ -474,6 +487,7 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
     required bool enabled,
   }) async {
     try {
+      await ShowLockService.assertShowUnlocked(widget.showId);
       await _ensureVarietyOverridesInitialized(breedId);
 
       await supabase
@@ -528,6 +542,7 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
     if (name.isEmpty) return;
 
     try {
+      await ShowLockService.assertShowUnlocked(widget.showId);
       await _ensureVarietyOverridesInitialized(breedId);
 
       await supabase.from('show_varieties').insert({
@@ -582,6 +597,7 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
     required bool enabled,
   }) async {
     try {
+      await ShowLockService.assertShowUnlocked(widget.showId);
       await supabase.from('show_commercial_classes').upsert({
         'show_id': widget.showId,
         'class_code': classCode,
@@ -669,7 +685,7 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
                         : 'Commercial single-rabbit class',
                   ),
                   value: enabled,
-                  onChanged: _loading
+                  onChanged: (_loading || _isReadOnly)
                       ? null
                       : (v) => _setCommercialEnabled(
                             classCode: code,
@@ -767,10 +783,12 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
                       prefixIcon: Icon(Icons.search),
                       border: OutlineInputBorder(),
                     ),
-                    onChanged: (v) {
-                      setState(() => _search = v);
-                      _refresh();
-                    },
+                    onChanged: _isSingleBreedShow || _loading
+                        ? null
+                        : (v) {
+                            setState(() => _search = v);
+                            _refresh();
+                          },
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -826,7 +844,7 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
                       : 'Turns all currently visible breeds on or off for this show.',
                 ),
                 value: _areAllVisibleBreedsEnabled,
-                onChanged: _loading ? null : (v) => _setAllBreedsEnabled(v),
+                onChanged: (_loading || _isReadOnly) ? null : (v) => _setAllBreedsEnabled(v),
               ),
             ),
 
@@ -918,7 +936,7 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
                                       ),
                                       Switch(
                                         value: enabled,
-                                        onChanged: lockedBreed
+                                        onChanged: (lockedBreed || _isReadOnly)
                                             ? null
                                             : (v) => _setBreedEnabled(
                                                   breedId,
@@ -971,7 +989,7 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
                                                   child: Text('6-class'),
                                                 ),
                                               ],
-                                              onChanged: (v) {
+                                              onChanged: _isReadOnly ? null : (v) {
                                                 final nv = v ?? 'inherit';
                                                 _setClassOverride(breedId, nv);
                                                 setState(() {});
@@ -1009,7 +1027,7 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
                                                   tooltip:
                                                       'Add show-only variety',
                                                   icon: const Icon(Icons.add),
-                                                  onPressed: enabled
+                                                  onPressed: (enabled && !_isReadOnly)
                                                       ? () async {
                                                           await _addCustomVariety(
                                                             breedId: breedId,
@@ -1077,7 +1095,7 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
                                                               )
                                                             : null),
                                                     value: vEnabled,
-                                                    onChanged: !enabled
+                                                    onChanged: (!enabled || _isReadOnly)
                                                         ? null
                                                         : (val) async {
                                                             await _setGlobalVarietyEnabled(
@@ -1136,10 +1154,12 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
                                                           'Custom (show-only)',
                                                         ),
                                                   value: cEnabled,
-                                                  onChanged: !enabled
+                                                  onChanged: (!enabled || _isReadOnly)
                                                       ? null
                                                       : (val) async {
                                                           try {
+                                                            await ShowLockService.assertShowUnlocked(widget.showId);
+
                                                             await supabase
                                                                 .from(
                                                                   'show_varieties',

@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/show_lock_service.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -41,6 +42,10 @@ class _ShowPaymentSettingsDialogState
   bool _loading = true;
   bool _saving = false;
   String? _msg;
+  bool _isLocked = false;
+  bool _isFinalized = false;
+
+  bool get _isReadOnly => _isLocked || _isFinalized;
 
   String _paymentMode =
       'pay_day_of_show'; // pay_day_of_show|stripe|square|hybrid
@@ -77,6 +82,14 @@ class _ShowPaymentSettingsDialogState
     });
 
     try {
+      final show = await supabase
+          .from('shows')
+          .select('is_locked,finalized_at')
+          .eq('id', widget.showId)
+          .single();
+
+      _isLocked = show['is_locked'] == true;
+      _isFinalized = (show['finalized_at'] ?? '').toString().trim().isNotEmpty;
       final data = await supabase
           .from('show_payment_settings')
           .select(
@@ -147,6 +160,7 @@ class _ShowPaymentSettingsDialogState
     });
 
     try {
+      await ShowLockService.assertShowUnlocked(widget.showId);
       await supabase.from('show_payment_settings').upsert({
         'show_id': widget.showId,
         'payment_mode': _paymentMode,
@@ -343,7 +357,7 @@ class _ShowPaymentSettingsDialogState
                                                 ),
                                               ),
                                             ],
-                                            onChanged: _saving
+                                            onChanged: (_saving || _isReadOnly)
                                                 ? null
                                                 : (v) => setState(
                                                       () => _paymentMode =
@@ -361,7 +375,7 @@ class _ShowPaymentSettingsDialogState
                                               'Keep OFF for MVP until live payment flow is fully built.',
                                             ),
                                             value: _requirePaymentToSubmit,
-                                            onChanged: _saving
+                                            onChanged: (_saving || _isReadOnly)
                                                 ? null
                                                 : (v) => setState(
                                                       () => _requirePaymentToSubmit =
@@ -372,7 +386,7 @@ class _ShowPaymentSettingsDialogState
                                             contentPadding: EdgeInsets.zero,
                                             title: const Text('Allow refunds'),
                                             value: _allowRefunds,
-                                            onChanged: _saving
+                                            onChanged: (_saving || _isReadOnly)
                                                 ? null
                                                 : (v) => setState(
                                                       () => _allowRefunds = v,
@@ -390,7 +404,7 @@ class _ShowPaymentSettingsDialogState
                                               contentPadding: EdgeInsets.zero,
                                               title: const Text('Enable Stripe'),
                                               value: _stripeEnabled,
-                                              onChanged: _saving
+                                              onChanged: (_saving || _isReadOnly)
                                                   ? null
                                                   : (v) => setState(
                                                         () => _stripeEnabled =
@@ -400,8 +414,7 @@ class _ShowPaymentSettingsDialogState
                                             const SizedBox(height: 8),
                                             TextField(
                                               controller: _stripePublishableKey,
-                                              enabled:
-                                                  !_saving && _stripeEnabled,
+                                              enabled: !_saving && !_isReadOnly && _stripeEnabled,
                                               decoration: const InputDecoration(
                                                 labelText:
                                                     'Stripe publishable key',
@@ -411,8 +424,7 @@ class _ShowPaymentSettingsDialogState
                                             const SizedBox(height: 12),
                                             TextField(
                                               controller: _stripeAccountId,
-                                              enabled:
-                                                  !_saving && _stripeEnabled,
+                                              enabled: !_saving && !_isReadOnly && _stripeEnabled,
                                               decoration: const InputDecoration(
                                                 labelText:
                                                     'Stripe account id (optional)',
@@ -431,7 +443,7 @@ class _ShowPaymentSettingsDialogState
                                               contentPadding: EdgeInsets.zero,
                                               title: const Text('Enable Square'),
                                               value: _squareEnabled,
-                                              onChanged: _saving
+                                              onChanged: (_saving || _isReadOnly)
                                                   ? null
                                                   : (v) => setState(
                                                         () => _squareEnabled =
@@ -441,8 +453,7 @@ class _ShowPaymentSettingsDialogState
                                             const SizedBox(height: 8),
                                             TextField(
                                               controller: _squareAppId,
-                                              enabled:
-                                                  !_saving && _squareEnabled,
+                                              enabled: !_saving && !_isReadOnly && _squareEnabled,
                                               decoration: const InputDecoration(
                                                 labelText:
                                                     'Square application id',
@@ -452,8 +463,7 @@ class _ShowPaymentSettingsDialogState
                                             const SizedBox(height: 12),
                                             TextField(
                                               controller: _squareLocationId,
-                                              enabled:
-                                                  !_saving && _squareEnabled,
+                                              enabled: !_saving && !_isReadOnly && _squareEnabled,
                                               decoration: const InputDecoration(
                                                 labelText:
                                                     'Square location id (optional)',
@@ -485,7 +495,7 @@ class _ShowPaymentSettingsDialogState
                                           vertical: 16,
                                         ),
                                       ),
-                                      onPressed: _saving ? null : _save,
+                                      onPressed: (_saving || _isReadOnly) ? null : _save,
                                       child: Text(_saving ? 'Saving…' : 'Save'),
                                     ),
                                   ),

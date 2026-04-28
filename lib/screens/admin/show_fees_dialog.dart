@@ -3,6 +3,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:ringmaster_show/services/show_lock_service.dart';
 
 import '../../services/stripe_connect_service.dart';
 
@@ -53,6 +54,11 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
 
   List<Map<String, dynamic>> _sections = [];
   Map<String, dynamic>? _stripeStatus;
+
+  bool _isLocked = false;
+  bool _isFinalized = false;
+
+  bool get _isReadOnly => _isLocked || _isFinalized;
 
   @override
   void initState() {
@@ -105,6 +111,15 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
     });
 
     try {
+      final show = await StripeConnectService.supabase
+          .from('shows')
+          .select('is_locked,finalized_at')
+          .eq('id', widget.showId)
+          .single();
+
+      _isLocked = show['is_locked'] == true;
+      _isFinalized = (show['finalized_at'] ?? '').toString().trim().isNotEmpty;
+
       final feeRow = await StripeConnectService.supabase
           .from('show_fee_settings')
           .select(
@@ -353,6 +368,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
     });
 
     try {
+      await ShowLockService.assertShowUnlocked(widget.showId);
       await StripeConnectService.supabase.from('show_fee_settings').upsert({
         'show_id': widget.showId,
         'multi_show_discount_enabled': _discountEnabled,
@@ -456,6 +472,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
   }) {
     return TextField(
       controller: controller,
+      enabled: !_saving && !_isReadOnly,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       textInputAction: TextInputAction.next,
       decoration: InputDecoration(
@@ -649,7 +666,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
             'Applies a discount when an exhibitor enters multiple show sections.',
           ),
           value: _discountEnabled,
-          onChanged: _saving
+          onChanged: (_saving || _isReadOnly)
               ? null
               : (v) => setState(() => _discountEnabled = v),
         ),
@@ -671,7 +688,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
                     child: Text('Percent (% off)'),
                   ),
                 ],
-                onChanged: _saving
+                onChanged: (_saving || _isReadOnly)
                     ? null
                     : (v) => setState(() => _discountType = v ?? 'amount'),
                 decoration: const InputDecoration(
@@ -682,6 +699,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
 
               final valueField = TextField(
                 controller: _discountValue,
+                enabled: !_saving && !_isReadOnly,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
                 decoration: InputDecoration(
@@ -846,7 +864,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
                             ? 'Continue Stripe Setup'
                             : 'Open Stripe Dashboard',
               ),
-              onPressed: (_saving || _connectingStripe || _loadingStripeStatus)
+              onPressed: (_saving || _isReadOnly || _connectingStripe || _loadingStripeStatus)
                   ? null
                   : () async {
                       if (!connected || needsSetup) {
@@ -860,7 +878,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
             final refresh = OutlinedButton.icon(
               icon: const Icon(Icons.refresh),
               label: const Text('Refresh Status'),
-              onPressed: (_saving || _connectingStripe || _loadingStripeStatus)
+              onPressed: (_saving || _isReadOnly || _connectingStripe || _loadingStripeStatus)
                   ? null
                   : _refreshStripeStatus,
             );
@@ -1015,7 +1033,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
                                         vertical: 16,
                                       ),
                                     ),
-                                    onPressed: (_saving || _connectingStripe)
+                                    onPressed: (_saving || _isReadOnly || _connectingStripe)
                                         ? null
                                         : _save,
                                     icon: const Icon(Icons.save_outlined),

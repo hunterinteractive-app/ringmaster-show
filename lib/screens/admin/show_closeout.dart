@@ -127,8 +127,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       'points_report_csv',
       'commercial_class_points',
       'newsletter',
-      'entered_exhibitors_contact_report',
-      'ribbon_payout_report',
     ];
 
     String? _artifactMetaString(ReportArtifactSummary artifact, String key) {
@@ -1620,6 +1618,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   Future<void> _downloadReportByName(
     String reportName, {
     String? exhibitorId,
+    String? breedName,
+    String? scope,
+    String? showLetter,
   }) async {
     try {
       final reports = _dashboard?.reports ?? const <ReportArtifactSummary>[];
@@ -1639,6 +1640,22 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
               (r.metadata['exhibitor_id'] ?? '').toString().trim() ==
               exhibitorId.trim(),
         );
+      }
+
+      if (reportName == 'sweepstakes_report' ||
+          reportName == 'breed_results_detail_report') {
+        matches = matches.where((r) {
+          final artBreed =
+              (r.metadata['breed_name'] ?? '').toString().trim().toLowerCase();
+          final artScope =
+              (r.metadata['scope'] ?? '').toString().trim().toUpperCase();
+          final artLetter =
+              (r.metadata['show_letter'] ?? '').toString().trim().toUpperCase();
+
+          return artBreed == (breedName ?? '').trim().toLowerCase() &&
+              artScope == (scope ?? '').trim().toUpperCase() &&
+              artLetter == (showLetter ?? '').trim().toUpperCase();
+        });
       }
 
       final list = matches.toList()
@@ -2280,10 +2297,16 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                               onDownload: (
                                 reportName, {
                                 String? exhibitorId,
+                                String? breedName,
+                                String? scope,
+                                String? showLetter,
                               }) =>
                                   _downloadReportByName(
                                 reportName,
                                 exhibitorId: exhibitorId,
+                                breedName: breedName,
+                                scope: scope,
+                                showLetter: showLetter,
                               ),
                               onEmail: _emailReportByName,
                               loading: _generatingReport,
@@ -2571,7 +2594,13 @@ class _ReportActionsCard extends StatefulWidget {
     String? exhibitorId,
     String? exhibitorName,
   }) onGenerate;
-  final Future<void> Function(String reportName, {String? exhibitorId,}) onDownload;
+  final Future<void> Function(
+    String reportName, {
+    String? exhibitorId,
+    String? breedName,
+    String? scope,
+    String? showLetter,
+  }) onDownload;
   final Future<void> Function(
     String reportName, {
     String? exhibitorId,
@@ -2654,8 +2683,22 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
 
     if (_selectedReportNeedsExhibitor && _selectedExhibitorId != null) {
       matches = matches.where(
-        (r) => (r.metadata['exhibitor_id'] ?? '').toString().trim() == _selectedExhibitorId,
+        (r) =>
+            (r.metadata['exhibitor_id'] ?? '').toString().trim() ==
+            _selectedExhibitorId,
       );
+    }
+
+    if (_selectedReportNeedsBreedScope) {
+      matches = matches.where((r) {
+        final breed = (r.metadata['breed_name'] ?? '').toString().trim().toLowerCase();
+        final scope = (r.metadata['scope'] ?? '').toString().trim().toUpperCase();
+        final letter = (r.metadata['show_letter'] ?? '').toString().trim().toUpperCase();
+
+        return breed == _breedController.text.trim().toLowerCase() &&
+            scope == _selectedScope.trim().toUpperCase() &&
+            letter == _selectedShowLetter.trim().toUpperCase();
+      });
     }
 
     final list = matches.toList()
@@ -2769,7 +2812,6 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
         } else {
           _selectedExhibitorId = null;
           _selectedExhibitorName = null;
-          _selectedExhibitorEmail = null;
           _selectedExhibitorEmail = null;
         }
       });
@@ -3264,7 +3306,13 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
               onPressed: _canDownload && _selectedReportName != null
                   ? () => widget.onDownload(
                         _selectedReportName!,
-                        exhibitorId: _selectedReportNeedsExhibitor ? _selectedExhibitorId : null,
+                        exhibitorId:
+                            _selectedReportNeedsExhibitor ? _selectedExhibitorId : null,
+                        breedName:
+                            _selectedReportNeedsBreedScope ? _breedController.text.trim() : null,
+                        scope: _selectedReportNeedsBreedScope ? _selectedScope : null,
+                        showLetter:
+                            _selectedReportNeedsBreedScope ? _selectedShowLetter : null,
                       )
                   : null,
               icon: const Icon(Icons.download),

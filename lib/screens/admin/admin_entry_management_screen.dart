@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/show_lock_service.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -151,8 +152,6 @@ class _AdminEntryManagementScreenState
   }
 
   String _exhibitorDisplayName(Map<String, dynamic> e) {
-    final label = (e['exhibitor_label'] ?? '').toString().trim();
-    if (label.isNotEmpty) return label;
 
     final ex = e['exhibitors'];
     if (ex is Map<String, dynamic>) {
@@ -196,6 +195,8 @@ class _AdminEntryManagementScreenState
     final willScratch = scratchedAt == null || scratchedAt.isEmpty;
 
     try {
+      await ShowLockService.assertShowUnlocked(widget.showId);
+
       await supabase.from('entries').update({
         'scratched_at':
             willScratch ? DateTime.now().toUtc().toIso8601String() : null,
@@ -700,6 +701,10 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
     try {
       final id = widget.entry['id'].toString();
 
+      await ShowLockService.assertShowUnlocked(
+        (widget.entry['show_id'] ?? '').toString(),
+      );
+
       await supabase.from('entries').update({
         'tattoo': _tattoo.text.trim().isEmpty
             ? null
@@ -940,6 +945,9 @@ class _MoveEntrySheetState extends State<_MoveEntrySheet> {
     });
 
     try {
+      await ShowLockService.assertShowUnlocked(
+        (widget.entry['show_id'] ?? '').toString(),
+      );
       await supabase.from('entries').update({
         'section_id': _sectionId,
         'class_name':
@@ -1256,14 +1264,6 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     if (name.isNotEmpty) return name;
     if (tattoo.isNotEmpty) return tattoo;
     return '(Unnamed Animal)';
-  }
-
-  String _sectionKind() {
-    final s = widget.sections.firstWhere(
-      (x) => x['id'].toString() == _sectionId,
-      orElse: () => <String, dynamic>{},
-    );
-    return (s['kind'] ?? '').toString().toLowerCase();
   }
 
   bool _isLopBreedName(String breedName) {
@@ -1609,8 +1609,8 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
   }
 
   Future<void> _save({bool reset = false}) async {
-    if (_sectionId == null || _sectionId!.isEmpty) {
-      setState(() => _msg = 'Select section');
+    if (_selectedSectionIds.isEmpty) {
+      setState(() => _msg = 'Select at least one section.');
       return;
     }
 
@@ -1620,6 +1620,8 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     });
 
     try {
+    await ShowLockService.assertShowUnlocked(widget.showId);
+    
     String resolvedExhibitorId;
 
     if (_addNewExhibitor) {
