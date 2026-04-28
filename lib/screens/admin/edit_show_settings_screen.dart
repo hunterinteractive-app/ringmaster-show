@@ -2,6 +2,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:convert';
+import 'dart:html' as html;
+import 'dart:typed_data';
 
 import '../show_list_screen.dart';
 import '../../services/club_service.dart';
@@ -162,7 +165,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
             title: Text(nextLocked ? 'Lock Show?' : 'Unlock Show?'),
             content: Text(
               nextLocked
-                  ? 'This will prevent setup changes like sections, fees, judges, sanctions, rules, and show details. You can unlock it later.'
+                  ? 'This will prevent setup changes like sections, fees, judges, sanctions, rules, and show details.\n\n Show data and report files may be retained on the server for up to 1 year.\n\nYou can unlock it at any time.'
                   : 'This will allow setup changes again. Only unlock if corrections are needed.',
             ),
             actions: [
@@ -768,6 +771,76 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
     );
   }
 
+  Future<void> _downloadLockedShowData() async {
+    setState(() {
+      _saving = true;
+      _msg = null;
+    });
+
+    try {
+      final session = supabase.auth.currentSession;
+      final accessToken = session?.accessToken;
+
+      if (accessToken == null || accessToken.isEmpty) {
+        throw Exception('You must be signed in to download the archive.');
+      }
+
+      final uri = Uri.parse(
+        'https://yzjoycrvqkyfrksmaixf.supabase.co/functions/v1/export-locked-show-data',
+      );
+
+      final request = await html.HttpRequest.request(
+        uri.toString(),
+        method: 'POST',
+        requestHeaders: {
+          'Authorization': 'Bearer $accessToken',
+          'Content-Type': 'application/json',
+        },
+        sendData: jsonEncode({
+          'show_id': widget.showId,
+        }),
+        responseType: 'arraybuffer',
+      );
+
+      final status = request.status ?? 0;
+      if (status < 200 || status >= 300) {
+        throw Exception('Export failed with status $status.');
+      }
+
+      final buffer = request.response as ByteBuffer;
+      final bytes = Uint8List.view(buffer);
+
+      final safeShowName = _effectiveShowName()
+          .replaceAll(RegExp(r'[^A-Za-z0-9_-]+'), '_')
+          .replaceAll(RegExp(r'_+'), '_')
+          .replaceAll(RegExp(r'^_|_$'), '');
+
+      final fileName =
+          '${safeShowName}_locked_show_export_${DateTime.now().millisecondsSinceEpoch}.zip';
+
+      final blob = html.Blob([bytes], 'application/zip');
+      final url = html.Url.createObjectUrlFromBlob(blob);
+
+      html.AnchorElement(href: url)
+        ..download = fileName
+        ..click();
+
+      html.Url.revokeObjectUrl(url);
+
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _msg = 'Locked show ZIP downloaded.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _msg = 'Download failed: $e';
+      });
+    }
+  }
+
   void _openShowCloseout() {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -1370,6 +1443,13 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                       ? 'Allow setup changes again if corrections are needed'
                                       : 'Prevent further setup changes before closeout',
                               onTap: (_saving || _isFinalized) ? null : _toggleShowLock,
+                            ),
+                            if (_isLocked)
+                            _buildSettingsActionTile(
+                              icon: Icons.download_for_offline,
+                              title: 'Download Locked Show Data',
+                              subtitle: 'Download a ZIP backup of this show’s entries, results, settings, and reports',
+                              onTap: _saving ? null : _downloadLockedShowData,
                             ),
                           ],
                         ),
