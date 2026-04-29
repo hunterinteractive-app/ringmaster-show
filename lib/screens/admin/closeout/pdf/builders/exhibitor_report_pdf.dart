@@ -223,7 +223,7 @@ class ExhibitorReportPdfBuilder {
           r.exhibitorCount?.toString() ?? '',
           r.awardsText,
           r.judgeName,
-          r.awardsText.isNotEmpty && r.earnedLeg ? 'Yes' : '',
+          r.earnedLeg ? 'Yes' : '',
           r.specialtyPoints.toString(),
           r.totalPoints.toString(),
         ];

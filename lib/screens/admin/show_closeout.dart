@@ -583,11 +583,33 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       );
     }
 
+    Future<void> _refreshDashboardOnly() async {
+      try {
+        final dashboardResp = await supabase.rpc(
+          'get_show_closeout_dashboard',
+          params: {'p_show_id': widget.showId},
+        );
+
+        final dashboardJson = Map<String, dynamic>.from(dashboardResp as Map);
+        final dashboard = CloseoutDashboard.fromJson(dashboardJson);
+
+        if (!mounted) return;
+        setState(() {
+          _dashboard = dashboard;
+        });
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed refreshing reports: $e')),
+        );
+      }
+    }
+
     Future<void> _loadDataUntilFinalizeVisible({
       required String previousFinalizeId,
     }) async {
       for (var attempt = 0; attempt < 10; attempt++) {
-        await _loadData();
+        await _refreshDashboardOnly();
 
         final latestId = _dashboard?.latestFinalize.id;
 
@@ -603,7 +625,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         await Future.delayed(const Duration(milliseconds: 500));
       }
 
-      await _loadData();
+      await _refreshDashboardOnly();
     }
 
   @override
@@ -1593,7 +1615,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           exhibitorName: exhibitorName,
         );
 
-        await _loadData();
+        await _refreshDashboardOnly();
 
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(

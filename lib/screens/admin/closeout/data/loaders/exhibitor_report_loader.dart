@@ -96,7 +96,8 @@ class ExhibitorReportLoader {
     final contextByEntryId = _buildEntryContextByShow(allEligibleRows);
     final displayPlacementByEntryId =
         _buildDisplayPlacementByEntryId(allEligibleRows);
-    final pointsByEntryId = await _loadPointsByEntryId(showId);
+    final pointsByEntryId =
+        await _loadAnimalSweepstakesPointsByEntryId(showId, entryIds);
 
     final showName = _str(show['name']);
     final showDate = _formatShowDateRange(show['start_date'], show['end_date']);
@@ -217,8 +218,8 @@ class ExhibitorReportLoader {
         awardsText: _formatAwards(awards),
         judgeName: judgeNamesByRef[judgeRef] ?? '',
         earnedLeg: earnedLegEntryIds.contains(entryId),
-        specialtyPoints: pointsByEntryId[entryId]?.specialtyPoints ?? 0,
-        totalPoints: pointsByEntryId[entryId]?.totalPoints ?? 0,
+        specialtyPoints: pointsByEntryId[entryId] ?? 0,
+        totalPoints: pointsByEntryId[entryId] ?? 0,
       );
     }).toList();
 
@@ -235,6 +236,35 @@ class ExhibitorReportLoader {
       secretaryEmail: secretaryEmail,
       entries: entryRows,
     );
+  }
+
+  Future<Map<String, int>> _loadAnimalSweepstakesPointsByEntryId(
+    String showId,
+    List<String> entryIds,
+  ) async {
+    try {
+      if (entryIds.isEmpty) return {};
+
+      final rows = await repo.supabase
+          .from('sweepstakes_entry_results')
+          .select('entry_id, points')
+          .eq('show_id', showId)
+          .inFilter('entry_id', entryIds);
+
+      final map = <String, int>{};
+
+      for (final row in List<Map<String, dynamic>>.from(rows)) {
+        final entryId = _str(row['entry_id']);
+        if (entryId.isEmpty) continue;
+
+        final points = _toInt(row['points']);
+        map[entryId] = (map[entryId] ?? 0) + points;
+      }
+
+      return map;
+    } catch (_) {
+      return {};
+    }
   }
 
   Future<Map<String, dynamic>?> _loadArbaDetails(String showId) async {
@@ -419,42 +449,22 @@ class ExhibitorReportLoader {
     }
   }
 
-    Future<Map<String, _EntryPoints>> _loadPointsByEntryId(String showId) async {
-      try {
-        final rows = await repo.supabase
-            .from('show_points_entries')
-            .select('''
-              total_points,
-              metadata
-            ''')
-            .eq('show_id', showId);
+  int _toInt(dynamic value) {
+    if (value == null) return 0;
+    if (value is int) return value;
+    if (value is num) return value.round();
 
-        final map = <String, _EntryPoints>{};
+    final text = value.toString().trim();
+    if (text.isEmpty) return 0;
 
-        for (final row in List<Map<String, dynamic>>.from(rows)) {
-          final metadataRaw = row['metadata'];
-          Map<String, dynamic> metadata = const {};
+    final asInt = int.tryParse(text);
+    if (asInt != null) return asInt;
 
-          if (metadataRaw is Map) {
-            metadata = Map<String, dynamic>.from(metadataRaw);
-          }
+    final asDouble = double.tryParse(text);
+    if (asDouble != null) return asDouble.round();
 
-          final entryId = _str(metadata['entry_id']);
-          if (entryId.isEmpty) continue;
-
-          final totalPoints = ((row['total_points'] as num?) ?? 0).toInt();
-          final current = map[entryId] ?? const _EntryPoints();
-
-          map[entryId] = _EntryPoints(
-            specialtyPoints: current.specialtyPoints + totalPoints,
-          );
-        }
-
-        return map;
-      } catch (_) {
-        return {};
-      }
-    }
+    return 0;
+  }
 
   Map<String, _EntryLegContext> _buildEntryContextByShow(
     List<Map<String, dynamic>> rows,
@@ -696,14 +706,4 @@ class _EntryLegContext {
     required this.showAnimals,
     required this.showExhibitors,
   });
-}
-
-class _EntryPoints {
-  final int specialtyPoints;
-
-  const _EntryPoints({
-    this.specialtyPoints = 0,
-  });
-
-  int get totalPoints => specialtyPoints;
 }
