@@ -127,11 +127,11 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
   Future<void> _loadShowAndSection() async {
     final show = await supabase
         .from('shows')
-        .select('name, show_name')
+        .select('name')
         .eq('id', widget.showId)
         .single();
 
-    _showName = (show['name'] ?? show['show_name'] ?? 'Show').toString();
+    _showName = (show['name'] ?? 'Show').toString();
 
     final section = await supabase
         .from('show_sections')
