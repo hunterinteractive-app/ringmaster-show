@@ -546,6 +546,7 @@ class ArbaReportLoader {
 
       final entries = (rows as List)
           .map((e) => Map<String, dynamic>.from(e as Map))
+          .where((e) => _str(e['species']).toLowerCase() == 'rabbit')
           .toList();
 
       final entryIds = entries

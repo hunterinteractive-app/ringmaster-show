@@ -321,6 +321,10 @@ class SweepstakesReportLoader {
         (arbaDetails['secretary_email'] ?? '').toString(),
         (show['secretary_email'] ?? '').toString(),
       ),
+      secretaryPhone: _firstNotEmpty(
+        (arbaDetails['secretary_phone'] ?? '').toString(),
+        (show['secretary_phone'] ?? '').toString(),
+      ),
     );
   }
 

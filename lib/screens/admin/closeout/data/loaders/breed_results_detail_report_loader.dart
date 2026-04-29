@@ -1,5 +1,7 @@
 // lib/screens/admin/closeout/data/loaders/breed_results_detail_report_loader.dart
 
+import 'package:ringmaster_show/utils/cavy/cavy_awards.dart';
+
 import '../../models/base/report_request.dart';
 import '../../models/clubs/breed_results_detail_report_data.dart';
 import '../closeout_repository.dart';
@@ -433,6 +435,7 @@ class BreedResultsDetailReportLoader {
       'BIS',
       'RIS',
       'RBIS',
+      'HM',
       'B4C',
       'B6C',
       'BOB',
@@ -440,23 +443,37 @@ class BreedResultsDetailReportLoader {
       'BOS',
       'BOG',
       'BOSG',
+      'BJB',
+      'BIB',
+      'BSB',
     ].contains(c);
   }
 
   bool _isVarietyAward(Object? code) {
     final c = _safe(code).toUpperCase();
-    return c == 'BOV' || c == 'BOSV';
+    return [
+      'BOV',
+      'BOSV',
+      'BJV',
+      'BIV',
+      'BSV',
+    ].contains(c);
   }
 
   String _normalizeAwardLabel(String code) {
     final c = code.toUpperCase();
+
     switch (c) {
       case 'BOS':
         return 'BOSB';
       case 'RBIS':
         return 'RIS';
+      case 'B4C':
+        return 'Best 4-Class';
+      case 'B6C':
+        return 'Best 6-Class';
       default:
-        return c;
+        return cavyAwardLabels[c] ?? c;
     }
   }
 

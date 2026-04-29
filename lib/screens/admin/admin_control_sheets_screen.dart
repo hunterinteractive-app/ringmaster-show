@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
+import 'package:ringmaster_show/utils/cavy/cavy_sop_order.dart';
 
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -241,15 +242,37 @@ class _AdminControlSheetsScreenState extends State<AdminControlSheetsScreen> {
     }
 
     // Sort groups: Breed, Color, Class order, Sex order
+    // Detect cavy by breed names only
+    final isCavy = entries.any((e) {
+      final breed = _safe(e, 'breed').toLowerCase();
+      return cavyBreedOrder.any((b) => b.toLowerCase() == breed);
+    });
+
+    // Sort groups:
+    // Rabbits = current alphabetical behavior
+    // Cavies = ARBA SOP breed/variety order
     final groupKeys = groups.keys.toList()
       ..sort((a, b) {
         final ma = meta[a]!;
         final mb = meta[b]!;
-        final cBreed = ma['breed']!.toLowerCase().compareTo(mb['breed']!.toLowerCase());
-        if (cBreed != 0) return cBreed;
 
-        final cColor = ma['color']!.toLowerCase().compareTo(mb['color']!.toLowerCase());
-        if (cColor != 0) return cColor;
+        if (isCavy) {
+          final cBreed = cavyBreedSortIndex(ma['breed']!)
+              .compareTo(cavyBreedSortIndex(mb['breed']!));
+          if (cBreed != 0) return cBreed;
+
+          final cColor = cavyVarietySortIndex(ma['breed']!, ma['color']!)
+              .compareTo(cavyVarietySortIndex(mb['breed']!, mb['color']!));
+          if (cColor != 0) return cColor;
+        } else {
+          final cBreed =
+              ma['breed']!.toLowerCase().compareTo(mb['breed']!.toLowerCase());
+          if (cBreed != 0) return cBreed;
+
+          final cColor =
+              ma['color']!.toLowerCase().compareTo(mb['color']!.toLowerCase());
+          if (cColor != 0) return cColor;
+        }
 
         final cClass = _classRank(ma['class']!).compareTo(_classRank(mb['class']!));
         if (cClass != 0) return cClass;

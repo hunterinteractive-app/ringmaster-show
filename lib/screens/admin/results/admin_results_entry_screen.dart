@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:ringmaster_show/services/show_lock_service.dart';
+import 'package:ringmaster_show/utils/cavy/cavy_sop_order.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -17,6 +18,62 @@ const List<String> kBestAgeAwardCodes = [
   'Best Intermediate',
   'Best Senior',
 ];
+
+const List<String> cavyAwardCodes = [
+  'BJV',
+  'BIV',
+  'BSV',
+  'BJB',
+  'BIB',
+  'BSB',
+  'BOV',
+  'BOSV',
+  'BOB',
+  'BOSB',
+  'BIS',
+  'RIS',
+  'HM',
+];
+
+const Map<String, String> cavyAwardLabels = {
+  'BJV': 'Best Junior Variety',
+  'BIV': 'Best Intermediate Variety',
+  'BSV': 'Best Senior Variety',
+
+  'BJB': 'Best Junior of Breed',
+  'BIB': 'Best Intermediate of Breed',
+  'BSB': 'Best Senior of Breed',
+
+  'BOV': 'Best of Variety',
+  'BOSV': 'Best Opposite Sex of Variety',
+
+  'BOB': 'Best of Breed',
+  'BOSB': 'Best Opposite Sex of Breed',
+
+  'BIS': 'Best in Show',
+  'RIS': 'Reserve in Show',
+  'HM': 'Honorable Mention',
+};
+
+bool _isCavyEntry(Map<String, dynamic> row) {
+  final species = (row['species'] ?? '').toString().trim().toLowerCase();
+  if (species == 'cavy') return true;
+
+  final breed = (row['breed'] ?? row['breed_name'] ?? '')
+      .toString()
+      .trim()
+      .toLowerCase();
+
+  return cavyBreedOrder.any((b) => b.toLowerCase() == breed);
+}
+
+String _awardDisplayLabel(String award, Map<String, dynamic> entry) {
+  if (_isCavyEntry(entry)) {
+    return cavyAwardLabels[award] ?? award;
+  }
+
+  return award;
+}
 
 bool _supportsBestAgeAwards(String breedName) {
   final b = breedName.trim().toLowerCase();
@@ -3886,6 +3943,11 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
       case 'Best In Show':
       case 'Reserve In Show':
         return const ['Best In Show', 'Reserve In Show'];
+      
+      case 'BIS':
+      case 'RIS':
+      case 'HM':
+        return const ['BIS', 'RIS', 'HM'];
 
       default:
         return const [];
@@ -3924,6 +3986,10 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
   bool get _showsByVariety => widget.showsByVariety;
 
   List<String> get _visibleAwardCodes {
+    if (_isCavyEntry(widget.entry)) {
+      return cavyAwardCodes;
+    }
+
     final awards = <String>[];
 
     if (widget.showsByGroup) {
@@ -3999,6 +4065,63 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
 
     final currentAwards = _selectedAwards;
 
+    if (_isCavyEntry(widget.entry)) {
+      switch (award) {
+        case 'BJV':
+          return (widget.entry['class_name'] ?? '')
+              .toString()
+              .toLowerCase()
+              .contains('junior');
+
+        case 'BIV':
+          return (widget.entry['class_name'] ?? '')
+              .toString()
+              .toLowerCase()
+              .contains('intermediate');
+
+        case 'BSV':
+          return (widget.entry['class_name'] ?? '')
+              .toString()
+              .toLowerCase()
+              .contains('senior');
+
+        case 'BJB':
+          return currentAwards.contains('BJV');
+
+        case 'BIB':
+          return currentAwards.contains('BIV');
+
+        case 'BSB':
+          return currentAwards.contains('BSV');
+
+        case 'BOV':
+        case 'BOSV':
+          return true;
+
+        case 'BOB':
+        case 'BOSB':
+          return currentAwards.contains('BOV') ||
+              currentAwards.contains('BOSV') ||
+              currentAwards.contains('BJB') ||
+              currentAwards.contains('BIB') ||
+              currentAwards.contains('BSB');
+
+        case 'BIS':
+          return currentAwards.contains('BOB');
+
+        case 'RIS':
+          return currentAwards.contains('BOB') &&
+              !currentAwards.contains('BIS');
+
+        case 'HM':
+          return currentAwards.contains('BOB') &&
+              !currentAwards.contains('BIS') &&
+              !currentAwards.contains('RIS');
+      }
+
+      return false;
+    }
+
     switch (award) {
       case 'BOV':
       case 'BOSV':
@@ -4067,7 +4190,9 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
     }
 
     if (_selectedAwards.isNotEmpty && !_placedFirst(widget.entry)) {
-      return 'Only first-place rabbits can receive awards.';
+      return _isCavyEntry(widget.entry)
+          ? 'Only first-place cavies can receive awards.'
+          : 'Only first-place rabbits can receive awards.';
     }
 
     bool sameVariety(Map<String, dynamic> e) =>
@@ -4086,6 +4211,87 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
 
     bool sameSection(Map<String, dynamic> e) =>
         _sectionId(e) == _sectionId(widget.entry);
+
+    if (_isCavyEntry(widget.entry)) {
+      bool sameClassAge(Map<String, dynamic> e) =>
+          sameVariety(e) &&
+          (e['class_name'] ?? '').toString().trim().toLowerCase() ==
+              (widget.entry['class_name'] ?? '').toString().trim().toLowerCase();
+
+      for (final award in _selectedAwards) {
+        final sameScope = switch (award) {
+          'BJV' || 'BIV' || 'BSV' => sameClassAge,
+          'BJB' || 'BIB' || 'BSB' => sameBreed,
+          'BOV' || 'BOSV' => sameVariety,
+          'BOB' || 'BOSB' => sameBreed,
+          'BIS' || 'RIS' || 'HM' => sameSection,
+          _ => sameSection,
+        };
+
+        final existing = _winnerForAwardInScope(
+          award: award,
+          sameScope: sameScope,
+        );
+
+        if (existing != null) {
+          return '${cavyAwardLabels[award] ?? award} is already assigned.';
+        }
+
+        if (!_canUseAward(award)) {
+          return '${cavyAwardLabels[award] ?? award} is not eligible for this cavy.';
+        }
+      }
+
+      if (_hasAward('BOV')) {
+        final bosv = _winnerForAwardInScope(
+          award: 'BOSV',
+          sameScope: sameVariety,
+        );
+        if (!_isOppositeSexOf(bosv)) {
+          return 'BOV and BOSV must be opposite sex.';
+        }
+      }
+
+      if (_hasAward('BOSV')) {
+        final bov = _winnerForAwardInScope(
+          award: 'BOV',
+          sameScope: sameVariety,
+        );
+        if (!_isOppositeSexOf(bov)) {
+          return 'BOV and BOSV must be opposite sex.';
+        }
+      }
+
+      if (_hasAward('BOB')) {
+        final bosb = _winnerForAwardInScope(
+          award: 'BOSB',
+          sameScope: sameBreed,
+        );
+        if (!_isOppositeSexOf(bosb)) {
+          return 'BOB and BOSB must be opposite sex.';
+        }
+      }
+
+      if (_hasAward('BOSB')) {
+        final bob = _winnerForAwardInScope(
+          award: 'BOB',
+          sameScope: sameBreed,
+        );
+        if (!_isOppositeSexOf(bob)) {
+          return 'BOB and BOSB must be opposite sex.';
+        }
+      }
+
+      if (_hasAward('BIS') && (_hasAward('RIS') || _hasAward('HM'))) {
+        return 'The same cavy cannot be BIS, RIS, or Honorable Mention.';
+      }
+
+      if (_hasAward('RIS') && _hasAward('HM')) {
+        return 'The same cavy cannot be both RIS and Honorable Mention.';
+      }
+
+      return null;
+    }
 
     // Same rabbit cannot hold both sides of a paired award stage.
     for (final award in _selectedAwards) {
@@ -4272,6 +4478,10 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
   String _awardDisabledReason(String award) {
     if (!_placedFirst(widget.entry)) {
       return 'Only first-place rabbits can receive awards.';
+    }
+
+    if (_isCavyEntry(widget.entry)) {
+      return '${cavyAwardLabels[award] ?? award} is not eligible right now.';
     }
 
     if (_sameRabbitAlreadyHasConflictingStageAward(award)) {
@@ -4632,7 +4842,7 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
                   dense: true,
                   contentPadding: EdgeInsets.zero,
                   value: checked,
-                  title: Text(award),
+                  title: Text(_awardDisplayLabel(award, widget.entry)),
                   subtitle: !allowed && canAward
                       ? Text(_awardDisabledReason(award))
                       : null,

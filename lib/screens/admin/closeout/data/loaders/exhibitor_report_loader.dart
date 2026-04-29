@@ -1,5 +1,7 @@
 // lib/screens/admin/closeout/data/loaders/exhibitor_report_loader.dart
 
+import 'package:ringmaster_show/utils/cavy/cavy_awards.dart';
+
 import '../../models/base/report_request.dart';
 import '../../models/exhibitor/exhibitor_report_data.dart';
 import '../closeout_repository.dart';
@@ -606,13 +608,20 @@ class ExhibitorReportLoader {
       'BEST_IN_SHOW',
       'RIS',
       'RESERVE_IN_SHOW',
+      'HM',
       'BOB',
-      'BOS',
       'BOSB',
+      'BOS',
+      'BJB',
+      'BIB',
+      'BSB',
       'BOG',
       'BOSG',
       'BOV',
       'BOSV',
+      'BJV',
+      'BIV',
+      'BSV',
       'BEST_6_CLASS',
       'BEST_4_CLASS',
       '1ST',
@@ -632,7 +641,20 @@ class ExhibitorReportLoader {
       return aIndex.compareTo(bIndex);
     });
 
-    return normalized.join(', ');
+    return normalized.map((award) {
+      switch (award) {
+        case 'BEST_IN_SHOW':
+          return 'Best In Show';
+        case 'RESERVE_IN_SHOW':
+          return 'Reserve In Show';
+        case 'BEST_6_CLASS':
+          return 'Best 6-Class';
+        case 'BEST_4_CLASS':
+          return 'Best 4-Class';
+        default:
+          return cavyAwardLabels[award] ?? award;
+      }
+    }).join(', ');
   }
 
   String _formatShowDateRange(dynamic startDate, dynamic endDate) {

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:ringmaster_show/widgets/exhibitor_builder_dialog.dart';
+import 'package:ringmaster_show/utils/cavy/cavy_sop_order.dart';
 
 import 'cart_screen.dart';
 
@@ -359,7 +360,11 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
       return const ['Junior', 'Senior'];
     }
 
-    return const ['Open Boar', 'Open Sow'];
+    if (species == 'cavy') {
+      return const ['Junior', 'Intermediate', 'Senior'];
+    }
+
+    return const [];
   }
 
   Future<void> _viewCart() async {
@@ -980,8 +985,15 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
       );
     }
 
-    final sexLabel = _sexLabel(species, a['sex']?.toString());
-    return 'Open $sexLabel';
+    if (species == 'cavy') {
+      final months = _ageInMonthsApprox(birthDate, _showDate!);
+
+      if (months < 4.0) return 'Junior';
+      if (months < 6.0) return 'Intermediate';
+      return 'Senior';
+    }
+
+    return null;
   }
 
   String? _selectedOrSuggestedClassForAnimal(Map<String, dynamic> animal) {
@@ -1611,19 +1623,39 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     final list = List<Map<String, dynamic>>.from(animals);
 
     list.sort((a, b) {
-      final speciesCmp = _speciesRank(_safeString(a, 'species'))
-          .compareTo(_speciesRank(_safeString(b, 'species')));
+      final speciesA = _safeString(a, 'species').toLowerCase();
+      final speciesB = _safeString(b, 'species').toLowerCase();
+
+      final speciesCmp =
+          _speciesRank(speciesA).compareTo(_speciesRank(speciesB));
       if (speciesCmp != 0) return speciesCmp;
 
-      final breedCmp = _safeString(a, 'breed')
-          .toLowerCase()
-          .compareTo(_safeString(b, 'breed').toLowerCase());
-      if (breedCmp != 0) return breedCmp;
+      if (speciesA == 'cavy' && speciesB == 'cavy') {
+        final breedCmp = cavyBreedSortIndex(_safeString(a, 'breed'))
+            .compareTo(cavyBreedSortIndex(_safeString(b, 'breed')));
+        if (breedCmp != 0) return breedCmp;
 
-      final varietyCmp = _safeString(a, 'variety')
-          .toLowerCase()
-          .compareTo(_safeString(b, 'variety').toLowerCase());
-      if (varietyCmp != 0) return varietyCmp;
+        final varietyCmp = cavyVarietySortIndex(
+          _safeString(a, 'breed'),
+          _safeString(a, 'variety'),
+        ).compareTo(
+          cavyVarietySortIndex(
+            _safeString(b, 'breed'),
+            _safeString(b, 'variety'),
+          ),
+        );
+        if (varietyCmp != 0) return varietyCmp;
+      } else {
+        final breedCmp = _safeString(a, 'breed')
+            .toLowerCase()
+            .compareTo(_safeString(b, 'breed').toLowerCase());
+        if (breedCmp != 0) return breedCmp;
+
+        final varietyCmp = _safeString(a, 'variety')
+            .toLowerCase()
+            .compareTo(_safeString(b, 'variety').toLowerCase());
+        if (varietyCmp != 0) return varietyCmp;
+      }
 
       final titleCmp = _displayAnimalTitle(a)
           .toLowerCase()

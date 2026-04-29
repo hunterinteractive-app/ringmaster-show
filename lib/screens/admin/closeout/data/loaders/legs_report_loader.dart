@@ -1,4 +1,4 @@
-// lib/sscreens/admin/closeout/data/loaders/legs_report_loader.dart
+// lib/screens/admin/closeout/data/loaders/legs_report_loader.dart
 
 import '../../models/base/report_request.dart';
 import '../../models/legs/legs_certificate_data.dart';

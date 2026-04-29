@@ -317,6 +317,39 @@ class BreedResultsDetailReportPdf {
     );
   }
 
+  String _awardLabel(String code) {
+    switch (code.toUpperCase().trim()) {
+      case 'BJV':
+        return 'Best Junior Variety';
+      case 'BIV':
+        return 'Best Intermediate Variety';
+      case 'BSV':
+        return 'Best Senior Variety';
+      case 'BJB':
+        return 'Best Junior of Breed';
+      case 'BIB':
+        return 'Best Intermediate of Breed';
+      case 'BSB':
+        return 'Best Senior of Breed';
+      case 'BOV':
+        return 'Best of Variety';
+      case 'BOSV':
+        return 'Best Opposite Sex of Variety';
+      case 'BOB':
+        return 'Best of Breed';
+      case 'BOSB':
+        return 'Best Opposite Sex of Breed';
+      case 'BIS':
+        return 'Best in Show';
+      case 'RIS':
+        return 'Reserve in Show';
+      case 'HM':
+        return 'Honorable Mention';
+      default:
+        return code;
+    }
+  }
+
   pw.Widget _buildAwardTable(List<BreedAward> rows) {
     return pw.TableHelper.fromTextArray(
       headers: const [
@@ -331,7 +364,7 @@ class BreedResultsDetailReportPdf {
       data: rows
           .map(
             (r) => [
-              r.award,
+              _awardLabel(r.award),
               r.animal,
               r.sex,
               r.variety,
@@ -354,7 +387,7 @@ class BreedResultsDetailReportPdf {
       oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
       cellPadding: const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 4),
       columnWidths: {
-        0: const pw.FixedColumnWidth(34),
+        0: const pw.FixedColumnWidth(74),
         1: const pw.FlexColumnWidth(1.2),
         2: const pw.FixedColumnWidth(28),
         3: const pw.FlexColumnWidth(1.1),
