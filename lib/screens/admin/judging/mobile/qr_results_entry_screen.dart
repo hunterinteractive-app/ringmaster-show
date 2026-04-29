@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/screens/login_screen.dart';
 
 import 'package:ringmaster_show/screens/admin/results/admin_results_entry_screen.dart';
 import 'package:ringmaster_show/services/show_lock_service.dart';
@@ -63,7 +64,12 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
     try {
       final session = supabase.auth.currentSession;
       if (session == null) {
-        throw Exception('Please sign in to use this results-entry QR code.');
+        if (!mounted) return;
+        setState(() {
+          _loading = false;
+          _msg = null;
+        });
+        return;
       }
 
       await _loadShowAndSection();
@@ -433,6 +439,10 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
         backgroundColor: Color(0xFFF4F6FB),
         body: Center(child: CircularProgressIndicator()),
       );
+    }
+
+    if (supabase.auth.currentSession == null) {
+      return const LoginScreen();
     }
 
     if (_msg != null) {

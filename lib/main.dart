@@ -65,7 +65,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'RingMaster Show QR FIX TEST',
+      title: 'RingMaster Show',
       theme: AppTheme.lightTheme,
       home: const Root(),
       onGenerateRoute: (settings) {
@@ -204,7 +204,7 @@ class _RootState extends State<Root> {
                 const SizedBox(height: 12),
                 FilledButton(
                   onPressed: _refresh,
-                  child: const Text('Retry - QR FIX TEST'),
+                  child: const Text(''),
                 ),
               ],
             ),
