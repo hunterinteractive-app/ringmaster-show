@@ -4,6 +4,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:ringmaster_show/screens/admin/judging/mobile/qr_results_entry_screen.dart';
 
 import '../theme/app_theme.dart';
 import '../utils/date_time_utils.dart';
@@ -96,12 +98,43 @@ class _LoginScreenState extends State<LoginScreen>
       setState(() => _showLogin = true);
     });
 
-    _sub = supabase.auth.onAuthStateChange.listen((data) {
-      if (data.session != null && mounted) {
+    _sub = supabase.auth.onAuthStateChange.listen((data) async {
+      if (data.session == null || !mounted) return;
+
+      final prefs = await SharedPreferences.getInstance();
+      final pendingQr = prefs.getString('pending_qr_results_url');
+
+      if (pendingQr != null && pendingQr.isNotEmpty) {
+        await prefs.remove('pending_qr_results_url');
+
+        final uri = Uri.parse(pendingQr);
+
+        if (!mounted) return;
+
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const ShowListScreen()),
+          MaterialPageRoute(
+            builder: (_) => QrResultsEntryScreen(
+              showId: uri.queryParameters['showId'] ?? '',
+              sectionId: uri.queryParameters['sectionId'] ?? '',
+              breedId: uri.queryParameters['breedId'] ??
+                  uri.queryParameters['breed'] ??
+                  '',
+              token: uri.queryParameters['token'] ?? '',
+              varietyKey: uri.queryParameters['varietyKey'],
+              groupKey: uri.queryParameters['groupKey'],
+              classSexLabel: uri.queryParameters['classSexLabel'],
+            ),
+          ),
         );
+
+        return;
       }
+
+      if (!mounted) return;
+
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const ShowListScreen()),
+      );
     });
   }
 

@@ -40,6 +40,7 @@ dependencies:
   path: ^1.9.0
   barcode_widget: ^2.0.4
   uuid: ^4.5.1
+  shared_preferences: ^2.3.3
 
 
 
