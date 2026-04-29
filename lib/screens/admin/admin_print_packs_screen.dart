@@ -36,6 +36,9 @@ Future<pw.ThemeData> _buildPdfTheme() async {
 
 final supabase = Supabase.instance.client;
 
+const String kQrResultsEntryBaseUrl =
+    'https://www.ringmasterone.com/#/qr-results-entry';
+
 Future<String?> _savePdfToUserChosenLocation({
   required Uint8List bytes,
   required String suggestedName,
@@ -594,6 +597,21 @@ class _ControlSheetsGeneratorSheetState
   bool _building = false;
   String? _msg;
 
+  String _qrResultsUrl({
+    required String sectionId,
+    required String breed,
+  }) {
+    final query = Uri(
+      queryParameters: {
+        'showId': widget.showId,
+        if (sectionId.trim().isNotEmpty) 'sectionId': sectionId.trim(),
+        if (breed.trim().isNotEmpty) 'breed': breed.trim(),
+      },
+    ).query;
+
+    return '$kQrResultsEntryBaseUrl?$query';
+  }
+
   String _safe(Map<String, dynamic> e, String k) =>
       (e[k] ?? '').toString().trim();
 
@@ -734,9 +752,10 @@ class _ControlSheetsGeneratorSheetState
   }
 
     pw.Document _buildPdf(
-    List<Map<String, dynamic>> rows,
-      pw.ThemeData theme,
-    ) {
+      List<Map<String, dynamic>> rows,
+      pw.ThemeData theme, {
+      required bool includeQrCode,
+    }) {
       final doc = pw.Document(theme: theme);
 
       final bySection = <String, List<Map<String, dynamic>>>{};
@@ -841,6 +860,7 @@ class _ControlSheetsGeneratorSheetState
           final isFurOrWool = _isFurOrWoolRow(first);
 
           allPages.add({
+            'sectionId': _safe(first, 'section_id'),
             'sectionTitle': widget.combineSections
                 ? _sectionTitleFromRow(first)
                 : widget.sectionLabel,
@@ -1088,6 +1108,47 @@ class _ControlSheetsGeneratorSheetState
           ],
         );
       }
+
+      pw.Widget qrResultsBlock({
+        required String sectionId,
+        required String breed,
+      }) {
+        final url = _qrResultsUrl(
+          sectionId: sectionId,
+          breed: breed,
+        );
+
+        return pw.Container(
+          margin: const pw.EdgeInsets.only(top: 10, bottom: 10),
+          padding: const pw.EdgeInsets.all(8),
+          decoration: pw.BoxDecoration(
+            border: pw.Border.all(color: PdfColors.grey500, width: 0.7),
+            borderRadius: pw.BorderRadius.circular(4),
+          ),
+          child: pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.center,
+            children: [
+              pw.BarcodeWidget(
+                barcode: pw.Barcode.qrCode(),
+                data: url,
+                width: 62,
+                height: 62,
+              ),
+              pw.SizedBox(width: 10),
+              pw.Expanded(
+                child: pw.Text(
+                  'Scan to enter results directly into RingMaster Show. This opens the breed view so the writer can drill down to the needed class.',
+                  style: pw.TextStyle(
+                    fontSize: 9,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+
       for (var i = 0; i < allPages.length; i++) {
         final p = allPages[i];
         final isFurOrWool = p['isFurOrWool'] == true;
@@ -1106,7 +1167,12 @@ class _ControlSheetsGeneratorSheetState
                         '${widget.showName}   ${(p['sectionTitle'] ?? '').toString()}',
                     pageText: 'Page ${i + 1} of $totalPages',
                   ),
-                  pw.SizedBox(height: 18),
+                  if (includeQrCode)
+                    qrResultsBlock(
+                      sectionId: (p['sectionId'] ?? '').toString(),
+                      breed: (p['breed'] ?? '').toString(),
+                    ),
+                  pw.SizedBox(height: includeQrCode ? 8 : 18),
                   _classHeaderBlock(
                     breed: (p['breed'] ?? '').toString(),
                     color: (p['color'] ?? '').toString(),
@@ -1142,7 +1208,7 @@ class _ControlSheetsGeneratorSheetState
       return doc;
     }
 
-  Future<void> _generatePdf() async {
+  Future<void> _generatePdf({required bool includeQrCode}) async {
     if (_building) return;
 
     setState(() {
@@ -1163,12 +1229,16 @@ class _ControlSheetsGeneratorSheetState
       }
 
       final theme = await _buildPdfTheme();
-      final doc = _buildPdf(rows, theme);
+      final doc = _buildPdf(
+        rows,
+        theme,
+        includeQrCode: includeQrCode,
+      );
       final bytes = await doc.save();
 
       final name = widget.combineSections
-          ? 'control_${widget.showName}_ALL_SECTIONS.pdf'
-          : 'control_${widget.showName}_${widget.sectionLabel}.pdf';
+          ? 'control_${widget.showName}_ALL_SECTIONS${includeQrCode ? '_QR' : ''}.pdf'
+          : 'control_${widget.showName}_${widget.sectionLabel}${includeQrCode ? '_QR' : ''}.pdf';
 
       final savedPath = await _savePdfToUserChosenLocation(
         bytes: Uint8List.fromList(bytes),
@@ -1195,8 +1265,7 @@ class _ControlSheetsGeneratorSheetState
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final isSuccess = _msg != null &&
-        _msg!.startsWith('Email complete') &&
-        _msg!.contains('Skipped with no email: 0');
+        (_msg == 'Save canceled.' || _msg!.startsWith('PDF saved to:'));
 
     return Padding(
       padding: EdgeInsets.only(
@@ -1264,9 +1333,39 @@ class _ControlSheetsGeneratorSheetState
                 foregroundColor: Colors.black87,
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
-              onPressed: _building ? null : _generatePdf,
+              onPressed: _building ? null : () => _generatePdf(includeQrCode: false),
               icon: const Icon(Icons.picture_as_pdf),
               label: Text(_building ? 'Building PDF…' : 'Generate PDF'),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF7E0),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFD4A623)),
+              ),
+              child: const Text(
+                'QR Code option: adds a secure results-entry QR code to each judging sheet so writers can enter results directly into the system.',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF6B4E00),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF11285A),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+              onPressed: _building ? null : () => _generatePdf(includeQrCode: true),
+              icon: const Icon(Icons.qr_code_2),
+              label: Text(
+                _building ? 'Building PDF…' : 'Generate PDF with QR Code',
+              ),
             ),
             const SizedBox(height: 8),
             OutlinedButton(
