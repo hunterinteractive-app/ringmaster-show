@@ -61,6 +61,11 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
     });
 
     try {
+      final session = supabase.auth.currentSession;
+      if (session == null) {
+        throw Exception('Please sign in to use this results-entry QR code.');
+      }
+
       await _validateToken();
       await _loadShowAndSection();
       await _loadJudges();
@@ -87,13 +92,19 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
   }
 
   Future<void> _validateToken() async {
+    final token = widget.token.trim();
+
+    // Admin-generated QR codes currently do not include a token.
+    // Sign-in is required, so allow signed-in users through.
+    if (token.isEmpty) return;
+
     var query = supabase
         .from('show_result_entry_tokens')
         .select('id')
         .eq('show_id', widget.showId)
         .eq('section_id', widget.sectionId)
         .eq('breed_id', widget.breedId)
-        .eq('token', widget.token)
+        .eq('token', token)
         .eq('is_active', true);
 
     final varietyKey = (widget.varietyKey ?? '').trim();

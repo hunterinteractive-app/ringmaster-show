@@ -1347,7 +1347,7 @@ class _ControlSheetsGeneratorSheetState
                 border: Border.all(color: const Color(0xFFD4A623)),
               ),
               child: const Text(
-                'QR Code OPTION: adds a secure results-entry QR code to each judging sheet so writers can enter results directly into the system.',
+                'QR Code Option: adds a secure results-entry QR code to each judging sheet so writers can enter results directly into the system.',
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
                   color: Color(0xFF6B4E00),

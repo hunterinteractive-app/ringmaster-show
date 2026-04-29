@@ -53,7 +53,9 @@ class MyApp extends StatelessWidget {
             builder: (_) => QrResultsEntryScreen(
               showId: uri.queryParameters['showId'] ?? '',
               sectionId: uri.queryParameters['sectionId'] ?? '',
-              breedId: uri.queryParameters['breedId'] ?? '',
+              breedId: uri.queryParameters['breedId'] ??
+                  uri.queryParameters['breed'] ??
+                  '',
               token: uri.queryParameters['token'] ?? '',
               varietyKey: uri.queryParameters['varietyKey'],
               groupKey: uri.queryParameters['groupKey'],
