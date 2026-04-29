@@ -12,6 +12,42 @@ final supabase = Supabase.instance.client;
 /// - bis_ris
 const String kDefaultFinalAwardMode = 'four_six_bis';
 
+const List<String> kBestAgeAwardCodes = [
+  'Best Junior',
+  'Best Intermediate',
+  'Best Senior',
+];
+
+bool _supportsBestAgeAwards(String breedName) {
+  final b = breedName.trim().toLowerCase();
+  return b == 'american sable' ||
+      b == 'american sables' ||
+      b == 'himalayan' ||
+      b == 'checkered giant';
+}
+
+bool _bestAgeAwardMatchesClass({
+  required String award,
+  required String className,
+  required String classSystem,
+}) {
+  final c = className.trim().toLowerCase();
+
+  if (award == 'Best Junior') {
+    return c.contains('junior') && !c.contains('pre');
+  }
+
+  if (award == 'Best Senior') {
+    return c.contains('senior');
+  }
+
+  if (award == 'Best Intermediate') {
+    return classSystem == 'six' && c.contains('intermediate');
+  }
+
+  return false;
+}
+
 const List<String> kResultStatuses = [
   'Shown',
   'No Show',
@@ -868,6 +904,17 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
         case 'BOB':
         case 'BOSB':
           final key = '${sectionId(e)}|$award|${breed(e).toLowerCase()}';
+          awardBuckets.putIfAbsent(key, () => <Map<String, dynamic>>[]);
+          awardBuckets[key]!.add(e);
+          break;
+        case 'Best Junior':
+        case 'Best Senior':
+        case 'Best Intermediate':
+          final useVarietyScope = showsByVariety(e);
+          final key = useVarietyScope
+              ? '${sectionId(e)}|$award|${breed(e).toLowerCase()}|${variety(e).toLowerCase()}'
+              : '${sectionId(e)}|$award|${breed(e).toLowerCase()}';
+
           awardBuckets.putIfAbsent(key, () => <Map<String, dynamic>>[]);
           awardBuckets[key]!.add(e);
           break;
@@ -2318,12 +2365,21 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
   }
 
   int _classRank(String v) {
-    final x = v.toLowerCase();
-    if (x == 'pre-junior' || x == 'pre junior' || x == 'prejunior') return 0;
-    if (x == 'junior') return 1;
-    if (x == 'intermediate') return 2;
-    if (x == 'senior') return 3;
-    if (x == 'open') return 4;
+    final x = v.toLowerCase().trim();
+
+    if (x.contains('senior') || x.startsWith('sr')) return 0;
+    if (x.contains('intermediate') || x.startsWith('int')) return 1;
+    if ((x.contains('junior') || x.startsWith('jr')) && !x.contains('pre')) {
+      return 2;
+    }
+    if (x.contains('pre-junior') ||
+        x.contains('pre junior') ||
+        x.contains('prejunior') ||
+        x.startsWith('pre jr') ||
+        x.startsWith('pre-jr')) {
+      return 3;
+    }
+
     return 99;
   }
 
@@ -2341,11 +2397,14 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
     if (lower == 'wool') return 1001;
     if (lower == 'fur/wool') return 1002;
 
-    final parts = label.split(' ');
-    final classPart = parts.isNotEmpty ? parts.first : '';
-    final sexPart = parts.length > 1 ? parts.sublist(1).join(' ') : '';
+    final cls = _ageClassOnly(label);
+    final sexPart = lower.contains('buck') || lower.contains('boar')
+        ? 'buck'
+        : lower.contains('doe') || lower.contains('sow')
+            ? 'doe'
+            : '';
 
-    final classRank = _classRank(classPart);
+    final classRank = _classRank(cls);
     final sexRank = _sexRank(sexPart);
 
     return (classRank * 10) + sexRank;
@@ -2968,6 +3027,31 @@ class _ResultsAnimalsScreenState extends State<_ResultsAnimalsScreen> {
       }
     }
 
+    for (final award in kBestAgeAwardCodes) {
+      if (!awards.contains(award)) continue;
+
+      final sameScope = widget.showsByVariety ? sameVariety : sameBreed;
+
+      if (_otherWinnerInScope(
+            entry: e,
+            award: award,
+            sameScope: sameScope,
+          ) !=
+          null) {
+        return true;
+      }
+
+      if (!_supportsBestAgeAwards(_entryBreed(e))) return true;
+
+      if (!_bestAgeAwardMatchesClass(
+        award: award,
+        className: (e['class_name'] ?? '').toString(),
+        classSystem: classSystem,
+      )) {
+        return true;
+      }
+    }
+
     if (awards.contains('Best 4-Class')) {
       if (_otherWinnerInScope(
             entry: e,
@@ -3097,10 +3181,69 @@ class _ResultsAnimalsScreenState extends State<_ResultsAnimalsScreen> {
   }
 
   void _sortEntries() {
+    int intVal(Map<String, dynamic> e, String key, [int fallback = 9999]) {
+      final raw = e[key];
+      if (raw is int) return raw;
+      return int.tryParse(raw?.toString() ?? '') ?? fallback;
+    }
+
+    String strVal(Map<String, dynamic> e, String key) {
+      return (e[key] ?? '').toString().trim().toLowerCase();
+    }
+
+    int classSexRank(Map<String, dynamic> e) {
+      final cls = strVal(e, 'class_name');
+      final sex = strVal(e, 'sex');
+
+      int classRank;
+      if (cls.contains('senior') || cls.startsWith('sr')) {
+        classRank = 0;
+      } else if (cls.contains('intermediate') || cls.startsWith('int')) {
+        classRank = 1;
+      } else if (cls.contains('junior') || cls.startsWith('jr')) {
+        classRank = 2;
+      } else if (cls.contains('pre') || cls.contains('pre-jr') || cls.contains('pre jr')) {
+        classRank = 3;
+      } else {
+        classRank = 99;
+      }
+
+      int sexRank;
+      if (sex.contains('buck') || sex.contains('boar')) {
+        sexRank = 0;
+      } else if (sex.contains('doe') || sex.contains('sow')) {
+        sexRank = 1;
+      } else {
+        sexRank = 99;
+      }
+
+      return (classRank * 10) + sexRank;
+    }
+
     _entries.sort((a, b) {
-      final at = (a['tattoo'] ?? '').toString().toLowerCase();
-      final bt = (b['tattoo'] ?? '').toString().toLowerCase();
-      return at.compareTo(bt);
+      final byBreedSort =
+          intVal(a, 'breed_sort_order').compareTo(intVal(b, 'breed_sort_order'));
+      if (byBreedSort != 0) return byBreedSort;
+
+      final byGroupSort =
+          intVal(a, 'group_sort_order').compareTo(intVal(b, 'group_sort_order'));
+      if (byGroupSort != 0) return byGroupSort;
+
+      final byVarietySort =
+          intVal(a, 'variety_sort_order').compareTo(intVal(b, 'variety_sort_order'));
+      if (byVarietySort != 0) return byVarietySort;
+
+      final byClassSex = classSexRank(a).compareTo(classSexRank(b));
+      if (byClassSex != 0) return byClassSex;
+
+      final byClassSort =
+          intVal(a, 'class_sort_order').compareTo(intVal(b, 'class_sort_order'));
+      if (byClassSort != 0) return byClassSort;
+
+      final byTattoo = strVal(a, 'tattoo').compareTo(strVal(b, 'tattoo'));
+      if (byTattoo != 0) return byTattoo;
+
+      return strVal(a, 'entry_id').compareTo(strVal(b, 'entry_id'));
     });
   }
 
@@ -3727,18 +3870,23 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
       case 'BOV':
       case 'BOSV':
         return const ['BOV', 'BOSV'];
+
       case 'BOG':
       case 'BOSG':
         return const ['BOG', 'BOSG'];
+
       case 'BOB':
       case 'BOSB':
         return const ['BOB', 'BOSB'];
+
       case 'Best 4-Class':
       case 'Best 6-Class':
         return const ['Best 4-Class', 'Best 6-Class'];
+
       case 'Best In Show':
       case 'Reserve In Show':
         return const ['Best In Show', 'Reserve In Show'];
+
       default:
         return const [];
     }
@@ -3787,6 +3935,16 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
     }
 
     awards.addAll(const ['BOB', 'BOSB']);
+
+    if (_supportsBestAgeAwards(_breed(widget.entry))) {
+      awards.addAll(kBestAgeAwardCodes.where((award) {
+        return _bestAgeAwardMatchesClass(
+          award: award,
+          className: (widget.entry['class_name'] ?? '').toString(),
+          classSystem: _classSystemForEntry(widget.entry),
+        );
+      }));
+    }
 
     if (widget.finalAwardMode == 'bis_ris') {
       awards.addAll(const ['Best In Show', 'Reserve In Show']);
@@ -3866,6 +4024,16 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
           return currentAwards.contains('BOV') || currentAwards.contains('BOSV');
         }
         return true;
+
+      case 'Best Junior':
+      case 'Best Senior':
+      case 'Best Intermediate':
+        return _supportsBestAgeAwards(_breed(widget.entry)) &&
+            _bestAgeAwardMatchesClass(
+              award: award,
+              className: (widget.entry['class_name'] ?? '').toString(),
+              classSystem: _classSystemForEntry(widget.entry),
+            );
 
       case 'Best 4-Class':
         return _classSystemForEntry(widget.entry) == 'four' &&
@@ -4024,6 +4192,25 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
       }
     }
 
+    for (final award in kBestAgeAwardCodes) {
+      if (!_hasAward(award)) continue;
+
+      final sameScope = _showsByVariety ? sameVariety : sameBreed;
+
+      final existing = _winnerForAwardInScope(
+        award: award,
+        sameScope: sameScope,
+      );
+
+      if (existing != null) {
+        return '$award is already assigned for this ${_showsByVariety ? 'variety' : 'breed'}.';
+      }
+
+      if (!_canUseAward(award)) {
+        return '$award is only available to the correct first-place age class in eligible breeds.';
+      }
+    }
+
     if (_hasAward('Best 4-Class')) {
       final existing = _winnerForAwardInScope(
         award: 'Best 4-Class',
@@ -4103,6 +4290,12 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
       case 'BOB':
       case 'BOSB':
         return 'Requires BOV/BOSV or BOG/BOSG first.';
+      case 'Best Junior':
+        return 'Only first-place junior rabbits in eligible breeds can receive Best Junior.';
+      case 'Best Senior':
+        return 'Only first-place senior rabbits in eligible breeds can receive Best Senior.';
+      case 'Best Intermediate':
+        return 'Only first-place intermediate rabbits in eligible 6-class breeds can receive Best Intermediate.';
       case 'Best 4-Class':
         return 'Requires first-place BOB from a 4-class breed.';
       case 'Best 6-Class':
