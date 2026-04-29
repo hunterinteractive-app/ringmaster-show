@@ -37,7 +37,7 @@ Future<pw.ThemeData> _buildPdfTheme() async {
 final supabase = Supabase.instance.client;
 
 const String kQrResultsEntryBaseUrl =
-    'https://www.ringmasterone.com/show/#/qr-results-entry';
+    'https://show.ringmasterone.com/#/qr-results-entry';
 
 Future<String?> _savePdfToUserChosenLocation({
   required Uint8List bytes,
