@@ -195,7 +195,8 @@ class ExhibitorReportLoader {
           .map((e) => e.toUpperCase())
           .toSet();
 
-      final ctx = contextByEntryId['$entryId|$showLetter'];
+      final sectionId = _str(row['section_id']);
+      final ctx = contextByEntryId['$entryId|$sectionId'];
 
       final scope = _str(row['resolved_section_kind']).toUpperCase();
       final showLabel = scope.isEmpty
@@ -473,11 +474,13 @@ class ExhibitorReportLoader {
 
     for (final row in rows) {
       final entryId = _str(row['entry_id']);
+      final sectionId = _str(row['section_id']);
       final showLetter = _str(row['resolved_show_letter']).toUpperCase();
-      if (entryId.isEmpty || showLetter.isEmpty) continue;
+
+      if (entryId.isEmpty || sectionId.isEmpty || showLetter.isEmpty) continue;
 
       final scopedRows = rows.where((e) {
-        return _str(e['resolved_show_letter']).toUpperCase() == showLetter;
+        return _str(e['section_id']) == sectionId;
       }).toList();
 
       final breed = _str(row['breed_name']);
@@ -546,7 +549,7 @@ class ExhibitorReportLoader {
           .toSet()
           .length;
 
-      byEntryIdAndShow['$entryId|$showLetter'] = _EntryLegContext(
+      byEntryIdAndShow['$entryId|$sectionId'] = _EntryLegContext(
         classCount: classAnimals,
         exhibitorCount: classExhibitors,
         breedAnimals: breedAnimals,

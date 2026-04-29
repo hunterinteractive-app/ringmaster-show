@@ -71,9 +71,9 @@ class LegsReportLoader {
           .eq('show_id', showId);
 
       final awards = List<Map<String, dynamic>>.from(awardsRows);
-      if (awards.isEmpty) return const [];
 
       final entryContext = await _loadShownEntryContext(showId);
+      if (entryContext.isEmpty) return const [];
 
       final judgeRefs = entryContext.values
           .map((e) => e.showJudgeRowId)
@@ -84,6 +84,81 @@ class LegsReportLoader {
       final judgeNamesByRef = await _loadJudgeNamesByShowJudgeId(judgeRefs);
 
       final candidates = <_LegCandidate>[];
+
+      // Add synthetic FIRST-place leg checks because 1st place is stored on entries.placement,
+      // not usually in entry_awards.
+      for (final ctxEntry in entryContext.entries) {
+        final entryId = ctxEntry.key;
+        final ctx = ctxEntry.value;
+
+        if (requestedExhibitorId.isNotEmpty &&
+            ctx.exhibitorId != requestedExhibitorId) {
+          continue;
+        }
+
+        if (ctx.placement != 1) continue;
+
+        final ruleMatch = _determineLegRule(
+          awardCode: 'FIRST',
+          ctx: ctx,
+        );
+
+        if (ruleMatch == null) continue;
+
+        // This candidate will be deduped against higher awards like BOB/BOV/BIS later.
+        candidates.add(
+          _LegCandidate(
+            priority: ruleMatch.priority,
+            dedupeKey: '$entryId|${ctx.sectionLetter}',
+            data: LegsCertificateData(
+              certificateId:
+                  'leg_${showId}_${ctx.sectionLetter}_${entryId}_r${ruleMatch.rule}_first',
+              showId: showId,
+              exhibitorId: ctx.exhibitorId,
+              exhibitorNumber: ctx.exhibitorLabel,
+              exhibitorName: _firstNonEmpty([
+                ctx.exhibitorShowingName,
+                ctx.exhibitorLabel,
+                [
+                  ctx.exhibitorFirstName,
+                  ctx.exhibitorLastName,
+                ].where((e) => e.isNotEmpty).join(' '),
+                'Unknown Exhibitor',
+              ]),
+              ownerAddress: [
+                ctx.exhibitorAddressLine1,
+                ctx.exhibitorAddressLine2,
+                ctx.exhibitorCity,
+                ctx.exhibitorState,
+                ctx.exhibitorZip,
+              ].where((e) => e.isNotEmpty).join(', '),
+              entryId: entryId,
+              earNumber: ctx.tattoo,
+              breed: ctx.breed,
+              variety: ctx.varietyDisplay,
+              className: ctx.className,
+              sex: ctx.sex,
+              showName: showName,
+              clubName: clubName.isNotEmpty ? clubName : showName,
+              sanctionNumber: sanctionNumber,
+              showDate: showDate,
+              location: location,
+              secretaryName: secretaryName,
+              secretaryEmail: secretaryEmail,
+              judgeName: judgeNamesByRef[ctx.showJudgeRowId] ?? 'Judge Not Available',
+              winCode: 'FIRST',
+              legRule: ruleMatch.rule,
+              legRuleDescription: legRuleDescriptions[ruleMatch.rule] ?? '',
+              animalsCount: ruleMatch.animalsCount,
+              exhibitorsCount: ruleMatch.exhibitorsCount,
+              barcodeValue:
+                  'RMLEG|show=$showId|section=${ctx.sectionLetter}|entry=$entryId|rule=${ruleMatch.rule}|ear=${ctx.tattoo}',
+              qrValue:
+                  'https://ringmasterone.com/verify/leg/leg_${showId}_${ctx.sectionLetter}_${entryId}_r${ruleMatch.rule}_first',
+            ),
+          ),
+        );
+      }
 
       for (final row in awards) {
         final awardCode = _str(row['award_code']).toUpperCase();
@@ -409,7 +484,8 @@ class LegsReportLoader {
 
         if (!isShown || isDisqualified || scratchedAt.isNotEmpty) continue;
 
-        row['resolved_section_letter'] = _str(row['section_letter']).toUpperCase();
+        row['resolved_section_id'] = sectionId;
+        row['resolved_section_letter'] = showLetter;
         allRows.add(row);
       }
     }
@@ -428,9 +504,11 @@ class LegsReportLoader {
       final className = _str(row['class_name']);
       final sex = _str(row['sex']);
       final showJudgeRowId = _str(row['judged_by_show_judge_id']);
+      
+      final sectionId = _str(row['resolved_section_id']);
 
       final sameShowRows = allRows.where((e) {
-        return _str(e['resolved_section_letter']).toUpperCase() == sectionLetter;
+        return _str(e['resolved_section_id']) == sectionId;
       }).toList();
 
       final showAnimals = sameShowRows.length;
@@ -488,10 +566,11 @@ class LegsReportLoader {
       final groupSameSexAnimals = groupSameSexRows.length;
 
       final classRows = sameShowRows.where((e) {
-        return _str(e['breed_name']) == breed &&
-            _str(e['variety_name']) == varietyDisplay &&
-            _str(e['class_name']) == className;
-      }).toList();
+      return _str(e['breed_name']) == breed &&
+          _str(e['variety_name']) == varietyDisplay &&
+          _str(e['class_name']) == className &&
+          _str(e['sex']) == sex;
+    }).toList();
 
       final classAnimals = classRows.length;
       final classExhibitors = classRows
@@ -507,6 +586,11 @@ class LegsReportLoader {
         usesGroupAwards: usesGroupAwards,
         showJudgeRowId: showJudgeRowId,
         tattoo: _str(row['tattoo']),
+        exhibitorId: _str(row['exhibitor_id']),
+        breed: breed,
+        className: className,
+        sex: sex,
+        placement: int.tryParse(_str(row['placement'])) ?? 0,
         exhibitorLabel: _str(row['exhibitor_label']),
         exhibitorShowingName: _str(row['exhibitor_showing_name']),
         exhibitorFirstName: _str(row['exhibitor_first_name']),
@@ -722,6 +806,11 @@ class _EntryLegContext {
   final bool usesGroupAwards;
   final String showJudgeRowId;
   final String tattoo;
+  final String exhibitorId;
+  final String breed;
+  final String className;
+  final String sex;
+  final int placement;
 
   final String exhibitorLabel;
   final String exhibitorShowingName;
@@ -758,6 +847,11 @@ class _EntryLegContext {
     required this.usesGroupAwards,
     required this.showJudgeRowId,
     required this.tattoo,
+    required this.exhibitorId,
+    required this.breed,
+    required this.className,
+    required this.sex,
+    required this.placement,
     required this.exhibitorLabel,
     required this.exhibitorShowingName,
     required this.exhibitorFirstName,
