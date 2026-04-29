@@ -28,6 +28,34 @@ Future<void> main() async {
 
 final supabase = Supabase.instance.client;
 
+Uri? _qrUriFromBrowser() {
+  final fragment = Uri.base.fragment;
+
+  if (fragment.isNotEmpty) {
+    final uri = Uri.parse(fragment);
+    if (uri.path == '/qr-results-entry') return uri;
+  }
+
+  final path = Uri.base.path;
+  if (path.endsWith('/qr-results-entry')) return Uri.base;
+
+  return null;
+}
+
+Widget _qrScreenFromUri(Uri uri) {
+  return QrResultsEntryScreen(
+    showId: uri.queryParameters['showId'] ?? '',
+    sectionId: uri.queryParameters['sectionId'] ?? '',
+    breedId: uri.queryParameters['breedId'] ??
+        uri.queryParameters['breed'] ??
+        '',
+    token: uri.queryParameters['token'] ?? '',
+    varietyKey: uri.queryParameters['varietyKey'],
+    groupKey: uri.queryParameters['groupKey'],
+    classSexLabel: uri.queryParameters['classSexLabel'],
+  );
+}
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -39,28 +67,15 @@ class MyApp extends StatelessWidget {
       home: const Root(),
       onGenerateRoute: (settings) {
         final routeUri = Uri.parse(settings.name ?? '');
-
         Uri uri = routeUri;
 
-        // Handles Flutter web hash URLs:
-        // /show/#/qr-results-entry?showId=...
         if (Uri.base.fragment.isNotEmpty) {
           uri = Uri.parse(Uri.base.fragment);
         }
 
         if (uri.path == '/qr-results-entry') {
           return MaterialPageRoute(
-            builder: (_) => QrResultsEntryScreen(
-              showId: uri.queryParameters['showId'] ?? '',
-              sectionId: uri.queryParameters['sectionId'] ?? '',
-              breedId: uri.queryParameters['breedId'] ??
-                  uri.queryParameters['breed'] ??
-                  '',
-              token: uri.queryParameters['token'] ?? '',
-              varietyKey: uri.queryParameters['varietyKey'],
-              groupKey: uri.queryParameters['groupKey'],
-              classSexLabel: uri.queryParameters['classSexLabel'],
-            ),
+            builder: (_) => _qrScreenFromUri(uri),
           );
         }
 
@@ -70,10 +85,6 @@ class MyApp extends StatelessWidget {
   }
 }
 
-/// Decides where to send the user:
-/// - not signed in -> LoginScreen
-/// - signed in but no exhibitor yet -> AccountProfileSetupScreen
-/// - signed in and has at least 1 exhibitor -> ShowListScreen
 class Root extends StatefulWidget {
   const Root({super.key});
 
@@ -93,7 +104,6 @@ class _RootState extends State<Root> {
     super.initState();
     _refresh();
 
-    // React to sign-in/sign-out immediately
     _authSub = supabase.auth.onAuthStateChange.listen((data) {
       final event = data.event;
       final session = data.session;
@@ -115,7 +125,6 @@ class _RootState extends State<Root> {
   Future<void> _refresh() async {
     final user = supabase.auth.currentUser;
 
-    // Not signed in
     if (user == null) {
       if (!mounted) return;
       setState(() {
@@ -126,7 +135,6 @@ class _RootState extends State<Root> {
       return;
     }
 
-    // Signed in: claim pending licenses first, then check exhibitor
     if (!mounted) return;
     setState(() {
       _loading = true;
@@ -160,19 +168,22 @@ class _RootState extends State<Root> {
 
   @override
   Widget build(BuildContext context) {
+    final qrUri = _qrUriFromBrowser();
     final session = supabase.auth.currentSession;
 
-    // Logged out
+    if (qrUri != null) {
+      if (session == null) return const LoginScreen();
+      return _qrScreenFromUri(qrUri);
+    }
+
     if (session == null) return const LoginScreen();
 
-    // Logged in: show spinner while checking exhibitor
     if (_loading) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       );
     }
 
-    // Error checking
     if (_msg != null) {
       return Scaffold(
         body: Center(
@@ -185,7 +196,7 @@ class _RootState extends State<Root> {
                 const SizedBox(height: 12),
                 FilledButton(
                   onPressed: _refresh,
-                  child: const Text('Retry'),
+                  child: Text('Retry'),
                 ),
               ],
             ),
@@ -194,10 +205,8 @@ class _RootState extends State<Root> {
       );
     }
 
-    // No exhibitor yet -> force setup
     if (!_hasExhibitor) return const AccountProfileSetupScreen();
 
-    // Has exhibitor -> proceed
     return const ShowListScreen();
   }
 }

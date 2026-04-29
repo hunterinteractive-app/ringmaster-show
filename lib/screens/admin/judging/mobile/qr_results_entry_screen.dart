@@ -66,7 +66,6 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
         throw Exception('Please sign in to use this results-entry QR code.');
       }
 
-      await _validateToken();
       await _loadShowAndSection();
       await _loadJudges();
       await _loadBreedClassSystems();
