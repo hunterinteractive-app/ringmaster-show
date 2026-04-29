@@ -13,6 +13,10 @@ import 'config/supabase_config.dart';
 import 'theme/app_theme.dart';
 import 'services/app_init_service.dart';
 
+final supabase = Supabase.instance.client;
+
+Uri? initialQrUri;
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -23,20 +27,20 @@ Future<void> main() async {
     anonKey: SupabaseConfig.anonKey,
   );
 
+  initialQrUri = _qrUriFromBrowser();
+
   runApp(const MyApp());
 }
 
-final supabase = Supabase.instance.client;
-
 Uri? _qrUriFromBrowser() {
-  final fragment = Uri.base.fragment;
+  final fragment = Uri.base.fragment.trim();
 
   if (fragment.isNotEmpty) {
     final uri = Uri.parse(fragment);
     if (uri.path == '/qr-results-entry') return uri;
   }
 
-  final path = Uri.base.path;
+  final path = Uri.base.path.trim();
   if (path.endsWith('/qr-results-entry')) return Uri.base;
 
   return null;
@@ -46,9 +50,8 @@ Widget _qrScreenFromUri(Uri uri) {
   return QrResultsEntryScreen(
     showId: uri.queryParameters['showId'] ?? '',
     sectionId: uri.queryParameters['sectionId'] ?? '',
-    breedId: uri.queryParameters['breedId'] ??
-        uri.queryParameters['breed'] ??
-        '',
+    breedId:
+        uri.queryParameters['breedId'] ?? uri.queryParameters['breed'] ?? '',
     token: uri.queryParameters['token'] ?? '',
     varietyKey: uri.queryParameters['varietyKey'],
     groupKey: uri.queryParameters['groupKey'],
@@ -62,7 +65,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'RingMaster Show',
+      title: 'RingMaster Show QR FIX TEST',
       theme: AppTheme.lightTheme,
       home: const Root(),
       onGenerateRoute: (settings) {
@@ -102,11 +105,16 @@ class _RootState extends State<Root> {
   @override
   void initState() {
     super.initState();
+
+    initialQrUri ??= _qrUriFromBrowser();
+
     _refresh();
 
     _authSub = supabase.auth.onAuthStateChange.listen((data) {
       final event = data.event;
       final session = data.session;
+
+      initialQrUri ??= _qrUriFromBrowser();
 
       if (event == AuthChangeEvent.signedOut || session == null) {
         AppInitService.reset();
@@ -168,7 +176,7 @@ class _RootState extends State<Root> {
 
   @override
   Widget build(BuildContext context) {
-    final qrUri = _qrUriFromBrowser();
+    final qrUri = initialQrUri ?? _qrUriFromBrowser();
     final session = supabase.auth.currentSession;
 
     if (qrUri != null) {
@@ -196,7 +204,7 @@ class _RootState extends State<Root> {
                 const SizedBox(height: 12),
                 FilledButton(
                   onPressed: _refresh,
-                  child: Text('Retry'),
+                  child: const Text('Retry - QR FIX TEST'),
                 ),
               ],
             ),
