@@ -3,6 +3,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/screens/admin/judging/mobile/qr_results_entry_screen.dart';
 
 import 'screens/login_screen.dart';
 import 'screens/show_list_screen.dart';
@@ -14,9 +15,6 @@ import 'services/app_init_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
-  const supabaseAnon = String.fromEnvironment('SUPABASE_ANON_KEY');
 
   SupabaseConfig.validate();
 
@@ -39,6 +37,28 @@ class MyApp extends StatelessWidget {
       title: 'RingMaster Show',
       theme: AppTheme.lightTheme,
       home: const Root(),
+      onGenerateRoute: (settings) {
+        final uri = Uri.parse(settings.name ?? '');
+
+        if (uri.path == '/qr-results-entry') {
+          return MaterialPageRoute(
+            builder: (_) => QrResultsEntryScreen(
+              showId: uri.queryParameters['showId'] ?? '',
+              sectionId: uri.queryParameters['sectionId'] ?? '',
+              breedId: uri.queryParameters['breedId'] ?? '',
+              token: uri.queryParameters['token'] ?? '',
+
+              // Leave these optional.
+              // Normal QR codes should NOT include these.
+              varietyKey: uri.queryParameters['varietyKey'],
+              groupKey: uri.queryParameters['groupKey'],
+              classSexLabel: uri.queryParameters['classSexLabel'],
+            ),
+          );
+        }
+
+        return null;
+      },
     );
   }
 }

@@ -1,70 +1,63 @@
+// lib/screens/admin/closeout/services/sweepstakes_report_service.dart
+
 import 'dart:typed_data';
 
-import 'package:pdf/widgets.dart' as pw;
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../data/closeout_repository.dart';
 import '../data/loaders/sweepstakes_report_loader.dart';
+import '../models/base/report_request.dart';
 import '../models/clubs/sweepstakes_report_data.dart';
 import '../pdf/builders/sweepstakes_report_pdf.dart';
 
 class SweepstakesReportService {
   SweepstakesReportService({
+    CloseoutRepository? repo,
     SweepstakesReportLoader? loader,
-  }) : _loader = loader ?? SweepstakesReportLoader();
+    SweepstakesReportPdf? pdfBuilder,
+  })  : _repo = repo ?? CloseoutRepository(Supabase.instance.client),
+        _loader = loader ??
+            SweepstakesReportLoader(
+              repo ?? CloseoutRepository(Supabase.instance.client),
+            ),
+        _pdfBuilder = pdfBuilder ?? SweepstakesReportPdf();
 
+  final CloseoutRepository _repo;
   final SweepstakesReportLoader _loader;
+  final SweepstakesReportPdf _pdfBuilder;
 
   Future<SweepstakesReportResult> generate({
     required String showId,
     required String breedName,
     required String scope,
+    required String showLetter,
     String? showName,
     String? showDate,
     String? sanctionNumber,
   }) async {
-    final SweepstakesReportData data = await _loader.load(
+    final request = ReportRequest(
       showId: showId,
-      breedName: breedName,
-      scope: scope,
-    );
-
-    final pw.Document pdf = await SweepstakesReportPdf.build(
-      data: data,
       showName: showName,
       showDate: showDate,
-      sanctionNumber: sanctionNumber,
+      finalizeRunId: 'manual-sweepstakes',
+      reportName: 'Sweepstakes Report',
+      breedName: breedName,
+      scope: scope,
+      showLetter: showLetter,
     );
 
-    final Uint8List bytes = await pdf.save();
+    final SweepstakesReportData data = await _loader.load(request);
+
+    final file = await _pdfBuilder.buildFile(data, request);
 
     return SweepstakesReportResult(
       data: data,
-      bytes: bytes,
-      fileName: _buildFileName(
-        breedName: breedName,
-        scope: scope,
-        showName: showName,
-      ),
+      bytes: Uint8List.fromList(file.bytes),
+      fileName: file.fileName,
     );
   }
 
-  String _buildFileName({
-    required String breedName,
-    required String scope,
-    String? showName,
-  }) {
-    String clean(String input) {
-      return input
-          .replaceAll(RegExp(r'[^\w\s-]'), '')
-          .trim()
-          .replaceAll(RegExp(r'\s+'), '_');
-    }
-
-    final showPart = clean(showName ?? 'show');
-    final breedPart = clean(breedName);
-    final scopePart = clean(scope.toLowerCase());
-
-    return '${showPart}_${breedPart}_${scopePart}_sweepstakes.pdf';
-  }
+  CloseoutRepository get repo => _repo;
 }
 
 class SweepstakesReportResult {

@@ -364,7 +364,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
       await Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => _ResultsAnimalsScreen(
+          builder: (_) => ResultsAnimalsScreen(
             showId: widget.showId,
             showName: widget.showName,
             sectionLabel: sectionName,
@@ -611,7 +611,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
       await Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => _ResultsAnimalsScreen(
+          builder: (_) => ResultsAnimalsScreen(
             showId: widget.showId,
             showName: widget.showName,
             sectionLabel: sectionName,
@@ -2746,7 +2746,7 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
                       final completed = await Navigator.push<bool>(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => _ResultsAnimalsScreen(
+                          builder: (_) => ResultsAnimalsScreen(
                             showId: widget.showId,
                             showName: widget.showName,
                             sectionLabel: widget.sectionLabel,
@@ -2787,7 +2787,7 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
                               await Navigator.push<bool>(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) => _ResultsAnimalsScreen(
+                                  builder: (_) => ResultsAnimalsScreen(
                                     showId: widget.showId,
                                     showName: widget.showName,
                                     sectionLabel: widget.sectionLabel,
@@ -2827,7 +2827,7 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
   }
 }
 
-class _ResultsAnimalsScreen extends StatefulWidget {
+class ResultsAnimalsScreen extends StatefulWidget {
   final String showId;
   final String showName;
   final String sectionLabel;
@@ -2846,7 +2846,7 @@ class _ResultsAnimalsScreen extends StatefulWidget {
   final bool showsByVariety;
 
 
-  const _ResultsAnimalsScreen({
+  const ResultsAnimalsScreen({
     required this.showId,
     required this.showName,
     required this.sectionLabel,
@@ -2866,10 +2866,10 @@ class _ResultsAnimalsScreen extends StatefulWidget {
   });
 
   @override
-  State<_ResultsAnimalsScreen> createState() => _ResultsAnimalsScreenState();
+  State<ResultsAnimalsScreen> createState() => ResultsAnimalsScreenState();
 }
 
-class _ResultsAnimalsScreenState extends State<_ResultsAnimalsScreen> {
+class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
   late List<Map<String, dynamic>> _entries;
   String? _msg;
   bool _savingJudge = false;
@@ -3505,11 +3505,11 @@ class _ResultsAnimalsScreenState extends State<_ResultsAnimalsScreen> {
 
     final entry = _entries[index];
 
-    final result = await showModalBottomSheet<_ResultsEntryOutcome>(
+    final result = await showModalBottomSheet<ResultsEntryOutcome>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => _ResultsEntrySheet(
+      builder: (_) => ResultsEntrySheet(
         showId: widget.showId,
         entry: entry,
         classEntries: _entries,
@@ -3738,17 +3738,17 @@ class _ResultsAnimalsScreenState extends State<_ResultsAnimalsScreen> {
   }
 }
 
-class _ResultsEntryOutcome {
+class ResultsEntryOutcome {
   final bool goNext;
   final bool classComplete;
 
-  const _ResultsEntryOutcome({
+  const ResultsEntryOutcome({
     required this.goNext,
     required this.classComplete,
   });
 }
 
-class _ResultsEntrySheet extends StatefulWidget {
+class ResultsEntrySheet extends StatefulWidget {
   final String showId;
   final Map<String, dynamic> entry;
   final List<Map<String, dynamic>> classEntries;
@@ -3763,7 +3763,7 @@ class _ResultsEntrySheet extends StatefulWidget {
   final bool showsByVariety;
   final bool isFurOrWoolClass;
 
-  const _ResultsEntrySheet({
+  const ResultsEntrySheet({
     required this.showId,
     required this.entry,
     required this.classEntries,
@@ -3780,10 +3780,10 @@ class _ResultsEntrySheet extends StatefulWidget {
   });
 
   @override
-  State<_ResultsEntrySheet> createState() => _ResultsEntrySheetState();
+  State<ResultsEntrySheet> createState() => ResultsEntrySheetState();
 }
 
-class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
+class ResultsEntrySheetState extends State<ResultsEntrySheet> {
   bool _saving = false;
   String? _msg;
 
@@ -4641,7 +4641,7 @@ class _ResultsEntrySheetState extends State<_ResultsEntrySheet> {
       if (!mounted) return;
       Navigator.pop(
         context,
-        _ResultsEntryOutcome(
+        ResultsEntryOutcome(
           goNext: goNext,
           classComplete: goNext,
         ),
