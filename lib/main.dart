@@ -38,7 +38,15 @@ class MyApp extends StatelessWidget {
       theme: AppTheme.lightTheme,
       home: const Root(),
       onGenerateRoute: (settings) {
-        final uri = Uri.parse(settings.name ?? '');
+        final routeUri = Uri.parse(settings.name ?? '');
+
+        Uri uri = routeUri;
+
+        // Handles Flutter web hash URLs:
+        // /show/#/qr-results-entry?showId=...
+        if (Uri.base.fragment.isNotEmpty) {
+          uri = Uri.parse(Uri.base.fragment);
+        }
 
         if (uri.path == '/qr-results-entry') {
           return MaterialPageRoute(
@@ -47,9 +55,6 @@ class MyApp extends StatelessWidget {
               sectionId: uri.queryParameters['sectionId'] ?? '',
               breedId: uri.queryParameters['breedId'] ?? '',
               token: uri.queryParameters['token'] ?? '',
-
-              // Leave these optional.
-              // Normal QR codes should NOT include these.
               varietyKey: uri.queryParameters['varietyKey'],
               groupKey: uri.queryParameters['groupKey'],
               classSexLabel: uri.queryParameters['classSexLabel'],
