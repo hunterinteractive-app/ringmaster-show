@@ -1137,7 +1137,7 @@ class _ControlSheetsGeneratorSheetState
               pw.SizedBox(width: 10),
               pw.Expanded(
                 child: pw.Text(
-                  'Scan to enter results directly into RingMaster Show.'
+                  'Scan to enter results directly into RingMaster Show.',
                   //If prompted to sign in, simply scan this code after logging in.',
                   style: pw.TextStyle(
                     fontSize: 9,
