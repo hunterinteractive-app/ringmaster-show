@@ -4703,12 +4703,17 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
         throw Exception('Entry update did not return a row. The row may not be updating.');
       }
 
-      final savedPlacement = (updated['placement'] ?? '').toString().trim();
+      final savedPlacementRaw = updated['placement'];
 
-      if (!shouldClearPlacement && savedPlacement != normalizedPlacement.toString()) {
-        throw Exception(
-          'Placement did not save. Tried to save $normalizedPlacement, database returned "$savedPlacement".',
-        );
+      if (!shouldClearPlacement) {
+        final saved = savedPlacementRaw?.toString().trim() ?? '';
+        final expected = normalizedPlacement?.toString().trim() ?? '';
+
+        if (saved != expected) {
+          throw Exception(
+            'Placement did not save correctly.\nExpected: $expected\nGot: $saved',
+          );
+        }
       }
 
       await supabase
