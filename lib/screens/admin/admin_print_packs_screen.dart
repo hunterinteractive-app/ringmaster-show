@@ -1137,7 +1137,7 @@ class _ControlSheetsGeneratorSheetState
               pw.SizedBox(width: 10),
               pw.Expanded(
                 child: pw.Text(
-                  'Scan to enter results directly into RingMaster Show. This opens the breed view so the writer can drill down to the needed class.',
+                  'Scan to enter results directly into RingMaster Show. If prompted to sign in, simply scan this code after logging in.',
                   style: pw.TextStyle(
                     fontSize: 9,
                     fontWeight: pw.FontWeight.bold,
@@ -1347,7 +1347,7 @@ class _ControlSheetsGeneratorSheetState
                 border: Border.all(color: const Color(0xFFD4A623)),
               ),
               child: const Text(
-                '🧪🧪🧪🧪🧪QR Code Option: adds a secure results-entry QR code to each judging sheet so writers can enter results directly into the system.',
+                'QR Code Option: adds a secure results-entry QR code to each judging sheet so writers can enter results directly into the system.',
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
                   color: Color(0xFF6B4E00),
