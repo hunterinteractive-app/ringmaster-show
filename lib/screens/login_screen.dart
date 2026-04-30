@@ -110,7 +110,6 @@ class _LoginScreenState extends State<LoginScreen>
         final uri = Uri.parse(pendingQr);
 
         if (!mounted) return;
-
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
             builder: (_) => QrResultsEntryScreen(
@@ -126,11 +125,8 @@ class _LoginScreenState extends State<LoginScreen>
             ),
           ),
         );
-
         return;
       }
-
-      if (!mounted) return;
 
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const ShowListScreen()),
@@ -174,6 +170,7 @@ class _LoginScreenState extends State<LoginScreen>
     try {
       await supabase.auth.signInWithOtp(
         email: _email.text.trim(),
+        emailRedirectTo: 'https://show.ringmasterone.com/',
       );
 
       if (!mounted) return;
