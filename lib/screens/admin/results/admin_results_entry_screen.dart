@@ -4568,7 +4568,9 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
     });
 
     try {
-      await ShowLockService.assertShowUnlocked(widget.showId);
+      if (!widget.isQrEntryMode) {
+        await ShowLockService.assertShowUnlocked(widget.showId);
+      }
 
       final entryId = _entryUuid;
       if (entryId.isEmpty) {
@@ -4647,7 +4649,6 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
         'result_entered_by_user_id': widget.isQrEntryMode ? null : user?.id,
         'result_entered_by_name': writerName.isEmpty ? 'Signed-in Writer' : writerName,
         'result_entered_by_phone': widget.isQrEntryMode ? writerPhone : null,
-        //'result_entry_source': widget.isQrEntryMode ? 'qr' : 'admin',
         'result_entered_at': now,
         'updated_at': now,
       };
