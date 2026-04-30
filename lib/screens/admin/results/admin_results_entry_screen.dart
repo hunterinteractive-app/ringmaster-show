@@ -4632,7 +4632,7 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
         'placement': normalizedPlacement,
         'result_status': effectiveStatus,
         'disqualified_reason': normalizedDqReason,
-        'is_shown': effectiveStatus != 'No Show',
+        'is_shown': effectiveStatus != 'Shown',
         'is_disqualified': _isDisqualifiedStatus(effectiveStatus),
         'judged_by_show_judge_id': normalizedJudgeId,
         'result_entered_by_user_id': widget.isQrEntryMode ? null : user?.id,
@@ -4691,10 +4691,20 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
     final scratched = _isScratched(widget.entry);
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
-    final placementOptions = _placementOptions();
-    final canPlace = !scratched && _resultStatus == 'Shown';
+    var placementOptions = _placementOptions();
+
+    final effectiveResultStatus = (_resultStatus ?? 'Shown').trim();
+    final canPlace = !scratched && effectiveResultStatus == 'Shown';
+
+    if (placementOptions.isEmpty && canPlace && widget.shownCount > 0) {
+      placementOptions = List<String>.generate(
+        widget.shownCount <= 0 ? 1 : widget.shownCount,
+        (i) => '${i + 1}',
+      );
+    }
+
     final canAward =
-        !scratched && _resultStatus == 'Shown' && (_placement ?? '').trim() == '1';
+        !scratched && effectiveResultStatus == 'Shown' && (_placement ?? '').trim() == '1';
 
     return Padding(
       padding: EdgeInsets.only(
