@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:ringmaster_show/screens/admin/judging/mobile/qr_results_entry_screen.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'screens/login_screen.dart';
 import 'screens/show_list_screen.dart';
@@ -46,11 +45,6 @@ Uri? _qrUriFromBrowser() {
   if (path.endsWith('/qr-results-entry')) return Uri.base;
 
   return null;
-}
-
-Future<void> _savePendingQrUri(Uri uri) async {
-  final prefs = await SharedPreferences.getInstance();
-  await prefs.setString('pending_qr_results_url', uri.toString());
 }
 
 Widget _qrScreenFromUri(Uri uri) {
@@ -188,11 +182,6 @@ class _RootState extends State<Root> {
     final session = supabase.auth.currentSession;
 
     if (qrUri != null) {
-      if (session == null) {
-        _savePendingQrUri(qrUri);
-        return const LoginScreen();
-      }
-
       return _qrScreenFromUri(qrUri);
     }
 

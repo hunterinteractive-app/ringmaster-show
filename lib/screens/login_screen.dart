@@ -101,33 +101,6 @@ class _LoginScreenState extends State<LoginScreen>
     _sub = supabase.auth.onAuthStateChange.listen((data) async {
       if (data.session == null || !mounted) return;
 
-      final prefs = await SharedPreferences.getInstance();
-      final pendingQr = prefs.getString('pending_qr_results_url');
-
-      if (pendingQr != null && pendingQr.isNotEmpty) {
-        await prefs.remove('pending_qr_results_url');
-
-        final uri = Uri.parse(pendingQr);
-
-        if (!mounted) return;
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (_) => QrResultsEntryScreen(
-              showId: uri.queryParameters['showId'] ?? '',
-              sectionId: uri.queryParameters['sectionId'] ?? '',
-              breedId: uri.queryParameters['breedId'] ??
-                  uri.queryParameters['breed'] ??
-                  '',
-              token: uri.queryParameters['token'] ?? '',
-              varietyKey: uri.queryParameters['varietyKey'],
-              groupKey: uri.queryParameters['groupKey'],
-              classSexLabel: uri.queryParameters['classSexLabel'],
-            ),
-          ),
-        );
-        return;
-      }
-
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const ShowListScreen()),
       );
