@@ -4647,12 +4647,32 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
         'result_entered_by_user_id': widget.isQrEntryMode ? null : user?.id,
         'result_entered_by_name': writerName.isEmpty ? 'Signed-in Writer' : writerName,
         'result_entered_by_phone': widget.isQrEntryMode ? writerPhone : null,
-        'result_entry_source': widget.isQrEntryMode ? 'qr' : 'admin',
+        //'result_entry_source': widget.isQrEntryMode ? 'qr' : 'admin',
         'result_entered_at': now,
         'updated_at': now,
       };
 
-      await supabase.from('entries').update(payload).eq('id', entryId);
+      if (!shouldClearPlacement && normalizedPlacement == null) {
+        throw Exception('Placement is required before saving.');
+      }
+
+      debugPrint('SAVE DEBUG entryId=$entryId');
+      debugPrint('SAVE DEBUG _placement=$_placement');
+      debugPrint('SAVE DEBUG normalizedPlacement=$normalizedPlacement');
+      debugPrint('SAVE DEBUG payload=$payload');
+
+      final updated = await supabase
+          .from('entries')
+          .update(payload)
+          .eq('id', entryId)
+          .select('id, placement, result_status, judged_by_show_judge_id, updated_at')
+          .maybeSingle();
+
+      debugPrint('SAVE DEBUG updated=$updated');
+
+      if (updated == null) {
+        throw Exception('Entry update did not return a row. Check RLS/update permissions.');
+      }
 
       await supabase
           .from('entry_awards')
