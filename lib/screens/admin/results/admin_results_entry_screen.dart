@@ -457,11 +457,8 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     }) async {
       final params = <String, dynamic>{
         'p_show_id': widget.showId,
+        'p_section_id': (sectionId == null || sectionId.isEmpty) ? null : sectionId,
       };
-
-      if (sectionId != null && sectionId.isNotEmpty) {
-        params['p_section_id'] = sectionId;
-      }
 
       final rows = await supabase.rpc(
         'report_results_entry_rows',
@@ -1707,9 +1704,9 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
       'report_results_entry_rows',
       params: {
         'p_show_id': widget.showId,
+        'p_section_id': null,
       },
     );
-
     final refreshed = (rows as List)
         .map((e) => Map<String, dynamic>.from(e as Map))
         .where((e) {
@@ -2084,6 +2081,7 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
       'report_results_entry_rows',
       params: {
         'p_show_id': widget.showId,
+        'p_section_id': null,
       },
     );
 
@@ -2584,6 +2582,7 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
       'report_results_entry_rows',
       params: {
         'p_show_id': widget.showId,
+        'p_section_id': null,
       },
     );
 
@@ -3410,6 +3409,7 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
       'report_results_entry_rows',
       params: {
         'p_show_id': widget.showId,
+        'p_section_id': null,
       },
     );
 
