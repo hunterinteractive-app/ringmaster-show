@@ -2844,6 +2844,9 @@ class ResultsAnimalsScreen extends StatefulWidget {
   final String finalAwardMode;
   final bool showsByGroup;
   final bool showsByVariety;
+  final String? writerName;
+  final String? writerPhone;
+  final bool isQrEntryMode;
 
 
   const ResultsAnimalsScreen({
@@ -2862,6 +2865,9 @@ class ResultsAnimalsScreen extends StatefulWidget {
     required this.finalAwardMode,
     required this.showsByGroup,
     required this.showsByVariety,
+    this.writerName,
+    this.writerPhone,
+    this.isQrEntryMode = false,
     this.initialEntryIdToOpen,
   });
 
@@ -3525,6 +3531,9 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
         finalAwardMode: widget.finalAwardMode,
         showsByGroup: widget.showsByGroup,
         showsByVariety: widget.showsByVariety,
+        writerName: widget.writerName,
+        writerPhone: widget.writerPhone,
+        isQrEntryMode: widget.isQrEntryMode,
         isFurOrWoolClass: widget.isFurOrWoolClass,
       ),
     );
@@ -3761,6 +3770,9 @@ class ResultsEntrySheet extends StatefulWidget {
   final String finalAwardMode;
   final bool showsByGroup;
   final bool showsByVariety;
+  final String? writerName;
+  final String? writerPhone;
+  final bool isQrEntryMode;
   final bool isFurOrWoolClass;
 
   const ResultsEntrySheet({
@@ -3776,6 +3788,9 @@ class ResultsEntrySheet extends StatefulWidget {
     required this.finalAwardMode,
     required this.showsByGroup,
     required this.showsByVariety,
+    this.writerName,
+    this.writerPhone,
+    this.isQrEntryMode = false,
     required this.isFurOrWoolClass,
   });
 
@@ -4554,11 +4569,21 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
       final user = supabase.auth.currentUser;
       final session = supabase.auth.currentSession;
 
-      if (user == null || session == null) {
-        throw Exception('Please sign in before saving results.');
-      }
+      final writerName = widget.isQrEntryMode
+          ? (widget.writerName ?? '').trim()
+          : (user == null ? '' : _writerNameFromUser(user));
 
-      final writerName = _writerNameFromUser(user);
+      final writerPhone = (widget.writerPhone ?? '').trim();
+
+      if (widget.isQrEntryMode) {
+        if (writerName.isEmpty || writerPhone.isEmpty) {
+          throw Exception('Writer name and phone number are required.');
+        }
+      } else {
+        if (user == null || session == null) {
+          throw Exception('Please sign in before saving results.');
+        }
+      }
 
       final scratched = _isScratched(widget.entry);
       final effectiveStatus = (_resultStatus ?? 'Shown').trim();
@@ -4610,8 +4635,10 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
         'is_shown': effectiveStatus != 'No Show',
         'is_disqualified': _isDisqualifiedStatus(effectiveStatus),
         'judged_by_show_judge_id': normalizedJudgeId,
-        'result_entered_by_user_id': user.id,
-        'result_entered_by_name': writerName,
+        'result_entered_by_user_id': widget.isQrEntryMode ? null : user?.id,
+        'result_entered_by_name': writerName.isEmpty ? 'Signed-in Writer' : writerName,
+        'result_entered_by_phone': widget.isQrEntryMode ? writerPhone : null,
+        'result_entry_source': widget.isQrEntryMode ? 'qr' : 'admin',
         'result_entered_at': now,
         'updated_at': now,
       };

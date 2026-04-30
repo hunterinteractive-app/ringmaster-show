@@ -2,7 +2,6 @@
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:ringmaster_show/screens/login_screen.dart';
 
 import 'package:ringmaster_show/screens/admin/results/admin_results_entry_screen.dart';
 import 'package:ringmaster_show/services/show_lock_service.dart';
@@ -49,6 +48,9 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
   bool _showsByGroup = false;
   bool _showsByVariety = false;
 
+  String? _writerName;
+  String? _writerPhone;
+
   @override
   void initState() {
     super.initState();
@@ -62,15 +64,6 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
     });
 
     try {
-      final session = supabase.auth.currentSession;
-      if (session == null) {
-        if (!mounted) return;
-        setState(() {
-          _loading = false;
-          _msg = null;
-        });
-        return;
-      }
 
       await _loadShowAndSection();
       await _loadJudges();
@@ -93,34 +86,6 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
         _loading = false;
         _msg = e.toString().replaceFirst('Exception: ', '');
       });
-    }
-  }
-
-  Future<void> _validateToken() async {
-    final token = widget.token.trim();
-
-    // Admin-generated QR codes currently do not include a token.
-    // Sign-in is required, so allow signed-in users through.
-    if (token.isEmpty) return;
-
-    var query = supabase
-        .from('show_result_entry_tokens')
-        .select('id')
-        .eq('show_id', widget.showId)
-        .eq('section_id', widget.sectionId)
-        .eq('breed_id', widget.breedId)
-        .eq('token', token)
-        .eq('is_active', true);
-
-    final varietyKey = (widget.varietyKey ?? '').trim();
-    if (varietyKey.isNotEmpty) {
-      query = query.eq('variety_key', varietyKey);
-    }
-
-    final rows = await query.limit(1);
-
-    if ((rows as List).isEmpty) {
-      throw Exception('This QR code is invalid or no longer active.');
     }
   }
 
@@ -441,10 +406,6 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
       );
     }
 
-    if (supabase.auth.currentSession == null) {
-      return const LoginScreen();
-    }
-
     if (_msg != null) {
       return Scaffold(
         backgroundColor: const Color(0xFFF4F6FB),
@@ -478,6 +439,20 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
       );
     }
 
+    if (_writerName == null || _writerPhone == null) {
+      return _QrWriterInfoScreen(
+        showName: _showName,
+        sectionLabel: _sectionLabel,
+        breed: widget.breedId,
+        onContinue: (name, phone) {
+          setState(() {
+            _writerName = name;
+            _writerPhone = phone;
+          });
+        },
+      );
+    }
+
     return _QrBreedDrilldownScreen(
       showId: widget.showId,
       showName: _showName,
@@ -489,6 +464,8 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
       finalAwardMode: _finalAwardMode,
       showsByGroup: _showsByGroup,
       showsByVariety: _showsByVariety,
+      writerName: _writerName!,
+      writerPhone: _writerPhone!,
       onBulkJudgeApply: _applyJudgeToEntries,
     );
   }
@@ -505,6 +482,8 @@ class _QrBreedDrilldownScreen extends StatefulWidget {
   final String finalAwardMode;
   final bool showsByGroup;
   final bool showsByVariety;
+  final String writerName;
+  final String writerPhone;
   final Future<void> Function(
     List<Map<String, dynamic>> entries,
     String? judgeId,
@@ -521,6 +500,8 @@ class _QrBreedDrilldownScreen extends StatefulWidget {
     required this.finalAwardMode,
     required this.showsByGroup,
     required this.showsByVariety,
+    required this.writerName,
+    required this.writerPhone,
     required this.onBulkJudgeApply,
   });
 
@@ -810,6 +791,9 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
           finalAwardMode: widget.finalAwardMode,
           showsByGroup: showsByGroup,
           showsByVariety: showsByVariety,
+          writerName: widget.writerName,
+          writerPhone: widget.writerPhone,
+          isQrEntryMode: true,
         ),
       ),
     );
@@ -912,6 +896,149 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
           fontSize: 12,
           fontWeight: FontWeight.w600,
         ),
+      ),
+    );
+  }
+}
+class _QrWriterInfoScreen extends StatefulWidget {
+  final String showName;
+  final String sectionLabel;
+  final String breed;
+  final void Function(String name, String phone) onContinue;
+
+  const _QrWriterInfoScreen({
+    required this.showName,
+    required this.sectionLabel,
+    required this.breed,
+    required this.onContinue,
+  });
+
+  @override
+  State<_QrWriterInfoScreen> createState() => _QrWriterInfoScreenState();
+}
+
+class _QrWriterInfoScreenState extends State<_QrWriterInfoScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _phoneController = TextEditingController();
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    super.dispose();
+  }
+
+  String? _validateName(String? value) {
+    final text = (value ?? '').trim();
+    if (text.isEmpty) return 'Writer name is required.';
+    if (text.length < 2) return 'Enter a full name.';
+    return null;
+  }
+
+  String? _validatePhone(String? value) {
+    final text = (value ?? '').trim();
+    if (text.isEmpty) return 'Phone number is required.';
+    final digits = text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.length < 10) return 'Enter a valid phone number.';
+    return null;
+  }
+
+  void _continue() {
+    if (!_formKey.currentState!.validate()) return;
+
+    widget.onContinue(
+      _nameController.text.trim(),
+      _phoneController.text.trim(),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF4F6FB),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF11285A),
+        foregroundColor: Colors.white,
+        title: const Text('QR Results Entry'),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Card(
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      widget.showName,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 22,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '${widget.sectionLabel} • ${widget.breed}',
+                      style: const TextStyle(
+                        color: Colors.black54,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    const Text(
+                      'Writer Information',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 18,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Enter the name and phone number of the person recording results. This is saved with the results in case the secretary has questions.',
+                      style: TextStyle(color: Colors.black54),
+                    ),
+                    const SizedBox(height: 18),
+                    TextFormField(
+                      controller: _nameController,
+                      validator: _validateName,
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(
+                        labelText: 'Writer name',
+                        prefixIcon: Icon(Icons.person_outline),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _phoneController,
+                      validator: _validatePhone,
+                      keyboardType: TextInputType.phone,
+                      textInputAction: TextInputAction.done,
+                      onFieldSubmitted: (_) => _continue(),
+                      decoration: const InputDecoration(
+                        labelText: 'Phone number',
+                        prefixIcon: Icon(Icons.phone_outlined),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    FilledButton.icon(
+                      onPressed: _continue,
+                      icon: const Icon(Icons.chevron_right),
+                      label: const Text('Continue to Results'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
