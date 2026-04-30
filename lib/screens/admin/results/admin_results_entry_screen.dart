@@ -133,12 +133,15 @@ class AdminResultsEntryScreen extends StatefulWidget {
   final String showId;
   final String showName;
   final String? initialEntryId;
+  final bool isQrEntryMode;
+  
 
   const AdminResultsEntryScreen({
     super.key,
     required this.showId,
     required this.showName,
     this.initialEntryId,
+    this.isQrEntryMode = false,
   });
 
   @override
@@ -391,7 +394,9 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                   .toList();
               if (ids.isEmpty) return;
 
-              await ShowLockService.assertShowUnlocked(widget.showId);
+              if (!widget.isQrEntryMode) {
+                await ShowLockService.assertShowUnlocked(widget.showId);
+              }
 
               await supabase
                   .from('entries')
@@ -407,6 +412,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
             finalAwardMode: _finalAwardMode,
             showsByGroup: byGroup,
             showsByVariety: byVariety,
+            isQrEntryMode: widget.isQrEntryMode,
             initialEntryIdToOpen:
                 (targetEntry['entry_id'] ?? targetEntry['id'] ?? '')
                     .toString(),
@@ -440,9 +446,10 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
         .from('shows')
         .select('final_award_mode')
         .eq('id', widget.showId)
-        .single();
+        .maybeSingle();
 
-    _finalAwardMode = (row['final_award_mode'] ?? kDefaultFinalAwardMode).toString();
+    _finalAwardMode =
+        (row?['final_award_mode'] ?? kDefaultFinalAwardMode).toString();
   }
 
     Future<List<Map<String, dynamic>>> _fetchHydratedEntries({
@@ -638,7 +645,9 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                   .toList();
               if (ids.isEmpty) return;
 
-              await ShowLockService.assertShowUnlocked(widget.showId);
+              if (!widget.isQrEntryMode) {
+                await ShowLockService.assertShowUnlocked(widget.showId);
+              }
 
               await supabase
                   .from('entries')
@@ -654,6 +663,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
             finalAwardMode: _finalAwardMode,
             showsByGroup: byGroup,
             showsByVariety: byVariety,
+            isQrEntryMode: widget.isQrEntryMode,
             initialEntryIdToOpen: targetId,
           ),
         ),
@@ -1530,6 +1540,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                                           breedClassSystems: _breedClassSystems,
                                           finalAwardMode: _finalAwardMode,
                                           showsByVariety: byVariety,
+                                          isQrEntryMode: widget.isQrEntryMode,
                                         ),
                                       ),
                                     );
@@ -1547,6 +1558,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                                           breedClassSystems: _breedClassSystems,
                                           finalAwardMode: _finalAwardMode,
                                           parentGroupLabel: null,
+                                          isQrEntryMode: widget.isQrEntryMode,
                                         ),
                                       ),
                                     );
@@ -1567,6 +1579,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                                           finalAwardMode: _finalAwardMode,
                                           showsByGroup: false,
                                           showsByVariety: false,
+                                          isQrEntryMode: widget.isQrEntryMode,
                                         ),
                                       ),
                                     );
@@ -1596,6 +1609,7 @@ class _ResultsGroupScreen extends StatefulWidget {
   final Map<String, String> breedClassSystems;
   final String finalAwardMode;
   final bool showsByVariety;
+  final bool isQrEntryMode;
 
   const _ResultsGroupScreen({
     required this.showId,
@@ -1607,6 +1621,7 @@ class _ResultsGroupScreen extends StatefulWidget {
     required this.breedClassSystems,
     required this.finalAwardMode,
     required this.showsByVariety,
+    required this.isQrEntryMode,
   });
 
   @override
@@ -1754,7 +1769,9 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
         .toList();
       if (ids.isEmpty) return;
 
-      await ShowLockService.assertShowUnlocked(widget.showId);
+      if (!widget.isQrEntryMode) {
+        await ShowLockService.assertShowUnlocked(widget.showId);
+      }
 
       await supabase
           .from('entries')
@@ -1922,6 +1939,7 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
                               breedClassSystems: widget.breedClassSystems,
                               finalAwardMode: widget.finalAwardMode,
                               parentGroupLabel: groupName,
+                              isQrEntryMode: widget.isQrEntryMode,
                             ),
                           ),
                         );
@@ -1942,6 +1960,7 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
                               finalAwardMode: widget.finalAwardMode,
                               showsByGroup: true,
                               showsByVariety: false,
+                              isQrEntryMode: widget.isQrEntryMode,
                             ),
                           ),
                         );
@@ -1970,6 +1989,7 @@ class _ResultsVarietyScreen extends StatefulWidget {
   final Map<String, String> breedClassSystems;
   final String finalAwardMode;
   final String? parentGroupLabel;
+  final bool isQrEntryMode;
 
   const _ResultsVarietyScreen({
     required this.showId,
@@ -1981,6 +2001,7 @@ class _ResultsVarietyScreen extends StatefulWidget {
     required this.breedClassSystems,
     required this.finalAwardMode,
     required this.parentGroupLabel,
+    required this.isQrEntryMode,
   });
 
   @override
@@ -2125,7 +2146,9 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
         .toList();
       if (ids.isEmpty) return;
 
-      await ShowLockService.assertShowUnlocked(widget.showId);
+      if (!widget.isQrEntryMode) {
+        await ShowLockService.assertShowUnlocked(widget.showId);
+      }
 
       await supabase
           .from('entries')
@@ -2312,6 +2335,7 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
                               return usesGroups && groupName.isNotEmpty;
                             }),
                             showsByVariety: true,
+                            isQrEntryMode: widget.isQrEntryMode,
                           ),
                         ),
                       );
@@ -2342,6 +2366,7 @@ class _ResultsClassSexScreen extends StatefulWidget {
   final String finalAwardMode;
   final bool showsByGroup;
   final bool showsByVariety;
+  final bool isQrEntryMode;
 
   const _ResultsClassSexScreen({
     required this.showId,
@@ -2356,6 +2381,7 @@ class _ResultsClassSexScreen extends StatefulWidget {
     required this.finalAwardMode,
     required this.showsByGroup,
     required this.showsByVariety,
+    required this.isQrEntryMode,
   });
 
   @override
@@ -2620,7 +2646,9 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
         .toList();
       if (ids.isEmpty) return;
 
-      await ShowLockService.assertShowUnlocked(widget.showId);
+      if (!widget.isQrEntryMode) {
+        await ShowLockService.assertShowUnlocked(widget.showId);
+      }
 
       await supabase
           .from('entries')
@@ -2764,6 +2792,7 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
                             finalAwardMode: widget.finalAwardMode,
                             showsByGroup: widget.showsByGroup,
                             showsByVariety: widget.showsByVariety,
+                            isQrEntryMode: widget.isQrEntryMode,
                           ),
                         ),
                       );
@@ -2805,6 +2834,7 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
                                     finalAwardMode: widget.finalAwardMode,
                                     showsByGroup: widget.showsByGroup,
                                     showsByVariety: widget.showsByVariety,
+                                    isQrEntryMode: widget.isQrEntryMode,
                                   ),
                                 ),
                               );
@@ -4662,18 +4692,10 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
       debugPrint('SAVE DEBUG normalizedPlacement=$normalizedPlacement');
       debugPrint('SAVE DEBUG payload=$payload');
 
-      final updated = await supabase
+      await supabase
           .from('entries')
           .update(payload)
-          .eq('id', entryId)
-          .select('id, placement, result_status, judged_by_show_judge_id, updated_at')
-          .maybeSingle();
-
-      debugPrint('SAVE DEBUG updated=$updated');
-
-      if (updated == null) {
-        throw Exception('Entry update did not return a row. Check RLS/update permissions.');
-      }
+          .eq('id', entryId);
 
       await supabase
           .from('entry_awards')
