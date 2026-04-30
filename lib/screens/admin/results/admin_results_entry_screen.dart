@@ -3822,7 +3822,16 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
     if (storedStatus.isNotEmpty && kResultStatuses.contains(storedStatus)) {
       _resultStatus = storedStatus;
     } else {
-      final isShown = widget.entry['is_shown'] != false;
+      final hasStoredResult =
+          widget.entry['result_status'] != null ||
+          widget.entry['placement'] != null ||
+          widget.entry['is_disqualified'] == true ||
+          widget.entry['disqualified_reason'] != null;
+
+      final isShown = hasStoredResult
+          ? widget.entry['is_shown'] != false
+          : true;
+
       final isDisqualified = widget.entry['is_disqualified'] == true;
       final dqReason =
           (widget.entry['disqualified_reason'] ?? '').toString().trim();
@@ -4632,7 +4641,7 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
         'placement': normalizedPlacement,
         'result_status': effectiveStatus,
         'disqualified_reason': normalizedDqReason,
-        'is_shown': effectiveStatus != 'Shown',
+        'is_shown': effectiveStatus != 'No Show',
         'is_disqualified': _isDisqualifiedStatus(effectiveStatus),
         'judged_by_show_judge_id': normalizedJudgeId,
         'result_entered_by_user_id': widget.isQrEntryMode ? null : user?.id,
@@ -4696,11 +4705,9 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
     final effectiveResultStatus = (_resultStatus ?? 'Shown').trim();
     final canPlace = !scratched && effectiveResultStatus == 'Shown';
 
-    if (placementOptions.isEmpty && canPlace && widget.shownCount > 0) {
-      placementOptions = List<String>.generate(
-        widget.shownCount <= 0 ? 1 : widget.shownCount,
-        (i) => '${i + 1}',
-      );
+    if (placementOptions.isEmpty && canPlace) {
+      final count = widget.shownCount <= 0 ? 1 : widget.shownCount;
+      placementOptions = List<String>.generate(count, (i) => '${i + 1}');
     }
 
     final canAward =
