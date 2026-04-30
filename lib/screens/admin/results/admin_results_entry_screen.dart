@@ -4521,6 +4521,22 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
     }
   }
 
+  String _writerNameFromUser(User user) {
+    final meta = user.userMetadata ?? {};
+
+    final displayName = (meta['display_name'] ?? '').toString().trim();
+    final fullName = (meta['full_name'] ?? '').toString().trim();
+    final name = (meta['name'] ?? '').toString().trim();
+    final email = (user.email ?? '').trim();
+
+    if (displayName.isNotEmpty) return displayName;
+    if (fullName.isNotEmpty) return fullName;
+    if (name.isNotEmpty) return name;
+    if (email.isNotEmpty) return email;
+
+    return 'Signed-in Writer';
+  }
+
   Future<void> _save({required bool goNext}) async {
     setState(() {
       _saving = true;
@@ -4538,23 +4554,14 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
       final user = supabase.auth.currentUser;
       final session = supabase.auth.currentSession;
 
-      debugPrint('SAVE DEBUG auth.currentUser.id=${user?.id}');
-      debugPrint('SAVE DEBUG auth.session.exists=${session != null}');
-      debugPrint('SAVE DEBUG entryId=$entryId');
-      debugPrint(
-        'SAVE DEBUG showId=${widget.entry['show_id'] ?? '(missing from entry row)'}',
-      );
-
       if (user == null || session == null) {
-        throw Exception(
-          'No authenticated Supabase user/session in the app. '
-          'Reads may still work through RPC, but direct table updates will be blocked by RLS.',
-        );
+        throw Exception('Please sign in before saving results.');
       }
+
+      final writerName = _writerNameFromUser(user);
 
       final scratched = _isScratched(widget.entry);
       final effectiveStatus = (_resultStatus ?? 'Shown').trim();
-
       final shouldClearPlacement = scratched || effectiveStatus != 'Shown';
 
       final awardError = widget.isFurOrWoolClass ? null : _validateAwards();
@@ -4590,10 +4597,11 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
         normalizedJudgeId ??= rawJudgeId;
       }
 
-      final normalizedDqReason =
-          _isDisqualifiedStatus(effectiveStatus)
-              ? _dqReasonFromStatus(effectiveStatus)
-              : null;
+      final normalizedDqReason = _isDisqualifiedStatus(effectiveStatus)
+          ? _dqReasonFromStatus(effectiveStatus)
+          : null;
+
+      final now = DateTime.now().toUtc().toIso8601String();
 
       final payload = <String, dynamic>{
         'placement': normalizedPlacement,
@@ -4602,23 +4610,13 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
         'is_shown': effectiveStatus != 'No Show',
         'is_disqualified': _isDisqualifiedStatus(effectiveStatus),
         'judged_by_show_judge_id': normalizedJudgeId,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
+        'result_entered_by_user_id': user.id,
+        'result_entered_by_name': writerName,
+        'result_entered_at': now,
+        'updated_at': now,
       };
 
-      debugPrint('SAVE DEBUG entryId=$entryId');
-      debugPrint('SAVE DEBUG payload=$payload');
-
       await supabase.from('entries').update(payload).eq('id', entryId);
-
-      final reread = await supabase
-          .from('entries')
-          .select(
-            'id, placement, result_status, judged_by_show_judge_id, is_shown, is_disqualified, updated_at',
-          )
-          .eq('id', entryId)
-          .single();
-
-      debugPrint('SAVE DEBUG reread=$reread');
 
       await supabase
           .from('entry_awards')
