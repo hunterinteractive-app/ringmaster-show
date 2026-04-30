@@ -4687,10 +4687,26 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
         'updated_at': now,
       };
 
-      await supabase
+      final updated = await supabase
           .from('entries')
           .update(payload)
-          .eq('id', entryId);
+          .eq('id', entryId)
+          .select('id, placement, result_status, judged_by_show_judge_id')
+          .maybeSingle();
+
+      if (updated == null) {
+        throw Exception(
+          'Entry update returned no row. This usually means RLS blocked the update or entryId does not match entries.id.',
+        );
+      }
+
+      final savedPlacement = updated['placement']?.toString();
+
+      if (savedPlacement != normalizedPlacement?.toString()) {
+        throw Exception(
+          'Placement did not save. Sent placement=$normalizedPlacement but database returned placement=$savedPlacement.',
+        );
+      }
 
       await supabase
           .from('entry_awards')
