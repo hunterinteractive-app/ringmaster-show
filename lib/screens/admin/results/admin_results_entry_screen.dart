@@ -4643,6 +4643,10 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
           ? null
           : int.tryParse((_placement ?? '').trim());
 
+      if (!shouldClearPlacement && normalizedPlacement == null) {
+        throw Exception('Placement is required before saving.');
+      }
+
       String? normalizedJudgeId;
       if (_judgeId != null && _judgeId!.trim().isNotEmpty) {
         final rawJudgeId = _judgeId!.trim();
@@ -4683,37 +4687,10 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
         'updated_at': now,
       };
 
-      if (!shouldClearPlacement && normalizedPlacement == null) {
-        throw Exception('Placement is required before saving.');
-      }
-
-      debugPrint('SAVE DEBUG entryId=$entryId');
-      debugPrint('SAVE DEBUG _placement=$_placement');
-      debugPrint('SAVE DEBUG normalizedPlacement=$normalizedPlacement');
-      debugPrint('SAVE DEBUG payload=$payload');
-
-      final updated = await supabase
+      await supabase
           .from('entries')
           .update(payload)
-          .eq('id', entryId)
-          .select('id, placement, result_status, is_shown, is_disqualified, updated_at')
-          .maybeSingle();
-
-      if (updated == null) {
-        throw Exception(
-          'Entry update returned no row. This is likely RLS or the entry id did not match.',
-        );
-      }
-
-      final savedPlacement = updated['placement']?.toString().trim() ?? '';
-      final expectedPlacement = normalizedPlacement?.toString().trim() ?? '';
-
-      if (!shouldClearPlacement && savedPlacement != expectedPlacement) {
-        throw Exception(
-          'Placement did not save correctly. Expected $expectedPlacement but database returned $savedPlacement.',
-        );
-      }
-      }
+          .eq('id', entryId);
 
       await supabase
           .from('entry_awards')
@@ -4734,6 +4711,7 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
       }
 
       if (!mounted) return;
+
       Navigator.pop(
         context,
         ResultsEntryOutcome(
