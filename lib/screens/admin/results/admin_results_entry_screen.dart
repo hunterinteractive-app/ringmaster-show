@@ -4692,10 +4692,24 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
       debugPrint('SAVE DEBUG normalizedPlacement=$normalizedPlacement');
       debugPrint('SAVE DEBUG payload=$payload');
 
-      await supabase
+      final updated = await supabase
           .from('entries')
           .update(payload)
-          .eq('id', entryId);
+          .eq('id', entryId)
+          .select('id, placement, result_status')
+          .maybeSingle();
+
+      if (updated == null) {
+        throw Exception('Entry update did not return a row. The row may not be updating.');
+      }
+
+      final savedPlacement = (updated['placement'] ?? '').toString().trim();
+
+      if (!shouldClearPlacement && savedPlacement != normalizedPlacement.toString()) {
+        throw Exception(
+          'Placement did not save. Tried to save $normalizedPlacement, database returned "$savedPlacement".',
+        );
+      }
 
       await supabase
           .from('entry_awards')
