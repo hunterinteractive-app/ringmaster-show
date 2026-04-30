@@ -4687,46 +4687,28 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
         'updated_at': now,
       };
 
-      final updated = await supabase
-          .from('entries')
-          .update(payload)
-          .eq('id', entryId)
-          .select('id, placement, result_status, judged_by_show_judge_id')
-          .maybeSingle();
+      final updated = await supabase.rpc(
+        'save_results_entry',
+        params: {
+          'p_show_id': widget.showId,
+          'p_entry_id': entryId,
+          'p_placement': normalizedPlacement,
+          'p_result_status': effectiveStatus,
+          'p_disqualified_reason': normalizedDqReason,
+          'p_is_shown': effectiveStatus != 'No Show',
+          'p_is_disqualified': _isDisqualifiedStatus(effectiveStatus),
+          'p_judged_by_show_judge_id': normalizedJudgeId,
+          'p_result_entered_by_name':
+              writerName.isEmpty ? 'Signed-in Writer' : writerName,
+          'p_result_entered_by_phone':
+              widget.isQrEntryMode ? writerPhone : null,
+          'p_awards': widget.isFurOrWoolClass ? <String>[] : _selectedAwards.toList(),
+        },
+      );
 
       if (updated == null) {
-        throw Exception(
-          'Entry update returned no row. This usually means RLS blocked the update or entryId does not match entries.id.',
-        );
+        throw Exception('Save returned no result.');
       }
-
-      final savedPlacement = updated['placement']?.toString();
-
-      if (savedPlacement != normalizedPlacement?.toString()) {
-        throw Exception(
-          'Placement did not save. Sent placement=$normalizedPlacement but database returned placement=$savedPlacement.',
-        );
-      }
-
-      await supabase
-          .from('entry_awards')
-          .delete()
-          .eq('show_id', widget.showId)
-          .eq('entry_id', entryId);
-
-      if (!widget.isFurOrWoolClass && _selectedAwards.isNotEmpty) {
-        await supabase.from('entry_awards').insert(
-              _selectedAwards.map((award) {
-                return {
-                  'show_id': widget.showId,
-                  'entry_id': entryId,
-                  'award_code': award,
-                };
-              }).toList(),
-            );
-      }
-
-      if (!mounted) return;
 
       Navigator.pop(
         context,
