@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:ringmaster_show/screens/admin/results/admin_results_entry_screen.dart';
-import 'package:ringmaster_show/services/show_lock_service.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -50,11 +49,44 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
 
   String? _writerName;
   String? _writerPhone;
+  bool _qrLocked = false;
+  DateTime? _qrLockStartsAt;
 
   @override
   void initState() {
     super.initState();
     _loadAll();
+  }
+
+  Future<void> _loadQrLockStatus() async {
+    final rows = await supabase
+        .from('show_result_entry_locks')
+        .select('lock_starts_at')
+        .eq('show_id', widget.showId)
+        .eq('section_id', widget.sectionId)
+        .eq('breed_id', widget.breedId)
+        .limit(1);
+
+    if ((rows as List).isEmpty) {
+      _qrLocked = false;
+      _qrLockStartsAt = null;
+      return;
+    }
+
+    final row = Map<String, dynamic>.from(rows.first as Map);
+    final raw = (row['lock_starts_at'] ?? '').toString().trim();
+
+    if (raw.isEmpty) {
+      _qrLocked = false;
+      _qrLockStartsAt = null;
+      return;
+    }
+
+    final startsAt = DateTime.tryParse(raw)?.toUtc();
+    final now = DateTime.now().toUtc();
+
+    _qrLockStartsAt = startsAt;
+    _qrLocked = startsAt != null && now.isAfter(startsAt);
   }
 
   Future<void> _loadAll() async {
@@ -70,6 +102,7 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
       await _loadBreedClassSystems();
       await _loadShowSettings();
       await _loadEntries();
+      await _loadQrLockStatus();
 
       if (_entries.isEmpty) {
         throw Exception('No matching entries were found for this QR code.');
@@ -94,7 +127,13 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
         .from('shows')
         .select('name')
         .eq('id', widget.showId)
-        .single();
+        .maybeSingle();
+
+    if (show == null) {
+      throw Exception(
+        'This show could not be found or is not available for QR results entry.',
+      );
+    }
 
     _showName = (show['name'] ?? 'Show').toString();
 
@@ -102,7 +141,13 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
         .from('show_sections')
         .select('letter, display_name')
         .eq('id', widget.sectionId)
-        .single();
+        .maybeSingle();
+
+    if (section == null) {
+      throw Exception(
+        'This show section could not be found or is not available for QR results entry.',
+      );
+    }
 
     final displayName = (section['display_name'] ?? '').toString().trim();
     final letter = (section['letter'] ?? '').toString().trim();
@@ -378,14 +423,18 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
     List<Map<String, dynamic>> entries,
     String? judgeId,
   ) async {
+    if (_qrLocked) {
+      throw Exception(
+        'This QR results link is locked because breed results have already been submitted.',
+      );
+    }
+
     final ids = entries
         .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
         .where((x) => x.isNotEmpty)
         .toList();
 
     if (ids.isEmpty) return;
-
-    await ShowLockService.assertShowUnlocked(widget.showId);
 
     await supabase
         .from('entries')
@@ -428,6 +477,36 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
                   _msg!,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_qrLocked) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFF4F6FB),
+        appBar: AppBar(
+          backgroundColor: const Color(0xFF11285A),
+          foregroundColor: Colors.white,
+          title: const Text('QR Results Entry'),
+        ),
+        body: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Card(
+              elevation: 0,
+              child: Padding(
+                padding: EdgeInsets.all(18),
+                child: Text(
+                  'This QR results link is locked because breed results have already been submitted.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
                     color: Colors.red,
                     fontWeight: FontWeight.w700,
                   ),
