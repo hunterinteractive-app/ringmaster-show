@@ -4696,24 +4696,23 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
           .from('entries')
           .update(payload)
           .eq('id', entryId)
-          .select('id, placement, result_status')
+          .select('id, placement, result_status, is_shown, is_disqualified, updated_at')
           .maybeSingle();
 
       if (updated == null) {
-        throw Exception('Entry update did not return a row. The row may not be updating.');
+        throw Exception(
+          'Entry update returned no row. This is likely RLS or the entry id did not match.',
+        );
       }
 
-      final savedPlacementRaw = updated['placement'];
+      final savedPlacement = updated['placement']?.toString().trim() ?? '';
+      final expectedPlacement = normalizedPlacement?.toString().trim() ?? '';
 
-      if (!shouldClearPlacement) {
-        final saved = savedPlacementRaw?.toString().trim() ?? '';
-        final expected = normalizedPlacement?.toString().trim() ?? '';
-
-        if (saved != expected) {
-          throw Exception(
-            'Placement did not save correctly.\nExpected: $expected\nGot: $saved',
-          );
-        }
+      if (!shouldClearPlacement && savedPlacement != expectedPlacement) {
+        throw Exception(
+          'Placement did not save correctly. Expected $expectedPlacement but database returned $savedPlacement.',
+        );
+      }
       }
 
       await supabase
