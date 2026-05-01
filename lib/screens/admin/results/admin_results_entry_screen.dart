@@ -2997,11 +2997,11 @@ class ResultsAnimalsScreen extends StatefulWidget {
   final String variety;
   final String classSexLabel;
   final bool isFurOrWoolClass;
+  final String? initialJudgeId;
   final String? initialEntryIdToOpen;
   final List<Map<String, dynamic>> entries;
   final List<Map<String, dynamic>> judges;
   final Future<void> Function(List<Map<String, dynamic>> entries, String? judgeId) onBulkJudgeApply;
-  final String? initialJudgeId;
   final Map<String, String> breedClassSystems;
   final String finalAwardMode;
   final bool showsByGroup;
@@ -3019,10 +3019,10 @@ class ResultsAnimalsScreen extends StatefulWidget {
     required this.variety,
     required this.classSexLabel,
     required this.isFurOrWoolClass,
+    this.initialJudgeId,
     required this.entries,
     required this.judges,
     required this.onBulkJudgeApply,
-    required this.initialJudgeId,
     required this.breedClassSystems,
     required this.finalAwardMode,
     required this.showsByGroup,
@@ -4048,48 +4048,49 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
       }
     }
 
-    String storedJudgeId =
-        (widget.entry['judged_by_show_judge_id'] ?? '').toString().trim();
+String storedJudgeId =
+    (widget.entry['judged_by_show_judge_id'] ?? '').toString().trim();
 
-    if (storedJudgeId.isEmpty) {
-      storedJudgeId = (widget.initialJudgeId ?? '').toString().trim();
-      if (storedJudgeId.isNotEmpty) {
-        widget.entry['judged_by_show_judge_id'] = storedJudgeId;
-      }
+if (storedJudgeId.isEmpty) {
+  storedJudgeId = (widget.initialJudgeId ?? '').toString().trim();
+
+  if (storedJudgeId.isNotEmpty) {
+    widget.entry['judged_by_show_judge_id'] = storedJudgeId;
+  }
+}
+
+if (storedJudgeId.isEmpty) {
+  final classJudgeIds = widget.classEntries
+      .map((e) => (e['judged_by_show_judge_id'] ?? '').toString().trim())
+      .where((x) => x.isNotEmpty)
+      .toSet();
+
+  if (classJudgeIds.length == 1) {
+    storedJudgeId = classJudgeIds.first;
+    widget.entry['judged_by_show_judge_id'] = storedJudgeId;
+  }
+}
+
+if (storedJudgeId.isEmpty) {
+  _judgeId = null;
+} else {
+  String? matched;
+
+  for (final j in widget.judges) {
+    final savedJudgeId = (j['id'] ?? '').toString().trim();
+    final masterJudgeId = (j['judge_id'] ?? '').toString().trim();
+    final assignmentId = (j['assignment_id'] ?? '').toString().trim();
+
+    if (storedJudgeId == savedJudgeId ||
+        storedJudgeId == masterJudgeId ||
+        storedJudgeId == assignmentId) {
+      matched = savedJudgeId;
+      break;
     }
+  }
 
-    if (storedJudgeId.isEmpty) {
-      final classJudgeIds = widget.classEntries
-          .map((e) => (e['judged_by_show_judge_id'] ?? '').toString().trim())
-          .where((x) => x.isNotEmpty)
-          .toSet();
-
-      if (classJudgeIds.length == 1) {
-        storedJudgeId = classJudgeIds.first;
-        widget.entry['judged_by_show_judge_id'] = storedJudgeId;
-      }
-    }
-
-    if (storedJudgeId.isEmpty) {
-      _judgeId = null;
-    } else {
-      String? matched;
-
-      for (final j in widget.judges) {
-        final savedJudgeId = (j['id'] ?? '').toString().trim();
-        final masterJudgeId = (j['judge_id'] ?? '').toString().trim();
-        final assignmentId = (j['assignment_id'] ?? '').toString().trim();
-
-        if (storedJudgeId == savedJudgeId ||
-            storedJudgeId == masterJudgeId ||
-            storedJudgeId == assignmentId) {
-          matched = savedJudgeId;
-          break;
-        }
-      }
-
-      _judgeId = matched ?? storedJudgeId;
-    }
+  _judgeId = matched ?? storedJudgeId;
+}
 
     final currentPlacement = (widget.entry['placement'] ?? '').toString().trim();
     _placement = currentPlacement.isEmpty ? null : currentPlacement;
