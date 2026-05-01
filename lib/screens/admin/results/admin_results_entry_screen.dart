@@ -2312,6 +2312,26 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
                       ),
                     ),
                     const SizedBox(height: 14),
+
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withOpacity(.08),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.blue.withOpacity(.2)),
+                      ),
+                      child: const Text(
+                        'Variety Screen Active (debug)',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.blue,
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
                     DropdownButtonFormField<String>(
                       value: _singleJudgeId(_entries),
                       decoration: InputDecoration(
