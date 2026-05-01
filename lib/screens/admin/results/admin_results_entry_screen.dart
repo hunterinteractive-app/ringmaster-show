@@ -1630,6 +1630,12 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
   String? _msg;
   bool _savingJudge = false;
 
+  @override
+  void initState() {
+    super.initState();
+    _entries = [...widget.entries];
+  }
+
   Map<String, List<Map<String, dynamic>>> _groupByGroupName() {
     final out = <String, List<Map<String, dynamic>>>{};
     for (final e in _entries) {
@@ -1746,11 +1752,11 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
       e['_awards'] = awardsByEntryId[id] ?? <String>[];
     }
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    setState(() {
-      _entries = refreshed;
-    });
+      setState(() {
+        _entries = refreshed;
+      });
     }
 
   Future<void> _applyJudgeToEntries(List<Map<String, dynamic>> entries, String? judgeId) async {
@@ -3400,9 +3406,10 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
 
   Future<void> _reloadAll() async {
     final currentIds = _entries
-      .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
-      .where((x) => x.isNotEmpty)
-      .toSet();
+        .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
+        .where((x) => x.isNotEmpty)
+        .toSet();
+
     if (currentIds.isEmpty) return;
 
     final rows = await supabase.rpc(
@@ -3413,45 +3420,65 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
       },
     );
 
-    final allRows = (rows as List).cast<Map<String, dynamic>>();
+    final allRows = (rows as List)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
 
     final refreshed = allRows.where((row) {
-      final id = (row['entry_id'] ?? '').toString();
+      final id = (row['entry_id'] ?? row['id'] ?? '').toString().trim();
       return currentIds.contains(id);
     }).map((e) {
       final copy = Map<String, dynamic>.from(e);
       copy['id'] ??= copy['entry_id'];
       copy['breed'] ??= copy['breed_name'];
       copy['variety'] ??= copy['variety_name'];
+
+      final normalizedGroup = (
+        copy['group_name'] ??
+        copy['group_display_name'] ??
+        copy['group_label'] ??
+        copy['group'] ??
+        copy['group_code']
+      )?.toString().trim();
+
+      copy['group_name'] =
+          (normalizedGroup == null || normalizedGroup.isEmpty)
+              ? null
+              : normalizedGroup;
+
       return copy;
     }).toList();
 
-    for (final id in currentIds) {
-      final found = refreshed.any(
-        (e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim() == id,
-      );
-      if (!found) {
-        debugPrint('Warning: updated entry $id but could not re-read row.');
+    final refreshedIds = refreshed
+        .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
+        .where((x) => x.isNotEmpty)
+        .toList();
+
+    final awardsByEntryId = <String, List<String>>{};
+
+    for (var i = 0; i < refreshedIds.length; i += 100) {
+      final chunk = refreshedIds.skip(i).take(100).toList();
+
+      final awardRows = await supabase
+          .from('entry_awards')
+          .select('entry_id,award_code')
+          .eq('show_id', widget.showId)
+          .inFilter('entry_id', chunk);
+
+      for (final row in (awardRows as List)) {
+        final map = Map<String, dynamic>.from(row as Map);
+        final entryId = (map['entry_id'] ?? '').toString().trim();
+        final award = (map['award_code'] ?? '').toString().trim();
+
+        if (entryId.isEmpty || award.isEmpty) continue;
+
+        awardsByEntryId.putIfAbsent(entryId, () => <String>[]);
+        awardsByEntryId[entryId]!.add(award);
       }
     }
 
-    final awardRows = await supabase
-        .from('entry_awards')
-        .select('entry_id,award_code')
-        .eq('show_id', widget.showId)
-        .inFilter('entry_id', refreshed.map((e) => e['entry_id'].toString()).toList());
-
-    final awardsByEntryId = <String, List<String>>{};
-    for (final row in (awardRows as List).cast<Map<String, dynamic>>()) {
-      final entryId = (row['entry_id'] ?? '').toString();
-      final award = (row['award_code'] ?? '').toString().trim();
-      if (entryId.isEmpty || award.isEmpty) continue;
-      awardsByEntryId.putIfAbsent(entryId, () => <String>[]);
-      awardsByEntryId[entryId]!.add(award);
-    }
-
     for (final e in refreshed) {
-      final id = e['entry_id'].toString();
+      final id = (e['entry_id'] ?? e['id'] ?? '').toString().trim();
       e['_awards'] = awardsByEntryId[id] ?? <String>[];
     }
 
@@ -3521,6 +3548,11 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
 
     try {
       await widget.onBulkJudgeApply(_entries, judgeId);
+
+      for (final e in _entries) {
+        e['judged_by_show_judge_id'] = judgeId;
+      }
+
       await _reloadAll();
       if (!mounted) return;
       setState(() {
@@ -3591,6 +3623,7 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
     }
 
     if (_allEntriesComplete()) {
+      await _reloadAll();
       if (!mounted) return;
       Navigator.pop(context, true);
     }
