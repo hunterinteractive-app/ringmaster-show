@@ -2314,36 +2314,7 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ),
-                    const SizedBox(height: 14),
-
-                    DropdownButtonFormField<String>(
-                      value: _singleJudgeId(_entries),
-                      decoration: InputDecoration(
-                        labelText: widget.parentGroupLabel == null
-                            ? 'Judge for this breed'
-                            : 'Judge for this group',
-                      ),
-                      items: [
-                        const DropdownMenuItem<String>(
-                          value: '',
-                          child: Text('(Not set)'),
-                        ),
-                        ...widget.judges.map(
-                          (j) => DropdownMenuItem<String>(
-                            value: (j['id'] ?? '').toString(),
-                            child: Text((j['name'] ?? '').toString()),
-                          ),
-                        ),
-                      ],
-                      onChanged: _savingJudge
-                          ? null
-                          : (v) {
-                              _applyJudgeToEntries(
-                                _entries,
-                                (v == null || v.isEmpty) ? null : v,
-                              );
-                            },
-                    ),
+          
                     if (_msg != null) ...[
                       const SizedBox(height: 12),
                       Align(
