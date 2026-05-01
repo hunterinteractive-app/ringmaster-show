@@ -2238,6 +2238,13 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
             .inFilter('id', chunk);
       }
 
+      for (final e in _entries) {
+        final id = (e['entry_id'] ?? e['id'] ?? '').toString().trim();
+        if (ids.contains(id)) {
+          e['judged_by_show_judge_id'] = normalizedJudgeId;
+        }
+      }
+
       await _reloadEntries();
 
       if (!mounted) return;
@@ -2305,36 +2312,6 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
                       ),
                     ),
                     const SizedBox(height: 14),
-
-                    DropdownButtonFormField<String>(
-                      value: _singleJudgeId(_entries),
-                      decoration: InputDecoration(
-                        labelText: widget.parentGroupLabel == null
-                            ? 'Judge for this breed'
-                            : 'Judge for this group',
-                      ),
-                      items: [
-                        const DropdownMenuItem<String>(
-                          value: '',
-                          child: Text('(Not set)'),
-                        ),
-                        ...widget.judges.map(
-                          (j) => DropdownMenuItem<String>(
-                            value: (j['id'] ?? '').toString(),
-                            child: Text((j['name'] ?? '').toString()),
-                          ),
-                        ),
-                      ],
-                      onChanged: _savingJudge
-                          ? null
-                          : (v) {
-                              _applyJudgeToEntries(
-                                _entries,
-                                (v == null || v.isEmpty) ? null : v,
-                              );
-                            },
-                    ),
-                    const SizedBox(height: 14),
                     DropdownButtonFormField<String>(
                       value: _singleJudgeId(_entries),
                       decoration: InputDecoration(
@@ -2399,55 +2376,91 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
-                    title: Text(
-                      variety,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    subtitle: Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Text(
-                        '$count entr${count == 1 ? 'y' : 'ies'} • ${_judgeSummary(varietyEntries)}',
-                      ),
-                    ),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () async {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => _ResultsClassSexScreen(
-                            showId: widget.showId,
-                            showName: widget.showName,
-                            sectionLabel: widget.sectionLabel,
-                            breed: widget.breed,
-                            variety: variety,
-                            contextLabel: widget.parentGroupLabel ?? variety,
-                            entries: varietyEntries,
-                            judges: widget.judges,
-                            breedClassSystems: widget.breedClassSystems,
-                            finalAwardMode: widget.finalAwardMode,
-                            showsByGroup: varietyEntries.any((e) {
-                              final usesGroups = e['uses_group_awards'] == true;
-                              final groupName = (
-                                e['group_name'] ??
-                                e['group_display_name'] ??
-                                e['group_label'] ??
-                                e['group'] ??
-                                e['group_code'] ??
-                                ''
-                              ).toString().trim();
-
-                              return usesGroups && groupName.isNotEmpty;
-                            }),
-                            showsByVariety: true,
-                            isQrEntryMode: widget.isQrEntryMode,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(
+                            variety,
+                            style: const TextStyle(fontWeight: FontWeight.w700),
                           ),
-                        ),
-                      );
+                          subtitle: Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Text(
+                              '$count entr${count == 1 ? 'y' : 'ies'} • ${_judgeSummary(varietyEntries)}',
+                            ),
+                          ),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () async {
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => _ResultsClassSexScreen(
+                                  showId: widget.showId,
+                                  showName: widget.showName,
+                                  sectionLabel: widget.sectionLabel,
+                                  breed: widget.breed,
+                                  variety: variety,
+                                  contextLabel: widget.parentGroupLabel ?? variety,
+                                  entries: varietyEntries,
+                                  judges: widget.judges,
+                                  breedClassSystems: widget.breedClassSystems,
+                                  finalAwardMode: widget.finalAwardMode,
+                                  showsByGroup: varietyEntries.any((e) {
+                                    final usesGroups = e['uses_group_awards'] == true;
+                                    final groupName = (
+                                      e['group_name'] ??
+                                      e['group_display_name'] ??
+                                      e['group_label'] ??
+                                      e['group'] ??
+                                      e['group_code'] ??
+                                      ''
+                                    ).toString().trim();
 
-                      await _reloadEntries();
-                    },
+                                    return usesGroups && groupName.isNotEmpty;
+                                  }),
+                                  showsByVariety: true,
+                                  isQrEntryMode: widget.isQrEntryMode,
+                                ),
+                              ),
+                            );
+
+                            await _reloadEntries();
+                          },
+                        ),
+                        const SizedBox(height: 10),
+                        DropdownButtonFormField<String>(
+                          key: ValueKey('variety-judge-$variety-${_singleJudgeId(varietyEntries) ?? 'mixed'}'),
+                          value: _singleJudgeId(varietyEntries),
+                          decoration: const InputDecoration(
+                            labelText: 'Judge for this variety',
+                          ),
+                          items: [
+                            const DropdownMenuItem<String>(
+                              value: '',
+                              child: Text('(Not set)'),
+                            ),
+                            ...widget.judges.map(
+                              (j) => DropdownMenuItem<String>(
+                                value: (j['id'] ?? '').toString(),
+                                child: Text((j['name'] ?? '').toString()),
+                              ),
+                            ),
+                          ],
+                          onChanged: _savingJudge
+                              ? null
+                              : (v) {
+                                  _applyJudgeToEntries(
+                                    varietyEntries,
+                                    (v == null || v.isEmpty) ? null : v,
+                                  );
+                                },
+                        ),
+                      ],
+                    ),
                   ),
                 );
               },
