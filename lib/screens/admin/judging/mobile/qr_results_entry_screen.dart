@@ -96,7 +96,6 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
     });
 
     try {
-
       await _loadShowAndSection();
       await _loadJudges();
       await _loadBreedClassSystems();
@@ -198,7 +197,7 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
 
         label = baseName.isNotEmpty ? baseName : masterJudgeId;
 
-        if (arbaNumber.isNotEmpty) {
+        if (arbaNumber.isNotEmpty && !label.contains('#$arbaNumber')) {
           label = '$label (#$arbaNumber)';
         }
       } else {
@@ -432,18 +431,32 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
     final ids = entries
         .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
         .where((x) => x.isNotEmpty)
+        .toSet()
         .toList();
 
     if (ids.isEmpty) return;
 
-    await supabase
-        .from('entries')
-        .update({
-          'judged_by_show_judge_id':
-              (judgeId == null || judgeId.isEmpty) ? null : judgeId,
-          'updated_at': DateTime.now().toUtc().toIso8601String(),
-        })
-        .inFilter('id', ids);
+    final normalizedJudgeId =
+        (judgeId == null || judgeId.trim().isEmpty) ? null : judgeId.trim();
+
+    for (var i = 0; i < ids.length; i += 100) {
+      final chunk = ids.skip(i).take(100).toList();
+
+      await supabase
+          .from('entries')
+          .update({
+            'judged_by_show_judge_id': normalizedJudgeId,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .inFilter('id', chunk);
+    }
+
+    for (final e in _entries) {
+      final id = (e['entry_id'] ?? e['id'] ?? '').toString().trim();
+      if (ids.contains(id)) {
+        e['judged_by_show_judge_id'] = normalizedJudgeId;
+      }
+    }
   }
 
   @override
@@ -591,6 +604,8 @@ class _QrBreedDrilldownScreen extends StatefulWidget {
 
 class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
   late List<Map<String, dynamic>> _entries;
+  bool _savingJudge = false;
+  String? _msg;
 
   @override
   void initState() {
@@ -716,14 +731,102 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
     return out;
   }
 
+  void _applyJudgeToLocalEntries(
+    Iterable<String> ids,
+    String? judgeId,
+  ) {
+    final idSet = ids.toSet();
+
+    for (final e in _entries) {
+      final id = (e['entry_id'] ?? e['id'] ?? '').toString().trim();
+      if (idSet.contains(id)) {
+        e['judged_by_show_judge_id'] = judgeId;
+      }
+    }
+  }
+
+  Future<void> _applyJudgeAndRefresh(
+    List<Map<String, dynamic>> entries,
+    String? judgeId,
+  ) async {
+    setState(() {
+      _savingJudge = true;
+      _msg = null;
+    });
+
+    try {
+      final ids = entries
+          .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
+          .where((x) => x.isNotEmpty)
+          .toSet()
+          .toList();
+
+      await widget.onBulkJudgeApply(entries, judgeId);
+
+      final normalizedJudgeId =
+          (judgeId == null || judgeId.trim().isEmpty) ? null : judgeId.trim();
+
+      _applyJudgeToLocalEntries(ids, normalizedJudgeId);
+
+      if (!mounted) return;
+      setState(() {
+        _savingJudge = false;
+        _msg = 'Judge updated.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _savingJudge = false;
+        _msg = 'Judge update failed: $e';
+      });
+    }
+  }
+
+  Widget _judgeDropdown({
+    required String labelText,
+    required List<Map<String, dynamic>> entries,
+    required String keyPrefix,
+  }) {
+    final selectedJudgeId = _singleJudgeIdFromEntries(entries);
+
+    return DropdownButtonFormField<String>(
+      key: ValueKey('$keyPrefix-${selectedJudgeId ?? 'mixed'}-${entries.length}'),
+      value: selectedJudgeId,
+      decoration: InputDecoration(labelText: labelText),
+      items: [
+        const DropdownMenuItem<String>(
+          value: '',
+          child: Text('(Not set)'),
+        ),
+        ...widget.judges.map(
+          (j) => DropdownMenuItem<String>(
+            value: (j['id'] ?? '').toString(),
+            child: Text((j['name'] ?? '').toString()),
+          ),
+        ),
+      ],
+      onChanged: _savingJudge
+          ? null
+          : (v) {
+              _applyJudgeAndRefresh(
+                entries,
+                (v == null || v.isEmpty) ? null : v,
+              );
+            },
+    );
+  }
+
   Widget _buildList({
     required String title,
     required Map<String, List<Map<String, dynamic>>> grouped,
     required void Function(String label, List<Map<String, dynamic>> entries)
         onTap,
+    String? judgeLabel,
   }) {
     final labels = grouped.keys.toList()
       ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
+    final allRows = grouped.values.expand((x) => x).toList();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6FB),
@@ -734,9 +837,57 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
       ),
       body: ListView.builder(
         padding: const EdgeInsets.all(16),
-        itemCount: labels.length,
+        itemCount: labels.length + 1,
         itemBuilder: (context, i) {
-          final label = labels[i];
+          if (i == 0) {
+            return Card(
+              elevation: 0,
+              margin: const EdgeInsets.only(bottom: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      '$title Judge Control',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '${allRows.length} entr${allRows.length == 1 ? 'y' : 'ies'} • ${_judgeSummary(allRows)}',
+                      style: const TextStyle(color: Colors.black54),
+                    ),
+                    const SizedBox(height: 12),
+                    _judgeDropdown(
+                      labelText: judgeLabel ?? 'Judge for this level',
+                      entries: allRows,
+                      keyPrefix: 'level-judge-$title',
+                    ),
+                    if (_msg != null) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        _msg!,
+                        style: TextStyle(
+                          color: _msg == 'Judge updated.'
+                              ? Colors.green
+                              : Colors.red,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            );
+          }
+
+          final label = labels[i - 1];
           final rows = grouped[label] ?? const <Map<String, dynamic>>[];
 
           return Card(
@@ -745,20 +896,34 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
             ),
-            child: ListTile(
-              contentPadding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
-              title: Text(
-                label,
-                style: const TextStyle(fontWeight: FontWeight.w700),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      label,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    subtitle: Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        '${rows.length} entr${rows.length == 1 ? 'y' : 'ies'} • ${_judgeSummary(rows)}',
+                      ),
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => onTap(label, rows),
+                  ),
+                  const SizedBox(height: 10),
+                  _judgeDropdown(
+                    labelText: judgeLabel ?? 'Judge for this item',
+                    entries: rows,
+                    keyPrefix: 'item-judge-$title-$label',
+                  ),
+                ],
               ),
-              subtitle: Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Text(
-                  '${rows.length} entr${rows.length == 1 ? 'y' : 'ies'} • ${_judgeSummary(rows)}',
-                ),
-              ),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => onTap(label, rows),
             ),
           );
         },
@@ -776,6 +941,7 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
           builder: (_) => _buildList(
             title: widget.breed,
             grouped: grouped,
+            judgeLabel: 'Judge for this group',
             onTap: (label, rows) {
               if (widget.showsByVariety) {
                 final byVariety = _groupBy(rows, _varietyName);
@@ -786,6 +952,7 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
                     builder: (_) => _buildList(
                       title: label,
                       grouped: byVariety,
+                      judgeLabel: 'Judge for this variety',
                       onTap: (varietyLabel, varietyRows) {
                         _openClassList(varietyLabel, varietyRows);
                       },
@@ -811,6 +978,7 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
           builder: (_) => _buildList(
             title: widget.breed,
             grouped: grouped,
+            judgeLabel: 'Judge for this variety',
             onTap: (label, rows) {
               _openClassList(label, rows);
             },
@@ -832,6 +1000,7 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
         builder: (_) => _buildList(
           title: title,
           grouped: grouped,
+          judgeLabel: 'Judge for this class',
           onTap: (label, rows) {
             _openClass(
               label: label,
@@ -864,7 +1033,7 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
           isFurOrWoolClass: _isFurOrWoolClass(entries),
           entries: entries,
           judges: widget.judges,
-          onBulkJudgeApply: widget.onBulkJudgeApply,
+          onBulkJudgeApply: _applyJudgeAndRefresh,
           initialJudgeId: _singleJudgeIdFromEntries(entries),
           breedClassSystems: widget.breedClassSystems,
           finalAwardMode: widget.finalAwardMode,
@@ -933,6 +1102,24 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
                       _pill(_judgeSummary(_entries)),
                     ],
                   ),
+                  const SizedBox(height: 14),
+                  _judgeDropdown(
+                    labelText: 'Judge for this breed',
+                    entries: _entries,
+                    keyPrefix: 'breed-judge-${widget.breed}',
+                  ),
+                  if (_msg != null) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      _msg!,
+                      style: TextStyle(
+                        color: _msg == 'Judge updated.'
+                            ? Colors.green
+                            : Colors.red,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -979,6 +1166,7 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
     );
   }
 }
+
 class _QrWriterInfoScreen extends StatefulWidget {
   final String showName;
   final String sectionLabel;

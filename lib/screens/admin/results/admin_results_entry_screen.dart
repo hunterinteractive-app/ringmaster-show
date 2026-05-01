@@ -1890,19 +1890,6 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
       ),
       body: Column(
         children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(8),
-            color: Colors.green,
-            child: const Text(
-              'DEBUG: GROUP SCREEN 1896',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: Card(
@@ -2307,18 +2294,6 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
       ),
       body: Column(
         children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(8),
-            color: Colors.purple,
-            child: const Text(
-              'DEBUG: VARIETY SCREEN 2312',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: Card(
@@ -2341,25 +2316,6 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
                     ),
                     const SizedBox(height: 14),
 
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.withOpacity(.08),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.blue.withOpacity(.2)),
-                      ),
-                      child: const Text(
-                        'Variety Screen Active (debug)',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.blue,
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 10),
                     DropdownButtonFormField<String>(
                       value: _singleJudgeId(_entries),
                       decoration: InputDecoration(
@@ -2889,18 +2845,6 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
       ),
       body: Column(
         children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(8),
-            color: Colors.purple,
-            child: const Text(
-              'DEBUG: VARIETY SCREEN 2893',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: Card(
@@ -3885,18 +3829,6 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
       ),
       body: Column(
         children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(8),
-            color: Colors.purple,
-            child: const Text(
-              'DEBUG: VARIETY SCREEN 3876',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: Card(
