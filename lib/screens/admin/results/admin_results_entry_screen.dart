@@ -496,7 +496,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
         }
 
         for (final row in allAwardRows) {
-          final entryId = (row['entry_id'] ?? '').toString();
+          final entryId = (row['entry_id'] ?? '').toString().trim();
           final award = (row['award_code'] ?? '').toString().trim();
           if (entryId.isEmpty || award.isEmpty) continue;
           awardsByEntryId.putIfAbsent(entryId, () => <String>[]);

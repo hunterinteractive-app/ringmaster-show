@@ -166,6 +166,20 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
         .toSet();
   }
 
+  String _judgeNameOnly(Map<String, dynamic> judge) {
+    final displayName = (judge['display_name'] ?? '').toString().trim();
+    if (displayName.isNotEmpty) return displayName;
+
+    final name = (judge['name'] ?? '').toString().trim();
+    if (name.isNotEmpty) return name;
+
+    final first = (judge['first_name'] ?? '').toString().trim();
+    final last = (judge['last_name'] ?? '').toString().trim();
+    final full = ('$first $last').trim();
+
+    return full.isNotEmpty ? full : '(Unnamed Judge)';
+  }
+
   String _judgeDisplayName(Map<String, dynamic> judge) {
     final displayName = (judge['display_name'] ?? '').toString().trim();
     if (displayName.isNotEmpty) return displayName;
@@ -316,7 +330,7 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
       await supabase.from('judge_assignments').insert({
         'show_id': widget.showId,
         'judge_id': judgeId,
-        'assignment_label': _judgeDisplayName(judge),
+        'assignment_label': _judgeNameOnly(judge),
       });
 
       await _loadAssigned();
