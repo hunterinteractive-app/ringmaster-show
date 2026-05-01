@@ -315,7 +315,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
 
         label = baseName.isNotEmpty ? baseName : masterJudgeId;
 
-        if (arbaNumber.isNotEmpty) {
+        if (arbaNumber.isNotEmpty && !label.contains('#$arbaNumber')) {
           label = '$label (#$arbaNumber)';
         }
       } else {
@@ -2303,6 +2303,36 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
                             : '${widget.showName} • ${widget.sectionLabel} • ${widget.breed} • ${widget.parentGroupLabel}',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    DropdownButtonFormField<String>(
+                      value: _singleJudgeId(_entries),
+                      decoration: InputDecoration(
+                        labelText: widget.parentGroupLabel == null
+                            ? 'Judge for this breed'
+                            : 'Judge for this group',
+                      ),
+                      items: [
+                        const DropdownMenuItem<String>(
+                          value: '',
+                          child: Text('(Not set)'),
+                        ),
+                        ...widget.judges.map(
+                          (j) => DropdownMenuItem<String>(
+                            value: (j['id'] ?? '').toString(),
+                            child: Text((j['name'] ?? '').toString()),
+                          ),
+                        ),
+                      ],
+                      onChanged: _savingJudge
+                          ? null
+                          : (v) {
+                              _applyJudgeToEntries(
+                                _entries,
+                                (v == null || v.isEmpty) ? null : v,
+                              );
+                            },
                     ),
                     const SizedBox(height: 14),
                     DropdownButtonFormField<String>(
