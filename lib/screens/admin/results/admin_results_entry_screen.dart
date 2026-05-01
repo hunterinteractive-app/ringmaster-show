@@ -5201,23 +5201,27 @@ if (storedJudgeId.isEmpty) {
                 DropdownButtonFormField<String>(
                   value: (_placement != null && placementOptions.contains(_placement))
                       ? _placement
-                      : null,
+                      : '',
                   decoration: const InputDecoration(
                     labelText: 'Placement',
                   ),
-                  items: placementOptions
-                      .map(
-                        (p) => DropdownMenuItem<String>(
-                          value: p,
-                          child: Text(p),
-                        ),
-                      )
-                      .toList(),
+                  items: [
+                    const DropdownMenuItem<String>(
+                      value: '',
+                      child: Text(''),
+                    ),
+                    ...placementOptions.map(
+                      (p) => DropdownMenuItem<String>(
+                        value: p,
+                        child: Text(p),
+                      ),
+                    ),
+                  ],
                   onChanged: _saving
                       ? null
                       : (v) {
                           setState(() {
-                            _placement = v;
+                            _placement = (v == null || v.isEmpty) ? null : v;
                           });
                         },
                 ),
