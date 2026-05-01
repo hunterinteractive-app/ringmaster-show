@@ -3728,6 +3728,7 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
         writerPhone: widget.writerPhone,
         isQrEntryMode: widget.isQrEntryMode,
         isFurOrWoolClass: widget.isFurOrWoolClass,
+        initialJudgeId: _currentJudgeId,
       ),
     );
 
@@ -3968,6 +3969,7 @@ class ResultsEntrySheet extends StatefulWidget {
   final String? writerPhone;
   final bool isQrEntryMode;
   final bool isFurOrWoolClass;
+  final String? initialJudgeId;
 
   const ResultsEntrySheet({
     required this.showId,
@@ -3986,6 +3988,7 @@ class ResultsEntrySheet extends StatefulWidget {
     this.writerPhone,
     this.isQrEntryMode = false,
     required this.isFurOrWoolClass,
+    this.initialJudgeId,
   });
 
   @override
@@ -4047,6 +4050,13 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
 
     String storedJudgeId =
         (widget.entry['judged_by_show_judge_id'] ?? '').toString().trim();
+
+    if (storedJudgeId.isEmpty) {
+      storedJudgeId = (widget.initialJudgeId ?? '').toString().trim();
+      if (storedJudgeId.isNotEmpty) {
+        widget.entry['judged_by_show_judge_id'] = storedJudgeId;
+      }
+    }
 
     if (storedJudgeId.isEmpty) {
       final classJudgeIds = widget.classEntries
