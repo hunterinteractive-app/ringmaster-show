@@ -4687,6 +4687,18 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
         'updated_at': now,
       };
 
+      final awardsToSave =
+          widget.isFurOrWoolClass ? <String>[] : _selectedAwards.toList();
+
+      if (widget.isQrEntryMode) {
+        setState(() {
+          _saving = false;
+          _msg =
+              'DEBUG — awardsToSave: $awardsToSave | selected: ${_selectedAwards.toList()} | fur/wool: ${widget.isFurOrWoolClass}';
+        });
+        return;
+      }
+
       final updated = await supabase.rpc(
         'save_results_entry',
         params: {
