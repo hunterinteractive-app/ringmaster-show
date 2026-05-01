@@ -129,6 +129,42 @@ String _dqReasonFromStatus(String status) {
   return parts.sublist(1).join('-').trim();
 }
 
+Future<Map<String, List<String>>> _loadAwardsByEntryId({
+  required String showId,
+  required Iterable<String> entryIds,
+}) async {
+  final ids = entryIds
+      .map((x) => x.trim())
+      .where((x) => x.isNotEmpty)
+      .toSet()
+      .toList();
+
+  final awardsByEntryId = <String, List<String>>{};
+
+  for (var i = 0; i < ids.length; i += 100) {
+    final chunk = ids.skip(i).take(100).toList();
+
+    final awardRows = await supabase
+        .from('entry_awards')
+        .select('entry_id,award_code')
+        .eq('show_id', showId)
+        .inFilter('entry_id', chunk);
+
+    for (final raw in awardRows as List) {
+      final row = Map<String, dynamic>.from(raw as Map);
+      final entryId = (row['entry_id'] ?? '').toString().trim();
+      final award = (row['award_code'] ?? '').toString().trim();
+
+      if (entryId.isEmpty || award.isEmpty) continue;
+
+      awardsByEntryId.putIfAbsent(entryId, () => <String>[]);
+      awardsByEntryId[entryId]!.add(award);
+    }
+  }
+
+  return awardsByEntryId;
+}
+
 class AdminResultsEntryScreen extends StatefulWidget {
   final String showId;
   final String showName;
@@ -1722,39 +1758,36 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
         })
         .toList();
 
-    final entryIds = refreshed
+    final refreshedIds = refreshed
         .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
         .where((x) => x.isNotEmpty)
         .toList();
 
-    final awardsByEntryId = <String, List<String>>{};
-
-    for (var i = 0; i < entryIds.length; i += 100) {
-      final chunk = entryIds.skip(i).take(100).toList();
-
-      final awardRows = await supabase
-          .from('entry_awards')
-          .select('entry_id,award_code')
-          .eq('show_id', widget.showId)
-          .inFilter('entry_id', chunk);
-
-      for (final row in (awardRows as List)) {
-        final map = Map<String, dynamic>.from(row as Map);
-        final entryId = (map['entry_id'] ?? '').toString().trim();
-        final award = (map['award_code'] ?? '').toString().trim();
-
-        if (entryId.isEmpty || award.isEmpty) continue;
-
-        awardsByEntryId.putIfAbsent(entryId, () => <String>[]);
-        awardsByEntryId[entryId]!.add(award);
-      }
-    }
+    final awardsByEntryId = await _loadAwardsByEntryId(
+      showId: widget.showId,
+      entryIds: refreshedIds,
+    );
 
     for (final e in refreshed) {
       final id = (e['entry_id'] ?? e['id'] ?? '').toString().trim();
+
       e['id'] ??= e['entry_id'];
       e['breed'] ??= e['breed_name'];
       e['variety'] ??= e['variety_name'];
+
+      final normalizedGroup = (
+        e['group_name'] ??
+        e['group_display_name'] ??
+        e['group_label'] ??
+        e['group'] ??
+        e['group_code']
+      )?.toString().trim();
+
+      e['group_name'] =
+          (normalizedGroup == null || normalizedGroup.isEmpty)
+              ? null
+              : normalizedGroup;
+
       e['_awards'] = awardsByEntryId[id] ?? <String>[];
     }
 
@@ -1765,7 +1798,10 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
     });
   }
 
-  Future<void> _applyJudgeToEntries(List<Map<String, dynamic>> entries, String? judgeId) async {
+  Future<void> _applyJudgeToEntries(
+    List<Map<String, dynamic>> entries,
+    String? judgeId,
+  ) async {
     setState(() {
       _savingJudge = true;
       _msg = null;
@@ -1773,37 +1809,50 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
 
     try {
       final ids = entries
-        .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
-        .where((x) => x.isNotEmpty)
-        .toList();
-      if (ids.isEmpty) return;
+          .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
+          .where((x) => x.isNotEmpty)
+          .toSet()
+          .toList();
+
+      if (ids.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _savingJudge = false;
+          _msg = 'No entries found to update.';
+        });
+        return;
+      }
 
       if (!widget.isQrEntryMode) {
         await ShowLockService.assertShowUnlocked(widget.showId);
       }
 
-      await supabase
-          .from('entries')
-          .update({
-            'judged_by_show_judge_id': (judgeId == null || judgeId.isEmpty) ? null : judgeId,
-            'updated_at': DateTime.now().toUtc().toIso8601String(),
-          })
-          .inFilter('id', ids);
+      final normalizedJudgeId =
+          (judgeId == null || judgeId.trim().isEmpty) ? null : judgeId.trim();
 
-      for (final e in _entries) {
-        final rowId = (e['entry_id'] ?? e['id'] ?? '').toString().trim();
-        if (ids.contains(rowId)) {
-          e['judged_by_show_judge_id'] = (judgeId == null || judgeId.isEmpty) ? null : judgeId;
-        }
+      for (var i = 0; i < ids.length; i += 100) {
+        final chunk = ids.skip(i).take(100).toList();
+
+        await supabase
+            .from('entries')
+            .update({
+              'judged_by_show_judge_id': normalizedJudgeId,
+              'updated_at': DateTime.now().toUtc().toIso8601String(),
+            })
+            .inFilter('id', chunk);
       }
 
+      await _reloadEntries();
+
       if (!mounted) return;
+
       setState(() {
         _savingJudge = false;
         _msg = 'Judge updated.';
       });
     } catch (e) {
       if (!mounted) return;
+
       setState(() {
         _savingJudge = false;
         _msg = 'Judge update failed: $e';
@@ -2105,34 +2154,36 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
         })
         .toList();
 
-    final entryIds = refreshed
-        .map((e) => (e['entry_id'] ?? '').toString().trim())
+    final refreshedIds = refreshed
+        .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
         .where((x) => x.isNotEmpty)
         .toList();
 
-    final awardsByEntryId = <String, List<String>>{};
-
-    if (entryIds.isNotEmpty) {
-      final awardRows = await supabase
-          .from('entry_awards')
-          .select('entry_id,award_code')
-          .eq('show_id', widget.showId)
-          .inFilter('entry_id', entryIds);
-
-      for (final row in (awardRows as List).cast<Map<String, dynamic>>()) {
-        final entryId = (row['entry_id'] ?? '').toString().trim();
-        final award = (row['award_code'] ?? '').toString().trim();
-        if (entryId.isEmpty || award.isEmpty) continue;
-        awardsByEntryId.putIfAbsent(entryId, () => <String>[]);
-        awardsByEntryId[entryId]!.add(award);
-      }
-    }
+    final awardsByEntryId = await _loadAwardsByEntryId(
+      showId: widget.showId,
+      entryIds: refreshedIds,
+    );
 
     for (final e in refreshed) {
-      final id = (e['entry_id'] ?? '').toString().trim();
+      final id = (e['entry_id'] ?? e['id'] ?? '').toString().trim();
+
       e['id'] ??= e['entry_id'];
       e['breed'] ??= e['breed_name'];
       e['variety'] ??= e['variety_name'];
+
+      final normalizedGroup = (
+        e['group_name'] ??
+        e['group_display_name'] ??
+        e['group_label'] ??
+        e['group'] ??
+        e['group_code']
+      )?.toString().trim();
+
+      e['group_name'] =
+          (normalizedGroup == null || normalizedGroup.isEmpty)
+              ? null
+              : normalizedGroup;
+
       e['_awards'] = awardsByEntryId[id] ?? <String>[];
     }
 
@@ -2156,30 +2207,35 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
       final ids = entries
           .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
           .where((x) => x.isNotEmpty)
+          .toSet()
           .toList();
 
-      if (ids.isEmpty) return;
+      if (ids.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _savingJudge = false;
+          _msg = 'No entries found to update.';
+        });
+        return;
+      }
 
       if (!widget.isQrEntryMode) {
         await ShowLockService.assertShowUnlocked(widget.showId);
       }
 
       final normalizedJudgeId =
-          (judgeId == null || judgeId.isEmpty) ? null : judgeId;
+          (judgeId == null || judgeId.trim().isEmpty) ? null : judgeId.trim();
 
-      await supabase
-          .from('entries')
-          .update({
-            'judged_by_show_judge_id': normalizedJudgeId,
-            'updated_at': DateTime.now().toUtc().toIso8601String(),
-          })
-          .inFilter('id', ids);
+      for (var i = 0; i < ids.length; i += 100) {
+        final chunk = ids.skip(i).take(100).toList();
 
-      for (final e in _entries) {
-        final rowId = (e['entry_id'] ?? e['id'] ?? '').toString().trim();
-        if (ids.contains(rowId)) {
-          e['judged_by_show_judge_id'] = normalizedJudgeId;
-        }
+        await supabase
+            .from('entries')
+            .update({
+              'judged_by_show_judge_id': normalizedJudgeId,
+              'updated_at': DateTime.now().toUtc().toIso8601String(),
+            })
+            .inFilter('id', chunk);
       }
 
       await _reloadEntries();
@@ -2616,34 +2672,36 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
         })
         .toList();
 
-    final entryIds = refreshed
-        ..map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
+    final refreshedIds = refreshed
+        .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
         .where((x) => x.isNotEmpty)
         .toList();
 
-    final awardsByEntryId = <String, List<String>>{};
-
-    if (entryIds.isNotEmpty) {
-      final awardRows = await supabase
-          .from('entry_awards')
-          .select('entry_id,award_code')
-          .eq('show_id', widget.showId)
-          .inFilter('entry_id', entryIds);
-
-      for (final row in (awardRows as List).cast<Map<String, dynamic>>()) {
-        final entryId = (row['entry_id'] ?? '').toString().trim();
-        final award = (row['award_code'] ?? '').toString().trim();
-        if (entryId.isEmpty || award.isEmpty) continue;
-        awardsByEntryId.putIfAbsent(entryId, () => <String>[]);
-        awardsByEntryId[entryId]!.add(award);
-      }
-    }
+    final awardsByEntryId = await _loadAwardsByEntryId(
+      showId: widget.showId,
+      entryIds: refreshedIds,
+    );
 
     for (final e in refreshed) {
       final id = (e['entry_id'] ?? e['id'] ?? '').toString().trim();
+
       e['id'] ??= e['entry_id'];
       e['breed'] ??= e['breed_name'];
       e['variety'] ??= e['variety_name'];
+
+      final normalizedGroup = (
+        e['group_name'] ??
+        e['group_display_name'] ??
+        e['group_label'] ??
+        e['group'] ??
+        e['group_code']
+      )?.toString().trim();
+
+      e['group_name'] =
+          (normalizedGroup == null || normalizedGroup.isEmpty)
+              ? null
+              : normalizedGroup;
+
       e['_awards'] = awardsByEntryId[id] ?? <String>[];
     }
 
@@ -2654,7 +2712,10 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
     });
   }
 
-  Future<void> _applyJudgeToEntries(List<Map<String, dynamic>> entries, String? judgeId) async {
+  Future<void> _applyJudgeToEntries(
+    List<Map<String, dynamic>> entries,
+    String? judgeId,
+  ) async {
     setState(() {
       _savingJudge = true;
       _msg = null;
@@ -2662,40 +2723,50 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
 
     try {
       final ids = entries
-        .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
-        .where((x) => x.isNotEmpty)
-        .toList();
-      if (ids.isEmpty) return;
+          .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
+          .where((x) => x.isNotEmpty)
+          .toSet()
+          .toList();
+
+      if (ids.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _savingJudge = false;
+          _msg = 'No entries found to update.';
+        });
+        return;
+      }
 
       if (!widget.isQrEntryMode) {
         await ShowLockService.assertShowUnlocked(widget.showId);
       }
 
-      await supabase
-          .from('entries')
-          .update({
-            'judged_by_show_judge_id': (judgeId == null || judgeId.isEmpty) ? null : judgeId,
-            'updated_at': DateTime.now().toUtc().toIso8601String(),
-          })
-          .inFilter('id', ids);
+      final normalizedJudgeId =
+          (judgeId == null || judgeId.trim().isEmpty) ? null : judgeId.trim();
 
-      for (final e in _entries) {
-        final rowId = (e['entry_id'] ?? e['id'] ?? '').toString().trim();
-        if (ids.contains(rowId)) {
-          e['judged_by_show_judge_id'] =
-              (judgeId == null || judgeId.isEmpty) ? null : judgeId;
-        }
+      for (var i = 0; i < ids.length; i += 100) {
+        final chunk = ids.skip(i).take(100).toList();
+
+        await supabase
+            .from('entries')
+            .update({
+              'judged_by_show_judge_id': normalizedJudgeId,
+              'updated_at': DateTime.now().toUtc().toIso8601String(),
+            })
+            .inFilter('id', chunk);
       }
 
       await _reloadEntries();
 
       if (!mounted) return;
+
       setState(() {
         _savingJudge = false;
         _msg = 'Judge updated.';
       });
     } catch (e) {
       if (!mounted) return;
+
       setState(() {
         _savingJudge = false;
         _msg = 'Judge update failed: $e';
