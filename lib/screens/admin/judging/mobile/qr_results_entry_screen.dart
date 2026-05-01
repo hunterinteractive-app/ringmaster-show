@@ -837,57 +837,10 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
       ),
       body: ListView.builder(
         padding: const EdgeInsets.all(16),
-        itemCount: labels.length + 1,
+        itemCount: labels.length,
         itemBuilder: (context, i) {
-          if (i == 0) {
-            return Card(
-              elevation: 0,
-              margin: const EdgeInsets.only(bottom: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      '$title Judge Control',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '${allRows.length} entr${allRows.length == 1 ? 'y' : 'ies'} • ${_judgeSummary(allRows)}',
-                      style: const TextStyle(color: Colors.black54),
-                    ),
-                    const SizedBox(height: 12),
-                    _judgeDropdown(
-                      labelText: judgeLabel ?? 'Judge for this level',
-                      entries: allRows,
-                      keyPrefix: 'level-judge-$title',
-                    ),
-                    if (_msg != null) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        _msg!,
-                        style: TextStyle(
-                          color: _msg == 'Judge updated.'
-                              ? Colors.green
-                              : Colors.red,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            );
-          }
-
-          final label = labels[i - 1];
+        
+          final label = labels[i];
           final rows = grouped[label] ?? const <Map<String, dynamic>>[];
 
           return Card(
