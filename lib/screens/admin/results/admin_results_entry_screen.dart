@@ -2756,6 +2756,14 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
             .inFilter('id', chunk);
       }
 
+      // Immediate local update so child screens/modals inherit it right away.
+      for (final e in _entries) {
+        final id = (e['entry_id'] ?? e['id'] ?? '').toString().trim();
+        if (ids.contains(id)) {
+          e['judged_by_show_judge_id'] = normalizedJudgeId;
+        }
+      }
+
       await _reloadEntries();
 
       if (!mounted) return;
@@ -4014,9 +4022,7 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
           widget.entry['is_disqualified'] == true ||
           widget.entry['disqualified_reason'] != null;
 
-      final isShown = hasStoredResult
-          ? widget.entry['is_shown'] != false
-          : true;
+      final isShown = hasStoredResult ? widget.entry['is_shown'] != false : true;
 
       final isDisqualified = widget.entry['is_disqualified'] == true;
       final dqReason =
@@ -4039,8 +4045,20 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
       }
     }
 
-    final storedJudgeId =
+    String storedJudgeId =
         (widget.entry['judged_by_show_judge_id'] ?? '').toString().trim();
+
+    if (storedJudgeId.isEmpty) {
+      final classJudgeIds = widget.classEntries
+          .map((e) => (e['judged_by_show_judge_id'] ?? '').toString().trim())
+          .where((x) => x.isNotEmpty)
+          .toSet();
+
+      if (classJudgeIds.length == 1) {
+        storedJudgeId = classJudgeIds.first;
+        widget.entry['judged_by_show_judge_id'] = storedJudgeId;
+      }
+    }
 
     if (storedJudgeId.isEmpty) {
       _judgeId = null;
