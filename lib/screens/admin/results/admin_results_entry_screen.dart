@@ -1888,6 +1888,19 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
       ),
       body: Column(
         children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(8),
+            color: Colors.green,
+            child: const Text(
+              'DEBUG: GROUP SCREEN',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: Card(
