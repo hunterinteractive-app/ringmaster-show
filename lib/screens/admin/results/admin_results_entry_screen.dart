@@ -1893,7 +1893,7 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
             padding: const EdgeInsets.all(8),
             color: Colors.green,
             child: const Text(
-              'DEBUG: GROUP SCREEN',
+              'DEBUG: GROUP SCREEN 1896',
               style: TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
@@ -2304,6 +2304,18 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
       ),
       body: Column(
         children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(8),
+            color: Colors.purple,
+            child: const Text(
+              'DEBUG: VARIETY SCREEN 2312',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: Card(
@@ -2873,6 +2885,18 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
       ),
       body: Column(
         children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(8),
+            color: Colors.purple,
+            child: const Text(
+              'DEBUG: VARIETY SCREEN 2893',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: Card(
@@ -3856,6 +3880,18 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
       ),
       body: Column(
         children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(8),
+            color: Colors.purple,
+            child: const Text(
+              'DEBUG: VARIETY SCREEN 3876',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: Card(
