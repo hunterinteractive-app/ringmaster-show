@@ -4703,12 +4703,28 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
           'p_result_entered_by_phone':
               widget.isQrEntryMode ? writerPhone : null,
           'p_awards': widget.isFurOrWoolClass ? <String>[] : _selectedAwards.toList(),
+          'p_is_qr_entry_mode': widget.isQrEntryMode,
         },
       );
 
       if (updated == null) {
         throw Exception('Save returned no result.');
       }
+
+      widget.entry['placement'] = normalizedPlacement?.toString();
+      widget.entry['result_status'] = effectiveStatus;
+      widget.entry['disqualified_reason'] = normalizedDqReason;
+      widget.entry['is_shown'] = effectiveStatus != 'No Show';
+      widget.entry['is_disqualified'] = _isDisqualifiedStatus(effectiveStatus);
+      widget.entry['judged_by_show_judge_id'] = normalizedJudgeId;
+      widget.entry['result_entered_by_name'] =
+          writerName.isEmpty ? 'Signed-in Writer' : writerName;
+      widget.entry['result_entered_by_phone'] =
+          widget.isQrEntryMode ? writerPhone : null;
+      widget.entry['result_entered_at'] = now;
+      widget.entry['updated_at'] = now;
+      widget.entry['_awards'] =
+          widget.isFurOrWoolClass ? <String>[] : _selectedAwards.toList();
 
       Navigator.pop(
         context,
