@@ -4690,15 +4690,6 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
       final awardsToSave =
           widget.isFurOrWoolClass ? <String>[] : _selectedAwards.toList();
 
-      if (widget.isQrEntryMode) {
-        setState(() {
-          _saving = false;
-          _msg =
-              'DEBUG — awardsToSave: $awardsToSave | selected: ${_selectedAwards.toList()} | fur/wool: ${widget.isFurOrWoolClass}';
-        });
-        return;
-      }
-
       final updated = await supabase.rpc(
         'save_results_entry',
         params: {
@@ -4714,7 +4705,7 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
               writerName.isEmpty ? 'Signed-in Writer' : writerName,
           'p_result_entered_by_phone':
               widget.isQrEntryMode ? writerPhone : null,
-          'p_awards': widget.isFurOrWoolClass ? <String>[] : _selectedAwards.toList(),
+          'p_awards': awardsToSave,
           'p_is_qr_entry_mode': widget.isQrEntryMode,
         },
       );
