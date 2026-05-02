@@ -13,6 +13,7 @@ import 'enter_show_screen.dart';
 import 'account_settings_screen.dart';
 import 'my_entries_screen.dart';
 
+import '../config/legal_config.dart';
 import '../services/role_service.dart';
 import '../utils/date_time_utils.dart';
 import '../theme/app_theme.dart';
@@ -36,6 +37,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
   String _searchQuery = '';
   String _sortMode = 'date';
   String _stateFilter = 'All';
+  bool _checkingLegal = true;
 
   static const Map<String, String> _stateAbbreviationToName = {
     'AL': 'Alabama',
@@ -99,7 +101,17 @@ class _ShowListScreenState extends State<ShowListScreen> {
   @override
   void initState() {
     super.initState();
-    _bundleFuture = _loadBundle();
+    _bundleFuture = Future.value(
+      _ShowListBundle(
+        shows: [],
+        superAdminShows: [],
+        adminShowIds: {},
+        isSuperAdmin: false,
+        hasAvailableShowCapacity: false,
+        hasAnyAssignedShows: false,
+      ),
+    );
+    _verifyLegalAcceptance();
   }
 
   @override
@@ -378,6 +390,48 @@ class _ShowListScreenState extends State<ShowListScreen> {
     return filtered;
   }
 
+  Future<void> _verifyLegalAcceptance() async {
+    final user = supabase.auth.currentUser;
+
+    if (user == null) {
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (_) => false,
+      );
+      return;
+    }
+
+    final profile = await supabase
+        .from('profiles')
+        .select('accepted_terms_version, accepted_privacy_version')
+        .eq('id', user.id)
+        .maybeSingle();
+
+    final termsOk =
+        profile?['accepted_terms_version'] == LegalConfig.currentTermsVersion;
+    final privacyOk =
+        profile?['accepted_privacy_version'] == LegalConfig.currentPrivacyVersion;
+
+    if (termsOk && privacyOk) {
+      if (!mounted) return;
+      setState(() {
+        _bundleFuture = _loadBundle();
+        _checkingLegal = false;
+      });
+      return;
+    }
+
+    await supabase.auth.signOut();
+
+    if (!mounted) return;
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (_) => false,
+    );
+  }
+
   Future<void> _logout(BuildContext context) async {
     await supabase.auth.signOut();
     if (!context.mounted) return;
@@ -425,6 +479,14 @@ class _ShowListScreenState extends State<ShowListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_checkingLegal) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
     return FutureBuilder<_ShowListBundle>(
       future: _bundleFuture,
       builder: (context, snap) {

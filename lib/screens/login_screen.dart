@@ -7,10 +7,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ringmaster_show/screens/admin/judging/mobile/qr_results_entry_screen.dart';
 
+import '../config/legal_config.dart';
 import '../theme/app_theme.dart';
 import '../utils/date_time_utils.dart';
 import '../widgets/rm_widgets.dart';
 import 'show_list_screen.dart';
+import 'legal/terms_screen.dart';
+import 'legal/privacy_policy_screen.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -29,6 +32,7 @@ class _LoginScreenState extends State<LoginScreen>
   String? _msg;
   bool _busy = false;
   bool _showLogin = false;
+  bool _handlingAuth = false;
 
   late Future<List<Map<String, dynamic>>> _publicShowsFuture;
 
@@ -99,7 +103,27 @@ class _LoginScreenState extends State<LoginScreen>
     });
 
     _sub = supabase.auth.onAuthStateChange.listen((data) async {
-      if (data.session == null || !mounted) return;
+      if (data.session == null || !mounted || _handlingAuth) return;
+
+      _handlingAuth = true;
+
+      final ok = await _ensureTermsAccepted();
+
+      if (!ok) {
+        await supabase.auth.signOut();
+
+        if (mounted) {
+          setState(() {
+            _msg =
+                'You must accept the current Terms of Service and Privacy Policy to continue.';
+          });
+        }
+
+        _handlingAuth = false;
+        return;
+      }
+
+      if (!mounted) return;
 
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const ShowListScreen()),
@@ -159,6 +183,89 @@ class _LoginScreenState extends State<LoginScreen>
       if (!mounted) return;
       setState(() => _busy = false);
     }
+  }
+
+  Future<bool> _ensureTermsAccepted() async {
+    final user = supabase.auth.currentUser;
+    if (user == null) return false;
+
+    final profile = await supabase
+        .from('profiles')
+        .select(
+          'accepted_terms_version, accepted_privacy_version',
+        )
+        .eq('id', user.id)
+        .maybeSingle();
+
+    final termsOk =
+        profile?['accepted_terms_version'] == LegalConfig.currentTermsVersion;
+    final privacyOk =
+        profile?['accepted_privacy_version'] == LegalConfig.currentPrivacyVersion;
+
+    if (termsOk && privacyOk) return true;
+
+    if (!mounted) return false;
+
+    final agreed = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) {
+            bool checked = false;
+
+            return StatefulBuilder(
+              builder: (context, setState) {
+                return AlertDialog(
+                  title: const Text('Terms & Privacy Agreement'),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Before continuing, please review and agree to the current RingMaster Show Terms of Service and Privacy Policy.',
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      CheckboxListTile(
+                        value: checked,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text(
+                          'I agree to the Terms of Service and Privacy Policy.',
+                        ),
+                        onChanged: (value) {
+                          setState(() => checked = value ?? false);
+                        },
+                      ),
+                    ],
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('Cancel'),
+                    ),
+                    FilledButton(
+                      onPressed: checked
+                          ? () => Navigator.pop(context, true)
+                          : null,
+                      child: const Text('Agree & Continue'),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        ) ??
+        false;
+
+    if (!agreed) return false;
+
+    await supabase.from('profiles').upsert({
+      'id': user.id,
+      'accepted_terms_version': LegalConfig.currentTermsVersion,
+      'accepted_terms_at': DateTime.now().toUtc().toIso8601String(),
+      'accepted_privacy_version': LegalConfig.currentPrivacyVersion,
+      'accepted_privacy_at': DateTime.now().toUtc().toIso8601String(),
+    });
+
+    return true;
   }
 
   String? _validateEmail(String? value) {
@@ -335,6 +442,36 @@ class _LoginScreenState extends State<LoginScreen>
                                     textAlign: TextAlign.center,
                                     style:
                                         Theme.of(context).textTheme.bodySmall,
+                                  ),
+                                  const SizedBox(height: AppSpacing.md),
+                                  Text(
+                                    'By continuing, you agree to the RingMaster Show Terms of Service and Privacy Policy.',
+                                    textAlign: TextAlign.center,
+                                    style: Theme.of(context).textTheme.bodySmall,
+                                  ),
+                                  const SizedBox(height: AppSpacing.xs),
+                                  Wrap(
+                                    alignment: WrapAlignment.center,
+                                    children: [
+                                      TextButton(
+                                        onPressed: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(builder: (_) => const TermsScreen()),
+                                          );
+                                        },
+                                        child: const Text('Terms of Service'),
+                                      ),
+                                      TextButton(
+                                        onPressed: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()),
+                                          );
+                                        },
+                                        child: const Text('Privacy Policy'),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),

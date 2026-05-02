@@ -2104,7 +2104,10 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                                           'Finalize & Generate Reports',
                                                         ),
                                                         content: const Text(
-                                                          'This will finalize the show and generate all Flutter-based closeout reports. Emails will not be sent automatically.',
+                                                          'This will finalize the show and generate all closeout reports.\n\n'
+                                                          'By continuing, you confirm that all results — including any submitted via QR Code '
+                                                          'have been reviewed for accuracy and completeness.\n\n'
+                                                          'Once finalized, results can be emailed. Emails will not be sent automatically.',
                                                         ),
                                                         actions: [
                                                           TextButton(
