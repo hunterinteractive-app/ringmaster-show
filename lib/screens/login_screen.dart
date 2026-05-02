@@ -207,53 +207,52 @@ class _LoginScreenState extends State<LoginScreen>
     if (!mounted) return false;
 
     final agreed = await showDialog<bool>(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) {
-            bool checked = false;
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        bool checked = false;
 
-            return StatefulBuilder(
-              builder: (context, setState) {
-                return AlertDialog(
-                  title: const Text('Terms & Privacy Agreement'),
-                  content: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text(
-                        'Before continuing, please review and agree to the current RingMaster Show Terms of Service and Privacy Policy.',
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      CheckboxListTile(
-                        value: checked,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text(
-                          'I agree to the Terms of Service and Privacy Policy.',
-                        ),
-                        onChanged: (value) {
-                          setState(() => checked = value ?? false);
-                        },
-                      ),
-                    ],
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('Terms & Privacy Agreement'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Our Terms of Service or Privacy Policy have changed. Please review and agree before continuing.',
                   ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: const Text('Cancel'),
+                  const SizedBox(height: AppSpacing.md),
+                  CheckboxListTile(
+                    value: checked,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text(
+                      'I have reviewed and agree to the current Terms of Service and Privacy Policy.',
                     ),
-                    FilledButton(
-                      onPressed: checked
-                          ? () => Navigator.pop(context, true)
-                          : null,
-                      child: const Text('Agree & Continue'),
-                    ),
-                  ],
-                );
-              },
+                    onChanged: (value) {
+                      setState(() => checked = value ?? false);
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: checked
+                      ? () => Navigator.pop(context, true)
+                      : null,
+                  child: const Text('Agree & Continue'),
+                ),
+              ],
             );
           },
-        ) ??
-        false;
+        );
+      },
+    ) ?? false;
 
     if (!agreed) return false;
 

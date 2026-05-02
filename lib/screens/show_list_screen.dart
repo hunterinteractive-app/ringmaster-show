@@ -37,7 +37,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
   String _searchQuery = '';
   String _sortMode = 'date';
   String _stateFilter = 'All';
-  bool _checkingLegal = true;
+  bool _checkingLegal = false;
 
   static const Map<String, String> _stateAbbreviationToName = {
     'AL': 'Alabama',
@@ -111,7 +111,6 @@ class _ShowListScreenState extends State<ShowListScreen> {
         hasAnyAssignedShows: false,
       ),
     );
-    _verifyLegalAcceptance();
   }
 
   @override
@@ -421,8 +420,6 @@ class _ShowListScreenState extends State<ShowListScreen> {
       });
       return;
     }
-
-    await supabase.auth.signOut();
 
     if (!mounted) return;
 
