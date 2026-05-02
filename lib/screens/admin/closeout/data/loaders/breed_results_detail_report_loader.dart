@@ -79,6 +79,7 @@ class BreedResultsDetailReportLoader {
         varieties: const [],
         sections: sections,
         noResultsFound: sections.every((s) => s.noResultsFound),
+        secretaryPhone: showHeader.secretaryPhone,
       );
     }
 
@@ -106,6 +107,7 @@ class BreedResultsDetailReportLoader {
       varieties: section.varieties,
       sections: const [],
       noResultsFound: section.noResultsFound,
+      secretaryPhone: showHeader.secretaryPhone,
     );
   }
 
@@ -198,7 +200,30 @@ class BreedResultsDetailReportLoader {
       return VarietySection(
         varietyName: varietyName,
         awards: varietyAwardMap[varietyName] ?? const [],
-        classes: _buildClasses(varietyRows),
+        sexSections: _buildSexSections(varietyRows),
+      );
+    }).toList();
+  }
+
+  List<SexSection> _buildSexSections(List<Map<String, dynamic>> rows) {
+    final bySex = <String, List<Map<String, dynamic>>>{};
+
+    for (final row in rows) {
+      final sexLabel = _deriveSexLabel(row);
+      bySex.putIfAbsent(sexLabel, () => []);
+      bySex[sexLabel]!.add(row);
+    }
+
+    final sexLabels = bySex.keys.toList()
+      ..sort((a, b) {
+        final cmp = _sexSort(a).compareTo(_sexSort(b));
+        return cmp != 0 ? cmp : a.compareTo(b);
+      });
+
+    return sexLabels.map((sexLabel) {
+      return SexSection(
+        sexLabel: sexLabel,
+        classes: _buildClasses(bySex[sexLabel]!),
       );
     }).toList();
   }
@@ -233,23 +258,23 @@ class BreedResultsDetailReportLoader {
           return _safe(a['exhibitor_label']).compareTo(_safe(b['exhibitor_label']));
         });
 
-      final rowsOut = sortedRows.map((r) {
-        final status = _isDisqualified(r) ? 'DQ' : _safe(r['status']);
-        final placeNum = _placementNumber(r['placement']);
+      final rowsOut = sortedRows
+          .where((r) {
+            final placeNum = _placementNumber(r['placement']);
+            return placeNum >= 1 && placeNum <= 5;
+          })
+          .map((r) {
+            final placeNum = _placementNumber(r['placement']);
 
-        return ClassEntry(
-          place: status == 'DQ'
-              ? 'DQ'
-              : placeNum < 999
-                  ? placeNum.toString()
-                  : '-',
-          animal: _animalLabel(r),
-          exhibitorName: _safe(r['exhibitor_label']),
-          sex: _safe(r['sex']),
-          variety: _safe(r['variety_name']),
-          status: status,
-        );
-      }).toList();
+            return ClassEntry(
+              place: placeNum.toString(),
+              animal: _animalLabel(r),
+              exhibitorName: _safe(r['exhibitor_label']),
+              sex: _safe(r['sex']),
+              variety: _safe(r['variety_name']),
+            );
+          })
+          .toList();
 
       final animalsJudged = classRows.where((r) => _wasJudged(r)).length;
       final exhibitorsJudged = classRows
@@ -262,7 +287,7 @@ class BreedResultsDetailReportLoader {
       return ClassSection(
         className: className,
         entryCount: classRows.length,
-        placedCount: rowsOut.where((r) => r.place != '-' && r.place != 'DQ').length,
+        placedCount: rowsOut.length,
         animalsJudged: animalsJudged,
         exhibitorsJudged: exhibitorsJudged,
         rows: rowsOut,
@@ -418,6 +443,7 @@ class BreedResultsDetailReportLoader {
       showLocation: _safe(show['location_name']),
       secretaryName: _safe(arbaDetails['secretary_name']),
       secretaryEmail: _safe(arbaDetails['secretary_email']),
+      secretaryPhone: _safe(arbaDetails['secretary_phone']),
     );
   }
 
@@ -477,6 +503,32 @@ class BreedResultsDetailReportLoader {
     }
   }
 
+  String _deriveSexLabel(Map<String, dynamic> row) {
+    final sex = _safe(row['sex']).toLowerCase();
+    final className = _safe(row['class_name']).toLowerCase();
+
+    if (sex.contains('buck') || sex == 'b' || className.contains('buck')) {
+      return 'Bucks';
+    }
+
+    if (sex.contains('doe') || sex == 'd' || className.contains('doe')) {
+      return 'Does';
+    }
+
+    return 'Unspecified Sex';
+  }
+
+  int _sexSort(String sexLabel) {
+    switch (sexLabel) {
+      case 'Bucks':
+        return 10;
+      case 'Does':
+        return 20;
+      default:
+        return 99;
+    }
+  }
+
   String _normalizeClassName(String raw) {
     final r = raw.toLowerCase();
     if (r.contains('senior') && r.contains('buck')) return 'Sr Bucks';
@@ -507,17 +559,18 @@ class BreedResultsDetailReportLoader {
     }
   }
 
-  bool _isDisqualified(Map<String, dynamic> row) {
-    final raw = row['is_disqualified'];
-    if (raw == true) return true;
-    final status = _safe(row['status']).toLowerCase();
-    return status == 'dq' || status.contains('disqual');
-  }
-
   bool _wasJudged(Map<String, dynamic> row) {
+    final isShown = row['is_shown'];
+    final isDisqualified = row['is_disqualified'];
+
+    if (isShown == false) return false;
+    if (isDisqualified == true) return false;
+
     final status = _safe(row['status']).toLowerCase();
     if (status.contains('no show')) return false;
     if (status.contains('wrong')) return false;
+    if (status.contains('scratch')) return false;
+
     return true;
   }
 
@@ -528,7 +581,9 @@ class BreedResultsDetailReportLoader {
 
   String _animalLabel(Map<String, dynamic> row) {
     final tattoo = _safe(row['tattoo']);
-    final animal = _safe(row['animal_label']);
+    final animal = _safe(row['animal_label']).isNotEmpty
+        ? _safe(row['animal_label'])
+        : _safe(row['tattoo']);
     if (animal.isNotEmpty) return animal;
     if (tattoo.isNotEmpty) return tattoo;
     return 'Animal';
@@ -555,11 +610,13 @@ class _ShowHeader {
   final String showLocation;
   final String secretaryName;
   final String secretaryEmail;
+  final String secretaryPhone;
 
   const _ShowHeader({
     this.hostClubName = '',
     this.showLocation = '',
     this.secretaryName = '',
     this.secretaryEmail = '',
+    this.secretaryPhone = '',
   });
 }

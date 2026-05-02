@@ -276,16 +276,33 @@ class BreedResultsDetailReportPdf {
         widgets.add(pw.SizedBox(height: 8));
       }
 
-      for (final classGroup in variety.classes) {
-        widgets.add(
-          pw.Text(
-            '${classGroup.className} — ${classGroup.animalsJudged} animals / ${classGroup.exhibitorsJudged} exhibitors judged',
-            style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
-          ),
-        );
-        widgets.add(pw.SizedBox(height: 4));
-        widgets.add(_buildPlacementTable(classGroup.rows));
-        widgets.add(pw.SizedBox(height: 8));
+      for (final sexSection in variety.sexSections) {
+        widgets.add(_sexHeader(sexSection.sexLabel));
+
+        for (final classGroup in sexSection.classes) {
+          widgets.add(
+            pw.Text(
+              '${classGroup.className} — ${classGroup.animalsJudged} animals / ${classGroup.exhibitorsJudged} exhibitors judged',
+              style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+            ),
+          );
+          widgets.add(pw.SizedBox(height: 4));
+
+          if (classGroup.rows.isEmpty) {
+            widgets.add(
+              pw.Text(
+                'No top 5 placements recorded.',
+                style: const pw.TextStyle(fontSize: 8),
+              ),
+            );
+          } else {
+            widgets.add(_buildPlacementTable(classGroup.rows));
+          }
+
+          widgets.add(pw.SizedBox(height: 8));
+        }
+
+        widgets.add(pw.SizedBox(height: 6));
       }
 
       widgets.add(pw.SizedBox(height: 8));
@@ -313,6 +330,19 @@ class BreedResultsDetailReportPdf {
       child: pw.Text(
         title,
         style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
+      ),
+    );
+  }
+
+  pw.Widget _sexHeader(String title) {
+    return pw.Container(
+      width: double.infinity,
+      margin: const pw.EdgeInsets.only(bottom: 5, top: 4),
+      padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+      child: pw.Text(
+        title.toUpperCase(),
+        style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
       ),
     );
   }
@@ -400,7 +430,7 @@ class BreedResultsDetailReportPdf {
 
   pw.Widget _buildPlacementTable(List<ClassEntry> rows) {
     return pw.TableHelper.fromTextArray(
-      headers: const ['Place', 'Animal', 'Sex', 'Variety', 'Exhibitor', 'Status'],
+      headers: const ['Place', 'Animal', 'Sex', 'Variety', 'Exhibitor'],
       data: rows
           .map((r) => [
                 r.place,
@@ -408,7 +438,6 @@ class BreedResultsDetailReportPdf {
                 r.sex,
                 r.variety,
                 r.exhibitorName,
-                r.status,
               ])
           .toList(),
       headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
@@ -422,7 +451,6 @@ class BreedResultsDetailReportPdf {
         2: const pw.FixedColumnWidth(30),
         3: const pw.FlexColumnWidth(1.2),
         4: const pw.FlexColumnWidth(1.6),
-        5: const pw.FixedColumnWidth(42),
       },
     );
   }

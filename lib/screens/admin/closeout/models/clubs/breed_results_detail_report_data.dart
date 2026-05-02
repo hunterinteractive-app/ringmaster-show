@@ -1,5 +1,3 @@
-// lib/screens/admin/closeout/models/clubs/breed_results_detail_report_data.dart
-
 class BreedResultsDetailReportData {
   final String showId;
   final String breedName;
@@ -83,11 +81,21 @@ class BreedAward {
 class VarietySection {
   final String varietyName;
   final List<BreedAward> awards;
-  final List<ClassSection> classes;
+  final List<SexSection> sexSections;
 
   const VarietySection({
     required this.varietyName,
     required this.awards,
+    required this.sexSections,
+  });
+}
+
+class SexSection {
+  final String sexLabel;
+  final List<ClassSection> classes;
+
+  const SexSection({
+    required this.sexLabel,
     required this.classes,
   });
 }
@@ -116,7 +124,6 @@ class ClassEntry {
   final String exhibitorName;
   final String sex;
   final String variety;
-  final String status;
 
   const ClassEntry({
     required this.place,
@@ -124,6 +131,5 @@ class ClassEntry {
     required this.exhibitorName,
     this.sex = '',
     this.variety = '',
-    this.status = '',
   });
 }
