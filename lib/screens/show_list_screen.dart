@@ -101,16 +101,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
   @override
   void initState() {
     super.initState();
-    _bundleFuture = Future.value(
-      _ShowListBundle(
-        shows: [],
-        superAdminShows: [],
-        adminShowIds: {},
-        isSuperAdmin: false,
-        hasAvailableShowCapacity: false,
-        hasAnyAssignedShows: false,
-      ),
-    );
+    _bundleFuture = _loadBundle();
   }
 
   @override
