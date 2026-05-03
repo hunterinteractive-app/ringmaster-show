@@ -1,3 +1,5 @@
+// lib/screens/create_show_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
@@ -22,6 +24,7 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
   DateTime _start = DateTime.now();
   DateTime _end = DateTime.now();
   bool _published = false;
+  bool _isNationalShow = false;
 
   int _openCount = 1;
   int _youthCount = 0;
@@ -324,6 +327,7 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
       await supabase.from('shows').update({
         'timezone': 'America/Indiana/Indianapolis',
         'is_published': _published,
+        'is_national_show': _isNationalShow,
         'entry_close_at': _entryCloseAt?.toUtc().toIso8601String(),
         'club_id': clubId,
         'club_name': clubName,
@@ -498,6 +502,17 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
                             onChanged: _saving
                                 ? null
                                 : (v) => setState(() => _published = v),
+                          ),
+                          SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('National Show'),
+                            subtitle: const Text(
+                              'Enables national show reporting rules, including Top 10 Breed reporting.',
+                            ),
+                            value: _isNationalShow,
+                            onChanged: _saving
+                                ? null
+                                : (v) => setState(() => _isNationalShow = v),
                           ),
                         ],
                       ),

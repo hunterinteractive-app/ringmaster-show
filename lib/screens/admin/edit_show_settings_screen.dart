@@ -54,6 +54,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   DateTime? _entryCloseAt;
 
   bool _published = false;
+  bool _isNationalShow = false;
   bool _isLocked = false;
   bool _isFinalized = false;
 
@@ -488,7 +489,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
       final show = await supabase
           .from('shows')
           .select(
-            'id,name,location_name,start_date,end_date,timezone,is_published,entry_open_at,entry_close_at,final_award_mode,club_id,club_name,is_locked,locked_at,finalized_at',
+            'id,name,location_name,start_date,end_date,timezone,is_published,is_national_show,entry_open_at,entry_close_at,final_award_mode,club_id,club_name,is_locked,locked_at,finalized_at',
           )
           .eq('id', widget.showId)
           .single();
@@ -503,6 +504,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
 
       _timezone = (show['timezone'] ?? _timezone).toString();
       _published = show['is_published'] == true;
+      _isNationalShow = show['is_national_show'] == true;
       _isLocked = show['is_locked'] == true;
 
       final finalizedAt = (show['finalized_at'] ?? '').toString().trim();
@@ -641,6 +643,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
         'end_date': _endDate!.toIso8601String().substring(0, 10),
         'timezone': _timezone,
         'is_published': _published,
+        'is_national_show': _isNationalShow,
         'entry_open_at': _entryOpenAt?.toUtc().toIso8601String(),
         'entry_close_at': _entryCloseAt?.toUtc().toIso8601String(),
         'final_award_mode': _finalAwardMode,
@@ -1310,6 +1313,18 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                     },
                             ),
                             const SizedBox(height: 12),
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text('National Show'),
+                              subtitle: const Text(
+                                'Enables national show reporting rules, including Top 10 Breed reporting.',
+                              ),
+                              value: _isNationalShow,
+                              onChanged: (_saving || _isReadOnly)
+                                  ? null
+                                  : (v) => setState(() => _isNationalShow = v),
+                            ),
+                            const SizedBox(height: 12),
                             DropdownButtonFormField<String>(
                               value: _finalAwardMode,
                               decoration: const InputDecoration(
@@ -1497,13 +1512,13 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                   'Per-animal fees, discounts, day-of-show, and online payment setup',
                               onTap: (_saving || _isReadOnly) ? null : _openFees,
                             ),
-                            _buildSettingsActionTile(
-                              icon: Icons.rule,
-                              title: 'Show Rules',
-                              subtitle:
-                                  'Validations like tattoo required, limits, and required fields',
-                              onTap: (_saving || _isReadOnly) ? null : _openRules,
-                            ),
+//                             _buildSettingsActionTile(
+//                               icon: Icons.rule,
+//                               title: 'Show Rules',
+//                               subtitle:
+//                                   'Validations like tattoo required, limits, and required fields',
+//                               onTap: (_saving || _isReadOnly) ? null : _openRules,
+//                             ),
                           ],
                         ),
 
