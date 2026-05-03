@@ -407,7 +407,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
     final profile = await supabase
         .from('profiles')
         .select('accepted_terms_version, accepted_privacy_version')
-        .eq('id', user.id)
+        .eq('user_id', user.id)
         .maybeSingle();
 
     final termsOk =
@@ -441,13 +441,14 @@ class _ShowListScreenState extends State<ShowListScreen> {
 
     try {
       await supabase.from('profiles').upsert({
-        'id': user.id,
         'user_id': user.id,
         'accepted_terms_version': LegalConfig.currentTermsVersion,
         'accepted_terms_at': DateTime.now().toUtc().toIso8601String(),
         'accepted_privacy_version': LegalConfig.currentPrivacyVersion,
         'accepted_privacy_at': DateTime.now().toUtc().toIso8601String(),
-      }, onConflict: 'id');
+        'email': user.email,
+        'display_name': user.email?.split('@').first ?? 'User',
+      }, onConflict: 'user_id');
     } catch (e) {
       if (!mounted) return;
 
