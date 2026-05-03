@@ -256,13 +256,12 @@ class _LoginScreenState extends State<LoginScreen>
 
     if (!agreed) return false;
 
-    await supabase.from('profiles').upsert({
-      'id': user.id,
+    await supabase.from('profiles').update({
       'accepted_terms_version': LegalConfig.currentTermsVersion,
       'accepted_terms_at': DateTime.now().toUtc().toIso8601String(),
       'accepted_privacy_version': LegalConfig.currentPrivacyVersion,
       'accepted_privacy_at': DateTime.now().toUtc().toIso8601String(),
-    });
+    }).eq('id', user.id);
 
     return true;
   }
