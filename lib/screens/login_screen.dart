@@ -4,10 +4,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:ringmaster_show/screens/admin/judging/mobile/qr_results_entry_screen.dart';
 
-import '../config/legal_config.dart';
 import '../theme/app_theme.dart';
 import '../utils/date_time_utils.dart';
 import '../widgets/rm_widgets.dart';
@@ -107,22 +104,6 @@ class _LoginScreenState extends State<LoginScreen>
 
       _handlingAuth = true;
 
-      final ok = await _ensureTermsAccepted();
-
-      if (!ok) {
-        await supabase.auth.signOut();
-
-        if (mounted) {
-          setState(() {
-            _msg =
-                'You must accept the current Terms of Service and Privacy Policy to continue.';
-          });
-        }
-
-        _handlingAuth = false;
-        return;
-      }
-
       if (!mounted) return;
 
       Navigator.of(context).pushReplacement(
@@ -183,87 +164,6 @@ class _LoginScreenState extends State<LoginScreen>
       if (!mounted) return;
       setState(() => _busy = false);
     }
-  }
-
-  Future<bool> _ensureTermsAccepted() async {
-    final user = supabase.auth.currentUser;
-    if (user == null) return false;
-
-    final profile = await supabase
-        .from('profiles')
-        .select(
-          'accepted_terms_version, accepted_privacy_version',
-        )
-        .eq('id', user.id)
-        .maybeSingle();
-
-    final termsOk =
-        profile?['accepted_terms_version'] == LegalConfig.currentTermsVersion;
-    final privacyOk =
-        profile?['accepted_privacy_version'] == LegalConfig.currentPrivacyVersion;
-
-    if (termsOk && privacyOk) return true;
-
-    if (!mounted) return false;
-
-    final agreed = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        bool checked = false;
-
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: const Text('Terms & Privacy Agreement'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Our Terms of Service or Privacy Policy have changed. Please review and agree before continuing.',
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  CheckboxListTile(
-                    value: checked,
-                    controlAffinity: ListTileControlAffinity.leading,
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text(
-                      'I have reviewed and agree to the current Terms of Service and Privacy Policy.',
-                    ),
-                    onChanged: (value) {
-                      setState(() => checked = value ?? false);
-                    },
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Cancel'),
-                ),
-                FilledButton(
-                  onPressed: checked
-                      ? () => Navigator.pop(context, true)
-                      : null,
-                  child: const Text('Agree & Continue'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    ) ?? false;
-
-    if (!agreed) return false;
-
-    await supabase.from('profiles').update({
-      'accepted_terms_version': LegalConfig.currentTermsVersion,
-      'accepted_terms_at': DateTime.now().toUtc().toIso8601String(),
-      'accepted_privacy_version': LegalConfig.currentPrivacyVersion,
-      'accepted_privacy_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', user.id);
-
-    return true;
   }
 
   String? _validateEmail(String? value) {

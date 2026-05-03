@@ -12,6 +12,8 @@ import 'my_animals_screen.dart';
 import 'enter_show_screen.dart';
 import 'account_settings_screen.dart';
 import 'my_entries_screen.dart';
+import 'legal/terms_screen.dart';
+import 'legal/privacy_policy_screen.dart';
 
 import '../config/legal_config.dart';
 import '../services/role_service.dart';
@@ -37,7 +39,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
   String _searchQuery = '';
   String _sortMode = 'date';
   String _stateFilter = 'All';
-  bool _checkingLegal = false;
+  bool _checkingLegal = true;
 
   static const Map<String, String> _stateAbbreviationToName = {
     'AL': 'Alabama',
@@ -101,7 +103,17 @@ class _ShowListScreenState extends State<ShowListScreen> {
   @override
   void initState() {
     super.initState();
-    _bundleFuture = _loadBundle();
+    _bundleFuture = Future.value(
+      _ShowListBundle(
+        shows: [],
+        superAdminShows: [],
+        adminShowIds: {},
+        isSuperAdmin: false,
+        hasAvailableShowCapacity: false,
+        hasAnyAssignedShows: false,
+      ),
+    );
+    _verifyLegalAcceptance();
   }
 
   @override
@@ -414,10 +426,115 @@ class _ShowListScreenState extends State<ShowListScreen> {
 
     if (!mounted) return;
 
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-      (_) => false,
-    );
+    final agreed = await _showLegalAgreementDialog();
+
+    if (!agreed) {
+      await supabase.auth.signOut();
+
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (_) => false,
+      );
+      return;
+    }
+
+    await supabase.from('profiles').update({
+      'accepted_terms_version': LegalConfig.currentTermsVersion,
+      'accepted_terms_at': DateTime.now().toUtc().toIso8601String(),
+      'accepted_privacy_version': LegalConfig.currentPrivacyVersion,
+      'accepted_privacy_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', user.id);
+
+    if (!mounted) return;
+
+    setState(() {
+      _bundleFuture = _loadBundle();
+      _checkingLegal = false;
+    });
+  }
+
+  Future<bool> _showLegalAgreementDialog() async {
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) {
+            bool checked = false;
+
+            return StatefulBuilder(
+              builder: (context, setState) {
+                return AlertDialog(
+                  title: const Text('Terms & Privacy Agreement'),
+                  content: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'Our Terms of Service or Privacy Policy have changed. '
+                          'Please review and agree before continuing.',
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        Wrap(
+                          alignment: WrapAlignment.center,
+                          children: [
+                            TextButton(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const TermsScreen(),
+                                  ),
+                                );
+                              },
+                              child: const Text('View Terms of Service'),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        const PrivacyPolicyScreen(),
+                                  ),
+                                );
+                              },
+                              child: const Text('View Privacy Policy'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        CheckboxListTile(
+                          value: checked,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text(
+                            'I have reviewed and agree to the current Terms of Service and Privacy Policy.',
+                          ),
+                          onChanged: (value) {
+                            setState(() => checked = value ?? false);
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('Cancel'),
+                    ),
+                    FilledButton(
+                      onPressed: checked
+                          ? () => Navigator.pop(context, true)
+                          : null,
+                      child: const Text('Agree & Continue'),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        ) ??
+        false;
   }
 
   Future<void> _logout(BuildContext context) async {
