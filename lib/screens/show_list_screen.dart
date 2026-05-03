@@ -442,6 +442,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
     try {
       await supabase.from('profiles').upsert({
         'id': user.id,
+        'user_id': user.id,
         'accepted_terms_version': LegalConfig.currentTermsVersion,
         'accepted_terms_at': DateTime.now().toUtc().toIso8601String(),
         'accepted_privacy_version': LegalConfig.currentPrivacyVersion,
