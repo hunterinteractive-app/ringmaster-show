@@ -529,6 +529,8 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
                         ),
                       ),
                     ),
+                  ],
+                ),
 
 //                      _buildSectionCard(
 //                        icon: Icons.sell_outlined,
@@ -570,8 +572,6 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
                         ],
                       ),
                   ],
-                ),
-              ],
             ),
     );
   }
@@ -1418,10 +1418,6 @@ class _ControlSheetsGeneratorSheetState
     );
   }
 }
-
-// =======================================================
-// CHECK-IN GENERATOR
-// =======================================================
 
 class _CheckInGeneratorSheet extends StatefulWidget {
   final String showId;
@@ -2413,9 +2409,9 @@ class _RemarkCardsGeneratorSheetState extends State<_RemarkCardsGeneratorSheet> 
     final raw = _safe(row, 'class_name');
     final lower = raw.toLowerCase();
 
+    if (lower.contains('pre')) return 'Pre Jr.';
     if (lower.contains('senior')) return 'Sr.';
     if (lower.contains('intermediate')) return '6/8';
-    if (lower.contains('pre')) return 'Pre Jr.';
     if (lower.contains('junior')) return 'Jr.';
     if (lower.contains('fryer')) return 'Fryer';
     if (lower.contains('meat')) return 'Meat Pen';
