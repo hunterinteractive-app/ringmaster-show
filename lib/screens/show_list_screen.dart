@@ -439,12 +439,26 @@ class _ShowListScreenState extends State<ShowListScreen> {
       return;
     }
 
-    await supabase.from('profiles').update({
-      'accepted_terms_version': LegalConfig.currentTermsVersion,
-      'accepted_terms_at': DateTime.now().toUtc().toIso8601String(),
-      'accepted_privacy_version': LegalConfig.currentPrivacyVersion,
-      'accepted_privacy_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', user.id);
+    try {
+      await supabase.from('profiles').upsert({
+        'id': user.id,
+        'accepted_terms_version': LegalConfig.currentTermsVersion,
+        'accepted_terms_at': DateTime.now().toUtc().toIso8601String(),
+        'accepted_privacy_version': LegalConfig.currentPrivacyVersion,
+        'accepted_privacy_at': DateTime.now().toUtc().toIso8601String(),
+      }, onConflict: 'id');
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not save legal agreement: $e'),
+          backgroundColor: AppColors.danger,
+        ),
+      );
+
+      return;
+    }
 
     if (!mounted) return;
 
