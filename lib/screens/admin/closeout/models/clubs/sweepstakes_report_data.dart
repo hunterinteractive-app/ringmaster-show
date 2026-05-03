@@ -20,7 +20,9 @@ class SweepstakesReportData {
 
   final List<SweepstakesReportRow> rows;
   final List<SweepstakesReportSection> sections;
+  final List<SweepstakesTopBreedRow> topBreedRows;
   final bool noResultsFound;
+  final bool isNationalShow;
 
   const SweepstakesReportData({
     required this.showId,
@@ -30,6 +32,7 @@ class SweepstakesReportData {
     required this.ruleSource,
     required this.verificationStatus,
     required this.engineType,
+    required this.rows,
     this.arbaSanction = '',
     this.nationalClubSanction = '',
     this.breedSanctionNumber = '',
@@ -38,9 +41,10 @@ class SweepstakesReportData {
     this.secretaryName = '',
     this.secretaryEmail = '',
     this.secretaryPhone = '',
-    required this.rows,
     this.sections = const [],
+    this.topBreedRows = const [],
     this.noResultsFound = false,
+    this.isNationalShow = false,
   });
 
   bool get isProvisional =>
@@ -116,6 +120,26 @@ class SweepstakesReportRow {
       bisPoints: asDouble(map['bis_points']),
       furPoints: asDouble(map['fur_points']),
       totalPoints: asDouble(map['total_points']),
+    );
+  }
+}
+
+class SweepstakesTopBreedRow {
+  final int rank;
+  final String breedName;
+  final int entryCount;
+
+  const SweepstakesTopBreedRow({
+    required this.rank,
+    required this.breedName,
+    required this.entryCount,
+  });
+
+  factory SweepstakesTopBreedRow.fromMap(Map<String, dynamic> map) {
+    return SweepstakesTopBreedRow(
+      rank: ((map['rank'] ?? 0) as num).toInt(),
+      breedName: (map['breed_name'] ?? '').toString(),
+      entryCount: ((map['entry_count'] ?? 0) as num).toInt(),
     );
   }
 }

@@ -31,6 +31,7 @@ class SweepstakesReportLoader {
     final breedName = (request.breedName ?? '').trim();
     final scope = (request.scope ?? '').trim().toUpperCase();
     final showLetter = (request.showLetter ?? '').trim().toUpperCase();
+    final isNationalShow = request.isNationalShow;
 
     if (breedName.isEmpty) {
       throw Exception('Sweepstakes report requires breedName.');
@@ -49,6 +50,14 @@ class SweepstakesReportLoader {
       scope: scope,
       showLetter: showLetter,
     );
+
+    final topBreedRows = isNationalShow
+        ? await _loadTopBreedRows(
+            showId: showId,
+            scope: scope,
+            showLetter: showLetter,
+          )
+        : const <SweepstakesTopBreedRow>[];
 
     if (showLetter == 'ALL') {
       final lettersResponse = await repo.supabase
@@ -127,6 +136,8 @@ class SweepstakesReportLoader {
         breedName: breedName,
         scope: scope,
         showLetter: 'ALL',
+        isNationalShow: isNationalShow,
+        topBreedRows: topBreedRows,
         ruleSource: sections.isNotEmpty ? sections.first.ruleSource : 'NO_RESULTS',
         verificationStatus:
             sections.isNotEmpty ? sections.first.verificationStatus : 'VERIFIED',
@@ -201,6 +212,8 @@ class SweepstakesReportLoader {
       breedName: (header['breed_name'] ?? breedName).toString(),
       scope: (header['scope'] ?? scope).toString(),
       showLetter: (header['show_letter'] ?? showLetter).toString(),
+      isNationalShow: isNationalShow,
+      topBreedRows: topBreedRows,
       ruleSource: (header['rule_source'] ?? 'NO_RESULTS').toString(),
       verificationStatus: (header['verification_status'] ?? 'VERIFIED').toString(),
       engineType: (header['engine_type'] ?? 'NO_RESULTS').toString(),
@@ -232,6 +245,29 @@ class SweepstakesReportLoader {
       sections: const [],
       noResultsFound: rows.isEmpty,
     );
+  }
+
+  Future<List<SweepstakesTopBreedRow>> _loadTopBreedRows({
+    required String showId,
+    required String scope,
+    required String showLetter,
+  }) async {
+    final rows = await repo.supabase.rpc(
+      'report_top_10_breeds',
+      params: {
+        'p_show_id': showId,
+        'p_scope': scope,
+        'p_show_letter': showLetter,
+      },
+    );
+
+    return (rows as List)
+        .map(
+          (e) => SweepstakesTopBreedRow.fromMap(
+            Map<String, dynamic>.from(e as Map),
+          ),
+        )
+        .toList();
   }
 
   Future<String> _loadBreedSanctionNumber({

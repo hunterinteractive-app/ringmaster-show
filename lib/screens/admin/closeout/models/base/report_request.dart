@@ -15,6 +15,7 @@ class ReportRequest {
     this.exhibitorId,
     this.exhibitorName,
     this.hideZeroBalances = true,
+    this.isNationalShow = false,
   });
 
   final String showId;
@@ -33,6 +34,7 @@ class ReportRequest {
   final String? exhibitorName;
 
   final bool hideZeroBalances;
+  final bool isNationalShow;
 
   Map<String, dynamic> toJson() {
     return {
@@ -49,6 +51,7 @@ class ReportRequest {
       'exhibitorId': exhibitorId,
       'exhibitorName': exhibitorName,
       'hideZeroBalances': hideZeroBalances,
+      'isNationalShow': isNationalShow,
     };
   }
 
@@ -66,6 +69,7 @@ class ReportRequest {
     String? exhibitorId,
     String? exhibitorName,
     bool? hideZeroBalances,
+    bool? isNationalShow,
   }) {
     return ReportRequest(
       showId: showId ?? this.showId,
@@ -81,6 +85,7 @@ class ReportRequest {
       exhibitorId: exhibitorId ?? this.exhibitorId,
       exhibitorName: exhibitorName ?? this.exhibitorName,
       hideZeroBalances: hideZeroBalances ?? this.hideZeroBalances,
+      isNationalShow: isNationalShow ?? this.isNationalShow,
     );
   }
 }

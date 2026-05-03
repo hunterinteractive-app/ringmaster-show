@@ -88,6 +88,12 @@ class SweepstakesReportPdf {
               secretaryPhone: data.secretaryPhone,
             ),
             pw.SizedBox(height: 14),
+
+            if (data.isNationalShow && data.topBreedRows.isNotEmpty) ...[
+              _buildTopBreedsTable(data.topBreedRows),
+              pw.SizedBox(height: 16),
+            ],
+
             if (isNoResults)
               _buildNoResultsBox(
                 'No rabbits of this breed were shown in this Show.',
@@ -295,6 +301,65 @@ class SweepstakesReportPdf {
           pw.Text(
             message,
             style: const pw.TextStyle(fontSize: 11),
+          ),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _buildTopBreedsTable(List<SweepstakesTopBreedRow> rows) {
+    return pw.Container(
+      width: double.infinity,
+      padding: const pw.EdgeInsets.all(10),
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(color: PdfColors.grey400),
+        borderRadius: pw.BorderRadius.circular(4),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(
+            'Top 10 Breeds',
+            style: pw.TextStyle(
+              fontSize: 12,
+              fontWeight: pw.FontWeight.bold,
+            ),
+          ),
+          pw.SizedBox(height: 6),
+          pw.TableHelper.fromTextArray(
+            headers: const [
+              'Rank',
+              'Breed',
+              'Entries',
+            ],
+            data: rows
+                .map(
+                  (row) => [
+                    row.rank.toString(),
+                    row.breedName,
+                    row.entryCount.toString(),
+                  ],
+                )
+                .toList(),
+            headerDecoration: const pw.BoxDecoration(
+              color: PdfColors.blueGrey700,
+            ),
+            headerStyle: pw.TextStyle(
+              color: PdfColors.white,
+              fontSize: 8,
+              fontWeight: pw.FontWeight.bold,
+            ),
+            cellStyle: const pw.TextStyle(fontSize: 8),
+            border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
+            oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
+            cellAlignment: pw.Alignment.centerLeft,
+            headerAlignment: pw.Alignment.centerLeft,
+            cellPadding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+            columnWidths: {
+              0: const pw.FixedColumnWidth(34),
+              1: const pw.FlexColumnWidth(3),
+              2: const pw.FixedColumnWidth(50),
+            },
           ),
         ],
       ),

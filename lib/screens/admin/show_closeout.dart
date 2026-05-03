@@ -694,6 +694,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       final arbaBuilder = ArbaReportPdfBuilder();
 
       final showBasics = await repository.loadShowBasics(widget.showId);
+      final isNationalShow = showBasics['is_national_show'] == true;
       final showDate = _formatShowDate(showBasics['start_date']);
       final sanctionNumber = await _loadArbaSanctionNumber(widget.showId);
 
@@ -784,6 +785,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
               showName: widget.showName,
               showDate: showDate,
               sanctionNumber: sanctionNumber,
+              isNationalShow: isNationalShow,
             );
           } else if (artifact.reportName == 'exhibitor_report' ||
               artifact.reportName == 'legs') {
@@ -806,6 +808,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
               showName: widget.showName,
               showDate: showDate,
               sanctionNumber: sanctionNumber,
+              isNationalShow: isNationalShow,
             );
           } else {
             await runner.generateSingleReport(
@@ -816,6 +819,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
               showName: widget.showName,
               showDate: showDate,
               sanctionNumber: sanctionNumber,
+              isNationalShow: isNationalShow,
             );
           }
 
@@ -1490,6 +1494,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         final showBasics = await repository.loadShowBasics(widget.showId);
         final showDate = _formatShowDate(showBasics['start_date']);
         final sanctionNumber = await _loadArbaSanctionNumber(widget.showId);
+        final isNationalShow = showBasics['is_national_show'] == true;
 
         final legsLoader = LegsReportLoader(repository);
         final exhibitorLoader = ExhibitorReportLoader(repository);
@@ -1613,6 +1618,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           showLetter: showLetter,
           exhibitorId: exhibitorId,
           exhibitorName: exhibitorName,
+          isNationalShow: isNationalShow,
         );
 
         await _refreshDashboardOnly();

@@ -15,7 +15,7 @@ class CloseoutRepository {
     return await supabase
         .from('shows')
         .select(
-          'id,name,start_date,end_date,location_name,location_address,secretary_name,secretary_email,secretary_phone,created_by',
+          'id,name,start_date,end_date,location_name,location_address,secretary_name,secretary_email,secretary_phone,created_by,is_national_show',
         )
         .eq('id', showId)
         .single();
