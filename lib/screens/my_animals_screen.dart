@@ -435,6 +435,47 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
   Future<void> _loadBreedsForSpecies() async {
     setState(() => _loadingBreeds = true);
 
+    if (_species == 'cavy') {
+      final res = await supabase
+          .from('cavy_sop_variety_order')
+          .select('breed_name, breed_sort_order')
+          .order('breed_sort_order');
+
+      final byBreed = <String, Map<String, dynamic>>{};
+
+      for (final row in (res as List).cast<Map<String, dynamic>>()) {
+        final name = (row['breed_name'] ?? '').toString().trim();
+        if (name.isEmpty) continue;
+
+        final key = name.toLowerCase();
+        byBreed[key] = {
+          'id': key,
+          'name': name,
+          'sort_order': row['breed_sort_order'],
+        };
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _breedOptions = byBreed.values.toList()
+          ..sort((a, b) {
+            final ai = int.tryParse((a['sort_order'] ?? '').toString()) ?? 9999;
+            final bi = int.tryParse((b['sort_order'] ?? '').toString()) ?? 9999;
+            final cmp = ai.compareTo(bi);
+            if (cmp != 0) return cmp;
+
+            return (a['name'] ?? '')
+                .toString()
+                .toLowerCase()
+                .compareTo((b['name'] ?? '').toString().toLowerCase());
+          });
+
+        _loadingBreeds = false;
+      });
+
+      return;
+    }
+
     final res = await supabase
         .from('breeds')
         .select('id,name')
@@ -443,14 +484,7 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
 
     if (!mounted) return;
     setState(() {
-      _breedOptions = (res as List)
-          .cast<Map<String, dynamic>>()
-        ..sort(
-          (a, b) => (a['name'] ?? '')
-              .toString()
-              .toLowerCase()
-              .compareTo((b['name'] ?? '').toString().toLowerCase()),
-        );
+      _breedOptions = (res as List).cast<Map<String, dynamic>>();
       _loadingBreeds = false;
     });
   }
