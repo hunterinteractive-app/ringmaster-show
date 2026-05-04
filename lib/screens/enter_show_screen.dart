@@ -1734,7 +1734,9 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                       });
                     },
             ),
-            if (_selected[id] == true && _selectedSectionIds.isNotEmpty) ...[
+            if (_selected[id] == true &&
+                _selectedSectionIds.isNotEmpty &&
+                _safeString(a, 'species').toLowerCase() != 'cavy') ...[
               const SizedBox(height: 8),
              Wrap(
               spacing: 8,
@@ -2869,26 +2871,13 @@ class _MeatPenDialogState extends State<_MeatPenDialog> {
     final breedName = (matchedBreed['name'] ?? '').toString().trim();
 
     if (_isLopBreedName(breedName)) {
-      const lopOptions = [
-        {'id': 'lop_broken', 'name': 'Broken'},
-        {'id': 'lop_solid', 'name': 'Solid'},
-      ];
-
       if (!mounted) return;
       setState(() {
-        _varietyOptions = lopOptions;
         _loadingVarieties = false;
-
-        final currentVariety = _varietyText.text.trim().toLowerCase();
-        final stillValidVariety = currentVariety.isNotEmpty &&
-            _varietyOptions.any(
-              (v) => (v['name'] ?? '').toString().trim().toLowerCase() ==
-                  currentVariety,
-            );
-
-        if (!stillValidVariety) {
-          _varietyText.clear();
-        }
+        _varietyOptions = const [
+          {'id': 'lop_broken', 'name': 'Broken'},
+          {'id': 'lop_solid', 'name': 'Solid'},
+        ];
       });
       return;
     }
@@ -2899,34 +2888,14 @@ class _MeatPenDialogState extends State<_MeatPenDialog> {
         .eq('breed_id', breedId)
         .order('name');
 
-    final effective = (res as List)
-        .cast<Map<String, dynamic>>()
-      ..sort(
-        (a, b) => (a['name'] ?? '')
-            .toString()
-            .toLowerCase()
-            .compareTo((b['name'] ?? '').toString().toLowerCase()),
-      );
-
     if (!mounted) return;
     setState(() {
-      _varietyOptions = effective;
+      _varietyOptions = (res as List).cast<Map<String, dynamic>>()
+        ..sort((a, b) => (a['name'] ?? '')
+            .toString()
+            .toLowerCase()
+            .compareTo((b['name'] ?? '').toString().toLowerCase()));
       _loadingVarieties = false;
-
-      if (effective.length == 1) {
-        _varietyText.text = (effective.first['name'] ?? '').toString();
-      } else {
-        final currentVariety = _varietyText.text.trim().toLowerCase();
-        final stillValidVariety = currentVariety.isNotEmpty &&
-            _varietyOptions.any(
-              (v) => (v['name'] ?? '').toString().trim().toLowerCase() ==
-                  currentVariety,
-            );
-
-        if (!stillValidVariety) {
-          _varietyText.clear();
-        }
-      }
     });
   }
 
@@ -3725,6 +3694,19 @@ class _FocusOpenAutocompleteState extends State<_FocusOpenAutocomplete> {
           return q.isEmpty || label.contains(q);
         }).toList()
           ..sort((a, b) {
+            final aSort = a['sort_order'];
+            final bSort = b['sort_order'];
+
+            if (aSort != null || bSort != null) {
+              final ai =
+                  aSort is int ? aSort : int.tryParse(aSort?.toString() ?? '') ?? 9999;
+              final bi =
+                  bSort is int ? bSort : int.tryParse(bSort?.toString() ?? '') ?? 9999;
+
+              final cmp = ai.compareTo(bi);
+              if (cmp != 0) return cmp;
+            }
+
             final aLabel = widget.displayStringForOption(a).toLowerCase();
             final bLabel = widget.displayStringForOption(b).toLowerCase();
             return aLabel.compareTo(bLabel);

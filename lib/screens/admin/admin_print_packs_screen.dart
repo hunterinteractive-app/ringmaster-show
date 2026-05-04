@@ -655,6 +655,42 @@ class _ControlSheetsGeneratorSheetState
   String _safe(Map<String, dynamic> e, String k) =>
       (e[k] ?? '').toString().trim();
 
+    int _toInt(dynamic value, [int fallback = 9999]) {
+      if (value == null) return fallback;
+      if (value is int) return value;
+      return int.tryParse(value.toString()) ?? fallback;
+    }
+
+    String _cavySortKey(String breed, String variety) {
+      return '${breed.trim().toLowerCase()}|${variety.trim().toLowerCase()}';
+    }
+
+    Future<Map<String, Map<String, int>>> _loadCavySopSortMap() async {
+      final rows = await supabase
+          .from('cavy_sop_variety_order')
+          .select('breed_name, variety_name, breed_sort_order, variety_sort_order');
+
+      final map = <String, Map<String, int>>{};
+
+      for (final row in List<Map<String, dynamic>>.from(rows)) {
+        final breed = (row['breed_name'] ?? '').toString().trim();
+        final variety = (row['variety_name'] ?? '').toString().trim();
+
+        if (breed.isEmpty || variety.isEmpty) continue;
+
+        map[_cavySortKey(breed, variety)] = {
+          'breed': _toInt(row['breed_sort_order']),
+          'variety': _toInt(row['variety_sort_order']),
+        };
+      }
+
+      return map;
+    }
+
+    bool _isCavyRow(Map<String, dynamic> row) {
+      return _safe(row, 'species').toLowerCase() == 'cavy';
+    }
+
   String _ageOnly(String raw) {
     final s = raw.trim();
     if (s.isEmpty) return '';
@@ -795,6 +831,7 @@ class _ControlSheetsGeneratorSheetState
       List<Map<String, dynamic>> rows,
       pw.ThemeData theme, {
       required bool includeQrCode,
+      required Map<String, Map<String, int>> cavySopSortMap,
     }) {
       final doc = pw.Document(theme: theme);
 
@@ -843,6 +880,41 @@ class _ControlSheetsGeneratorSheetState
 
         final keys = grouped.keys.toList()
           ..sort((a, b) {
+            final aRows = grouped[a] ?? const <Map<String, dynamic>>[];
+            final bRows = grouped[b] ?? const <Map<String, dynamic>>[];
+
+            final aFirst = aRows.isEmpty ? <String, dynamic>{} : aRows.first;
+            final bFirst = bRows.isEmpty ? <String, dynamic>{} : bRows.first;
+
+            final aIsCavy = _isCavyRow(aFirst);
+            final bIsCavy = _isCavyRow(bFirst);
+
+            if (aIsCavy != bIsCavy) {
+              return aIsCavy ? 1 : -1;
+            }
+
+            if (aIsCavy && bIsCavy) {
+              final aBreed = _safe(aFirst, 'breed');
+              final bBreed = _safe(bFirst, 'breed');
+              final aVariety = _safe(aFirst, 'variety');
+              final bVariety = _safe(bFirst, 'variety');
+
+              final aMap = cavySopSortMap[_cavySortKey(aBreed, aVariety)];
+              final bMap = cavySopSortMap[_cavySortKey(bBreed, bVariety)];
+
+              final aBreedSort = aIsCavy ? (aMap?['breed'] ?? 9999) : 9999;
+              final bBreedSort = bIsCavy ? (bMap?['breed'] ?? 9999) : 9999;
+
+              final breedSortCmp = aBreedSort.compareTo(bBreedSort);
+              if (breedSortCmp != 0) return breedSortCmp;
+
+              final aVarietySort = aIsCavy ? (aMap?['variety'] ?? 9999) : 9999;
+              final bVarietySort = bIsCavy ? (bMap?['variety'] ?? 9999) : 9999;
+
+              final varietySortCmp = aVarietySort.compareTo(bVarietySort);
+              if (varietySortCmp != 0) return varietySortCmp;
+            }
+
             final aParts = a.split('|');
             final bParts = b.split('|');
 
@@ -1268,11 +1340,14 @@ class _ControlSheetsGeneratorSheetState
         return;
       }
 
+      final cavySopSortMap = await _loadCavySopSortMap();
+
       final theme = await _buildPdfTheme();
       final doc = _buildPdf(
         rows,
         theme,
         includeQrCode: includeQrCode,
+        cavySopSortMap: cavySopSortMap,
       );
       final bytes = await doc.save();
 

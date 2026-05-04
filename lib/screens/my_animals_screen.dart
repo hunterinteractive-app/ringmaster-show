@@ -468,6 +468,47 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
 
     final breedName = (matchedBreed['name'] ?? '').toString().trim();
 
+    // CAVY: load SOP-ordered varieties from Supabase mapping table.
+    if (_species == 'cavy') {
+      final res = await supabase
+          .from('cavy_sop_variety_order')
+          .select('id, variety_name, variety_sort_order')
+          .ilike('breed_name', breedName)
+          .order('variety_sort_order');
+
+      final effective = (res as List).map((row) {
+        final map = Map<String, dynamic>.from(row as Map);
+        return {
+          'id': (map['id'] ?? map['variety_name']).toString(),
+          'name': (map['variety_name'] ?? '').toString(),
+          'sort_order': map['variety_sort_order'],
+        };
+      }).where((v) {
+        return (v['name'] ?? '').toString().trim().isNotEmpty;
+      }).toList();
+
+      if (!mounted) return;
+      setState(() {
+        _varietyOptions = effective;
+        _loadingVarieties = false;
+
+        final currentVariety = _varietyText.text.trim().toLowerCase();
+        final stillValidVariety = currentVariety.isNotEmpty &&
+            _varietyOptions.any(
+              (v) =>
+                  (v['name'] ?? '').toString().trim().toLowerCase() ==
+                  currentVariety,
+            );
+
+        if (!stillValidVariety) {
+          _varietyText.clear();
+        }
+      });
+
+      return;
+    }
+
+    // RABBIT: existing lop override.
     if (_isLopBreedName(breedName)) {
       const lopOptions = [
         {'id': 'lop_broken', 'name': 'Broken'},
@@ -482,7 +523,8 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
         final currentVariety = _varietyText.text.trim().toLowerCase();
         final stillValidVariety = currentVariety.isNotEmpty &&
             _varietyOptions.any(
-              (v) => (v['name'] ?? '').toString().trim().toLowerCase() ==
+              (v) =>
+                  (v['name'] ?? '').toString().trim().toLowerCase() ==
                   currentVariety,
             );
 
@@ -493,14 +535,14 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
       return;
     }
 
+    // RABBIT: normal varieties table.
     final res = await supabase
         .from('varieties')
         .select('id,name')
         .eq('breed_id', breedId)
         .order('name');
 
-    final effective = (res as List)
-        .cast<Map<String, dynamic>>()
+    final effective = (res as List).cast<Map<String, dynamic>>()
       ..sort(
         (a, b) => (a['name'] ?? '')
             .toString()
@@ -519,7 +561,8 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
         final currentVariety = _varietyText.text.trim().toLowerCase();
         final stillValidVariety = currentVariety.isNotEmpty &&
             _varietyOptions.any(
-              (v) => (v['name'] ?? '').toString().trim().toLowerCase() ==
+              (v) =>
+                  (v['name'] ?? '').toString().trim().toLowerCase() ==
                   currentVariety,
             );
 
@@ -1108,6 +1151,16 @@ class _FocusOpenAutocompleteState extends State<_FocusOpenAutocomplete> {
           return q.isEmpty || label.contains(q);
         }).toList()
           ..sort((a, b) {
+            final aSort = a['sort_order'];
+            final bSort = b['sort_order'];
+
+            if (aSort != null || bSort != null) {
+              final ai = aSort is int ? aSort : int.tryParse(aSort?.toString() ?? '') ?? 9999;
+              final bi = bSort is int ? bSort : int.tryParse(bSort?.toString() ?? '') ?? 9999;
+              final cmp = ai.compareTo(bi);
+              if (cmp != 0) return cmp;
+            }
+
             final aLabel = widget.displayStringForOption(a).toLowerCase();
             final bLabel = widget.displayStringForOption(b).toLowerCase();
             return aLabel.compareTo(bLabel);
