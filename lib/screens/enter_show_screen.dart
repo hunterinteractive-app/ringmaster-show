@@ -3199,16 +3199,13 @@ class _InlineAnimalEditorDialogState extends State<_InlineAnimalEditorDialog> {
         .from('breeds')
         .select('id,name')
         .eq('species', _species)
+        .eq('is_active', true)
         .order('name');
 
     if (!mounted) return;
+
     setState(() {
-      _breedOptions = (res as List)
-          .cast<Map<String, dynamic>>()
-        ..sort((a, b) => (a['name'] ?? '')
-            .toString()
-            .toLowerCase()
-            .compareTo((b['name'] ?? '').toString().toLowerCase()));
+      _breedOptions = (res as List).cast<Map<String, dynamic>>();
       _loadingBreeds = false;
     });
   }
@@ -3226,8 +3223,37 @@ class _InlineAnimalEditorDialogState extends State<_InlineAnimalEditorDialog> {
 
     final breedName = (matchedBreed['name'] ?? '').toString().trim();
 
+    if (_species == 'cavy') {
+      final res = await supabase
+          .from('cavy_sop_variety_order')
+          .select('id, variety_name, variety_sort_order')
+          .ilike('breed_name', breedName)
+          .order('variety_sort_order');
+
+      final effective = (res as List).map((row) {
+        final map = Map<String, dynamic>.from(row as Map);
+        return {
+          'id': (map['id'] ?? map['variety_name']).toString(),
+          'name': (map['variety_name'] ?? '').toString(),
+          'sort_order': map['variety_sort_order'],
+        };
+      }).where((v) {
+        return (v['name'] ?? '').toString().trim().isNotEmpty;
+      }).toList();
+
+      if (!mounted) return;
+
+      setState(() {
+        _varietyOptions = effective;
+        _loadingVarieties = false;
+        _varietyText.clear();
+      });
+      return;
+    }
+
     if (_isLopBreedName(breedName)) {
       if (!mounted) return;
+
       setState(() {
         _loadingVarieties = false;
         _varietyOptions = const [
@@ -3245,9 +3271,9 @@ class _InlineAnimalEditorDialogState extends State<_InlineAnimalEditorDialog> {
         .order('name');
 
     if (!mounted) return;
+
     setState(() {
-      _varietyOptions = (res as List)
-          .cast<Map<String, dynamic>>()
+      _varietyOptions = (res as List).cast<Map<String, dynamic>>()
         ..sort((a, b) => (a['name'] ?? '')
             .toString()
             .toLowerCase()
