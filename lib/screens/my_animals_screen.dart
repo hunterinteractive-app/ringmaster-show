@@ -457,29 +457,17 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
 
       if (!mounted) return;
       setState(() {
-        _breedOptions = byBreed.values.toList()
-          ..sort((a, b) {
-            final ai = int.tryParse((a['sort_order'] ?? '').toString()) ?? 9999;
-            final bi = int.tryParse((b['sort_order'] ?? '').toString()) ?? 9999;
-            final cmp = ai.compareTo(bi);
-            if (cmp != 0) return cmp;
-
-            return (a['name'] ?? '')
-                .toString()
-                .toLowerCase()
-                .compareTo((b['name'] ?? '').toString().toLowerCase());
-          });
-
+        _breedOptions = byBreed.values.toList();
         _loadingBreeds = false;
       });
-
       return;
     }
 
     final res = await supabase
         .from('breeds')
         .select('id,name')
-        .eq('species', _species)
+        .eq('species', 'rabbit')
+        .eq('is_active', true)
         .order('name');
 
     if (!mounted) return;
@@ -502,7 +490,6 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
 
     final breedName = (matchedBreed['name'] ?? '').toString().trim();
 
-    // CAVY: load SOP-ordered varieties from Supabase mapping table.
     if (_species == 'cavy') {
       final res = await supabase
           .from('cavy_sop_variety_order')
@@ -525,85 +512,35 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
       setState(() {
         _varietyOptions = effective;
         _loadingVarieties = false;
-
-        final currentVariety = _varietyText.text.trim().toLowerCase();
-        final stillValidVariety = currentVariety.isNotEmpty &&
-            _varietyOptions.any(
-              (v) =>
-                  (v['name'] ?? '').toString().trim().toLowerCase() ==
-                  currentVariety,
-            );
-
-        if (!stillValidVariety) {
-          _varietyText.clear();
-        }
+        _varietyText.clear();
       });
-
       return;
     }
 
-    // RABBIT: existing lop override.
     if (_isLopBreedName(breedName)) {
-      const lopOptions = [
-        {'id': 'lop_broken', 'name': 'Broken'},
-        {'id': 'lop_solid', 'name': 'Solid'},
-      ];
-
       if (!mounted) return;
       setState(() {
         _loadingVarieties = false;
-        _varietyOptions = lopOptions;
-
-        final currentVariety = _varietyText.text.trim().toLowerCase();
-        final stillValidVariety = currentVariety.isNotEmpty &&
-            _varietyOptions.any(
-              (v) =>
-                  (v['name'] ?? '').toString().trim().toLowerCase() ==
-                  currentVariety,
-            );
-
-        if (!stillValidVariety) {
-          _varietyText.clear();
-        }
+        _varietyOptions = const [
+          {'id': 'lop_broken', 'name': 'Broken'},
+          {'id': 'lop_solid', 'name': 'Solid'},
+        ];
+        _varietyText.clear();
       });
       return;
     }
 
-    // RABBIT: normal varieties table.
     final res = await supabase
         .from('varieties')
         .select('id,name')
         .eq('breed_id', breedId)
         .order('name');
 
-    final effective = (res as List).cast<Map<String, dynamic>>()
-      ..sort(
-        (a, b) => (a['name'] ?? '')
-            .toString()
-            .toLowerCase()
-            .compareTo((b['name'] ?? '').toString().toLowerCase()),
-      );
-
     if (!mounted) return;
     setState(() {
-      _varietyOptions = effective;
+      _varietyOptions = (res as List).cast<Map<String, dynamic>>();
       _loadingVarieties = false;
-
-      if (effective.length == 1) {
-        _varietyText.text = (effective.first['name'] ?? '').toString();
-      } else {
-        final currentVariety = _varietyText.text.trim().toLowerCase();
-        final stillValidVariety = currentVariety.isNotEmpty &&
-            _varietyOptions.any(
-              (v) =>
-                  (v['name'] ?? '').toString().trim().toLowerCase() ==
-                  currentVariety,
-            );
-
-        if (!stillValidVariety) {
-          _varietyText.clear();
-        }
-      }
+      _varietyText.clear();
     });
   }
 
@@ -810,10 +747,11 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
               ],
               onChanged: (v) async {
                 final newSpecies = v ?? 'rabbit';
+
                 setState(() {
                   _species = newSpecies;
-                  _sexValue = _sexOptions.first;
-                  _sexText.text = _sexOptions.first;
+                  _sexValue = newSpecies == 'rabbit' ? 'Buck' : 'Boar';
+                  _sexText.text = _sexValue ?? '';
                   _breedId = null;
                   _breedOptions = [];
                   _varietyOptions = [];
@@ -821,6 +759,7 @@ class _AnimalEditorDialogState extends State<_AnimalEditorDialog> {
                   _varietyText.clear();
                   _msg = null;
                 });
+
                 await _loadBreedsForSpecies();
               },
               decoration: const InputDecoration(labelText: 'Species (required)'),

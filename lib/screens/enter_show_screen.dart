@@ -3195,15 +3195,42 @@ class _InlineAnimalEditorDialogState extends State<_InlineAnimalEditorDialog> {
   Future<void> _loadBreedsForSpecies() async {
     setState(() => _loadingBreeds = true);
 
+    if (_species == 'cavy') {
+      final res = await supabase
+          .from('cavy_sop_variety_order')
+          .select('breed_name, breed_sort_order')
+          .order('breed_sort_order');
+
+      final byBreed = <String, Map<String, dynamic>>{};
+
+      for (final row in (res as List).cast<Map<String, dynamic>>()) {
+        final name = (row['breed_name'] ?? '').toString().trim();
+        if (name.isEmpty) continue;
+
+        final key = name.toLowerCase();
+        byBreed[key] = {
+          'id': key,
+          'name': name,
+          'sort_order': row['breed_sort_order'],
+        };
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _breedOptions = byBreed.values.toList();
+        _loadingBreeds = false;
+      });
+      return;
+    }
+
     final res = await supabase
         .from('breeds')
         .select('id,name')
-        .eq('species', _species)
+        .eq('species', 'rabbit')
         .eq('is_active', true)
         .order('name');
 
     if (!mounted) return;
-
     setState(() {
       _breedOptions = (res as List).cast<Map<String, dynamic>>();
       _loadingBreeds = false;
@@ -3242,7 +3269,6 @@ class _InlineAnimalEditorDialogState extends State<_InlineAnimalEditorDialog> {
       }).toList();
 
       if (!mounted) return;
-
       setState(() {
         _varietyOptions = effective;
         _loadingVarieties = false;
@@ -3253,13 +3279,13 @@ class _InlineAnimalEditorDialogState extends State<_InlineAnimalEditorDialog> {
 
     if (_isLopBreedName(breedName)) {
       if (!mounted) return;
-
       setState(() {
         _loadingVarieties = false;
         _varietyOptions = const [
           {'id': 'lop_broken', 'name': 'Broken'},
           {'id': 'lop_solid', 'name': 'Solid'},
         ];
+        _varietyText.clear();
       });
       return;
     }
@@ -3271,14 +3297,10 @@ class _InlineAnimalEditorDialogState extends State<_InlineAnimalEditorDialog> {
         .order('name');
 
     if (!mounted) return;
-
     setState(() {
-      _varietyOptions = (res as List).cast<Map<String, dynamic>>()
-        ..sort((a, b) => (a['name'] ?? '')
-            .toString()
-            .toLowerCase()
-            .compareTo((b['name'] ?? '').toString().toLowerCase()));
+      _varietyOptions = (res as List).cast<Map<String, dynamic>>();
       _loadingVarieties = false;
+      _varietyText.clear();
     });
   }
 
@@ -3455,10 +3477,11 @@ class _InlineAnimalEditorDialogState extends State<_InlineAnimalEditorDialog> {
               ],
               onChanged: (v) async {
                 final newSpecies = v ?? 'rabbit';
+
                 setState(() {
                   _species = newSpecies;
-                  _sexValue = _sexOptions.first;
-                  _sexText.text = _sexOptions.first;
+                  _sexValue = newSpecies == 'rabbit' ? 'Buck' : 'Boar';
+                  _sexText.text = _sexValue ?? '';
                   _breedId = null;
                   _breedOptions = [];
                   _varietyOptions = [];
@@ -3466,6 +3489,7 @@ class _InlineAnimalEditorDialogState extends State<_InlineAnimalEditorDialog> {
                   _varietyText.clear();
                   _msg = null;
                 });
+
                 await _loadBreedsForSpecies();
               },
               decoration: const InputDecoration(labelText: 'Species (required)'),
