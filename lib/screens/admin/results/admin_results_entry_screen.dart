@@ -3799,7 +3799,7 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
       return;
     }
 
-    if (_allEntriesComplete()) {
+    if (result.goNext && _allEntriesComplete()) {
       await _reloadAll();
       if (!mounted) return;
       Navigator.pop(context, true);
