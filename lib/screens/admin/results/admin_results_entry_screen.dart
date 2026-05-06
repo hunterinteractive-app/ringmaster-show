@@ -3064,6 +3064,7 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
   bool _didAutoOpenInitialEntry = false;
 
   bool _allEntriesComplete() {
+    if (_entries.isEmpty) return false;
     return _entries.every(_isEntryComplete);
   }
 
@@ -3558,92 +3559,116 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
 
     if (currentIds.isEmpty) return;
 
-    final rows = await supabase.rpc(
-      'report_results_entry_rows',
-      params: {
-        'p_show_id': widget.showId,
-        'p_section_id': null,
-        'p_show_letter': null,
-      },
-    );
+    try {
+      final rows = await supabase.rpc(
+        'report_results_entry_rows',
+        params: {
+          'p_show_id': widget.showId,
+          'p_section_id': null,
+          'p_show_letter': null,
+        },
+      );
 
-    final allRows = (rows as List)
-        .map((e) => Map<String, dynamic>.from(e as Map))
-        .toList();
+      final allRows = (rows as List)
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
 
-    final refreshed = allRows.where((row) {
-      final id = (row['entry_id'] ?? row['id'] ?? '').toString().trim();
-      return currentIds.contains(id);
-    }).map((e) {
-      final copy = Map<String, dynamic>.from(e);
-      copy['id'] ??= copy['entry_id'];
-      copy['breed'] ??= copy['breed_name'];
-      copy['variety'] ??= copy['variety_name'];
+      final refreshed = allRows.where((row) {
+        final id = (row['entry_id'] ?? row['id'] ?? '').toString().trim();
+        return currentIds.contains(id);
+      }).map((e) {
+        final copy = Map<String, dynamic>.from(e);
+        copy['id'] ??= copy['entry_id'];
+        copy['breed'] ??= copy['breed_name'];
+        copy['variety'] ??= copy['variety_name'];
 
-      final normalizedGroup = (
-        copy['group_name'] ??
-        copy['group_display_name'] ??
-        copy['group_label'] ??
-        copy['group'] ??
-        copy['group_code']
-      )?.toString().trim();
+        final normalizedGroup = (
+          copy['group_name'] ??
+          copy['group_display_name'] ??
+          copy['group_label'] ??
+          copy['group'] ??
+          copy['group_code']
+        )?.toString().trim();
 
-      copy['group_name'] =
-          (normalizedGroup == null || normalizedGroup.isEmpty)
-              ? null
-              : normalizedGroup;
+        copy['group_name'] =
+            (normalizedGroup == null || normalizedGroup.isEmpty)
+                ? null
+                : normalizedGroup;
 
-      return copy;
-    }).toList();
+        return copy;
+      }).toList();
 
-    final refreshedIds = refreshed
-        .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
-        .where((x) => x.isNotEmpty)
-        .toList();
+      if (refreshed.isEmpty) {
+        debugPrint(
+          'WARNING: _reloadAll found 0 refreshed rows. '
+          'Keeping existing entries. '
+          'showId=${widget.showId}, '
+          'breed=${widget.breed}, '
+          'variety=${widget.variety}, '
+          'class=${widget.classSexLabel}, '
+          'ids=${currentIds.length}',
+        );
 
-    final awardsByEntryId = <String, List<String>>{};
+        if (mounted) setState(() {});
+        return;
+      }
 
-    for (var i = 0; i < refreshedIds.length; i += 100) {
-      final chunk = refreshedIds.skip(i).take(100).toList();
+      final refreshedIds = refreshed
+          .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
+          .where((x) => x.isNotEmpty)
+          .toList();
 
-      final awardRows = await supabase
-          .from('entry_awards')
-          .select('entry_id,award_code')
-          .eq('show_id', widget.showId)
-          .inFilter('entry_id', chunk);
+      final awardsByEntryId = <String, List<String>>{};
 
-      for (final row in (awardRows as List)) {
-        final map = Map<String, dynamic>.from(row as Map);
-        final entryId = (map['entry_id'] ?? '').toString().trim();
-        final award = (map['award_code'] ?? '').toString().trim();
+      for (var i = 0; i < refreshedIds.length; i += 100) {
+        final chunk = refreshedIds.skip(i).take(100).toList();
 
-        if (entryId.isEmpty || award.isEmpty) continue;
+        final awardRows = await supabase
+            .from('entry_awards')
+            .select('entry_id,award_code')
+            .eq('show_id', widget.showId)
+            .inFilter('entry_id', chunk);
 
-        awardsByEntryId.putIfAbsent(entryId, () => <String>[]);
-        awardsByEntryId[entryId]!.add(award);
+        for (final row in (awardRows as List)) {
+          final map = Map<String, dynamic>.from(row as Map);
+          final entryId = (map['entry_id'] ?? '').toString().trim();
+          final award = (map['award_code'] ?? '').toString().trim();
+
+          if (entryId.isEmpty || award.isEmpty) continue;
+
+          awardsByEntryId.putIfAbsent(entryId, () => <String>[]);
+          awardsByEntryId[entryId]!.add(award);
+        }
+      }
+
+      for (final e in refreshed) {
+        final id = (e['entry_id'] ?? e['id'] ?? '').toString().trim();
+        e['_awards'] = awardsByEntryId[id] ?? <String>[];
+      }
+
+      _entries = refreshed;
+      _sortEntries();
+
+      final judgeIds = _entries
+          .map((e) => (e['judged_by_show_judge_id'] ?? '').toString().trim())
+          .where((x) => x.isNotEmpty)
+          .map(_normalizeJudgeId)
+          .whereType<String>()
+          .toSet();
+
+      _currentJudgeId = judgeIds.length == 1 ? judgeIds.first : null;
+
+      if (mounted) setState(() {});
+
+      _openInitialEntryIfNeeded();
+    } catch (e) {
+      debugPrint('Results reload failed, keeping existing entries: $e');
+      if (mounted) {
+        setState(() {
+          _msg = 'Results updated. Reload warning: $e';
+        });
       }
     }
-
-    for (final e in refreshed) {
-      final id = (e['entry_id'] ?? e['id'] ?? '').toString().trim();
-      e['_awards'] = awardsByEntryId[id] ?? <String>[];
-    }
-
-    _entries = refreshed;
-    _sortEntries();
-
-    final judgeIds = _entries
-        .map((e) => (e['judged_by_show_judge_id'] ?? '').toString().trim())
-        .where((x) => x.isNotEmpty)
-        .map(_normalizeJudgeId)
-        .whereType<String>()
-        .toSet();
-
-    _currentJudgeId = judgeIds.length == 1 ? judgeIds.first : null;
-
-    if (mounted) setState(() {});
-
-    _openInitialEntryIfNeeded();
   }
 
     int _shownCount() {
