@@ -278,7 +278,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
   Future<void> _loadJudges() async {
     final rows = await supabase
         .from('judge_assignments')
-        .select(
+        ..select(
           'id,judge_id,assignment_label,'
           'judges(id,display_name,name,first_name,last_name,judge_type,is_active,arba_judge_number)',
         )
@@ -2450,7 +2450,7 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
 
                                     return usesGroups && groupName.isNotEmpty;
                                   }),
-                                  showsByVariety: true,
+                                  showsByVariety: variety != 'Fur',
                                   isQrEntryMode: widget.isQrEntryMode,
                                 ),
                               ),
@@ -3004,9 +3004,9 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
                             breed: widget.breed,
                             variety: widget.variety,
                             classSexLabel: label,
-                            isFurOrWoolClass: label.toLowerCase() == 'fur' ||
-                                label.toLowerCase() == 'wool' ||
-                                label.toLowerCase() == 'fur/wool',
+                            isFurOrWoolClass: label.toLowerCase().startsWith('fur') ||
+                                label.toLowerCase().startsWith('commercial fur') ||
+                                label.toLowerCase().startsWith('wool'),
                             entries: classEntries,
                             judges: widget.judges,
                             onBulkJudgeApply: _applyJudgeToEntries,
@@ -4278,6 +4278,17 @@ if (storedJudgeId.isEmpty) {
     return _effectivePlacementFor(e) == '1';
   }
 
+  bool _isFurOrWoolResultRow() {
+    if (widget.isFurOrWoolClass) return true;
+
+    final className =
+        (widget.entry['class_name'] ?? '').toString().trim().toLowerCase();
+
+    return className.startsWith('fur') ||
+        className.startsWith('commercial fur') ||
+        className.startsWith('wool');
+  }
+
   List<String> _pairedAwardsFor(String award) {
     switch (award) {
       case 'BOV':
@@ -4342,6 +4353,9 @@ if (storedJudgeId.isEmpty) {
   bool get _showsByVariety => widget.showsByVariety;
 
   List<String> get _visibleAwardCodes {
+    if (_isFurOrWoolResultRow()) {
+      return const <String>[];
+    }
     if (_isCavyEntry(widget.entry)) {
       return cavyAwardCodes;
     }
@@ -4975,61 +4989,65 @@ if (storedJudgeId.isEmpty) {
 
       final now = DateTime.now().toUtc().toIso8601String();
 
-      final payload = <String, dynamic>{
-        'placement': normalizedPlacement,
-        'result_status': effectiveStatus,
-        'disqualified_reason': normalizedDqReason,
-        'is_shown': effectiveStatus != 'No Show',
-        'is_disqualified': _isDisqualifiedStatus(effectiveStatus),
-        'judged_by_show_judge_id': normalizedJudgeId,
-        'result_entered_by_user_id': widget.isQrEntryMode ? null : user?.id,
-        'result_entered_by_name': writerName.isEmpty ? 'Signed-in Writer' : writerName,
-        'result_entered_by_phone': widget.isQrEntryMode ? writerPhone : null,
-        'result_entered_at': now,
-        'updated_at': now,
-      };
+      final isFurOrWoolResult = _isFurOrWoolResultRow();
 
-      final awardsToSave =
-          widget.isFurOrWoolClass ? <String>[] : _selectedAwards.toList();
+      if (isFurOrWoolResult) {
+        await supabase
+            .from('entries')
+            .update({
+              'fur_placement': normalizedPlacement,
+              'fur_notes': normalizedDqReason,
+              'updated_at': now,
+            })
+            .eq('id', entryId);
 
-      final updated = await supabase.rpc(
-        'save_results_entry',
-        params: {
-          'p_show_id': widget.showId,
-          'p_entry_id': entryId,
-          'p_placement': normalizedPlacement,
-          'p_result_status': effectiveStatus,
-          'p_disqualified_reason': normalizedDqReason,
-          'p_is_shown': effectiveStatus != 'No Show',
-          'p_is_disqualified': _isDisqualifiedStatus(effectiveStatus),
-          'p_judged_by_show_judge_id': normalizedJudgeId,
-          'p_result_entered_by_name':
-              writerName.isEmpty ? 'Signed-in Writer' : writerName,
-          'p_result_entered_by_phone':
-              widget.isQrEntryMode ? writerPhone : null,
-          'p_awards': awardsToSave,
-          'p_is_qr_entry_mode': widget.isQrEntryMode,
-        },
-      );
+        widget.entry['placement'] = normalizedPlacement?.toString();
+        widget.entry['fur_placement'] = normalizedPlacement?.toString();
+        widget.entry['disqualified_reason'] = normalizedDqReason;
+        widget.entry['fur_notes'] = normalizedDqReason;
+        widget.entry['updated_at'] = now;
+        widget.entry['_awards'] = <String>[];
+      } else {
+        final awardsToSave = _selectedAwards.toList();
 
-      if (updated == null) {
-        throw Exception('Save returned no result.');
+        final updated = await supabase.rpc(
+          'save_results_entry',
+          params: {
+            'p_show_id': widget.showId,
+            'p_entry_id': entryId,
+            'p_placement': normalizedPlacement,
+            'p_result_status': effectiveStatus,
+            'p_disqualified_reason': normalizedDqReason,
+            'p_is_shown': effectiveStatus != 'No Show',
+            'p_is_disqualified': _isDisqualifiedStatus(effectiveStatus),
+            'p_judged_by_show_judge_id': normalizedJudgeId,
+            'p_result_entered_by_name':
+                writerName.isEmpty ? 'Signed-in Writer' : writerName,
+            'p_result_entered_by_phone':
+                widget.isQrEntryMode ? writerPhone : null,
+            'p_awards': awardsToSave,
+            'p_is_qr_entry_mode': widget.isQrEntryMode,
+          },
+        );
+
+        if (updated == null) {
+          throw Exception('Save returned no result.');
+        }
+
+        widget.entry['placement'] = normalizedPlacement?.toString();
+        widget.entry['result_status'] = effectiveStatus;
+        widget.entry['disqualified_reason'] = normalizedDqReason;
+        widget.entry['is_shown'] = effectiveStatus != 'No Show';
+        widget.entry['is_disqualified'] = _isDisqualifiedStatus(effectiveStatus);
+        widget.entry['judged_by_show_judge_id'] = normalizedJudgeId;
+        widget.entry['result_entered_by_name'] =
+            writerName.isEmpty ? 'Signed-in Writer' : writerName;
+        widget.entry['result_entered_by_phone'] =
+            widget.isQrEntryMode ? writerPhone : null;
+        widget.entry['result_entered_at'] = now;
+        widget.entry['updated_at'] = now;
+        widget.entry['_awards'] = awardsToSave;
       }
-
-      widget.entry['placement'] = normalizedPlacement?.toString();
-      widget.entry['result_status'] = effectiveStatus;
-      widget.entry['disqualified_reason'] = normalizedDqReason;
-      widget.entry['is_shown'] = effectiveStatus != 'No Show';
-      widget.entry['is_disqualified'] = _isDisqualifiedStatus(effectiveStatus);
-      widget.entry['judged_by_show_judge_id'] = normalizedJudgeId;
-      widget.entry['result_entered_by_name'] =
-          writerName.isEmpty ? 'Signed-in Writer' : writerName;
-      widget.entry['result_entered_by_phone'] =
-          widget.isQrEntryMode ? writerPhone : null;
-      widget.entry['result_entered_at'] = now;
-      widget.entry['updated_at'] = now;
-      widget.entry['_awards'] =
-          widget.isFurOrWoolClass ? <String>[] : _selectedAwards.toList();
 
       Navigator.pop(
         context,
