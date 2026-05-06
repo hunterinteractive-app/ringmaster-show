@@ -1803,6 +1803,16 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
       return;
     }
 
+    if (!mounted) return;
+
+    if (refreshed.isEmpty) {
+      debugPrint(
+        'WARNING: _reloadEntries returned 0 rows. Keeping current entries.',
+      );
+      setState(() {});
+      return;
+    }
+
     setState(() {
       _entries = refreshed;
     });
@@ -2199,6 +2209,14 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
     }
 
     if (!mounted) return;
+
+    if (refreshed.isEmpty) {
+      debugPrint(
+        'WARNING: _reloadEntries returned 0 rows. Keeping current entries.',
+      );
+      setState(() {});
+      return;
+    }
 
     setState(() {
       _entries = refreshed;
@@ -2733,6 +2751,14 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
     }
 
     if (!mounted) return;
+
+    if (refreshed.isEmpty) {
+      debugPrint(
+        'WARNING: _reloadEntries returned 0 rows. Keeping current entries.',
+      );
+      setState(() {});
+      return;
+    }
 
     setState(() {
       _entries = refreshed;
