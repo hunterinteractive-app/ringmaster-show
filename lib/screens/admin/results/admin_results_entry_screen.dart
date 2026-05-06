@@ -1795,6 +1795,14 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
 
     if (!mounted) return;
 
+    if (refreshed.isEmpty) {
+      debugPrint(
+        'WARNING: _ResultsClassSexScreen _reloadEntries returned 0 rows. Keeping current entries.',
+      );
+      setState(() {});
+      return;
+    }
+
     setState(() {
       _entries = refreshed;
     });
@@ -3799,7 +3807,7 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
       return;
     }
 
-    if (result.goNext && _allEntriesComplete()) {
+    if (result.goNext) {
       await _reloadAll();
       if (!mounted) return;
       Navigator.pop(context, true);
