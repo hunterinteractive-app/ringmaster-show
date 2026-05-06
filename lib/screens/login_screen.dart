@@ -12,6 +12,12 @@ import 'show_list_screen.dart';
 import 'legal/terms_screen.dart';
 import 'legal/privacy_policy_screen.dart';
 
+
+//dev backdoor
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+//dev backdoor
+
 final supabase = Supabase.instance.client;
 
 class LoginScreen extends StatefulWidget {
@@ -40,6 +46,57 @@ class _LoginScreenState extends State<LoginScreen>
   late final Animation<double> _logoFade;
   late final Animation<double> _cardFade;
   late final Animation<Offset> _cardSlide;
+
+//dev backdoor
+
+  int _logoTapCount = 0;
+  DateTime? _lastLogoTapAt;
+
+  Future<void> _handleLogoTap() async {
+    if (kReleaseMode || _busy) return;
+
+    final now = DateTime.now();
+
+    if (_lastLogoTapAt == null ||
+        now.difference(_lastLogoTapAt!) > const Duration(seconds: 4)) {
+      _logoTapCount = 0;
+    }
+
+    _lastLogoTapAt = now;
+    _logoTapCount++;
+
+    HapticFeedback.selectionClick();
+
+    if (_logoTapCount >= 7) {
+      _logoTapCount = 0;
+      await _devLogin();
+    }
+  }
+
+  Future<void> _devLogin() async {
+    setState(() {
+      _busy = true;
+      _msg = 'Dev login triggered...';
+    });
+
+    try {
+      await supabase.auth.signInWithPassword(
+        email: 'test@ringmaster.dev',
+        password: 'Smile!987',
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _msg = 'Dev login failed: $e';
+      });
+    } finally {
+      if (!mounted) return;
+      setState(() => _busy = false);
+    }
+  }
+
+//dev backdoor
 
   @override
   void initState() {
@@ -215,7 +272,15 @@ class _LoginScreenState extends State<LoginScreen>
                                   color: Colors.white.withOpacity(0.12),
                                 ),
                               ),
-                              child: _LogoBlock(),
+                            //  child: _LogoBlock(),
+                              
+                              //dev backdoor
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: _handleLogoTap,
+                                child: _LogoBlock(),
+                              ),
+                              //dev backdoor
                             ),
                             const SizedBox(height: AppSpacing.lg),
                             const Text(

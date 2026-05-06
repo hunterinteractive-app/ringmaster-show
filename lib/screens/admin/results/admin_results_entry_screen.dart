@@ -2097,16 +2097,36 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
     _entries = [...widget.entries];
   }
 
-  Map<String, List<Map<String, dynamic>>> _groupByVariety() {
-    final out = <String, List<Map<String, dynamic>>>{};
-    for (final e in _entries) {
-      final variety = (e['variety'] ?? '').toString().trim();
-      final key = variety.isEmpty ? '(Unknown Variety)' : variety;
-      out.putIfAbsent(key, () => <Map<String, dynamic>>[]);
-      out[key]!.add(e);
+    bool _isFurOrWoolEntry(Map<String, dynamic> e) {
+      final className = (e['class_name'] ?? '').toString().trim().toLowerCase();
+      final variety = (e['variety'] ?? '').toString().trim().toLowerCase();
+      final groupName = (e['group_name'] ?? '').toString().trim().toLowerCase();
+
+      return className.contains('fur') ||
+          className.contains('wool') ||
+          variety.contains('fur') ||
+          variety.contains('wool') ||
+          groupName.contains('fur') ||
+          groupName.contains('wool');
     }
-    return out;
-  }
+
+    Map<String, List<Map<String, dynamic>>> _groupByVariety() {
+      final out = <String, List<Map<String, dynamic>>>{};
+
+      for (final e in _entries) {
+        final key = _isFurOrWoolEntry(e)
+            ? 'Fur'
+            : (() {
+                final variety = (e['variety'] ?? '').toString().trim();
+                return variety.isEmpty ? '(Unknown Variety)' : variety;
+              })();
+
+        out.putIfAbsent(key, () => <Map<String, dynamic>>[]);
+        out[key]!.add(e);
+      }
+
+      return out;
+    }
 
   String _judgeNameById(String? judgeId) {
     if (judgeId == null || judgeId.isEmpty) return '';
@@ -2305,6 +2325,11 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
           return int.tryParse(raw?.toString() ?? '') ?? 9999;
         }
 
+        final aIsFur = a.trim().toLowerCase() == 'fur';
+        final bIsFur = b.trim().toLowerCase() == 'fur';
+
+        if (aIsFur != bIsFur) return aIsFur ? 1 : -1;
+
         final bySort = sortFor(a).compareTo(sortFor(b));
         if (bySort != 0) return bySort;
         return a.toLowerCase().compareTo(b.toLowerCase());
@@ -2404,8 +2429,10 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
                                   showName: widget.showName,
                                   sectionLabel: widget.sectionLabel,
                                   breed: widget.breed,
-                                  variety: variety,
-                                  contextLabel: widget.parentGroupLabel ?? variety,
+                                  variety: variety == 'Fur' ? '' : variety,
+                                  contextLabel: variety == 'Fur'
+                                      ? 'Fur'
+                                      : (widget.parentGroupLabel ?? variety),
                                   entries: varietyEntries,
                                   judges: widget.judges,
                                   breedClassSystems: widget.breedClassSystems,
@@ -2532,20 +2559,28 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
         rawVariety.contains('wool');
   }
 
-  String _furWoolBucketLabel(Map<String, dynamic> e) {
-    final rawClass = (e['class_name'] ?? '').toString().trim();
-    final rawLower = rawClass.toLowerCase();
+    String _furWoolBucketLabel(Map<String, dynamic> e) {
+      final rawClass = (e['class_name'] ?? '').toString().trim();
+      final lowerClass = rawClass.toLowerCase();
 
-    if (rawLower.contains('wool')) return 'Wool';
-    if (rawLower.contains('fur')) return 'Fur';
+      if (lowerClass.startsWith('fur - ') ||
+          lowerClass.startsWith('commercial fur - ') ||
+          lowerClass.startsWith('wool - ')) {
+        return rawClass;
+      }
 
-    final rawGroup = (e['group_name'] ?? '').toString().trim();
-    final groupLower = rawGroup.toLowerCase();
-    if (groupLower.contains('wool')) return 'Wool';
-    if (groupLower.contains('fur')) return 'Fur';
+      final rawVariety = (e['variety'] ?? '').toString().trim();
 
-    return 'Fur/Wool';
-  }
+      if (lowerClass.contains('wool')) {
+        return rawVariety.isNotEmpty ? 'Wool - $rawVariety' : 'Wool';
+      }
+
+      if (lowerClass.contains('fur')) {
+        return rawVariety.isNotEmpty ? 'Fur - $rawVariety' : 'Fur';
+      }
+
+      return rawVariety.isNotEmpty ? 'Fur/Wool - $rawVariety' : 'Fur/Wool';
+    }
 
   String _ageClassOnly(String raw) {
     final s = raw.trim();
@@ -2596,6 +2631,9 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
   int _labelSortKey(String label) {
     final lower = label.trim().toLowerCase();
 
+    if (lower.startsWith('fur - ')) return 1000;
+    if (lower.startsWith('commercial fur - ')) return 1001;
+    if (lower.startsWith('wool - ')) return 1002;
     if (lower == 'fur') return 1000;
     if (lower == 'wool') return 1001;
     if (lower == 'fur/wool') return 1002;
