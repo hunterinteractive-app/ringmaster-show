@@ -45,6 +45,10 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
   bool _isLocked = false;
   bool _isFinalized = false;
 
+  final TextEditingController _searchController =
+      TextEditingController();
+  String _searchText = '';
+
   bool get _isReadOnly => _isLocked || _isFinalized;
 
   final List<_SectionColumn> _sections = [];
@@ -69,6 +73,9 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
     for (final c in _controllers.values) {
       c.dispose();
     }
+
+    _searchController.dispose();
+
     super.dispose();
   }
 
@@ -174,28 +181,50 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
     return '${v[0].toUpperCase()}${v.substring(1).toLowerCase()}';
   }
 
-  String _normalizedClubType(Map<String, dynamic> row) {
-    final rawClubType = (row['club_type'] ?? '').toString().trim().toUpperCase();
-    final rawBody = (row['sanctioning_body'] ?? '').toString().trim().toUpperCase();
+  String _normName(String v) {
+    return v.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+  }
 
-    if (rawClubType == 'NATIONAL BREED CLUB' ||
-        rawClubType == 'NATIONAL CLUB') {
+  String _normalizedClubType(Map<String, dynamic> row) {
+    String clean(String v) {
+      return v
+          .trim()
+          .toUpperCase()
+          .replaceAll('&', 'AND')
+          .replaceAll(RegExp(r'\s+'), ' ');
+    }
+
+    final rawClubType = clean((row['club_type'] ?? '').toString());
+    final rawBody = clean((row['sanctioning_body'] ?? '').toString());
+
+    bool isNationalBreedClub(String v) {
+      return v == 'NATIONAL BREED CLUB' ||
+          v == 'NATIONAL BREED CLUBS' ||
+          v == 'NATIONAL CLUB' ||
+          v == 'NATIONAL CLUBS';
+    }
+
+    if (isNationalBreedClub(rawClubType) || isNationalBreedClub(rawBody)) {
       return 'NATIONAL BREED CLUB';
     }
-    if (rawClubType == 'STATE BREED CLUB') {
+
+    if (rawClubType == 'STATE BREED CLUB' ||
+        rawClubType == 'STATE BREED CLUBS' ||
+        rawBody == 'STATE BREED CLUB' ||
+        rawBody == 'STATE BREED CLUBS') {
       return 'STATE BREED CLUB';
     }
-    if (rawClubType == 'STATE CLUB') {
+
+    if (rawClubType == 'STATE CLUB' ||
+        rawClubType == 'STATE CLUBS' ||
+        rawBody == 'STATE CLUB' ||
+        rawBody == 'STATE CLUBS') {
       return 'STATE CLUB';
     }
-    if (rawClubType == 'ARBA') {
+
+    if (rawClubType == 'ARBA' || rawBody == 'ARBA') {
       return 'ARBA';
     }
-
-    if (rawBody == 'NATIONAL CLUB') return 'NATIONAL BREED CLUB';
-    if (rawBody == 'STATE BREED CLUB') return 'STATE BREED CLUB';
-    if (rawBody == 'STATE CLUB') return 'STATE CLUB';
-    if (rawBody == 'ARBA') return 'ARBA';
 
     return '';
   }
@@ -256,7 +285,7 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
 
     final speciesRankByBreedName = <String, int>{
       for (final b in allBreedRows)
-        (b['name'] ?? '').toString().trim().toLowerCase():
+        _normName((b['name'] ?? '').toString()):
             (((b['species'] ?? '').toString().trim().toLowerCase().contains('cavy') ||
                     (b['species'] ?? '')
                         .toString()
@@ -354,15 +383,26 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
         for (final entry in allowedBreedNamesBySectionId.entries) {
           final sectionId = entry.key;
           final allowedNames = entry.value;
-          if (allowedNames.contains(breedName)) {
+          final normalizedBreedName = _normName(breedName);
+
+          final normalizedAllowedNames = allowedNames.map(_normName).toSet();
+
+          if (normalizedAllowedNames.contains(normalizedBreedName)) {
             allowedSectionIds.add(sectionId);
           }
         }
       }
 
+      final isAmericanCavyBreeders =
+          clubName.toLowerCase().contains('american cavy breeders');
+
+      if (allowedSectionIds.isEmpty && isAmericanCavyBreeders) {
+        allowedSectionIds = {...allSectionIds};
+      }
+
       if (allowedSectionIds.isEmpty) continue;
 
-      final speciesRank = speciesRankByBreedName[breedName.toLowerCase()] ?? 0;
+      final speciesRank = speciesRankByBreedName[_normName(breedName)] ?? 0;
       final dedupeKey =
           '$clubType|${clubName.toLowerCase()}|${breedName.toLowerCase()}|${(club['state_code'] ?? '').toString().trim().toUpperCase()}';
 
@@ -514,43 +554,64 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
 
   List<_SanctionRowModel> get _visibleRows {
     final tab = _SanctionTabKind.values[_selectedTabIndex];
-    final tabRows = _rows.where((r) => r.tabKind == tab).toList();
 
-    // National Breed Clubs = flat list sorted by breed, then club
+    var tabRows = _rows.where((r) => r.tabKind == tab).toList();
+
+    final search = _searchText.trim().toLowerCase();
+    if (search.isNotEmpty) {
+      tabRows = tabRows.where((r) {
+        return r.label.toLowerCase().contains(search) ||
+            (r.breedName ?? '').toLowerCase().contains(search) ||
+            (r.clubName ?? '').toLowerCase().contains(search) ||
+            (r.stateCode ?? '').toLowerCase().contains(search);
+      }).toList();
+    }
+
+    int pinnedRank(_SanctionRowModel r) {
+      final label = r.label.toLowerCase();
+
+      if (label.contains('american rabbit breeders')) return 0;
+      if (label == 'arba' || label.contains('the arba')) return 0;
+
+      if (label.contains('american cavy breeders')) return 1;
+
+      return 10;
+    }
+
+    int sortRows(_SanctionRowModel a, _SanctionRowModel b) {
+      final pin = pinnedRank(a).compareTo(pinnedRank(b));
+      if (pin != 0) return pin;
+
+      final breedCompare = (a.breedName ?? '')
+          .toLowerCase()
+          .compareTo((b.breedName ?? '').toLowerCase());
+      if (breedCompare != 0) return breedCompare;
+
+      return a.label.toLowerCase().compareTo(b.label.toLowerCase());
+    }
+
     if (tab == _SanctionTabKind.nationalBreed) {
+      return tabRows..sort(sortRows);
+    }
+
+    if (tab == _SanctionTabKind.stateClub) {
       return tabRows
         ..sort((a, b) {
-          final breedCompare = (a.breedName ?? '')
-              .toLowerCase()
-              .compareTo((b.breedName ?? '').toLowerCase());
-          if (breedCompare != 0) return breedCompare;
-
+          final pin = pinnedRank(a).compareTo(pinnedRank(b));
+          if (pin != 0) return pin;
           return a.label.toLowerCase().compareTo(b.label.toLowerCase());
         });
     }
 
-    // State Clubs = flat alphabetical list
-    if (tab == _SanctionTabKind.stateClub) {
-      return tabRows
-        ..sort((a, b) => a.label.toLowerCase().compareTo(b.label.toLowerCase()));
-    }
-
-    // State Breed Clubs = grouped by breed
     final result = <_SanctionRowModel>[];
     String? currentBreed;
 
-    final sorted = [...tabRows]
-      ..sort((a, b) {
-        final breedCompare = (a.breedName ?? '')
-            .toLowerCase()
-            .compareTo((b.breedName ?? '').toLowerCase());
-        if (breedCompare != 0) return breedCompare;
-        return a.label.toLowerCase().compareTo(b.label.toLowerCase());
-      });
+    final sorted = [...tabRows]..sort(sortRows);
 
     for (final row in sorted) {
       final breed = row.breedName ?? '';
-      if (breed.isNotEmpty && breed != currentBreed) {
+
+      if (search.isEmpty && breed.isNotEmpty && breed != currentBreed) {
         currentBreed = breed;
         result.add(
           _SanctionRowModel(
@@ -564,6 +625,7 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
           ),
         );
       }
+
       result.add(row);
     }
 
@@ -1025,6 +1087,26 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                         ),
                         const SizedBox(height: 12),
                         _buildTabs(),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _searchController,
+                          decoration: InputDecoration(
+                            prefixIcon: const Icon(Icons.search),
+                            hintText: 'Search clubs, breeds, or state...',
+                            filled: true,
+                            fillColor: Colors.white,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: Colors.grey.shade300),
+                            ),
+                            isDense: true,
+                          ),
+                          onChanged: (v) {
+                            setState(() {
+                              _searchText = v;
+                            });
+                          },
+                        ),
                         const SizedBox(height: 12),
                         if (_msg != null) ...[
                           Container(

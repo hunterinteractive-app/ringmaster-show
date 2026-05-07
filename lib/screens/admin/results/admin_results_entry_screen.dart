@@ -278,7 +278,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
   Future<void> _loadJudges() async {
     final rows = await supabase
         .from('judge_assignments')
-        ..select(
+        .select(
           'id,judge_id,assignment_label,'
           'judges(id,display_name,name,first_name,last_name,judge_type,is_active,arba_judge_number)',
         )
