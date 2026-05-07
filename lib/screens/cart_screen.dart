@@ -103,7 +103,7 @@ class _CartScreenState extends State<CartScreen> {
       final items = await supabase
           .from('entry_cart_items')
           .select(
-            'id,exhibitor_id,section_id,animal_id,species,breed,variety,fur_variety,sex,tattoo,class_name,created_at,is_fur',
+            'id,exhibitor_id,section_id,animal_id,species,breed,variety,fur_variety,sex,tattoo,animal_name,class_name,created_at,is_fur',
           )
           .eq('cart_id', widget.cartId)
           .order('created_at');
@@ -386,8 +386,18 @@ class _CartScreenState extends State<CartScreen> {
 
   String _cartItemTitle(Map<String, dynamic> item, String sectionName) {
     final tattoo = (item['tattoo'] ?? '').toString().trim();
+    final animalName = (item['animal_name'] ?? '').toString().trim();
     final animalId = (item['animal_id'] ?? '').toString().trim();
     final furVariety = (item['fur_variety'] ?? '').toString().trim();
+
+    String animalLabel() {
+      if (animalName.isNotEmpty && tattoo.isNotEmpty) {
+        return '$animalName • $tattoo';
+      }
+      if (animalName.isNotEmpty) return animalName;
+      if (tattoo.isNotEmpty) return tattoo;
+      return animalId;
+    }
 
     if (_isMeatPenEntry(item)) {
       return '$sectionName — Meat Pen';
@@ -397,13 +407,14 @@ class _CartScreenState extends State<CartScreen> {
       final label = (item['class_name'] ?? item['variety'] ?? 'Commercial')
           .toString()
           .trim();
-      return tattoo.isNotEmpty
-          ? '$sectionName — $label ($tattoo)'
+      final idLabel = animalLabel();
+
+      return idLabel.isNotEmpty
+          ? '$sectionName — $label ($idLabel)'
           : '$sectionName — $label';
     }
 
-    final baseTitle =
-        '$sectionName — ${tattoo.isEmpty ? animalId : tattoo}';
+    final baseTitle = '$sectionName — ${animalLabel()}';
 
     if (item['is_fur'] == true && furVariety.isNotEmpty) {
       return '$baseTitle ($furVariety)';

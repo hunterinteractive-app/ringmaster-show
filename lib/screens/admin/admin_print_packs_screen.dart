@@ -652,6 +652,18 @@ class _ControlSheetsGeneratorSheetState
     return '$kQrResultsEntryBaseUrl?$query';
   }
 
+  String _animalPrintLabel(Map<String, dynamic> row) {
+    final name = _safe(row, 'animal_name');
+    final tattoo = _safe(row, 'tattoo').toUpperCase();
+
+    if (name.isNotEmpty && name.toUpperCase() != tattoo) {
+      return '$name • $tattoo';
+    }
+
+    if (name.isNotEmpty) return name;
+    return tattoo;
+  }
+
   String _safe(Map<String, dynamic> e, String k) =>
       (e[k] ?? '').toString().trim();
 
@@ -759,7 +771,24 @@ class _ControlSheetsGeneratorSheetState
       },
     );
 
-    return (rows as List).cast<Map<String, dynamic>>();
+    final raw = (rows as List).cast<Map<String, dynamic>>();
+
+    final byEntryId = <String, Map<String, dynamic>>{};
+
+    for (final row in raw) {
+      final entryId = _safe(row, 'entry_id').isNotEmpty
+          ? _safe(row, 'entry_id')
+          : _safe(row, 'id');
+
+      if (entryId.isEmpty) {
+        byEntryId['fallback_${byEntryId.length}'] = row;
+        continue;
+      }
+
+      byEntryId.putIfAbsent(entryId, () => row);
+    }
+
+    return byEntryId.values.toList();
   }
 
   String _sectionTitleFromRow(Map<String, dynamic> row) {
@@ -1148,7 +1177,7 @@ class _ControlSheetsGeneratorSheetState
                   children: [
                     pw.Padding(
                       padding: const pw.EdgeInsets.all(6),
-                      child: pw.Text(_safe(row, 'tattoo'), style: c),
+                      child: pw.Text(_animalPrintLabel(row), style: c),
                     ),
                     pw.Padding(
                       padding: const pw.EdgeInsets.all(6),
@@ -1200,7 +1229,7 @@ class _ControlSheetsGeneratorSheetState
                 children: [
                   pw.Padding(
                     padding: const pw.EdgeInsets.all(6),
-                    child: pw.Text(_safe(row, 'tattoo'), style: c),
+                    child: pw.Text(_animalPrintLabel(row), style: c),
                   ),
                   pw.Padding(
                     padding: const pw.EdgeInsets.all(6),
@@ -2068,7 +2097,12 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
                 children: [
                   pw.Padding(
                     padding: const pw.EdgeInsets.all(6),
-                    child: pw.Text(_safe(e, 'tattoo'), style: style),
+                    child: pw.Text(
+                      _safe(e, 'animal_name').isNotEmpty
+                          ? _safe(e, 'animal_name')
+                          : _safe(e, 'tattoo'),
+                      style: style,
+                    ),
                   ),
                   pw.Padding(
                     padding: const pw.EdgeInsets.all(6),

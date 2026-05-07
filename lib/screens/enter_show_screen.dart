@@ -1528,6 +1528,9 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
             'exhibitor_id': _selectedExhibitorId,
             'species': a['species'],
             'tattoo': a['tattoo'],
+            'animal_name': (a['name'] ?? '').toString().trim().isEmpty
+                ? null
+                : (a['name'] ?? '').toString().trim(),
             'breed': a['breed'],
             'variety': a['variety'],
             'fur_variety': isFur && _breedUsesWhiteColoredFur(breedName)
@@ -2132,6 +2135,9 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
           'exhibitor_id': _selectedExhibitorId,
           'species': animal['species'],
           'tattoo': animal['tattoo'],
+          'animal_name': (animal['name'] ?? '').toString().trim().isEmpty
+              ? null
+              : (animal['name'] ?? '').toString().trim(),
           'breed': 'Commercial',
           'variety': label,
           'sex': animal['sex'],

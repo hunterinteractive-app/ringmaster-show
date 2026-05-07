@@ -132,7 +132,7 @@ class _AdminControlSheetsScreenState extends State<AdminControlSheetsScreen> {
         .from('entries')
         .select(
           'id,show_id,section_id,exhibitor_id,'
-          'tattoo,breed,variety,sex,class_name,notes,scratched_at,created_at,'
+          'tattoo,animal_name,breed,variety,sex,class_name,notes,scratched_at,created_at,'
           'exhibitors!entries_exhibitor_id_fkey(id,display_name,first_name,last_name)',
         )
         .eq('show_id', widget.showId)
@@ -144,6 +144,20 @@ class _AdminControlSheetsScreenState extends State<AdminControlSheetsScreen> {
 
     final res = await q.order('created_at');
     return (res as List).cast<Map<String, dynamic>>();
+  }
+
+  String _animalEarLabel(Map<String, dynamic> e, {required bool isCavy}) {
+    final tattoo = _safe(e, 'tattoo');
+    final animalName = _safe(e, 'animal_name');
+
+    if (!isCavy) return tattoo;
+
+    if (animalName.isNotEmpty && tattoo.isNotEmpty) {
+      return '$animalName • $tattoo';
+    }
+
+    if (animalName.isNotEmpty) return animalName;
+    return tattoo;
   }
 
   String _safe(Map<String, dynamic> e, String k) => (e[k] ?? '').toString().trim();
@@ -379,7 +393,7 @@ class _AdminControlSheetsScreenState extends State<AdminControlSheetsScreen> {
                   border: pw.TableBorder.all(width: 0.8),
                   columnWidths: {
                     0: pw.FixedColumnWidth(60), // Coop #
-                    1: pw.FixedColumnWidth(60), // Ear #
+                    1: pw.FixedColumnWidth(95), // Animal Name • Ear # for cavies, Ear # for rabbits
                     2: pw.FixedColumnWidth(60), // Entry #
                     3: pw.FlexColumnWidth(1), // Exhibitor
                     4: pw.FixedColumnWidth(160), // Place or Reason Disqualified
@@ -390,7 +404,10 @@ class _AdminControlSheetsScreenState extends State<AdminControlSheetsScreen> {
                       decoration: pw.BoxDecoration(color: PdfColors.grey300),
                       children: [
                         pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text('Coop #', style: label)),
-                        pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text('Ear #', style: label)),
+                        pw.Padding(
+                          padding: pw.EdgeInsets.all(6),
+                          child: pw.Text(isCavy ? 'Animal Name • Ear #' : 'Ear #', style: label),
+                        ),
                         pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text('Entry #', style: label)),
                         pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text('Exhibitor', style: label)),
                         pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text('Place or Reason Disqualified', style: label)),
@@ -399,7 +416,7 @@ class _AdminControlSheetsScreenState extends State<AdminControlSheetsScreen> {
                     ),
                     ...List.generate(list.length, (idx) {
                       final e = list[idx];
-                      final tattoo = _safe(e, 'tattoo');
+                      final earLabel = _animalEarLabel(e, isCavy: isCavy);
                       final exhibitor = _exhibitorName(e);
 
                       // placeholders unless you add these columns later
@@ -409,7 +426,7 @@ class _AdminControlSheetsScreenState extends State<AdminControlSheetsScreen> {
                       return pw.TableRow(
                         children: [
                           pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text(coop, style: small)),
-                          pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text(tattoo, style: small)),
+                          pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text(earLabel, style: small)),
                           pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text(entryNo, style: small)),
                           pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text(exhibitor, style: small)),
                           pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text('', style: small)),

@@ -341,6 +341,7 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
       e['id'] ??= e['entry_id'];
       e['breed'] ??= e['breed_name'];
       e['variety'] ??= e['variety_name'];
+      e['animal_name'] ??= '';
       e['_awards'] = awardsByEntryId[id] ?? <String>[];
 
       final normalizedGroup = (

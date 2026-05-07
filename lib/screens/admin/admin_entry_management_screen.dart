@@ -113,7 +113,7 @@ class _AdminEntryManagementScreenState
         .from('entries')
         .select(
           'id,show_id,section_id,exhibitor_id,exhibitor_user_id,animal_id,species,'
-          'tattoo,breed,variety,fur_variety,sex,class_name,notes,status,created_at,updated_at,scratched_at,'
+          'tattoo,animal_name,breed,variety,fur_variety,sex,class_name,notes,status,created_at,updated_at,scratched_at,'
           'is_fur,fur_placement,fur_notes,'
           'show_sections(id,letter,display_name,kind),'
           'exhibitors!entries_exhibitor_id_fkey(id,display_name,first_name,last_name)',
@@ -175,6 +175,7 @@ class _AdminEntryManagementScreenState
 
     final fields = <String>[
       exhibitorName,
+      (e['animal_name'] ?? '').toString(),
       (e['tattoo'] ?? '').toString(),
       (e['breed'] ?? '').toString(),
       (e['variety'] ?? '').toString(),
@@ -517,6 +518,7 @@ class _AdminEntryManagementScreenState
                                         .toString()
                                         .trim()
                                         .toUpperCase();
+                                    final animalName = (e['animal_name'] ?? '').toString().trim();
                                     final breed = (e['breed'] ?? '').toString();
                                     final variety =
                                         (e['variety'] ?? '').toString();
@@ -534,8 +536,13 @@ class _AdminEntryManagementScreenState
                                             : '')
                                         .toString();
 
-                                    final titleLeft =
-                                        tattoo.isEmpty ? '(no tattoo)' : tattoo;
+                                    final titleLeft = animalName.isNotEmpty && tattoo.isNotEmpty
+                                        ? '$animalName • $tattoo'
+                                        : animalName.isNotEmpty
+                                            ? animalName
+                                            : tattoo.isEmpty
+                                                ? '(no tattoo)'
+                                                : tattoo;
 
                                     final isFur = e['is_fur'] == true;
 
@@ -645,6 +652,7 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
   bool _saving = false;
   String? _msg;
 
+  late final TextEditingController _animalName;
   late final TextEditingController _tattoo;
   late final TextEditingController _breed;
   late final TextEditingController _variety;
@@ -658,6 +666,9 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
   @override
   void initState() {
     super.initState();
+    _animalName = TextEditingController(
+        text: (widget.entry['animal_name'] ?? '').toString().trim(),
+      );
     _tattoo = TextEditingController(
         text: (widget.entry['tattoo'] ?? '').toString().trim().toUpperCase(),
       );
@@ -681,6 +692,7 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
 
   @override
   void dispose() {
+    _animalName.dispose();
     _tattoo.dispose();
     _breed.dispose();
     _variety.dispose();
@@ -706,6 +718,9 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
       );
 
       await supabase.from('entries').update({
+        'animal_name': _animalName.text.trim().isEmpty
+            ? null
+            : _animalName.text.trim(),
         'tattoo': _tattoo.text.trim().isEmpty
             ? null
             : _tattoo.text.trim().toUpperCase(),
@@ -770,6 +785,15 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
                   ),
                 ),
               ),
+              TextField(
+                controller: _animalName,
+                enabled: !_saving,
+                decoration: const InputDecoration(
+                  labelText: 'Animal Name',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 10),
             TextField(
               controller: _tattoo,
               enabled: !_saving,
@@ -1082,6 +1106,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
   String _exhibitorType = 'adult';
   String _species = 'rabbit';
 
+  final _animalName = TextEditingController();
   final _tattoo = TextEditingController();
   final _breed = TextEditingController();
   final _variety = TextEditingController();
@@ -1152,6 +1177,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     _lastName.dispose();
     _email.dispose();
     _phone.dispose();
+    _animalName.dispose();
     _tattoo.dispose();
     _breed.dispose();
     _variety.dispose();
@@ -1742,6 +1768,11 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
           'tattoo': _useLocalAnimal
               ? _tattoo.text.trim().toUpperCase()
               : (_animal!['tattoo'] ?? '').toString().trim().toUpperCase(),
+          'animal_name': _useLocalAnimal
+              ? (_animalName.text.trim().isEmpty ? null : _animalName.text.trim())
+              : ((_animal!['name'] ?? '').toString().trim().isEmpty
+                  ? null
+                  : (_animal!['name'] ?? '').toString().trim()),
           'breed': _useLocalAnimal ? _breed.text.trim() : _animal!['breed'],
           'variety': _useLocalAnimal ? _variety.text.trim() : _animal!['variety'],
           'sex': _useLocalAnimal ? _sexValue : _animal!['sex'],
@@ -1783,6 +1814,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
         _classValue = null;
         _furVarietyValue = null;
         _className.clear();
+        _animalName.clear();
         _tattoo.clear();
         _breed.clear();
         _variety.clear();
@@ -2064,6 +2096,15 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
 
                               await _loadBreedsForSpecies();
                             },
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _animalName,
+                      enabled: !_saving,
+                      decoration: const InputDecoration(
+                        labelText: 'Animal Name (optional)',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
                     const SizedBox(height: 10),
                     TextField(

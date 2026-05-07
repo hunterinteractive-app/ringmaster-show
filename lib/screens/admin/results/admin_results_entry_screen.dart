@@ -548,6 +548,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
         e['id'] ??= e['entry_id'];
         e['breed'] ??= e['breed_name'];
         e['variety'] ??= e['variety_name'];
+        e['animal_name'] ??= '';
 
         final normalizedGroup = (
           e['group_name'] ??
@@ -1212,13 +1213,22 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
 }
 
   String _entryLabel(Map<String, dynamic> e) {
+    final animalName = (e['animal_name'] ?? '').toString().trim();
     final tattoo = (e['tattoo'] ?? '').toString().trim();
     final breed = (e['breed'] ?? '').toString().trim();
     final variety = (e['variety'] ?? '').toString().trim();
     final groupName = (e['group_name'] ?? '').toString().trim();
 
+    final animalLabel = animalName.isNotEmpty && tattoo.isNotEmpty
+        ? '$animalName • $tattoo'
+        : animalName.isNotEmpty
+            ? animalName
+            : tattoo.isNotEmpty
+                ? tattoo
+                : '(No ear #)';
+
     return [
-      tattoo.isEmpty ? '(No ear #)' : tattoo,
+      animalLabel,
       breed,
       if (groupName.isNotEmpty) groupName,
       if (variety.isNotEmpty) variety,
@@ -1776,6 +1786,7 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
       e['id'] ??= e['entry_id'];
       e['breed'] ??= e['breed_name'];
       e['variety'] ??= e['variety_name'];
+      e['animal_name'] ??= '';
 
       final normalizedGroup = (
         e['group_name'] ??
@@ -2211,6 +2222,7 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
       e['id'] ??= e['entry_id'];
       e['breed'] ??= e['breed_name'];
       e['variety'] ??= e['variety_name'];
+      e['animal_name'] ??= '';
 
       final normalizedGroup = (
         e['group_name'] ??
@@ -2821,6 +2833,7 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
       e['id'] ??= e['entry_id'];
       e['breed'] ??= e['breed_name'];
       e['variety'] ??= e['variety_name'];
+      e['animal_name'] ??= '';
 
       final normalizedGroup = (
         e['group_name'] ??
@@ -3037,7 +3050,7 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
                     subtitle: Padding(
                       padding: const EdgeInsets.only(top: 6),
                       child: Text(
-                        '$count rabbit${count == 1 ? '' : 's'} • ${_judgeSummary(classEntries)}',
+                        '$count entr${count == 1 ? 'y' : 'ies'} • ${_judgeSummary(classEntries)}',
                       ),
                     ),
                     trailing: const Icon(Icons.chevron_right),
@@ -3628,6 +3641,7 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
         copy['id'] ??= copy['entry_id'];
         copy['breed'] ??= copy['breed_name'];
         copy['variety'] ??= copy['variety_name'];
+        copy['animal_name'] ??= '';
 
         final normalizedGroup = (
           copy['group_name'] ??
@@ -3855,7 +3869,7 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final rabbitCount = _entries.length;
+    final entryCount = _entries.length;
     final exhibitorCount = _entries
         .map((e) => (e['exhibitor_id'] ?? '').toString())
         .where((x) => x.isNotEmpty)
@@ -3928,7 +3942,7 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
                         spacing: 8,
                         runSpacing: 8,
                         children: [
-                          _infoPill('$rabbitCount rabbits'),
+                          _infoPill('$entryCount entries'),
                           _infoPill('$exhibitorCount exhibitors'),
                           _infoPill('${_shownCount()} shown/eligible'),
                         ],
@@ -3961,7 +3975,8 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
               itemCount: _entries.length,
               itemBuilder: (context, i) {
                 final e = _entries[i];
-                final tattoo = (e['tattoo'] ?? '').toString();
+                final animalName = (e['animal_name'] ?? '').toString().trim();
+                final tattoo = (e['tattoo'] ?? '').toString().trim();
                 final exhibitor = _exhibitorName(e);
                 final placement = (e['placement'] ?? '').toString().trim();
                 final awards = ((e['_awards'] as List?) ?? const [])
@@ -3997,7 +4012,13 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
                   child: ListTile(
                     contentPadding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
                     title: Text(
-                      tattoo.isEmpty ? '(No ear #)' : tattoo,
+                      animalName.isNotEmpty && tattoo.isNotEmpty
+                          ? '$animalName • $tattoo'
+                          : animalName.isNotEmpty
+                              ? animalName
+                              : tattoo.isEmpty
+                                  ? '(No ear #)'
+                                  : tattoo,
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                     subtitle: Padding(
@@ -4822,7 +4843,9 @@ if (storedJudgeId.isEmpty) {
 
   String _awardDisabledReason(String award) {
     if (!_placedFirst(widget.entry)) {
-      return 'Only first-place rabbits can receive awards.';
+      return _isCavyEntry(widget.entry)
+          ? 'Only first-place cavies can receive awards.'
+          : 'Only first-place rabbits can receive awards.';
     }
 
     if (_isCavyEntry(widget.entry)) {
@@ -5042,6 +5065,7 @@ if (storedJudgeId.isEmpty) {
 
   @override
   Widget build(BuildContext context) {
+    final animalName = (widget.entry['animal_name'] ?? '').toString().trim();
     final tattoo = (widget.entry['tattoo'] ?? '').toString();
     final breed = (widget.entry['breed'] ?? '').toString();
     final groupName = (widget.entry['group_name'] ?? '').toString();
@@ -5116,7 +5140,11 @@ if (storedJudgeId.isEmpty) {
               ),
               const SizedBox(height: 4),
               Text(
-                'Ear #: ${tattoo.isEmpty ? '(No ear #)' : tattoo}',
+                animalName.isNotEmpty && tattoo.isNotEmpty
+                    ? '$animalName • Ear #: $tattoo'
+                    : animalName.isNotEmpty
+                        ? animalName
+                        : 'Ear #: ${tattoo.isEmpty ? '(No ear #)' : tattoo}',
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
               if (scratched) ...[
