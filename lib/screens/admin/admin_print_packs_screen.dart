@@ -1249,7 +1249,7 @@ class _ControlSheetsGeneratorSheetState
               pw.SizedBox(width: 10),
               pw.Expanded(
                 child: pw.Text(
-                  'Scan to enter results directly into RingMaster Show.',
+                  'Scan to enter results directly into RingMaster Show. Please also fill out control sheet in full',
                   style: pw.TextStyle(
                     fontSize: 9,
                     fontWeight: pw.FontWeight.bold,

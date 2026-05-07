@@ -591,7 +591,19 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
     }
 
     if (tab == _SanctionTabKind.nationalBreed) {
-      return tabRows..sort(sortRows);
+      return tabRows
+        ..sort((a, b) {
+          final pin = pinnedRank(a).compareTo(pinnedRank(b));
+          if (pin != 0) return pin;
+
+          final breedCompare = (a.breedName ?? '')
+              .toLowerCase()
+              .compareTo((b.breedName ?? '').toLowerCase());
+
+          if (breedCompare != 0) return breedCompare;
+
+          return a.label.toLowerCase().compareTo(b.label.toLowerCase());
+        });
     }
 
     if (tab == _SanctionTabKind.stateClub) {

@@ -386,7 +386,7 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
       'Variety',
       'Age / Sex Class',
       ..._sections.map((s) => '${_sectionHeader(s)} (R/E)'),
-      'Total Rabbits',
+      'Total Rabbit/Cavy',
       'Unique Exhibitors',
     ];
 
@@ -555,7 +555,7 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
         ),
       ),
       child: const Text(
-        'All section counts are shown as Rabbits / Exhibitors (R/E).',
+        'All section counts are shown as Rabbit/Cavy / Exhibitors (R/E).',
         style: TextStyle(fontWeight: FontWeight.w600),
       ),
     );
@@ -596,7 +596,7 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
             ),
             const DataColumn(
               label: Text(
-                'Rabbits',
+                'Rabbit/Cavy',
                 style: TextStyle(fontWeight: FontWeight.w700),
               ),
             ),
@@ -815,7 +815,7 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
                               runSpacing: 8,
                               children: [
                                 _countChip('Exhibitors', breed.exhibitorCount),
-                                _countChip('Rabbits', breed.rabbitCount),
+                                _countChip('Rabbit/Cavy', breed.rabbitCount),
                               ],
                             ),
                           ],
@@ -854,7 +854,7 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
                                       runSpacing: 8,
                                       children: [
                                         _countChip('Exhibitors', variety.exhibitorCount),
-                                        _countChip('Rabbits', variety.rabbitCount),
+                                        _countChip('Rabbit/Cavy', variety.rabbitCount),
                                       ],
                                     ),
                                   ],

@@ -2651,6 +2651,56 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
     return (classRank * 10) + sexRank;
   }
 
+  Future<void> _openClassSexByIndex(int index) async {
+    final grouped = _groupByClassSex();
+    final labels = _sortedLabels(grouped);
+
+    if (index < 0 || index >= labels.length) return;
+
+    final label = labels[index];
+    final classEntries = grouped[label] ?? const <Map<String, dynamic>>[];
+    if (classEntries.isEmpty) return;
+
+    final completed = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ResultsAnimalsScreen(
+          showId: widget.showId,
+          showName: widget.showName,
+          sectionLabel: widget.sectionLabel,
+          breed: widget.breed,
+          variety: widget.variety,
+          classSexLabel: label,
+          isFurOrWoolClass: label.toLowerCase().startsWith('fur') ||
+              label.toLowerCase().startsWith('commercial fur') ||
+              label.toLowerCase().startsWith('wool') ||
+              label.toLowerCase().startsWith('fur/wool'),
+          entries: classEntries,
+          judges: widget.judges,
+          onBulkJudgeApply: _applyJudgeToEntries,
+          initialJudgeId: _singleJudgeId(classEntries),
+          breedClassSystems: widget.breedClassSystems,
+          finalAwardMode: widget.finalAwardMode,
+          showsByGroup: widget.showsByGroup,
+          showsByVariety: widget.showsByVariety,
+          isQrEntryMode: widget.isQrEntryMode,
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+
+    if (completed == true) {
+      await _openClassSexByIndex(index + 1);
+      await _reloadEntries();
+      if (mounted) setState(() {});
+      return;
+    }
+
+    await _reloadEntries();
+    if (mounted) setState(() {});
+  }
+
   List<String> _sortedLabels(Map<String, List<Map<String, dynamic>>> grouped) {
     final labels = grouped.keys.toList()
       ..sort((a, b) {
@@ -2992,82 +3042,7 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
                     ),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () async {
-                      final currentIndex = labels.indexOf(label);
-
-                      final completed = await Navigator.push<bool>(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ResultsAnimalsScreen(
-                            showId: widget.showId,
-                            showName: widget.showName,
-                            sectionLabel: widget.sectionLabel,
-                            breed: widget.breed,
-                            variety: widget.variety,
-                            classSexLabel: label,
-                            isFurOrWoolClass: label.toLowerCase().startsWith('fur') ||
-                                label.toLowerCase().startsWith('commercial fur') ||
-                                label.toLowerCase().startsWith('wool'),
-                            entries: classEntries,
-                            judges: widget.judges,
-                            onBulkJudgeApply: _applyJudgeToEntries,
-                            initialJudgeId: _singleJudgeId(classEntries),
-                            breedClassSystems: widget.breedClassSystems,
-                            finalAwardMode: widget.finalAwardMode,
-                            showsByGroup: widget.showsByGroup,
-                            showsByVariety: widget.showsByVariety,
-                            isQrEntryMode: widget.isQrEntryMode,
-                          ),
-                        ),
-                      );
-
-                      await _reloadEntries();
-                      if (!mounted) return;
-
-                      if (completed == true) {
-                        final refreshedGrouped = _groupByClassSex();
-                        final refreshedLabels = _sortedLabels(refreshedGrouped);
-
-                        final nextIndex = currentIndex + 1;
-                        if (nextIndex < refreshedLabels.length) {
-                          final nextLabel = refreshedLabels[nextIndex];
-                          final nextEntries = refreshedGrouped[nextLabel] ?? const <Map<String, dynamic>>[];
-
-                          if (nextEntries.isNotEmpty) {
-                            WidgetsBinding.instance.addPostFrameCallback((_) async {
-                              if (!mounted) return;
-
-                              await Navigator.push<bool>(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => ResultsAnimalsScreen(
-                                    showId: widget.showId,
-                                    showName: widget.showName,
-                                    sectionLabel: widget.sectionLabel,
-                                    breed: widget.breed,
-                                    variety: widget.variety,
-                                    classSexLabel: nextLabel,
-                                    isFurOrWoolClass: nextLabel.toLowerCase() == 'fur' ||
-                                        nextLabel.toLowerCase() == 'wool' ||
-                                        nextLabel.toLowerCase() == 'fur/wool',
-                                    entries: nextEntries,
-                                    judges: widget.judges,
-                                    onBulkJudgeApply: _applyJudgeToEntries,
-                                    initialJudgeId: _singleJudgeId(nextEntries),
-                                    breedClassSystems: widget.breedClassSystems,
-                                    finalAwardMode: widget.finalAwardMode,
-                                    showsByGroup: widget.showsByGroup,
-                                    showsByVariety: widget.showsByVariety,
-                                    isQrEntryMode: widget.isQrEntryMode,
-                                  ),
-                                ),
-                              );
-
-                              await _reloadEntries();
-                              if (mounted) setState(() {});
-                            });
-                          }
-                        }
-                      }
+                      await _openClassSexByIndex(i);
                     },
                   ),
                 );
