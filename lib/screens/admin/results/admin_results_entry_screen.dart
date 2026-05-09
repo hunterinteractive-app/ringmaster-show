@@ -139,6 +139,24 @@ String _resultSortText(dynamic value) {
   return (value ?? '').toString().trim().toLowerCase();
 }
 
+List<Map<String, dynamic>> _mergeRefreshedEntriesWithoutDroppingCurrentRows({
+  required List<Map<String, dynamic>> currentEntries,
+  required List<Map<String, dynamic>> refreshedEntries,
+}) {
+  final refreshedById = <String, Map<String, dynamic>>{};
+
+  for (final e in refreshedEntries) {
+    final id = (e['entry_id'] ?? e['id'] ?? '').toString().trim();
+    if (id.isNotEmpty) refreshedById[id] = e;
+  }
+
+  return currentEntries.map((current) {
+    final id = (current['entry_id'] ?? current['id'] ?? '').toString().trim();
+    if (id.isEmpty) return current;
+    return refreshedById[id] ?? current;
+  }).toList();
+}
+
 Future<Map<String, List<String>>> _loadAwardsByEntryId({
   required String showId,
   required Iterable<String> entryIds,
@@ -1818,16 +1836,6 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
 
     if (refreshed.isEmpty) {
       debugPrint(
-        'WARNING: _ResultsClassSexScreen _reloadEntries returned 0 rows. Keeping current entries.',
-      );
-      setState(() {});
-      return;
-    }
-
-    if (!mounted) return;
-
-    if (refreshed.isEmpty) {
-      debugPrint(
         'WARNING: _reloadEntries returned 0 rows. Keeping current entries.',
       );
       setState(() {});
@@ -1835,7 +1843,10 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
     }
 
     setState(() {
-      _entries = refreshed;
+      _entries = _mergeRefreshedEntriesWithoutDroppingCurrentRows(
+        currentEntries: _entries,
+        refreshedEntries: refreshed,
+      );
     });
   }
 
@@ -2261,7 +2272,10 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
     }
 
     setState(() {
-      _entries = refreshed;
+      _entries = _mergeRefreshedEntriesWithoutDroppingCurrentRows(
+        currentEntries: _entries,
+        refreshedEntries: refreshed,
+      );
     });
   }
 
@@ -2884,7 +2898,10 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
     }
 
     setState(() {
-      _entries = refreshed;
+      _entries = _mergeRefreshedEntriesWithoutDroppingCurrentRows(
+        currentEntries: _entries,
+        refreshedEntries: refreshed,
+      );
     });
   }
 
