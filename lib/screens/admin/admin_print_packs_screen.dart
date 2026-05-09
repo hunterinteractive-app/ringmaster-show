@@ -673,6 +673,10 @@ class _ControlSheetsGeneratorSheetState
       return int.tryParse(value.toString()) ?? fallback;
     }
 
+    int _sortValue(Map<String, dynamic> row, String key) {
+      return _toInt(row[key], 9999);
+    }
+
     String _cavySortKey(String breed, String variety) {
       return '${breed.trim().toLowerCase()}|${variety.trim().toLowerCase()}';
     }
@@ -969,6 +973,14 @@ class _ControlSheetsGeneratorSheetState
             }
 
             if (!aIsFurOrWool && !bIsFurOrWool) {
+              final groupSortCmp = _sortValue(aFirst, 'group_sort_order')
+                  .compareTo(_sortValue(bFirst, 'group_sort_order'));
+              if (groupSortCmp != 0) return groupSortCmp;
+
+              final varietySortCmp = _sortValue(aFirst, 'variety_sort_order')
+                  .compareTo(_sortValue(bFirst, 'variety_sort_order'));
+              if (varietySortCmp != 0) return varietySortCmp;
+
               final colorCmp = aColor.compareTo(bColor);
               if (colorCmp != 0) return colorCmp;
 

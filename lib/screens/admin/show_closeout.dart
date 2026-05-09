@@ -68,6 +68,13 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   List<_MissingPlacementItem> _missingPlacementItems = [];
   bool _missingPlacementsLoaded = false;
 
+  List<_CloseoutSectionSummary> _closeoutSections = [];
+  List<_CloseoutScope> _closeoutScopes = [];
+  _CloseoutScope? _selectedCloseoutScope;
+  bool _loadingCloseoutScopes = false;
+  
+  final Set<String> _customCloseoutSectionIds = {};
+
   bool _loading = true;
   bool _generatingReport = false;
   String? _error;
@@ -181,6 +188,19 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       return matches.isEmpty ? null : matches.first;
     }
 
+    bool _artifactMatchesSelectedScope(
+      ReportArtifactSummary artifact,
+    ) {
+      if (_selectedCloseoutScopeIsEntireShow) {
+        return true;
+      }
+
+      final artifactScope =
+          (artifact.metadata['scope_label'] ?? '').toString().trim();
+
+      return artifactScope == _selectedCloseoutScopeLabel;
+    }
+
     bool _artifactMatchesExhibitor(
       ReportArtifactSummary artifact,
       _ExhibitorEmailTarget exhibitor,
@@ -266,6 +286,26 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
           return list;
         }
+
+    List<String> get _selectedCloseoutSectionIds {
+      final scope = _selectedCloseoutScope;
+      if (scope == null) return const [];
+
+      if (scope.isCustom) {
+        return _customCloseoutSectionIds.toList();
+      }
+
+      return scope.sectionIds;
+    }
+
+    String get _selectedCloseoutScopeLabel {
+      return _selectedCloseoutScope?.label ?? 'Selected Scope';
+    }
+
+    bool get _selectedCloseoutScopeIsEntireShow {
+      return _selectedCloseoutScope?.type == _CloseoutScopeType.entireShow ||
+          _selectedCloseoutScope == null;
+    }
 
     Future<List<_ClubEmailTarget>> _loadClubEmailTargets() async {
       final rows = await supabase
@@ -357,6 +397,142 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       return list;
     }
 
+    Future<void> _loadCloseoutScopes() async {
+      if (mounted) {
+        setState(() {
+          _loadingCloseoutScopes = true;
+        });
+      } else {
+        _loadingCloseoutScopes = true;
+      }
+      try {
+        final rows = await supabase.rpc(
+          'get_closeout_scope_sections',
+          params: {'p_show_id': widget.showId},
+        );
+
+        final sections = (rows as List)
+            .map((raw) => _CloseoutSectionSummary.fromJson(
+                  Map<String, dynamic>.from(raw as Map),
+                ))
+            .toList();
+
+        final enabledSections = sections.where((s) => s.isEnabled).toList();
+
+        final scopes = <_CloseoutScope>[
+          _CloseoutScope(
+            type: _CloseoutScopeType.entireShow,
+            label: 'Entire Show',
+            description: 'Finalize and report all enabled sections.',
+            sectionIds: enabledSections.map((s) => s.sectionId).toList(),
+          ),
+        ];
+
+        final rabbitAllBreed = enabledSections
+            .where((s) => s.isAllBreed && s.species.contains('rabbit'))
+            .toList();
+
+        if (rabbitAllBreed.isNotEmpty) {
+          scopes.add(
+            _CloseoutScope(
+              type: _CloseoutScopeType.rabbitAllBreed,
+              label: 'Rabbit All Breed',
+              description:
+                  '${rabbitAllBreed.length} all-breed rabbit section${rabbitAllBreed.length == 1 ? '' : 's'}.',
+              sectionIds: rabbitAllBreed.map((s) => s.sectionId).toList(),
+            ),
+          );
+        }
+
+        final cavyAllBreed = enabledSections
+            .where((s) => s.isAllBreed && s.species.contains('cavy'))
+            .toList();
+
+        if (cavyAllBreed.isNotEmpty) {
+          scopes.add(
+            _CloseoutScope(
+              type: _CloseoutScopeType.cavyAllBreed,
+              label: 'Cavy All Breed',
+              description:
+                  '${cavyAllBreed.length} all-breed cavy section${cavyAllBreed.length == 1 ? '' : 's'}.',
+              sectionIds: cavyAllBreed.map((s) => s.sectionId).toList(),
+            ),
+          );
+        }
+
+        final specialtySections =
+            enabledSections.where((s) => s.isSpecialty).toList();
+
+        if (specialtySections.isNotEmpty) {
+          scopes.add(
+            _CloseoutScope(
+              type: _CloseoutScopeType.specialty,
+              label: 'Single Breed / Specialty',
+              description:
+                  '${specialtySections.length} limited-breed section${specialtySections.length == 1 ? '' : 's'}.',
+              sectionIds: specialtySections.map((s) => s.sectionId).toList(),
+            ),
+          );
+        }
+
+        scopes.add(
+          _CloseoutScope(
+            type: _CloseoutScopeType.custom,
+            label: 'Custom Sections',
+            description: 'Choose exactly which sections to finalize or send.',
+            sectionIds: const [],
+          ),
+        );
+
+        if (!mounted) return;
+
+        setState(() {
+          _closeoutSections = sections;
+          _closeoutScopes = scopes;
+          _customCloseoutSectionIds.removeWhere(
+            (id) => !enabledSections.any((section) => section.sectionId == id),
+          );
+
+          final currentType = _selectedCloseoutScope?.type;
+          final stillExists = currentType != null &&
+              scopes.any((scope) => scope.type == currentType);
+          _selectedCloseoutScope = stillExists
+              ? scopes.firstWhere((scope) => scope.type == currentType)
+              : scopes.first;
+        });
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _closeoutSections = [];
+          _closeoutScopes = [
+            const _CloseoutScope(
+              type: _CloseoutScopeType.entireShow,
+              label: 'Entire Show',
+              description: 'Finalize and report all enabled sections.',
+              sectionIds: [],
+            ),
+            const _CloseoutScope(
+              type: _CloseoutScopeType.custom,
+              label: 'Custom Sections',
+              description: 'Choose exactly which sections to finalize or send.',
+              sectionIds: [],
+            ),
+          ];
+          _selectedCloseoutScope ??= _closeoutScopes.first;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed loading finalize scopes: $e')),
+        );
+      } finally {
+        if (mounted) {
+          setState(() {
+            _loadingCloseoutScopes = false;
+          });
+        } else {
+          _loadingCloseoutScopes = false;
+        }
+      }
+    }
 
     Future<void> _syncClubDeliveryMetadata() async {
       await supabase.rpc(
@@ -653,24 +829,48 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         throw Exception('Results are not ready for finalize.');
       }
 
+      final selectedSectionIds = _selectedCloseoutSectionIds;
+
+      if (!_selectedCloseoutScopeIsEntireShow && selectedSectionIds.isEmpty) {
+        throw Exception('Select at least one section before finalizing this scope.');
+      }
+
       try {
-        await supabase.rpc(
-          'finalize_show',
-          params: {'p_show_id': widget.showId},
-        );
+        if (_selectedCloseoutScopeIsEntireShow) {
+          await supabase.rpc(
+            'finalize_show',
+            params: {'p_show_id': widget.showId},
+          );
+        } else {
+          await supabase.rpc(
+            'finalize_show_scoped',
+            params: {
+              'p_show_id': widget.showId,
+              'p_section_ids': selectedSectionIds,
+              'p_scope_label': _selectedCloseoutScopeLabel,
+            },
+          );
+        }
       } catch (e) {
         rethrow;
       }
     }
 
     Future<int> _countQueuedArtifactsForShow() async {
-      final rows = await supabase
+      var query = supabase
           .from('show_report_artifacts')
           .select('id')
           .eq('show_id', widget.showId)
           .eq('is_current', true)
           .inFilter('artifact_status', ['queued', 'generated', 'failed']);
 
+      if (!_selectedCloseoutScopeIsEntireShow) {
+        query = query.contains('metadata', {
+          'scope_label': _selectedCloseoutScopeLabel,
+        });
+      }
+
+      final rows = await query;
       return (rows as List).length;
     }
 
@@ -897,12 +1097,16 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       for (final exhibitor in exhibitors) {
         final exhibitorReport = _newestGeneratedArtifactWhere(
           'exhibitor_report',
-          (a) => _artifactMatchesExhibitor(a, exhibitor),
+          (a) =>
+              _artifactMatchesExhibitor(a, exhibitor) &&
+              _artifactMatchesSelectedScope(a),
         );
 
         final legsReport = _newestGeneratedArtifactWhere(
           'legs',
-          (a) => _artifactMatchesExhibitor(a, exhibitor),
+          (a) =>
+              _artifactMatchesExhibitor(a, exhibitor) &&
+              _artifactMatchesSelectedScope(a),
         );
 
         final artifacts = <ReportArtifactSummary>[
@@ -1006,12 +1210,16 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         for (final target in targets) {
           final sweepstakesArtifacts = _allGeneratedArtifactsWhere(
             'sweepstakes_report',
-            (a) => _artifactMatchesClubTarget(a, target),
+            (a) =>
+                _artifactMatchesClubTarget(a, target) &&
+                _artifactMatchesSelectedScope(a),
           );
 
           final breedDetailArtifacts = _allGeneratedArtifactsWhere(
             'breed_results_detail_report',
-            (a) => _artifactMatchesClubTarget(a, target),
+            (a) =>
+                _artifactMatchesClubTarget(a, target) &&
+                _artifactMatchesSelectedScope(a),
           );
 
           for (final a in sweepstakesArtifacts) {
@@ -1291,6 +1499,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       await _ensureReportLogo();
       await _ensureEnteredExhibitorsContactBuilder();
       await _ensureRibbonPayoutBuilder();
+      await _loadCloseoutScopes();
 
       if (!mounted) return;
       setState(() {
@@ -1904,19 +2113,24 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     final reports = _dashboard?.reports ?? const <ReportArtifactSummary>[];
 
     final filtered = switch (groupKey) {
-      'arba' => reports.where((r) => _arbaReportKeys.contains(r.reportName)),
-      'exhibitor' =>
-        reports.where((r) => _exhibitorReportKeys.contains(r.reportName)),
-      'club' => reports.where((r) => _clubReportKeys.contains(r.reportName)),
+      'arba' => reports.where((r) => _arbaReportKeys.contains(r.reportName)).toList(),
+      'exhibitor' => reports
+          .where((r) => _exhibitorReportKeys.contains(r.reportName))
+          .toList(),
+      'club' => reports.where((r) => _clubReportKeys.contains(r.reportName)).toList(),
       'other' => reports.where((r) {
           return !_arbaReportKeys.contains(r.reportName) &&
               !_exhibitorReportKeys.contains(r.reportName) &&
               !_clubReportKeys.contains(r.reportName);
-        }),
+        }).toList(),
       _ => reports,
-    }.toList();
+    };
 
-    filtered.sort((a, b) {
+    final scoped = filtered.where((r) {
+      return _artifactMatchesSelectedScope(r);
+    }).toList();
+
+    scoped.sort((a, b) {
       final aIndex = _reportDisplayOrder.indexOf(a.reportName);
       final bIndex = _reportDisplayOrder.indexOf(b.reportName);
 
@@ -1929,7 +2143,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       return aIndex.compareTo(bIndex);
     });
 
-    return filtered;
+    return scoped;
   }
 
     List<String> _reportNamesForGroup(String groupKey) {
@@ -2043,6 +2257,28 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                             ),
 
                             const SizedBox(height: 16),
+
+                            _CloseoutScopeCard(
+                              loading: _loadingCloseoutScopes,
+                              scopes: _closeoutScopes,
+                              sections: _closeoutSections,
+                              selectedScope: _selectedCloseoutScope,
+                              customSectionIds: _customCloseoutSectionIds,
+                              onChanged: (scope) {
+                                setState(() {
+                                  _selectedCloseoutScope = scope;
+                                });
+                              },
+                              onCustomSectionChanged: (sectionId, selected) {
+                                setState(() {
+                                  if (selected) {
+                                    _customCloseoutSectionIds.add(sectionId);
+                                  } else {
+                                    _customCloseoutSectionIds.remove(sectionId);
+                                  }
+                                });
+                              },
+                            ),
 
                             if (reportsBlocked) ...[
                               Container(
@@ -2169,16 +2405,19 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                               );
                                             }
 
-                                            final artifactsToGenerate =
-                                                (_dashboard?.reports ??
-                                                        <ReportArtifactSummary>[])
+                                            final List<ReportArtifactSummary> artifactsToGenerate =
+                                                (_dashboard?.reports ?? const <ReportArtifactSummary>[])
                                                     .where((r) => r.isCurrent)
+                                                    .where((r) {
+                                                      if (_selectedCloseoutScopeIsEntireShow) return true;
+
+                                                      return (r.metadata['scope_label'] ?? '').toString() ==
+                                                          _selectedCloseoutScopeLabel;
+                                                    })
                                                     .where(
                                                       (r) =>
-                                                          r.artifactStatus ==
-                                                              'queued' ||
-                                                          r.artifactStatus ==
-                                                              'failed',
+                                                          r.artifactStatus == 'queued' ||
+                                                          r.artifactStatus == 'failed',
                                                     )
                                                     .where(
                                                       (r) => {
@@ -2270,11 +2509,13 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                   label: Text(
                                     reportsBlocked
                                         ? 'Finish Results Before Finalize'
-                                        : (_dashboard?.dashboard.closeout
-                                                    .isReportsStale ==
-                                                true
-                                            ? 'Finalize Show'
-                                            : 'Re-Finalize Show'),
+                                        : (_dashboard?.dashboard.closeout.isReportsStale == true
+                                            ? (_selectedCloseoutScopeIsEntireShow
+                                                ? 'Finalize Show'
+                                                : 'Finalize $_selectedCloseoutScopeLabel')
+                                            : (_selectedCloseoutScopeIsEntireShow
+                                                ? 'Re-Finalize Show'
+                                                : 'Re-Finalize $_selectedCloseoutScopeLabel')),
                                   ),
                                 ),
 
@@ -2283,8 +2524,10 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                       ? null
                                       : _sendAllExhibitorReports,
                                   icon: const Icon(Icons.send_outlined),
-                                  label: const Text(
-                                    'Send All Exhibitor Reports',
+                                  label: Text(
+                                    _selectedCloseoutScopeIsEntireShow
+                                        ? 'Send All Exhibitor Reports'
+                                        : 'Send $_selectedCloseoutScopeLabel Exhibitor Reports',
                                   ),
                                 ),
 
@@ -2292,7 +2535,11 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                   onPressed:
                                       _isBusy ? null : _sendAllClubReports,
                                   icon: const Icon(Icons.group_outlined),
-                                  label: const Text('Send All Club Reports'),
+                                  label: Text(
+                                    _selectedCloseoutScopeIsEntireShow
+                                        ? 'Send All Club Reports'
+                                        : 'Send $_selectedCloseoutScopeLabel Club Reports',
+                                  ),
                                 ),
                               ],
                             ),
@@ -4002,6 +4249,152 @@ class LatestFinalize {
   }
 }
 
+class _CustomSectionPicker extends StatelessWidget {
+  final List<_CloseoutSectionSummary> sections;
+  final Set<String> selectedSectionIds;
+  final void Function(String sectionId, bool selected) onChanged;
+
+  const _CustomSectionPicker({
+    required this.sections,
+    required this.selectedSectionIds,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (sections.isEmpty) {
+      return Text(
+        'No enabled sections available.',
+        style: Theme.of(context).textTheme.bodySmall,
+      );
+    }
+
+    final selectedCount = sections
+        .where((section) => selectedSectionIds.contains(section.sectionId))
+        .length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '$selectedCount of ${sections.length} section${sections.length == 1 ? '' : 's'} selected.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 8),
+        ...sections.map((section) {
+          final selected = selectedSectionIds.contains(section.sectionId);
+
+          return CheckboxListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            value: selected,
+            title: Text(section.displayLabel),
+            subtitle: Text(section.summaryLabel),
+            onChanged: (value) {
+              onChanged(section.sectionId, value == true);
+            },
+          );
+        }),
+      ],
+    );
+  }
+}
+
+class _CloseoutScopeCard extends StatelessWidget {
+  final bool loading;
+  final List<_CloseoutScope> scopes;
+  final List<_CloseoutSectionSummary> sections;
+  final _CloseoutScope? selectedScope;
+  final ValueChanged<_CloseoutScope> onChanged;
+  final Set<String> customSectionIds;
+  final void Function(String sectionId, bool selected) onCustomSectionChanged;
+
+  const _CloseoutScopeCard({
+    required this.loading,
+    required this.scopes,
+    required this.sections,
+    required this.selectedScope,
+    required this.onChanged,
+    required this.customSectionIds,
+    required this.onCustomSectionChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _CloseoutSectionCard(
+      title: 'Finalize Scope',
+      subtitle: 'Choose what part of the show you want to finalize, generate, or send.',
+      children: [
+        if (loading)
+          const Center(child: CircularProgressIndicator())
+        else ...[
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: scopes.map((scope) {
+              final selected = selectedScope?.type == scope.type;
+
+              return ChoiceChip(
+                selected: selected,
+                label: Text(scope.label),
+                onSelected: (_) => onChanged(scope),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 12),
+          if (selectedScope != null)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF11285A).withOpacity(.04),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: const Color(0xFF11285A).withOpacity(.12),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    selectedScope!.label,
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(selectedScope!.description),
+                  const SizedBox(height: 8),
+                  if (selectedScope!.isCustom)
+                    _CustomSectionPicker(
+                      sections: sections.where((s) => s.isEnabled).toList(),
+                      selectedSectionIds: customSectionIds,
+                      onChanged: onCustomSectionChanged,
+                    )
+                  else
+                    Text(
+                      'Included sections: ${_sectionLabelsForScope(selectedScope!, sections).join(', ')}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                ],
+              ),
+            ),
+        ],
+      ],
+    );
+  }
+
+  List<String> _sectionLabelsForScope(
+    _CloseoutScope scope,
+    List<_CloseoutSectionSummary> sections,
+  ) {
+    final labels = sections
+        .where((s) => scope.sectionIds.contains(s.sectionId))
+        .map((s) => s.displayName.isEmpty ? '${s.kind} ${s.letter}' : s.displayName)
+        .toList();
+
+    return labels.isEmpty ? ['None'] : labels;
+  }
+}
+
 class ReportArtifactSummary {
   final String id;
   final String? finalizeRunId;
@@ -4081,6 +4474,104 @@ class ArchiveSummary {
       id: (json['id'] ?? '') as String,
       archiveVersion: ((json['archive_version'] ?? 0) as num).toInt(),
       archiveStatus: (json['archive_status'] ?? '') as String,
+    );
+  }
+}
+
+enum _CloseoutScopeType {
+  entireShow,
+  rabbitAllBreed,
+  cavyAllBreed,
+  specialty,
+  custom,
+}
+
+class _CloseoutScope {
+  final _CloseoutScopeType type;
+  final String label;
+  final String description;
+  final List<String> sectionIds;
+
+  const _CloseoutScope({
+    required this.type,
+    required this.label,
+    required this.description,
+    required this.sectionIds,
+  });
+
+  bool get isCustom => type == _CloseoutScopeType.custom;
+}
+
+class _CloseoutSectionSummary {
+  final String sectionId;
+  final String kind;
+  final String letter;
+  final String displayName;
+  final String breedScope;
+  final List<String> allowedBreedIds;
+  final bool isEnabled;
+  final int sortOrder;
+  final List<String> species;
+  final int entryCount;
+
+  const _CloseoutSectionSummary({
+    required this.sectionId,
+    required this.kind,
+    required this.letter,
+    required this.displayName,
+    required this.breedScope,
+    required this.allowedBreedIds,
+    required this.isEnabled,
+    required this.sortOrder,
+    required this.species,
+    required this.entryCount,
+  });
+
+  bool get isAllBreed => breedScope.trim().toLowerCase() == 'all';
+
+  bool get isSpecialty =>
+      breedScope.trim().toLowerCase() != 'all' || allowedBreedIds.isNotEmpty;
+
+  String get displayLabel {
+    if (displayName.trim().isNotEmpty) return displayName.trim();
+
+    final kindLabel = kind.trim().isEmpty
+        ? 'Section'
+        : '${kind[0].toUpperCase()}${kind.substring(1)}';
+
+    return '$kindLabel ${letter.trim()}'.trim();
+  }
+
+  String get summaryLabel {
+    final parts = <String>[
+      if (kind.trim().isNotEmpty) kind.toUpperCase(),
+      if (letter.trim().isNotEmpty) 'Show ${letter.toUpperCase()}',
+      if (breedScope.trim().isNotEmpty) breedScope,
+      if (species.isNotEmpty) species.join(', '),
+      '$entryCount entr${entryCount == 1 ? 'y' : 'ies'}',
+    ];
+
+    return parts.join(' • ');
+  }
+
+  factory _CloseoutSectionSummary.fromJson(Map<String, dynamic> json) {
+    return _CloseoutSectionSummary(
+      sectionId: (json['section_id'] ?? '').toString(),
+      kind: (json['kind'] ?? '').toString(),
+      letter: (json['letter'] ?? '').toString(),
+      displayName: (json['display_name'] ?? '').toString(),
+      breedScope: (json['breed_scope'] ?? '').toString(),
+      allowedBreedIds: json['allowed_breed_ids'] is List
+          ? List<String>.from(
+              (json['allowed_breed_ids'] as List).map((e) => e.toString()),
+            )
+          : const [],
+      isEnabled: json['is_enabled'] == true,
+      sortOrder: ((json['sort_order'] ?? 0) as num).toInt(),
+      species: json['species'] is List
+          ? List<String>.from((json['species'] as List).map((e) => e.toString()))
+          : const [],
+      entryCount: ((json['entry_count'] ?? 0) as num).toInt(),
     );
   }
 }

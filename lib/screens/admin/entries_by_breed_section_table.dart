@@ -343,8 +343,6 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
         );
       }).toList();
 
-      varieties.sort((a, b) => a.variety.toLowerCase().compareTo(b.variety.toLowerCase()));
-
       return _BreedGroup(
         breed: breed,
         species: species,
