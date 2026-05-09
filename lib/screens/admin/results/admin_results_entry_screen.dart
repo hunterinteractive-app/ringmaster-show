@@ -129,6 +129,16 @@ String _dqReasonFromStatus(String status) {
   return parts.sublist(1).join('-').trim();
 }
 
+int _resultSortValue(Map<String, dynamic> row, String key) {
+  final value = row[key];
+  if (value is int) return value;
+  return int.tryParse(value?.toString() ?? '') ?? 9999;
+}
+
+String _resultSortText(dynamic value) {
+  return (value ?? '').toString().trim().toLowerCase();
+}
+
 Future<Map<String, List<String>>> _loadAwardsByEntryId({
   required String showId,
   required Iterable<String> entryIds,
@@ -2716,14 +2726,26 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
   List<String> _sortedLabels(Map<String, List<Map<String, dynamic>>> grouped) {
     final labels = grouped.keys.toList()
       ..sort((a, b) {
-        final aKey = _labelSortKey(a);
-        final bKey = _labelSortKey(b);
-        if (aKey != bKey) return aKey.compareTo(bKey);
-        return a.toLowerCase().compareTo(b.toLowerCase());
+        final aRows = grouped[a] ?? const <Map<String, dynamic>>[];
+        final bRows = grouped[b] ?? const <Map<String, dynamic>>[];
+
+        final aFirst = aRows.isEmpty ? <String, dynamic>{} : aRows.first;
+        final bFirst = bRows.isEmpty ? <String, dynamic>{} : bRows.first;
+
+        final classCmp = _resultSortValue(aFirst, 'class_sort_order')
+            .compareTo(_resultSortValue(bFirst, 'class_sort_order'));
+        if (classCmp != 0) return classCmp;
+
+        final sexCmp = _resultSortValue(aFirst, 'sex_sort_order')
+            .compareTo(_resultSortValue(bFirst, 'sex_sort_order'));
+        if (sexCmp != 0) return sexCmp;
+
+        return _resultSortText(a).compareTo(_resultSortText(b));
       });
 
-    return labels;
-  }
+        return labels;
+
+      }
 
     Map<String, List<Map<String, dynamic>>> _groupByClassSex() {
       final out = <String, List<Map<String, dynamic>>>{};
