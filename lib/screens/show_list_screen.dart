@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:ringmaster_show/screens/admin/admin_shows_screen.dart';
 import 'package:ringmaster_show/screens/admin/edit_show_settings_screen.dart';
+import 'package:ringmaster_show/screens/admin/entries_by_breed_section_table.dart';
 import 'package:ringmaster_show/screens/super_admin/superadmin_home_screen.dart';
 
 import 'login_screen.dart';
@@ -17,6 +18,7 @@ import 'legal/privacy_policy_screen.dart';
 
 import '../config/legal_config.dart';
 import '../services/role_service.dart';
+import '../services/stripe_connect_service.dart';
 import '../utils/date_time_utils.dart';
 import '../theme/app_theme.dart';
 import '../widgets/rm_widgets.dart';
@@ -598,6 +600,110 @@ class _ShowListScreenState extends State<ShowListScreen> {
     );
   }
 
+  void _openBreedCounts(BuildContext context, String showId, String showName) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          appBar: AppBar(
+            title: Text('Breed Counts - $showName'),
+          ),
+          body: EntriesByBreedSectionTable(
+            showId: showId,
+            showName: showName,
+            includeScratched: false,
+            showExportButton: false,
+            showExhibitorCounts: true,
+            title: 'Breed Counts',
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showPaymentInfo(
+    BuildContext context,
+    String showId,
+    String showName,
+  ) async {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const AlertDialog(
+        content: Row(
+          children: [
+            SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(width: 14),
+            Expanded(child: Text('Checking payment setup...')),
+          ],
+        ),
+      ),
+    );
+
+    bool payOnline = false;
+    String? error;
+
+    try {
+      final status = await StripeConnectService.getAccountStatus(showId);
+      payOnline = status['charges_enabled'] == true &&
+          status['payouts_enabled'] == true &&
+          status['details_submitted'] == true;
+    } catch (e) {
+      error = e.toString();
+    }
+
+    if (!context.mounted) return;
+    Navigator.of(context, rootNavigator: true).pop();
+
+    if (!context.mounted) return;
+    showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(showName),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  payOnline ? Icons.credit_card : Icons.payments_outlined,
+                  color: payOnline ? Colors.green : Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    payOnline ? 'Payment: Pay Online' : 'Payment: Paid at Show',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            ),
+            if (error != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                'Online payment not setup, so this show is paid at show.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.muted,
+                    ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_checkingLegal) {
@@ -874,10 +980,22 @@ class _ShowListScreenState extends State<ShowListScreen> {
                                                     ),
                                                   ),
                                                   PopupMenuButton<String>(
-                                                    tooltip: 'Actions',
+                                                    tooltip: 'Show Details',
                                                     onSelected: (v) {
                                                       if (v == 'enter') {
                                                         _openEnterShow(
+                                                          context,
+                                                          showId,
+                                                          showName,
+                                                        );
+                                                      } else if (v == 'breed_counts') {
+                                                        _openBreedCounts(
+                                                          context,
+                                                          showId,
+                                                          showName,
+                                                        );
+                                                      } else if (v == 'payment_info') {
+                                                        _showPaymentInfo(
                                                           context,
                                                           showId,
                                                           showName,
@@ -892,17 +1010,43 @@ class _ShowListScreenState extends State<ShowListScreen> {
                                                     itemBuilder: (_) => [
                                                       const PopupMenuItem(
                                                         value: 'enter',
-                                                        child:
-                                                            Text('Enter Show'),
+                                                        child: ListTile(
+                                                          leading: Icon(Icons.login),
+                                                          title: Text('Enter Show'),
+                                                          contentPadding: EdgeInsets.zero,
+                                                        ),
+                                                      ),
+                                                      const PopupMenuItem(
+                                                        value: 'breed_counts',
+                                                        child: ListTile(
+                                                          leading: Icon(Icons.bar_chart),
+                                                          title: Text('Breed Counts'),
+                                                          contentPadding: EdgeInsets.zero,
+                                                        ),
+                                                      ),
+                                                      const PopupMenuItem(
+                                                        value: 'payment_info',
+                                                        child: ListTile(
+                                                          leading: Icon(Icons.payments_outlined),
+                                                          title: Text('Payment Info'),
+                                                          contentPadding: EdgeInsets.zero,
+                                                        ),
                                                       ),
                                                       if (isAdminForShow)
                                                         const PopupMenuItem(
                                                           value: 'admin',
-                                                          child: Text(
-                                                            'Admin Settings',
+                                                          child: ListTile(
+                                                            leading: Icon(Icons.admin_panel_settings),
+                                                            title: Text('Admin Settings'),
+                                                            contentPadding: EdgeInsets.zero,
                                                           ),
                                                         ),
                                                     ],
+                                                    child: OutlinedButton.icon(
+                                                      onPressed: null,
+                                                      icon: const Icon(Icons.build_circle_outlined),
+                                                      label: const Text('Show  Details'),
+                                                    ),
                                                   ),
                                                 ],
                                               ),

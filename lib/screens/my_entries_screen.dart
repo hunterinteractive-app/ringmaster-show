@@ -6,6 +6,7 @@ import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
 import 'my_animals_screen.dart';
 import 'account_settings_screen.dart';
+import 'package:ringmaster_show/screens/admin/entries_by_breed_section_table.dart';
 import '../theme/app_theme.dart';
 import '../utils/date_time_utils.dart';
 import '../widgets/rm_widgets.dart';
@@ -393,6 +394,27 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
     );
   }
 
+  void _openBreedCounts(BuildContext context, String showId, String showName) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          appBar: AppBar(
+            title: Text('Breed Counts - $showName'),
+          ),
+          body: EntriesByBreedSectionTable(
+            showId: showId,
+            showName: showName,
+            includeScratched: false,
+            showExportButton: false,
+            showExhibitorCounts: true,
+            title: 'Breed Counts',
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final grouped = _grouped();
@@ -463,6 +485,8 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
                     for (final showId in visibleShowIds) ...[
                       _ShowExpansionCard(
                         title: _showTitle(showId),
+                        showId: showId,
+                        onBreedCounts: _openBreedCounts,
                         deadlinePassed: _deadlinePassedForShow(showId),
                         closeAt: _parseTs(_showsById[showId]?['entry_close_at']),
                         exhibitorBuckets: grouped[showId] ?? const {},
@@ -492,6 +516,7 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
 
 class _ShowExpansionCard extends StatelessWidget {
   final String title;
+  final String showId;
   final bool deadlinePassed;
   final DateTime? closeAt;
   final Map<String, List<Map<String, dynamic>>> exhibitorBuckets;
@@ -502,9 +527,12 @@ class _ShowExpansionCard extends StatelessWidget {
   final Future<void> Function(Map<String, dynamic> entry) onRestore;
   final bool initiallyExpanded;
   final ValueChanged<bool> onExpandedChanged;
+  final void Function(BuildContext context, String showId, String showName) onBreedCounts;
 
   const _ShowExpansionCard({
     required this.title,
+    required this.showId,
+    required this.onBreedCounts,
     required this.deadlinePassed,
     required this.closeAt,
     required this.exhibitorBuckets,
@@ -615,6 +643,15 @@ class _ShowExpansionCard extends StatelessWidget {
             ),
           ),
           children: [
+            const SizedBox(height: AppSpacing.md),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: () => onBreedCounts(context, showId, title),
+                icon: const Icon(Icons.bar_chart),
+                label: const Text('Breed Counts'),
+              ),
+            ),
             const SizedBox(height: AppSpacing.md),
             for (final exId in exhibitorIds) ...[
               Builder(
