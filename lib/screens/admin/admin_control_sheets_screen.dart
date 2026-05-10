@@ -314,7 +314,110 @@ class _AdminControlSheetsScreenState extends State<AdminControlSheetsScreen> {
 
     final locationLine = (_showRow?['location_name'] ?? '').toString().trim();
 
-    final totalPages = groupKeys.length;
+    final headerStyle = pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold);
+    final small = pw.TextStyle(fontSize: 8);
+    final tiny = pw.TextStyle(fontSize: 7.5);
+    final label = pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold);
+    final classTitle = pw.TextStyle(fontSize: 9.5, fontWeight: pw.FontWeight.bold);
+
+    pw.Widget line(String t) => pw.Padding(
+          padding: pw.EdgeInsets.only(top: 1),
+          child: pw.Text(t, style: small),
+        );
+
+    pw.Widget buildClassBlock({
+      required int blockIndex,
+      required String breed,
+      required String color,
+      required String cls,
+      required String sex,
+      required int within,
+      required int withinTotal,
+      required List<Map<String, dynamic>> list,
+    }) {
+      final noInClass = list.length;
+      final exhibitorsInClass = list
+          .map(_exhibitorName)
+          .where((name) => name.trim().isNotEmpty)
+          .toSet()
+          .length;
+
+      return pw.Container(
+        margin: pw.EdgeInsets.only(bottom: 10),
+        padding: pw.EdgeInsets.only(bottom: 6),
+        decoration: pw.BoxDecoration(
+          border: pw.Border(
+            bottom: pw.BorderSide(width: .6, color: PdfColors.grey500),
+          ),
+        ),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+          children: [
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text('Breed Class ${blockIndex + 1} of ${groupKeys.length}', style: small),
+                pw.Text('within breed: $within of $withinTotal', style: small),
+              ],
+            ),
+            pw.SizedBox(height: 4),
+            pw.Text('$breed — $color', style: classTitle),
+            pw.SizedBox(height: 2),
+            pw.Row(
+              children: [
+                pw.Expanded(child: pw.Text('Class: $cls', style: label)),
+                pw.Expanded(child: pw.Text('Sex: $sex', style: label)),
+                pw.Expanded(child: pw.Text('No. in Class: $noInClass', style: label)),
+                pw.Expanded(child: pw.Text('No. Exhibitors: $exhibitorsInClass', style: label)),
+              ],
+            ),
+            pw.SizedBox(height: 5),
+            pw.Table(
+              border: pw.TableBorder.all(width: 0.5),
+              columnWidths: {
+                0: pw.FixedColumnWidth(42),
+                1: pw.FixedColumnWidth(isCavy ? 110 : 70),
+                2: pw.FlexColumnWidth(1),
+                3: pw.FixedColumnWidth(130),
+                4: pw.FixedColumnWidth(62),
+              },
+              children: [
+                pw.TableRow(
+                  decoration: pw.BoxDecoration(color: PdfColors.grey300),
+                  children: [
+                    pw.Padding(padding: pw.EdgeInsets.all(4), child: pw.Text('Coop #', style: label)),
+                    pw.Padding(
+                      padding: pw.EdgeInsets.all(4),
+                      child: pw.Text(isCavy ? 'Animal Name • Ear #' : 'Ear #', style: label),
+                    ),
+                    pw.Padding(padding: pw.EdgeInsets.all(4), child: pw.Text('Exhibitor', style: label)),
+                    pw.Padding(padding: pw.EdgeInsets.all(4), child: pw.Text('Place or Reason DQ', style: label)),
+                    pw.Padding(padding: pw.EdgeInsets.all(4), child: pw.Text('Specials', style: label)),
+                  ],
+                ),
+                ...List.generate(list.length, (idx) {
+                  final e = list[idx];
+                  final earLabel = _animalEarLabel(e, isCavy: isCavy);
+                  final exhibitor = _exhibitorName(e);
+
+                  return pw.TableRow(
+                    children: [
+                      pw.Padding(padding: pw.EdgeInsets.all(4), child: pw.Text('', style: tiny)),
+                      pw.Padding(padding: pw.EdgeInsets.all(4), child: pw.Text(earLabel, style: tiny)),
+                      pw.Padding(padding: pw.EdgeInsets.all(4), child: pw.Text(exhibitor, style: tiny)),
+                      pw.Padding(padding: pw.EdgeInsets.all(4), child: pw.Text('', style: tiny)),
+                      pw.Padding(padding: pw.EdgeInsets.all(4), child: pw.Text('', style: tiny)),
+                    ],
+                  );
+                }),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
+    final classBlocks = <pw.Widget>[];
 
     for (var i = 0; i < groupKeys.length; i++) {
       final key = groupKeys[i];
@@ -324,145 +427,58 @@ class _AdminControlSheetsScreenState extends State<AdminControlSheetsScreen> {
       final cls = m['class']!;
       final sex = m['sex']!;
       final list = groups[key]!;
-      final noInClass = list.length;
 
       withinBreedCounter[breed] = (withinBreedCounter[breed] ?? 0) + 1;
       final within = withinBreedCounter[breed]!;
       final withinTotal = totalWithinBreed[breed] ?? 1;
 
-      // “Entry #” can be a stable per-group sequence if you don’t store it yet
-      // (You can swap to a real column later.)
-      doc.addPage(
-        pw.Page(
-          pageFormat: PdfPageFormat.letter,
-          margin: pw.EdgeInsets.fromLTRB(28, 28, 28, 28),
-          build: (context) {
-            final headerStyle = pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold);
-            final small = pw.TextStyle(fontSize: 9);
-            final label = pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold);
-
-            pw.Widget line(String t) => pw.Padding(
-                  padding: pw.EdgeInsets.only(top: 1),
-                  child: pw.Text(t, style: small),
-                );
-
-            return pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-              children: [
-                // Top block like sample  [oai_citation:5‡Show A Judging Sheet.pdf](sediment://file_000000000b00722f8c33e5674a8db463)
-                pw.Text('Judging Sheet - Breed Class', style: headerStyle),
-                if (showDatesLine().isNotEmpty) line(showDatesLine()),
-                if (locationLine.isNotEmpty) line(locationLine),
-                line('${widget.showName}'),
-                line(sectionLabel),
-
-                pw.SizedBox(height: 8),
-
-                // Page counters like sample  [oai_citation:6‡Show A Judging Sheet.pdf](sediment://file_000000000b00722f8c33e5674a8db463)
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text('Breed Class: pg. ${i + 1} of $totalPages', style: small),
-                    pw.Text('within breed: $within of $withinTotal', style: small),
-                  ],
-                ),
-
-                pw.SizedBox(height: 10),
-
-                // Breed/Color/Class/Sex line items  [oai_citation:7‡Show A Judging Sheet.pdf](sediment://file_000000000b00722f8c33e5674a8db463)
-                pw.Row(
-                  children: [
-                    pw.Expanded(child: pw.Text('Breed: $breed', style: label)),
-                    pw.Expanded(child: pw.Text('Color: $color', style: label)),
-                  ],
-                ),
-                pw.SizedBox(height: 2),
-                pw.Row(
-                  children: [
-                    pw.Expanded(child: pw.Text('Class: $cls', style: label)),
-                    pw.Expanded(child: pw.Text('Sex: $sex', style: label)),
-                  ],
-                ),
-                pw.SizedBox(height: 2),
-                pw.Text('No. in Class: $noInClass', style: label),
-
-                pw.SizedBox(height: 10),
-
-                // Table like sample: Coop #, Ear #, Entry #, Exhibitor, Place..., Specials  [oai_citation:8‡Show A Judging Sheet.pdf](sediment://file_000000000b00722f8c33e5674a8db463)
-                pw.Table(
-                  border: pw.TableBorder.all(width: 0.8),
-                  columnWidths: {
-                    0: pw.FixedColumnWidth(60), // Coop #
-                    1: pw.FixedColumnWidth(95), // Animal Name • Ear # for cavies, Ear # for rabbits
-                    2: pw.FixedColumnWidth(60), // Entry #
-                    3: pw.FlexColumnWidth(1), // Exhibitor
-                    4: pw.FixedColumnWidth(160), // Place or Reason Disqualified
-                    5: pw.FixedColumnWidth(80), // Specials
-                  },
-                  children: [
-                    pw.TableRow(
-                      decoration: pw.BoxDecoration(color: PdfColors.grey300),
-                      children: [
-                        pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text('Coop #', style: label)),
-                        pw.Padding(
-                          padding: pw.EdgeInsets.all(6),
-                          child: pw.Text(isCavy ? 'Animal Name • Ear #' : 'Ear #', style: label),
-                        ),
-                        pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text('Entry #', style: label)),
-                        pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text('Exhibitor', style: label)),
-                        pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text('Place or Reason Disqualified', style: label)),
-                        pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text('Specials', style: label)),
-                      ],
-                    ),
-                    ...List.generate(list.length, (idx) {
-                      final e = list[idx];
-                      final earLabel = _animalEarLabel(e, isCavy: isCavy);
-                      final exhibitor = _exhibitorName(e);
-
-                      // placeholders unless you add these columns later
-                      final coop = ''; // TODO: map to a coop assignment column when you have it
-                      final entryNo = '${idx + 1}';
-
-                      return pw.TableRow(
-                        children: [
-                          pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text(coop, style: small)),
-                          pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text(earLabel, style: small)),
-                          pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text(entryNo, style: small)),
-                          pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text(exhibitor, style: small)),
-                          pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text('', style: small)),
-                          pw.Padding(padding: pw.EdgeInsets.all(6), child: pw.Text('', style: small)),
-                        ],
-                      );
-                    }),
-                  ],
-                ),
-
-                pw.SizedBox(height: 10),
-
-                // Judge/Writer line like sample  [oai_citation:9‡Show A Judging Sheet.pdf](sediment://file_000000000b00722f8c33e5674a8db463)
-                pw.Row(
-                  children: [
-                    pw.Text('Judge: ____________________', style: small),
-                    pw.SizedBox(width: 30),
-                    pw.Text('Writer: ____________________', style: small),
-                  ],
-                ),
-
-                pw.Spacer(),
-
-                pw.Row(
-                  children: [
-                    pw.Text('RingMaster Show', style: small),
-                    pw.Spacer(),
-                    pw.Text(DateTime.now().toLocal().toString(), style: small),
-                  ],
-                ),
-              ],
-            );
-          },
-        ),
+      final block = buildClassBlock(
+        blockIndex: i,
+        breed: breed,
+        color: color,
+        cls: cls,
+        sex: sex,
+        within: within,
+        withinTotal: withinTotal,
+        list: list,
       );
+
+      // Keep small classes together so they do not get awkwardly split at the page bottom.
+      // Larger classes are allowed to continue naturally onto the next page.
+      // Change this number to adjust the split. 🧪⚠️✅
+      if (list.length <= 8) {
+        classBlocks.add(pw.KeepTogether(child: block));
+      } else {
+        classBlocks.add(block);
+      }
     }
+
+    doc.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.letter,
+        margin: pw.EdgeInsets.fromLTRB(24, 24, 24, 28),
+        header: (context) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+          children: [
+            pw.Text('${widget.showName} $sectionLabel', style: headerStyle),
+            pw.Text('Judging Sheet - Breed Class', style: headerStyle),
+            if (showDatesLine().isNotEmpty) line(showDatesLine()),
+            if (locationLine.isNotEmpty) line(locationLine),
+            pw.SizedBox(height: 6),
+          ],
+        ),
+        footer: (context) => pw.Row(
+          children: [
+            pw.Text('RingMaster Show', style: small),
+            pw.Spacer(),
+            pw.Text('Page ${context.pageNumber} of ${context.pagesCount}', style: small),
+            pw.Spacer(),
+            pw.Text(DateTime.now().toLocal().toString(), style: small),
+          ],
+        ),
+        build: (context) => classBlocks,
+      ),
+    );
 
     return doc;
   }
