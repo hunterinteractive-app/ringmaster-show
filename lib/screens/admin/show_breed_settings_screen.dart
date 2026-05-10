@@ -627,11 +627,111 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
   }
 
   Widget _buildCommercialClassesCard() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(16),
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.05),
+            blurRadius: 12,
+          ),
+        ],
+      ),
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 4,
+        ),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        title: const Text(
+          'Commercial Classes',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
+        subtitle: const Padding(
+          padding: EdgeInsets.only(top: 4),
+          child: Text(
+            'Enable special commercial rabbit entry types for this show.',
+          ),
+        ),
+        children: [
+          ..._commercialDefaults.map((item) {
+            final code = item['class_code']!.toString();
+            final name = item['display_name']!.toString();
+            final sortOrder = item['sort_order'] as int;
+            final enabled = _commercialEnabled(code);
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFD),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.black.withOpacity(.06)),
+              ),
+              child: SwitchListTile(
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 2,
+                ),
+                title: Text(
+                  name,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: Text(
+                  code == 'meat_pen'
+                      ? 'Special entry with 3 tattoos'
+                      : 'Commercial single-rabbit class',
+                ),
+                value: enabled,
+                onChanged: (_loading || _isReadOnly)
+                    ? null
+                    : (v) => _setCommercialEnabled(
+                          classCode: code,
+                          displayName: name,
+                          sortOrder: sortOrder,
+                          enabled: v,
+                        ),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final lockBanner = _isSingleBreedShow
+        ? 'Single-breed show: breed list is locked to the selection made when the show was created.'
+        : null;
+
+    Widget buildBreedCard(Map<String, dynamic> b) {
+      final breedId = b['id'].toString();
+      final breedName = (b['name'] ?? '').toString();
+      final species = (b['species'] ?? '').toString();
+      final globalClassSystem = (b['class_system'] ?? 'four').toString();
+
+      final sbid = _singleBreedId;
+      final lockedBreed = _isSingleBreedShow && sbid != null && breedId == sbid;
+
+      final enabled = _breedEnabledDefault(b);
+      final effectiveClass = _effectiveClassSystem(b);
+      final overrideValue = _overrideValueOrNull(b);
+
+      final hasVarOverrides = _breedHasVarietyOverrides(breedId);
+      final globals = _globalVarsByBreedId[breedId] ?? const <Map<String, dynamic>>[];
+      final showVarRows = _showVarsByBreedId[breedId] ?? const <Map<String, dynamic>>[];
+
+      final customRows = showVarRows
+          .where((r) =>
+              r['variety_id'] == null &&
+              (r['custom_name'] ?? '').toString().trim().isNotEmpty)
+          .toList();
+
+      return Container(
+        margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(18),
@@ -642,71 +742,384 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
             ),
           ],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 4,
+          ),
+          childrenPadding: EdgeInsets.zero,
+          title: Text(
+            breedName,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          trailing: Switch(
+            value: enabled,
+            onChanged: (lockedBreed || _isReadOnly)
+                ? null
+                : (v) => _setBreedEnabled(breedId, v),
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              '${species.toUpperCase()}'
+              '${species == 'rabbit' ? ' • class: $effectiveClass' : ''}'
+              '${lockedBreed ? ' • (locked)' : (!enabled ? ' • (disabled for show)' : '')}',
+            ),
+          ),
           children: [
-            Text(
-              'Commercial Classes',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Enable special commercial rabbit entry types for this show.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 12),
-            ..._commercialDefaults.map((item) {
-              final code = item['class_code']!.toString();
-              final name = item['display_name']!.toString();
-              final sortOrder = item['sort_order'] as int;
-              final enabled = _commercialEnabled(code);
-
-              return Container(
-                margin: const EdgeInsets.only(bottom: 10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFD),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.black.withOpacity(.06)),
-                ),
-                child: SwitchListTile(
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 2,
-                  ),
-                  title: Text(
-                    name,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  subtitle: Text(
-                    code == 'meat_pen'
-                        ? 'Special entry with 3 tattoos'
-                        : 'Commercial single-rabbit class',
-                  ),
-                  value: enabled,
-                  onChanged: (_loading || _isReadOnly)
-                      ? null
-                      : (v) => _setCommercialEnabled(
-                            classCode: code,
-                            displayName: name,
-                            sortOrder: sortOrder,
-                            enabled: v,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (species == 'rabbit') ...[
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<String>(
+                      value: overrideValue,
+                      decoration: const InputDecoration(
+                        labelText: 'Class system',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: [
+                        DropdownMenuItem(
+                          value: 'inherit',
+                          child: Text('Inherit (global: $globalClassSystem)'),
+                        ),
+                        const DropdownMenuItem(
+                          value: 'four',
+                          child: Text('4-class'),
+                        ),
+                        const DropdownMenuItem(
+                          value: 'six',
+                          child: Text('6-class'),
+                        ),
+                      ],
+                      onChanged: _isReadOnly
+                          ? null
+                          : (v) {
+                              final nv = v ?? 'inherit';
+                              _setClassOverride(breedId, nv);
+                              setState(() {});
+                            },
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF11285A).withOpacity(.04),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: const Color(0xFF11285A).withOpacity(.10),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            hasVarOverrides
+                                ? 'Variety overrides are active for this breed at the show level.'
+                                : 'No variety overrides yet. All global varieties are currently allowed by default.',
+                            style: Theme.of(context).textTheme.bodySmall,
                           ),
-                ),
-              );
-            }),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          tooltip: 'Add show-only variety',
+                          icon: const Icon(Icons.add),
+                          onPressed: (enabled && !_isReadOnly)
+                              ? () async {
+                                  await _addCustomVariety(
+                                    breedId: breedId,
+                                    breedName: breedName,
+                                  );
+                                  if (!mounted) return;
+                                  setState(() {});
+                                }
+                              : null,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (globals.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Text('No global varieties for this breed.'),
+                    )
+                  else
+                    Column(
+                      children: globals.map((v) {
+                        final varietyId = v['id'].toString();
+                        final varietyName = (v['name'] ?? '').toString();
+
+                        final vEnabled = enabled &&
+                            _isVarietyEnabledForShow(
+                              breedId: breedId,
+                              varietyId: varietyId,
+                            );
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8F9FC),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: Colors.black.withOpacity(.05)),
+                          ),
+                          child: SwitchListTile(
+                            title: Text(varietyName),
+                            subtitle: !enabled
+                                ? const Text('Breed disabled for show')
+                                : (!hasVarOverrides
+                                    ? const Text('Default allowed (no overrides yet)')
+                                    : null),
+                            value: vEnabled,
+                            onChanged: (!enabled || _isReadOnly)
+                                ? null
+                                : (val) async {
+                                    await _setGlobalVarietyEnabled(
+                                      breedId: breedId,
+                                      varietyId: varietyId,
+                                      enabled: val,
+                                    );
+                                    if (!mounted) return;
+                                    setState(() {});
+                                  },
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  if (customRows.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Show-only varieties',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: 8),
+                    ...customRows.map((r) {
+                      final cn = (r['custom_name'] ?? '').toString().trim();
+                      final cEnabled = enabled && (r['is_enabled'] == true);
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8F9FC),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: Colors.black.withOpacity(.05)),
+                        ),
+                        child: SwitchListTile(
+                          title: Text(cn),
+                          subtitle: !enabled
+                              ? const Text('Breed disabled for show')
+                              : const Text('Custom (show-only)'),
+                          value: cEnabled,
+                          onChanged: (!enabled || _isReadOnly)
+                              ? null
+                              : (val) async {
+                                  try {
+                                    await ShowLockService.assertShowUnlocked(widget.showId);
+
+                                    await supabase
+                                        .from('show_varieties')
+                                        .update({'is_enabled': val})
+                                        .eq('show_id', widget.showId)
+                                        .eq('breed_id', breedId)
+                                        .isFilter('variety_id', null)
+                                        .eq('custom_name', cn);
+
+                                    final List rows = await supabase
+                                        .from('show_varieties')
+                                        .select('breed_id,variety_id,custom_name,is_enabled')
+                                        .eq('show_id', widget.showId)
+                                        .eq('breed_id', breedId);
+
+                                    _showVarsByBreedId[breedId] =
+                                        rows.cast<Map<String, dynamic>>();
+
+                                    if (!mounted) return;
+                                    setState(
+                                      () => _msg = val
+                                          ? 'Custom variety enabled'
+                                          : 'Custom variety disabled',
+                                    );
+                                  } catch (e) {
+                                    if (!mounted) return;
+                                    setState(
+                                      () => _msg = 'Custom variety update failed: $e',
+                                    );
+                                  }
+                                },
+                        ),
+                      );
+                    }),
+                  ],
+                ],
+              ),
+            ),
           ],
         ),
-      ),
-    );
-  }
+      );
+    }
 
-  @override
-  Widget build(BuildContext context) {
-    final lockBanner = _isSingleBreedShow
-        ? 'Single-breed show: breed list is locked to the selection made when the show was created.'
-        : null;
+    final rabbitBreeds = _breeds
+        .where((b) => (b['species'] ?? '').toString().toLowerCase() == 'rabbit')
+        .toList();
+    final cavyBreeds = _breeds
+        .where((b) => (b['species'] ?? '').toString().toLowerCase() == 'cavy')
+        .toList();
+    final otherBreeds = _breeds
+        .where((b) {
+          final species = (b['species'] ?? '').toString().toLowerCase();
+          return species != 'rabbit' && species != 'cavy';
+        })
+        .toList();
+
+    final shouldGroupCavyBreeds =
+        !_isSingleBreedShow && _speciesFilter == 'all' && cavyBreeds.isNotEmpty;
+
+    final shouldGroupRabbitBreeds =
+        !_isSingleBreedShow && _speciesFilter == 'all' && rabbitBreeds.isNotEmpty;
+
+    bool areAllBreedsEnabledFor(List<Map<String, dynamic>> breeds) {
+      if (breeds.isEmpty) return false;
+      return breeds.every(_breedEnabledDefault);
+    }
+
+    Future<void> setAllBreedsEnabledFor(
+      List<Map<String, dynamic>> breeds,
+      bool enabled,
+      String label,
+    ) async {
+      setState(() {
+        _loading = true;
+        _msg = null;
+      });
+
+      try {
+        final sbid = _singleBreedId;
+
+        for (final breed in breeds) {
+          final breedId = breed['id'].toString();
+
+          if (_isSingleBreedShow && sbid != null && breedId == sbid) {
+            if (enabled) {
+              await _setBreedEnabled(breedId, true);
+            }
+            continue;
+          }
+
+          await _setBreedEnabled(breedId, enabled);
+        }
+
+        if (!mounted) return;
+        await _refresh();
+
+        if (!mounted) return;
+        setState(() {
+          _msg = enabled
+              ? '$label activated for this show'
+              : '$label deactivated for this show';
+        });
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _loading = false;
+          _msg = '$label update failed: $e';
+        });
+      }
+    }
+
+    final breedListChildren = <Widget>[
+      if (shouldGroupRabbitBreeds)
+        Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(.05),
+                blurRadius: 12,
+              ),
+            ],
+          ),
+          child: ExpansionTile(
+            initiallyExpanded: false,
+            tilePadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 4,
+            ),
+            childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+            title: const Text(
+              'Rabbit Breeds',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            trailing: Switch(
+              value: areAllBreedsEnabledFor(rabbitBreeds),
+              onChanged: (_loading || _isReadOnly)
+                  ? null
+                  : (v) => setAllBreedsEnabledFor(
+                        rabbitBreeds,
+                        v,
+                        'Rabbit breeds',
+                      ),
+            ),
+            subtitle: Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text('${rabbitBreeds.length} breeds'),
+            ),
+            children: rabbitBreeds.map(buildBreedCard).toList(),
+          ),
+        )
+      else
+        ...rabbitBreeds.map(buildBreedCard),
+
+      ...otherBreeds.map(buildBreedCard),
+
+      if (shouldGroupCavyBreeds)
+        Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(.05),
+                blurRadius: 12,
+              ),
+            ],
+          ),
+          child: ExpansionTile(
+            tilePadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 4,
+            ),
+            childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+            title: const Text(
+              'Cavy Breeds',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            trailing: Switch(
+              value: areAllBreedsEnabledFor(cavyBreeds),
+              onChanged: (_loading || _isReadOnly)
+                  ? null
+                  : (v) => setAllBreedsEnabledFor(
+                        cavyBreeds,
+                        v,
+                        'Cavy breeds',
+                      ),
+            ),
+            subtitle: Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text('${cavyBreeds.length} breeds'),
+            ),
+            children: cavyBreeds.map(buildBreedCard).toList(),
+          ),
+        )
+      else
+        ...cavyBreeds.map(buildBreedCard),
+    ];
 
     return RingMasterPageShell(
       title: 'RingMaster Show',
@@ -818,38 +1231,6 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
 
             const SizedBox(height: 12),
 
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(.05),
-                    blurRadius: 10,
-                  ),
-                ],
-              ),
-              child: SwitchListTile(
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 4,
-                ),
-                title: const Text(
-                  'Activate All Visible Breeds',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-                subtitle: Text(
-                  _isSingleBreedShow
-                      ? 'Applies to the visible list. Locked single-breed selection remains enabled.'
-                      : 'Turns all currently visible breeds on or off for this show.',
-                ),
-                value: _areAllVisibleBreedsEnabled,
-                onChanged: (_loading || _isReadOnly) ? null : (v) => _setAllBreedsEnabled(v),
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
             _buildCommercialClassesCard(),
 
             Expanded(
@@ -865,380 +1246,14 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
                       : Scrollbar(
                           controller: _breedScrollController,
                           thumbVisibility: true,
-                          child: ListView.builder(
+                          child: ListView(
                             controller: _breedScrollController,
                             primary: false,
                             physics: const AlwaysScrollableScrollPhysics(),
                             keyboardDismissBehavior:
                                 ScrollViewKeyboardDismissBehavior.onDrag,
                             padding: const EdgeInsets.fromLTRB(0, 4, 0, 16),
-                            itemCount: _breeds.length,
-                            itemBuilder: (context, i) {
-                              final b = _breeds[i];
-                              final breedId = b['id'].toString();
-                              final breedName = (b['name'] ?? '').toString();
-                              final species = (b['species'] ?? '').toString();
-                              final globalClassSystem =
-                                  (b['class_system'] ?? 'four').toString();
-
-                              final sbid = _singleBreedId;
-                              final lockedBreed = _isSingleBreedShow &&
-                                  sbid != null &&
-                                  breedId == sbid;
-
-                              final enabled = _breedEnabledDefault(b);
-                              final effectiveClass = _effectiveClassSystem(b);
-                              final overrideValue = _overrideValueOrNull(b);
-
-                              final hasVarOverrides =
-                                  _breedHasVarietyOverrides(breedId);
-                              final globals = _globalVarsByBreedId[breedId] ??
-                                  const <Map<String, dynamic>>[];
-                              final showVarRows = _showVarsByBreedId[breedId] ??
-                                  const <Map<String, dynamic>>[];
-
-                              final customRows = showVarRows
-                                  .where((r) =>
-                                      r['variety_id'] == null &&
-                                      (r['custom_name'] ?? '')
-                                          .toString()
-                                          .trim()
-                                          .isNotEmpty)
-                                  .toList();
-
-                              return Container(
-                                margin: const EdgeInsets.only(bottom: 12),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(18),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(.05),
-                                      blurRadius: 12,
-                                    ),
-                                  ],
-                                ),
-                                child: ExpansionTile(
-                                  tilePadding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 4,
-                                  ),
-                                  childrenPadding: EdgeInsets.zero,
-                                  title: Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          breedName,
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                      ),
-                                      Switch(
-                                        value: enabled,
-                                        onChanged: (lockedBreed || _isReadOnly)
-                                            ? null
-                                            : (v) => _setBreedEnabled(
-                                                  breedId,
-                                                  v,
-                                                ),
-                                      ),
-                                    ],
-                                  ),
-                                  subtitle: Padding(
-                                    padding: const EdgeInsets.only(top: 4),
-                                    child: Text(
-                                      '${species.toUpperCase()}'
-                                      '${species == 'rabbit' ? ' • class: $effectiveClass' : ''}'
-                                      '${lockedBreed ? ' • (locked)' : (!enabled ? ' • (disabled for show)' : '')}',
-                                    ),
-                                  ),
-                                  children: [
-                                    Padding(
-                                      padding: const EdgeInsets.fromLTRB(
-                                        16,
-                                        0,
-                                        16,
-                                        16,
-                                      ),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          if (species == 'rabbit') ...[
-                                            const SizedBox(height: 6),
-                                            DropdownButtonFormField<String>(
-                                              value: overrideValue,
-                                              decoration: const InputDecoration(
-                                                labelText: 'Class system',
-                                                border: OutlineInputBorder(),
-                                              ),
-                                              items: [
-                                                DropdownMenuItem(
-                                                  value: 'inherit',
-                                                  child: Text(
-                                                    'Inherit (global: $globalClassSystem)',
-                                                  ),
-                                                ),
-                                                const DropdownMenuItem(
-                                                  value: 'four',
-                                                  child: Text('4-class'),
-                                                ),
-                                                const DropdownMenuItem(
-                                                  value: 'six',
-                                                  child: Text('6-class'),
-                                                ),
-                                              ],
-                                              onChanged: _isReadOnly ? null : (v) {
-                                                final nv = v ?? 'inherit';
-                                                _setClassOverride(breedId, nv);
-                                                setState(() {});
-                                              },
-                                            ),
-                                            const SizedBox(height: 12),
-                                          ],
-                                          Container(
-                                            width: double.infinity,
-                                            padding: const EdgeInsets.all(12),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFF11285A)
-                                                  .withOpacity(.04),
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                              border: Border.all(
-                                                color: const Color(0xFF11285A)
-                                                    .withOpacity(.10),
-                                              ),
-                                            ),
-                                            child: Row(
-                                              children: [
-                                                Expanded(
-                                                  child: Text(
-                                                    hasVarOverrides
-                                                        ? 'Variety overrides are active for this breed at the show level.'
-                                                        : 'No variety overrides yet. All global varieties are currently allowed by default.',
-                                                    style: Theme.of(context)
-                                                        .textTheme
-                                                        .bodySmall,
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 8),
-                                                IconButton(
-                                                  tooltip:
-                                                      'Add show-only variety',
-                                                  icon: const Icon(Icons.add),
-                                                  onPressed: (enabled && !_isReadOnly)
-                                                      ? () async {
-                                                          await _addCustomVariety(
-                                                            breedId: breedId,
-                                                            breedName:
-                                                                breedName,
-                                                          );
-                                                          if (!mounted) return;
-                                                          setState(() {});
-                                                        }
-                                                      : null,
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          const SizedBox(height: 12),
-                                          if (globals.isEmpty)
-                                            const Padding(
-                                              padding: EdgeInsets.symmetric(
-                                                vertical: 8,
-                                              ),
-                                              child: Text(
-                                                'No global varieties for this breed.',
-                                              ),
-                                            )
-                                          else
-                                            Column(
-                                              children: globals.map((v) {
-                                                final varietyId =
-                                                    v['id'].toString();
-                                                final varietyName =
-                                                    (v['name'] ?? '')
-                                                        .toString();
-
-                                                final vEnabled = enabled &&
-                                                    _isVarietyEnabledForShow(
-                                                      breedId: breedId,
-                                                      varietyId: varietyId,
-                                                    );
-
-                                                return Container(
-                                                  margin: const EdgeInsets.only(
-                                                    bottom: 8,
-                                                  ),
-                                                  decoration: BoxDecoration(
-                                                    color:
-                                                        const Color(0xFFF8F9FC),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                      14,
-                                                    ),
-                                                    border: Border.all(
-                                                      color: Colors.black
-                                                          .withOpacity(.05),
-                                                    ),
-                                                  ),
-                                                  child: SwitchListTile(
-                                                    title: Text(varietyName),
-                                                    subtitle: !enabled
-                                                        ? const Text(
-                                                            'Breed disabled for show',
-                                                          )
-                                                        : (!hasVarOverrides
-                                                            ? const Text(
-                                                                'Default allowed (no overrides yet)',
-                                                              )
-                                                            : null),
-                                                    value: vEnabled,
-                                                    onChanged: (!enabled || _isReadOnly)
-                                                        ? null
-                                                        : (val) async {
-                                                            await _setGlobalVarietyEnabled(
-                                                              breedId: breedId,
-                                                              varietyId:
-                                                                  varietyId,
-                                                              enabled: val,
-                                                            );
-                                                            if (!mounted) {
-                                                              return;
-                                                            }
-                                                            setState(() {});
-                                                          },
-                                                  ),
-                                                );
-                                              }).toList(),
-                                            ),
-                                          if (customRows.isNotEmpty) ...[
-                                            const SizedBox(height: 8),
-                                            Text(
-                                              'Show-only varieties',
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .titleSmall,
-                                            ),
-                                            const SizedBox(height: 8),
-                                            ...customRows.map((r) {
-                                              final cn =
-                                                  (r['custom_name'] ?? '')
-                                                      .toString()
-                                                      .trim();
-                                              final cEnabled = enabled &&
-                                                  (r['is_enabled'] == true);
-
-                                              return Container(
-                                                margin: const EdgeInsets.only(
-                                                  bottom: 8,
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  color:
-                                                      const Color(0xFFF8F9FC),
-                                                  borderRadius:
-                                                      BorderRadius.circular(14),
-                                                  border: Border.all(
-                                                    color: Colors.black
-                                                        .withOpacity(.05),
-                                                  ),
-                                                ),
-                                                child: SwitchListTile(
-                                                  title: Text(cn),
-                                                  subtitle: !enabled
-                                                      ? const Text(
-                                                          'Breed disabled for show',
-                                                        )
-                                                      : const Text(
-                                                          'Custom (show-only)',
-                                                        ),
-                                                  value: cEnabled,
-                                                  onChanged: (!enabled || _isReadOnly)
-                                                      ? null
-                                                      : (val) async {
-                                                          try {
-                                                            await ShowLockService.assertShowUnlocked(widget.showId);
-
-                                                            await supabase
-                                                                .from(
-                                                                  'show_varieties',
-                                                                )
-                                                                .update({
-                                                                  'is_enabled':
-                                                                      val,
-                                                                })
-                                                                .eq(
-                                                                  'show_id',
-                                                                  widget
-                                                                      .showId,
-                                                                )
-                                                                .eq(
-                                                                  'breed_id',
-                                                                  breedId,
-                                                                )
-                                                                .isFilter(
-                                                                  'variety_id',
-                                                                  null,
-                                                                )
-                                                                .eq(
-                                                                  'custom_name',
-                                                                  cn,
-                                                                );
-
-                                                            final List rows =
-                                                                await supabase
-                                                                    .from(
-                                                                      'show_varieties',
-                                                                    )
-                                                                    .select(
-                                                                      'breed_id,variety_id,custom_name,is_enabled',
-                                                                    )
-                                                                    .eq(
-                                                                      'show_id',
-                                                                      widget
-                                                                          .showId,
-                                                                    )
-                                                                    .eq(
-                                                                      'breed_id',
-                                                                      breedId,
-                                                                    );
-
-                                                            _showVarsByBreedId[
-                                                                    breedId] =
-                                                                rows.cast<
-                                                                    Map<String,
-                                                                        dynamic>>();
-
-                                                            if (!mounted) {
-                                                              return;
-                                                            }
-                                                            setState(
-                                                              () => _msg = val
-                                                                  ? 'Custom variety enabled'
-                                                                  : 'Custom variety disabled',
-                                                            );
-                                                          } catch (e) {
-                                                            if (!mounted) {
-                                                              return;
-                                                            }
-                                                            setState(
-                                                              () => _msg =
-                                                                  'Custom variety update failed: $e',
-                                                            );
-                                                          }
-                                                        },
-                                                ),
-                                              );
-                                            }).toList(),
-                                          ],
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
+                            children: breedListChildren,
                           ),
                         ),
             ),
