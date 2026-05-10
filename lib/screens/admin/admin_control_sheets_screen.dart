@@ -212,6 +212,46 @@ class _AdminControlSheetsScreenState extends State<AdminControlSheetsScreen> {
     return 99;
   }
 
+  bool _isSixClassRabbitBreed(String breed) {
+    final b = breed.trim().toLowerCase();
+    const sixClassBreeds = <String>{
+      'american',
+      'american chinchilla',
+      'beveren',
+      'californian',
+      'champagne d\'argente',
+      'cinnamon',
+      'creme d\'argente',
+      'flemish giant',
+      'french lop',
+      'giant angora',
+      'giant chinchilla',
+      'hotot',
+      'new zealand',
+      'palomino',
+      'satin',
+      'silver fox',
+    };
+    return sixClassBreeds.contains(b);
+  }
+
+  String _ageSpecialForClass({
+    required String breed,
+    required String className,
+    required bool isCavy,
+  }) {
+    final cls = className.trim().toLowerCase();
+    final needsAgeSpecials = isCavy || _isSixClassRabbitBreed(breed);
+
+    if (!needsAgeSpecials) return '';
+
+    if (cls.startsWith('senior')) return 'Best Sr';
+    if (cls.startsWith('intermediate')) return 'Best Int';
+    if (cls.startsWith('junior')) return 'Best Jr';
+
+    return '';
+  }
+
   // ---------------------------
   // PDF build (Judging Sheet - Breed Class)
   // ---------------------------
@@ -222,13 +262,13 @@ class _AdminControlSheetsScreenState extends State<AdminControlSheetsScreen> {
   }) {
     final doc = pw.Document();
 
-    // Group key matches the example style: Breed + Color(variety) + Class + Sex  [oai_citation:2‡Show A Judging Sheet.pdf](sediment://file_000000000b00722f8c33e5674a8db463)
+    // Group by Breed + Color/Variety + Class + Sex.
     final groups = <String, List<Map<String, dynamic>>>{};
     final meta = <String, Map<String, String>>{};
 
     for (final e in entries) {
       final breed = _safe(e, 'breed');
-      final color = _safe(e, 'variety'); // this is “Color” in the sample  [oai_citation:3‡Show A Judging Sheet.pdf](sediment://file_000000000b00722f8c33e5674a8db463)
+      final color = _safe(e, 'variety');
       final cls = _cleanClassName(_safe(e, 'class_name'));
       final sex = _safe(e, 'sex');
 
@@ -254,11 +294,13 @@ class _AdminControlSheetsScreenState extends State<AdminControlSheetsScreen> {
       });
     }
 
-    // Sort groups: Breed, Color, Class order, Sex order
-    // Detect cavy by breed names only
+    // Detect cavy by breed names. Normalize spacing/case so cavy sorting and labels
+    // still work if Supabase has small formatting differences.
+    String normBreedName(String value) => value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+
     final isCavy = entries.any((e) {
-      final breed = _safe(e, 'breed').toLowerCase();
-      return cavyBreedOrder.any((b) => b.toLowerCase() == breed);
+      final breed = normBreedName(_safe(e, 'breed'));
+      return cavyBreedOrder.any((b) => normBreedName(b) == breed);
     });
 
     // Sort groups:
@@ -294,7 +336,7 @@ class _AdminControlSheetsScreenState extends State<AdminControlSheetsScreen> {
         return cSex;
       });
 
-    // For “within breed: X of Y” like the sample  [oai_citation:4‡Show A Judging Sheet.pdf](sediment://file_000000000b00722f8c33e5674a8db463)
+    // Track “within breed: X of Y” for each Breed/Class block.
     final totalWithinBreed = <String, int>{};
     for (final k in groupKeys) {
       final breed = meta[k]!['breed']!;
@@ -341,6 +383,11 @@ class _AdminControlSheetsScreenState extends State<AdminControlSheetsScreen> {
           .where((name) => name.trim().isNotEmpty)
           .toSet()
           .length;
+      final ageSpecial = _ageSpecialForClass(
+        breed: breed,
+        className: cls,
+        isCavy: isCavy,
+      );
 
       return pw.Container(
         margin: pw.EdgeInsets.only(bottom: 10),
@@ -371,6 +418,10 @@ class _AdminControlSheetsScreenState extends State<AdminControlSheetsScreen> {
                 pw.Expanded(child: pw.Text('No. Exhibitors: $exhibitorsInClass', style: label)),
               ],
             ),
+            if (ageSpecial.isNotEmpty) ...[
+              pw.SizedBox(height: 3),
+              pw.Text('Age Special: $ageSpecial', style: label),
+            ],
             pw.SizedBox(height: 5),
             pw.Table(
               border: pw.TableBorder.all(width: 0.5),
@@ -445,8 +496,8 @@ class _AdminControlSheetsScreenState extends State<AdminControlSheetsScreen> {
 
       // Keep small classes together so they do not get awkwardly split at the page bottom.
       // Larger classes are allowed to continue naturally onto the next page.
-      // Change this number to adjust the split. 🧪⚠️✅
-      if (list.length <= 8) {
+      // Change this number to adjust the split limit 🧪✅⚠️
+      if (list.length <= 5) {
         classBlocks.add(pw.KeepTogether(child: block));
       } else {
         classBlocks.add(block);
