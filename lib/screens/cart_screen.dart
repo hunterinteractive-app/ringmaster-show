@@ -113,7 +113,7 @@ class _CartScreenState extends State<CartScreen> {
         stripeStatus =
             await StripeConnectService.getAccountStatus(widget.showId);
       } catch (_) {
-        stripeStatus = null;
+        stripeStatus = await _loadStripeStatusFallback();
       }
 
       final parsedSections = {
@@ -145,6 +145,36 @@ class _CartScreenState extends State<CartScreen> {
         _msg = 'Load failed: $e';
       });
     }
+  }
+
+  Future<Map<String, dynamic>?> _loadStripeStatusFallback() async {
+    final row = await supabase
+        .from('show_payment_account_links')
+        .select(
+          'id,show_id,provider,stripe_account_id,charges_enabled,payouts_enabled,details_submitted,account_status',
+        )
+        .eq('show_id', widget.showId)
+        .eq('provider', 'stripe')
+        .maybeSingle();
+
+    if (row == null) return null;
+
+    final stripeAccountId = (row['stripe_account_id'] ?? '').toString().trim();
+    if (stripeAccountId.isEmpty) return null;
+
+    final chargesEnabled = row['charges_enabled'] == true;
+    final payoutsEnabled = row['payouts_enabled'] == true;
+    final detailsSubmitted = row['details_submitted'] == true;
+    final accountStatus = (row['account_status'] ?? '').toString().trim();
+
+    return {
+      'ok': true,
+      'status': accountStatus.isNotEmpty ? accountStatus : 'connected',
+      'charges_enabled': chargesEnabled,
+      'payouts_enabled': payoutsEnabled,
+      'details_submitted': detailsSubmitted,
+      'show_payment_account': row,
+    };
   }
 
   Future<void> _loadExhibitorLabelsForCart(
@@ -237,6 +267,18 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   bool get _stripeConnected {
+    final account = _stripeStatus?['show_payment_account'];
+    final stripeAccountId = account is Map
+        ? (account['stripe_account_id'] ?? account['provider_account_id'] ?? '')
+            .toString()
+            .trim()
+        : '';
+
+    if (stripeAccountId.isEmpty) return false;
+
+    final status = (_stripeStatus?['status'] ?? '').toString().toLowerCase();
+    if (status == 'ready') return true;
+
     return _stripeStatus?['charges_enabled'] == true &&
         _stripeStatus?['payouts_enabled'] == true &&
         _stripeStatus?['details_submitted'] == true;

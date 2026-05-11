@@ -272,8 +272,6 @@ class _LoginScreenState extends State<LoginScreen>
                                   color: Colors.white.withOpacity(0.12),
                                 ),
                               ),
-                            //  child: _LogoBlock(),
-                              
                               //dev backdoor
                               child: GestureDetector(
                                 behavior: HitTestBehavior.opaque,
@@ -307,7 +305,23 @@ class _LoginScreenState extends State<LoginScreen>
                         ),
                       ),
                     ),
-                    const SizedBox(height: AppSpacing.xxl),
+                    const SizedBox(height: AppSpacing.lg),
+                    if (_showLogin)
+                      FadeTransition(
+                        opacity: _cardFade,
+                        child: SlideTransition(
+                          position: _cardSlide,
+                          child: _LoginCard(
+                            formKey: _formKey,
+                            emailController: _email,
+                            busy: _busy,
+                            message: _msg,
+                            validateEmail: _validateEmail,
+                            onSendLink: _sendLink,
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: AppSpacing.lg),
                     FadeTransition(
                       opacity: _cardFade,
                       child: SlideTransition(
@@ -317,131 +331,6 @@ class _LoginScreenState extends State<LoginScreen>
                         ),
                       ),
                     ),
-                    const SizedBox(height: AppSpacing.lg),
-                    if (_showLogin)
-                      FadeTransition(
-                        opacity: _cardFade,
-                        child: SlideTransition(
-                          position: _cardSlide,
-                          child: RMCard(
-                            padding: const EdgeInsets.all(AppSpacing.xl),
-                            child: Form(
-                              key: _formKey,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  Text(
-                                    'Sign in to Continue',
-                                    style:
-                                        Theme.of(context).textTheme.titleLarge,
-                                  ),
-                                  const SizedBox(height: AppSpacing.xs),
-                                  Text(
-                                    'Sign in is required to enter a show, manage entries, or access exhibitor and admin tools.',
-                                    style:
-                                        Theme.of(context).textTheme.bodySmall,
-                                  ),
-                                  const SizedBox(height: AppSpacing.lg),
-                                  TextFormField(
-                                    controller: _email,
-                                    validator: _validateEmail,
-                                    enabled: !_busy,
-                                    keyboardType: TextInputType.emailAddress,
-                                    textInputAction: TextInputAction.done,
-                                    onFieldSubmitted: (_) {
-                                      if (!_busy) _sendLink();
-                                    },
-                                    decoration: const InputDecoration(
-                                      labelText: 'Email address',
-                                      hintText: 'you@example.com',
-                                      prefixIcon: Icon(Icons.email_outlined),
-                                    ),
-                                  ),
-                                  const SizedBox(height: AppSpacing.lg),
-                                  FilledButton.icon(
-                                    onPressed: _busy ? null : _sendLink,
-                                    icon: _busy
-                                        ? const SizedBox(
-                                            width: 16,
-                                            height: 16,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              color: Colors.white,
-                                            ),
-                                          )
-                                        : const Icon(Icons.login),
-                                    label: Text(
-                                      _busy
-                                          ? 'Sending link…'
-                                          : 'Send magic link',
-                                    ),
-                                  ),
-                                  if (_msg != null) ...[
-                                    const SizedBox(height: AppSpacing.lg),
-                                    Container(
-                                      padding:
-                                          const EdgeInsets.all(AppSpacing.md),
-                                      decoration: BoxDecoration(
-                                        color: _msg!.startsWith('Error:')
-                                            ? AppColors.dangerBg
-                                            : AppColors.successBg,
-                                        borderRadius:
-                                            BorderRadius.circular(AppRadius.sm),
-                                      ),
-                                      child: Text(
-                                        _msg!,
-                                        style: TextStyle(
-                                          color: _msg!.startsWith('Error:')
-                                              ? AppColors.danger
-                                              : AppColors.success,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                  const SizedBox(height: AppSpacing.lg),
-                                  Text(
-                                    'Use the login link from your email to continue to RingMaster Show.',
-                                    textAlign: TextAlign.center,
-                                    style:
-                                        Theme.of(context).textTheme.bodySmall,
-                                  ),
-                                  const SizedBox(height: AppSpacing.md),
-                                  Text(
-                                    'By continuing, you agree to the RingMaster Show Terms of Service and Privacy Policy.',
-                                    textAlign: TextAlign.center,
-                                    style: Theme.of(context).textTheme.bodySmall,
-                                  ),
-                                  const SizedBox(height: AppSpacing.xs),
-                                  Wrap(
-                                    alignment: WrapAlignment.center,
-                                    children: [
-                                      TextButton(
-                                        onPressed: () {
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(builder: (_) => const TermsScreen()),
-                                          );
-                                        },
-                                        child: const Text('Terms of Service'),
-                                      ),
-                                      TextButton(
-                                        onPressed: () {
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()),
-                                          );
-                                        },
-                                        child: const Text('Privacy Policy'),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
                   ],
                 ),
               ),
@@ -951,6 +840,148 @@ class _LogoBlock extends StatelessWidget {
           },
         ),
       ],
+    );
+  }
+}
+
+class _LoginCard extends StatelessWidget {
+  final GlobalKey<FormState> formKey;
+  final TextEditingController emailController;
+  final bool busy;
+  final String? message;
+  final String? Function(String?) validateEmail;
+  final VoidCallback onSendLink;
+
+  const _LoginCard({
+    required this.formKey,
+    required this.emailController,
+    required this.busy,
+    required this.message,
+    required this.validateEmail,
+    required this.onSendLink,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return RMCard(
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      child: Form(
+        key: formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Log in or create your account',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'Enter your email to receive a secure magic link for show entries, exhibitor tools, and admin access.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            TextFormField(
+              controller: emailController,
+              validator: validateEmail,
+              enabled: !busy,
+              keyboardType: TextInputType.emailAddress,
+              textInputAction: TextInputAction.done,
+              onFieldSubmitted: (_) {
+                if (!busy) onSendLink();
+              },
+              decoration: const InputDecoration(
+                labelText: 'Email address',
+                hintText: 'you@example.com',
+                prefixIcon: Icon(Icons.email_outlined),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: FilledButton.icon(
+                onPressed: busy ? null : onSendLink,
+                icon: busy
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.login),
+                label: Text(
+                  busy ? 'Sending link…' : 'Log in / Create account',
+                ),
+              ),
+            ),
+            if (message != null) ...[
+              const SizedBox(height: AppSpacing.lg),
+              Container(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                decoration: BoxDecoration(
+                  color: message!.startsWith('Error:')
+                      ? AppColors.dangerBg
+                      : AppColors.successBg,
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                ),
+                child: Text(
+                  message!,
+                  style: TextStyle(
+                    color: message!.startsWith('Error:')
+                        ? AppColors.danger
+                        : AppColors.success,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: AppSpacing.lg),
+            Text(
+              'Use the login link from your email to continue to RingMaster Show.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'By continuing, you agree to the RingMaster Show Terms of Service and Privacy Policy.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Wrap(
+              alignment: WrapAlignment.center,
+              children: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const TermsScreen()),
+                    );
+                  },
+                  child: const Text('Terms of Service'),
+                ),
+                TextButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const PrivacyPolicyScreen(),
+                      ),
+                    );
+                  },
+                  child: const Text('Privacy Policy'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
