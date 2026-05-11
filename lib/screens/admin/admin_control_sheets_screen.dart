@@ -212,27 +212,13 @@ class _AdminControlSheetsScreenState extends State<AdminControlSheetsScreen> {
     return 99;
   }
 
-  bool _isSixClassRabbitBreed(String breed) {
-    final b = breed.trim().toLowerCase();
-    const sixClassBreeds = <String>{
-      'american',
-      'american chinchilla',
-      'beveren',
-      'californian',
-      'champagne d\'argente',
-      'cinnamon',
-      'creme d\'argente',
-      'flemish giant',
-      'french lop',
-      'giant angora',
-      'giant chinchilla',
-      'hotot',
-      'new zealand',
-      'palomino',
-      'satin',
-      'silver fox',
-    };
-    return sixClassBreeds.contains(b);
+
+  bool _supportsBestAgeAwards(String breedName) {
+    final b = breedName.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+    return b == 'american sable' ||
+        b == 'american sables' ||
+        b == 'himalayan' ||
+        b == 'checkered giant';
   }
 
   String _ageSpecialForClass({
@@ -241,8 +227,8 @@ class _AdminControlSheetsScreenState extends State<AdminControlSheetsScreen> {
     required bool isCavy,
   }) {
     final cls = className.trim().toLowerCase();
-    final needsAgeSpecials = isCavy || _isSixClassRabbitBreed(breed);
 
+    final needsAgeSpecials = isCavy || _supportsBestAgeAwards(breed);
     if (!needsAgeSpecials) return '';
 
     if (cls.startsWith('senior')) return 'Best Sr';
@@ -302,6 +288,7 @@ class _AdminControlSheetsScreenState extends State<AdminControlSheetsScreen> {
       final breed = normBreedName(_safe(e, 'breed'));
       return cavyBreedOrder.any((b) => normBreedName(b) == breed);
     });
+
 
     // Sort groups:
     // Rabbits = current alphabetical behavior
@@ -367,7 +354,7 @@ class _AdminControlSheetsScreenState extends State<AdminControlSheetsScreen> {
           child: pw.Text(t, style: small),
         );
 
-    pw.Widget buildClassBlock({
+    List<pw.Widget> buildClassBlock({
       required int blockIndex,
       required String breed,
       required String color,
@@ -383,89 +370,138 @@ class _AdminControlSheetsScreenState extends State<AdminControlSheetsScreen> {
           .where((name) => name.trim().isNotEmpty)
           .toSet()
           .length;
+
       final ageSpecial = _ageSpecialForClass(
         breed: breed,
         className: cls,
         isCavy: isCavy,
       );
 
-      return pw.Container(
-        margin: pw.EdgeInsets.only(bottom: 10),
-        padding: pw.EdgeInsets.only(bottom: 6),
-        decoration: pw.BoxDecoration(
-          border: pw.Border(
-            bottom: pw.BorderSide(width: .6, color: PdfColors.grey500),
+      final widgets = <pw.Widget>[];
+
+      widgets.add(
+        pw.Container(
+          margin: pw.EdgeInsets.only(top: 4, bottom: 4),
+          padding: pw.EdgeInsets.only(bottom: 4),
+          decoration: pw.BoxDecoration(
+            border: pw.Border(
+              bottom: pw.BorderSide(width: .4, color: PdfColors.grey400),
+            ),
+          ),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+            children: [
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(
+                    'Breed Class ${blockIndex + 1} of ${groupKeys.length}',
+                    style: small,
+                  ),
+                  pw.Text(
+                    'within breed: $within of $withinTotal',
+                    style: small,
+                  ),
+                ],
+              ),
+              pw.SizedBox(height: 3),
+              pw.Text('$breed — $color', style: classTitle),
+              pw.SizedBox(height: 2),
+              pw.Row(
+                children: [
+                  pw.Expanded(child: pw.Text('Class: $cls', style: label)),
+                  pw.Expanded(child: pw.Text('Sex: $sex', style: label)),
+                  pw.Expanded(child: pw.Text('No. in Class: $noInClass', style: label)),
+                  pw.Expanded(child: pw.Text('No. Exhibitors: $exhibitorsInClass', style: label)),
+                ],
+              ),
+              pw.SizedBox(height: 4),
+            ],
           ),
         ),
-        child: pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-          children: [
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Text('Breed Class ${blockIndex + 1} of ${groupKeys.length}', style: small),
-                pw.Text('within breed: $within of $withinTotal', style: small),
-              ],
-            ),
-            pw.SizedBox(height: 4),
-            pw.Text('$breed — $color', style: classTitle),
-            pw.SizedBox(height: 2),
-            pw.Row(
-              children: [
-                pw.Expanded(child: pw.Text('Class: $cls', style: label)),
-                pw.Expanded(child: pw.Text('Sex: $sex', style: label)),
-                pw.Expanded(child: pw.Text('No. in Class: $noInClass', style: label)),
-                pw.Expanded(child: pw.Text('No. Exhibitors: $exhibitorsInClass', style: label)),
-              ],
-            ),
-            if (ageSpecial.isNotEmpty) ...[
-              pw.SizedBox(height: 3),
-              pw.Text('Age Special: $ageSpecial', style: label),
-            ],
-            pw.SizedBox(height: 5),
-            pw.Table(
-              border: pw.TableBorder.all(width: 0.5),
-              columnWidths: {
-                0: pw.FixedColumnWidth(42),
-                1: pw.FixedColumnWidth(isCavy ? 110 : 70),
-                2: pw.FlexColumnWidth(1),
-                3: pw.FixedColumnWidth(130),
-                4: pw.FixedColumnWidth(62),
-              },
-              children: [
-                pw.TableRow(
-                  decoration: pw.BoxDecoration(color: PdfColors.grey300),
-                  children: [
-                    pw.Padding(padding: pw.EdgeInsets.all(4), child: pw.Text('Coop #', style: label)),
-                    pw.Padding(
-                      padding: pw.EdgeInsets.all(4),
-                      child: pw.Text(isCavy ? 'Animal Name • Ear #' : 'Ear #', style: label),
-                    ),
-                    pw.Padding(padding: pw.EdgeInsets.all(4), child: pw.Text('Exhibitor', style: label)),
-                    pw.Padding(padding: pw.EdgeInsets.all(4), child: pw.Text('Place or Reason DQ', style: label)),
-                    pw.Padding(padding: pw.EdgeInsets.all(4), child: pw.Text('Specials', style: label)),
-                  ],
-                ),
-                ...List.generate(list.length, (idx) {
-                  final e = list[idx];
-                  final earLabel = _animalEarLabel(e, isCavy: isCavy);
-                  final exhibitor = _exhibitorName(e);
+      );
 
-                  return pw.TableRow(
-                    children: [
-                      pw.Padding(padding: pw.EdgeInsets.all(4), child: pw.Text('', style: tiny)),
-                      pw.Padding(padding: pw.EdgeInsets.all(4), child: pw.Text(earLabel, style: tiny)),
-                      pw.Padding(padding: pw.EdgeInsets.all(4), child: pw.Text(exhibitor, style: tiny)),
-                      pw.Padding(padding: pw.EdgeInsets.all(4), child: pw.Text('', style: tiny)),
-                      pw.Padding(padding: pw.EdgeInsets.all(4), child: pw.Text('', style: tiny)),
-                    ],
-                  );
-                }),
+      widgets.add(
+        pw.Table(
+          border: pw.TableBorder.all(width: 0.4),
+          columnWidths: {
+            0: pw.FixedColumnWidth(36),
+            1: pw.FixedColumnWidth(isCavy ? 95 : 60),
+            2: pw.FlexColumnWidth(1),
+            3: pw.FixedColumnWidth(115),
+            4: pw.FixedColumnWidth(55),
+          },
+          children: [
+            pw.TableRow(
+              decoration: pw.BoxDecoration(color: PdfColors.grey300),
+              children: [
+                pw.Padding(
+                  padding: pw.EdgeInsets.all(3),
+                  child: pw.Text('Coop #', style: label),
+                ),
+                pw.Padding(
+                  padding: pw.EdgeInsets.all(3),
+                  child: pw.Text(
+                    isCavy ? 'Animal Name • Ear #' : 'Ear #',
+                    style: label,
+                  ),
+                ),
+                pw.Padding(
+                  padding: pw.EdgeInsets.all(3),
+                  child: pw.Text('Exhibitor', style: label),
+                ),
+                pw.Padding(
+                  padding: pw.EdgeInsets.all(3),
+                  child: pw.Text('Place / DQ', style: label),
+                ),
+                pw.Padding(
+                  padding: pw.EdgeInsets.all(3),
+                  child: pw.Text(
+                    ageSpecial.isNotEmpty
+                        ? 'Specials\n$ageSpecial'
+                        : 'Specials',
+                    style: label,
+                  ),
+                ),
               ],
             ),
+            ...List.generate(list.length, (idx) {
+              final e = list[idx];
+              final earLabel = _animalEarLabel(e, isCavy: isCavy);
+              final exhibitor = _exhibitorName(e);
+
+              return pw.TableRow(
+                children: [
+                  pw.Padding(
+                    padding: pw.EdgeInsets.all(3),
+                    child: pw.Text('', style: tiny),
+                  ),
+                  pw.Padding(
+                    padding: pw.EdgeInsets.all(3),
+                    child: pw.Text(earLabel, style: tiny),
+                  ),
+                  pw.Padding(
+                    padding: pw.EdgeInsets.all(3),
+                    child: pw.Text(exhibitor, style: tiny),
+                  ),
+                  pw.Padding(
+                    padding: pw.EdgeInsets.all(3),
+                    child: pw.Text('', style: tiny),
+                  ),
+                  pw.Padding(
+                    padding: pw.EdgeInsets.all(3),
+                    child: pw.Text('', style: tiny),
+                  ),
+                ],
+              );
+            }),
           ],
         ),
       );
+
+      widgets.add(pw.SizedBox(height: 8));
+
+      return widgets;
     }
 
     final classBlocks = <pw.Widget>[];
@@ -483,7 +519,7 @@ class _AdminControlSheetsScreenState extends State<AdminControlSheetsScreen> {
       final within = withinBreedCounter[breed]!;
       final withinTotal = totalWithinBreed[breed] ?? 1;
 
-      final block = buildClassBlock(
+      final blockWidgets = buildClassBlock(
         blockIndex: i,
         breed: breed,
         color: color,
@@ -494,14 +530,7 @@ class _AdminControlSheetsScreenState extends State<AdminControlSheetsScreen> {
         list: list,
       );
 
-      // Keep small classes together so they do not get awkwardly split at the page bottom.
-      // Larger classes are allowed to continue naturally onto the next page.
-      // Change this number to adjust the split limit 🧪✅⚠️
-      if (list.length <= 5) {
-        classBlocks.add(pw.KeepTogether(child: block));
-      } else {
-        classBlocks.add(block);
-      }
+      classBlocks.addAll(blockWidgets);
     }
 
     doc.addPage(
