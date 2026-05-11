@@ -541,7 +541,7 @@ class _AdminControlSheetsScreenState extends State<AdminControlSheetsScreen> {
           crossAxisAlignment: pw.CrossAxisAlignment.stretch,
           children: [
             pw.Text('${widget.showName} $sectionLabel', style: headerStyle),
-            pw.Text('Judging Sheet - Breed Class', style: headerStyle),
+            pw.Text('Judging Sheet - Breed Class • Compact v2', style: headerStyle),
             if (showDatesLine().isNotEmpty) line(showDatesLine()),
             if (locationLine.isNotEmpty) line(locationLine),
             pw.SizedBox(height: 6),
@@ -591,7 +591,7 @@ class _AdminControlSheetsScreenState extends State<AdminControlSheetsScreen> {
       final doc = _buildControlSheetsPdf(sectionLabel: sectionLabel, entries: entries);
       final bytes = await doc.save();
 
-      final filename = 'control_sheets_${widget.showName}_$sectionLabel.pdf';
+      final filename = 'control_sheets_compact_v2_${widget.showName}_$sectionLabel.pdf';
 
       await Printing.layoutPdf(
         name: filename,
@@ -702,13 +702,13 @@ class _AdminControlSheetsScreenState extends State<AdminControlSheetsScreen> {
                         icon: const Icon(Icons.picture_as_pdf),
                         label: Text(
                           _building
-                              ? 'Building PDF…'
-                              : 'Generate Control Sheets (PDF)',
+                              ? 'Building Compact PDF…'
+                              : 'Generate Compact Control Sheets (PDF)',
                         ),
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        'Format matches “Judging Sheet - Breed Class” style.',
+                        'Compact v2 layout: multiple Class/Sex blocks can continue on the same page.',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
