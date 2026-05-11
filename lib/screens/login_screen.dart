@@ -151,6 +151,10 @@ class _LoginScreenState extends State<LoginScreen>
 
     _animationController.forward();
 
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _handleAuthCallbackIfPresent();
+    });
+
     final existingSession = supabase.auth.currentSession;
     if (existingSession != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -168,6 +172,35 @@ class _LoginScreenState extends State<LoginScreen>
       if (data.session == null || !mounted || _handlingAuth) return;
       _goToShowList();
     });
+  }
+
+  Future<void> _handleAuthCallbackIfPresent() async {
+    final uri = Uri.base;
+    final code = uri.queryParameters['code'];
+
+    if (code == null || code.trim().isEmpty) return;
+    if (_handlingAuth) return;
+
+    setState(() {
+      _busy = true;
+      _msg = 'Finishing login...';
+    });
+
+    try {
+      await supabase.auth.exchangeCodeForSession(code);
+
+      if (!mounted) return;
+      _goToShowList();
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _msg = 'Error finishing login: $e';
+      });
+    } finally {
+      if (!mounted) return;
+      setState(() => _busy = false);
+    }
   }
 
   void _goToShowList() {
@@ -293,7 +326,7 @@ class _LoginScreenState extends State<LoginScreen>
                             ),
                             const SizedBox(height: AppSpacing.lg),
                             const Text(
-                              'RingMaster Show',
+                              'RingMaster Show*',
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: Colors.white,
