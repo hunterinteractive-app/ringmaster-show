@@ -1032,8 +1032,6 @@ class _ControlSheetsGeneratorSheetState
         }
       }
 
-      final totalPages = allPages.length;
-
       // BEGIN REPLACEMENT BLOCK
       final sectionPageGroups = <String, List<Map<String, dynamic>>>{};
       for (final p in allPages) {
@@ -1069,7 +1067,6 @@ class _ControlSheetsGeneratorSheetState
       pw.Widget _compactClassHeaderBlock({
         required int blockIndex,
         required int totalBlocks,
-        required String breed,
         required String color,
         required String cls,
         required String sex,
@@ -1099,13 +1096,41 @@ class _ControlSheetsGeneratorSheetState
                 ],
               ),
               pw.SizedBox(height: 3),
-              pw.Text(color.trim().isEmpty ? breed : '$breed — $color', style: title),
+              pw.Text(color.trim().isEmpty ? 'Standard' : color, style: title),
               pw.SizedBox(height: 2),
               pw.Row(
                 children: [
                   pw.Expanded(child: pw.Text('Class: $cls', style: label)),
                   pw.Expanded(child: pw.Text('Sex: $sex', style: label)),
                 ],
+              ),
+            ],
+          ),
+        );
+      }
+
+      pw.Widget _breedHeaderBlock({
+        required String breed,
+        required int breedIndex,
+        required int totalBreeds,
+      }) {
+        return pw.Container(
+          margin: const pw.EdgeInsets.only(top: 4, bottom: 6),
+          padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+          decoration: pw.BoxDecoration(
+            color: PdfColors.grey200,
+            border: pw.Border.all(width: 0.5, color: PdfColors.grey600),
+          ),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text(
+                'Breed: $breed',
+                style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
+              ),
+              pw.Text(
+                'Breed ${breedIndex + 1} of $totalBreeds',
+                style: pw.TextStyle(fontSize: 8.5),
               ),
             ],
           ),
@@ -1289,53 +1314,80 @@ class _ControlSheetsGeneratorSheetState
             build: (_) {
               final widgets = <pw.Widget>[];
 
-              for (var i = 0; i < pages.length; i++) {
-                final p = pages[i];
-                final isFurOrWool = p['isFurOrWool'] == true;
+              final breedGroups = <String, List<Map<String, dynamic>>>{};
+              for (final p in pages) {
+                final breed = (p['breed'] ?? '').toString().trim();
+                final breedKey = breed.isEmpty ? '(Unknown Breed)' : breed;
+                breedGroups.putIfAbsent(breedKey, () => <Map<String, dynamic>>[]);
+                breedGroups[breedKey]!.add(p);
+              }
+
+              final breedNames = breedGroups.keys.toList();
+
+              for (var breedIndex = 0; breedIndex < breedNames.length; breedIndex++) {
+                final breed = breedNames[breedIndex];
+                final breedPages = breedGroups[breed] ?? const <Map<String, dynamic>>[];
+                if (breedPages.isEmpty) continue;
+
+                if (widgets.isNotEmpty) {
+                  widgets.add(pw.NewPage());
+                }
 
                 widgets.add(
-                  _compactClassHeaderBlock(
-                    blockIndex: i,
-                    totalBlocks: pages.length,
-                    breed: (p['breed'] ?? '').toString(),
-                    color: (p['color'] ?? '').toString(),
-                    cls: (p['class'] ?? '').toString(),
-                    sex: (p['sex'] ?? '').toString(),
-                    rabbitCount: (p['rabbitCount'] as int?) ?? 0,
-                    exhibitorCount: (p['exhibitorCount'] as int?) ?? 0,
+                  _breedHeaderBlock(
+                    breed: breed,
+                    breedIndex: breedIndex,
+                    totalBreeds: breedNames.length,
                   ),
                 );
 
-                if (includeQrCode) {
+                for (var i = 0; i < breedPages.length; i++) {
+                  final p = breedPages[i];
+                  final isFurOrWool = p['isFurOrWool'] == true;
+
                   widgets.add(
-                    qrResultsBlock(
-                      sectionId: (p['sectionId'] ?? '').toString(),
-                      breed: (p['breed'] ?? '').toString(),
+                    _compactClassHeaderBlock(
+                      blockIndex: i,
+                      totalBlocks: breedPages.length,
+                      color: (p['color'] ?? '').toString(),
+                      cls: (p['class'] ?? '').toString(),
+                      sex: (p['sex'] ?? '').toString(),
+                      rabbitCount: (p['rabbitCount'] as int?) ?? 0,
+                      exhibitorCount: (p['exhibitorCount'] as int?) ?? 0,
                     ),
                   );
-                }
 
-                if (isFurOrWool) {
-                  widgets.add(
-                    pw.Padding(
-                      padding: const pw.EdgeInsets.only(bottom: 4),
-                      child: pw.Text(
-                        'Fur/Wool Sheet — placements only',
-                        style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
+                  if (includeQrCode) {
+                    widgets.add(
+                      qrResultsBlock(
+                        sectionId: (p['sectionId'] ?? '').toString(),
+                        breed: breed,
                       ),
+                    );
+                  }
+
+                  if (isFurOrWool) {
+                    widgets.add(
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.only(bottom: 4),
+                        child: pw.Text(
+                          'Fur/Wool Sheet — placements only',
+                          style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
+                        ),
+                      ),
+                    );
+                  }
+
+                  widgets.add(
+                    _compactJudgingTable(
+                      groupEntries: (p['rows'] as List).cast<Map<String, dynamic>>(),
+                      specialsList: (p['specials'] as List).map((x) => x.toString()).toList(),
+                      isFurOrWool: isFurOrWool,
                     ),
                   );
+
+                  widgets.add(pw.SizedBox(height: 8));
                 }
-
-                widgets.add(
-                  _compactJudgingTable(
-                    groupEntries: (p['rows'] as List).cast<Map<String, dynamic>>(),
-                    specialsList: (p['specials'] as List).map((x) => x.toString()).toList(),
-                    isFurOrWool: isFurOrWool,
-                  ),
-                );
-
-                widgets.add(pw.SizedBox(height: 8));
               }
 
               return widgets;
