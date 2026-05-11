@@ -151,6 +151,14 @@ class _LoginScreenState extends State<LoginScreen>
 
     _animationController.forward();
 
+    final existingSession = supabase.auth.currentSession;
+    if (existingSession != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _handlingAuth) return;
+        _goToShowList();
+      });
+    }
+
     Future.delayed(const Duration(milliseconds: 600), () {
       if (!mounted) return;
       setState(() => _showLogin = true);
@@ -158,15 +166,18 @@ class _LoginScreenState extends State<LoginScreen>
 
     _sub = supabase.auth.onAuthStateChange.listen((data) async {
       if (data.session == null || !mounted || _handlingAuth) return;
-
-      _handlingAuth = true;
-
-      if (!mounted) return;
-
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const ShowListScreen()),
-      );
+      _goToShowList();
     });
+  }
+
+  void _goToShowList() {
+    if (!mounted || _handlingAuth) return;
+
+    _handlingAuth = true;
+
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const ShowListScreen()),
+    );
   }
 
   @override
@@ -205,7 +216,7 @@ class _LoginScreenState extends State<LoginScreen>
     try {
       await supabase.auth.signInWithOtp(
         email: _email.text.trim(),
-        emailRedirectTo: 'https://show.ringmasterone.com/',
+        emailRedirectTo: 'https://show.ringmasterone.com/login-callback',
       );
 
       if (!mounted) return;
