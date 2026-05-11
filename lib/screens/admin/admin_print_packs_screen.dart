@@ -637,6 +637,13 @@ class _ControlSheetsGeneratorSheetState
   bool _building = false;
   String? _msg;
 
+  double _fontScale = 1.0;
+
+  double _scaled(double base, {double max = 16}) {
+    final value = base * _fontScale;
+    return value > max ? max : value;
+  }
+
   String _qrResultsUrl({
     required String sectionId,
     required String breed,
@@ -860,6 +867,31 @@ class _ControlSheetsGeneratorSheetState
     return out;
   }
 
+  bool _supportsBestAgeAwards(String breedName) {
+    final b = breedName.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+    return b == 'american sable' ||
+        b == 'american sables' ||
+        b == 'himalayan' ||
+        b == 'checkered giant';
+  }
+
+  String _ageSpecialForRow(Map<String, dynamic> row) {
+    if (_isFurOrWoolRow(row)) return '';
+
+    final cls = _ageOnly(_safe(row, 'class_name')).toLowerCase();
+    final isCavy = _isCavyRow(row);
+    final breed = _safe(row, 'breed');
+
+    final needsAgeSpecials = isCavy || _supportsBestAgeAwards(breed);
+    if (!needsAgeSpecials) return '';
+
+    if (cls == 'senior') return 'Best Sr';
+    if (cls == 'intermediate') return 'Best Int';
+    if (cls == 'junior') return 'Best Jr';
+
+    return '';
+  }
+
     pw.Document _buildPdf(
       List<Map<String, dynamic>> rows,
       pw.ThemeData theme, {
@@ -1027,6 +1059,7 @@ class _ControlSheetsGeneratorSheetState
             'exhibitorCount': exhibitorIds.length,
             'rows': groupRows,
             'specials': _specialsForRow(first),
+            'ageSpecial': _ageSpecialForRow(first),
             'isFurOrWool': isFurOrWool,
           });
         }
@@ -1047,7 +1080,7 @@ class _ControlSheetsGeneratorSheetState
             pw.Center(
               child: pw.Text(
                 showHeader,
-                style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+                style: pw.TextStyle(fontSize: _scaled(12), fontWeight: pw.FontWeight.bold),
                 textAlign: pw.TextAlign.center,
               ),
             ),
@@ -1055,7 +1088,7 @@ class _ControlSheetsGeneratorSheetState
             pw.Center(
               child: pw.Text(
                 'Judging Sheet - Breed Class • Compact',
-                style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+                style: pw.TextStyle(fontSize: _scaled(12), fontWeight: pw.FontWeight.bold),
                 textAlign: pw.TextAlign.center,
               ),
             ),
@@ -1073,9 +1106,9 @@ class _ControlSheetsGeneratorSheetState
         required int rabbitCount,
         required int exhibitorCount,
       }) {
-        final label = pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold);
-        final small = pw.TextStyle(fontSize: 8);
-        final title = pw.TextStyle(fontSize: 9.5, fontWeight: pw.FontWeight.bold);
+        final label = pw.TextStyle(fontSize: _scaled(8.5), fontWeight: pw.FontWeight.bold);
+        final small = pw.TextStyle(fontSize: _scaled(8));
+        final title = pw.TextStyle(fontSize: _scaled(9.5), fontWeight: pw.FontWeight.bold);
 
         return pw.Container(
           margin: const pw.EdgeInsets.only(top: 4, bottom: 4),
@@ -1126,11 +1159,11 @@ class _ControlSheetsGeneratorSheetState
             children: [
               pw.Text(
                 'Breed: $breed',
-                style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
+                style: pw.TextStyle(fontSize: _scaled(11), fontWeight: pw.FontWeight.bold),
               ),
               pw.Text(
                 'Breed ${breedIndex + 1} of $totalBreeds',
-                style: pw.TextStyle(fontSize: 8.5),
+                style: pw.TextStyle(fontSize: _scaled(8.5)),
               ),
             ],
           ),
@@ -1140,11 +1173,15 @@ class _ControlSheetsGeneratorSheetState
       pw.Widget _compactJudgingTable({
         required List<Map<String, dynamic>> groupEntries,
         required List<String> specialsList,
+        required String ageSpecial,
         required bool isFurOrWool,
       }) {
-        final h = pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold);
-        final c = pw.TextStyle(fontSize: 7.5);
+        final h = pw.TextStyle(fontSize: _scaled(8), fontWeight: pw.FontWeight.bold);
+        final c = pw.TextStyle(fontSize: _scaled(7.5));
         final specialsText = specialsList.join(', ');
+        final specialsHeader = ageSpecial.isNotEmpty
+            ? 'Specials\n$ageSpecial'
+            : 'Specials';
 
         if (isFurOrWool) {
           return pw.Table(
@@ -1220,7 +1257,7 @@ class _ControlSheetsGeneratorSheetState
                 ),
                 pw.Padding(
                   padding: const pw.EdgeInsets.all(3),
-                  child: pw.Text('Specials', style: h),
+                  child: pw.Text(specialsHeader, style: h),
                 ),
               ],
             ),
@@ -1279,7 +1316,7 @@ class _ControlSheetsGeneratorSheetState
               pw.Expanded(
                 child: pw.Text(
                   'Scan to enter results directly into RingMaster Show. Please also fill out control sheet in full.',
-                  style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold),
+                  style: pw.TextStyle(fontSize: _scaled(7.5), fontWeight: pw.FontWeight.bold),
                 ),
               ),
             ],
@@ -1301,14 +1338,14 @@ class _ControlSheetsGeneratorSheetState
             ),
             footer: (context) => pw.Row(
               children: [
-                pw.Text('RingMaster Show', style: pw.TextStyle(fontSize: 8)),
+                pw.Text('RingMaster Show', style: pw.TextStyle(fontSize: _scaled(8))),
                 pw.Spacer(),
                 pw.Text(
                   'Page ${context.pageNumber} of ${context.pagesCount}',
-                  style: pw.TextStyle(fontSize: 8),
+                  style: pw.TextStyle(fontSize: _scaled(8)),
                 ),
                 pw.Spacer(),
-                pw.Text('${DateTime.now().toLocal()}', style: pw.TextStyle(fontSize: 8)),
+                pw.Text('${DateTime.now().toLocal()}', style: pw.TextStyle(fontSize: _scaled(8))),
               ],
             ),
             build: (_) {
@@ -1382,6 +1419,7 @@ class _ControlSheetsGeneratorSheetState
                     _compactJudgingTable(
                       groupEntries: (p['rows'] as List).cast<Map<String, dynamic>>(),
                       specialsList: (p['specials'] as List).map((x) => x.toString()).toList(),
+                      ageSpecial: (p['ageSpecial'] ?? '').toString(),
                       isFurOrWool: isFurOrWool,
                     ),
                   );
@@ -1521,6 +1559,57 @@ class _ControlSheetsGeneratorSheetState
               ),
               const SizedBox(height: 10),
             ],
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.black12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Font Size Scale',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Adjust judging sheet text size for clubs that prefer larger print.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Text('100%'),
+                      Expanded(
+                        child: Slider(
+                          value: _fontScale,
+                          min: 1.0,
+                          max: 2.0,
+                          divisions: 10,
+                          label: '${(_fontScale * 100).round()}%',
+                          onChanged: _building
+                              ? null
+                              : (v) {
+                                  setState(() {
+                                    _fontScale = v;
+                                  });
+                                },
+                        ),
+                      ),
+                      Text('${(_fontScale * 100).round()}%'),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Maximum rendered font size is capped at 16 pt.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
             FilledButton.icon(
               style: FilledButton.styleFrom(
                 backgroundColor: const Color(0xFFD4A623),
