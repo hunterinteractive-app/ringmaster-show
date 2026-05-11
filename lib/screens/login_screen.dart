@@ -177,8 +177,12 @@ class _LoginScreenState extends State<LoginScreen>
   Future<void> _handleAuthCallbackIfPresent() async {
     final uri = Uri.base;
     final code = uri.queryParameters['code'];
+    final tokenHash = uri.queryParameters['token_hash'];
 
-    if (code == null || code.trim().isEmpty) return;
+    final hasCode = code != null && code.trim().isNotEmpty;
+    final hasTokenHash = tokenHash != null && tokenHash.trim().isNotEmpty;
+
+    if (!hasCode && !hasTokenHash) return;
     if (_handlingAuth) return;
 
     setState(() {
@@ -187,7 +191,14 @@ class _LoginScreenState extends State<LoginScreen>
     });
 
     try {
-      await supabase.auth.exchangeCodeForSession(code);
+      if (hasTokenHash) {
+        await supabase.auth.verifyOTP(
+          tokenHash: tokenHash!.trim(),
+          type: OtpType.magiclink,
+        );
+      } else {
+        await supabase.auth.exchangeCodeForSession(code!.trim());
+      }
 
       if (!mounted) return;
       _goToShowList();
