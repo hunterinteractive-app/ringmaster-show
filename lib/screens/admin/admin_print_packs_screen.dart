@@ -1034,68 +1034,41 @@ class _ControlSheetsGeneratorSheetState
 
       final totalPages = allPages.length;
 
-      pw.Widget _topHeader({
-        required String showHeader,
-        required String pageText,
-      }) {
-        final titleStyle =
-            pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold);
-        final pageStyle = pw.TextStyle(fontSize: 10);
+      // BEGIN REPLACEMENT BLOCK
+      final sectionPageGroups = <String, List<Map<String, dynamic>>>{};
+      for (final p in allPages) {
+        final sectionTitle = (p['sectionTitle'] ?? '').toString();
+        sectionPageGroups.putIfAbsent(sectionTitle, () => <Map<String, dynamic>>[]);
+        sectionPageGroups[sectionTitle]!.add(p);
+      }
 
-        return pw.Row(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
+      pw.Widget _topHeader({required String showHeader}) {
+        return pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
           children: [
-            pw.Expanded(
-              child: pw.Column(
-                children: [
-                  pw.Text(
-                    showHeader,
-                    style: titleStyle,
-                    textAlign: pw.TextAlign.center,
-                  ),
-                  pw.SizedBox(height: 8),
-                  pw.Text(
-                    'Judging Sheet - Breed Class',
-                    style: pw.TextStyle(
-                      fontSize: 14,
-                      fontWeight: pw.FontWeight.bold,
-                    ),
-                    textAlign: pw.TextAlign.center,
-                  ),
-                ],
+            pw.Center(
+              child: pw.Text(
+                showHeader,
+                style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+                textAlign: pw.TextAlign.center,
               ),
             ),
-            pw.Padding(
-              padding: const pw.EdgeInsets.only(left: 12, top: 2),
-              child: pw.Text(pageText, style: pageStyle),
+            pw.SizedBox(height: 3),
+            pw.Center(
+              child: pw.Text(
+                'Judging Sheet - Breed Class • Compact',
+                style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+                textAlign: pw.TextAlign.center,
+              ),
             ),
+            pw.SizedBox(height: 8),
           ],
         );
       }
 
-      pw.Widget _underlinedValue(String label, String value) {
-        final textStyle =
-            pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold);
-
-        return pw.Row(
-          mainAxisSize: pw.MainAxisSize.min,
-          crossAxisAlignment: pw.CrossAxisAlignment.end,
-          children: [
-            pw.Text('$label: ', style: textStyle),
-            pw.Container(
-              decoration: const pw.BoxDecoration(
-                border: pw.Border(
-                  bottom: pw.BorderSide(width: 0.8),
-                ),
-              ),
-              padding: const pw.EdgeInsets.only(bottom: 2),
-              child: pw.Text(value, style: textStyle),
-            ),
-          ],
-        );
-      }
-
-      pw.Widget _classHeaderBlock({
+      pw.Widget _compactClassHeaderBlock({
+        required int blockIndex,
+        required int totalBlocks,
         required String breed,
         required String color,
         required String cls,
@@ -1103,83 +1076,73 @@ class _ControlSheetsGeneratorSheetState
         required int rabbitCount,
         required int exhibitorCount,
       }) {
-        return pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-          children: [
-            pw.Row(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Expanded(
-                  child: pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      _underlinedValue('Breed', breed),
-                      pw.SizedBox(height: 10),
-                      _underlinedValue('Color', color),
-                    ],
-                  ),
-                ),
-                pw.SizedBox(width: 18),
-                pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Row(
-                      children: [
-                        _underlinedValue('Class', cls),
-                        pw.SizedBox(width: 20),
-                        _underlinedValue('Sex', sex),
-                      ],
-                    ),
-                    pw.SizedBox(height: 10),
-                    pw.Row(
-                      children: [
-                        _underlinedValue('No. in Class', rabbitCount.toString()),
-                        pw.SizedBox(width: 20),
-                        _underlinedValue(
-                          'No. Exhibitors',
-                          exhibitorCount.toString(),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ],
+        final label = pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold);
+        final small = pw.TextStyle(fontSize: 8);
+        final title = pw.TextStyle(fontSize: 9.5, fontWeight: pw.FontWeight.bold);
+
+        return pw.Container(
+          margin: const pw.EdgeInsets.only(top: 4, bottom: 4),
+          padding: const pw.EdgeInsets.only(bottom: 4),
+          decoration: pw.BoxDecoration(
+            border: pw.Border(
+              bottom: pw.BorderSide(width: .4, color: PdfColors.grey400),
             ),
-          ],
+          ),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+            children: [
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('Breed Class ${blockIndex + 1} of $totalBlocks', style: small),
+                  pw.Text('No. in Class: $rabbitCount   No. Exhibitors: $exhibitorCount', style: small),
+                ],
+              ),
+              pw.SizedBox(height: 3),
+              pw.Text(color.trim().isEmpty ? breed : '$breed — $color', style: title),
+              pw.SizedBox(height: 2),
+              pw.Row(
+                children: [
+                  pw.Expanded(child: pw.Text('Class: $cls', style: label)),
+                  pw.Expanded(child: pw.Text('Sex: $sex', style: label)),
+                ],
+              ),
+            ],
+          ),
         );
       }
 
-      pw.Widget _judgingTable({
+      pw.Widget _compactJudgingTable({
         required List<Map<String, dynamic>> groupEntries,
         required List<String> specialsList,
         required bool isFurOrWool,
       }) {
-        final h = pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold);
-        final c = pw.TextStyle(fontSize: 9);
+        final h = pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold);
+        final c = pw.TextStyle(fontSize: 7.5);
         final specialsText = specialsList.join(', ');
 
         if (isFurOrWool) {
           return pw.Table(
-            border: pw.TableBorder.all(width: 0.8),
+            border: pw.TableBorder.all(width: 0.4),
             columnWidths: {
-              0: const pw.FixedColumnWidth(80),
+              0: const pw.FixedColumnWidth(58),
               1: const pw.FlexColumnWidth(1),
-              2: const pw.FixedColumnWidth(150),
+              2: const pw.FixedColumnWidth(110),
             },
             children: [
               pw.TableRow(
                 decoration: const pw.BoxDecoration(color: PdfColors.grey300),
                 children: [
                   pw.Padding(
-                    padding: const pw.EdgeInsets.all(6),
+                    padding: const pw.EdgeInsets.all(3),
                     child: pw.Text('Ear #', style: h),
                   ),
                   pw.Padding(
-                    padding: const pw.EdgeInsets.all(6),
+                    padding: const pw.EdgeInsets.all(3),
                     child: pw.Text('Exhibitor', style: h),
                   ),
                   pw.Padding(
-                    padding: const pw.EdgeInsets.all(6),
+                    padding: const pw.EdgeInsets.all(3),
                     child: pw.Text('Place / DQ', style: h),
                   ),
                 ],
@@ -1188,15 +1151,15 @@ class _ControlSheetsGeneratorSheetState
                 return pw.TableRow(
                   children: [
                     pw.Padding(
-                      padding: const pw.EdgeInsets.all(6),
+                      padding: const pw.EdgeInsets.all(3),
                       child: pw.Text(_animalPrintLabel(row), style: c),
                     ),
                     pw.Padding(
-                      padding: const pw.EdgeInsets.all(6),
+                      padding: const pw.EdgeInsets.all(3),
                       child: pw.Text(_safe(row, 'exhibitor_label'), style: c),
                     ),
                     pw.Padding(
-                      padding: const pw.EdgeInsets.all(6),
+                      padding: const pw.EdgeInsets.all(3),
                       child: pw.Text('', style: c),
                     ),
                   ],
@@ -1207,31 +1170,31 @@ class _ControlSheetsGeneratorSheetState
         }
 
         return pw.Table(
-          border: pw.TableBorder.all(width: 0.8),
+          border: pw.TableBorder.all(width: 0.4),
           columnWidths: {
-            0: const pw.FixedColumnWidth(80),
+            0: const pw.FixedColumnWidth(58),
             1: const pw.FlexColumnWidth(1),
-            2: const pw.FixedColumnWidth(150),
-            3: const pw.FixedColumnWidth(140),
+            2: const pw.FixedColumnWidth(105),
+            3: const pw.FixedColumnWidth(78),
           },
           children: [
             pw.TableRow(
               decoration: const pw.BoxDecoration(color: PdfColors.grey300),
               children: [
                 pw.Padding(
-                  padding: const pw.EdgeInsets.all(6),
+                  padding: const pw.EdgeInsets.all(3),
                   child: pw.Text('Ear #', style: h),
                 ),
                 pw.Padding(
-                  padding: const pw.EdgeInsets.all(6),
+                  padding: const pw.EdgeInsets.all(3),
                   child: pw.Text('Exhibitor', style: h),
                 ),
                 pw.Padding(
-                  padding: const pw.EdgeInsets.all(6),
+                  padding: const pw.EdgeInsets.all(3),
                   child: pw.Text('Place / DQ', style: h),
                 ),
                 pw.Padding(
-                  padding: const pw.EdgeInsets.all(6),
+                  padding: const pw.EdgeInsets.all(3),
                   child: pw.Text('Specials', style: h),
                 ),
               ],
@@ -1240,19 +1203,19 @@ class _ControlSheetsGeneratorSheetState
               return pw.TableRow(
                 children: [
                   pw.Padding(
-                    padding: const pw.EdgeInsets.all(6),
+                    padding: const pw.EdgeInsets.all(3),
                     child: pw.Text(_animalPrintLabel(row), style: c),
                   ),
                   pw.Padding(
-                    padding: const pw.EdgeInsets.all(6),
+                    padding: const pw.EdgeInsets.all(3),
                     child: pw.Text(_safe(row, 'exhibitor_label'), style: c),
                   ),
                   pw.Padding(
-                    padding: const pw.EdgeInsets.all(6),
+                    padding: const pw.EdgeInsets.all(3),
                     child: pw.Text('', style: c),
                   ),
                   pw.Padding(
-                    padding: const pw.EdgeInsets.all(6),
+                    padding: const pw.EdgeInsets.all(3),
                     child: pw.Text(specialsText, style: c),
                   ),
                 ],
@@ -1272,10 +1235,10 @@ class _ControlSheetsGeneratorSheetState
         );
 
         return pw.Container(
-          margin: const pw.EdgeInsets.only(top: 10, bottom: 10),
-          padding: const pw.EdgeInsets.all(8),
+          margin: const pw.EdgeInsets.only(top: 5, bottom: 5),
+          padding: const pw.EdgeInsets.all(6),
           decoration: pw.BoxDecoration(
-            border: pw.Border.all(color: PdfColors.grey500, width: 0.7),
+            border: pw.Border.all(color: PdfColors.grey500, width: 0.5),
             borderRadius: pw.BorderRadius.circular(4),
           ),
           child: pw.Row(
@@ -1284,17 +1247,14 @@ class _ControlSheetsGeneratorSheetState
               pw.BarcodeWidget(
                 barcode: pw.Barcode.qrCode(),
                 data: url,
-                width: 62,
-                height: 62,
+                width: 42,
+                height: 42,
               ),
-              pw.SizedBox(width: 10),
+              pw.SizedBox(width: 8),
               pw.Expanded(
                 child: pw.Text(
-                  'Scan to enter results directly into RingMaster Show. Please also fill out control sheet in full',
-                  style: pw.TextStyle(
-                    fontSize: 9,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
+                  'Scan to enter results directly into RingMaster Show. Please also fill out control sheet in full.',
+                  style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold),
                 ),
               ),
             ],
@@ -1302,31 +1262,41 @@ class _ControlSheetsGeneratorSheetState
         );
       }
 
-      for (var i = 0; i < allPages.length; i++) {
-        final p = allPages[i];
-        final isFurOrWool = p['isFurOrWool'] == true;
+      for (final sectionGroup in sectionPageGroups.entries) {
+        final sectionTitle = sectionGroup.key;
+        final pages = sectionGroup.value;
 
         doc.addPage(
-          pw.Page(
+          pw.MultiPage(
             pageFormat: PdfPageFormat.letter,
-            margin: const pw.EdgeInsets.fromLTRB(28, 28, 28, 28),
+            margin: const pw.EdgeInsets.fromLTRB(24, 24, 24, 26),
             theme: theme,
+            header: (_) => _topHeader(
+              showHeader: '${widget.showName}   $sectionTitle',
+            ),
+            footer: (context) => pw.Row(
+              children: [
+                pw.Text('RingMaster Show', style: pw.TextStyle(fontSize: 8)),
+                pw.Spacer(),
+                pw.Text(
+                  'Page ${context.pageNumber} of ${context.pagesCount}',
+                  style: pw.TextStyle(fontSize: 8),
+                ),
+                pw.Spacer(),
+                pw.Text('${DateTime.now().toLocal()}', style: pw.TextStyle(fontSize: 8)),
+              ],
+            ),
             build: (_) {
-              return pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-                children: [
-                  _topHeader(
-                    showHeader:
-                        '${widget.showName}   ${(p['sectionTitle'] ?? '').toString()}',
-                    pageText: 'Page ${i + 1} of $totalPages',
-                  ),
-                  if (includeQrCode)
-                    qrResultsBlock(
-                      sectionId: (p['sectionId'] ?? '').toString(),
-                      breed: (p['breed'] ?? '').toString(),
-                    ),
-                  pw.SizedBox(height: includeQrCode ? 8 : 18),
-                  _classHeaderBlock(
+              final widgets = <pw.Widget>[];
+
+              for (var i = 0; i < pages.length; i++) {
+                final p = pages[i];
+                final isFurOrWool = p['isFurOrWool'] == true;
+
+                widgets.add(
+                  _compactClassHeaderBlock(
+                    blockIndex: i,
+                    totalBlocks: pages.length,
                     breed: (p['breed'] ?? '').toString(),
                     color: (p['color'] ?? '').toString(),
                     cls: (p['class'] ?? '').toString(),
@@ -1334,30 +1304,46 @@ class _ControlSheetsGeneratorSheetState
                     rabbitCount: (p['rabbitCount'] as int?) ?? 0,
                     exhibitorCount: (p['exhibitorCount'] as int?) ?? 0,
                   ),
-                  if (isFurOrWool) ...[
-                    pw.SizedBox(height: 6),
-                    pw.Text(
-                      'Fur/Wool Sheet — placements only',
-                      style: pw.TextStyle(
-                        fontSize: 10,
-                        fontWeight: pw.FontWeight.bold,
+                );
+
+                if (includeQrCode) {
+                  widgets.add(
+                    qrResultsBlock(
+                      sectionId: (p['sectionId'] ?? '').toString(),
+                      breed: (p['breed'] ?? '').toString(),
+                    ),
+                  );
+                }
+
+                if (isFurOrWool) {
+                  widgets.add(
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.only(bottom: 4),
+                      child: pw.Text(
+                        'Fur/Wool Sheet — placements only',
+                        style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
                       ),
                     ),
-                  ],
-                  pw.SizedBox(height: 14),
-                  _judgingTable(
-                    groupEntries:
-                        (p['rows'] as List).cast<Map<String, dynamic>>(),
-                    specialsList:
-                        (p['specials'] as List).map((x) => x.toString()).toList(),
+                  );
+                }
+
+                widgets.add(
+                  _compactJudgingTable(
+                    groupEntries: (p['rows'] as List).cast<Map<String, dynamic>>(),
+                    specialsList: (p['specials'] as List).map((x) => x.toString()).toList(),
                     isFurOrWool: isFurOrWool,
                   ),
-                ],
-              );
+                );
+
+                widgets.add(pw.SizedBox(height: 8));
+              }
+
+              return widgets;
             },
           ),
         );
       }
+      // END REPLACEMENT BLOCK
       return doc;
     }
 
@@ -1393,8 +1379,8 @@ class _ControlSheetsGeneratorSheetState
       final bytes = await doc.save();
 
       final name = widget.combineSections
-          ? 'control_${widget.showName}_ALL_SECTIONS${includeQrCode ? '_QR' : ''}.pdf'
-          : 'control_${widget.showName}_${widget.sectionLabel}${includeQrCode ? '_QR' : ''}.pdf';
+          ? 'control_compact_${widget.showName}_ALL_SECTIONS${includeQrCode ? '_QR' : ''}.pdf'
+          : 'control_compact_${widget.showName}_${widget.sectionLabel}${includeQrCode ? '_QR' : ''}.pdf';
 
       final savedPath = await _savePdfToUserChosenLocation(
         bytes: Uint8List.fromList(bytes),
@@ -1491,7 +1477,7 @@ class _ControlSheetsGeneratorSheetState
               ),
               onPressed: _building ? null : () => _generatePdf(includeQrCode: false),
               icon: const Icon(Icons.picture_as_pdf),
-              label: Text(_building ? 'Building PDF…' : 'Generate PDF'),
+              label: Text(_building ? 'Building Compact PDF…' : 'Generate Compact PDF'),
             ),
             const SizedBox(height: 8),
             Container(
@@ -1520,7 +1506,7 @@ class _ControlSheetsGeneratorSheetState
               onPressed: _building ? null : () => _generatePdf(includeQrCode: true),
               icon: const Icon(Icons.qr_code_2),
               label: Text(
-                _building ? 'Building PDF…' : 'Generate PDF with QR Code',
+                _building ? 'Building Compact PDF…' : 'Generate Compact PDF with QR Code',
               ),
             ),
             const SizedBox(height: 8),
