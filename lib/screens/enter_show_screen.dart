@@ -36,6 +36,8 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
 
   DateTime? _showDate;
 
+  bool _furEntriesEnabled = false;
+
   final Map<String, String> _rabbitBreedClassSystem = {};
 
   final Map<String, Map<String, dynamic>> _rabbitBreedMeta = {};
@@ -403,6 +405,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
 
   Future<_EnterShowLoadBundle> _loadAll() async {
     await _loadShowContext();
+    await _loadPaymentSettings();
     await _loadCommercialClasses();
     final animals = await _loadAnimals();
     final sections = await _loadEnabledSections();
@@ -616,6 +619,39 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
       }
     }
     return '';
+  }
+
+  Future<void> _loadPaymentSettings() async {
+    _furEntriesEnabled = false;
+
+    try {
+      final row = await supabase
+          .from('show_payment_settings')
+          .select()
+          .eq('show_id', widget.showId)
+          .maybeSingle();
+
+      if (row == null) return;
+
+      double readPrice(String key) {
+        final value = row[key];
+        if (value == null) return 0;
+        if (value is num) return value.toDouble();
+        return double.tryParse(value.toString()) ?? 0;
+      }
+
+      final possibleFurPrices = <double>[
+        readPrice('fur_entry_fee'),
+        readPrice('fur_fee'),
+        readPrice('fur_wool_fee'),
+        readPrice('fur_price'),
+        readPrice('fur_wool_price'),
+      ];
+
+      _furEntriesEnabled = possibleFurPrices.any((price) => price > 0);
+    } catch (_) {
+      _furEntriesEnabled = false;
+    }
   }
 
   Future<void> _loadShowContext() async {
@@ -1090,22 +1126,22 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     required String sectionId,
     required String? value,
   }) {
-  setState(() {
-    if (value == null || value.trim().isEmpty) {
-      _furVarietyByAnimalSection[animalId]?.remove(sectionId);
-      if (_furVarietyByAnimalSection[animalId]?.isEmpty ?? false) {
-        _furVarietyByAnimalSection.remove(animalId);
+    setState(() {
+      if (value == null || value.trim().isEmpty) {
+        _furVarietyByAnimalSection[animalId]?.remove(sectionId);
+        if (_furVarietyByAnimalSection[animalId]?.isEmpty ?? false) {
+          _furVarietyByAnimalSection.remove(animalId);
+        }
+        return;
       }
-      return;
-    }
 
-    final bySection = _furVarietyByAnimalSection.putIfAbsent(
-      animalId,
-      () => <String, String>{},
-    );
-    bySection[sectionId] = value.trim();
-  });
-}
+      final bySection = _furVarietyByAnimalSection.putIfAbsent(
+        animalId,
+        () => <String, String>{},
+      );
+      bySection[sectionId] = value.trim();
+    });
+  }
 
   void _toggleSection({
     required String sectionId,
@@ -1131,6 +1167,11 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
         }
       } else {
         _selectedSectionIds.add(sectionId);
+      }
+
+      if (!_furEntriesEnabled) {
+        _furSectionIdsByAnimal.clear();
+        _furVarietyByAnimalSection.clear();
       }
 
       _ensureSelectedExhibitorStillAllowed();
@@ -1203,7 +1244,10 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
         );
       }
       for (final sectionId in _selectedSectionIds) {
-        if (!_isFurSelectedForAnimalSection(animalId, sectionId)) continue;
+        if (!_furEntriesEnabled ||
+            !_isFurSelectedForAnimalSection(animalId, sectionId)) {
+          continue;
+        }
 
         if (_breedUsesWhiteColoredFur(breed)) {
           final furVariety = _furVarietyForAnimalSection(animalId, sectionId);
@@ -1399,18 +1443,21 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                   (a) {
                     final animalId = (a['id'] ?? '').toString();
 
-                    final furDescriptions = _selectedSectionIds
-                        .where((sectionId) =>
-                            _isFurSelectedForAnimalSection(animalId, sectionId))
-                        .map((sectionId) {
-                          final sectionLabel = _sectionLabelForId(sectionId);
-                          final furVariety = _furVarietyForAnimalSection(animalId, sectionId);
-                          if (furVariety != null && furVariety.isNotEmpty) {
-                            return '$sectionLabel ($furVariety)';
-                          }
-                          return sectionLabel;
-                        }).toList()
-                      ..sort();
+                    final furDescriptions = _furEntriesEnabled
+                        ? (_selectedSectionIds
+                            .where((sectionId) =>
+                                _isFurSelectedForAnimalSection(animalId, sectionId))
+                            .map((sectionId) {
+                              final sectionLabel = _sectionLabelForId(sectionId);
+                              final furVariety =
+                                  _furVarietyForAnimalSection(animalId, sectionId);
+                              if (furVariety != null && furVariety.isNotEmpty) {
+                                return '$sectionLabel ($furVariety)';
+                              }
+                              return sectionLabel;
+                            }).toList()
+                          ..sort())
+                        : <String>[];
 
                     final furText = furDescriptions.isEmpty
                         ? ''
@@ -1518,7 +1565,8 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
 
         for (final sectionId in _selectedSectionIds) {
           if (_sectionIsMeatOnly(sectionId)) continue;
-          final isFur = _isFurSelectedForAnimalSection(animalId, sectionId);
+          final isFur = _furEntriesEnabled &&
+              _isFurSelectedForAnimalSection(animalId, sectionId);
           final breedName = (a['breed'] ?? '').toString().trim();
 
           itemsToAdd.add({
@@ -1735,15 +1783,16 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                       });
                     },
             ),
-            if (_selected[id] == true &&
+            if (_furEntriesEnabled &&
+                _selected[id] == true &&
                 _selectedSectionIds.isNotEmpty &&
                 _safeString(a, 'species').toLowerCase() != 'cavy') ...[
               const SizedBox(height: 8),
-             Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _selectedSectionIds
-                  .where((sectionId) => !_sectionIsMeatOnly(sectionId))
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _selectedSectionIds
+                    .where((sectionId) => !_sectionIsMeatOnly(sectionId))
                   .map((sectionId) {
                     final label = _sectionLabelForId(sectionId);
                     final furSelected =
