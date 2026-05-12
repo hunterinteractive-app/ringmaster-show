@@ -6,7 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/screens/admin/admin_shows_screen.dart';
 import 'package:ringmaster_show/screens/admin/edit_show_settings_screen.dart';
 import 'package:ringmaster_show/screens/admin/entries_by_breed_section_table.dart';
-import 'package:ringmaster_show/screens/super_admin/superadmin_home_screen.dart';
+
 
 import 'login_screen.dart';
 import 'my_animals_screen.dart';
@@ -15,8 +15,10 @@ import 'account_settings_screen.dart';
 import 'my_entries_screen.dart';
 import 'legal/terms_screen.dart';
 import 'legal/privacy_policy_screen.dart';
+import 'super_admin/superadmin_home_screen.dart';
 
 import '../config/legal_config.dart';
+import '../services/app_session.dart';
 import '../services/role_service.dart';
 import '../services/stripe_connect_service.dart';
 import '../utils/date_time_utils.dart';
@@ -42,6 +44,11 @@ class _ShowListScreenState extends State<ShowListScreen> {
   String _sortMode = 'date';
   String _stateFilter = 'All';
   bool _checkingLegal = true;
+
+  SupportImpersonatedUser? get _impersonatedUser =>
+      SupportImpersonationSession.current.value;
+
+  String? get _effectiveUserId => AppSession.effectiveUserId;
 
   static const Map<String, String> _stateAbbreviationToName = {
     'AL': 'Alabama',
@@ -116,12 +123,23 @@ class _ShowListScreenState extends State<ShowListScreen> {
       ),
     );
     _verifyLegalAcceptance();
+    SupportImpersonationSession.current.addListener(_handleSupportModeChanged);
   }
 
   @override
   void dispose() {
+    SupportImpersonationSession.current.removeListener(
+      _handleSupportModeChanged,
+    );
     _searchController.dispose();
     super.dispose();
+  }
+  
+  void _handleSupportModeChanged() {
+    if (!mounted) return;
+    setState(() {
+      _bundleFuture = _loadBundle();
+    });
   }
 
   Future<List<Map<String, dynamic>>> _loadShows() async {
@@ -138,13 +156,13 @@ class _ShowListScreenState extends State<ShowListScreen> {
   }
 
   Future<Set<String>> _loadAdminShowIds() async {
-    final user = supabase.auth.currentUser;
-    if (user == null) return <String>{};
+    final userId = _effectiveUserId;
+    if (userId == null) return <String>{};
 
     final rows = await supabase
         .from('role_assignments')
         .select('show_id, role')
-        .eq('user_id', user.id);
+        .eq('user_id', userId);
 
     const allowedRoles = {
       'super_admin',
@@ -162,28 +180,28 @@ class _ShowListScreenState extends State<ShowListScreen> {
   }
 
   Future<bool> _hasAnyAssignedShows() async {
-    final user = supabase.auth.currentUser;
-    if (user == null) return false;
+    final userId = _effectiveUserId;
+    if (userId == null) return false;
 
     final rows = await supabase
         .from('role_assignments')
         .select('show_id')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .limit(1);
 
     return (rows as List).isNotEmpty;
   }
 
   Future<bool> _hasAvailableShowCapacity() async {
-    final user = supabase.auth.currentUser;
-    if (user == null) return false;
+    final userId = _effectiveUserId;
+    if (userId == null) return false;
 
     final row = await supabase
         .from('account_license_balances')
         .select(
           'purchased_show_days, consumed_show_days, unlimited_access, unlimited_active',
         )
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .maybeSingle();
 
     if (row == null) return false;
@@ -201,7 +219,8 @@ class _ShowListScreenState extends State<ShowListScreen> {
 
   Future<_ShowListBundle> _loadBundle() async {
     final shows = await _loadShows();
-    final isSuper = await RoleService.isSuperAdmin();
+    final isSupportMode = SupportImpersonationSession.isActive;
+    final isSuper = isSupportMode ? false : await RoleService.isSuperAdmin();
 
     List<Map<String, dynamic>> superAdminShows = <Map<String, dynamic>>[];
     if (isSuper) {
@@ -406,10 +425,21 @@ class _ShowListScreenState extends State<ShowListScreen> {
       return;
     }
 
+    final userId = _effectiveUserId ?? user.id;
+
+    if (SupportImpersonationSession.isActive) {
+      if (!mounted) return;
+      setState(() {
+        _bundleFuture = _loadBundle();
+        _checkingLegal = false;
+      });
+      return;
+    }
+
     final profile = await supabase
         .from('profiles')
         .select('accepted_terms_version, accepted_privacy_version')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .maybeSingle();
 
     final termsOk =
@@ -443,7 +473,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
 
     try {
       await supabase.from('profiles').upsert({
-        'user_id': user.id,
+        'user_id': userId,
         'accepted_terms_version': LegalConfig.currentTermsVersion,
         'accepted_terms_at': DateTime.now().toUtc().toIso8601String(),
         'accepted_privacy_version': LegalConfig.currentPrivacyVersion,
@@ -564,6 +594,17 @@ class _ShowListScreenState extends State<ShowListScreen> {
     );
   }
 
+  void _exitSupportMode() {
+    SupportImpersonationSession.stop();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Support mode ended.')),
+    );
+    setState(() {
+      _bundleFuture = _loadBundle();
+    });
+  }
+
   void _openAdmin(BuildContext context, _ShowListBundle bundle) {
     final allowedShowIds = bundle.isSuperAdmin
         ? bundle.superAdminShowIds.toList()
@@ -589,6 +630,14 @@ class _ShowListScreenState extends State<ShowListScreen> {
   }
 
   void _openEnterShow(BuildContext context, String showId, String showName) {
+    if (SupportImpersonationSession.isActive) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Entry is disabled while viewing in support mode.'),
+        ),
+      );
+      return;
+    }
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -740,7 +789,12 @@ class _ShowListScreenState extends State<ShowListScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const SuperadminHomeScreen()),
-              );
+              ).then((_) {
+                if (!mounted) return;
+                setState(() {
+                  _bundleFuture = _loadBundle();
+                });
+              });
             },
             onAccount: () {
               Navigator.push(
@@ -1099,8 +1153,38 @@ class _ShowListScreenState extends State<ShowListScreen> {
                 }
               }
 
+              final impersonatedUser = _impersonatedUser;
+
               return Column(
                 children: [
+                  if (impersonatedUser != null)
+                    Container(
+                      width: double.infinity,
+                      color: Colors.amber.shade100,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.lg,
+                        vertical: AppSpacing.sm,
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.support_agent, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Support Mode — ${impersonatedUser.label} (${impersonatedUser.email})',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          TextButton.icon(
+                            onPressed: _exitSupportMode,
+                            icon: const Icon(Icons.close),
+                            label: const Text('Exit'),
+                          ),
+                        ],
+                      ),
+                    ),
                   const Padding(
                     padding: EdgeInsets.fromLTRB(
                       AppSpacing.lg,
@@ -1228,7 +1312,10 @@ class _ResponsiveShowAppBar extends StatelessWidget
         ),
         if (showSuperAdminInline)
           FutureBuilder<bool>(
-            future: RoleService.isSuperAdmin(),
+            future: Future.value(
+              !SupportImpersonationSession.isActive &&
+                  (bundle?.isSuperAdmin ?? false),
+            ),
             builder: (context, snap) {
               if (snap.data != true) return const SizedBox.shrink();
               return _TopBarAction(
@@ -1267,7 +1354,10 @@ class _ResponsiveShowAppBar extends StatelessWidget
           )
         else ...[
           FutureBuilder<bool>(
-            future: RoleService.isSuperAdmin(),
+            future: Future.value(
+              !SupportImpersonationSession.isActive &&
+                  (bundle?.isSuperAdmin ?? false),
+            ),
             builder: (context, snap) {
               if (snap.data != true || showSuperAdminInline) {
                 return const SizedBox.shrink();

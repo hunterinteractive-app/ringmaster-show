@@ -7,6 +7,7 @@ import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:ringmaster_show/widgets/exhibitor_builder_dialog.dart';
 import 'package:ringmaster_show/utils/cavy/cavy_sop_order.dart';
 import 'package:ringmaster_show/widgets/animal_editor/open_animal_editor_dialog.dart';
+import 'package:ringmaster_show/services/app_session.dart';
 
 import 'cart_screen.dart';
 
@@ -222,6 +223,10 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   }
 
   Future<void> _openAddAnimalDialog() async {
+    if (AppSession.isSupportMode) {
+      setState(() => _msg = 'Adding animals is disabled while viewing in support mode.');
+      return;
+    }
     final saved = await openAnimalEditorDialog(context);
 
     if (saved == true) {
@@ -230,6 +235,10 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   }
 
   Future<void> _openAddExhibitorDialog() async {
+    if (AppSession.isSupportMode) {
+      setState(() => _msg = 'Adding exhibitors is disabled while viewing in support mode.');
+      return;
+    }
     final saved = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (_) => const ExhibitorBuilderDialog(),
@@ -368,16 +377,26 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   }
 
   Future<void> _viewCart() async {
-    final user = supabase.auth.currentUser;
-    if (user == null) {
+    final userId = AppSession.effectiveUserId;
+    if (userId == null) {
       setState(() => _msg = 'Not signed in.');
       return;
     }
 
-    final cartId = await _getOrCreateActiveCartId(
-      showId: widget.showId,
-      userId: user.id,
-    );
+    final cartId = AppSession.isSupportMode
+        ? await _getActiveCartIdIfExists(
+            showId: widget.showId,
+            userId: userId,
+          )
+        : await _getOrCreateActiveCartId(
+            showId: widget.showId,
+            userId: userId,
+          );
+
+    if (cartId == null) {
+      setState(() => _msg = 'No active cart found for this user.');
+      return;
+    }
 
     _activeCartId = cartId;
     await _refreshAnimalsInCart();
@@ -427,13 +446,13 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   }
 
   Future<List<Map<String, dynamic>>> _loadActiveExhibitors() async {
-    final user = supabase.auth.currentUser;
-    if (user == null) return [];
+    final userId = AppSession.effectiveUserId;
+    if (userId == null) return [];
 
     final rows = await supabase
         .from('exhibitors')
         .select('id,showing_name,display_name,type,is_active,created_at')
-        .eq('owner_user_id', user.id)
+        .eq('owner_user_id', userId)
         .eq('is_active', true)
         .order('created_at', ascending: true);
 
@@ -502,21 +521,31 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   }
 
   Future<void> _loadActiveCartIdIfExists() async {
-    final user = supabase.auth.currentUser;
-    if (user == null) {
+    final userId = AppSession.effectiveUserId;
+    if (userId == null) {
       _activeCartId = null;
       return;
     }
 
+    _activeCartId = await _getActiveCartIdIfExists(
+      showId: widget.showId,
+      userId: userId,
+    );
+  }
+
+  Future<String?> _getActiveCartIdIfExists({
+    required String showId,
+    required String userId,
+  }) async {
     final existing = await supabase
         .from('entry_carts')
         .select('id')
-        .eq('show_id', widget.showId)
-        .eq('user_id', user.id)
+        .eq('show_id', showId)
+        .eq('user_id', userId)
         .eq('status', 'active')
         .maybeSingle();
 
-    _activeCartId = existing == null ? null : existing['id'].toString();
+    return existing == null ? null : existing['id'].toString();
   }
 
   Future<String> _getOrCreateActiveCartId({
@@ -854,15 +883,15 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   }
 
   Future<List<Map<String, dynamic>>> _loadAnimals() async {
-    final user = supabase.auth.currentUser;
-    if (user == null) return [];
+    final userId = AppSession.effectiveUserId;
+    if (userId == null) return [];
 
     final res = await supabase
         .from('animals')
         .select(
           'id,species,name,tattoo,breed,variety,sex,birth_date,is_dob_unknown',
         )
-        .eq('owner_user_id', user.id)
+        .eq('owner_user_id', userId)
         .order('created_at', ascending: false);
 
     return (res as List).cast<Map<String, dynamic>>();
@@ -1491,8 +1520,12 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   Future<void> _addSelectedToCart(
     List<Map<String, dynamic>> eligibleAnimals,
   ) async {
-    final user = supabase.auth.currentUser;
-    if (user == null) {
+    if (AppSession.isSupportMode) {
+      setState(() => _msg = 'Adding to cart is disabled while viewing in support mode.');
+      return;
+    }
+    final userId = AppSession.effectiveUserId;
+    if (userId == null) {
       setState(() => _msg = 'Not signed in.');
       return;
     }
@@ -1554,7 +1587,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     try {
       final cartId = await _getOrCreateActiveCartId(
         showId: widget.showId,
-        userId: user.id,
+        userId: userId,
       );
       _activeCartId = cartId;
 
@@ -2105,8 +2138,12 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     required Map<String, dynamic> animal,
     required String classCode,
   }) async {
-    final user = supabase.auth.currentUser;
-    if (user == null) {
+    if (AppSession.isSupportMode) {
+      setState(() => _msg = 'Commercial entries are disabled while viewing in support mode.');
+      return;
+    }
+    final userId = AppSession.effectiveUserId;
+    if (userId == null) {
       setState(() => _msg = 'Not signed in.');
       return;
     }
@@ -2161,7 +2198,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     try {
       final cartId = await _getOrCreateActiveCartId(
         showId: widget.showId,
-        userId: user.id,
+        userId: userId,
       );
       _activeCartId = cartId;
 
@@ -2216,8 +2253,12 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   }
 
   Future<void> _addMeatPenToCart() async {
-    final user = supabase.auth.currentUser;
-    if (user == null) {
+    if (AppSession.isSupportMode) {
+      setState(() => _msg = 'Meat Pen entries are disabled while viewing in support mode.');
+      return;
+    }
+    final userId = AppSession.effectiveUserId;
+    if (userId == null) {
       setState(() => _msg = 'Not signed in.');
       return;
     }
@@ -2249,7 +2290,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     try {
       final cartId = await _getOrCreateActiveCartId(
         showId: widget.showId,
-        userId: user.id,
+        userId: userId,
       );
       _activeCartId = cartId;
 
@@ -2340,7 +2381,9 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                 child: SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
-                    onPressed: _submitting ? null : _addMeatPenToCart,
+                    onPressed: (_submitting || AppSession.isSupportMode)
+                        ? null
+                        : _addMeatPenToCart,
                     icon: const Icon(Icons.set_meal),
                     label: Text('Add $label'),
                   ),
@@ -2351,7 +2394,9 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
             return Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: PopupMenuButton<String>(
-                enabled: !_submitting && rabbitAnimals.isNotEmpty,
+                enabled: !AppSession.isSupportMode &&
+                    !_submitting &&
+                    rabbitAnimals.isNotEmpty,
                 tooltip: 'Select rabbit for $label',
                 onSelected: (animalId) {
                   final animal = rabbitAnimals.firstWhere(
@@ -2435,9 +2480,13 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
           useScrollView: false,
           actions: [
             IconButton(
-              tooltip: 'Add Animal',
+              tooltip: AppSession.isSupportMode
+                  ? 'Add animal disabled in support mode'
+                  : 'Add Animal',
               icon: const Icon(Icons.add),
-              onPressed: _submitting ? null : _openAddAnimalDialog,
+              onPressed: (_submitting || AppSession.isSupportMode)
+                  ? null
+                  : _openAddAnimalDialog,
             ),
             IconButton(
               tooltip: 'View Cart',

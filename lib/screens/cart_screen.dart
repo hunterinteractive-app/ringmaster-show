@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
 import '../utils/date_time_utils.dart';
+import '../services/app_session.dart';
 import '../services/stripe_connect_service.dart';
 
 import 'my_entries_screen.dart';
@@ -288,6 +289,7 @@ class _CartScreenState extends State<CartScreen> {
     return !_loading &&
         !_payingOnline &&
         !_confirming &&
+        !AppSession.isSupportMode &&
         !_deadlinePassed() &&
         _items.isNotEmpty &&
         _stripeConnected;
@@ -504,6 +506,12 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Future<void> _removeItem(String itemId) async {
+    if (AppSession.isSupportMode) {
+      setState(() {
+        _msg = 'Removing cart items is disabled while viewing in support mode.';
+      });
+      return;
+    }
     try {
       await supabase.from('entry_cart_items').delete().eq('id', itemId);
       await _load();
@@ -575,6 +583,12 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Future<void> _payOnline() async {
+    if (AppSession.isSupportMode) {
+      setState(() {
+        _msg = 'Online payment is disabled while viewing in support mode.';
+      });
+      return;
+    }
     if (_items.isEmpty) {
       setState(() => _msg = 'Your cart is empty. If you are looking for completed entries please return to the upcoming shows tab and select Entries.');
       return;
@@ -643,6 +657,12 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Future<void> _confirmDayOf() async {
+    if (AppSession.isSupportMode) {
+      setState(() {
+        _msg = 'Submitting entries is disabled while viewing in support mode.';
+      });
+      return;
+    }
     if (_items.isEmpty) {
       setState(() => _msg = 'Your cart is empty.');
       return;
@@ -783,6 +803,23 @@ class _CartScreenState extends State<CartScreen> {
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
+                if (AppSession.isSupportMode)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade100,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.amber.shade300),
+                      ),
+                      child: const Text(
+                        'Support Mode — Cart is read-only. Remove, payment, and submit actions are disabled.',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ),
                 if (_msg != null)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -964,12 +1001,13 @@ class _CartScreenState extends State<CartScreen> {
                                           icon: const Icon(
                                             Icons.delete_outline,
                                           ),
-                                          onPressed:
-                                              (_confirming || _payingOnline)
-                                                  ? null
-                                                  : () => _removeItem(
-                                                        it['id'].toString(),
-                                                      ),
+                                          onPressed: (AppSession.isSupportMode ||
+                                                  _confirming ||
+                                                  _payingOnline)
+                                              ? null
+                                              : () => _removeItem(
+                                                    it['id'].toString(),
+                                                  ),
                                         ),
                                       );
                                     }),
@@ -996,7 +1034,8 @@ class _CartScreenState extends State<CartScreen> {
                           )
                         : FilledButton(
                             onPressed:
-                                (_confirming ||
+                                (AppSession.isSupportMode ||
+                                        _confirming ||
                                         _deadlinePassed() ||
                                         _items.isEmpty)
                                     ? null

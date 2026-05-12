@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
 import 'account_profile_setup_screen.dart';
+import '../services/app_session.dart';
 import '../widgets/exhibitor_builder_dialog.dart';
 
 final supabase = Supabase.instance.client;
@@ -32,8 +33,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   // Load Exhibitors
   // ------------------------------
   Future<void> _load() async {
-    final user = supabase.auth.currentUser;
-    if (user == null) {
+    final userId = AppSession.effectiveUserId;
+    if (userId == null) {
       setState(() {
         _loading = false;
         _msg = 'Not signed in.';
@@ -53,7 +54,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
             'id,type,display_name,arba_number,email,phone,'
             'birth_date,is_active,created_at',
           )
-          .eq('owner_user_id', user.id)
+          .eq('owner_user_id', userId)
           .order('created_at', ascending: true);
 
       if (!mounted) return;
@@ -76,6 +77,13 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   // Profile Setup
   // ------------------------------
   Future<void> _openProfileSetup() async {
+    if (AppSession.isSupportMode) {
+      setState(() {
+        _msg = 'Profile setup is disabled while viewing in support mode.';
+      });
+      return;
+    }
+
     final saved = await Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (_) => const AccountProfileSetupScreen()),
@@ -90,6 +98,13 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   // Exhibitor Dialog (NEW)
   // ------------------------------
   Future<void> _openExhibitorEditor({Map<String, dynamic>? existing}) async {
+    if (AppSession.isSupportMode) {
+      setState(() {
+        _msg = 'Exhibitor editing is disabled while viewing in support mode.';
+      });
+      return;
+    }
+
     final saved = await showDialog<Map<String, dynamic>>(
       context: context,
       barrierDismissible: false,
@@ -107,6 +122,13 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   // Toggle Active
   // ------------------------------
   Future<void> _toggleActive(String id, bool newActive) async {
+    if (AppSession.isSupportMode) {
+      setState(() {
+        _msg = 'Activating and deactivating exhibitors is disabled while viewing in support mode.';
+      });
+      return;
+    }
+
     try {
       await supabase
           .from('exhibitors')
@@ -132,9 +154,13 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       useScrollView: false,
       actions: [
         IconButton(
-          tooltip: 'Add Exhibitor',
+          tooltip: AppSession.isSupportMode
+              ? 'Add exhibitor disabled in support mode'
+              : 'Add Exhibitor',
           icon: const Icon(Icons.person_add_alt_1),
-          onPressed: _loading ? null : () => _openExhibitorEditor(),
+          onPressed: (_loading || AppSession.isSupportMode)
+              ? null
+              : () => _openExhibitorEditor(),
         ),
         IconButton(
           tooltip: 'Reload',
@@ -146,6 +172,23 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
+                if (AppSession.isSupportMode)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade100,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.amber.shade300),
+                      ),
+                      child: const Text(
+                        'Support Mode — Account settings are read-only.',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ),
                 if (_msg != null)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
@@ -215,36 +258,40 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                                   '${bd == null ? '' : ' • DOB: $bd'}'
                                   '${active ? '' : ' • INACTIVE'}',
                                 ),
-                                onTap: () => _openExhibitorEditor(existing: e),
-                                trailing: PopupMenuButton<String>(
-                                  onSelected: (v) {
-                                    if (v == 'edit') {
-                                      _openExhibitorEditor(existing: e);
-                                    }
-                                    if (v == 'deactivate') {
-                                      _toggleActive(id, false);
-                                    }
-                                    if (v == 'activate') {
-                                      _toggleActive(id, true);
-                                    }
-                                  },
-                                  itemBuilder: (_) => [
-                                    const PopupMenuItem(
-                                      value: 'edit',
-                                      child: Text('Edit'),
-                                    ),
-                                    if (active)
-                                      const PopupMenuItem(
-                                        value: 'deactivate',
-                                        child: Text('Deactivate'),
-                                      )
-                                    else
-                                      const PopupMenuItem(
-                                        value: 'activate',
-                                        child: Text('Activate'),
+                                onTap: AppSession.isSupportMode
+                                    ? null
+                                    : () => _openExhibitorEditor(existing: e),
+                                trailing: AppSession.isSupportMode
+                                    ? null
+                                    : PopupMenuButton<String>(
+                                        onSelected: (v) {
+                                          if (v == 'edit') {
+                                            _openExhibitorEditor(existing: e);
+                                          }
+                                          if (v == 'deactivate') {
+                                            _toggleActive(id, false);
+                                          }
+                                          if (v == 'activate') {
+                                            _toggleActive(id, true);
+                                          }
+                                        },
+                                        itemBuilder: (_) => [
+                                          const PopupMenuItem(
+                                            value: 'edit',
+                                            child: Text('Edit'),
+                                          ),
+                                          if (active)
+                                            const PopupMenuItem(
+                                              value: 'deactivate',
+                                              child: Text('Deactivate'),
+                                            )
+                                          else
+                                            const PopupMenuItem(
+                                              value: 'activate',
+                                              child: Text('Activate'),
+                                            ),
+                                        ],
                                       ),
-                                  ],
-                                ),
                               ),
                             );
                           },

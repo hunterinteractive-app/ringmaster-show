@@ -12,6 +12,7 @@ import '../../screens/my_animals_screen.dart';
 import '../../screens/my_entries_screen.dart';
 import '../../screens/account_settings_screen.dart';
 import '../../theme/app_theme.dart';
+import '../../services/app_session.dart';
 import '../../widgets/rm_widgets.dart';
 
 final supabase = Supabase.instance.client;
@@ -58,14 +59,16 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
   }
 
   Future<List<Map<String, dynamic>>> _loadShows() async {
-    final user = supabase.auth.currentUser;
-    if (user == null) return [];
+    final userId = AppSession.effectiveUserId;
+    if (userId == null) return [];
 
-    final superAdminRes = await supabase
-        .from('super_admins')
-        .select('user_id')
-        .eq('user_id', user.id)
-        .maybeSingle();
+    final superAdminRes = AppSession.isSupportMode
+        ? null
+        : await supabase
+            .from('super_admins')
+            .select('user_id')
+            .eq('user_id', userId)
+            .maybeSingle();
 
     final isSuperAdmin = superAdminRes != null;
 
@@ -145,8 +148,18 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
   }
 
   Future<_ShowCreationStatus> _loadLicenseStatus() async {
-    final user = supabase.auth.currentUser;
-    if (user == null) {
+    if (AppSession.isSupportMode) {
+      return const _ShowCreationStatus(
+        canCreate: false,
+        remainingShowDays: 0,
+        unlimitedActive: false,
+        unlimitedExpiresAt: null,
+        message: 'Support mode is read-only.',
+      );
+    }
+
+    final userId = AppSession.effectiveUserId;
+    if (userId == null) {
       return const _ShowCreationStatus(
         canCreate: false,
         remainingShowDays: 0,
@@ -159,7 +172,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
     try {
       final result = await supabase.rpc(
         'show_creation_status',
-        params: {'p_user_id': user.id},
+        params: {'p_user_id': userId},
       );
 
       if (result is List && result.isNotEmpty) {
@@ -259,6 +272,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
   }
 
   Future<void> _openCreate() async {
+    if (AppSession.isSupportMode) return;
     final ok = await Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (_) => const CreateShowScreen()),
@@ -386,7 +400,8 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
 
         return Scaffold(
           appBar: _AdminShowsAppBar(
-            canCreate: license.canCreate &&
+            canCreate: !AppSession.isSupportMode &&
+                license.canCreate &&
                 snap.connectionState != ConnectionState.waiting,
             onShows: _openShows,
             onAnimals: _openAnimals,
@@ -395,7 +410,8 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
             onAccount: _openAccount,
             onReload:
                 snap.connectionState == ConnectionState.waiting ? null : _reload,
-            onCreate: (snap.connectionState == ConnectionState.waiting ||
+            onCreate: (AppSession.isSupportMode ||
+                    snap.connectionState == ConnectionState.waiting ||
                     !license.canCreate)
                 ? null
                 : _openCreate,
@@ -409,6 +425,26 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
                       child: Column(
                         children: [
                           _buildLicenseBanner(license),
+                          if (AppSession.isSupportMode) ...[
+                            const SizedBox(height: AppSpacing.md),
+                            RMCard(
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: const [
+                                  Icon(Icons.support_agent, color: Colors.orange),
+                                  SizedBox(width: AppSpacing.md),
+                                  Expanded(
+                                    child: Text(
+                                      'Support Mode — Admin shows are read-only. Creating shows is disabled.',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: AppSpacing.md),
                           RMCard(
                             child: TextField(

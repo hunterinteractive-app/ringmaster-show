@@ -8,6 +8,7 @@ import 'dart:typed_data';
 
 import '../show_list_screen.dart';
 import '../../services/club_service.dart';
+import '../../services/app_session.dart';
 import 'show_breed_settings_screen.dart';
 import 'show_sanctions_dialog.dart';
 import 'show_fees_dialog.dart';
@@ -58,7 +59,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   bool _isLocked = false;
   bool _isFinalized = false;
 
-  bool get _isReadOnly => _isLocked || _isFinalized;
+  bool get _isReadOnly => _isLocked || _isFinalized || AppSession.isSupportMode;
 
   String _timezone = 'America/Indiana/Indianapolis';
   String _showNameForTitle = 'Show';
@@ -156,6 +157,10 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   }
 
   Future<void> _toggleShowLock() async {
+    if (AppSession.isSupportMode) {
+      setState(() => _msg = 'Lock and unlock are disabled while viewing in support mode.');
+      return;
+    }
     if (_isFinalized) return;
 
     final nextLocked = !_isLocked;
@@ -267,6 +272,10 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   }
 
   Future<void> _showAddClubDialog() async {
+    if (AppSession.isSupportMode) {
+      setState(() => _msg = 'Adding clubs is disabled while viewing in support mode.');
+      return;
+    }
     final controller = TextEditingController();
     bool submitting = false;
     String? errorText;
@@ -352,6 +361,10 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   }
 
   Future<void> _showManageClubsDialog() async {
+    if (AppSession.isSupportMode) {
+      setState(() => _msg = 'Managing clubs is disabled while viewing in support mode.');
+      return;
+    }
     final renamedValues = <String, TextEditingController>{};
 
     for (final club in _clubs) {
@@ -532,6 +545,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   }
 
   Future<void> _pickStartDate() async {
+    if (AppSession.isSupportMode) return;
     final initial = _startDate ?? DateTime.now();
     final picked = await showDatePicker(
       context: context,
@@ -544,6 +558,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   }
 
   Future<void> _pickEndDate() async {
+    if (AppSession.isSupportMode) return;
     final initial = _endDate ?? _startDate ?? DateTime.now();
     final picked = await showDatePicker(
       context: context,
@@ -556,6 +571,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   }
 
   Future<DateTime?> _pickDateTime(DateTime? current) async {
+    if (AppSession.isSupportMode) return null;
     final base = current?.toLocal() ?? DateTime.now();
     final d = await showDatePicker(
       context: context,
@@ -587,6 +603,10 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   }
 
   bool _validate() {
+    if (AppSession.isSupportMode) {
+      setState(() => _msg = 'Show settings are read-only in support mode.');
+      return false;
+    }
     if (_name.text.trim().isEmpty) {
       setState(() => _msg = 'Show name is required.');
       return false;
@@ -775,6 +795,10 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   }
 
   Future<void> _downloadLockedShowData() async {
+    if (AppSession.isSupportMode) {
+      setState(() => _msg = 'Downloading locked show data is disabled while viewing in support mode.');
+      return;
+    }
     setState(() {
       _saving = true;
       _msg = null;
@@ -1059,6 +1083,30 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                       children: [
                         const RMTimezoneNoticeBanner(),
                         _buildStatusBanner(),
+                        if (AppSession.isSupportMode)
+                          Container(
+                            width: double.infinity,
+                            margin: const EdgeInsets.only(bottom: 16),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.shade100,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.amber.shade300),
+                            ),
+                            child: const Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(Icons.support_agent, size: 18),
+                                SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'Support Mode — Show settings are read-only. Editing, lock/unlock, downloads, and setup changes are disabled.',
+                                    style: TextStyle(fontWeight: FontWeight.w700),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         if (_msg != null)
                           Container(
                             width: double.infinity,
@@ -1276,7 +1324,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                 'Controls whether this show is published.',
                               ),
                               value: _published,
-                              onChanged: (_saving || _isReadOnly)
+                              onChanged: (_saving || _isReadOnly || AppSession.isSupportMode)
                                   ? null
                                   : (v) async {
                                       final previous = _published;
@@ -1320,7 +1368,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                 'Enables national show reporting rules, including Top 10 Breed reporting.',
                               ),
                               value: _isNationalShow,
-                              onChanged: (_saving || _isReadOnly)
+                              onChanged: (_saving || _isReadOnly || AppSession.isSupportMode)
                                   ? null
                                   : (v) => setState(() => _isNationalShow = v),
                             ),
@@ -1457,14 +1505,14 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                   : _isLocked
                                       ? 'Allow setup changes again if corrections are needed'
                                       : 'Prevent further setup changes before closeout',
-                              onTap: (_saving || _isFinalized) ? null : _toggleShowLock,
+                              onTap: (_saving || _isFinalized || AppSession.isSupportMode) ? null : _toggleShowLock,
                             ),
                             if (_isLocked)
                             _buildSettingsActionTile(
                               icon: Icons.download_for_offline,
                               title: 'Download Locked Show Data',
                               subtitle: 'Download a ZIP backup of this show’s entries, results, settings, and reports',
-                              onTap: _saving ? null : _downloadLockedShowData,
+                              onTap: (_saving || AppSession.isSupportMode) ? null : _downloadLockedShowData,
                             ),
                           ],
                         ),

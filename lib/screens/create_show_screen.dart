@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
+import '../services/app_session.dart';
 import '../services/club_service.dart';
 import '../widgets/rm_timezone_notice_banner.dart';
 
@@ -154,8 +155,13 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
   }
 
   bool _validate() {
-    final user = supabase.auth.currentUser;
-    if (user == null) {
+    if (AppSession.isSupportMode) {
+      setState(() => _msg = 'Creating shows is disabled while viewing in support mode.');
+      return false;
+    }
+
+    final userId = AppSession.effectiveUserId;
+    if (userId == null) {
       setState(() => _msg = 'Not signed in.');
       return false;
     }
@@ -281,7 +287,7 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
   Future<void> _create() async {
     if (!_validate()) return;
 
-    final user = supabase.auth.currentUser!;
+    final userId = AppSession.effectiveUserId!;
 
     setState(() {
       _saving = true;
@@ -294,7 +300,7 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
 
       if (!_hasLockedHostingClub) {
         final createdClub = await _createFirstClubForUser(
-          userId: user.id,
+          userId: userId,
           clubName: _hostingClubName.text.trim(),
         );
 
@@ -338,7 +344,7 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
         await supabase.from('show_sections').insert(sectionRows);
       }
 
-      await _ensureShowAdmin(showId: showId, userId: user.id);
+      await _ensureShowAdmin(showId: showId, userId: userId);
 
       if (!mounted) return;
       Navigator.pop(context, true);
@@ -706,7 +712,7 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
                   backgroundColor: const Color(0xFFD4A623),
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
-                onPressed: _saving ? null : _create,
+                onPressed: (_saving || AppSession.isSupportMode) ? null : _create,
                 child: Text(_saving ? 'Creating…' : 'Create'),
               ),
             ),

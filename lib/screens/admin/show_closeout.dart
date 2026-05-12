@@ -16,6 +16,7 @@ import 'package:ringmaster_show/screens/admin/closeout/services/closeout_runner.
 import 'package:ringmaster_show/screens/admin/closeout/services/report_engine.dart';
 import 'package:ringmaster_show/screens/admin/closeout/services/report_upload_service.dart';
 import 'package:ringmaster_show/services/report_email_service.dart';
+import 'package:ringmaster_show/services/app_session.dart';
 
 import 'closeout/data/loaders/legs_report_loader.dart';
 import 'closeout/data/loaders/exhibitor_report_loader.dart';
@@ -823,6 +824,11 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   }
 
     Future<void> _finalizeShow() async {
+    if (_isSupportMode) {
+      throw Exception(
+        'Finalize is disabled while viewing in support mode.',
+      );
+    }
       final ready = await _ensureResultsReadyForReports();
 
       if (!ready) {
@@ -880,6 +886,11 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       required void Function(String artifactKey) onFinished,
       required void Function(String artifactKey, Object error) onFailed,
     }) async {
+    if (_isSupportMode) {
+      throw Exception(
+        'Report generation is disabled while viewing in support mode.',
+      );
+    }
       await _saveArbaDetails();
       await _ensureLegsBuilder();
       await _ensureExhibitorBuilder();
@@ -1070,6 +1081,16 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     }
 
   Future<void> _sendAllExhibitorReports() async {
+    if (_isSupportMode) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Exhibitor email sending is disabled while viewing in support mode.',
+          ),
+        ),
+      );
+      return;
+    }
     final ready = await _ensureResultsReadyForReports();
     if (!ready) return;
 
@@ -1156,6 +1177,16 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   }
 
   Future<void> _sendAllClubReports() async {
+      if (_isSupportMode) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Club email sending is disabled while viewing in support mode.',
+          ),
+        ),
+      );
+      return;
+    }
     final ready = await _ensureResultsReadyForReports();
     if (!ready) return;
 
@@ -1419,6 +1450,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     }
 
   bool get _isBusy => _loading || _generatingReport;
+  bool get _isSupportMode => AppSession.isSupportMode;
 
   Future<void> _ensureLegsBuilder() async {
     _legsBuilder ??= await LegsReportPdfBuilder.fromAssets();
@@ -1520,6 +1552,16 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   }
 
   Future<void> _saveArbaDetails() async {
+    if (_isSupportMode) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Saving closeout details is disabled while viewing in support mode.',
+          ),
+        ),
+      );
+      return;
+    }
     try {
       await supabase.from('show_arba_report_details').upsert({
         'show_id': widget.showId,
@@ -1678,6 +1720,16 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       String? exhibitorId,
       String? exhibitorName,
     }) async {
+      if (_isSupportMode) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Report generation is disabled while viewing in support mode.',
+            ),
+          ),
+        );
+        return;
+      }
       if (reportName != 'unpaid_balances_report') {
         final ready = await _ensureResultsReadyForReports();
         if (!ready) return;
@@ -1974,6 +2026,16 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     String? scope,
     String? showLetter,
   }) async {
+    if (_isSupportMode) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Email sending is disabled while viewing in support mode.',
+          ),
+        ),
+      );
+      return;
+    }
     try {
       var artifacts = (_dashboard?.reports ?? const <ReportArtifactSummary>[])
           .where((r) => r.reportName == reportName)
@@ -2216,6 +2278,38 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                         child: ListView(
                           padding: const EdgeInsets.all(16),
                           children: [
+                            if (_isSupportMode)
+                              Container(
+                                width: double.infinity,
+                                margin: const EdgeInsets.only(bottom: 16),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber.shade100,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: Colors.amber.shade300,
+                                  ),
+                                ),
+                                child: const Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Icon(
+                                      Icons.support_agent,
+                                      color: Colors.orange,
+                                    ),
+                                    SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        'Support Mode — Closeout tools are read-only. Finalize, report generation, saving, and email sending are disabled.',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+
                             _ArbaCloseoutCard(
                               secretaryNameController: _secretaryNameController,
                               secretaryAddressController:
@@ -2232,27 +2326,27 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                               sweepstakesClubController:
                                   _sweepstakesClubController,
                               onSweepstakesChanged: (v) {
-                                setState(() {
-                                  _sweepstakesIssue = v;
-                                  if (!v) {
-                                    _sweepstakesClubController.clear();
-                                  }
-                                });
-                              },
+                                      setState(() {
+                                        _sweepstakesIssue = v;
+                                        if (!v) {
+                                          _sweepstakesClubController.clear();
+                                        }
+                                      });
+                                    },
                               onSweepstakesClubChanged: (_) {},
                               officialProtest: _officialProtest,
                               onOfficialProtestChanged: (v) {
-                                setState(() {
-                                  _officialProtest = v;
-                                  if (!v) {
-                                    _arbaReportFiled = false;
-                                  }
-                                });
-                              },
+                                      setState(() {
+                                        _officialProtest = v;
+                                        if (!v) {
+                                          _arbaReportFiled = false;
+                                        }
+                                      });
+                                    },
                               arbaReportFiled: _arbaReportFiled,
                               onArbaReportFiledChanged: (v) {
-                                setState(() => _arbaReportFiled = v);
-                              },
+                                      setState(() => _arbaReportFiled = v);
+                                    },
                               onSave: _saveArbaDetails,
                             ),
 

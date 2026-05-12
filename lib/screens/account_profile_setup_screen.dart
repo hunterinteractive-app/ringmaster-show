@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/widgets/exhibitor_builder_dialog.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
+import 'package:ringmaster_show/services/app_session.dart';
 
 import 'show_list_screen.dart';
 
@@ -30,6 +31,15 @@ class _AccountProfileSetupScreenState extends State<AccountProfileSetupScreen> {
   }
 
   Future<void> _openBuilder() async {
+    if (AppSession.isSupportMode) {
+      if (!mounted) return;
+      setState(() {
+        _msg = 'Profile setup is disabled while viewing in support mode.';
+        _opening = false;
+      });
+      return;
+    }
+
     if (_opening || !mounted) return;
 
     setState(() {
@@ -82,10 +92,15 @@ class _AccountProfileSetupScreenState extends State<AccountProfileSetupScreen> {
   @override
   Widget build(BuildContext context) {
     final isEdit = widget.exhibitorId != null;
+    final isSupportMode = AppSession.isSupportMode;
 
     return RingMasterPageShell(
       title: 'RingMaster Show',
-      subtitle: isEdit ? 'Edit Exhibitor' : 'Add Exhibitor',
+      subtitle: isSupportMode
+          ? 'Support Mode'
+          : isEdit
+              ? 'Edit Exhibitor'
+              : 'Add Exhibitor',
       showBackButton: true,
       useScrollView: false,
       body: Center(
@@ -96,12 +111,16 @@ class _AccountProfileSetupScreenState extends State<AccountProfileSetupScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const CircularProgressIndicator(),
-                const SizedBox(height: 20),
+                if (!isSupportMode) ...[
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 20),
+                ],
                 Text(
-                  isEdit
-                      ? 'Opening exhibitor editor...'
-                      : 'Opening exhibitor builder...',
+                  isSupportMode
+                      ? 'Profile setup is read-only in support mode.'
+                      : isEdit
+                          ? 'Opening exhibitor editor...'
+                          : 'Opening exhibitor builder...',
                   style: Theme.of(context).textTheme.titleMedium,
                   textAlign: TextAlign.center,
                 ),
@@ -128,7 +147,7 @@ class _AccountProfileSetupScreenState extends State<AccountProfileSetupScreen> {
                   ),
                   const SizedBox(height: 16),
                   FilledButton(
-                    onPressed: _opening ? null : _openBuilder,
+                    onPressed: (_opening || isSupportMode) ? null : _openBuilder,
                     child: const Text('Try Again'),
                   ),
                 ],

@@ -10,6 +10,8 @@ import 'my_entries_screen.dart';
 import 'account_settings_screen.dart';
 
 import '../theme/app_theme.dart';
+import '../services/app_session.dart';
+
 import '../widgets/rm_widgets.dart';
 
 import '../widgets/animal_editor/open_animal_editor_dialog.dart';
@@ -25,27 +27,45 @@ class MyAnimalsScreen extends StatefulWidget {
 
 class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
   Future<List<Map<String, dynamic>>> _loadAnimals() async {
-    final user = supabase.auth.currentUser;
-    if (user == null) return [];
+    final userId = AppSession.effectiveUserId;
+    if (userId == null) return [];
 
     final res = await supabase
         .from('animals')
         .select(
           'id,species,name,tattoo,breed,variety,sex,birth_date,is_dob_unknown,created_at',
         )
-        .eq('owner_user_id', user.id)
+        .eq('owner_user_id', userId)
         .order('created_at', ascending: false);
 
     return (res as List).cast<Map<String, dynamic>>();
   }
 
   Future<void> _deleteAnimal(String id) async {
+    if (AppSession.isSupportMode) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Delete is disabled while viewing in support mode.'),
+        ),
+      );
+      return;
+    }
+
     await supabase.from('animals').delete().eq('id', id);
     if (!mounted) return;
     setState(() {});
   }
 
   Future<void> _confirmDeleteAnimal(Map<String, dynamic> animal) async {
+    if (AppSession.isSupportMode) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Delete is disabled while viewing in support mode.'),
+        ),
+      );
+      return;
+    }
+
     final name = (animal['name'] ?? '').toString().trim();
     final tattoo = (animal['tattoo'] ?? '').toString().trim().toUpperCase();
     final breed = (animal['breed'] ?? '').toString().trim();
@@ -80,6 +100,15 @@ class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
   Future<void> _openAnimalEditor({
     Map<String, dynamic>? existing,
   }) async {
+    if (AppSession.isSupportMode) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Animal editing is disabled while viewing in support mode.'),
+        ),
+      );
+      return;
+    }
+
     final saved = await openAnimalEditorDialog(
       context,
       existing: existing,
@@ -98,6 +127,15 @@ class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
   }
 
   void _openAccount(BuildContext context) {
+    if (AppSession.isSupportMode) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Account settings are disabled while viewing in support mode.'),
+        ),
+      );
+      return;
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const AccountSettingsScreen()),
@@ -134,14 +172,22 @@ class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
           onPressed: () => _openEntries(context),
         ),
         IconButton(
-          tooltip: 'Account',
+          tooltip: AppSession.isSupportMode
+              ? 'Account disabled in support mode'
+              : 'Account',
           icon: const Icon(Icons.manage_accounts),
-          onPressed: () => _openAccount(context),
+          onPressed: AppSession.isSupportMode
+              ? null
+              : () => _openAccount(context),
         ),
         IconButton(
-          tooltip: 'Add Animal',
+          tooltip: AppSession.isSupportMode
+              ? 'Add animal disabled in support mode'
+              : 'Add Animal',
           icon: const Icon(Icons.add),
-          onPressed: () => _openAnimalEditor(),
+          onPressed: AppSession.isSupportMode
+              ? null
+              : () => _openAnimalEditor(),
         ),
       ],
       body: FutureBuilder<List<Map<String, dynamic>>>(
@@ -185,7 +231,9 @@ class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
               return Padding(
                 padding: const EdgeInsets.only(bottom: AppSpacing.md),
                 child: RMCard(
-                  onTap: () => _openAnimalEditor(existing: a),
+                  onTap: AppSession.isSupportMode
+                      ? null
+                      : () => _openAnimalEditor(existing: a),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -201,26 +249,27 @@ class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
                                   ?.copyWith(fontWeight: FontWeight.w700),
                             ),
                           ),
-                          PopupMenuButton<String>(
-                            tooltip: 'Actions',
-                            onSelected: (value) {
-                              if (value == 'edit') {
-                                _openAnimalEditor(existing: a);
-                              } else if (value == 'delete') {
-                                _confirmDeleteAnimal(a);
-                              }
-                            },
-                            itemBuilder: (_) => const [
-                              PopupMenuItem(
-                                value: 'edit',
-                                child: Text('Edit'),
-                              ),
-                              PopupMenuItem(
-                                value: 'delete',
-                                child: Text('Delete'),
-                              ),
-                            ],
-                          ),
+                          if (!AppSession.isSupportMode)
+                            PopupMenuButton<String>(
+                              tooltip: 'Actions',
+                              onSelected: (value) {
+                                if (value == 'edit') {
+                                  _openAnimalEditor(existing: a);
+                                } else if (value == 'delete') {
+                                  _confirmDeleteAnimal(a);
+                                }
+                              },
+                              itemBuilder: (_) => const [
+                                PopupMenuItem(
+                                  value: 'edit',
+                                  child: Text('Edit'),
+                                ),
+                                PopupMenuItem(
+                                  value: 'delete',
+                                  child: Text('Delete'),
+                                ),
+                              ],
+                            ),
                         ],
                       ),
                       const SizedBox(height: AppSpacing.sm),

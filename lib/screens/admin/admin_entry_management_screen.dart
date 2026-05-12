@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/services/show_lock_service.dart';
+import 'package:ringmaster_show/services/app_session.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -86,6 +87,10 @@ class _AdminEntryManagementScreenState
   }
 
   Future<void> _openAddEntry() async {
+    if (AppSession.isSupportMode) {
+      setState(() => _msg = 'Adding entries is disabled while viewing in support mode.');
+      return;
+    }
     final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -191,6 +196,10 @@ class _AdminEntryManagementScreenState
   }
 
   Future<void> _toggleScratch(Map<String, dynamic> entry) async {
+    if (AppSession.isSupportMode) {
+      setState(() => _msg = 'Scratch changes are disabled while viewing in support mode.');
+      return;
+    }
     final id = entry['id'].toString();
     final scratchedAt = entry['scratched_at']?.toString();
     final willScratch = scratchedAt == null || scratchedAt.isEmpty;
@@ -214,6 +223,10 @@ class _AdminEntryManagementScreenState
   }
 
   Future<void> _openEdit(Map<String, dynamic> entry) async {
+    if (AppSession.isSupportMode) {
+      setState(() => _msg = 'Entry editing is disabled while viewing in support mode.');
+      return;
+    }
     final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -233,6 +246,10 @@ class _AdminEntryManagementScreenState
   }
 
   Future<void> _openMove(Map<String, dynamic> entry) async {
+    if (AppSession.isSupportMode) {
+      setState(() => _msg = 'Moving entries is disabled while viewing in support mode.');
+      return;
+    }
     final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -288,6 +305,25 @@ class _AdminEntryManagementScreenState
   }
 
   Widget _messageBanner() {
+    if (AppSession.isSupportMode) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.amber.shade100,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.amber.shade300),
+          ),
+          child: const Text(
+            'Support Mode — Entry management is read-only. Add, edit, move, and scratch actions are disabled.',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ),
+      );
+    }
+
     if (_msg == null) return const SizedBox.shrink();
 
     final successMessages = {
@@ -401,7 +437,9 @@ class _AdminEntryManagementScreenState
         IconButton(
           tooltip: 'Add Entry',
           icon: const Icon(Icons.add),
-          onPressed: _loading || _sections.isEmpty ? null : _openAddEntry,
+          onPressed: (_loading || _sections.isEmpty || AppSession.isSupportMode)
+            ? null
+            : _openAddEntry,
         ),
         IconButton(
           tooltip: 'Reload',
@@ -571,33 +609,39 @@ class _AdminEntryManagementScreenState
                                       subtitle:
                                           subtitle.isEmpty ? null : Text(subtitle),
                                       isThreeLine: subtitle.length > 80,
-                                      trailing: PopupMenuButton<String>(
-                                        tooltip: 'Actions',
-                                        onSelected: (v) {
-                                          if (v == 'edit') _openEdit(e);
-                                          if (v == 'move') _openMove(e);
-                                          if (v == 'scratch') _toggleScratch(e);
-                                        },
-                                        itemBuilder: (_) => [
-                                          const PopupMenuItem(
-                                            value: 'edit',
-                                            child: Text('Edit'),
-                                          ),
-                                          const PopupMenuItem(
-                                            value: 'move',
-                                            child: Text('Move Animal'),
-                                          ),
-                                          PopupMenuItem(
-                                            value: 'scratch',
-                                            child: Text(
-                                              isScratched
-                                                  ? 'Un-scratch'
-                                                  : 'Scratch',
+                                      trailing: AppSession.isSupportMode
+                                          ? null
+                                          : PopupMenuButton<String>(
+                                              tooltip: 'Actions',
+                                              onSelected: (v) {
+                                                if (v == 'edit') _openEdit(e);
+                                                if (v == 'move') _openMove(e);
+                                                if (v == 'scratch') {
+                                                  _toggleScratch(e);
+                                                }
+                                              },
+                                              itemBuilder: (_) => [
+                                                const PopupMenuItem(
+                                                  value: 'edit',
+                                                  child: Text('Edit'),
+                                                ),
+                                                const PopupMenuItem(
+                                                  value: 'move',
+                                                  child: Text('Move Animal'),
+                                                ),
+                                                PopupMenuItem(
+                                                  value: 'scratch',
+                                                  child: Text(
+                                                    isScratched
+                                                        ? 'Un-scratch'
+                                                        : 'Scratch',
+                                                  ),
+                                                ),
+                                              ],
                                             ),
-                                          ),
-                                        ],
-                                      ),
-                                      onTap: () => _openEdit(e),
+                                      onTap: AppSession.isSupportMode
+                                          ? null
+                                          : () => _openEdit(e),
                                     );
                                   }),
                                 ],
@@ -705,6 +749,10 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
   }
 
   Future<void> _save() async {
+    if (AppSession.isSupportMode) {
+      setState(() => _msg = 'Entry editing is disabled while viewing in support mode.');
+      return;
+    }
     setState(() {
       _saving = true;
       _msg = null;
@@ -787,7 +835,7 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
               ),
               TextField(
                 controller: _animalName,
-                enabled: !_saving,
+                enabled: !_saving && !AppSession.isSupportMode,
                 decoration: const InputDecoration(
                   labelText: 'Animal Name',
                   border: OutlineInputBorder(),
@@ -796,7 +844,7 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
               const SizedBox(height: 10),
             TextField(
               controller: _tattoo,
-              enabled: !_saving,
+              enabled: !_saving && !AppSession.isSupportMode,
               textCapitalization: TextCapitalization.characters,
               inputFormatters: [UpperCaseTextFormatter()],
               decoration: const InputDecoration(
@@ -807,7 +855,7 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
             const SizedBox(height: 10),
             TextField(
               controller: _breed,
-              enabled: !_saving,
+              enabled: !_saving && !AppSession.isSupportMode,
               decoration: const InputDecoration(
                 labelText: 'Breed',
                 border: OutlineInputBorder(),
@@ -816,7 +864,7 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
             const SizedBox(height: 10),
             TextField(
               controller: _variety,
-              enabled: !_saving,
+              enabled: !_saving && !AppSession.isSupportMode,
               decoration: const InputDecoration(
                 labelText: 'Variety',
                 border: OutlineInputBorder(),
@@ -825,7 +873,7 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
             const SizedBox(height: 10),
             TextField(
               controller: _sex,
-              enabled: !_saving,
+              enabled: !_saving && !AppSession.isSupportMode,
               decoration: const InputDecoration(
                 labelText: 'Sex',
                 border: OutlineInputBorder(),
@@ -834,7 +882,7 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
             const SizedBox(height: 10),
             TextField(
               controller: _className,
-              enabled: !_saving,
+              enabled: !_saving && !AppSession.isSupportMode,
               decoration: const InputDecoration(
                 labelText: 'Class',
                 border: OutlineInputBorder(),
@@ -845,7 +893,7 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
               contentPadding: EdgeInsets.zero,
               title: const Text('Fur / Wool Entry'),
               value: _isFur,
-              onChanged: _saving
+              onChanged: (_saving || AppSession.isSupportMode)
                   ? null
                   : (v) => setState(() {
                         _isFur = v;
@@ -863,7 +911,7 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
                   DropdownMenuItem(value: 'White', child: Text('White')),
                   DropdownMenuItem(value: 'Colored', child: Text('Colored')),
                 ],
-                onChanged: _saving
+                onChanged: (_saving || AppSession.isSupportMode)
                     ? null
                     : (value) {
                         setState(() {
@@ -874,7 +922,7 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
               const SizedBox(height: 10),
               TextField(
                 controller: _furNotes,
-                enabled: !_saving,
+                enabled: !_saving && !AppSession.isSupportMode,
                 minLines: 2,
                 maxLines: 4,
                 decoration: const InputDecoration(
@@ -886,7 +934,7 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
             const SizedBox(height: 10),
             TextField(
               controller: _notes,
-              enabled: !_saving,
+              enabled: !_saving && !AppSession.isSupportMode,
               minLines: 2,
               maxLines: 5,
               decoration: const InputDecoration(
@@ -901,7 +949,7 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
                 foregroundColor: Colors.black87,
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
-              onPressed: _saving ? null : _save,
+              onPressed: (_saving || AppSession.isSupportMode) ? null : _save,
               child: Text(_saving ? 'Saving…' : 'Save Changes'),
             ),
           ],
@@ -955,6 +1003,10 @@ class _MoveEntrySheetState extends State<_MoveEntrySheet> {
   }
 
   Future<void> _save() async {
+    if (AppSession.isSupportMode) {
+      setState(() => _msg = 'Moving entries is disabled while viewing in support mode.');
+      return;
+    }
     final entryId = widget.entry['id']?.toString() ?? '';
     if (entryId.isEmpty) return;
 
@@ -1038,12 +1090,14 @@ class _MoveEntrySheetState extends State<_MoveEntrySheet> {
                     ),
                   )
                   .toList(),
-              onChanged: _saving ? null : (v) => setState(() => _sectionId = v),
+              onChanged: (_saving || AppSession.isSupportMode)
+                  ? null
+                  : (v) => setState(() => _sectionId = v),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _className,
-              enabled: !_saving,
+              enabled: !_saving && !AppSession.isSupportMode,
               decoration: const InputDecoration(
                 labelText: 'Class',
                 border: OutlineInputBorder(),
@@ -1056,7 +1110,9 @@ class _MoveEntrySheetState extends State<_MoveEntrySheet> {
                 foregroundColor: Colors.black87,
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
-              onPressed: _saving ? null : _save,
+              onPressed: (_saving || AppSession.isSupportMode)
+                  ? null
+                  : _save,
               child: Text(_saving ? 'Moving…' : 'Save Move'),
             ),
           ],
@@ -1560,6 +1616,9 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
   }
 
   Future<String> _createNewExhibitor() async {
+    if (AppSession.isSupportMode) {
+      throw Exception('Creating exhibitors is disabled while viewing in support mode.');
+    }
     final showing = _showingName.text.trim();
     final display = showing;
     final first = _firstName.text.trim();
@@ -1635,6 +1694,10 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
   }
 
   Future<void> _save({bool reset = false}) async {
+    if (AppSession.isSupportMode) {
+      setState(() => _msg = 'Adding entries is disabled while viewing in support mode.');
+      return;
+    }
     if (_selectedSectionIds.isEmpty) {
       setState(() => _msg = 'Select at least one section.');
       return;
@@ -1899,7 +1962,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                             dense: true,
                             value: checked,
                             title: Text((s['display_name'] ?? s['letter']).toString()),
-                            onChanged: _saving
+                            onChanged: (_saving || AppSession.isSupportMode)
                                 ? null
                                 : (v) {
                                     setState(() {
@@ -1941,7 +2004,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                       'Create a show/local exhibitor with contact info',
                     ),
                     value: _addNewExhibitor,
-                    onChanged: _saving
+                    onChanged: (_saving || AppSession.isSupportMode)
                         ? null
                         : (v) {
                             setState(() {
@@ -1956,7 +2019,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                   if (_addNewExhibitor) ...[
                     TextField(
                       controller: _showingName,
-                      enabled: !_saving,
+                      enabled: !_saving && !AppSession.isSupportMode,
                       decoration: const InputDecoration(
                         labelText: 'Showing Name',
                         border: OutlineInputBorder(),
@@ -1968,7 +2031,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                         Expanded(
                           child: TextField(
                             controller: _firstName,
-                            enabled: !_saving,
+                            enabled: !_saving && !AppSession.isSupportMode,
                             decoration: const InputDecoration(
                               labelText: 'First Name',
                               border: OutlineInputBorder(),
@@ -1979,7 +2042,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                         Expanded(
                           child: TextField(
                             controller: _lastName,
-                            enabled: !_saving,
+                            enabled: !_saving && !AppSession.isSupportMode,
                             decoration: const InputDecoration(
                               labelText: 'Last Name',
                               border: OutlineInputBorder(),
@@ -1991,7 +2054,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                     const SizedBox(height: 10),
                     TextField(
                       controller: _email,
-                      enabled: !_saving,
+                      enabled: !_saving && !AppSession.isSupportMode,
                       decoration: const InputDecoration(
                         labelText: 'Email',
                         border: OutlineInputBorder(),
@@ -2000,7 +2063,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                     const SizedBox(height: 10),
                     TextField(
                       controller: _phone,
-                      enabled: !_saving,
+                      enabled: !_saving && !AppSession.isSupportMode,
                       decoration: const InputDecoration(
                         labelText: 'Phone',
                         border: OutlineInputBorder(),
@@ -2017,7 +2080,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                         DropdownMenuItem(value: 'adult', child: Text('Open')),
                         DropdownMenuItem(value: 'youth', child: Text('Youth')),
                       ],
-                      onChanged: _saving
+                      onChanged: (_saving || AppSession.isSupportMode)
                           ? null
                           : (v) => setState(() => _exhibitorType = v ?? 'adult'),
                     ),
@@ -2036,7 +2099,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                             ),
                           )
                           .toList(),
-                      onChanged: _saving
+                      onChanged: (_saving || AppSession.isSupportMode)
                           ? null
                           : (v) async {
                               setState(() {
@@ -2057,7 +2120,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                       'Use when the animal is not already in the system',
                     ),
                     value: _useLocalAnimal,
-                    onChanged: _saving
+                    onChanged: (_saving || AppSession.isSupportMode)
                         ? null
                         : (v) {
                             setState(() {
@@ -2078,7 +2141,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                         DropdownMenuItem(value: 'rabbit', child: Text('Rabbit')),
                         DropdownMenuItem(value: 'cavy', child: Text('Cavy')),
                       ],
-                      onChanged: _saving
+                      onChanged: (_saving || AppSession.isSupportMode)
                           ? null
                           : (v) async {
                               final newSpecies = v ?? 'rabbit';
@@ -2100,7 +2163,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                     const SizedBox(height: 10),
                     TextField(
                       controller: _animalName,
-                      enabled: !_saving,
+                      enabled: !_saving && !AppSession.isSupportMode,
                       decoration: const InputDecoration(
                         labelText: 'Animal Name (optional)',
                         border: OutlineInputBorder(),
@@ -2109,7 +2172,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                     const SizedBox(height: 10),
                     TextField(
                       controller: _tattoo,
-                      enabled: !_saving,
+                      enabled: !_saving && !AppSession.isSupportMode,
                       textCapitalization: TextCapitalization.characters,
                       inputFormatters: [UpperCaseTextFormatter()],
                       decoration: const InputDecoration(
@@ -2133,7 +2196,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                             ),
                           )
                           .toList(),
-                      onChanged: _saving
+                      onChanged: (_saving || AppSession.isSupportMode)
                           ? null
                           : (value) async {
                               final selected = _breedOptions.firstWhere(
@@ -2170,7 +2233,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                             ),
                           )
                           .toList(),
-                      onChanged: _saving || _breedId == null
+                      onChanged: (_saving || AppSession.isSupportMode || _breedId == null)
                           ? null
                           : (value) {
                               setState(() {
@@ -2192,7 +2255,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                         DropdownMenuItem(value: 'Junior', child: Text('Junior')),
                         DropdownMenuItem(value: 'Pre-Junior', child: Text('Pre-Junior')),
                       ],
-                      onChanged: _saving
+                      onChanged: (_saving || AppSession.isSupportMode)
                           ? null
                           : (value) {
                               setState(() {
@@ -2217,7 +2280,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                             ),
                           )
                           .toList(),
-                      onChanged: _saving
+                      onChanged: (_saving || AppSession.isSupportMode)
                           ? null
                           : (value) {
                               setState(() {
@@ -2269,7 +2332,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                       'Mark this animal as entered in Fur/Wool for this section',
                     ),
                     value: _isFur,
-                    onChanged: _saving
+                    onChanged: (_saving || AppSession.isSupportMode)
                         ? null
                         : (v) => setState(() {
                               _isFur = v;
@@ -2281,7 +2344,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                     const SizedBox(height: 10),
                     TextField(
                       controller: _furNotes,
-                      enabled: !_saving,
+                      enabled: !_saving && !AppSession.isSupportMode,
                       minLines: 2,
                       maxLines: 4,
                       decoration: const InputDecoration(
@@ -2300,7 +2363,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                         DropdownMenuItem(value: 'White', child: Text('White')),
                         DropdownMenuItem(value: 'Colored', child: Text('Colored')),
                       ],
-                      onChanged: _saving
+                      onChanged: (_saving || AppSession.isSupportMode)
                           ? null
                           : (value) {
                               setState(() {
@@ -2314,7 +2377,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                   const SizedBox(height: 10),
                   TextField(
                     controller: _notes,
-                    enabled: !_saving,
+                    enabled: !_saving && !AppSession.isSupportMode,
                     minLines: 2,
                     maxLines: 4,
                     decoration: const InputDecoration(

@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
+import 'package:ringmaster_show/services/app_session.dart';
 
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -1757,6 +1758,12 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
   }
 
   Future<void> _emailCheckInSheets() async {
+    if (AppSession.isSupportMode) {
+      setState(() {
+        _msg = 'Email sending is disabled while viewing in support mode.';
+      });
+      return;
+    }
     if (_emailing || _building) return;
 
     setState(() {

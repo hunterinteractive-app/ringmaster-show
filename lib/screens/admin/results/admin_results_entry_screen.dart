@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:ringmaster_show/services/show_lock_service.dart';
 import 'package:ringmaster_show/utils/cavy/cavy_sop_order.dart';
+import 'package:ringmaster_show/services/app_session.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -452,6 +453,12 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
             entries: working,
             judges: _judges,
             onBulkJudgeApply: (entries, judgeId) async {
+              if (AppSession.isSupportMode) {
+                setState(() {
+                  _msg = 'Results changes are disabled while viewing in support mode.';
+                });
+                return;
+              }
               final ids = entries
                   .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
                   .where((x) => x.isNotEmpty)
@@ -702,6 +709,12 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
             entries: working,
             judges: _judges,
             onBulkJudgeApply: (entries, judgeId) async {
+              if (AppSession.isSupportMode) {
+                setState(() {
+                  _msg = 'Results changes are disabled while viewing in support mode.';
+                });
+                return;
+              }
               final ids = entries
                   .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
                   .where((x) => x.isNotEmpty)
@@ -1436,6 +1449,23 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                     ),
                   ),
                 ),
+                if (AppSession.isSupportMode)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade100,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.amber.shade300),
+                      ),
+                      child: const Text(
+                        'Support Mode — Results entry is read-only. Result, award, and judge changes are disabled.',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ),
                 if (_msg != null)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -1985,6 +2015,32 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
                               );
                             },
                     ),
+                    if (AppSession.isSupportMode)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade100,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: Colors.amber.shade300),
+                          ),
+                          child: const Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(Icons.support_agent, size: 18),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Support Mode — Results entry is read-only. Result, award, and judge changes are disabled.',
+                                  style: TextStyle(fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     if (_msg != null) ...[
                       const SizedBox(height: 12),
                       Align(
@@ -3813,6 +3869,12 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
   }
 
   Future<void> _applyJudgeToClass(String? judgeId) async {
+    if (AppSession.isSupportMode) {
+      setState(() {
+        _msg = 'Judge changes are disabled while viewing in support mode.';
+      });
+      return;
+    }
     setState(() {
       _savingJudge = true;
       _msg = null;
@@ -5222,7 +5284,7 @@ if (storedJudgeId.isEmpty) {
                     ),
                   ),
                 ],
-                onChanged: _saving
+                onChanged: (_saving || AppSession.isSupportMode)
                     ? null
                     : (v) {
                         setState(() {
@@ -5244,7 +5306,7 @@ if (storedJudgeId.isEmpty) {
                       ),
                     )
                     .toList(),
-                onChanged: scratched || _saving
+                onChanged: scratched || _saving || AppSession.isSupportMode
                     ? null
                     : (value) {
                         if (value == null) return;
@@ -5310,7 +5372,7 @@ if (storedJudgeId.isEmpty) {
                   subtitle: !allowed && canAward
                       ? Text(_awardDisabledReason(award))
                       : null,
-                  onChanged: (!canAward || _saving || !allowed)
+                  onChanged: (!canAward || _saving || AppSession.isSupportMode || !allowed)
                       ? null
                       : (v) {
                           setState(() {
@@ -5344,7 +5406,7 @@ if (storedJudgeId.isEmpty) {
                   const SizedBox(width: 10),
                   Expanded(
                     child: FilledButton(
-                      onPressed: _saving ? null : () => _save(goNext: false),
+                      onPressed: (_saving || AppSession.isSupportMode) ? null : () => _save(goNext: false),
                       child: Text(_saving ? 'Saving…' : 'Save'),
                     ),
                   ),
@@ -5354,7 +5416,7 @@ if (storedJudgeId.isEmpty) {
                       style: FilledButton.styleFrom(
                         backgroundColor: const Color(0xFFD4A623),
                       ),
-                      onPressed: _saving ? null : () => _save(goNext: true),
+                      onPressed: (_saving || AppSession.isSupportMode) ? null : () => _save(goNext: true),
                       child: const Text('Save & Next'),
                     ),
                   ),

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:ringmaster_show/services/show_lock_service.dart';
+import 'package:ringmaster_show/services/app_session.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -486,6 +487,11 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
     required String varietyId,
     required bool enabled,
   }) async {
+    if (AppSession.isSupportMode) {
+      setState(() => _msg = 'Variety settings are read-only in support mode.');
+      return;
+    }
+
     try {
       await ShowLockService.assertShowUnlocked(widget.showId);
       await _ensureVarietyOverridesInitialized(breedId);
@@ -517,6 +523,11 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
     required String breedId,
     required String breedName,
   }) async {
+    if (AppSession.isSupportMode) {
+      setState(() => _msg = 'Adding show-only varieties is disabled in support mode.');
+      return;
+    }
+
     final controller = TextEditingController();
     final ok = await showDialog<bool>(
       context: context,
@@ -596,6 +607,11 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
     required int sortOrder,
     required bool enabled,
   }) async {
+    if (AppSession.isSupportMode) {
+      setState(() => _msg = 'Commercial class settings are read-only in support mode.');
+      return;
+    }
+
     try {
       await ShowLockService.assertShowUnlocked(widget.showId);
       await supabase.from('show_commercial_classes').upsert({
@@ -991,6 +1007,11 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
       bool enabled,
       String label,
     ) async {
+      if (AppSession.isSupportMode) {
+        setState(() => _msg = 'Breed settings are read-only in support mode.');
+        return;
+      }
+
       setState(() {
         _loading = true;
         _msg = null;
@@ -1138,6 +1159,31 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
         padding: const EdgeInsets.all(12),
         child: Column(
           children: [
+            if (AppSession.isSupportMode)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade100,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.amber.shade300),
+                ),
+                child: const Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.support_agent, size: 18),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Support Mode — Breed settings are read-only.',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
             if (lockBanner != null)
               Container(
                 width: double.infinity,

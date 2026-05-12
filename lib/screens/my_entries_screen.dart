@@ -7,6 +7,7 @@ import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'my_animals_screen.dart';
 import 'account_settings_screen.dart';
 import 'package:ringmaster_show/screens/admin/entries_by_breed_section_table.dart';
+import '../services/app_session.dart';
 import '../theme/app_theme.dart';
 import '../utils/date_time_utils.dart';
 import '../widgets/rm_widgets.dart';
@@ -38,8 +39,8 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
   }
 
   Future<void> _load() async {
-    final user = supabase.auth.currentUser;
-    if (user == null) {
+    final userId = AppSession.effectiveUserId;
+    if (userId == null) {
       setState(() {
         _loading = false;
         _msg = 'Not signed in.';
@@ -59,7 +60,7 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
             'id,show_id,exhibitor_id,animal_id,species,tattoo,breed,variety,sex,'
             'class_name,status,section_id,created_at,exhibitor_user_id',
           )
-          .eq('exhibitor_user_id', user.id)
+          .eq('exhibitor_user_id', userId)
           .order('created_at', ascending: true);
 
       _entries = (rows as List).cast<Map<String, dynamic>>();
@@ -184,6 +185,12 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
   }
 
   Future<void> _scratchEntry(Map<String, dynamic> entry) async {
+    if (AppSession.isSupportMode) {
+      setState(() {
+        _msg = 'Scratch is disabled while viewing in support mode.';
+      });
+      return;
+    }
     final id = entry['id']?.toString() ?? '';
     if (id.isEmpty) return;
 
@@ -228,6 +235,12 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
   }
 
   Future<void> _restoreEntry(Map<String, dynamic> entry) async {
+    if (AppSession.isSupportMode) {
+      setState(() {
+        _msg = 'Restore is disabled while viewing in support mode.';
+      });
+      return;
+    }
     final id = entry['id']?.toString() ?? '';
     if (id.isEmpty) return;
 
@@ -282,19 +295,25 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
   }
 
   Future<List<Map<String, dynamic>>> _loadMyAnimals() async {
-    final user = supabase.auth.currentUser;
-    if (user == null) return [];
+    final userId = AppSession.effectiveUserId;
+    if (userId == null) return [];
 
     final rows = await supabase
         .from('animals')
         .select('id,species,name,tattoo,breed,variety,sex,birth_date')
-        .eq('owner_user_id', user.id)
+        .eq('owner_user_id', userId)
         .order('created_at', ascending: false);
 
     return (rows as List).cast<Map<String, dynamic>>();
   }
 
   Future<void> _editEntry(Map<String, dynamic> entry) async {
+    if (AppSession.isSupportMode) {
+      setState(() {
+        _msg = 'Editing is disabled while viewing in support mode.';
+      });
+      return;
+    }
     final showId = entry['show_id']?.toString() ?? '';
     if (showId.isEmpty) return;
 
@@ -381,6 +400,12 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
   }
 
   void _openAnimals(BuildContext context) {
+    if (AppSession.isSupportMode) {
+      setState(() {
+        _msg = 'Animal management is disabled while viewing in support mode.';
+      });
+      return;
+    }
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const MyAnimalsScreen()),
@@ -388,6 +413,12 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
   }
 
   void _openAccount(BuildContext context) {
+    if (AppSession.isSupportMode) {
+      setState(() {
+        _msg = 'Account settings are disabled while viewing in support mode.';
+      });
+      return;
+    }
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const AccountSettingsScreen()),
@@ -444,14 +475,22 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
       useScrollView: false,
       actions: [
         IconButton(
-          tooltip: 'Animals',
+          tooltip: AppSession.isSupportMode
+              ? 'Animals disabled in support mode'
+              : 'Animals',
           icon: const Icon(Icons.pets),
-          onPressed: () => _openAnimals(context),
+          onPressed: AppSession.isSupportMode
+              ? null
+              : () => _openAnimals(context),
         ),
         IconButton(
-          tooltip: 'Account',
+          tooltip: AppSession.isSupportMode
+              ? 'Account disabled in support mode'
+              : 'Account',
           icon: const Icon(Icons.manage_accounts),
-          onPressed: () => _openAccount(context),
+          onPressed: AppSession.isSupportMode
+              ? null
+              : () => _openAccount(context),
         ),
       ],
       body: _loading
