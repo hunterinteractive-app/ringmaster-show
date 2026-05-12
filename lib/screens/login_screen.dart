@@ -337,7 +337,7 @@ class _LoginScreenState extends State<LoginScreen>
                             ),
                             const SizedBox(height: AppSpacing.lg),
                             const Text(
-                              'RingMaster Show*',
+                              'RingMaster Show',
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: Colors.white,
