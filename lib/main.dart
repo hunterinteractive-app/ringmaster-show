@@ -17,6 +17,7 @@ import 'services/app_init_service.dart';
 final supabase = Supabase.instance.client;
 
 Uri? initialQrUri;
+bool initialDemoMode = false;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,6 +30,7 @@ Future<void> main() async {
   );
 
   initialQrUri = _qrUriFromBrowser();
+  initialDemoMode = _demoModeFromBrowser();
 
   runApp(const MyApp());
 }
@@ -45,6 +47,18 @@ Uri? _qrUriFromBrowser() {
   if (path.endsWith('/qr-results-entry')) return Uri.base;
 
   return null;
+}
+
+bool _demoModeFromBrowser() {
+  final fragment = Uri.base.fragment.trim();
+
+  if (fragment.isNotEmpty) {
+    final uri = Uri.parse(fragment);
+    if (uri.path == '/demo') return true;
+  }
+
+  final path = Uri.base.path.trim();
+  return path.endsWith('/demo');
 }
 
 Widget _qrScreenFromUri(Uri uri) {
@@ -84,6 +98,12 @@ class MyApp extends StatelessWidget {
           );
         }
 
+        if (uri.path == '/demo') {
+          return MaterialPageRoute(
+            builder: (_) => const DemoLoginScreen(),
+          );
+        }
+
         return null;
       },
     );
@@ -109,6 +129,7 @@ class _RootState extends State<Root> {
     super.initState();
 
     initialQrUri ??= _qrUriFromBrowser();
+    initialDemoMode = initialDemoMode || _demoModeFromBrowser();
 
     _refresh();
 
@@ -117,6 +138,7 @@ class _RootState extends State<Root> {
       final session = data.session;
 
       initialQrUri ??= _qrUriFromBrowser();
+      initialDemoMode = initialDemoMode || _demoModeFromBrowser();
 
       if (event == AuthChangeEvent.signedOut || session == null) {
         AppInitService.reset();
@@ -134,12 +156,23 @@ class _RootState extends State<Root> {
 
   Future<void> _refresh() async {
     final user = supabase.auth.currentUser;
+    final demoMode = initialDemoMode || _demoModeFromBrowser();
 
     if (user == null) {
       if (!mounted) return;
       setState(() {
         _loading = false;
         _hasExhibitor = false;
+        _msg = null;
+      });
+      return;
+    }
+
+    if (demoMode) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _hasExhibitor = true;
         _msg = null;
       });
       return;
@@ -180,9 +213,14 @@ class _RootState extends State<Root> {
   Widget build(BuildContext context) {
     final qrUri = initialQrUri ?? _qrUriFromBrowser();
     final session = supabase.auth.currentSession;
+    final demoMode = initialDemoMode || _demoModeFromBrowser();
 
     if (qrUri != null) {
       return _qrScreenFromUri(qrUri);
+    }
+
+    if (demoMode && session == null) {
+      return const DemoLoginScreen();
     }
 
     if (session == null) return const LoginScreen();
@@ -213,6 +251,8 @@ class _RootState extends State<Root> {
         ),
       );
     }
+
+    if (demoMode) return const ShowListScreen(demoMode: true);
 
     if (!_hasExhibitor) return const AccountProfileSetupScreen();
 

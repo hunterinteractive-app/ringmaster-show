@@ -29,7 +29,12 @@ import '../widgets/rm_timezone_notice_banner.dart';
 final supabase = Supabase.instance.client;
 
 class ShowListScreen extends StatefulWidget {
-  const ShowListScreen({super.key});
+  const ShowListScreen({
+    super.key,
+    this.demoMode = false,
+  });
+
+  final bool demoMode;
 
   @override
   State<ShowListScreen> createState() => _ShowListScreenState();
@@ -143,11 +148,23 @@ class _ShowListScreenState extends State<ShowListScreen> {
   }
 
   Future<List<Map<String, dynamic>>> _loadShows() async {
+    var query = supabase
+        .from('shows')
+        .select('id,name,start_date,location_name,entry_close_at,is_demo');
+
+    if (widget.demoMode) {
+      final res = await query
+          .eq('is_demo', true)
+          .eq('is_published', true)
+          .order('start_date')
+          .limit(1);
+
+      return (res as List).cast<Map<String, dynamic>>();
+    }
+
     final now = DateTime.now().toUtc().toIso8601String();
 
-    final res = await supabase
-        .from('shows')
-        .select('id,name,start_date,location_name,entry_close_at')
+    final res = await query
         .eq('is_published', true)
         .or('entry_close_at.is.null,entry_close_at.gte.$now')
         .order('start_date');
@@ -220,7 +237,11 @@ class _ShowListScreenState extends State<ShowListScreen> {
   Future<_ShowListBundle> _loadBundle() async {
     final shows = await _loadShows();
     final isSupportMode = SupportImpersonationSession.isActive;
-    final isSuper = isSupportMode ? false : await RoleService.isSuperAdmin();
+    final isSuper = widget.demoMode
+        ? false
+        : isSupportMode
+            ? false
+            : await RoleService.isSuperAdmin();
 
     List<Map<String, dynamic>> superAdminShows = <Map<String, dynamic>>[];
     if (isSuper) {
@@ -232,24 +253,30 @@ class _ShowListScreenState extends State<ShowListScreen> {
     }
 
     Set<String> adminShowIds = <String>{};
-    try {
-      adminShowIds = await _loadAdminShowIds();
-    } catch (_) {
-      adminShowIds = <String>{};
+    if (!widget.demoMode) {
+      try {
+        adminShowIds = await _loadAdminShowIds();
+      } catch (_) {
+        adminShowIds = <String>{};
+      }
     }
 
     bool hasAvailableShowCapacity = false;
-    try {
-      hasAvailableShowCapacity = await _hasAvailableShowCapacity();
-    } catch (_) {
-      hasAvailableShowCapacity = false;
+    if (!widget.demoMode) {
+      try {
+        hasAvailableShowCapacity = await _hasAvailableShowCapacity();
+      } catch (_) {
+        hasAvailableShowCapacity = false;
+      }
     }
 
     bool hasAnyAssignedShows = false;
-    try {
-      hasAnyAssignedShows = await _hasAnyAssignedShows();
-    } catch (_) {
-      hasAnyAssignedShows = false;
+    if (!widget.demoMode) {
+      try {
+        hasAnyAssignedShows = await _hasAnyAssignedShows();
+      } catch (_) {
+        hasAnyAssignedShows = false;
+      }
     }
 
     return _ShowListBundle(
@@ -414,6 +441,15 @@ class _ShowListScreenState extends State<ShowListScreen> {
   }
 
   Future<void> _verifyLegalAcceptance() async {
+    if (widget.demoMode) {
+      if (!mounted) return;
+      setState(() {
+        _bundleFuture = _loadBundle();
+        _checkingLegal = false;
+      });
+      return;
+    }
+
     final user = supabase.auth.currentUser;
 
     if (user == null) {
@@ -646,7 +682,14 @@ class _ShowListScreenState extends State<ShowListScreen> {
           showName: showName,
         ),
       ),
-    );
+    ).then((_) {
+      if (!mounted) return;
+      if (widget.demoMode) {
+        setState(() {
+          _bundleFuture = _loadBundle();
+        });
+      }
+    });
   }
 
   void _openBreedCounts(BuildContext context, String showId, String showName) {
@@ -805,6 +848,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
               );
             },
             onLogout: () => _logout(context),
+            demoMode: widget.demoMode,
           ),
           body: Builder(
             builder: (_) {
@@ -1154,9 +1198,32 @@ class _ShowListScreenState extends State<ShowListScreen> {
               }
 
               final impersonatedUser = _impersonatedUser;
+              final demoBanner = widget.demoMode
+                  ? Container(
+                      width: double.infinity,
+                      color: Colors.blue.shade50,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.lg,
+                        vertical: AppSpacing.sm,
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.science_outlined, size: 18),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Demo Mode — this shared show resets every 24 hours. Emails and real payments are disabled.',
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : null;
 
               return Column(
                 children: [
+                  if (demoBanner != null) demoBanner,
                   if (impersonatedUser != null)
                     Container(
                       width: double.infinity,
@@ -1215,6 +1282,7 @@ class _ResponsiveShowAppBar extends StatelessWidget
   final VoidCallback onSuperAdmin;
   final VoidCallback onAccount;
   final VoidCallback onLogout;
+  final bool demoMode;
 
   const _ResponsiveShowAppBar({
     required this.bundle,
@@ -1225,6 +1293,7 @@ class _ResponsiveShowAppBar extends StatelessWidget
     required this.onSuperAdmin,
     required this.onAccount,
     required this.onLogout,
+    this.demoMode = false,
   });
 
   @override
@@ -1274,7 +1343,7 @@ class _ResponsiveShowAppBar extends StatelessWidget
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Upcoming Shows',
+                      demoMode ? 'Demo Show' : 'Upcoming Shows',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -1298,18 +1367,20 @@ class _ResponsiveShowAppBar extends StatelessWidget
             showLabel: showLabels,
             onTap: onAdmin!,
           ),
-        _TopBarAction(
-          icon: Icons.pets,
-          label: 'Animals',
-          showLabel: showLabels,
-          onTap: onAnimals,
-        ),
-        _TopBarAction(
-          icon: Icons.receipt_long,
-          label: 'Entries',
-          showLabel: showLabels,
-          onTap: onEntries,
-        ),
+        if (!demoMode)
+          _TopBarAction(
+            icon: Icons.pets,
+            label: 'Animals',
+            showLabel: showLabels,
+            onTap: onAnimals,
+          ),
+        if (!demoMode)
+          _TopBarAction(
+            icon: Icons.receipt_long,
+            label: 'Entries',
+            showLabel: showLabels,
+            onTap: onEntries,
+          ),
         if (showSuperAdminInline)
           FutureBuilder<bool>(
             future: Future.value(
@@ -1326,12 +1397,13 @@ class _ResponsiveShowAppBar extends StatelessWidget
               );
             },
           ),
-        _TopBarAction(
-          icon: Icons.manage_accounts,
-          label: 'Account',
-          showLabel: showLabels || medium,
-          onTap: onAccount,
-        ),
+        if (!demoMode)
+          _TopBarAction(
+            icon: Icons.manage_accounts,
+            label: 'Account',
+            showLabel: showLabels || medium,
+            onTap: onAccount,
+          ),
         if (!showLabels)
           PopupMenuButton<String>(
             tooltip: 'More',

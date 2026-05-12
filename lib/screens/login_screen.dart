@@ -394,6 +394,176 @@ class _LoginScreenState extends State<LoginScreen>
         ),
       ),
     );
+}
+}
+
+class DemoLoginScreen extends StatefulWidget {
+  const DemoLoginScreen({super.key});
+
+  @override
+  State<DemoLoginScreen> createState() => _DemoLoginScreenState();
+}
+
+class _DemoLoginScreenState extends State<DemoLoginScreen> {
+  bool _busy = false;
+  String? _msg;
+
+  Future<void> _enterDemo() async {
+    setState(() {
+      _busy = true;
+      _msg = null;
+    });
+
+    try {
+      await supabase.auth.signInWithPassword(
+        email: 'demo@ringmasterone.com',
+        password: 'Demo!987',
+      );
+
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => const ShowListScreen(demoMode: true),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _msg = 'Unable to enter demo: $e';
+      });
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              AppColors.navyDark,
+              AppColors.navy,
+              Color(0xFF1B3D82),
+            ],
+          ),
+        ),
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(AppSpacing.xl),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 560),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(AppSpacing.lg),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.10),
+                        borderRadius: BorderRadius.circular(AppRadius.lg),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.12),
+                        ),
+                      ),
+                      child: _LogoBlock(),
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    const Text(
+                      'RingMaster Show Demo',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(
+                      'Try a shared demo show with sample exhibitors, entries, counts, and show tools.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.82),
+                        fontSize: 14,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    RMCard(
+                      padding: const EdgeInsets.all(AppSpacing.xl),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            'Enter the Demo',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                ),
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                          const Text(
+                            'This demo resets every 24 hours. Emails, real payments, and official report delivery are disabled.',
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          SizedBox(
+                            height: 52,
+                            child: FilledButton.icon(
+                              onPressed: _busy ? null : _enterDemo,
+                              icon: _busy
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Icon(Icons.science_outlined),
+                              label: Text(_busy ? 'Opening Demo…' : 'Enter Demo'),
+                            ),
+                          ),
+                          if (_msg != null) ...[
+                            const SizedBox(height: AppSpacing.lg),
+                            Container(
+                              padding: const EdgeInsets.all(AppSpacing.md),
+                              decoration: BoxDecoration(
+                                color: AppColors.dangerBg,
+                                borderRadius: BorderRadius.circular(AppRadius.sm),
+                              ),
+                              child: Text(
+                                _msg!,
+                                style: const TextStyle(
+                                  color: AppColors.danger,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: AppSpacing.lg),
+                          Text(
+                            'Use this link for hands-on testing only. Demo changes are temporary.',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
