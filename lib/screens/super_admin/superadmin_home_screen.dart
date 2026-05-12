@@ -31,15 +31,47 @@ class SupportImpersonatedUser {
     required this.userId,
     required this.email,
     required this.displayName,
+    required this.exhibitorName,
   });
 
   final String userId;
   final String email;
   final String displayName;
+  final String exhibitorName;
 
   String get label {
-    if (displayName.trim().isNotEmpty) return displayName.trim();
-    if (email.trim().isNotEmpty) return email.trim();
+    final cleanedExhibitor = exhibitorName.trim();
+    if (cleanedExhibitor.isNotEmpty) return cleanedExhibitor;
+
+    final cleanedDisplay = displayName.trim();
+    final emailLocal = email.trim().isEmpty
+        ? ''
+        : email.trim().split('@').first.trim().toLowerCase();
+
+    if (cleanedDisplay.isNotEmpty &&
+        cleanedDisplay.toLowerCase() != emailLocal) {
+      return cleanedDisplay;
+    }
+
+    if (email.trim().isNotEmpty) {
+      final local = email.trim().split('@').first;
+      final parts = local
+          .replaceAll('.', ' ')
+          .replaceAll('_', ' ')
+          .replaceAll('-', ' ')
+          .split(' ')
+          .where((p) => p.trim().isNotEmpty)
+          .toList();
+
+      if (parts.isNotEmpty) {
+        return parts
+            .map((p) => p[0].toUpperCase() + p.substring(1))
+            .join(' ');
+      }
+
+      return email.trim();
+    }
+
     return userId;
   }
 }
@@ -304,6 +336,58 @@ class _SupportImpersonationScreenState
     super.dispose();
   }
 
+  String _bestExhibitorName(Map<String, dynamic> row) {
+    final display = (row['display_name'] ?? '').toString().trim();
+    if (display.isNotEmpty) return display;
+
+    final showing = (row['showing_name'] ?? '').toString().trim();
+    if (showing.isNotEmpty) return showing;
+
+    final first = (row['first_name'] ?? '').toString().trim();
+    final last = (row['last_name'] ?? '').toString().trim();
+    final fullName = [first, last].where((x) => x.isNotEmpty).join(' ').trim();
+    if (fullName.isNotEmpty) return fullName;
+
+    return '';
+  }
+
+  Future<Map<String, String>> _loadExhibitorNamesByUserId(
+    Iterable<String> userIds,
+  ) async {
+    final ids = userIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+
+    if (ids.isEmpty) return <String, String>{};
+
+    final result = <String, String>{};
+
+    for (var i = 0; i < ids.length; i += 100) {
+      final chunk = ids.skip(i).take(100).toList();
+
+      final rows = await supabase
+          .from('exhibitors')
+          .select('owner_user_id,display_name,showing_name,first_name,last_name')
+          .inFilter('owner_user_id', chunk)
+          .order('created_at');
+
+      for (final raw in rows as List) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        final ownerUserId = (row['owner_user_id'] ?? '').toString().trim();
+        if (ownerUserId.isEmpty || result.containsKey(ownerUserId)) continue;
+
+        final name = _bestExhibitorName(row);
+        if (name.isNotEmpty) {
+          result[ownerUserId] = name;
+        }
+      }
+    }
+
+    return result;
+  }
+
   Future<void> _loadInitialUsers() async {
     setState(() {
       _loading = true;
@@ -318,14 +402,22 @@ class _SupportImpersonationScreenState
           .order('email')
           .limit(100);
 
-      final users = (rows as List)
-          .cast<Map<String, dynamic>>()
+      final profileRows = (rows as List).cast<Map<String, dynamic>>();
+      final exhibitorNamesByUserId = await _loadExhibitorNamesByUserId(
+        profileRows.map((row) => (row['user_id'] ?? '').toString()),
+      );
+
+      final users = profileRows
           .map(
-            (row) => SupportImpersonatedUser(
-              userId: (row['user_id'] ?? '').toString(),
-              email: (row['email'] ?? '').toString(),
-              displayName: (row['display_name'] ?? '').toString(),
-            ),
+            (row) {
+              final userId = (row['user_id'] ?? '').toString();
+              return SupportImpersonatedUser(
+                userId: userId,
+                email: (row['email'] ?? '').toString(),
+                displayName: (row['display_name'] ?? '').toString(),
+                exhibitorName: exhibitorNamesByUserId[userId] ?? '',
+              );
+            },
           )
           .where((user) => user.userId.isNotEmpty)
           .toList();
@@ -378,18 +470,27 @@ class _SupportImpersonationScreenState
       final rows = await supabase
           .from('profiles')
           .select('user_id,email,display_name')
-          .or('email.ilike.%$safeQuery%,display_name.ilike.%$safeQuery%')
-          .order('email')
-          .limit(50);
+          .or(
+            'email.ilike.*$safeQuery*,display_name.ilike.*$safeQuery*',
+          )
+          .limit(200);
 
-      final users = (rows as List)
-          .cast<Map<String, dynamic>>()
+      final profileRows = (rows as List).cast<Map<String, dynamic>>();
+      final exhibitorNamesByUserId = await _loadExhibitorNamesByUserId(
+        profileRows.map((row) => (row['user_id'] ?? '').toString()),
+      );
+
+      final users = profileRows
           .map(
-            (row) => SupportImpersonatedUser(
-              userId: (row['user_id'] ?? '').toString(),
-              email: (row['email'] ?? '').toString(),
-              displayName: (row['display_name'] ?? '').toString(),
-            ),
+            (row) {
+              final userId = (row['user_id'] ?? '').toString();
+              return SupportImpersonatedUser(
+                userId: userId,
+                email: (row['email'] ?? '').toString(),
+                displayName: (row['display_name'] ?? '').toString(),
+                exhibitorName: exhibitorNamesByUserId[userId] ?? '',
+              );
+            },
           )
           .where((user) => user.userId.isNotEmpty)
           .toList();
@@ -568,7 +669,19 @@ class _SupportImpersonationScreenState
                                 subtitle: Padding(
                                   padding: const EdgeInsets.only(top: 6),
                                   child: Text(
-                                    user.email.isEmpty ? user.userId : user.email,
+                                    [
+                                      if (user.email.isNotEmpty) user.email,
+                                      if (user.displayName.trim().isNotEmpty &&
+                                          user.displayName.trim() != user.label)
+                                        'Profile: ${user.displayName.trim()}',
+                                    ].join(' • ').isEmpty
+                                        ? user.userId
+                                        : [
+                                            if (user.email.isNotEmpty) user.email,
+                                            if (user.displayName.trim().isNotEmpty &&
+                                                user.displayName.trim() != user.label)
+                                              'Profile: ${user.displayName.trim()}',
+                                          ].join(' • '),
                                   ),
                                 ),
                                 trailing: FilledButton.icon(
