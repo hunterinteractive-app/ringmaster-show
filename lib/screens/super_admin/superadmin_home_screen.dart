@@ -290,6 +290,13 @@ class _SupportImpersonationScreenState
   bool _loading = false;
   String? _error;
   List<SupportImpersonatedUser> _users = <SupportImpersonatedUser>[];
+  bool _showingInitialUsers = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInitialUsers();
+  }
 
   @override
   void dispose() {
@@ -297,13 +304,60 @@ class _SupportImpersonationScreenState
     super.dispose();
   }
 
+  Future<void> _loadInitialUsers() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+      _showingInitialUsers = true;
+    });
+
+    try {
+      final rows = await supabase
+          .from('profiles')
+          .select('user_id,email,display_name')
+          .order('email')
+          .limit(100);
+
+      final users = (rows as List)
+          .cast<Map<String, dynamic>>()
+          .map(
+            (row) => SupportImpersonatedUser(
+              userId: (row['user_id'] ?? '').toString(),
+              email: (row['email'] ?? '').toString(),
+              displayName: (row['display_name'] ?? '').toString(),
+            ),
+          )
+          .where((user) => user.userId.isNotEmpty)
+          .toList();
+
+      if (!mounted) return;
+
+      setState(() {
+        _users = users;
+        _loading = false;
+        _error = users.isEmpty ? 'No users found.' : null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _loading = false;
+        _error = 'User list failed: $e';
+      });
+    }
+  }
+
   Future<void> _searchUsers() async {
     final query = _searchController.text.trim();
 
+    if (query.isEmpty) {
+      await _loadInitialUsers();
+      return;
+    }
+
     if (query.length < 2) {
       setState(() {
-        _error = 'Enter at least 2 characters to search.';
-        _users = <SupportImpersonatedUser>[];
+        _error = 'Enter at least 2 characters to search, or clear the search to show users.';
       });
       return;
     }
@@ -311,17 +365,22 @@ class _SupportImpersonationScreenState
     setState(() {
       _loading = true;
       _error = null;
+      _showingInitialUsers = false;
     });
 
     try {
-      final safeQuery = query.replaceAll('%', '').replaceAll(',', '');
+      final safeQuery = query
+          .replaceAll('%', '')
+          .replaceAll(',', '')
+          .replaceAll('*', '')
+          .trim();
 
       final rows = await supabase
           .from('profiles')
           .select('user_id,email,display_name')
           .or('email.ilike.%$safeQuery%,display_name.ilike.%$safeQuery%')
           .order('email')
-          .limit(25);
+          .limit(50);
 
       final users = (rows as List)
           .cast<Map<String, dynamic>>()
@@ -389,7 +448,7 @@ class _SupportImpersonationScreenState
           const Padding(
             padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
             child: Text(
-              'Search for a user by email or display name, then open the app using that user context.',
+              'Select a user from the list, or search by email or display name to narrow it down.',
             ),
           ),
           Padding(
@@ -407,6 +466,11 @@ class _SupportImpersonationScreenState
                     ),
                     textInputAction: TextInputAction.search,
                     onSubmitted: (_) => _searchUsers(),
+                    onChanged: (value) {
+                      if (value.trim().isEmpty && !_showingInitialUsers) {
+                        _loadInitialUsers();
+                      }
+                    },
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -420,6 +484,17 @@ class _SupportImpersonationScreenState
                         )
                       : const Icon(Icons.search),
                   label: const Text('Search'),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  onPressed: _loading
+                      ? null
+                      : () {
+                          _searchController.clear();
+                          _loadInitialUsers();
+                        },
+                  icon: const Icon(Icons.clear),
+                  label: const Text('Clear'),
                 ),
               ],
             ),
@@ -445,49 +520,69 @@ class _SupportImpersonationScreenState
               ),
             ),
           Expanded(
-            child: ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: _users.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
-              itemBuilder: (context, index) {
-                final user = _users[index];
+            child: _loading && _users.isEmpty
+                ? const Center(child: CircularProgressIndicator())
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                        child: Text(
+                          _showingInitialUsers
+                              ? 'Showing up to 100 users'
+                              : 'Search results',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                      ),
+                      Expanded(
+                        child: ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                          itemCount: _users.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 10),
+                          itemBuilder: (context, index) {
+                            final user = _users[index];
 
-                return Card(
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 10,
-                    ),
-                    leading: CircleAvatar(
-                      child: Text(
-                        user.label.isEmpty
-                            ? '?'
-                            : user.label.characters.first.toUpperCase(),
+                            return Card(
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                              child: ListTile(
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 10,
+                                ),
+                                leading: CircleAvatar(
+                                  child: Text(
+                                    user.label.isEmpty
+                                        ? '?'
+                                        : user.label.characters.first.toUpperCase(),
+                                  ),
+                                ),
+                                title: Text(
+                                  user.label,
+                                  style: const TextStyle(fontWeight: FontWeight.w700),
+                                ),
+                                subtitle: Padding(
+                                  padding: const EdgeInsets.only(top: 6),
+                                  child: Text(
+                                    user.email.isEmpty ? user.userId : user.email,
+                                  ),
+                                ),
+                                trailing: FilledButton.icon(
+                                  onPressed: () => _startImpersonation(user),
+                                  icon: const Icon(Icons.visibility),
+                                  label: const Text('View As'),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
                       ),
-                    ),
-                    title: Text(
-                      user.label,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    subtitle: Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Text(
-                        user.email.isEmpty ? user.userId : user.email,
-                      ),
-                    ),
-                    trailing: FilledButton.icon(
-                      onPressed: () => _startImpersonation(user),
-                      icon: const Icon(Icons.visibility),
-                      label: const Text('View As'),
-                    ),
+                    ],
                   ),
-                );
-              },
-            ),
           ),
         ],
       ),
