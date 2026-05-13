@@ -252,8 +252,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
       }
     }
 
-    Set<String> adminShowIds = <String>{};
-    if (!widget.demoMode) {
+    Set<String> adminShowIds = <String>{};{
       try {
         adminShowIds = await _loadAdminShowIds();
       } catch (_) {
@@ -262,7 +261,9 @@ class _ShowListScreenState extends State<ShowListScreen> {
     }
 
     bool hasAvailableShowCapacity = false;
-    if (!widget.demoMode) {
+    if (widget.demoMode) {
+      hasAvailableShowCapacity = true;
+    } else {
       try {
         hasAvailableShowCapacity = await _hasAvailableShowCapacity();
       } catch (_) {
