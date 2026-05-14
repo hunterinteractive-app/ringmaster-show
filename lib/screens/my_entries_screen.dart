@@ -1,6 +1,8 @@
 // lib/screens/my_entries_screen.dart
 
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'dart:html' as html;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
@@ -446,6 +448,314 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
     );
   }
 
+  void _downloadEntriesForShow(String showId, String showName) {
+    final grouped = _grouped();
+    final exhibitorBuckets =
+        grouped[showId] ?? const <String, List<Map<String, dynamic>>>{};
+
+    if (exhibitorBuckets.isEmpty) {
+      setState(() => _msg = 'No entries found to download for this show.');
+      return;
+    }
+
+    String esc(dynamic value) => htmlEscape.convert((value ?? '').toString());
+
+    int classRank(dynamic value) {
+      final v = (value ?? '').toString().trim().toLowerCase();
+      if (v.contains('senior') || v.contains('sr')) return 0;
+      if (v.contains('intermediate') || v.contains('int')) return 1;
+      if (v.contains('junior') || v.contains('jr')) return 2;
+      return 99;
+    }
+
+    int sexRank(dynamic value) {
+      final v = (value ?? '').toString().trim().toLowerCase();
+      if (v == 'buck' || v == 'boar') return 0;
+      if (v == 'doe' || v == 'sow') return 1;
+      return 99;
+    }
+
+    int compareText(dynamic a, dynamic b) {
+      return (a ?? '').toString().trim().toLowerCase().compareTo(
+            (b ?? '').toString().trim().toLowerCase(),
+          );
+    }
+
+    int compareEntries(Map<String, dynamic> a, Map<String, dynamic> b) {
+      final sectionCmp = _sectionLabel(a['section_id']).toLowerCase().compareTo(
+            _sectionLabel(b['section_id']).toLowerCase(),
+          );
+      if (sectionCmp != 0) return sectionCmp;
+
+      final breedCmp = compareText(a['breed'], b['breed']);
+      if (breedCmp != 0) return breedCmp;
+
+      final varietyCmp = compareText(a['variety'], b['variety']);
+      if (varietyCmp != 0) return varietyCmp;
+
+      final classRankCmp =
+          classRank(a['class_name']).compareTo(classRank(b['class_name']));
+      if (classRankCmp != 0) return classRankCmp;
+
+      final classCmp = compareText(a['class_name'], b['class_name']);
+      if (classCmp != 0) return classCmp;
+
+      final sexRankCmp = sexRank(a['sex']).compareTo(sexRank(b['sex']));
+      if (sexRankCmp != 0) return sexRankCmp;
+
+      final sexCmp = compareText(a['sex'], b['sex']);
+      if (sexCmp != 0) return sexCmp;
+
+      return compareText(a['tattoo'], b['tattoo']);
+    }
+
+    final exhibitorIds = exhibitorBuckets.keys.toList()
+      ..sort(
+        (a, b) => _exhibitorLabelById(a).toLowerCase().compareTo(
+          _exhibitorLabelById(b).toLowerCase(),
+        ),
+      );
+
+    final totalEntries = exhibitorBuckets.values.fold<int>(
+      0,
+      (sum, list) => sum + list.length,
+    );
+
+    final generatedAt = formatLocalDateTime(DateTime.now().toIso8601String());
+    final closeAt = _parseTs(_showsById[showId]?['entry_close_at']);
+    final deadlineText = closeAt == null
+        ? 'Entry deadline not set'
+        : 'Entry deadline: ${formatLocalDateTime(closeAt.toIso8601String())}';
+
+    final buffer = StringBuffer();
+
+    buffer.writeln('''
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>${esc(showName)} Entries</title>
+  <style>
+    @page { size: letter; margin: 0.45in; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      color: #111827;
+      background: #ffffff;
+      font-size: 12px;
+    }
+    .header {
+      border: 2px solid #0f2d52;
+      border-radius: 12px;
+      padding: 16px 18px;
+      margin-bottom: 16px;
+      background: #f8fafc;
+    }
+    .brand {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: #0f2d52;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 24px;
+      color: #0f2d52;
+    }
+    .subtitle {
+      margin-top: 6px;
+      color: #374151;
+      font-size: 13px;
+    }
+    .summary {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+    .pill {
+      border: 1px solid #cbd5e1;
+      border-radius: 999px;
+      padding: 6px 10px;
+      background: #ffffff;
+      font-weight: 700;
+      color: #1f2937;
+    }
+    .notice {
+      border-left: 5px solid #d4a623;
+      padding: 10px 12px;
+      margin: 0 0 16px 0;
+      background: #fffbeb;
+      color: #374151;
+      line-height: 1.4;
+    }
+    .exhibitor {
+      break-inside: avoid;
+      page-break-inside: avoid;
+      margin-bottom: 18px;
+      border: 1px solid #d1d5db;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .exhibitor-head {
+      background: #0f2d52;
+      color: #ffffff;
+      padding: 10px 12px;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      font-weight: 700;
+    }
+    .entry-count {
+      font-size: 11px;
+      background: rgba(255,255,255,.16);
+      border-radius: 999px;
+      padding: 4px 8px;
+      white-space: nowrap;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th {
+      background: #e5e7eb;
+      color: #111827;
+      text-align: left;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: .4px;
+      padding: 7px 6px;
+      border-bottom: 1px solid #9ca3af;
+    }
+    td {
+      padding: 7px 6px;
+      border-bottom: 1px solid #e5e7eb;
+      vertical-align: top;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:nth-child(even) td { background: #f9fafb; }
+    .status-scratched {
+      color: #991b1b;
+      font-weight: 700;
+    }
+    .footer {
+      margin-top: 18px;
+      padding-top: 10px;
+      border-top: 1px solid #d1d5db;
+      color: #6b7280;
+      font-size: 10px;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    @media print {
+      .no-print { display: none; }
+      body { font-size: 11px; }
+      .exhibitor { break-inside: avoid; page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="brand">RingMaster Show</div>
+    <h1>${esc(showName)}</h1>
+    <div class="subtitle">Exhibitor Entries Report</div>
+    <div class="summary">
+      <div class="pill">${exhibitorIds.length} exhibitor${exhibitorIds.length == 1 ? '' : 's'}</div>
+      <div class="pill">$totalEntries entr${totalEntries == 1 ? 'y' : 'ies'}</div>
+      <div class="pill">${esc(deadlineText)}</div>
+    </div>
+  </div>
+
+  <div class="notice">
+    Please review all entries carefully. If anything is incorrect, contact the show secretary before judging begins.
+    This report is intended to match the check-in style used by show administration.
+  </div>
+''');
+
+    for (final exhibitorId in exhibitorIds) {
+      final exhibitorName = _exhibitorLabelById(exhibitorId);
+      final entries = List<Map<String, dynamic>>.from(
+        exhibitorBuckets[exhibitorId] ?? const [],
+      )..sort(compareEntries);
+
+      buffer.writeln('''
+  <section class="exhibitor">
+    <div class="exhibitor-head">
+      <div>${esc(exhibitorName)}</div>
+      <div class="entry-count">${entries.length} entr${entries.length == 1 ? 'y' : 'ies'}</div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Section</th>
+          <th>Animal</th>
+          <th>Tattoo / Ear #</th>
+          <th>Breed</th>
+          <th>Variety</th>
+          <th>Class</th>
+          <th>Sex</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+''');
+
+      for (final e in entries) {
+        final rawStatus = (e['status'] ?? 'entered').toString().trim();
+        final status = rawStatus.isEmpty ? 'entered' : rawStatus;
+        final statusClass = status.toLowerCase() == 'scratched'
+            ? ' class="status-scratched"'
+            : '';
+
+        buffer.writeln('''
+        <tr>
+          <td>${esc(_sectionLabel(e['section_id']))}</td>
+          <td>${esc(e['animal_name'])}</td>
+          <td>${esc(e['tattoo'])}</td>
+          <td>${esc(e['breed'])}</td>
+          <td>${esc(e['variety'])}</td>
+          <td>${esc(e['class_name'])}</td>
+          <td>${esc(e['sex'])}</td>
+          <td$statusClass>${esc(status)}</td>
+        </tr>
+''');
+      }
+
+      buffer.writeln('''
+      </tbody>
+    </table>
+  </section>
+''');
+    }
+
+    buffer.writeln('''
+  <div class="footer">
+    <div>Generated by RingMaster Show</div>
+    <div>$generatedAt</div>
+  </div>
+  <script>
+    window.addEventListener('load', function () {
+      setTimeout(function () { window.print(); }, 350);
+    });
+  </script>
+</body>
+</html>
+''');
+
+    final blob = html.Blob([buffer.toString()], 'text/html;charset=utf-8');
+    final url = html.Url.createObjectUrlFromBlob(blob);
+    html.window.open(url, '_blank');
+
+    Future.delayed(const Duration(seconds: 5), () {
+      html.Url.revokeObjectUrl(url);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final grouped = _grouped();
@@ -526,6 +836,7 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
                         title: _showTitle(showId),
                         showId: showId,
                         onBreedCounts: _openBreedCounts,
+                        onDownloadEntries: _downloadEntriesForShow,
                         deadlinePassed: _deadlinePassedForShow(showId),
                         closeAt: _parseTs(_showsById[showId]?['entry_close_at']),
                         exhibitorBuckets: grouped[showId] ?? const {},
@@ -567,11 +878,13 @@ class _ShowExpansionCard extends StatelessWidget {
   final bool initiallyExpanded;
   final ValueChanged<bool> onExpandedChanged;
   final void Function(BuildContext context, String showId, String showName) onBreedCounts;
+  final void Function(String showId, String showName) onDownloadEntries;
 
   const _ShowExpansionCard({
     required this.title,
     required this.showId,
     required this.onBreedCounts,
+    required this.onDownloadEntries,
     required this.deadlinePassed,
     required this.closeAt,
     required this.exhibitorBuckets,
@@ -588,6 +901,102 @@ class _ShowExpansionCard extends StatelessWidget {
     return (value ?? '').toString().trim().toLowerCase();
   }
 
+  int _toInt(dynamic value, [int fallback = 9999]) {
+    if (value == null) return fallback;
+    if (value is int) return value;
+    return int.tryParse(value.toString()) ?? fallback;
+  }
+
+  int _sectionKindRank(dynamic value) {
+    switch (_safeLower(value)) {
+      case 'open':
+        return 0;
+      case 'youth':
+        return 1;
+      default:
+        return 99;
+    }
+  }
+
+  int _classRank(dynamic value) {
+    final v = _safeLower(value);
+    if (v.contains('senior') || v.contains('sr')) return 0;
+    if (v.contains('intermediate') || v.contains('int')) return 1;
+    if (v.contains('junior') || v.contains('jr')) return 2;
+    return 99;
+  }
+
+  int _sexRank(dynamic value) {
+    final v = _safeLower(value);
+    if (v == 'buck' || v == 'boar') return 0;
+    if (v == 'doe' || v == 'sow') return 1;
+    return 99;
+  }
+
+  int _compareEntriesForShowOrder(
+    Map<String, dynamic> a,
+    Map<String, dynamic> b,
+  ) {
+    final sectionA = sectionLabel(a['section_id']);
+    final sectionB = sectionLabel(b['section_id']);
+
+    final sectionKindCmp = _sectionKindRank(sectionA).compareTo(
+      _sectionKindRank(sectionB),
+    );
+    if (sectionKindCmp != 0) return sectionKindCmp;
+
+    final sectionLabelCmp = sectionA.toLowerCase().compareTo(
+          sectionB.toLowerCase(),
+        );
+    if (sectionLabelCmp != 0) return sectionLabelCmp;
+
+    final breedSortCmp = _toInt(a['breed_sort_order']).compareTo(
+      _toInt(b['breed_sort_order']),
+    );
+    if (breedSortCmp != 0) return breedSortCmp;
+
+    final breedCmp = _safeLower(a['breed']).compareTo(_safeLower(b['breed']));
+    if (breedCmp != 0) return breedCmp;
+
+    final groupSortCmp = _toInt(a['group_sort_order']).compareTo(
+      _toInt(b['group_sort_order']),
+    );
+    if (groupSortCmp != 0) return groupSortCmp;
+
+    final varietySortCmp = _toInt(a['variety_sort_order']).compareTo(
+      _toInt(b['variety_sort_order']),
+    );
+    if (varietySortCmp != 0) return varietySortCmp;
+
+    final varietyCmp = _safeLower(a['variety']).compareTo(
+      _safeLower(b['variety']),
+    );
+    if (varietyCmp != 0) return varietyCmp;
+
+    final classSortCmp = _toInt(a['class_sort_order']).compareTo(
+      _toInt(b['class_sort_order']),
+    );
+    if (classSortCmp != 0) return classSortCmp;
+
+    final classRankCmp = _classRank(a['class_name']).compareTo(
+      _classRank(b['class_name']),
+    );
+    if (classRankCmp != 0) return classRankCmp;
+
+    final classCmp = _safeLower(a['class_name']).compareTo(
+      _safeLower(b['class_name']),
+    );
+    if (classCmp != 0) return classCmp;
+
+    final sexRankCmp = _sexRank(a['sex']).compareTo(_sexRank(b['sex']));
+    if (sexRankCmp != 0) return sexRankCmp;
+
+    final sexCmp = _safeLower(a['sex']).compareTo(_safeLower(b['sex']));
+    if (sexCmp != 0) return sexCmp;
+
+    return _safeLower(a['tattoo']).compareTo(_safeLower(b['tattoo']));
+  }
+
   String _safeLabel(dynamic value, String fallback) {
     final text = (value ?? '').toString().trim();
     return text.isEmpty ? fallback : text;
@@ -599,23 +1008,7 @@ class _ShowExpansionCard extends StatelessWidget {
         <String, Map<String, Map<String, Map<String, List<Map<String, dynamic>>>>>>{};
 
     final sorted = List<Map<String, dynamic>>.from(entries)
-      ..sort((a, b) {
-        final breedCmp = _safeLower(a['breed']).compareTo(_safeLower(b['breed']));
-        if (breedCmp != 0) return breedCmp;
-
-        final varietyCmp =
-            _safeLower(a['variety']).compareTo(_safeLower(b['variety']));
-        if (varietyCmp != 0) return varietyCmp;
-
-        final classCmp =
-            _safeLower(a['class_name']).compareTo(_safeLower(b['class_name']));
-        if (classCmp != 0) return classCmp;
-
-        final sexCmp = _safeLower(a['sex']).compareTo(_safeLower(b['sex']));
-        if (sexCmp != 0) return sexCmp;
-
-        return _safeLower(a['tattoo']).compareTo(_safeLower(b['tattoo']));
-      });
+      ..sort(_compareEntriesForShowOrder);
 
     for (final e in sorted) {
       final breed = _safeLabel(e['breed'], '(No Breed)');
@@ -636,7 +1029,11 @@ class _ShowExpansionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final exhibitorIds = exhibitorBuckets.keys.toList()
-      ..sort((a, b) => exhibitorLabel(a).compareTo(exhibitorLabel(b)));
+      ..sort(
+        (a, b) => exhibitorLabel(a).toLowerCase().compareTo(
+          exhibitorLabel(b).toLowerCase(),
+        ),
+      );
 
     final deadlineText = closeAt == null
         ? '(deadline not set)'
@@ -683,13 +1080,21 @@ class _ShowExpansionCard extends StatelessWidget {
           ),
           children: [
             const SizedBox(height: AppSpacing.md),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: OutlinedButton.icon(
-                onPressed: () => onBreedCounts(context, showId, title),
-                icon: const Icon(Icons.bar_chart),
-                label: const Text('Breed Counts'),
-              ),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () => onBreedCounts(context, showId, title),
+                  icon: const Icon(Icons.bar_chart),
+                  label: const Text('Breed Counts'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => onDownloadEntries(showId, title),
+                  icon: const Icon(Icons.download),
+                  label: const Text('Download Entries'),
+                ),
+              ],
             ),
             const SizedBox(height: AppSpacing.md),
             for (final exId in exhibitorIds) ...[

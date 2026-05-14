@@ -1982,19 +1982,69 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
 
     for (final k in map.keys) {
       map[k]!.sort((a, b) {
-        final at = _safe(a, 'tattoo').toLowerCase();
-        final bt = _safe(b, 'tattoo').toLowerCase();
-        final c1 = at.compareTo(bt);
-        if (c1 != 0) return c1;
+        int toInt(dynamic value, [int fallback = 9999]) {
+          if (value == null) return fallback;
+          if (value is int) return value;
+          return int.tryParse(value.toString()) ?? fallback;
+        }
+
+        int kindRank(String k) {
+          switch (k.toLowerCase()) {
+            case 'open':
+              return 0;
+            case 'youth':
+              return 1;
+            default:
+              return 99;
+          }
+        }
+
+        final sectionKindCmp = kindRank(_safe(a, 'section_kind'))
+            .compareTo(kindRank(_safe(b, 'section_kind')));
+        if (sectionKindCmp != 0) return sectionKindCmp;
+
+        final sectionSortCmp = toInt(a['section_sort_order'])
+            .compareTo(toInt(b['section_sort_order']));
+        if (sectionSortCmp != 0) return sectionSortCmp;
+
+        final sectionLetterCmp = _safe(a, 'section_letter')
+            .toUpperCase()
+            .compareTo(_safe(b, 'section_letter').toUpperCase());
+        if (sectionLetterCmp != 0) return sectionLetterCmp;
+
+        final breedSortCmp =
+            toInt(a['breed_sort_order']).compareTo(toInt(b['breed_sort_order']));
+        if (breedSortCmp != 0) return breedSortCmp;
 
         final breedCmp = _safe(a, 'breed')
             .toLowerCase()
             .compareTo(_safe(b, 'breed').toLowerCase());
         if (breedCmp != 0) return breedCmp;
 
-        return _groupVarietyLabel(a)
+        final groupSortCmp =
+            toInt(a['group_sort_order']).compareTo(toInt(b['group_sort_order']));
+        if (groupSortCmp != 0) return groupSortCmp;
+
+        final varietySortCmp = toInt(a['variety_sort_order'])
+            .compareTo(toInt(b['variety_sort_order']));
+        if (varietySortCmp != 0) return varietySortCmp;
+
+        final varietyCmp = _groupVarietyLabel(a)
             .toLowerCase()
             .compareTo(_groupVarietyLabel(b).toLowerCase());
+        if (varietyCmp != 0) return varietyCmp;
+
+        final classSortCmp =
+            toInt(a['class_sort_order']).compareTo(toInt(b['class_sort_order']));
+        if (classSortCmp != 0) return classSortCmp;
+
+        final sexCmp =
+            _safe(a, 'sex').toLowerCase().compareTo(_safe(b, 'sex').toLowerCase());
+        if (sexCmp != 0) return sexCmp;
+
+        return _safe(a, 'tattoo')
+            .toLowerCase()
+            .compareTo(_safe(b, 'tattoo').toLowerCase());
       });
     }
 
