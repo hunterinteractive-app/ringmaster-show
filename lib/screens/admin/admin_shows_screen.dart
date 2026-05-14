@@ -35,6 +35,11 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
   late Future<_AdminShowsPageData> _pageFuture;
   final TextEditingController _searchController = TextEditingController();
 
+  static const String _demoShowId = '0f432fe8-2be2-467a-842f-ff3777436992';
+
+  bool get _isDemoMode =>
+      widget.demoMode || widget.allowedShowIds.contains(_demoShowId);
+
   @override
   void initState() {
     super.initState();
@@ -171,7 +176,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
   }
 
   Future<_ShowCreationStatus> _loadLicenseStatus() async {
-    if (widget.demoMode) {
+    if (_isDemoMode) {
       return const _ShowCreationStatus(
         canCreate: false,
         remainingShowDays: 0,
@@ -304,7 +309,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
   }
 
   Future<void> _openCreate() async {
-    if (AppSession.isSupportMode || widget.demoMode) return;
+    if (AppSession.isSupportMode || _isDemoMode) return;
     final ok = await Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (_) => const CreateShowScreen()),
@@ -330,7 +335,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder: (_) => ShowListScreen(
-          demoMode: widget.demoMode,
+          demoMode: _isDemoMode,
           demoSecretaryMode: false,
         ),
       ),
@@ -338,7 +343,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
   }
 
   void _openAnimals() {
-    if (widget.demoMode) return;
+    if (_isDemoMode) return;
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const MyAnimalsScreen()),
@@ -346,7 +351,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
   }
 
   void _openEntries() {
-    if (widget.demoMode) return;
+    if (_isDemoMode) return;
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const MyEntriesScreen()),
@@ -354,7 +359,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
   }
 
   void _openAccount() {
-    if (widget.demoMode) return;
+    if (_isDemoMode) return;
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const AccountSettingsScreen()),
@@ -362,7 +367,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
   }
 
   void _openResources() {
-    if (widget.demoMode) return;
+    if (_isDemoMode) return;
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const AdminResourcesScreen()),
@@ -444,7 +449,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
         canCreate: !AppSession.isSupportMode &&
             license.canCreate &&
             snap.connectionState != ConnectionState.waiting,
-        demoMode: widget.demoMode,
+        demoMode: _isDemoMode,
         onShows: _openShows,
         onAnimals: _openAnimals,
         onEntries: _openEntries,
