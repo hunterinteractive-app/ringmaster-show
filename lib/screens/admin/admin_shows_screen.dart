@@ -38,8 +38,15 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
 
   static const String _demoShowId = '0f432fe8-2be2-467a-842f-ff3777436992';
 
-  bool get _isDemoMode =>
-      widget.demoMode || widget.allowedShowIds.contains(_demoShowId);
+  bool get _isDemoMode {
+    if (widget.demoMode) return true;
+
+    final fragment = Uri.base.fragment.trim();
+    if (fragment == '/demo' || fragment.startsWith('/demo?')) return true;
+
+    final path = Uri.base.path.trim();
+    return path == '/demo' || path.startsWith('/demo/');
+  }
 
   @override
   void initState() {
