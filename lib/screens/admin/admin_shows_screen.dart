@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'admin_resources_screen.dart';
 
@@ -743,6 +744,33 @@ class _AdminShowsAppBar extends StatelessWidget implements PreferredSizeWidget {
                 label: 'Demo Show',
                 showLabel: showFullNav,
                 onTap: onShows,
+              ),
+              _TopBarAction(
+                icon: Icons.rocket_launch,
+                label: 'Run Your Show',
+                showLabel: showFullNav,
+                onTap: () async {
+                  final uri = Uri(
+                    scheme: 'mailto',
+                    path: 'support@ringmasterone.com',
+                    queryParameters: {
+                      'subject': 'Ready to run my show with RingMaster Show',
+                      'body': 'Hi, I tried the RingMaster Show demo and would like help getting my show set up.',
+                    },
+                  );
+
+                  final opened = await launchUrl(uri);
+
+                  if (!opened && context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Ready to run your own show? Email support@ringmasterone.com and I’ll help you get set up.',
+                        ),
+                      ),
+                    );
+                  }
+                },
               ),
               const SizedBox(width: 10),
             ]
