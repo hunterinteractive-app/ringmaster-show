@@ -73,16 +73,37 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
     final isSuperAdmin = superAdminRes != null;
 
     final query = supabase.from('shows').select(
-          'id,name,start_date,end_date,location_name,is_published,entry_open_at,entry_close_at,created_at,'
-          'is_locked,locked_at,finalized_at',
-        );
+      'id,name,start_date,end_date,location_name,is_published,entry_open_at,entry_close_at,created_at,'
+      'is_locked,locked_at,finalized_at',
+    );
+
+    final allowedShowIds = <String>{...widget.allowedShowIds};
+
+    if (!isSuperAdmin) {
+      try {
+        final adminRows = await supabase
+            .from('show_admins')
+            .select('show_id')
+            .eq('user_id', userId);
+
+        for (final raw in (adminRows as List)) {
+          final row = Map<String, dynamic>.from(raw as Map);
+          final showId = row['show_id']?.toString();
+          if (showId != null && showId.isNotEmpty) {
+            allowedShowIds.add(showId);
+          }
+        }
+      } catch (_) {
+        // Keep using widget.allowedShowIds if the direct lookup fails.
+      }
+    }
 
     final res = isSuperAdmin
         ? await query.order('start_date').order('location_name')
-        : widget.allowedShowIds.isEmpty
+        : allowedShowIds.isEmpty
             ? []
             : await query
-                .inFilter('id', widget.allowedShowIds)
+                .inFilter('id', allowedShowIds.toList())
                 .order('start_date')
                 .order('location_name');
 
@@ -459,7 +480,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
                             ),
                           ),
                           const SizedBox(height: AppSpacing.md),
-                          if (widget.allowedShowIds.isEmpty)
+                          if (page?.hasAdminAccess != true)
                             const Expanded(
                               child: RMEmptyState(
                                 title: 'No admin access yet',
@@ -861,6 +882,8 @@ class _AdminShowsPageData {
     required this.license,
     required this.entryCounts,
   });
+
+  bool get hasAdminAccess => shows.isNotEmpty;
 }
 
 class _ShowCreationStatus {
