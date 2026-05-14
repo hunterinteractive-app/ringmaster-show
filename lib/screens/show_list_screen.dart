@@ -1269,7 +1269,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              'Demo Mode — this shared show resets every 24 hours. Emails and real payments are disabled.${demoResetText == null ? '' : ' Resets in: $demoResetText'}',
+                              'Demo Mode — this is a shared demo account. No login required. Entries are temporary and reset every 24 hours. Emails and real payments are disabled.${demoResetText == null ? '' : ' Resets in: $demoResetText'}',
                               style: const TextStyle(fontWeight: FontWeight.w700),
                             ),
                           ),
@@ -1400,7 +1400,7 @@ class _ResponsiveShowAppBar extends StatelessWidget
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      demoMode ? 'Demo Show' : 'Upcoming Shows',
+                      demoMode ? 'Demo Mode — RingMaster Show' : 'Upcoming Shows',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(

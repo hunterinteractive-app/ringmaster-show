@@ -28,6 +28,8 @@ class EnterShowScreen extends StatefulWidget {
 }
 
 class _EnterShowScreenState extends State<EnterShowScreen> {
+  bool get isDemo =>
+      widget.showId == '0f432fe8-2be2-467a-842f-ff3777436992';
   final Map<String, bool> _selected = {};
   final Map<String, TextEditingController> _classControllers = {};
 
@@ -1752,179 +1754,202 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     return list;
   }
 
-    Widget _buildAnimalTile(Map<String, dynamic> a) {
-      final id = a['id'] as String;
-      final checked = _selected[id] ?? false;
-      final inCart = _isAnimalInCart(id);
-      final alreadyEnteredInSelectedSection =
-          _isAnimalAlreadyEnteredInAnySelectedSection(id);
-      final hasSectionConflict = _hasSectionConflictForAnimal(id);
-      final disabled =
-          inCart || alreadyEnteredInSelectedSection || hasSectionConflict;
+  Widget _demoEntryDisclaimer() {
+    if (!isDemo) return const SizedBox.shrink();
 
-      final alreadyEnteredLabel = _alreadyEnteredSectionLabel(id);
-      final conflictLabel = _sectionConflictLabelForAnimal(id);
-
-      final classOptions = _allowedClassOptionsForAnimal(a);
-      final selectedClass = _selectedOrSuggestedClassForAnimal(a);
-      final needsValidation = selectedClass == null || selectedClass.isEmpty;
-
-      final tile = ListTile(
-        leading: Checkbox(
-          value: checked,
-          onChanged: (_submitting || disabled)
-              ? null
-              : (v) => _toggleSelected(a, v ?? false),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade100,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.orange.shade300),
+      ),
+      child: const Text(
+        'Demo Mode — Entries are for testing only. No real submissions, emails, or payments will occur. Data resets automatically every 24 hours.',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontWeight: FontWeight.w700,
+          fontSize: 13,
         ),
-        title: Text(_displayAnimalTitle(a)),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '${_safeString(a, 'species').toUpperCase()} • ${_safeString(a, 'breed')} • ${_safeString(a, 'variety')} • ${_safeString(a, 'sex')}',
-            ),
-            const SizedBox(height: 10),
-            DropdownButtonFormField<String>(
-              value: classOptions.contains(selectedClass) ? selectedClass : null,
-              decoration: InputDecoration(
-                labelText: 'Class',
-                helperText: needsValidation
-                    ? 'Select the class for this animal.'
-                    : 'Projected class selected.',
-                helperStyle: TextStyle(
-                  color: needsValidation ? Colors.red : null,
-                  fontWeight: needsValidation ? FontWeight.w600 : null,
-                ),
-                border: const OutlineInputBorder(),
-                isDense: true,
-              ),
-              items: classOptions
-                  .map(
-                    (opt) => DropdownMenuItem<String>(
-                      value: opt,
-                      child: Text(opt),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (_submitting || disabled)
-                  ? null
-                  : (value) {
-                      if (value == null) return;
-                      setState(() {
-                        _classControllerFor(id).text = value;
-                        _msg = null;
-                      });
-                    },
-            ),
-            if (_furEntriesEnabled &&
-                _selected[id] == true &&
-                _selectedSectionIds.isNotEmpty &&
-                _safeString(a, 'species').toLowerCase() != 'cavy') ...[
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _selectedSectionIds
-                    .where((sectionId) => !_sectionIsMeatOnly(sectionId))
-                  .map((sectionId) {
-                    final label = _sectionLabelForId(sectionId);
-                    final furSelected =
-                        _isFurSelectedForAnimalSection(id, sectionId);
-                    final breedName = _safeString(a, 'breed');
-                    final needsWhiteColored =
-                        _breedUsesWhiteColoredFur(breedName);
-                    final selectedFurVariety =
-                        _furVarietyForAnimalSection(id, sectionId);
+      ),
+    );
+  }
 
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        FilterChip(
-                          label: Text('$label Fur/Wool'),
-                          selected: furSelected,
-                          onSelected: (_submitting || disabled)
+  Widget _buildAnimalTile(Map<String, dynamic> a) {
+    final id = a['id'] as String;
+    final checked = _selected[id] ?? false;
+    final inCart = _isAnimalInCart(id);
+    final alreadyEnteredInSelectedSection =
+        _isAnimalAlreadyEnteredInAnySelectedSection(id);
+    final hasSectionConflict = _hasSectionConflictForAnimal(id);
+    final disabled =
+        inCart || alreadyEnteredInSelectedSection || hasSectionConflict;
+
+    final alreadyEnteredLabel = _alreadyEnteredSectionLabel(id);
+    final conflictLabel = _sectionConflictLabelForAnimal(id);
+
+    final classOptions = _allowedClassOptionsForAnimal(a);
+    final selectedClass = _selectedOrSuggestedClassForAnimal(a);
+    final needsValidation = selectedClass == null || selectedClass.isEmpty;
+
+    final tile = ListTile(
+      leading: Checkbox(
+        value: checked,
+        onChanged: (_submitting || disabled)
+            ? null
+            : (v) => _toggleSelected(a, v ?? false),
+      ),
+      title: Text(_displayAnimalTitle(a)),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${_safeString(a, 'species').toUpperCase()} • ${_safeString(a, 'breed')} • ${_safeString(a, 'variety')} • ${_safeString(a, 'sex')}',
+          ),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            value: classOptions.contains(selectedClass) ? selectedClass : null,
+            decoration: InputDecoration(
+              labelText: 'Class',
+              helperText: needsValidation
+                  ? 'Select the class for this animal.'
+                  : 'Projected class selected.',
+              helperStyle: TextStyle(
+                color: needsValidation ? Colors.red : null,
+                fontWeight: needsValidation ? FontWeight.w600 : null,
+              ),
+              border: const OutlineInputBorder(),
+              isDense: true,
+            ),
+            items: classOptions
+                .map(
+                  (opt) => DropdownMenuItem<String>(
+                    value: opt,
+                    child: Text(opt),
+                  ),
+                )
+                .toList(),
+            onChanged: (_submitting || disabled)
+                ? null
+                : (value) {
+                    if (value == null) return;
+                    setState(() {
+                      _classControllerFor(id).text = value;
+                      _msg = null;
+                    });
+                  },
+          ),
+          if (_furEntriesEnabled &&
+              _selected[id] == true &&
+              _selectedSectionIds.isNotEmpty &&
+              _safeString(a, 'species').toLowerCase() != 'cavy') ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _selectedSectionIds
+                  .where((sectionId) => !_sectionIsMeatOnly(sectionId))
+                  .map((sectionId) {
+                final label = _sectionLabelForId(sectionId);
+                final furSelected =
+                    _isFurSelectedForAnimalSection(id, sectionId);
+                final breedName = _safeString(a, 'breed');
+                final needsWhiteColored =
+                    _breedUsesWhiteColoredFur(breedName);
+                final selectedFurVariety =
+                    _furVarietyForAnimalSection(id, sectionId);
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    FilterChip(
+                      label: Text('$label Fur/Wool'),
+                      selected: furSelected,
+                      onSelected: (_submitting || disabled)
+                          ? null
+                          : (value) => _toggleFurForAnimalSection(
+                                animalId: id,
+                                sectionId: sectionId,
+                                value: value,
+                              ),
+                    ),
+                    if (furSelected && needsWhiteColored) ...[
+                      const SizedBox(height: 6),
+                      SizedBox(
+                        width: 180,
+                        child: DropdownButtonFormField<String>(
+                          value: (selectedFurVariety == 'White' ||
+                                  selectedFurVariety == 'Colored')
+                              ? selectedFurVariety
+                              : null,
+                          decoration: const InputDecoration(
+                            labelText: 'Fur/Wool Class',
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                          ),
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'White',
+                              child: Text('White'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'Colored',
+                              child: Text('Colored'),
+                            ),
+                          ],
+                          onChanged: (_submitting || disabled)
                               ? null
-                              : (value) => _toggleFurForAnimalSection(
+                              : (value) {
+                                  _setFurVarietyForAnimalSection(
                                     animalId: id,
                                     sectionId: sectionId,
                                     value: value,
-                                  ),
+                                  );
+                                },
                         ),
-                        if (furSelected && needsWhiteColored) ...[
-                          const SizedBox(height: 6),
-                          SizedBox(
-                            width: 180,
-                            child: DropdownButtonFormField<String>(
-                              value: (selectedFurVariety == 'White' ||
-                                      selectedFurVariety == 'Colored')
-                                  ? selectedFurVariety
-                                  : null,
-                              decoration: const InputDecoration(
-                                labelText: 'Fur/Wool Class',
-                                border: OutlineInputBorder(),
-                                isDense: true,
-                              ),
-                              items: const [
-                                DropdownMenuItem(
-                                  value: 'White',
-                                  child: Text('White'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'Colored',
-                                  child: Text('Colored'),
-                                ),
-                              ],
-                              onChanged: (_submitting || disabled)
-                                  ? null
-                                  : (value) {
-                                      _setFurVarietyForAnimalSection(
-                                        animalId: id,
-                                        sectionId: sectionId,
-                                        value: value,
-                                      );
-                                    },
-                            ),
-                          ),
-                        ],
-                      ],
-                    );
-                  }).toList(),
+                      ),
+                    ],
+                  ],
+                );
+              }).toList(),
             ),
           ],
-            if (alreadyEnteredInSelectedSection || hasSectionConflict || inCart) ...[
-              const SizedBox(height: 8),
-              Text(
-                alreadyEnteredInSelectedSection
-                    ? (alreadyEnteredLabel.isEmpty
-                        ? 'Already entered in one of the selected sections'
-                        : 'Already entered in $alreadyEnteredLabel')
-                    : hasSectionConflict
-                        ? (conflictLabel.isEmpty
-                            ? 'Cannot enter the same letter in both Open and Youth'
-                            : 'Conflicts with existing $conflictLabel')
-                        : 'Already in cart',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Colors.red,
-                      fontWeight: FontWeight.w600,
-                    ),
-              ),
-            ],
+          if (alreadyEnteredInSelectedSection || hasSectionConflict || inCart) ...[
+            const SizedBox(height: 8),
+            Text(
+              alreadyEnteredInSelectedSection
+                  ? (alreadyEnteredLabel.isEmpty
+                      ? 'Already entered in one of the selected sections'
+                      : 'Already entered in $alreadyEnteredLabel')
+                  : hasSectionConflict
+                      ? (conflictLabel.isEmpty
+                          ? 'Cannot enter the same letter in both Open and Youth'
+                          : 'Conflicts with existing $conflictLabel')
+                      : 'Already in cart',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Colors.red,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
           ],
-        ),
-        isThreeLine: false,
-      );
-
-      return Column(
-        children: [
-          Opacity(
-            opacity: disabled ? 0.45 : 1.0,
-            child: tile,
-          ),
-          const Divider(height: 1),
         ],
-      );
-    }
+      ),
+      isThreeLine: false,
+    );
+
+    return Column(
+      children: [
+        Opacity(
+          opacity: disabled ? 0.45 : 1.0,
+          child: tile,
+        ),
+        const Divider(height: 1),
+      ],
+    );
+  }
 
   bool _animalHasExactDob(Map<String, dynamic> animal) {
     if (_showDate == null) return false;
