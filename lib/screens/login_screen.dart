@@ -435,7 +435,10 @@ class _DemoLoginScreenState extends State<DemoLoginScreen> {
               ? const AdminShowsScreen(
                   allowedShowIds: [_demoShowId],
                 )
-              : const ShowListScreen(demoMode: true),
+              : const ShowListScreen(
+                  demoMode: true,
+                  demoSecretaryMode: false,
+                ),
         ),
       );
     } catch (e) {

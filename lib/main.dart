@@ -219,7 +219,7 @@ class _RootState extends State<Root> {
       return _qrScreenFromUri(qrUri);
     }
 
-    if (demoMode && session == null) {
+    if (demoMode) {
       return const DemoLoginScreen();
     }
 
@@ -252,7 +252,7 @@ class _RootState extends State<Root> {
       );
     }
 
-    if (demoMode) return const ShowListScreen(demoMode: true);
+    // if (demoMode) return const ShowListScreen(demoMode: true);
 
     if (!_hasExhibitor) return const AccountProfileSetupScreen();
 

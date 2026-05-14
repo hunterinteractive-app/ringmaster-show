@@ -32,9 +32,11 @@ class ShowListScreen extends StatefulWidget {
   const ShowListScreen({
     super.key,
     this.demoMode = false,
+    this.demoSecretaryMode = false,
   });
 
   final bool demoMode;
+  final bool demoSecretaryMode;
 
   @override
   State<ShowListScreen> createState() => _ShowListScreenState();
@@ -150,7 +152,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
   Future<List<Map<String, dynamic>>> _loadShows() async {
     final query = supabase
         .from('shows')
-        .select('id,name,start_date,location_name,entry_close_at,is_demo');
+        .select('id,name,start_date,location_name,entry_close_at,is_demo,demo_resets_at');
 
     if (widget.demoMode) {
       final res = await query
@@ -173,6 +175,10 @@ class _ShowListScreenState extends State<ShowListScreen> {
   Future<Set<String>> _loadAdminShowIds() async {
     final userId = _effectiveUserId;
     if (userId == null) return <String>{};
+
+    if (widget.demoMode && !widget.demoSecretaryMode) {
+      return <String>{};
+    }
 
     final allowedShowIds = <String>{};
 
@@ -216,7 +222,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
       // Keep any role_assignments results if show_admins lookup fails.
     }
 
-    if (widget.demoMode) {
+    if (widget.demoMode && widget.demoSecretaryMode) {
       allowedShowIds.add('0f432fe8-2be2-467a-842f-ff3777436992');
     }
 
@@ -287,9 +293,9 @@ class _ShowListScreenState extends State<ShowListScreen> {
     }
 
     bool hasAvailableShowCapacity = false;
-    if (widget.demoMode) {
+    if (widget.demoMode && widget.demoSecretaryMode) {
       hasAvailableShowCapacity = true;
-    } else {
+    } else if (!widget.demoMode) {
       try {
         hasAvailableShowCapacity = await _hasAvailableShowCapacity();
       } catch (_) {
@@ -314,6 +320,25 @@ class _ShowListScreenState extends State<ShowListScreen> {
       hasAvailableShowCapacity: hasAvailableShowCapacity,
       hasAnyAssignedShows: hasAnyAssignedShows,
     );
+  }
+
+  String? _formatDemoResetText(List<Map<String, dynamic>> shows) {
+    if (shows.isEmpty) return null;
+
+    final raw = shows.first['demo_resets_at']?.toString();
+    if (raw == null || raw.trim().isEmpty) return null;
+
+    final resetAt = DateTime.tryParse(raw)?.toLocal();
+    if (resetAt == null) return null;
+
+    final remaining = resetAt.difference(DateTime.now());
+    if (remaining.isNegative) return 'soon';
+
+    final hours = remaining.inHours;
+    final minutes = remaining.inMinutes.remainder(60);
+
+    if (hours <= 0) return '${minutes}m';
+    return '${hours}h ${minutes}m';
   }
 
   Future<List<Map<String, dynamic>>> _loadAllShowsForSuperAdmin() async {
@@ -1070,9 +1095,10 @@ class _ShowListScreenState extends State<ShowListScreen> {
                                                   .isBefore(DateTime.now());
 
                                       final isAdminForShow =
-                                          bundle.isSuperAdmin ||
-                                              bundle.adminShowIds
-                                                  .contains(showId);
+                                          !widget.demoMode &&
+                                              (bundle.isSuperAdmin ||
+                                                  bundle.adminShowIds
+                                                      .contains(showId));
 
                                       return Padding(
                                         padding: const EdgeInsets.only(
@@ -1225,6 +1251,10 @@ class _ShowListScreenState extends State<ShowListScreen> {
               }
 
               final impersonatedUser = _impersonatedUser;
+              final demoResetText = widget.demoMode
+                  ? _formatDemoResetText(bundle?.shows ?? const [])
+                  : null;
+
               final demoBanner = widget.demoMode
                   ? Container(
                       width: double.infinity,
@@ -1233,14 +1263,14 @@ class _ShowListScreenState extends State<ShowListScreen> {
                         horizontal: AppSpacing.lg,
                         vertical: AppSpacing.sm,
                       ),
-                      child: const Row(
+                      child: Row(
                         children: [
-                          Icon(Icons.science_outlined, size: 18),
-                          SizedBox(width: 8),
+                          const Icon(Icons.science_outlined, size: 18),
+                          const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              'Demo Mode — this shared show resets every 24 hours. Emails and real payments are disabled.',
-                              style: TextStyle(fontWeight: FontWeight.w700),
+                              'Demo Mode — this shared show resets every 24 hours. Emails and real payments are disabled.${demoResetText == null ? '' : ' Resets in: $demoResetText'}',
+                              style: const TextStyle(fontWeight: FontWeight.w700),
                             ),
                           ),
                         ],
@@ -1387,7 +1417,7 @@ class _ResponsiveShowAppBar extends StatelessWidget
         },
       ),
       actions: [
-        if (showAdmin && onAdmin != null)
+        if (!demoMode && showAdmin && onAdmin != null)
           _TopBarAction(
             icon: Icons.admin_panel_settings,
             label: 'Admin',
@@ -1440,11 +1470,12 @@ class _ResponsiveShowAppBar extends StatelessWidget
               if (value == 'logout') onLogout();
             },
             itemBuilder: (context) => [
-              PopupMenuItem<String>(
-                value: 'super_admin',
-                enabled: bundle?.isSuperAdmin == true,
-                child: const Text('Super Admin'),
-              ),
+              if (!demoMode)
+                PopupMenuItem<String>(
+                  value: 'super_admin',
+                  enabled: bundle?.isSuperAdmin == true,
+                  child: const Text('Super Admin'),
+                ),
               const PopupMenuItem<String>(
                 value: 'logout',
                 child: Text('Logout'),
