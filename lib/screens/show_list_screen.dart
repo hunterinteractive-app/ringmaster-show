@@ -1193,10 +1193,12 @@ class _ShowListScreenState extends State<ShowListScreen> {
                                                           ),
                                                         ),
                                                     ],
-                                                    child: OutlinedButton.icon(
-                                                      onPressed: () {},
-                                                      icon: const Icon(Icons.build_circle_outlined),
-                                                      label: const Text('Show Details'),
+                                                    child: IgnorePointer(
+                                                      child: OutlinedButton.icon(
+                                                        onPressed: () {},
+                                                        icon: const Icon(Icons.build_circle_outlined),
+                                                        label: const Text('Show Details'),
+                                                      ),
                                                     ),
                                                   ),
                                                 ],
