@@ -46,6 +46,12 @@ class AppTheme {
 
     return base.copyWith(
       scaffoldBackgroundColor: AppColors.bg,
+      scrollbarTheme: ScrollbarThemeData(
+        thumbColor: WidgetStateProperty.all(Colors.black),
+        trackColor: WidgetStateProperty.all(Colors.black.withOpacity(.12)),
+        thickness: WidgetStateProperty.all(8),
+        radius: const Radius.circular(8),
+      ),
       appBarTheme: const AppBarTheme(
         backgroundColor: AppColors.navy,
         foregroundColor: Colors.white,

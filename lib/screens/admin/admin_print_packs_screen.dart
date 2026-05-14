@@ -89,6 +89,11 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
 
   bool _includeScratched = false;
   bool _combineSections = true;
+  bool _autoEmailCheckInSheets = false;
+  bool _savingAutoEmailCheckInSheets = false;
+  DateTime? _entryCloseAt;
+  DateTime? _checkInSheetsAutoEmailedAt;
+  String? _checkInSheetsAutoEmailError;
 
   @override
   void initState() {
@@ -103,11 +108,38 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
     });
 
     try {
+      final showRow = await supabase
+          .from('shows')
+          .select(
+            'id, entry_close_at, auto_email_checkin_sheets, checkin_sheets_auto_emailed_at, checkin_sheets_auto_email_error',
+          )
+          .eq('id', widget.showId)
+          .maybeSingle();
+
       final rows = await supabase
           .from('show_sections')
           .select('id,letter,display_name,kind,is_enabled,sort_order')
           .eq('show_id', widget.showId)
           .eq('is_enabled', true);
+
+      final show = (showRow as Map<String, dynamic>?) ?? <String, dynamic>{};
+      final rawEntryCloseAt = (show['entry_close_at'] ?? '').toString();
+      final rawAutoEmailedAt =
+          (show['checkin_sheets_auto_emailed_at'] ?? '').toString();
+
+      _entryCloseAt = rawEntryCloseAt.isEmpty
+          ? null
+          : DateTime.tryParse(rawEntryCloseAt)?.toLocal();
+      _autoEmailCheckInSheets = show['auto_email_checkin_sheets'] == true;
+      _checkInSheetsAutoEmailedAt = rawAutoEmailedAt.isEmpty
+          ? null
+          : DateTime.tryParse(rawAutoEmailedAt)?.toLocal();
+      _checkInSheetsAutoEmailError =
+          (show['checkin_sheets_auto_email_error'] ?? '').toString().trim();
+      if (_checkInSheetsAutoEmailError != null &&
+          _checkInSheetsAutoEmailError!.isEmpty) {
+        _checkInSheetsAutoEmailError = null;
+      }
 
       _sections = (rows as List).cast<Map<String, dynamic>>();
 
@@ -195,6 +227,45 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
       if (s['id']?.toString() == _selectedSectionId) return s;
     }
     return null;
+  }
+
+  Future<void> _setAutoEmailCheckInSheets(bool value) async {
+    if (_savingAutoEmailCheckInSheets) return;
+
+    if (value && _entryCloseAt == null) {
+      setState(() {
+        _msg = 'Set an entry deadline before enabling automatic check-in sheet emails.';
+      });
+      return;
+    }
+
+    setState(() {
+      _savingAutoEmailCheckInSheets = true;
+      _msg = null;
+    });
+
+    try {
+      await supabase.from('shows').update({
+        'auto_email_checkin_sheets': value,
+        if (value) 'checkin_sheets_auto_email_error': null,
+      }).eq('id', widget.showId);
+
+      if (!mounted) return;
+      setState(() {
+        _autoEmailCheckInSheets = value;
+        if (value) _checkInSheetsAutoEmailError = null;
+        _savingAutoEmailCheckInSheets = false;
+        _msg = value
+            ? 'Automatic check-in sheet emails enabled.'
+            : 'Automatic check-in sheet emails disabled.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _savingAutoEmailCheckInSheets = false;
+        _msg = 'Failed to update automatic check-in sheet email setting: $e';
+      });
+    }
   }
 
   void _openRemarkCardsGenerator() {
@@ -442,6 +513,36 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
                   title: 'Check-In Sheets',
                   subtitle: 'Generate exhibitor check-in sheets as PDF files.',
                   children: [
+                    SwitchListTile(
+                      value: _autoEmailCheckInSheets,
+                      contentPadding: EdgeInsets.zero,
+                      onChanged: (_savingAutoEmailCheckInSheets ||
+                              _entryCloseAt == null ||
+                              _checkInSheetsAutoEmailedAt != null)
+                          ? null
+                          : _setAutoEmailCheckInSheets,
+                      title: const Text(
+                        'Automatically email check-in sheets when entries close',
+                      ),
+                      subtitle: Text(
+                        _checkInSheetsAutoEmailedAt != null
+                            ? 'Already emailed on ${_checkInSheetsAutoEmailedAt!.toLocal()}'
+                            : _entryCloseAt == null
+                                ? 'Set an entry deadline before enabling this.'
+                                : 'Entry deadline: ${_entryCloseAt!.toLocal()}',
+                      ),
+                    ),
+                    if (_checkInSheetsAutoEmailError != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Last automatic email error: $_checkInSheetsAutoEmailError',
+                        style: const TextStyle(
+                          color: Colors.red,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 8),
                     SwitchListTile(
                       value: _combineSections,
                       contentPadding: EdgeInsets.zero,

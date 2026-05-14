@@ -26,6 +26,7 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
   DateTime _end = DateTime.now();
   bool _published = false;
   bool _isNationalShow = false;
+  bool _autoEmailCheckInSheets = false;
 
   int _openCount = 1;
   int _youthCount = 0;
@@ -335,6 +336,7 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
         'is_published': _published,
         'is_national_show': _isNationalShow,
         'entry_close_at': _entryCloseAt?.toUtc().toIso8601String(),
+        'auto_email_checkin_sheets': _autoEmailCheckInSheets,
         'club_id': clubId,
         'club_name': clubName,
       }).eq('id', showId);
@@ -563,10 +565,29 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
                               TextButton(
                                 onPressed: _saving
                                     ? null
-                                    : () => setState(() => _entryCloseAt = null),
+                                    : () => setState(() {
+                                          _entryCloseAt = null;
+                                          _autoEmailCheckInSheets = false;
+                                        }),
                                 child: const Text('Clear'),
                               ),
                             ],
+                          ),
+                          const SizedBox(height: 8),
+                          SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text(
+                              'Automatically email check-in sheets when entries close?',
+                            ),
+                            subtitle: const Text(
+                              'You can update this later from Print Packs → Check-In Sheets.',
+                            ),
+                            value: _autoEmailCheckInSheets,
+                            onChanged: (_saving || _entryCloseAt == null)
+                                ? null
+                                : (v) => setState(
+                                      () => _autoEmailCheckInSheets = v,
+                                    ),
                           ),
                         ],
                       ),

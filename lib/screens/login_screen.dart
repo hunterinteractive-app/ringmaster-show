@@ -306,11 +306,23 @@ class _LoginScreenState extends State<LoginScreen>
         ),
         child: SafeArea(
           child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(AppSpacing.xl),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 560),
-                child: Column(
+            child: Theme(
+              data: Theme.of(context).copyWith(
+                scrollbarTheme: ScrollbarThemeData(
+                  thumbColor: WidgetStateProperty.all(Colors.white),
+                  trackColor:
+                      WidgetStateProperty.all(Colors.white.withOpacity(.18)),
+                  thickness: WidgetStateProperty.all(8),
+                  radius: const Radius.circular(8),
+                ),
+              ),
+              child: Scrollbar(
+                thumbVisibility: true,
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(AppSpacing.xl),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 560),
+                    child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     FadeTransition(
@@ -388,7 +400,9 @@ class _LoginScreenState extends State<LoginScreen>
                         ),
                       ),
                     ),
-                  ],
+                    ],
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -396,7 +410,7 @@ class _LoginScreenState extends State<LoginScreen>
         ),
       ),
     );
-}
+  }
 }
 
 class DemoLoginScreen extends StatefulWidget {
@@ -472,11 +486,23 @@ class _DemoLoginScreenState extends State<DemoLoginScreen> {
         ),
         child: SafeArea(
           child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(AppSpacing.xl),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 560),
-                child: Column(
+            child: Theme(
+              data: Theme.of(context).copyWith(
+                scrollbarTheme: ScrollbarThemeData(
+                  thumbColor: WidgetStateProperty.all(Colors.white),
+                  trackColor:
+                      WidgetStateProperty.all(Colors.white.withOpacity(.18)),
+                  thickness: WidgetStateProperty.all(8),
+                  radius: const Radius.circular(8),
+                ),
+              ),
+              child: Scrollbar(
+                thumbVisibility: true,
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(AppSpacing.xl),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 560),
+                    child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Container(
@@ -587,7 +613,9 @@ class _DemoLoginScreenState extends State<DemoLoginScreen> {
                         ],
                       ),
                     ),
-                  ],
+                    ],
+                    ),
+                  ),
                 ),
               ),
             ),
