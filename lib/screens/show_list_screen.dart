@@ -148,15 +148,13 @@ class _ShowListScreenState extends State<ShowListScreen> {
   }
 
   Future<List<Map<String, dynamic>>> _loadShows() async {
-    var query = supabase
+    final query = supabase
         .from('shows')
         .select('id,name,start_date,location_name,entry_close_at,is_demo');
 
     if (widget.demoMode) {
       final res = await query
-          .eq('is_demo', true)
-          .eq('is_published', true)
-          .order('start_date')
+          .eq('id', '0f432fe8-2be2-467a-842f-ff3777436992')
           .limit(1);
 
       return (res as List).cast<Map<String, dynamic>>();
@@ -176,24 +174,53 @@ class _ShowListScreenState extends State<ShowListScreen> {
     final userId = _effectiveUserId;
     if (userId == null) return <String>{};
 
-    final rows = await supabase
-        .from('role_assignments')
-        .select('show_id, role')
-        .eq('user_id', userId);
+    final allowedShowIds = <String>{};
 
-    const allowedRoles = {
-      'super_admin',
-      'admin',
-      'superintendent',
-      'reporting_clerk',
-    };
+    try {
+      final roleRows = await supabase
+          .from('role_assignments')
+          .select('show_id, role')
+          .eq('user_id', userId);
 
-    return (rows as List)
-        .cast<Map<String, dynamic>>()
-        .where((r) => allowedRoles.contains((r['role'] ?? '').toString()))
-        .map((r) => (r['show_id'] ?? '').toString())
-        .where((id) => id.isNotEmpty)
-        .toSet();
+      const allowedRoles = {
+        'super_admin',
+        'admin',
+        'superintendent',
+        'reporting_clerk',
+      };
+
+      allowedShowIds.addAll(
+        (roleRows as List)
+            .cast<Map<String, dynamic>>()
+            .where((r) => allowedRoles.contains((r['role'] ?? '').toString()))
+            .map((r) => (r['show_id'] ?? '').toString())
+            .where((id) => id.isNotEmpty),
+      );
+    } catch (_) {
+      // Older demo/admin records may not exist in role_assignments.
+    }
+
+    try {
+      final adminRows = await supabase
+          .from('show_admins')
+          .select('show_id')
+          .eq('user_id', userId);
+
+      allowedShowIds.addAll(
+        (adminRows as List)
+            .cast<Map<String, dynamic>>()
+            .map((r) => (r['show_id'] ?? '').toString())
+            .where((id) => id.isNotEmpty),
+      );
+    } catch (_) {
+      // Keep any role_assignments results if show_admins lookup fails.
+    }
+
+    if (widget.demoMode) {
+      allowedShowIds.add('0f432fe8-2be2-467a-842f-ff3777436992');
+    }
+
+    return allowedShowIds;
   }
 
   Future<bool> _hasAnyAssignedShows() async {
@@ -252,12 +279,11 @@ class _ShowListScreenState extends State<ShowListScreen> {
       }
     }
 
-    Set<String> adminShowIds = <String>{};{
-      try {
-        adminShowIds = await _loadAdminShowIds();
-      } catch (_) {
-        adminShowIds = <String>{};
-      }
+    Set<String> adminShowIds = <String>{};
+    try {
+      adminShowIds = await _loadAdminShowIds();
+    } catch (_) {
+      adminShowIds = <String>{};
     }
 
     bool hasAvailableShowCapacity = false;
@@ -1142,9 +1168,9 @@ class _ShowListScreenState extends State<ShowListScreen> {
                                                         ),
                                                     ],
                                                     child: OutlinedButton.icon(
-                                                      onPressed: null,
+                                                      onPressed: () {},
                                                       icon: const Icon(Icons.build_circle_outlined),
-                                                      label: const Text('Show  Details'),
+                                                      label: const Text('Show Details'),
                                                     ),
                                                   ),
                                                 ],
