@@ -750,13 +750,15 @@ class _AdminShowsAppBar extends StatelessWidget implements PreferredSizeWidget {
                 label: 'Run Your Show',
                 showLabel: showFullNav,
                 onTap: () async {
-                  final uri = Uri(
-                    scheme: 'mailto',
-                    path: 'support@ringmasterone.com',
-                    queryParameters: {
-                      'subject': 'Ready to run my show with RingMaster Show',
-                      'body': 'Hi, I tried the RingMaster Show demo and would like help getting my show set up.',
-                    },
+                  final subject = Uri.encodeComponent(
+                    'Ready to run my show with RingMaster Show',
+                  );
+                  final body = Uri.encodeComponent(
+                    'Hi, I tried the RingMaster Show demo and would like help getting my show set up.',
+                  );
+
+                  final uri = Uri.parse(
+                    'mailto:support@ringmasterone.com?subject=$subject&body=$body',
                   );
 
                   final opened = await launchUrl(uri);
