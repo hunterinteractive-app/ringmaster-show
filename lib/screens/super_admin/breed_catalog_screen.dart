@@ -74,14 +74,77 @@ class _BreedCatalogScreenState extends State<BreedCatalogScreen> {
     return filtered;
   }
 
-  Future<List<Map<String, dynamic>>> _loadVarieties(String breedId) async {
+  String _normalizeLookup(String value) {
+    return value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+  }
+
+  Future<List<Map<String, dynamic>>> _loadVarieties({
+    required String breedId,
+    required String breedName,
+    required String species,
+  }) async {
     final res = await supabase
         .from('varieties')
         .select('id,name,is_active')
         .eq('breed_id', breedId)
         .order('name');
 
-    return (res as List).cast<Map<String, dynamic>>();
+    final varieties = (res as List).cast<Map<String, dynamic>>();
+
+    if (species.toLowerCase() != 'cavy') {
+      return varieties;
+    }
+
+    final List sopRes = await supabase
+        .from('cavy_sop_variety_order')
+        .select('breed_name,variety_name,breed_sort_order,variety_sort_order')
+        .order('breed_sort_order')
+        .order('variety_sort_order')
+        .order('variety_name');
+
+    final existingNames = varieties
+        .map((v) => _normalizeLookup((v['name'] ?? '').toString()))
+        .toSet();
+
+    final targetBreedName = _normalizeLookup(breedName);
+    final sopRows = sopRes.cast<Map<String, dynamic>>().where((row) {
+      return _normalizeLookup((row['breed_name'] ?? '').toString()) ==
+          targetBreedName;
+    }).toList();
+
+    for (final row in sopRows) {
+      final varietyName = (row['variety_name'] ?? '').toString().trim();
+      if (varietyName.isEmpty) continue;
+      if (existingNames.contains(_normalizeLookup(varietyName))) continue;
+
+      varieties.add({
+        'id': 'cavy_sop:${_normalizeLookup(breedName)}:${_normalizeLookup(varietyName)}',
+        'name': varietyName,
+        'is_active': true,
+        'is_cavy_sop': true,
+        'variety_sort_order': row['variety_sort_order'],
+      });
+    }
+
+    varieties.sort((a, b) {
+      final aIsSop = a['is_cavy_sop'] == true;
+      final bIsSop = b['is_cavy_sop'] == true;
+
+      if (aIsSop || bIsSop) {
+        final aSort = a['variety_sort_order'];
+        final bSort = b['variety_sort_order'];
+        final aOrder = aSort is int ? aSort : int.tryParse('$aSort') ?? 9999;
+        final bOrder = bSort is int ? bSort : int.tryParse('$bSort') ?? 9999;
+        final orderCmp = aOrder.compareTo(bOrder);
+        if (orderCmp != 0) return orderCmp;
+      }
+
+      final aName = (a['name'] ?? '').toString().toLowerCase();
+      final bName = (b['name'] ?? '').toString().toLowerCase();
+      return aName.compareTo(bName);
+    });
+
+    return varieties;
   }
 
   Future<void> _openBreedEditor({
@@ -385,7 +448,11 @@ class _BreedCatalogScreenState extends State<BreedCatalogScreen> {
           ),
           const SizedBox(height: 12),
           FutureBuilder<List<Map<String, dynamic>>>(
-            future: _loadVarieties(breedId),
+            future: _loadVarieties(
+              breedId: breedId,
+              breedName: breedName,
+              species: species,
+            ),
             builder: (context, vSnap) {
               if (vSnap.connectionState != ConnectionState.done) {
                 return const Padding(
@@ -417,6 +484,7 @@ class _BreedCatalogScreenState extends State<BreedCatalogScreen> {
                   final varietyId = v['id'].toString();
                   final varietyName = (v['name'] ?? '').toString();
                   final isVarietyActive = v['is_active'] == true;
+                  final isCavySop = v['is_cavy_sop'] == true;
 
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
@@ -428,47 +496,60 @@ class _BreedCatalogScreenState extends State<BreedCatalogScreen> {
                             : TextDecoration.lineThrough,
                       ),
                     ),
-                    subtitle: Text(isVarietyActive ? 'Active' : 'Disabled'),
-                    trailing: IconButton(
-                      tooltip: isVarietyActive ? 'Disable globally' : 'Re-enable',
-                      icon: Icon(
-                        isVarietyActive
-                            ? Icons.remove_circle_outline
-                            : Icons.undo,
-                      ),
-                      onPressed: () async {
-                        if (isVarietyActive) {
-                          final ok = await showDialog<bool>(
-                            context: context,
-                            builder: (_) => AlertDialog(
-                              title: const Text('Disable variety?'),
-                              content: Text(
-                                'Disable "$varietyName" globally for $breedName?\n\n'
-                                'This keeps historical data but removes it from dropdowns.',
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context, false),
-                                  child: const Text('Cancel'),
-                                ),
-                                FilledButton(
-                                  onPressed: () => Navigator.pop(context, true),
-                                  child: const Text('Disable'),
-                                ),
-                              ],
-                            ),
-                          );
-                          if (ok != true) return;
-                        }
-
-                        await _setVarietyActive(
-                          varietyId: varietyId,
-                          isActive: !isVarietyActive,
-                        );
-                        if (!mounted) return;
-                        setState(() {});
-                      },
+                    subtitle: Text(
+                      isCavySop
+                          ? 'Cavy SOP variety'
+                          : (isVarietyActive ? 'Active' : 'Disabled'),
                     ),
+                    trailing: isCavySop
+                        ? const Tooltip(
+                            message: 'Managed by cavy_sop_variety_order',
+                            child: Icon(Icons.lock_outline),
+                          )
+                        : IconButton(
+                            tooltip: isVarietyActive
+                                ? 'Disable globally'
+                                : 'Re-enable',
+                            icon: Icon(
+                              isVarietyActive
+                                  ? Icons.remove_circle_outline
+                                  : Icons.undo,
+                            ),
+                            onPressed: () async {
+                              if (isVarietyActive) {
+                                final ok = await showDialog<bool>(
+                                  context: context,
+                                  builder: (_) => AlertDialog(
+                                    title: const Text('Disable variety?'),
+                                    content: Text(
+                                      'Disable "$varietyName" globally for $breedName?\n\n'
+                                      'This keeps historical data but removes it from dropdowns.',
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(context, false),
+                                        child: const Text('Cancel'),
+                                      ),
+                                      FilledButton(
+                                        onPressed: () =>
+                                            Navigator.pop(context, true),
+                                        child: const Text('Disable'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                if (ok != true) return;
+                              }
+
+                              await _setVarietyActive(
+                                varietyId: varietyId,
+                                isActive: !isVarietyActive,
+                              );
+                              if (!mounted) return;
+                              setState(() {});
+                            },
+                          ),
                   );
                 }).toList(),
               );

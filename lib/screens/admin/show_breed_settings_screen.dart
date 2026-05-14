@@ -47,6 +47,9 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
   // Global varieties by breed_id
   final Map<String, List<Map<String, dynamic>>> _globalVarsByBreedId = {};
 
+  // Cavy SOP varieties by normalized breed name
+  final Map<String, List<Map<String, dynamic>>> _cavySopVarsByBreedName = {};
+
   // Breed list cache
   List<Map<String, dynamic>> _breeds = [];
 
@@ -145,6 +148,39 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
     }
   }
 
+  String _normalizeLookup(String value) {
+    return value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+  }
+
+  Future<void> _loadCavySopVarieties() async {
+    _cavySopVarsByBreedName.clear();
+
+    final List rows = await supabase
+        .from('cavy_sop_variety_order')
+        .select('breed_name,variety_name,breed_sort_order,variety_sort_order')
+        .order('breed_sort_order')
+        .order('variety_sort_order')
+        .order('variety_name');
+
+    for (final row in rows.cast<Map<String, dynamic>>()) {
+      final breedName = (row['breed_name'] ?? '').toString().trim();
+      final varietyName = (row['variety_name'] ?? '').toString().trim();
+      if (breedName.isEmpty || varietyName.isEmpty) continue;
+
+      final key = _normalizeLookup(breedName);
+      _cavySopVarsByBreedName.putIfAbsent(key, () => <Map<String, dynamic>>[]);
+      _cavySopVarsByBreedName[key]!.add({
+        'id': 'cavy_sop:${_normalizeLookup(breedName)}:${_normalizeLookup(varietyName)}',
+        'breed_id': null,
+        'name': varietyName,
+        'is_active': true,
+        'is_cavy_sop': true,
+        'breed_sort_order': row['breed_sort_order'],
+        'variety_sort_order': row['variety_sort_order'],
+      });
+    }
+  }
+
   Future<void> _refresh() async {
     setState(() {
       _loading = true;
@@ -212,12 +248,59 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
           .eq('is_active', true)
           .order('name');
 
+      await _loadCavySopVarieties();
+
       _globalVarsByBreedId.clear();
       for (final row in varData.cast<Map<String, dynamic>>()) {
         final bid = row['breed_id']?.toString();
         if (bid == null) continue;
         _globalVarsByBreedId.putIfAbsent(bid, () => <Map<String, dynamic>>[]);
         _globalVarsByBreedId[bid]!.add(row);
+      }
+
+      for (final breed in _breeds) {
+        final species = (breed['species'] ?? '').toString().toLowerCase();
+        if (species != 'cavy') continue;
+
+        final breedId = breed['id']?.toString();
+        final breedName = (breed['name'] ?? '').toString();
+        if (breedId == null || breedId.isEmpty || breedName.trim().isEmpty) {
+          continue;
+        }
+
+        final sopRows = _cavySopVarsByBreedName[_normalizeLookup(breedName)] ??
+            const <Map<String, dynamic>>[];
+        if (sopRows.isEmpty) continue;
+
+        final current = _globalVarsByBreedId.putIfAbsent(
+          breedId,
+          () => <Map<String, dynamic>>[],
+        );
+        final existingNames = current
+            .map((v) => _normalizeLookup((v['name'] ?? '').toString()))
+            .toSet();
+
+        for (final sopRow in sopRows) {
+          final sopName = (sopRow['name'] ?? '').toString();
+          if (existingNames.contains(_normalizeLookup(sopName))) continue;
+          current.add({
+            ...sopRow,
+            'breed_id': breedId,
+          });
+        }
+
+        current.sort((a, b) {
+          final aSort = a['variety_sort_order'];
+          final bSort = b['variety_sort_order'];
+          final aOrder = aSort is int ? aSort : int.tryParse('$aSort') ?? 9999;
+          final bOrder = bSort is int ? bSort : int.tryParse('$bSort') ?? 9999;
+          final orderCmp = aOrder.compareTo(bOrder);
+          if (orderCmp != 0) return orderCmp;
+
+          final aName = (a['name'] ?? '').toString().toLowerCase();
+          final bName = (b['name'] ?? '').toString().toLowerCase();
+          return aName.compareTo(bName);
+        });
       }
 
       final List showBreedData = await supabase
@@ -431,32 +514,66 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
   }
 
   Future<void> _ensureVarietyOverridesInitialized(String breedId) async {
-    if (_breedHasVarietyOverrides(breedId)) return;
-
     final globals = _globalVarsByBreedId[breedId] ?? const <Map<String, dynamic>>[];
     if (globals.isEmpty) {
-      _showVarsByBreedId[breedId] = <Map<String, dynamic>>[];
+      _showVarsByBreedId.putIfAbsent(breedId, () => <Map<String, dynamic>>[]);
       return;
     }
 
-    final payload = globals.map((v) {
-      return {
-        'show_id': widget.showId,
-        'breed_id': breedId,
-        'variety_id': v['id'],
-        'custom_name': null,
-        'is_enabled': true,
-      };
-    }).toList();
+    final existingRows = _showVarsByBreedId[breedId] ?? const <Map<String, dynamic>>[];
+    final existingGlobalVarietyIds = existingRows
+        .where((r) => r['variety_id'] != null)
+        .map((r) => r['variety_id'].toString())
+        .toSet();
+    final existingCustomNames = existingRows
+        .where((r) => r['variety_id'] == null)
+        .map((r) => _normalizeLookup((r['custom_name'] ?? '').toString()))
+        .toSet();
 
-    try {
-      await ShowLockService.assertShowUnlocked(widget.showId);
-      await supabase.from('show_varieties').insert(payload);
-    } catch (_) {
-      for (final row in payload) {
-        try {
-          await supabase.from('show_varieties').insert(row);
-        } catch (_) {}
+    final payload = <Map<String, dynamic>>[];
+
+    for (final v in globals) {
+      final isCavySop = v['is_cavy_sop'] == true;
+      final varietyName = (v['name'] ?? '').toString().trim();
+
+      if (isCavySop) {
+        if (varietyName.isEmpty) continue;
+        if (existingCustomNames.contains(_normalizeLookup(varietyName))) {
+          continue;
+        }
+
+        payload.add({
+          'show_id': widget.showId,
+          'breed_id': breedId,
+          'variety_id': null,
+          'custom_name': varietyName,
+          'is_enabled': true,
+        });
+      } else {
+        final varietyId = v['id']?.toString();
+        if (varietyId == null || varietyId.isEmpty) continue;
+        if (existingGlobalVarietyIds.contains(varietyId)) continue;
+
+        payload.add({
+          'show_id': widget.showId,
+          'breed_id': breedId,
+          'variety_id': varietyId,
+          'custom_name': null,
+          'is_enabled': true,
+        });
+      }
+    }
+
+    if (payload.isNotEmpty) {
+      try {
+        await ShowLockService.assertShowUnlocked(widget.showId);
+        await supabase.from('show_varieties').insert(payload);
+      } catch (_) {
+        for (final row in payload) {
+          try {
+            await supabase.from('show_varieties').insert(row);
+          } catch (_) {}
+        }
       }
     }
 
@@ -472,20 +589,36 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
   bool _isVarietyEnabledForShow({
     required String breedId,
     required String varietyId,
+    String? customName,
   }) {
     final hasOverrides = _breedHasVarietyOverrides(breedId);
     if (!hasOverrides) return true;
 
     final rows = _showVarsByBreedId[breedId] ?? const <Map<String, dynamic>>[];
-    final match = rows.where((r) => r['variety_id']?.toString() == varietyId).toList();
-    if (match.isEmpty) return false;
-    return match.first['is_enabled'] == true;
+    final isCavySopId = varietyId.startsWith('cavy_sop:');
+
+    Iterable<Map<String, dynamic>> match;
+    if (isCavySopId && customName != null) {
+      final targetName = _normalizeLookup(customName);
+      match = rows.where(
+        (r) =>
+            r['variety_id'] == null &&
+            _normalizeLookup((r['custom_name'] ?? '').toString()) == targetName,
+      );
+    } else {
+      match = rows.where((r) => r['variety_id']?.toString() == varietyId);
+    }
+
+    final list = match.toList();
+    if (list.isEmpty) return false;
+    return list.first['is_enabled'] == true;
   }
 
   Future<void> _setGlobalVarietyEnabled({
     required String breedId,
     required String varietyId,
     required bool enabled,
+    String? customName,
   }) async {
     if (AppSession.isSupportMode) {
       setState(() => _msg = 'Variety settings are read-only in support mode.');
@@ -496,12 +629,23 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
       await ShowLockService.assertShowUnlocked(widget.showId);
       await _ensureVarietyOverridesInitialized(breedId);
 
-      await supabase
-          .from('show_varieties')
-          .update({'is_enabled': enabled})
-          .eq('show_id', widget.showId)
-          .eq('breed_id', breedId)
-          .eq('variety_id', varietyId);
+      final isCavySopId = varietyId.startsWith('cavy_sop:');
+      if (isCavySopId && customName != null) {
+        await supabase
+            .from('show_varieties')
+            .update({'is_enabled': enabled})
+            .eq('show_id', widget.showId)
+            .eq('breed_id', breedId)
+            .isFilter('variety_id', null)
+            .eq('custom_name', customName);
+      } else {
+        await supabase
+            .from('show_varieties')
+            .update({'is_enabled': enabled})
+            .eq('show_id', widget.showId)
+            .eq('breed_id', breedId)
+            .eq('variety_id', varietyId);
+      }
 
       final List rows = await supabase
           .from('show_varieties')
@@ -740,10 +884,17 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
       final globals = _globalVarsByBreedId[breedId] ?? const <Map<String, dynamic>>[];
       final showVarRows = _showVarsByBreedId[breedId] ?? const <Map<String, dynamic>>[];
 
+      final cavySopNames = globals
+          .where((v) => v['is_cavy_sop'] == true)
+          .map((v) => _normalizeLookup((v['name'] ?? '').toString()))
+          .toSet();
+
       final customRows = showVarRows
-          .where((r) =>
-              r['variety_id'] == null &&
-              (r['custom_name'] ?? '').toString().trim().isNotEmpty)
+          .where((r) {
+            final customName = (r['custom_name'] ?? '').toString().trim();
+            if (r['variety_id'] != null || customName.isEmpty) return false;
+            return !cavySopNames.contains(_normalizeLookup(customName));
+          })
           .toList();
 
       return Container(
@@ -869,11 +1020,13 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
                       children: globals.map((v) {
                         final varietyId = v['id'].toString();
                         final varietyName = (v['name'] ?? '').toString();
+                        final isCavySop = v['is_cavy_sop'] == true;
 
                         final vEnabled = enabled &&
                             _isVarietyEnabledForShow(
                               breedId: breedId,
                               varietyId: varietyId,
+                              customName: isCavySop ? varietyName : null,
                             );
 
                         return Container(
@@ -887,9 +1040,11 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
                             title: Text(varietyName),
                             subtitle: !enabled
                                 ? const Text('Breed disabled for show')
-                                : (!hasVarOverrides
-                                    ? const Text('Default allowed (no overrides yet)')
-                                    : null),
+                                : isCavySop
+                                    ? const Text('Cavy SOP variety')
+                                    : (!hasVarOverrides
+                                        ? const Text('Default allowed (no overrides yet)')
+                                        : null),
                             value: vEnabled,
                             onChanged: (!enabled || _isReadOnly)
                                 ? null
@@ -898,6 +1053,7 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
                                       breedId: breedId,
                                       varietyId: varietyId,
                                       enabled: val,
+                                      customName: isCavySop ? varietyName : null,
                                     );
                                     if (!mounted) return;
                                     setState(() {});
