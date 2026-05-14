@@ -19,10 +19,12 @@ final supabase = Supabase.instance.client;
 
 class AdminShowsScreen extends StatefulWidget {
   final List<String> allowedShowIds;
+  final bool demoMode;
 
   const AdminShowsScreen({
     super.key,
     required this.allowedShowIds,
+    this.demoMode = false,
   });
 
   @override
@@ -169,6 +171,15 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
   }
 
   Future<_ShowCreationStatus> _loadLicenseStatus() async {
+    if (widget.demoMode) {
+      return const _ShowCreationStatus(
+        canCreate: false,
+        remainingShowDays: 0,
+        unlimitedActive: false,
+        unlimitedExpiresAt: null,
+        message: 'Demo mode is limited to the shared demo show.',
+      );
+    }
     if (AppSession.isSupportMode) {
       return const _ShowCreationStatus(
         canCreate: false,
@@ -293,7 +304,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
   }
 
   Future<void> _openCreate() async {
-    if (AppSession.isSupportMode) return;
+    if (AppSession.isSupportMode || widget.demoMode) return;
     final ok = await Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (_) => const CreateShowScreen()),
@@ -317,11 +328,17 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
 
   void _openShows() {
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const ShowListScreen()),
+      MaterialPageRoute(
+        builder: (_) => ShowListScreen(
+          demoMode: widget.demoMode,
+          demoSecretaryMode: false,
+        ),
+      ),
     );
   }
 
   void _openAnimals() {
+    if (widget.demoMode) return;
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const MyAnimalsScreen()),
@@ -329,6 +346,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
   }
 
   void _openEntries() {
+    if (widget.demoMode) return;
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const MyEntriesScreen()),
@@ -336,6 +354,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
   }
 
   void _openAccount() {
+    if (widget.demoMode) return;
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const AccountSettingsScreen()),
@@ -343,6 +362,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
   }
 
   void _openResources() {
+    if (widget.demoMode) return;
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const AdminResourcesScreen()),
@@ -419,24 +439,25 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
               message: 'Loading license…',
             );
 
-        return Scaffold(
-          appBar: _AdminShowsAppBar(
-            canCreate: !AppSession.isSupportMode &&
-                license.canCreate &&
-                snap.connectionState != ConnectionState.waiting,
-            onShows: _openShows,
-            onAnimals: _openAnimals,
-            onEntries: _openEntries,
-            onResources: _openResources,
-            onAccount: _openAccount,
-            onReload:
-                snap.connectionState == ConnectionState.waiting ? null : _reload,
-            onCreate: (AppSession.isSupportMode ||
-                    snap.connectionState == ConnectionState.waiting ||
-                    !license.canCreate)
-                ? null
-                : _openCreate,
-          ),
+    return Scaffold(
+      appBar: _AdminShowsAppBar(
+        canCreate: !AppSession.isSupportMode &&
+            license.canCreate &&
+            snap.connectionState != ConnectionState.waiting,
+        demoMode: widget.demoMode,
+        onShows: _openShows,
+        onAnimals: _openAnimals,
+        onEntries: _openEntries,
+        onResources: _openResources,
+        onAccount: _openAccount,
+        onReload:
+            snap.connectionState == ConnectionState.waiting ? null : _reload,
+        onCreate: (AppSession.isSupportMode ||
+                snap.connectionState == ConnectionState.waiting ||
+                !license.canCreate)
+            ? null
+            : _openCreate,
+      ),
           body: snap.connectionState != ConnectionState.done
               ? const Center(child: CircularProgressIndicator())
               : snap.hasError
@@ -639,6 +660,7 @@ class _AdminShowsAppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback? onReload;
   final VoidCallback? onCreate;
   final bool canCreate;
+  final bool demoMode;
 
   const _AdminShowsAppBar({
     required this.onShows,
@@ -649,6 +671,7 @@ class _AdminShowsAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.onReload,
     required this.onCreate,
     required this.canCreate,
+    required this.demoMode,
   });
 
   @override
@@ -688,7 +711,7 @@ class _AdminShowsAppBar extends StatelessWidget implements PreferredSizeWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Admin Shows',
+                  demoMode ? 'Demo Secretary View' : 'Admin Shows',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -702,125 +725,141 @@ class _AdminShowsAppBar extends StatelessWidget implements PreferredSizeWidget {
           ),
         ],
       ),
-      actions: showFullNav
+      actions: demoMode
           ? [
               _TopBarAction(
                 icon: Icons.refresh,
                 label: 'Reload',
-                showLabel: true,
+                showLabel: showFullNav,
                 onTap: onReload,
               ),
               _TopBarAction(
-                icon: Icons.add,
-                label: 'Create Show',
-                showLabel: true,
-                onTap: onCreate,
-              ),
-              _TopBarAction(
-                icon: Icons.event,
-                label: 'Shows',
-                showLabel: true,
+                icon: Icons.science_outlined,
+                label: 'Demo Show',
+                showLabel: showFullNav,
                 onTap: onShows,
-              ),
-              _TopBarAction(
-                icon: Icons.pets,
-                label: 'Animals',
-                showLabel: true,
-                onTap: onAnimals,
-              ),
-              _TopBarAction(
-                icon: Icons.receipt_long,
-                label: 'Entries',
-                showLabel: true,
-                onTap: onEntries,
-              ),
-              _TopBarAction(
-                icon: Icons.perm_media_outlined,
-                label: 'Resources',
-                showLabel: true,
-                onTap: onResources,
-              ),
-              _TopBarAction(
-                icon: Icons.manage_accounts,
-                label: 'Account',
-                showLabel: true,
-                onTap: onAccount,
               ),
               const SizedBox(width: 10),
             ]
-          : [
-              IconButton(
-                tooltip: 'Reload',
-                icon: const Icon(Icons.refresh, color: Colors.white),
-                onPressed: onReload,
-              ),
-              IconButton(
-                tooltip: 'Create Show',
-                icon: const Icon(Icons.add, color: Colors.white),
-                onPressed: onCreate,
-              ),
-              PopupMenuButton<String>(
-                tooltip: 'Menu',
-                icon: const Icon(Icons.more_vert, color: Colors.white),
-                onSelected: (value) {
-                  switch (value) {
-                    case 'shows':
-                      onShows();
-                      break;
-                    case 'animals':
-                      onAnimals();
-                      break;
-                    case 'entries':
-                      onEntries();
-                      break;
-                    case 'resources':
-                      onResources();
-                      break;
-                    case 'account':
-                      onAccount();
-                      break;
-                  }
-                },
-                itemBuilder: (_) => const [
-                  PopupMenuItem(
-                    value: 'shows',
-                    child: ListTile(
-                      leading: Icon(Icons.event),
-                      title: Text('Shows'),
-                    ),
+          : showFullNav
+              ? [
+                  _TopBarAction(
+                    icon: Icons.refresh,
+                    label: 'Reload',
+                    showLabel: true,
+                    onTap: onReload,
                   ),
-                  PopupMenuItem(
-                    value: 'animals',
-                    child: ListTile(
-                      leading: Icon(Icons.pets),
-                      title: Text('Animals'),
-                    ),
+                  _TopBarAction(
+                    icon: Icons.add,
+                    label: 'Create Show',
+                    showLabel: true,
+                    onTap: onCreate,
                   ),
-                  PopupMenuItem(
-                    value: 'entries',
-                    child: ListTile(
-                      leading: Icon(Icons.receipt_long),
-                      title: Text('Entries'),
-                    ),
+                  _TopBarAction(
+                    icon: Icons.event,
+                    label: 'Shows',
+                    showLabel: true,
+                    onTap: onShows,
                   ),
-                  PopupMenuItem(
-                    value: 'resources',
-                    child: ListTile(
-                      leading: Icon(Icons.perm_media_outlined),
-                      title: Text('Resources'),
-                    ),
+                  _TopBarAction(
+                    icon: Icons.pets,
+                    label: 'Animals',
+                    showLabel: true,
+                    onTap: onAnimals,
                   ),
-                  PopupMenuItem(
-                    value: 'account',
-                    child: ListTile(
-                      leading: Icon(Icons.manage_accounts),
-                      title: Text('Account'),
-                    ),
+                  _TopBarAction(
+                    icon: Icons.receipt_long,
+                    label: 'Entries',
+                    showLabel: true,
+                    onTap: onEntries,
                   ),
+                  _TopBarAction(
+                    icon: Icons.perm_media_outlined,
+                    label: 'Resources',
+                    showLabel: true,
+                    onTap: onResources,
+                  ),
+                  _TopBarAction(
+                    icon: Icons.manage_accounts,
+                    label: 'Account',
+                    showLabel: true,
+                    onTap: onAccount,
+                  ),
+                  const SizedBox(width: 10),
+                ]
+              : [
+                  IconButton(
+                    tooltip: 'Reload',
+                    icon: const Icon(Icons.refresh, color: Colors.white),
+                    onPressed: onReload,
+                  ),
+                  IconButton(
+                    tooltip: 'Create Show',
+                    icon: const Icon(Icons.add, color: Colors.white),
+                    onPressed: onCreate,
+                  ),
+                  PopupMenuButton<String>(
+                    tooltip: 'Menu',
+                    icon: const Icon(Icons.more_vert, color: Colors.white),
+                    onSelected: (value) {
+                      switch (value) {
+                        case 'shows':
+                          onShows();
+                          break;
+                        case 'animals':
+                          onAnimals();
+                          break;
+                        case 'entries':
+                          onEntries();
+                          break;
+                        case 'resources':
+                          onResources();
+                          break;
+                        case 'account':
+                          onAccount();
+                          break;
+                      }
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(
+                        value: 'shows',
+                        child: ListTile(
+                          leading: Icon(Icons.event),
+                          title: Text('Shows'),
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'animals',
+                        child: ListTile(
+                          leading: Icon(Icons.pets),
+                          title: Text('Animals'),
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'entries',
+                        child: ListTile(
+                          leading: Icon(Icons.receipt_long),
+                          title: Text('Entries'),
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'resources',
+                        child: ListTile(
+                          leading: Icon(Icons.perm_media_outlined),
+                          title: Text('Resources'),
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'account',
+                        child: ListTile(
+                          leading: Icon(Icons.manage_accounts),
+                          title: Text('Account'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 6),
                 ],
-              ),
-              const SizedBox(width: 6),
-            ],
     );
   }
 }

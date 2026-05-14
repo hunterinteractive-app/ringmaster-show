@@ -434,6 +434,7 @@ class _DemoLoginScreenState extends State<DemoLoginScreen> {
           builder: (_) => asSecretary
               ? const AdminShowsScreen(
                   allowedShowIds: [_demoShowId],
+                  demoMode: true,
                 )
               : const ShowListScreen(
                   demoMode: true,
