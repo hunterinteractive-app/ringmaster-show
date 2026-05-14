@@ -8,7 +8,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_theme.dart';
 import '../utils/date_time_utils.dart';
 import '../widgets/rm_widgets.dart';
+import '../services/app_init_service.dart';
 import 'show_list_screen.dart';
+import 'admin/admin_shows_screen.dart';
 import 'legal/terms_screen.dart';
 import 'legal/privacy_policy_screen.dart';
 
@@ -408,7 +410,11 @@ class _DemoLoginScreenState extends State<DemoLoginScreen> {
   bool _busy = false;
   String? _msg;
 
-  Future<void> _enterDemo() async {
+  static const String _demoEmail = 'demo@ringmasterone.com';
+  static const String _demoPassword = 'Demo!987';
+  static const String _demoShowId = '0f432fe8-2be2-467a-842f-ff3777436992';
+
+  Future<void> _enterDemo({required bool asSecretary}) async {
     setState(() {
       _busy = true;
       _msg = null;
@@ -416,14 +422,20 @@ class _DemoLoginScreenState extends State<DemoLoginScreen> {
 
     try {
       await supabase.auth.signInWithPassword(
-        email: 'demo@ringmasterone.com',
-        password: 'Demo!987',
+        email: _demoEmail,
+        password: _demoPassword,
       );
+
+      await AppInitService.initializeForCurrentUser();
 
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (_) => const ShowListScreen(demoMode: true),
+          builder: (_) => asSecretary
+              ? const AdminShowsScreen(
+                  allowedShowIds: [_demoShowId],
+                )
+              : const ShowListScreen(demoMode: true),
         ),
       );
     } catch (e) {
@@ -486,7 +498,7 @@ class _DemoLoginScreenState extends State<DemoLoginScreen> {
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     Text(
-                      'Try a shared demo show with sample exhibitors, entries, counts, and show tools.',
+                      'Try RingMaster Show as an exhibitor entering animals or as a show secretary managing the demo show.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: Colors.white.withOpacity(0.82),
@@ -509,14 +521,16 @@ class _DemoLoginScreenState extends State<DemoLoginScreen> {
                           ),
                           const SizedBox(height: AppSpacing.sm),
                           const Text(
-                            'This demo resets every 24 hours. Emails, real payments, and official report delivery are disabled.',
+                            'Choose how you want to explore the shared demo. It resets every 24 hours, and emails, real payments, and official report delivery are disabled.',
                             textAlign: TextAlign.center,
                           ),
                           const SizedBox(height: AppSpacing.lg),
                           SizedBox(
                             height: 52,
                             child: FilledButton.icon(
-                              onPressed: _busy ? null : _enterDemo,
+                              onPressed: _busy
+                                  ? null
+                                  : () => _enterDemo(asSecretary: false),
                               icon: _busy
                                   ? const SizedBox(
                                       width: 16,
@@ -526,8 +540,21 @@ class _DemoLoginScreenState extends State<DemoLoginScreen> {
                                         color: Colors.white,
                                       ),
                                     )
-                                  : const Icon(Icons.science_outlined),
-                              label: Text(_busy ? 'Opening Demo…' : 'Enter Demo'),
+                                  : const Icon(Icons.person_outline),
+                              label: Text(
+                                _busy ? 'Opening Demo…' : 'View as Exhibitor',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          SizedBox(
+                            height: 52,
+                            child: OutlinedButton.icon(
+                              onPressed: _busy
+                                  ? null
+                                  : () => _enterDemo(asSecretary: true),
+                              icon: const Icon(Icons.admin_panel_settings_outlined),
+                              label: const Text('View as Show Secretary'),
                             ),
                           ),
                           if (_msg != null) ...[
