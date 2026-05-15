@@ -1,5 +1,3 @@
-// lib/screens/admin/closeout/pdf/builders/unpaid_balances_report_pdf.dart
-
 import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
@@ -66,9 +64,13 @@ class UnpaidBalancesReportPdfBuilder {
         footer: (context) => _footer(context),
         build: (_) => [
           pw.SizedBox(height: 10),
-          _table(data),
-          pw.SizedBox(height: 12),
-          _totals(data),
+          if (data.rows.isEmpty)
+            _emptyState()
+          else ...[
+            _table(data),
+            pw.SizedBox(height: 12),
+            _totals(data),
+          ],
         ],
       ),
     );
@@ -149,6 +151,37 @@ class UnpaidBalancesReportPdfBuilder {
         pw.SizedBox(height: 8),
         pw.Divider(thickness: 0.6),
       ],
+    );
+  }
+
+  pw.Widget _emptyState() {
+    return pw.Container(
+      width: double.infinity,
+      padding: const pw.EdgeInsets.all(18),
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(
+          color: PdfColors.grey600,
+          width: 0.5,
+        ),
+        borderRadius: pw.BorderRadius.circular(8),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(
+            'No unpaid exhibitor balances were found for this show.',
+            style: pw.TextStyle(
+              fontSize: 10,
+              fontWeight: pw.FontWeight.bold,
+            ),
+          ),
+          pw.SizedBox(height: 6),
+          pw.Text(
+            'If balances were expected, check that entries are not marked scratched, disqualified, or test, and that show fee settings produce a balance greater than zero.',
+            style: const pw.TextStyle(fontSize: 8),
+          ),
+        ],
+      ),
     );
   }
 

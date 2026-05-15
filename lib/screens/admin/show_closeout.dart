@@ -886,11 +886,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       required void Function(String artifactKey) onFinished,
       required void Function(String artifactKey, Object error) onFailed,
     }) async {
-    if (_isSupportMode) {
-      throw Exception(
-        'Report generation is disabled while viewing in support mode.',
-      );
-    }
       await _saveArbaDetails();
       await _ensureLegsBuilder();
       await _ensureExhibitorBuilder();
@@ -1720,16 +1715,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       String? exhibitorId,
       String? exhibitorName,
     }) async {
-      if (_isSupportMode) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Report generation is disabled while viewing in support mode.',
-            ),
-          ),
-        );
-        return;
-      }
       if (reportName != 'unpaid_balances_report') {
         final ready = await _ensureResultsReadyForReports();
         if (!ready) return;
@@ -2300,7 +2285,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                     SizedBox(width: 10),
                                     Expanded(
                                       child: Text(
-                                        'Support Mode — Closeout tools are read-only. Finalize, report generation, saving, and email sending are disabled.',
+                                        'Support Mode — Closeout tools are partially read-only. Finalize, saving, and email sending are disabled. Report generation is allowed for troubleshooting.',
                                         style: TextStyle(
                                           fontWeight: FontWeight.w700,
                                         ),
