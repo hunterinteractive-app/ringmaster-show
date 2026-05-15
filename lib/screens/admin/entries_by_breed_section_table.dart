@@ -398,13 +398,8 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
       'Breed',
       'Variety',
       'Age / Sex Class',
-      ..._sections.map(
-        (s) => widget.showExhibitorCounts
-            ? '${_sectionHeader(s)} (R/E)'
-            : '${_sectionHeader(s)} Showing',
-      ),
+      ..._sections.map((s) => '${_sectionHeader(s)} Showing'),
       'Total Showing',
-      if (widget.showExhibitorCounts) 'Unique Exhibitors',
     ];
 
     final lines = <List<String>>[];
@@ -418,44 +413,10 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
         ..._sections.map((s) {
           final sid = s['id'].toString();
           final rabbits = _countForSection(breed.countsBySection, sid);
-          final exhibitors = _exhibitorsForSection(breed.exhibitorsBySection, sid);
-          return widget.showExhibitorCounts ? '$rabbits/$exhibitors' : rabbits.toString();
+          return rabbits.toString();
         }),
         breed.rabbitCount.toString(),
-        if (widget.showExhibitorCounts) breed.exhibitorCount.toString(),
       ]);
-
-      for (final variety in breed.varieties) {
-        lines.add([
-          breed.breed,
-          variety.variety,
-          '',
-          ..._sections.map((s) {
-            final sid = s['id'].toString();
-            final rabbits = _countForSection(variety.countsBySection, sid);
-            final exhibitors = _exhibitorsForSection(variety.exhibitorsBySection, sid);
-            return widget.showExhibitorCounts ? '$rabbits/$exhibitors' : rabbits.toString();
-          }),
-          variety.rabbitCount.toString(),
-          if (widget.showExhibitorCounts) variety.exhibitorCount.toString(),
-        ]);
-
-        for (final c in variety.classes) {
-          lines.add([
-            breed.breed,
-            variety.variety,
-            c.label,
-            ..._sections.map((s) {
-              final sid = s['id'].toString();
-              final rabbits = _countForSection(c.countsBySection, sid);
-              final exhibitors = _exhibitorsForSection(c.exhibitorsBySection, sid);
-              return widget.showExhibitorCounts ? '$rabbits/$exhibitors' : rabbits.toString();
-            }),
-            c.rabbitCount.toString(),
-            if (widget.showExhibitorCounts) c.exhibitorCount.toString(),
-          ]);
-        }
-      }
     }
 
     return lines.map((r) => r.map(_csvEscape).join(',')).join('\n');
@@ -472,11 +433,9 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
         ..._sections.map((s) {
           final sid = s['id'].toString();
           final rabbits = _countForSection(breed.countsBySection, sid);
-          final exhibitors = _exhibitorsForSection(breed.exhibitorsBySection, sid);
-          return widget.showExhibitorCounts ? '$rabbits/$exhibitors' : rabbits.toString();
+          return rabbits.toString();
         }),
         breed.rabbitCount.toString(),
-        if (widget.showExhibitorCounts) breed.exhibitorCount.toString(),
       ]);
 
       for (final variety in breed.varieties) {
@@ -487,11 +446,9 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
           ..._sections.map((s) {
             final sid = s['id'].toString();
             final rabbits = _countForSection(variety.countsBySection, sid);
-            final exhibitors = _exhibitorsForSection(variety.exhibitorsBySection, sid);
-            return widget.showExhibitorCounts ? '$rabbits/$exhibitors' : rabbits.toString();
+            return rabbits.toString();
           }),
           variety.rabbitCount.toString(),
-          if (widget.showExhibitorCounts) variety.exhibitorCount.toString(),
         ]);
 
         for (final c in variety.classes) {
@@ -502,13 +459,9 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
             ..._sections.map((s) {
               final sid = s['id'].toString();
               final rabbits = _countForSection(c.countsBySection, sid);
-              final exhibitors = _exhibitorsForSection(c.exhibitorsBySection, sid);
-              return widget.showExhibitorCounts
-                  ? ((rabbits == 0 && exhibitors == 0) ? '-' : '$rabbits/$exhibitors')
-                  : (rabbits == 0 ? '-' : rabbits.toString());
+              return rabbits == 0 ? '-' : rabbits.toString();
             }),
             c.rabbitCount.toString(),
-            if (widget.showExhibitorCounts) c.exhibitorCount.toString(),
           ]);
         }
       }
@@ -535,9 +488,7 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
               pw.Text(widget.showName),
               pw.SizedBox(height: 8),
               pw.Text(
-                widget.showExhibitorCounts
-                    ? 'Counts shown as Rabbit/Cavy / Exhibitors (R/E)'
-                    : 'Counts shown as entries currently showing',
+                'Export counts shown as entries currently showing only.',
                 style: const pw.TextStyle(fontSize: 9),
               ),
             ],
@@ -552,13 +503,8 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
                 'Breed',
                 'Variety',
                 'Age / Sex Class',
-                ..._sections.map(
-                  (s) => widget.showExhibitorCounts
-                      ? '${_sectionHeader(s)} (R/E)'
-                      : '${_sectionHeader(s)} Showing',
-                ),
+                ..._sections.map((s) => '${_sectionHeader(s)} Showing'),
                 'Total Showing',
-                if (widget.showExhibitorCounts) 'Unique Exhibitors',
               ],
               data: _pdfRows(),
               headerStyle: pw.TextStyle(
