@@ -5,6 +5,40 @@ class CloseoutRepository {
 
   final SupabaseClient supabase;
 
+  Future<List<Map<String, dynamic>>> _selectAll(
+    String table,
+    String columns, {
+    required String filterColumn,
+    required Object filterValue,
+    String? orderColumn,
+  }) async {
+    const pageSize = 1000;
+    final allRows = <Map<String, dynamic>>[];
+    var from = 0;
+
+    while (true) {
+      final rows = orderColumn != null && orderColumn.isNotEmpty
+          ? await supabase
+              .from(table)
+              .select(columns)
+              .eq(filterColumn, filterValue)
+              .order(orderColumn)
+              .range(from, from + pageSize - 1)
+          : await supabase
+              .from(table)
+              .select(columns)
+              .eq(filterColumn, filterValue)
+              .range(from, from + pageSize - 1);
+      final batch = List<Map<String, dynamic>>.from(rows);
+      allRows.addAll(batch);
+
+      if (batch.length < pageSize) break;
+      from += pageSize;
+    }
+
+    return allRows;
+  }
+
   // ---------------------------
   // EXISTING METHODS
   // ---------------------------
@@ -86,28 +120,35 @@ class CloseoutRepository {
   Future<List<Map<String, dynamic>>> loadShowSections(
     String showId,
   ) async {
-    final rows = await supabase
-        .from('show_sections')
-        .select('id,display_name,kind,letter,sort_order')
-        .eq('show_id', showId)
-        .eq('is_enabled', true)
-        .order('sort_order');
-
-    return List<Map<String, dynamic>>.from(rows);
+    return _selectAll(
+      'show_sections',
+      'id,display_name,kind,letter,sort_order,is_enabled',
+      filterColumn: 'show_id',
+      filterValue: showId,
+      orderColumn: 'sort_order',
+    );
   }
 
   Future<List<Map<String, dynamic>>> loadEntriesForBalanceReport(
     String showId,
   ) async {
-    final rows = await supabase
-        .from('entries')
-        .select(
-          'id,exhibitor_id,animal_id,section_id,'
+    final rows = await _selectAll(
+      'entries',
+      'id,exhibitor_id,animal_id,section_id,status,'
           'scratched_at,is_disqualified,is_test',
-        )
-        .eq('show_id', showId);
+      filterColumn: 'show_id',
+      filterValue: showId,
+    );
 
-    return List<Map<String, dynamic>>.from(rows);
+    return rows.where((row) {
+      final status = (row['status'] ?? '').toString().trim().toLowerCase();
+      final isTest = row['is_test'] == true;
+      final scratchedAt = row['scratched_at'];
+
+      return !isTest &&
+          scratchedAt == null &&
+          status != 'scratched';
+    }).toList();
   }
 
   Future<List<Map<String, dynamic>>> loadExhibitorsByIds(
