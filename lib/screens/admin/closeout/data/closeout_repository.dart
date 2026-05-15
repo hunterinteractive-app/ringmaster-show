@@ -1,5 +1,3 @@
-// lib/screens/admin/closeout/data/closeout_repository.dart
-
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class CloseoutRepository {
@@ -60,6 +58,29 @@ class CloseoutRepository {
         .maybeSingle();
 
     return row == null ? null : Map<String, dynamic>.from(row);
+  }
+
+  Future<List<Map<String, dynamic>>> loadShowSectionFeeSettings(
+    String showId,
+  ) async {
+    final sectionRows = await supabase
+        .from('show_sections')
+        .select('id')
+        .eq('show_id', showId);
+
+    final sectionIds = List<Map<String, dynamic>>.from(sectionRows)
+        .map((row) => row['id']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toList();
+
+    if (sectionIds.isEmpty) return [];
+
+    final rows = await supabase
+        .from('show_section_fee_settings')
+        .select('section_id,fee_per_entry,fee_per_show,fur_fee')
+        .inFilter('section_id', sectionIds);
+
+    return List<Map<String, dynamic>>.from(rows);
   }
 
   Future<List<Map<String, dynamic>>> loadShowSections(

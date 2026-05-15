@@ -14,6 +14,7 @@ class UnpaidBalancesReportLoader {
 
     final show = await repo.loadShowBasics(showId);
     final feeSettings = await repo.loadShowFeeSettings(showId);
+    final sectionFeeSettings = await repo.loadShowSectionFeeSettings(showId);
     final sections = await repo.loadShowSections(showId);
     final entries = await repo.loadEntriesForBalanceReport(showId);
 
@@ -39,6 +40,10 @@ class UnpaidBalancesReportLoader {
 
     final sectionById = <String, Map<String, dynamic>>{
       for (final row in sections) _str(row['id']): row,
+    };
+
+    final sectionFeeById = <String, Map<String, dynamic>>{
+      for (final row in sectionFeeSettings) _str(row['section_id']): row,
     };
 
     final groupedByExhibitor = <String, List<Map<String, dynamic>>>{};
@@ -92,27 +97,39 @@ class UnpaidBalancesReportLoader {
         ..sort((a, b) => a.label.compareTo(b.label));
 
       final entryCount = exhibitorEntries.length;
-      final subtotal = feePerEntry * entryCount.toDouble();
+      final subtotal = exhibitorEntries.fold<double>(0.0, (sum, item) {
+        final sectionId = _str(item['section_id']);
+        final sectionFees = sectionFeeById[sectionId];
+        final sectionEntryFee = _asDouble(
+          sectionFees?['fee_per_entry'],
+          fallback: feePerEntry,
+        );
+        return sum + sectionEntryFee;
+      });
 
-      final additionalEntries =
-          _calculateAdditionalEntriesForDiscount(exhibitorEntries);
+      final chargedSectionIds = exhibitorEntries
+          .map((item) => _str(item['section_id']))
+          .where((id) => id.isNotEmpty)
+          .toSet();
 
-      double discount = 0.0;
-      if (discountEnabled && additionalEntries > 0 && feePerEntry > 0) {
-        if (discountType == 'percent') {
-          final pct =
-              (discountValue <= 1.0) ? discountValue : (discountValue / 100.0);
-          discount = (feePerEntry * additionalEntries) * pct;
-        } else if (discountType == 'amount') {
-          discount = additionalEntries * discountValue;
-        }
+      final showFee = chargedSectionIds.fold<double>(0.0, (sum, sectionId) {
+        final sectionFees = sectionFeeById[sectionId];
+        final sectionShowFee = _asDouble(
+          sectionFees?['fee_per_show'],
+          fallback: feePerShow,
+        );
+        return sum + sectionShowFee;
+      });
 
-        final maxDiscount = feePerEntry * additionalEntries;
-        if (discount > maxDiscount) discount = maxDiscount;
-        if (discount < 0) discount = 0;
-      }
+      final discount = _calculateMultiShowDiscount(
+        exhibitorEntries,
+        sectionFeeById: sectionFeeById,
+        fallbackFeePerEntry: feePerEntry,
+        discountEnabled: discountEnabled,
+        discountType: discountType,
+        discountValue: discountValue,
+      );
 
-      final showFee = feePerShow;
       final totalDue = (subtotal + showFee) - discount;
 
       final row = UnpaidBalanceRow(
@@ -161,26 +178,76 @@ class UnpaidBalancesReportLoader {
     );
   }
 
-  int _calculateAdditionalEntriesForDiscount(
-    List<Map<String, dynamic>> entries,
-  ) {
-    final perAnimalCounts = <String, int>{};
+  double _calculateMultiShowDiscount(
+    List<Map<String, dynamic>> entries, {
+    required Map<String, Map<String, dynamic>> sectionFeeById,
+    required double fallbackFeePerEntry,
+    required bool discountEnabled,
+    required String discountType,
+    required double discountValue,
+  }) {
+    if (!discountEnabled || entries.length < 2) return 0.0;
 
+    final entriesByAnimal = <String, List<Map<String, dynamic>>>{};
     for (final entry in entries) {
       final animalId = _str(entry['animal_id']);
       if (animalId.isEmpty) continue;
-
-      perAnimalCounts[animalId] = (perAnimalCounts[animalId] ?? 0) + 1;
+      entriesByAnimal.putIfAbsent(animalId, () => []).add(entry);
     }
 
-    var additionalEntries = 0;
-    for (final count in perAnimalCounts.values) {
-      if (count > 1) {
-        additionalEntries += (count - 1);
+    var discount = 0.0;
+
+    for (final animalEntries in entriesByAnimal.values) {
+      if (animalEntries.length <= 1) continue;
+
+      final sorted = [...animalEntries]
+        ..sort((a, b) {
+          final aFee = _entryFeeForDiscount(
+            a,
+            sectionFeeById: sectionFeeById,
+            fallbackFeePerEntry: fallbackFeePerEntry,
+          );
+          final bFee = _entryFeeForDiscount(
+            b,
+            sectionFeeById: sectionFeeById,
+            fallbackFeePerEntry: fallbackFeePerEntry,
+          );
+          return bFee.compareTo(aFee);
+        });
+
+      for (final entry in sorted.skip(1)) {
+        final entryFee = _entryFeeForDiscount(
+          entry,
+          sectionFeeById: sectionFeeById,
+          fallbackFeePerEntry: fallbackFeePerEntry,
+        );
+
+        if (entryFee <= 0) continue;
+
+        if (discountType == 'percent') {
+          final pct =
+              (discountValue <= 1.0) ? discountValue : (discountValue / 100.0);
+          discount += entryFee * pct;
+        } else if (discountType == 'amount') {
+          discount += discountValue > entryFee ? entryFee : discountValue;
+        }
       }
     }
 
-    return additionalEntries;
+    return discount < 0 ? 0.0 : discount;
+  }
+
+  double _entryFeeForDiscount(
+    Map<String, dynamic> entry, {
+    required Map<String, Map<String, dynamic>> sectionFeeById,
+    required double fallbackFeePerEntry,
+  }) {
+    final sectionId = _str(entry['section_id']);
+    final sectionFees = sectionFeeById[sectionId];
+    return _asDouble(
+      sectionFees?['fee_per_entry'],
+      fallback: fallbackFeePerEntry,
+    );
   }
 
   String _resolveExhibitorName(Map<String, dynamic> exhibitor) {
