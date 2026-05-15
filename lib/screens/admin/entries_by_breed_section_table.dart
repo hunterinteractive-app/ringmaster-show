@@ -5,6 +5,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/utils/csv_exporter.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -296,7 +299,7 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
           final sex = _sexOnly(_safe(row, 'sex'), _safe(row, 'class_name'));
 
           final label =
-              '${age.isEmpty ? '(No Age)' : age} • ${sex.isEmpty ? '(No Sex)' : sex}';
+              '${age.isEmpty ? '(No Age)' : age} / ${sex.isEmpty ? '(No Sex)' : sex}';
 
           classBuckets.putIfAbsent(label, () => <Map<String, dynamic>>[]);
           classBuckets[label]!.add(row);
@@ -456,6 +459,132 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
     }
 
     return lines.map((r) => r.map(_csvEscape).join(',')).join('\n');
+  }
+
+  List<List<String>> _pdfRows() {
+    final rows = <List<String>>[];
+
+    for (final breed in _breedGroups) {
+      rows.add([
+        breed.breed,
+        '',
+        '',
+        ..._sections.map((s) {
+          final sid = s['id'].toString();
+          final rabbits = _countForSection(breed.countsBySection, sid);
+          final exhibitors = _exhibitorsForSection(breed.exhibitorsBySection, sid);
+          return widget.showExhibitorCounts ? '$rabbits/$exhibitors' : rabbits.toString();
+        }),
+        breed.rabbitCount.toString(),
+        if (widget.showExhibitorCounts) breed.exhibitorCount.toString(),
+      ]);
+
+      for (final variety in breed.varieties) {
+        rows.add([
+          breed.breed,
+          variety.variety,
+          '',
+          ..._sections.map((s) {
+            final sid = s['id'].toString();
+            final rabbits = _countForSection(variety.countsBySection, sid);
+            final exhibitors = _exhibitorsForSection(variety.exhibitorsBySection, sid);
+            return widget.showExhibitorCounts ? '$rabbits/$exhibitors' : rabbits.toString();
+          }),
+          variety.rabbitCount.toString(),
+          if (widget.showExhibitorCounts) variety.exhibitorCount.toString(),
+        ]);
+
+        for (final c in variety.classes) {
+          rows.add([
+            breed.breed,
+            variety.variety,
+            c.label,
+            ..._sections.map((s) {
+              final sid = s['id'].toString();
+              final rabbits = _countForSection(c.countsBySection, sid);
+              final exhibitors = _exhibitorsForSection(c.exhibitorsBySection, sid);
+              return widget.showExhibitorCounts
+                  ? ((rabbits == 0 && exhibitors == 0) ? '-' : '$rabbits/$exhibitors')
+                  : (rabbits == 0 ? '-' : rabbits.toString());
+            }),
+            c.rabbitCount.toString(),
+            if (widget.showExhibitorCounts) c.exhibitorCount.toString(),
+          ]);
+        }
+      }
+    }
+
+    return rows;
+  }
+
+  Future<void> _exportPdf() async {
+    try {
+      final doc = pw.Document();
+
+      doc.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.letter.landscape,
+          margin: const pw.EdgeInsets.all(24),
+          header: (_) => pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(
+                widget.title,
+                style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+              ),
+              pw.Text(widget.showName),
+              pw.SizedBox(height: 8),
+              pw.Text(
+                widget.showExhibitorCounts
+                    ? 'Counts shown as Rabbit/Cavy / Exhibitors (R/E)'
+                    : 'Counts shown as entries currently showing',
+                style: const pw.TextStyle(fontSize: 9),
+              ),
+            ],
+          ),
+          footer: (context) => pw.Text(
+            'Page ${context.pageNumber} of ${context.pagesCount}',
+            style: const pw.TextStyle(fontSize: 8),
+          ),
+          build: (_) => [
+            pw.TableHelper.fromTextArray(
+              headers: [
+                'Breed',
+                'Variety',
+                'Age / Sex Class',
+                ..._sections.map(
+                  (s) => widget.showExhibitorCounts
+                      ? '${_sectionHeader(s)} (R/E)'
+                      : '${_sectionHeader(s)} Showing',
+                ),
+                'Total Showing',
+                if (widget.showExhibitorCounts) 'Unique Exhibitors',
+              ],
+              data: _pdfRows(),
+              headerStyle: pw.TextStyle(
+                fontSize: 7,
+                fontWeight: pw.FontWeight.bold,
+              ),
+              cellStyle: const pw.TextStyle(fontSize: 7),
+              border: pw.TableBorder.all(color: PdfColors.grey400, width: .4),
+              headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
+              oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
+              cellPadding: const pw.EdgeInsets.all(3),
+            ),
+          ],
+        ),
+      );
+
+      await Printing.sharePdf(
+        bytes: await doc.save(),
+        filename: 'entries_by_breed_section_${widget.showId}.pdf',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('PDF export failed: $e')),
+      );
+    }
   }
 
   Future<void> _exportCsv() async {
@@ -786,7 +915,12 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
                       TextButton.icon(
                         onPressed: _exportCsv,
                         icon: const Icon(Icons.download),
-                        label: const Text('Export CSV'),
+                        label: const Text('CSV'),
+                      ),
+                      TextButton.icon(
+                        onPressed: _exportPdf,
+                        icon: const Icon(Icons.picture_as_pdf),
+                        label: const Text('PDF'),
                       ),
                       const SizedBox(width: 6),
                     ],
