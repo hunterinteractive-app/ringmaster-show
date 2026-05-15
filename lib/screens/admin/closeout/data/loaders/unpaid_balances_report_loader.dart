@@ -104,7 +104,12 @@ class UnpaidBalancesReportLoader {
           sectionFees?['fee_per_entry'],
           fallback: feePerEntry,
         );
-        return sum + sectionEntryFee;
+
+        final furFee = item['is_fur'] == true
+            ? _asDouble(sectionFees?['fur_fee'])
+            : 0.0;
+
+        return sum + sectionEntryFee + furFee;
       });
 
       final chargedSectionIds = exhibitorEntries
