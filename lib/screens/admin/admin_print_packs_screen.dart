@@ -2078,7 +2078,7 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
       final sid = (e['section_id'] ?? '').toString();
       map[sid] = {
         'id': sid,
-        'display_name': (e['section_label'] ?? '').toString(),
+        'display_name': _safe(e, 'section_display_name'),
         'kind': (e['section_kind'] ?? '').toString(),
         'letter': (e['section_letter'] ?? '').toString(),
         'sort_order': e['section_sort_order'],
