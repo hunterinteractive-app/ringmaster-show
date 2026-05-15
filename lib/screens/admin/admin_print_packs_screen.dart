@@ -1793,17 +1793,15 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
   String? _msg;
   Map<String, dynamic>? _showRow;
 
-    Future<void> _loadShowContact() async {
-      final row = await supabase
-          .from('shows')
-          .select(
-            'id, secretary_name, secretary_phone, secretary_email, contact_name, contact_phone, contact_email',
-          )
-          .eq('id', widget.showId)
-          .maybeSingle();
+  Future<void> _loadShowContact() async {
+    final row = await supabase
+        .from('shows')
+        .select('id, secretary_name, secretary_phone, secretary_email')
+        .eq('id', widget.showId)
+        .maybeSingle();
 
-      _showRow = (row as Map<String, dynamic>?) ?? <String, dynamic>{};
-    }
+    _showRow = (row as Map<String, dynamic>?) ?? <String, dynamic>{};
+  }
 
   Future<List<Map<String, dynamic>>> _fetchEntries() async {
     final rows = await supabase.rpc(
@@ -2225,13 +2223,13 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
     }
 
     pw.Widget _infoBlockLeft(Map<String, dynamic> ex) {
-      final a1 = _safe(ex, 'address_line1');
-      final a2 = _safe(ex, 'address_line2');
-      final city = _safe(ex, 'city');
-      final st = _safe(ex, 'state');
-      final zip = _safe(ex, 'zip');
-      final phone = _safe(ex, 'phone');
-      final email = _safe(ex, 'email');
+      final a1 = _safe(ex, 'exhibitor_address_line1');
+      final a2 = _safe(ex, 'exhibitor_address_line2');
+      final city = _safe(ex, 'exhibitor_city');
+      final st = _safe(ex, 'exhibitor_state');
+      final zip = _safe(ex, 'exhibitor_zip');
+      final phone = _safe(ex, 'exhibitor_phone');
+      final email = _safe(ex, 'exhibitor_email');
 
       final lines = <String>[
         if (a1.isNotEmpty) a1,
@@ -2261,15 +2259,9 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
       String s2(Map<String, dynamic>? m, String k) =>
           (m == null) ? '' : (m[k] ?? '').toString().trim();
 
-      final name = s2(_showRow, 'secretary_name').isNotEmpty
-          ? s2(_showRow, 'secretary_name')
-          : s2(_showRow, 'contact_name');
-      final phone = s2(_showRow, 'secretary_phone').isNotEmpty
-          ? s2(_showRow, 'secretary_phone')
-          : s2(_showRow, 'contact_phone');
-      final email = s2(_showRow, 'secretary_email').isNotEmpty
-          ? s2(_showRow, 'secretary_email')
-          : s2(_showRow, 'contact_email');
+      final name = s2(_showRow, 'secretary_name');
+      final phone = s2(_showRow, 'secretary_phone');
+      final email = s2(_showRow, 'secretary_email');
 
       final lines = <pw.Widget>[
         pw.Text(
