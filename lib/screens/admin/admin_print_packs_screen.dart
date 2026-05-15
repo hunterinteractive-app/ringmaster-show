@@ -1182,7 +1182,10 @@ class _ControlSheetsGeneratorSheetState
             pw.Center(
               child: pw.Text(
                 showHeader,
-                style: pw.TextStyle(fontSize: _scaled(12), fontWeight: pw.FontWeight.bold),
+                style: pw.TextStyle(
+                  fontSize: _scaled(12),
+                  fontWeight: pw.FontWeight.bold,
+                ),
                 textAlign: pw.TextAlign.center,
               ),
             ),
@@ -1190,7 +1193,10 @@ class _ControlSheetsGeneratorSheetState
             pw.Center(
               child: pw.Text(
                 'Judging Sheet - Breed Class • Compact',
-                style: pw.TextStyle(fontSize: _scaled(12), fontWeight: pw.FontWeight.bold),
+                style: pw.TextStyle(
+                  fontSize: _scaled(12),
+                  fontWeight: pw.FontWeight.bold,
+                ),
                 textAlign: pw.TextAlign.center,
               ),
             ),
@@ -1803,18 +1809,83 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
     _showRow = (row as Map<String, dynamic>?) ?? <String, dynamic>{};
   }
 
-  Future<List<Map<String, dynamic>>> _fetchEntries() async {
-    final rows = await supabase.rpc(
-      'report_checkin_entries',
-      params: {
-        'p_show_id': widget.showId,
-        'p_section_id': widget.combineSections ? null : widget.sectionId,
-        'p_include_scratched': widget.includeScratched,
-      },
-    );
+    Future<List<Map<String, dynamic>>> _fetchEntries() async {
+      final rows = await supabase.rpc(
+        'report_checkin_entries',
+        params: {
+          'p_show_id': widget.showId,
+          'p_section_id': widget.combineSections ? null : widget.sectionId,
+          'p_include_scratched': widget.includeScratched,
+        },
+      );
 
-    return (rows as List).cast<Map<String, dynamic>>();
-  }
+      final list = (rows as List).cast<Map<String, dynamic>>();
+
+      int toInt(dynamic value, [int fallback = 9999]) {
+        if (value == null) return fallback;
+        if (value is int) return value;
+        return int.tryParse(value.toString()) ?? fallback;
+      }
+
+      int kindRank(String k) {
+        switch (k.toLowerCase()) {
+          case 'open':
+            return 0;
+          case 'youth':
+            return 1;
+          default:
+            return 99;
+        }
+      }
+
+      list.sort((a, b) {
+        final showCmp = _safe(a, 'show_id').compareTo(_safe(b, 'show_id'));
+        if (showCmp != 0) return showCmp;
+
+        final sectionKindCmp = kindRank(_safe(a, 'section_kind'))
+            .compareTo(kindRank(_safe(b, 'section_kind')));
+        if (sectionKindCmp != 0) return sectionKindCmp;
+
+        final sectionSortCmp = toInt(a['section_sort_order'])
+            .compareTo(toInt(b['section_sort_order']));
+        if (sectionSortCmp != 0) return sectionSortCmp;
+
+        final sectionLetterCmp = _safe(a, 'section_letter')
+            .toUpperCase()
+            .compareTo(_safe(b, 'section_letter').toUpperCase());
+        if (sectionLetterCmp != 0) return sectionLetterCmp;
+
+        final exhibitorCmp = _safe(a, 'exhibitor_label')
+            .toLowerCase()
+            .compareTo(_safe(b, 'exhibitor_label').toLowerCase());
+        if (exhibitorCmp != 0) return exhibitorCmp;
+
+        final breedCmp = _safe(a, 'breed')
+            .toLowerCase()
+            .compareTo(_safe(b, 'breed').toLowerCase());
+        if (breedCmp != 0) return breedCmp;
+
+        final varietyCmp = _groupVarietyLabel(a)
+            .toLowerCase()
+            .compareTo(_groupVarietyLabel(b).toLowerCase());
+        if (varietyCmp != 0) return varietyCmp;
+
+        final classSortCmp = toInt(a['class_sort_order'])
+            .compareTo(toInt(b['class_sort_order']));
+        if (classSortCmp != 0) return classSortCmp;
+
+        final sexCmp = _safe(a, 'sex')
+            .toLowerCase()
+            .compareTo(_safe(b, 'sex').toLowerCase());
+        if (sexCmp != 0) return sexCmp;
+
+        return _safe(a, 'tattoo')
+            .toLowerCase()
+            .compareTo(_safe(b, 'tattoo').toLowerCase());
+      });
+
+      return list;
+    }
 
   bool _emailing = false;
 
@@ -1826,13 +1897,13 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
     
   String _emailForExhibitor(List<Map<String, dynamic>> entries) {
     for (final e in entries) {
-      final email = _safe(e, 'email');
-      if (email.isNotEmpty && email.contains('@')) return email;
-
       final exhibitorEmail = _safe(e, 'exhibitor_email');
       if (exhibitorEmail.isNotEmpty && exhibitorEmail.contains('@')) {
         return exhibitorEmail;
       }
+
+      final email = _safe(e, 'email');
+      if (email.isNotEmpty && email.contains('@')) return email;
     }
     return '';
   }
@@ -2195,7 +2266,7 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
       );
     }
 
-    pw.Widget _balanceBox({required String allShows}) {
+    pw.Widget _balanceBox({required String balanceDue}) {
       return pw.Container(
         padding: const pw.EdgeInsets.all(6),
         child: pw.Column(
@@ -2211,7 +2282,7 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
             ),
             pw.SizedBox(height: 6),
             pw.Text(
-              allShows,
+              balanceDue,
               style: pw.TextStyle(
                 fontSize: 11,
                 fontWeight: pw.FontWeight.bold,
@@ -2386,7 +2457,10 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
                   : c;
 
               final ageClass = _displayAgeClassOnly(_safe(e, 'class_name'));
-              final furMark = e['is_fur'] == true ? 'X' : '';
+              final furMark = _safe(e, 'is_fur').toLowerCase() == 'true' ||
+                      _safe(e, 'class_name').toLowerCase().contains('fur')
+                  ? 'X'
+                  : '';
 
               return pw.TableRow(
                 children: [
@@ -2441,7 +2515,7 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
       final exMap = exEntries.first;
       final exName = _exhibitorNameFromEntry(exMap);
       final numberEntered = exEntries.length;
-      final allShows = _money(exMap['balance_due_all_shows']);
+      final balanceDue = _money(exMap['balance_due_this_show']);
       final thisShow = _money(exMap['balance_due_this_show']);
       final multi = _isMultiSection(exEntries);
 
@@ -2495,7 +2569,7 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
               pw.Row(
                 children: [
                   pw.Spacer(),
-                  _balanceBox(allShows: allShows),
+                  _balanceBox(balanceDue: balanceDue),
                 ],
               ),
             );
@@ -3184,11 +3258,12 @@ class _RemarkCardsGeneratorSheetState extends State<_RemarkCardsGeneratorSheet> 
       final second = i + 1 < entries.length ? entries[i + 1] : null;
 
       doc.addPage(
-        pw.Page(
+        pw.MultiPage(
           pageFormat: PdfPageFormat.letter,
           margin: const pw.EdgeInsets.fromLTRB(20, 20, 20, 20),
           build: (_) {
-            return pw.Column(
+            return [
+              pw.Column(
               children: [
                 pw.Expanded(child: _remarkCard(first)),
                 pw.SizedBox(height: 14),
@@ -3198,9 +3273,10 @@ class _RemarkCardsGeneratorSheetState extends State<_RemarkCardsGeneratorSheet> 
                       : _remarkCard(second),
                 ),
               ],
-            );
+            ),
+            ];
           },
-        ),
+        )
       );
     }
 
