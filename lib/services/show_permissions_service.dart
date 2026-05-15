@@ -1,6 +1,7 @@
 // lib/services/show_permissions_service.dart
 
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/app_session.dart';
 
 class ShowPermissions {
   final bool canManageShow;
@@ -39,16 +40,19 @@ class ShowPermissionsService {
 
   static Future<ShowPermissions> load(String showId) async {
     final user = _client.auth.currentUser;
-    if (user == null) return ShowPermissions.none;
+    final effectiveUserId = AppSession.effectiveUserId ?? user?.id;
+    if (user == null || effectiveUserId == null || effectiveUserId.isEmpty) {
+      return ShowPermissions.none;
+    }
 
     final results = await Future.wait<bool>([
-      _rpcBool('user_can_manage_show', showId),
-      _rpcBool('user_can_enter_results', showId),
-      _rpcBool('user_can_finalize_show', showId),
-      _rpcBool('user_can_email_reports', showId),
-      _rpcBool('user_can_manage_entries', showId),
-      _rpcBool('user_can_manage_judges', showId),
-      _rpcBool('user_can_manage_show_settings', showId),
+      _rpcBool('user_can_manage_show', showId, effectiveUserId),
+      _rpcBool('user_can_enter_results', showId, effectiveUserId),
+      _rpcBool('user_can_finalize_show', showId, effectiveUserId),
+      _rpcBool('user_can_email_reports', showId, effectiveUserId),
+      _rpcBool('user_can_manage_entries', showId, effectiveUserId),
+      _rpcBool('user_can_manage_judges', showId, effectiveUserId),
+      _rpcBool('user_can_manage_show_settings', showId, effectiveUserId),
     ]);
 
     return ShowPermissions(
@@ -62,12 +66,28 @@ class ShowPermissionsService {
     );
   }
 
-  static Future<bool> _rpcBool(String functionName, String showId) async {
-    final result = await _client.rpc(
-      functionName,
-      params: {'p_show_id': showId},
-    );
+  static Future<bool> _rpcBool(
+    String functionName,
+    String showId,
+    String effectiveUserId,
+  ) async {
+    try {
+      final result = await _client.rpc(
+        functionName,
+        params: {
+          'p_show_id': showId,
+          'p_user_id': effectiveUserId,
+        },
+      );
 
-    return result == true;
+      return result == true;
+    } catch (_) {
+      final result = await _client.rpc(
+        functionName,
+        params: {'p_show_id': showId},
+      );
+
+      return result == true;
+    }
   }
 }
