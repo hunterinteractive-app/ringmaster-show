@@ -74,8 +74,8 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
   }
 
   Future<List<Map<String, dynamic>>> _loadShows() async {
-    final userId = AppSession.effectiveUserId;
-    if (userId == null) return [];
+    final userId = AppSession.effectiveUserId ?? supabase.auth.currentUser?.id;
+    if (userId == null || userId.isEmpty) return [];
 
     final superAdminRes = AppSession.isSupportMode
         ? null
@@ -85,7 +85,17 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
             .eq('user_id', userId)
             .maybeSingle();
 
-    final isSuperAdmin = superAdminRes != null;
+    final roleSuperAdminRes = AppSession.isSupportMode
+        ? null
+        : await supabase
+            .from('role_assignments')
+            .select('user_id')
+            .eq('user_id', userId)
+            .eq('role', 'super_admin')
+            .limit(1)
+            .maybeSingle();
+
+    final isSuperAdmin = superAdminRes != null || roleSuperAdminRes != null;
 
     final query = supabase.from('shows').select(
       'id,name,start_date,end_date,location_name,is_published,entry_open_at,entry_close_at,created_at,'
