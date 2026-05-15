@@ -51,6 +51,8 @@ class _ShowListScreenState extends State<ShowListScreen> {
   String _sortMode = 'date';
   String _stateFilter = 'All';
   bool _checkingLegal = true;
+  bool _canAccessAdmin = false;
+  bool _loadingAdminAccess = true;
 
   SupportImpersonatedUser? get _impersonatedUser =>
       SupportImpersonationSession.current.value;
@@ -111,6 +113,44 @@ class _ShowListScreenState extends State<ShowListScreen> {
     'DC': 'District of Columbia',
   };
 
+  Future<void> _loadAdminAccess() async {
+    final user = supabase.auth.currentUser;
+
+    if (user == null || widget.demoMode) {
+      if (!mounted) return;
+      setState(() {
+        _canAccessAdmin = false;
+        _loadingAdminAccess = false;
+      });
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _loadingAdminAccess = true;
+        _canAccessAdmin = false;
+      });
+    }
+
+    try {
+      final result = await supabase.rpc('user_has_any_show_access');
+
+      if (!mounted) return;
+
+      setState(() {
+        _canAccessAdmin = result == true;
+        _loadingAdminAccess = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        _canAccessAdmin = false;
+        _loadingAdminAccess = false;
+      });
+    }
+  }
+
   static final Map<String, String> _stateNameLookup = {
     for (final entry in _stateAbbreviationToName.entries)
       entry.value.toUpperCase(): entry.value,
@@ -144,6 +184,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
   
   void _handleSupportModeChanged() {
     if (!mounted) return;
+    _loadAdminAccess();
     setState(() {
       _bundleFuture = _loadBundle();
     });
@@ -496,6 +537,8 @@ class _ShowListScreenState extends State<ShowListScreen> {
     if (widget.demoMode) {
       if (!mounted) return;
       setState(() {
+        _canAccessAdmin = false;
+        _loadingAdminAccess = false;
         _bundleFuture = _loadBundle();
         _checkingLegal = false;
       });
@@ -516,6 +559,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
     final userId = _effectiveUserId ?? user.id;
 
     if (SupportImpersonationSession.isActive) {
+      await _loadAdminAccess();
       if (!mounted) return;
       setState(() {
         _bundleFuture = _loadBundle();
@@ -536,6 +580,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
         profile?['accepted_privacy_version'] == LegalConfig.currentPrivacyVersion;
 
     if (termsOk && privacyOk) {
+      await _loadAdminAccess();
       if (!mounted) return;
       setState(() {
         _bundleFuture = _loadBundle();
@@ -584,6 +629,8 @@ class _ShowListScreenState extends State<ShowListScreen> {
 
     if (!mounted) return;
 
+    await _loadAdminAccess();
+    if (!mounted) return;
     setState(() {
       _bundleFuture = _loadBundle();
       _checkingLegal = false;
@@ -688,6 +735,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Support mode ended.')),
     );
+    _loadAdminAccess();
     setState(() {
       _bundleFuture = _loadBundle();
     });
@@ -866,7 +914,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
         return Scaffold(
           appBar: _ResponsiveShowAppBar(
             bundle: bundle,
-            showAdmin: bundle?.canSeeAdminButton == true,
+            showAdmin: !_loadingAdminAccess && _canAccessAdmin,
             onAdmin: bundle == null ? null : () => _openAdmin(context, bundle),
             onAnimals: () {
               Navigator.push(
@@ -918,7 +966,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
 
                 if (allShows.isEmpty) {
                   content = _UpcomingShowsEmptyState(
-                    showAdminButton: bundle.canSeeAdminButton,
+                    showAdminButton: !_loadingAdminAccess && _canAccessAdmin,
                     onAdmin: () => _openAdmin(context, bundle),
                   );
                 } else {
@@ -1422,7 +1470,7 @@ class _ResponsiveShowAppBar extends StatelessWidget
         if (!demoMode && showAdmin && onAdmin != null)
           _TopBarAction(
             icon: Icons.admin_panel_settings,
-            label: 'Admin',
+            label: 'Show Secretary',
             showLabel: showLabels,
             onTap: onAdmin!,
           ),
@@ -1596,7 +1644,7 @@ class _UpcomingShowsEmptyState extends StatelessWidget {
                 const SizedBox(height: AppSpacing.sm),
                 Text(
                   showAdminButton
-                      ? 'Published shows will appear here once they are available. If you are a show secretary, open Admin to create or manage shows.'
+                      ? 'Published shows will appear here once they are available. If you are a show secretary, open Show Secretary to create or manage shows.'
                       : 'Published shows will appear here once they are available.',
                   style: Theme.of(context).textTheme.bodySmall,
                   textAlign: TextAlign.center,
@@ -1611,7 +1659,7 @@ class _UpcomingShowsEmptyState extends StatelessWidget {
                       FilledButton.icon(
                         onPressed: onAdmin,
                         icon: const Icon(Icons.admin_panel_settings),
-                        label: const Text('Open Admin'),
+                        label: const Text('Open Show Secretary'),
                       ),
                   ],
                 ),

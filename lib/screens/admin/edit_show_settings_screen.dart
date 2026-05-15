@@ -12,10 +12,12 @@ import '../../services/app_session.dart';
 import 'show_breed_settings_screen.dart';
 import 'show_sanctions_dialog.dart';
 import 'show_fees_dialog.dart';
+import 'show_role_assignments_dialog.dart';
 import 'show_rules_dialog.dart';
 import 'show_sections_dialog.dart';
 import 'show_judges_dialog.dart';
 import '../../widgets/rm_timezone_notice_banner.dart';
+import '../../services/show_permissions_service.dart';
 
 // ✅ Admin Operations (Pre-show) screens
 import 'admin_entry_management_screen.dart';
@@ -42,6 +44,8 @@ class EditShowSettingsScreen extends StatefulWidget {
 
 class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   bool _loading = true;
+  bool _loadingPermissions = true;
+  ShowPermissions _permissions = ShowPermissions.none;
   bool _saving = false;
   String? _msg;
 
@@ -77,6 +81,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   @override
   void initState() {
     super.initState();
+    _loadPermissions();
     _load();
   }
 
@@ -358,6 +363,25 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
     );
 
     controller.dispose();
+  }
+
+  Future<void> _loadPermissions() async {
+    try {
+      final permissions = await ShowPermissionsService.load(widget.showId);
+
+      if (!mounted) return;
+      setState(() {
+        _permissions = permissions;
+        _loadingPermissions = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _permissions = ShowPermissions.none;
+        _loadingPermissions = false;
+        _msg = 'Failed to load permissions: $e';
+      });
+    }
   }
 
   Future<void> _showManageClubsDialog() async {
@@ -708,6 +732,14 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
 
   void _openFees() {
     ShowFeesDialog.open(
+      context,
+      showId: widget.showId,
+      showName: _effectiveShowName(),
+    );
+  }
+
+  void _openRoleAssignments() {
+    ShowRoleAssignmentsDialog.open(
       context,
       showId: widget.showId,
       showName: _effectiveShowName(),
@@ -1065,11 +1097,18 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
             end: Alignment.bottomCenter,
           ),
         ),
-        child: _loading
+        child: (_loading || _loadingPermissions)
             ? const Center(
                 child: CircularProgressIndicator(color: Colors.white),
               )
-            : SafeArea(
+            : !_permissions.canManageShow
+                ? const Center(
+                    child: Text(
+                      'You do not have permission to manage this show.',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  )
+                : SafeArea(
                 child: Container(
                   margin: const EdgeInsets.only(top: 8),
                   decoration: const BoxDecoration(
@@ -1140,275 +1179,277 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                             ),
                           ),
 
-                        _buildSectionCard(
-                          title: 'Basic Show Info',
-                          children: [
-                            TextField(
-                              controller: _name,
-                              enabled: !_saving && !_isReadOnly,
-                              decoration: const InputDecoration(
-                                labelText: 'Show name (required)',
-                                border: OutlineInputBorder(),
+                        if (_permissions.canManageShowSettings)
+                          _buildSectionCard(
+                            title: 'Basic Show Info',
+                            children: [
+                              TextField(
+                                controller: _name,
+                                enabled: !_saving && !_isReadOnly,
+                                decoration: const InputDecoration(
+                                  labelText: 'Show name (required)',
+                                  border: OutlineInputBorder(),
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 12),
-                            TextField(
-                              controller: _location,
-                              enabled: !_saving && !_isReadOnly,
-                              decoration: const InputDecoration(
-                                labelText: 'Location (required)',
-                                border: OutlineInputBorder(),
+                              const SizedBox(height: 12),
+                              TextField(
+                                controller: _location,
+                                enabled: !_saving && !_isReadOnly,
+                                decoration: const InputDecoration(
+                                  labelText: 'Location (required)',
+                                  border: OutlineInputBorder(),
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 12),
-                           if (_loadingClubs) const LinearProgressIndicator(),
-                           DropdownButtonFormField<String>(
-                            value: _clubs.any((club) => club['id']?.toString() == _selectedClubId)
-                                ? _selectedClubId
-                                : null,
-                            decoration: InputDecoration(
-                              labelText: 'Hosting Club',
-                              border: const OutlineInputBorder(),
-                              helperText: _clubs.isEmpty
-                                  ? 'No active clubs found. Add your first hosting club to continue.'
-                                  : _canSwitchHostingClub
-                                      ? 'Select a hosting club, add a new club, or manage your existing clubs.'
-                                      : 'Locked to your account. Upgrade to Multi-Club Hosting to change this.',
-                            ),
-                            items: [
-                              ..._clubs.map((club) {
-                                return DropdownMenuItem<String>(
-                                  value: club['id'].toString(),
-                                  child: Text((club['name'] ?? 'Club').toString()),
-                                );
-                              }),
-                              if (_canManageHostingClubs)
-                                const DropdownMenuItem<String>(
-                                  value: _addClubActionValue,
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.add, size: 18),
-                                      SizedBox(width: 8),
-                                      Text('Add New Club'),
-                                    ],
-                                  ),
+                              const SizedBox(height: 12),
+                              if (_loadingClubs) const LinearProgressIndicator(),
+                              DropdownButtonFormField<String>(
+                                value: _clubs.any((club) => club['id']?.toString() == _selectedClubId)
+                                    ? _selectedClubId
+                                    : null,
+                                decoration: InputDecoration(
+                                  labelText: 'Hosting Club',
+                                  border: const OutlineInputBorder(),
+                                  helperText: _clubs.isEmpty
+                                      ? 'No active clubs found. Add your first hosting club to continue.'
+                                      : _canSwitchHostingClub
+                                          ? 'Select a hosting club, add a new club, or manage your existing clubs.'
+                                          : 'Locked to your account. Upgrade to Multi-Club Hosting to change this.',
                                 ),
-                              if (_canSwitchHostingClub && _clubs.isNotEmpty)
-                                const DropdownMenuItem<String>(
-                                  value: _manageClubsActionValue,
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.settings, size: 18),
-                                      SizedBox(width: 8),
-                                      Text('Manage Clubs'),
-                                    ],
-                                  ),
-                                ),
-                            ],
-                            onChanged: (_saving || _isReadOnly || _loadingClubs || !_canManageHostingClubs)
-                                ? null
-                                : (value) async {
-                                    if (value == null) return;
-
-                                    if (value == _addClubActionValue) {
-                                      await _showAddClubDialog();
-                                      return;
-                                    }
-
-                                    if (value == _manageClubsActionValue) {
-                                      await _showManageClubsDialog();
-                                      return;
-                                    }
-
-                                    setState(() {
-                                      _selectedClubId = value;
-
-                                      final selected = _clubs.firstWhere(
-                                        (c) => c['id'].toString() == value,
-                                        orElse: () => <String, dynamic>{},
-                                      );
-
-                                      _selectedClubName = (selected['name'] ?? '').toString();
-                                    });
-                                  },
-                          ),
-                          ],
-                        ),
-
-                        _buildSectionCard(
-                          title: 'Show Date',
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    'Show Start: ${_startDate == null ? '(required)' : _fmtDate(_startDate)}',
-                                  ),
-                                ),
-                                TextButton(
-                                  onPressed: (_saving || _isReadOnly) ? null : _pickStartDate,
-                                  child: const Text('Pick'),
-                                ),
-                              ],
-                            ),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    'Show End: ${_endDate == null ? '(required)' : _fmtDate(_endDate)}',
-                                  ),
-                                ),
-                                TextButton(
-                                  onPressed: (_saving || _isReadOnly) ? null : _pickEndDate,
-                                  child: const Text('Pick'),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-
-                        _buildSectionCard(
-                          title: 'Entry Window',
-                          subtitle:
-                              'Date and time for when exhibitors can begin and stop entering.',
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    'Entry open: ${_fmtDateTime(_entryOpenAt)}',
-                                  ),
-                                ),
-                                TextButton(
-                                  onPressed: (_saving || _isReadOnly) ? null : _pickEntryOpenAt,
-                                  child: const Text('Pick'),
-                                ),
-                                TextButton(
-                                  onPressed: (_saving || _isReadOnly) ? null : () => setState(() => _entryOpenAt = null),
-                                  child: const Text('Clear'),
-                                ),
-                              ],
-                            ),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    'Entry close: ${_fmtDateTime(_entryCloseAt)}',
-                                  ),
-                                ),
-                                TextButton(
-                                  onPressed: (_saving || _isReadOnly) ? null : _pickEntryCloseAt,
-                                  child: const Text('Pick'),
-                                ),
-                                TextButton(
-                                  onPressed: (_saving || _isReadOnly) ? null : () => setState(() => _entryCloseAt = null),
-                                  child: const Text('Clear'),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Timezone: $_timezone',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                        ),
-
-                        _buildSectionCard(
-                          title: 'Publication & Awards',
-                          children: [
-                            SwitchListTile(
-                              contentPadding: EdgeInsets.zero,
-                              title: const Text('Published'),
-                              subtitle: const Text(
-                                'Controls whether this show is published.',
-                              ),
-                              value: _published,
-                              onChanged: (_saving || _isReadOnly || AppSession.isSupportMode)
-                                  ? null
-                                  : (v) async {
-                                      final previous = _published;
-
-                                      setState(() {
-                                        _published = v;
-                                        _saving = true;
-                                        _msg = null;
-                                      });
-
-                                      try {
-                                        await supabase
-                                            .from('shows')
-                                            .update({
-                                              'is_published': v,
-                                            })
-                                            .eq('id', widget.showId);
-
-                                        if (!mounted) return;
-                                        setState(() {
-                                          _saving = false;
-                                          _msg = v
-                                              ? 'Show published.'
-                                              : 'Show unpublished.';
-                                        });
-                                      } catch (e) {
-                                        if (!mounted) return;
-                                        setState(() {
-                                          _published = previous;
-                                          _saving = false;
-                                          _msg = 'Failed to update publish status: $e';
-                                        });
-                                      }
-                                    },
-                            ),
-                            const SizedBox(height: 12),
-                            SwitchListTile(
-                              contentPadding: EdgeInsets.zero,
-                              title: const Text('National Show'),
-                              subtitle: const Text(
-                                'Enables national show reporting rules, including Top 10 Breed reporting.',
-                              ),
-                              value: _isNationalShow,
-                              onChanged: (_saving || _isReadOnly || AppSession.isSupportMode)
-                                  ? null
-                                  : (v) => setState(() => _isNationalShow = v),
-                            ),
-                            const SizedBox(height: 12),
-                            DropdownButtonFormField<String>(
-                              value: _finalAwardMode,
-                              decoration: const InputDecoration(
-                                labelText: 'Final award format',
-                                border: OutlineInputBorder(),
-                              ),
-                              items: const [
-                                DropdownMenuItem(
-                                  value: 'four_six_bis',
-                                  child: Text(
-                                    'Best 4-Class / Best 6-Class / Best in Show',
-                                  ),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'bis_ris',
-                                  child: Text(
-                                    'Best in Show / Reserve in Show',
-                                  ),
-                                ),
-                              ],
-                              onChanged:
-                                  (_saving || _isReadOnly)
-                                      ? null
-                                      : (v) => setState(
-                                        () =>
-                                            _finalAwardMode =
-                                                v ?? 'four_six_bis',
+                                items: [
+                                  ..._clubs.map((club) {
+                                    return DropdownMenuItem<String>(
+                                      value: club['id'].toString(),
+                                      child: Text((club['name'] ?? 'Club').toString()),
+                                    );
+                                  }),
+                                  if (_canManageHostingClubs)
+                                    const DropdownMenuItem<String>(
+                                      value: _addClubActionValue,
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.add, size: 18),
+                                          SizedBox(width: 8),
+                                          Text('Add New Club'),
+                                        ],
                                       ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Current mode: ${_finalAwardModeLabel(_finalAwardMode)}',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                        ),
+                                    ),
+                                  if (_canSwitchHostingClub && _clubs.isNotEmpty)
+                                    const DropdownMenuItem<String>(
+                                      value: _manageClubsActionValue,
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.settings, size: 18),
+                                          SizedBox(width: 8),
+                                          Text('Manage Clubs'),
+                                        ],
+                                      ),
+                                    ),
+                                ],
+                                onChanged: (_saving || _isReadOnly || _loadingClubs || !_canManageHostingClubs)
+                                    ? null
+                                    : (value) async {
+                                        if (value == null) return;
+
+                                        if (value == _addClubActionValue) {
+                                          await _showAddClubDialog();
+                                          return;
+                                        }
+
+                                        if (value == _manageClubsActionValue) {
+                                          await _showManageClubsDialog();
+                                          return;
+                                        }
+
+                                        setState(() {
+                                          _selectedClubId = value;
+
+                                          final selected = _clubs.firstWhere(
+                                            (c) => c['id'].toString() == value,
+                                            orElse: () => <String, dynamic>{},
+                                          );
+
+                                          _selectedClubName = (selected['name'] ?? '').toString();
+                                        });
+                                      },
+                              ),
+                            ],
+                          ),
+
+                        if (_permissions.canManageShowSettings)
+                          _buildSectionCard(
+                            title: 'Show Date',
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      'Show Start: ${_startDate == null ? '(required)' : _fmtDate(_startDate)}',
+                                    ),
+                                  ),
+                                  TextButton(
+                                    onPressed: (_saving || _isReadOnly) ? null : _pickStartDate,
+                                    child: const Text('Pick'),
+                                  ),
+                                ],
+                              ),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      'Show End: ${_endDate == null ? '(required)' : _fmtDate(_endDate)}',
+                                    ),
+                                  ),
+                                  TextButton(
+                                    onPressed: (_saving || _isReadOnly) ? null : _pickEndDate,
+                                    child: const Text('Pick'),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        if (_permissions.canManageShowSettings)
+                          _buildSectionCard(
+                            title: 'Entry Window',
+                            subtitle:
+                                'Date and time for when exhibitors can begin and stop entering.',
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      'Entry open: ${_fmtDateTime(_entryOpenAt)}',
+                                    ),
+                                  ),
+                                  TextButton(
+                                    onPressed: (_saving || _isReadOnly) ? null : _pickEntryOpenAt,
+                                    child: const Text('Pick'),
+                                  ),
+                                  TextButton(
+                                    onPressed: (_saving || _isReadOnly) ? null : () => setState(() => _entryOpenAt = null),
+                                    child: const Text('Clear'),
+                                  ),
+                                ],
+                              ),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      'Entry close: ${_fmtDateTime(_entryCloseAt)}',
+                                    ),
+                                  ),
+                                  TextButton(
+                                    onPressed: (_saving || _isReadOnly) ? null : _pickEntryCloseAt,
+                                    child: const Text('Pick'),
+                                  ),
+                                  TextButton(
+                                    onPressed: (_saving || _isReadOnly) ? null : () => setState(() => _entryCloseAt = null),
+                                    child: const Text('Clear'),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Timezone: $_timezone',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
+                        if (_permissions.canManageShowSettings)
+                          _buildSectionCard(
+                            title: 'Publication & Awards',
+                            children: [
+                              SwitchListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: const Text('Published'),
+                                subtitle: const Text(
+                                  'Controls whether this show is published.',
+                                ),
+                                value: _published,
+                                onChanged: (_saving || _isReadOnly || AppSession.isSupportMode)
+                                    ? null
+                                    : (v) async {
+                                        final previous = _published;
+
+                                        setState(() {
+                                          _published = v;
+                                          _saving = true;
+                                          _msg = null;
+                                        });
+
+                                        try {
+                                          await supabase
+                                              .from('shows')
+                                              .update({
+                                                'is_published': v,
+                                              })
+                                              .eq('id', widget.showId);
+
+                                          if (!mounted) return;
+                                          setState(() {
+                                            _saving = false;
+                                            _msg = v
+                                                ? 'Show published.'
+                                                : 'Show unpublished.';
+                                          });
+                                        } catch (e) {
+                                          if (!mounted) return;
+                                          setState(() {
+                                            _published = previous;
+                                            _saving = false;
+                                            _msg = 'Failed to update publish status: $e';
+                                          });
+                                        }
+                                      },
+                              ),
+                              const SizedBox(height: 12),
+                              SwitchListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: const Text('National Show'),
+                                subtitle: const Text(
+                                  'Enables national show reporting rules, including Top 10 Breed reporting.',
+                                ),
+                                value: _isNationalShow,
+                                onChanged: (_saving || _isReadOnly || AppSession.isSupportMode)
+                                    ? null
+                                    : (v) => setState(() => _isNationalShow = v),
+                              ),
+                              const SizedBox(height: 12),
+                              DropdownButtonFormField<String>(
+                                value: _finalAwardMode,
+                                decoration: const InputDecoration(
+                                  labelText: 'Final award format',
+                                  border: OutlineInputBorder(),
+                                ),
+                                items: const [
+                                  DropdownMenuItem(
+                                    value: 'four_six_bis',
+                                    child: Text(
+                                      'Best 4-Class / Best 6-Class / Best in Show',
+                                    ),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 'bis_ris',
+                                    child: Text(
+                                      'Best in Show / Reserve in Show',
+                                    ),
+                                  ),
+                                ],
+                                onChanged:
+                                    (_saving || _isReadOnly)
+                                        ? null
+                                        : (v) => setState(
+                                          () =>
+                                              _finalAwardMode =
+                                                  v ?? 'four_six_bis',
+                                        ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Current mode: ${_finalAwardModeLabel(_finalAwardMode)}',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
 
                         _buildSectionCard(
                           title: 'Admin Operations (Pre-show)',
@@ -1418,168 +1459,167 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                               title: 'Judges',
                               subtitle:
                                   'Select judges available for staff assignment',
-                              onTap:
-                                  _saving
-                                      ? null
-                                      : () async {
-                                        final changed =
-                                            await ShowJudgesDialog.open(
-                                              context,
-                                              showId: widget.showId,
-                                              showName: _showNameForTitle,
-                                            );
-                                        if (changed == true && mounted) {
-                                          setState(
-                                            () => _msg = 'Judges updated.',
+                              onTap: (_saving || !_permissions.canManageJudges)
+                                  ? null
+                                  : () async {
+                                      final changed =
+                                          await ShowJudgesDialog.open(
+                                            context,
+                                            showId: widget.showId,
+                                            showName: _showNameForTitle,
                                           );
-                                        }
-                                      },
-                            ),
-                            _buildSettingsActionTile(
-                              icon: Icons.edit_note,
-                              title: 'Entry Management',
-                              subtitle:
-                                  'Search, edit, scratch, move class, add notes',
-                              onTap: (_saving || _isReadOnly) ? null : _openEntryManagement,
-                            ),
-                            _buildSettingsActionTile(
-                              icon: Icons.bar_chart,
-                              title: 'Breed Counts',
-                              subtitle: 'Totals by breed/show',
-                              onTap: (_saving || _isReadOnly) ? null : _openShowReports,
-                            ),
-                            _buildSettingsActionTile(
-                              icon: Icons.print,
-                              title: 'Print Packs',
-                              subtitle:
-                                  'Check-In Sheets, Control Sheets, Coop Tags, Comment Cards',
-                              onTap: (_saving || _isReadOnly) ? null : _openPrintPacks,
-                            ),
-                          ],
-                        ),
-
-                        _buildSectionCard(
-                          title: 'Post-Show Operations',
-                          children: [
-                            _buildSettingsActionTile(
-                              icon: Icons.fact_check,
-                              title: 'Results Entry',
-                              subtitle:
-                                  'Enter placements, DQs, and specials by class',
-                              onTap: (_saving || _isReadOnly) ? null : _openResultsEntry,
-                            ),
-//                            _buildSettingsActionTile(
-//                              icon: Icons.verified,
-//                              title: 'Results Validation',
-//                              subtitle:
-//                                  'Check for missing or inconsistent results before publishing',
-//                              onTap: (_saving || _isReadOnly) ? null : _openResultsValidation,
-//                            ),
-//                            _buildSettingsActionTile(
-//                              icon: Icons.public,
-//                              title: 'Publish Results',
-//                              subtitle:
-//                                  'Future: make finalized results visible to exhibitors and the public',
-//                              onTap: (_saving || _isReadOnly) ? null : _openPublishResultsFuture,
-//                            ),
-//                            _buildSettingsActionTile(
-//                              icon: Icons.request_quote,
-//                              title: 'Financial Closeout',
-//                              subtitle:
-//                                  'Future: finalize balances and reconcile show payments',
-//                              onTap:
-//                                  _saving ? null : _openFinancialCloseoutLater,
-//                            ),
-                            _buildSettingsActionTile(
-                              icon: Icons.archive,
-                              title: 'Close Show/Reports',
-                              subtitle:
-                                  'Finalize, send reports, and lock/download copy',
-                              onTap: _saving ? null : _openShowCloseout,
-                            ),
-                            _buildSettingsActionTile(
-                              icon: _isLocked ? Icons.lock_open : Icons.lock,
-                              title: _isLocked ? 'Unlock Show' : 'Lock Show',
-                              subtitle: _isFinalized
-                                  ? 'Finalized shows cannot be unlocked.'
-                                  : _isLocked
-                                      ? 'Allow setup changes again if corrections are needed'
-                                      : 'Prevent further setup changes before closeout',
-                              onTap: (_saving || _isFinalized || AppSession.isSupportMode) ? null : _toggleShowLock,
-                            ),
-                            if (_isLocked)
-                            _buildSettingsActionTile(
-                              icon: Icons.download_for_offline,
-                              title: 'Download Locked Show Data',
-                              subtitle: 'Download a ZIP backup of this show’s entries, results, settings, and reports',
-                              onTap: (_saving || AppSession.isSupportMode) ? null : _downloadLockedShowData,
-                            ),
-                          ],
-                        ),
-
-                        _buildSectionCard(
-                          title: 'Show Settings',
-                          children: [
-                            _buildSettingsActionTile(
-                              icon: Icons.pets,
-                              title: 'Breed Settings',
-                              subtitle:
-                                  'Manage allowed breeds and varieties for this show',
-                              onTap: (_saving || _isReadOnly) ? null : _openBreedSettings,
-                            ),
-                            _buildSettingsActionTile(
-                              icon: Icons.view_module,
-                              title: 'Modify Number of Shows',
-                              subtitle:
-                                  'Open A/B, Youth A/B, and setup',
-                              onTap:
-                                  (_saving || _isReadOnly)
-                                      ? null
-                                      : () async {
-                                        await ShowSectionsDialog.open(
-                                          context,
-                                          showId: widget.showId,
-                                          showName: _effectiveShowName(),
+                                      if (changed == true && mounted) {
+                                        setState(
+                                          () => _msg = 'Judges updated.',
                                         );
-
-                                        if (!mounted) return;
-                                        await _load();
-                                      },
+                                      }
+                                    },
                             ),
-                            _buildSettingsActionTile(
-                              icon: Icons.confirmation_number,
-                              title: 'Sanction Numbers',
-                              subtitle:
-                                  'Add or edit ARBA and breed/club sanction numbers',
-                              onTap: (_saving || _isReadOnly) ? null : _openSanctions,
-                            ),
-                            _buildSettingsActionTile(
-                              icon: Icons.attach_money,
-                              title: 'Show Fees & Payments',
-                              subtitle:
-                                  'Per-animal fees, discounts, day-of-show, and online payment setup',
-                              onTap: (_saving || _isReadOnly) ? null : _openFees,
-                            ),
-//                             _buildSettingsActionTile(
-//                               icon: Icons.rule,
-//                               title: 'Show Rules',
-//                               subtitle:
-//                                   'Validations like tattoo required, limits, and required fields',
-//                               onTap: (_saving || _isReadOnly) ? null : _openRules,
-//                             ),
+                            if (_permissions.canManageEntries)
+                              _buildSettingsActionTile(
+                                icon: Icons.edit_note,
+                                title: 'Entry Management',
+                                subtitle:
+                                    'Search, edit, scratch, move class, add notes',
+                                onTap: _saving ? null : _openEntryManagement,
+                              ),
+                            if (_permissions.canManageShow)
+                              _buildSettingsActionTile(
+                                icon: Icons.bar_chart,
+                                title: 'Breed Counts',
+                                subtitle: 'Totals by breed/show',
+                                onTap: _saving ? null : _openShowReports,
+                              ),
+                            if (_permissions.canManageShow)
+                              _buildSettingsActionTile(
+                                icon: Icons.print,
+                                title: 'Print Packs',
+                                subtitle:
+                                    'Check-In Sheets, Control Sheets, Coop Tags, Comment Cards',
+                                onTap: _saving ? null : _openPrintPacks,
+                              ),
                           ],
                         ),
+
+                        if (_permissions.canEnterResults ||
+                            _permissions.canFinalizeShow ||
+                            _permissions.canManageShowSettings)
+                          _buildSectionCard(
+                            title: 'Post-Show Operations',
+                            children: [
+                              if (_permissions.canEnterResults)
+                                _buildSettingsActionTile(
+                                  icon: Icons.fact_check,
+                                  title: 'Results Entry',
+                                  subtitle:
+                                      'Enter placements, DQs, and specials by class',
+                                  onTap: _saving ? null : _openResultsEntry,
+                                ),
+                              if (_permissions.canFinalizeShow)
+                                _buildSettingsActionTile(
+                                  icon: Icons.archive,
+                                  title: 'Close Show/Reports',
+                                  subtitle:
+                                      'Finalize, send reports, and lock/download copy',
+                                  onTap: _saving ? null : _openShowCloseout,
+                                ),
+                              if (_permissions.canManageShowSettings)
+                                _buildSettingsActionTile(
+                                  icon: _isLocked ? Icons.lock_open : Icons.lock,
+                                  title: _isLocked ? 'Unlock Show' : 'Lock Show',
+                                  subtitle: _isFinalized
+                                      ? 'Finalized shows cannot be unlocked.'
+                                      : _isLocked
+                                          ? 'Allow setup changes again if corrections are needed'
+                                          : 'Prevent further setup changes before closeout',
+                                  onTap: (_saving || _isFinalized || AppSession.isSupportMode)
+                                      ? null
+                                      : _toggleShowLock,
+                                ),
+                              if (_isLocked && _permissions.canManageShowSettings)
+                                _buildSettingsActionTile(
+                                  icon: Icons.download_for_offline,
+                                  title: 'Download Locked Show Data',
+                                  subtitle: 'Download a ZIP backup of this show’s entries, results, settings, and reports',
+                                  onTap: (_saving || AppSession.isSupportMode)
+                                      ? null
+                                      : _downloadLockedShowData,
+                                ),
+                            ],
+                          ),
+
+                        if (_permissions.canManageShowSettings)
+                          _buildSectionCard(
+                            title: 'Show Settings',
+                            children: [
+                              _buildSettingsActionTile(
+                                icon: Icons.pets,
+                                title: 'Breed Settings',
+                                subtitle:
+                                    'Manage allowed breeds and varieties for this show',
+                                onTap: (_saving || _isReadOnly) ? null : _openBreedSettings,
+                              ),
+                              _buildSettingsActionTile(
+                                icon: Icons.view_module,
+                                title: 'Modify Number of Shows',
+                                subtitle:
+                                    'Open A/B, Youth A/B, and setup',
+                                onTap:
+                                    (_saving || _isReadOnly)
+                                        ? null
+                                        : () async {
+                                          await ShowSectionsDialog.open(
+                                            context,
+                                            showId: widget.showId,
+                                            showName: _effectiveShowName(),
+                                          );
+
+                                          if (!mounted) return;
+                                          await _load();
+                                        },
+                              ),
+                              _buildSettingsActionTile(
+                                icon: Icons.confirmation_number,
+                                title: 'Sanction Numbers',
+                                subtitle:
+                                    'Add or edit ARBA and breed/club sanction numbers',
+                                onTap: (_saving || _isReadOnly) ? null : _openSanctions,
+                              ),
+                              _buildSettingsActionTile(
+                                icon: Icons.attach_money,
+                                title: 'Show Fees & Payments',
+                                subtitle:
+                                    'Per-animal fees, discounts, day-of-show, and online payment setup',
+                                onTap: (_saving || _isReadOnly) ? null : _openFees,
+                              ),
+                              if (_permissions.canManageShowSettings)
+                                _buildSettingsActionTile(
+                                  icon: Icons.manage_accounts,
+                                  title: 'Role Assignments',
+                                  subtitle: 'Assign Show Superintendent, and Other Staff Roles',
+                                  onTap: (_saving || _isReadOnly) ? null : _openRoleAssignments,
+                                ),
+//                               _buildSettingsActionTile(
+//                                 icon: Icons.rule,
+//                                 title: 'Show Rules',
+//                                 subtitle:
+//                                     'Validations like tattoo required, limits, and required fields',
+//                                 onTap: (_saving || _isReadOnly) ? null : _openRules,
+//                               ),
+                            ],
+                          ),
 
                         const SizedBox(height: 8),
 
-                        FilledButton(
-                          style: FilledButton.styleFrom(
-                            backgroundColor: const Color(0xFFD4A623),
-                            padding: const EdgeInsets.symmetric(vertical: 16),
+                        if (_permissions.canManageShowSettings)
+                          FilledButton(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: const Color(0xFFD4A623),
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                            ),
+                            onPressed: (_saving || _isReadOnly) ? null : _save,
+                            child: Text(_saving ? 'Saving…' : 'Save Changes'),
                           ),
-                          onPressed: (_saving || _isReadOnly) ? null : _save,
-                          child: Text(_saving ? 'Saving…' : 'Save Changes'),
-                        ),
                       ],
                     ),
                   ),

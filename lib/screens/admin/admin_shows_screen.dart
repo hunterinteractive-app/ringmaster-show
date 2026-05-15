@@ -92,16 +92,22 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
       'is_locked,locked_at,finalized_at',
     );
 
-    final allowedShowIds = <String>{...widget.allowedShowIds};
+    final allowedShowIds = <String>{};
 
     if (!isSuperAdmin) {
-      try {
-        final adminRows = await supabase
-            .from('show_admins')
-            .select('show_id')
-            .eq('user_id', userId);
 
-        for (final raw in (adminRows as List)) {
+      try {
+        final roleRows = await supabase
+            .from('role_assignments')
+            .select('show_id, role')
+            .eq('user_id', userId)
+            .inFilter('role', const [
+              'admin',
+              'reporting_clerk',
+              'superintendent',
+            ]);
+
+        for (final raw in (roleRows as List)) {
           final row = Map<String, dynamic>.from(raw as Map);
           final showId = row['show_id']?.toString();
           if (showId != null && showId.isNotEmpty) {
@@ -109,7 +115,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
           }
         }
       } catch (_) {
-        // Keep using widget.allowedShowIds if the direct lookup fails.
+        // No role-based show secretary access found.
       }
     }
 
@@ -490,7 +496,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
                                   SizedBox(width: AppSpacing.md),
                                   Expanded(
                                     child: Text(
-                                      'Support Mode — Admin shows are read-only. Creating shows is disabled.',
+                                      'Support Mode — Show Secretary tools are read-only. Creating shows is disabled.',
                                       style: TextStyle(
                                         fontWeight: FontWeight.w700,
                                       ),
@@ -517,10 +523,9 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
                           if (page?.hasAdminAccess != true)
                             const Expanded(
                               child: RMEmptyState(
-                                title: 'No admin access yet',
-                                subtitle:
-                                    'You do not currently have admin access to any shows.',
-                                icon: Icons.admin_panel_settings_outlined,
+                                title: 'No show secretary access yet',
+                                subtitle: 'You do not currently have access to manage any shows.',
+                                icon: Icons.assignment_ind_outlined,
                               ),
                             )
                           else if ((page?.shows ?? []).isEmpty)
@@ -724,7 +729,7 @@ class _AdminShowsAppBar extends StatelessWidget implements PreferredSizeWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  demoMode ? 'Demo Secretary View' : 'Admin Shows',
+                  demoMode ? 'Demo Secretary View' : 'Show Secretary',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
