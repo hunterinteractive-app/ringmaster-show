@@ -1793,15 +1793,17 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
   String? _msg;
   Map<String, dynamic>? _showRow;
 
-  Future<void> _loadShowContact() async {
-    final row = await supabase
-        .from('shows')
-        .select('id, secretary_name, secretary_phone, secretary_email')
-        .eq('id', widget.showId)
-        .single();
+    Future<void> _loadShowContact() async {
+      final row = await supabase
+          .from('shows')
+          .select(
+            'id, secretary_name, secretary_phone, secretary_email, contact_name, contact_phone, contact_email',
+          )
+          .eq('id', widget.showId)
+          .maybeSingle();
 
-    _showRow = row as Map<String, dynamic>;
-  }
+      _showRow = (row as Map<String, dynamic>?) ?? <String, dynamic>{};
+    }
 
   Future<List<Map<String, dynamic>>> _fetchEntries() async {
     final rows = await supabase.rpc(
@@ -1844,6 +1846,7 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
         .replaceAll(RegExp(r'^_|_$'), '');
   }
 
+  // Loads show secretary/contact details before building each check-in sheet PDF.
   Future<Uint8List> _buildPdfBytesForEntries(
     List<Map<String, dynamic>> entries,
   ) async {
@@ -2258,9 +2261,15 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
       String s2(Map<String, dynamic>? m, String k) =>
           (m == null) ? '' : (m[k] ?? '').toString().trim();
 
-      final name = s2(_showRow, 'secretary_name');
-      final phone = s2(_showRow, 'secretary_phone');
-      final email = s2(_showRow, 'secretary_email');
+      final name = s2(_showRow, 'secretary_name').isNotEmpty
+          ? s2(_showRow, 'secretary_name')
+          : s2(_showRow, 'contact_name');
+      final phone = s2(_showRow, 'secretary_phone').isNotEmpty
+          ? s2(_showRow, 'secretary_phone')
+          : s2(_showRow, 'contact_phone');
+      final email = s2(_showRow, 'secretary_email').isNotEmpty
+          ? s2(_showRow, 'secretary_email')
+          : s2(_showRow, 'contact_email');
 
       final lines = <pw.Widget>[
         pw.Text(
@@ -2273,10 +2282,10 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
         lines.add(pw.Text(name, style: pw.TextStyle(fontSize: 9)));
       }
       if (phone.isNotEmpty) {
-        lines.add(pw.Text(phone, style: pw.TextStyle(fontSize: 9)));
+        lines.add(pw.Text('Phone: $phone', style: pw.TextStyle(fontSize: 9)));
       }
       if (email.isNotEmpty) {
-        lines.add(pw.Text(email, style: pw.TextStyle(fontSize: 9)));
+        lines.add(pw.Text('Email: $email', style: pw.TextStyle(fontSize: 9)));
       }
 
       if (lines.length == 1) {
