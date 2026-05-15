@@ -1284,8 +1284,8 @@ class _ControlSheetsGeneratorSheetState
         required String ageSpecial,
         required bool isFurOrWool,
       }) {
-        final h = pw.TextStyle(fontSize: _scaled(8), fontWeight: pw.FontWeight.bold);
-        final c = pw.TextStyle(fontSize: _scaled(7.5));
+        final h = pw.TextStyle(fontSize: _scaled(13), fontWeight: pw.FontWeight.bold);
+        final c = pw.TextStyle(fontSize: _scaled(12.5), fontWeight: pw.FontWeight.bold);
         final specialsText = specialsList.join(', ');
         final specialsHeader = ageSpecial.isNotEmpty
             ? 'Specials\n$ageSpecial'
