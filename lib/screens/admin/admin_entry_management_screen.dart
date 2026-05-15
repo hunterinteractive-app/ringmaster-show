@@ -6,6 +6,7 @@ import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/services/show_lock_service.dart';
 import 'package:ringmaster_show/services/app_session.dart';
+import 'package:ringmaster_show/widgets/animal_editor/open_animal_editor_dialog.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -227,6 +228,37 @@ class _AdminEntryManagementScreenState
       setState(() => _msg = 'Entry editing is disabled while viewing in support mode.');
       return;
     }
+
+    final animalId = (entry['animal_id'] ?? '').toString().trim();
+
+    // Saved animals should use the same shared editor as My Animals so the
+    // breed / variety / class / sex dropdown behavior stays consistent.
+    if (animalId.isNotEmpty) {
+      final existingAnimal = <String, dynamic>{
+        'id': animalId,
+        'species': entry['species'],
+        'name': entry['animal_name'],
+        'tattoo': entry['tattoo'],
+        'breed': entry['breed'],
+        'variety': entry['variety'],
+        'sex': entry['sex'],
+      };
+
+      final saved = await openAnimalEditorDialog(
+        context,
+        existing: existingAnimal,
+      );
+
+      if (saved == true) {
+        await _loadEntries();
+        if (!mounted) return;
+        setState(() => _msg = 'Animal updated.');
+      }
+      return;
+    }
+
+    // Local/show-only entries do not exist in the animals table, so they still
+    // use the entry editor for the entry snapshot fields.
     final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -328,6 +360,7 @@ class _AdminEntryManagementScreenState
 
     final successMessages = {
       'Entry updated.',
+      'Animal updated.',
       'Scratched.',
       'Unscratched.',
       'Animal moved.',
@@ -707,6 +740,247 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
   late final TextEditingController _furNotes;
   late final TextEditingController _furVariety;
 
+  String _species = 'rabbit';
+  String? _breedId;
+  String? _sexValue;
+  String? _classValue;
+  String? _furVarietyValue;
+
+  List<Map<String, dynamic>> _breedOptions = [];
+  List<Map<String, dynamic>> _varietyOptions = [];
+
+  bool _loadingBreeds = false;
+  bool _loadingVarieties = false;
+  bool _isLopBreedName(String breedName) {
+    return breedName.trim().toLowerCase().endsWith('lop');
+  }
+
+  List<String> get _sexOptions =>
+      _species == 'rabbit' ? const ['Buck', 'Doe'] : const ['Boar', 'Sow'];
+
+  Future<void> _loadBreedsForSpecies({String? initialBreedName}) async {
+    if (!mounted) return;
+    setState(() => _loadingBreeds = true);
+
+    try {
+      final globalBreedsRes = await supabase
+          .from('breeds')
+          .select('id,name,species,is_active')
+          .eq('species', _species)
+          .eq('is_active', true)
+          .order('name');
+
+      final globalBreeds =
+          (globalBreedsRes as List).cast<Map<String, dynamic>>();
+
+      final showId = (widget.entry['show_id'] ?? '').toString();
+      final showBreedRes = await supabase
+          .from('show_breeds')
+          .select('breed_id,is_enabled')
+          .eq('show_id', showId);
+
+      final showBreedRows =
+          (showBreedRes as List).cast<Map<String, dynamic>>();
+
+      final showBreedMap = <String, bool>{};
+      for (final row in showBreedRows) {
+        final breedId = (row['breed_id'] ?? '').toString();
+        if (breedId.isEmpty) continue;
+        showBreedMap[breedId] = row['is_enabled'] == true;
+      }
+
+      final effective = globalBreeds.where((b) {
+        final id = (b['id'] ?? '').toString();
+
+        if (showBreedMap.containsKey(id)) {
+          return showBreedMap[id] == true;
+        }
+
+        return true;
+      }).toList()
+        ..sort(
+          (a, b) => (a['name'] ?? '')
+              .toString()
+              .toLowerCase()
+              .compareTo((b['name'] ?? '').toString().toLowerCase()),
+        );
+
+      final currentBreedName = (initialBreedName ?? _breed.text).trim().toLowerCase();
+      final matchedBreed = effective.firstWhere(
+        (b) => (b['name'] ?? '').toString().trim().toLowerCase() == currentBreedName,
+        orElse: () => <String, dynamic>{},
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _breedOptions = effective;
+        _loadingBreeds = false;
+        _breedId = matchedBreed.isEmpty ? null : matchedBreed['id']?.toString();
+      });
+
+      if (_breedId != null && _breedId!.isNotEmpty) {
+        await _loadVarietiesForBreed(_breedId!, initialVarietyName: _variety.text);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadingBreeds = false;
+        _msg = 'Failed to load breeds: $e';
+      });
+    }
+  }
+
+  Future<void> _loadVarietiesForBreed(
+    String breedId, {
+    String? initialVarietyName,
+  }) async {
+    if (!mounted) return;
+    setState(() {
+      _loadingVarieties = true;
+      _varietyOptions = [];
+    });
+
+    try {
+      final matchedBreed = _breedOptions.firstWhere(
+        (b) => (b['id'] ?? '').toString() == breedId,
+        orElse: () => <String, dynamic>{},
+      );
+
+      final breedName = (matchedBreed['name'] ?? '').toString().trim();
+
+      if (_isLopBreedName(breedName)) {
+        const lopOptions = [
+          {'id': 'lop_broken', 'name': 'Broken'},
+          {'id': 'lop_solid', 'name': 'Solid'},
+        ];
+
+        final currentVariety =
+            (initialVarietyName ?? _variety.text).trim().toLowerCase();
+        final matchedVariety = lopOptions.firstWhere(
+          (v) => (v['name'] ?? '').toString().trim().toLowerCase() == currentVariety,
+          orElse: () => <String, String>{},
+        );
+
+        if (!mounted) return;
+        setState(() {
+          _loadingVarieties = false;
+          _varietyOptions = lopOptions;
+          if (matchedVariety.isNotEmpty) {
+            _variety.text = (matchedVariety['name'] ?? '').toString();
+          } else if (lopOptions.length == 1) {
+            _variety.text = (lopOptions.first['name'] ?? '').toString();
+          } else {
+            _variety.clear();
+          }
+        });
+        return;
+      }
+
+      final globalVarietiesRes = await supabase
+          .from('varieties')
+          .select('id,name,breed_id,is_active')
+          .eq('breed_id', breedId)
+          .eq('is_active', true)
+          .order('name');
+
+      final globalVarieties =
+          (globalVarietiesRes as List).cast<Map<String, dynamic>>();
+
+      final showId = (widget.entry['show_id'] ?? '').toString();
+      final showVarietiesRes = await supabase
+          .from('show_varieties')
+          .select('id,variety_id,custom_name,is_enabled')
+          .eq('show_id', showId)
+          .eq('breed_id', breedId);
+
+      final showVarietyRows =
+          (showVarietiesRes as List).cast<Map<String, dynamic>>();
+
+      final showVarietyByGlobalId = <String, Map<String, dynamic>>{};
+      final customRows = <Map<String, dynamic>>[];
+
+      for (final row in showVarietyRows) {
+        final varietyId = row['variety_id']?.toString();
+        final customName = (row['custom_name'] ?? '').toString().trim();
+
+        if (varietyId != null && varietyId.isNotEmpty) {
+          showVarietyByGlobalId[varietyId] = row;
+        } else if (customName.isNotEmpty) {
+          customRows.add(row);
+        }
+      }
+
+      final effective = <Map<String, dynamic>>[];
+
+      for (final global in globalVarieties) {
+        final globalId = (global['id'] ?? '').toString();
+        if (globalId.isEmpty) continue;
+
+        final override = showVarietyByGlobalId[globalId];
+
+        if (override != null) {
+          if (override['is_enabled'] == true) {
+            effective.add({
+              'id': globalId,
+              'name': (global['name'] ?? '').toString(),
+            });
+          }
+        } else {
+          effective.add({
+            'id': globalId,
+            'name': (global['name'] ?? '').toString(),
+          });
+        }
+      }
+
+      for (final row in customRows) {
+        if (row['is_enabled'] == true) {
+          final customName = (row['custom_name'] ?? '').toString().trim();
+          if (customName.isNotEmpty) {
+            effective.add({
+              'id': 'custom_$customName',
+              'name': customName,
+            });
+          }
+        }
+      }
+
+      effective.sort(
+        (a, b) => (a['name'] ?? '')
+            .toString()
+            .toLowerCase()
+            .compareTo((b['name'] ?? '').toString().toLowerCase()),
+      );
+
+      final currentVariety =
+          (initialVarietyName ?? _variety.text).trim().toLowerCase();
+      final matchedVariety = effective.firstWhere(
+        (v) => (v['name'] ?? '').toString().trim().toLowerCase() == currentVariety,
+        orElse: () => <String, dynamic>{},
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _varietyOptions = effective;
+        _loadingVarieties = false;
+
+        if (matchedVariety.isNotEmpty) {
+          _variety.text = (matchedVariety['name'] ?? '').toString();
+        } else if (effective.length == 1) {
+          _variety.text = (effective.first['name'] ?? '').toString();
+        } else {
+          _variety.clear();
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadingVarieties = false;
+        _msg = 'Failed to load varieties: $e';
+      });
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -732,6 +1006,26 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
     _furVariety = TextEditingController(
       text: (widget.entry['fur_variety'] ?? '').toString(),
     );
+
+    _species = (widget.entry['species'] ?? 'rabbit').toString().trim().toLowerCase();
+    if (_species != 'cavy') _species = 'rabbit';
+
+    final initialSex = _sex.text.trim();
+    _sexValue = _sexOptions.contains(initialSex) ? initialSex : _sexOptions.first;
+    _sex.text = _sexValue ?? '';
+
+    final initialClass = _className.text.trim();
+    const classOptions = ['Senior', 'Intermediate', 'Junior', 'Pre-Junior'];
+    _classValue = classOptions.contains(initialClass) ? initialClass : null;
+
+    final initialFurVariety = _furVariety.text.trim();
+    _furVarietyValue = ['White', 'Colored'].contains(initialFurVariety)
+        ? initialFurVariety
+        : null;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _loadBreedsForSpecies(initialBreedName: _breed.text);
+    });
   }
 
   @override
@@ -774,13 +1068,16 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
             : _tattoo.text.trim().toUpperCase(),
         'breed': _breed.text.trim().isEmpty ? null : _breed.text.trim(),
         'variety': _variety.text.trim().isEmpty ? null : _variety.text.trim(),
-        'sex': _sex.text.trim().isEmpty ? null : _sex.text.trim(),
-        'class_name':
-            _className.text.trim().isEmpty ? null : _className.text.trim(),
+        'sex': _sexValue == null || _sexValue!.trim().isEmpty
+            ? null
+            : _sexValue!.trim(),
+        'class_name': _classValue == null || _classValue!.trim().isEmpty
+            ? null
+            : _classValue!.trim(),
         'notes': _notes.text.trim().isEmpty ? null : _notes.text.trim(),
         'is_fur': _isFur,
-        'fur_variety': _isFur && _furVariety.text.trim().isNotEmpty
-            ? _furVariety.text.trim()
+        'fur_variety': _isFur && (_furVarietyValue?.trim().isNotEmpty == true)
+            ? _furVarietyValue!.trim()
             : null,
         'fur_notes': _isFur && _furNotes.text.trim().isNotEmpty
             ? _furNotes.text.trim()
@@ -853,40 +1150,114 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
               ),
             ),
             const SizedBox(height: 10),
-            TextField(
-              controller: _breed,
-              enabled: !_saving && !AppSession.isSupportMode,
+            if (_loadingBreeds) const LinearProgressIndicator(),
+            DropdownButtonFormField<String>(
+              value: _breedId,
               decoration: const InputDecoration(
                 labelText: 'Breed',
                 border: OutlineInputBorder(),
               ),
+              items: _breedOptions
+                  .map(
+                    (b) => DropdownMenuItem<String>(
+                      value: (b['id'] ?? '').toString(),
+                      child: Text((b['name'] ?? '').toString()),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (_saving || AppSession.isSupportMode)
+                  ? null
+                  : (value) async {
+                      final selected = _breedOptions.firstWhere(
+                        (b) => (b['id'] ?? '').toString() == value,
+                        orElse: () => <String, dynamic>{},
+                      );
+
+                      setState(() {
+                        _breedId = value;
+                        _breed.text = (selected['name'] ?? '').toString();
+                        _variety.clear();
+                        _varietyOptions = [];
+                        _msg = null;
+                      });
+
+                      if (value != null && value.isNotEmpty) {
+                        await _loadVarietiesForBreed(value);
+                      }
+                    },
             ),
             const SizedBox(height: 10),
-            TextField(
-              controller: _variety,
-              enabled: !_saving && !AppSession.isSupportMode,
+            if (_breedId != null && _loadingVarieties) const LinearProgressIndicator(),
+            DropdownButtonFormField<String>(
+              value: _variety.text.trim().isEmpty ? null : _variety.text.trim(),
               decoration: const InputDecoration(
                 labelText: 'Variety',
                 border: OutlineInputBorder(),
               ),
+              items: _varietyOptions
+                  .map(
+                    (v) => DropdownMenuItem<String>(
+                      value: (v['name'] ?? '').toString(),
+                      child: Text((v['name'] ?? '').toString()),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (_saving || AppSession.isSupportMode || _breedId == null)
+                  ? null
+                  : (value) {
+                      setState(() {
+                        _variety.text = value ?? '';
+                        _msg = null;
+                      });
+                    },
             ),
             const SizedBox(height: 10),
-            TextField(
-              controller: _sex,
-              enabled: !_saving && !AppSession.isSupportMode,
-              decoration: const InputDecoration(
-                labelText: 'Sex',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _className,
-              enabled: !_saving && !AppSession.isSupportMode,
+            DropdownButtonFormField<String>(
+              value: _classValue,
               decoration: const InputDecoration(
                 labelText: 'Class',
                 border: OutlineInputBorder(),
               ),
+              items: const [
+                DropdownMenuItem(value: 'Senior', child: Text('Senior')),
+                DropdownMenuItem(value: 'Intermediate', child: Text('Intermediate')),
+                DropdownMenuItem(value: 'Junior', child: Text('Junior')),
+                DropdownMenuItem(value: 'Pre-Junior', child: Text('Pre-Junior')),
+              ],
+              onChanged: (_saving || AppSession.isSupportMode)
+                  ? null
+                  : (value) {
+                      setState(() {
+                        _classValue = value ?? '';
+                        _className.text = _classValue ?? '';
+                        _msg = null;
+                      });
+                    },
+            ),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              value: _sexValue,
+              decoration: const InputDecoration(
+                labelText: 'Sex',
+                border: OutlineInputBorder(),
+              ),
+              items: _sexOptions
+                  .map(
+                    (sex) => DropdownMenuItem<String>(
+                      value: sex,
+                      child: Text(sex),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (_saving || AppSession.isSupportMode)
+                  ? null
+                  : (value) {
+                      setState(() {
+                        _sexValue = value;
+                        _sex.text = value ?? '';
+                        _msg = null;
+                      });
+                    },
             ),
             const SizedBox(height: 10),
             SwitchListTile(
@@ -897,12 +1268,18 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
                   ? null
                   : (v) => setState(() {
                         _isFur = v;
+                        if (!v) {
+                          _furVarietyValue = null;
+                          _furVariety.clear();
+                          _furNotes.clear();
+                        }
+                        _msg = null;
                       }),
             ),
             if (_isFur) ...[
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
-                value: _furVariety.text.trim().isEmpty ? null : _furVariety.text.trim(),
+                value: _furVarietyValue,
                 decoration: const InputDecoration(
                   labelText: 'Fur / Wool Class',
                   border: OutlineInputBorder(),
@@ -915,7 +1292,9 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
                     ? null
                     : (value) {
                         setState(() {
+                          _furVarietyValue = value;
                           _furVariety.text = value ?? '';
+                          _msg = null;
                         });
                       },
               ),
