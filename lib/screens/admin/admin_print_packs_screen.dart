@@ -2194,7 +2194,7 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
       );
     }
 
-    pw.Widget _balanceBox({required String allShows, required String thisShow}) {
+    pw.Widget _balanceBox({required String allShows}) {
       return pw.Container(
         padding: const pw.EdgeInsets.all(6),
         child: pw.Column(
@@ -2210,15 +2210,11 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
             ),
             pw.SizedBox(height: 6),
             pw.Text(
-              'All Shows: $allShows',
-              style:
-                  pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
-            ),
-            pw.SizedBox(height: 2),
-            pw.Text(
-              'This Show: $thisShow',
-              style:
-                  pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
+              allShows,
+              style: pw.TextStyle(
+                fontSize: 11,
+                fontWeight: pw.FontWeight.bold,
+              ),
             ),
           ],
         ),
@@ -2312,7 +2308,7 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
             ),
             pw.SizedBox(height: 2),
             pw.Text(
-              '»  Fur column: B = entered in breed fur, C = entered in commercial fur.',
+              '»  Fur column: X = entered in fur.',
               style: pw.TextStyle(fontSize: 9),
             ),
             pw.SizedBox(height: 2),
@@ -2389,15 +2385,15 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
                   : c;
 
               final ageClass = _displayAgeClassOnly(_safe(e, 'class_name'));
+              final furMark = e['is_fur'] == true ? 'X' : '';
 
               return pw.TableRow(
                 children: [
                   pw.Padding(
                     padding: const pw.EdgeInsets.all(6),
-                    child: pw.Text(
-                      _safe(e, 'animal_name').isNotEmpty
-                          ? _safe(e, 'animal_name')
-                          : _safe(e, 'tattoo'),
+                    child: 
+                    pw.Text(
+                      _safe(e, 'tattoo'),
                       style: style,
                     ),
                   ),
@@ -2423,7 +2419,10 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
                   ),
                   pw.Padding(
                     padding: const pw.EdgeInsets.all(6),
-                    child: pw.Text('', style: style),
+                    child: pw.Text(
+                      furMark,
+                      style: style,
+                    ),
                   ),
                 ],
               );
@@ -2495,7 +2494,7 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
               pw.Row(
                 children: [
                   pw.Spacer(),
-                  _balanceBox(allShows: allShows, thisShow: thisShow),
+                  _balanceBox(allShows: allShows),
                 ],
               ),
             );
