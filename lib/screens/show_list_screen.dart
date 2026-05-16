@@ -50,6 +50,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
   String _searchQuery = '';
   String _sortMode = 'date';
   String _stateFilter = 'All';
+  bool _showSearchFilters = true;
   bool _checkingLegal = true;
   bool _canAccessAdmin = false;
   bool _loadingAdminAccess = true;
@@ -976,11 +977,10 @@ class _ShowListScreenState extends State<ShowListScreen> {
                       final horizontalPadding =
                           isMobile ? AppSpacing.md : AppSpacing.lg;
 
-                      return Column(
-                        children: [
-                          Flexible(
-                            fit: FlexFit.loose,
-                            child: SingleChildScrollView(
+                      return SingleChildScrollView(
+                        child: Column(
+                          children: [
+                            Padding(
                               padding: EdgeInsets.fromLTRB(
                                 horizontalPadding,
                                 0,
@@ -991,92 +991,107 @@ class _ShowListScreenState extends State<ShowListScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    TextField(
-                                      controller: _searchController,
-                                      decoration: InputDecoration(
-                                        labelText: 'Search shows',
-                                        hintText: isMobile
-                                            ? 'Search name, location, state, date'
-                                            : 'Search by show name, location, state, or date',
-                                        prefixIcon: const Icon(Icons.search),
-                                        suffixIcon: _searchQuery.isEmpty
-                                            ? null
-                                            : IconButton(
-                                                icon: const Icon(Icons.clear),
-                                                onPressed: () {
-                                                  setState(() {
-                                                    _searchController.clear();
-                                                    _searchQuery = '';
-                                                  });
-                                                },
-                                              ),
-                                        border: const OutlineInputBorder(),
-                                      ),
-                                      onChanged: (value) {
-                                        setState(() {
-                                          _searchQuery = value;
-                                        });
-                                      },
-                                    ),
-                                    const SizedBox(height: AppSpacing.md),
-                                    Wrap(
-                                      spacing: AppSpacing.md,
-                                      runSpacing: AppSpacing.md,
+                                    Row(
                                       children: [
-                                        SizedBox(
-                                          width: isMobile ? double.infinity : 220,
-                                          child: DropdownButtonFormField<String>(
-                                            value: _sortMode,
-                                            decoration: const InputDecoration(
-                                              labelText: 'Sort by',
-                                              border: OutlineInputBorder(),
-                                            ),
-                                            items: const [
-                                              DropdownMenuItem(
-                                                value: 'date',
-                                                child: Text('Show Date'),
-                                              ),
-                                              DropdownMenuItem(
-                                                value: 'state',
-                                                child: Text('State'),
-                                              ),
-                                            ],
-                                            onChanged: (value) {
-                                              if (value == null) return;
-                                              setState(() {
-                                                _sortMode = value;
-                                              });
-                                            },
+                                        Expanded(
+                                          child: Text(
+                                            'Search Shows',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .titleSmall
+                                                ?.copyWith(fontWeight: FontWeight.w700),
                                           ),
                                         ),
-                                        SizedBox(
-                                          width: isMobile ? double.infinity : 220,
-                                          child: DropdownButtonFormField<String>(
-                                            value: stateOptions.contains(_stateFilter)
-                                                ? _stateFilter
-                                                : 'All',
-                                            decoration: const InputDecoration(
-                                              labelText: 'Filter by State',
-                                              border: OutlineInputBorder(),
-                                            ),
-                                            items: stateOptions
-                                                .map(
-                                                  (state) => DropdownMenuItem<String>(
-                                                    value: state,
-                                                    child: Text(state),
-                                                  ),
-                                                )
-                                                .toList(),
-                                            onChanged: (value) {
-                                              if (value == null) return;
-                                              setState(() {
-                                                _stateFilter = value;
-                                              });
-                                            },
+                                        TextButton.icon(
+                                          onPressed: () {
+                                            setState(() {
+                                              _showSearchFilters = !_showSearchFilters;
+                                            });
+                                          },
+                                          icon: Icon(
+                                            _showSearchFilters
+                                                ? Icons.expand_less
+                                                : Icons.expand_more,
                                           ),
+                                          label: Text(_showSearchFilters ? 'Hide' : 'Show'),
                                         ),
                                       ],
                                     ),
+                                    if (_showSearchFilters) ...[
+                                      const SizedBox(height: AppSpacing.sm),
+                                      TextField(
+                                        controller: _searchController,
+                                        decoration: InputDecoration(
+                                          labelText: 'Search shows',
+                                          prefixIcon: const Icon(Icons.search),
+                                          border: const OutlineInputBorder(),
+                                        ),
+                                        onChanged: (value) {
+                                          setState(() {
+                                            _searchQuery = value;
+                                          });
+                                        },
+                                      ),
+                                      const SizedBox(height: AppSpacing.md),
+                                      Wrap(
+                                        spacing: AppSpacing.md,
+                                        runSpacing: AppSpacing.md,
+                                        children: [
+                                          SizedBox(
+                                            width: isMobile ? double.infinity : 220,
+                                            child: DropdownButtonFormField<String>(
+                                              value: _sortMode,
+                                              decoration: const InputDecoration(
+                                                labelText: 'Sort by',
+                                                border: OutlineInputBorder(),
+                                              ),
+                                              items: const [
+                                                DropdownMenuItem(
+                                                  value: 'date',
+                                                  child: Text('Show Date'),
+                                                ),
+                                                DropdownMenuItem(
+                                                  value: 'state',
+                                                  child: Text('State'),
+                                                ),
+                                              ],
+                                              onChanged: (value) {
+                                                if (value == null) return;
+                                                setState(() {
+                                                  _sortMode = value;
+                                                });
+                                              },
+                                            ),
+                                          ),
+                                          SizedBox(
+                                            width: isMobile ? double.infinity : 220,
+                                            child: DropdownButtonFormField<String>(
+                                              value: stateOptions.contains(_stateFilter)
+                                                  ? _stateFilter
+                                                  : 'All',
+                                              decoration: const InputDecoration(
+                                                labelText: 'Filter by State',
+                                                border: OutlineInputBorder(),
+                                              ),
+                                              items: stateOptions
+                                                  .map(
+                                                    (state) => DropdownMenuItem<String>(
+                                                      value: state,
+                                                      child: Text(state),
+                                                    ),
+                                                  )
+                                                  .toList(),
+                                              onChanged: (value) {
+                                                if (value == null) return;
+                                                setState(() {
+                                                  _stateFilter = value;
+                                                });
+                                              },
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
                                     const SizedBox(height: AppSpacing.sm),
                                     Text(
                                       '${shows.length} show${shows.length == 1 ? '' : 's'} found',
@@ -1089,232 +1104,59 @@ class _ShowListScreenState extends State<ShowListScreen> {
                                 ),
                               ),
                             ),
-                          ),
-                          Expanded(
-                            child: shows.isEmpty
-                                ? Center(
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(AppSpacing.xl),
-                                      child: Text(
-                                        'No shows match your current search or filters.',
-                                        style: Theme.of(context).textTheme.bodyMedium,
-                                        textAlign: TextAlign.center,
-                                      ),
+                            ListView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              padding: EdgeInsets.fromLTRB(
+                                horizontalPadding,
+                                0,
+                                horizontalPadding,
+                                AppSpacing.xl,
+                              ),
+                              itemCount: shows.length,
+                              itemBuilder: (context, i) {
+                                final s = shows[i];
+                                final showId = s['id'].toString();
+                                final showName = (s['name'] ?? '').toString();
+                                final location = (s['location_name'] ?? '').toString();
+
+                                final formattedStartDate =
+                                    formatLocalDateTime(s['start_date']?.toString());
+
+                                final entryDeadlineText =
+                                    formatLocalDateTime(s['entry_close_at']?.toString());
+
+                                final deadlinePassed = s['entry_close_at'] != null &&
+                                    DateTime.parse(s['entry_close_at'].toString())
+                                        .toLocal()
+                                        .isBefore(DateTime.now());
+
+                                final isAdminForShow = !widget.demoMode &&
+                                    (bundle.isSuperAdmin ||
+                                        bundle.adminShowIds.contains(showId));
+
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                                  child: RMCard(
+                                    onTap: () => _openEnterShow(context, showId, showName),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(showName,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .titleMedium
+                                                ?.copyWith(fontWeight: FontWeight.w700)),
+                                        const SizedBox(height: AppSpacing.sm),
+                                        Text('$formattedStartDate • $location'),
+                                      ],
                                     ),
-                                  )
-                                : ListView.builder(
-                                    padding: EdgeInsets.fromLTRB(
-                                      horizontalPadding,
-                                      0,
-                                      horizontalPadding,
-                                      AppSpacing.xl,
-                                    ),
-                                    itemCount: shows.length,
-                                    itemBuilder: (context, i) {
-                                      final s = shows[i];
-                                      final showId = s['id'].toString();
-                                      final showName =
-                                          (s['name'] ?? '').toString();
-                                      final location =
-                                          (s['location_name'] ?? '').toString();
-
-                                      final formattedStartDate =
-                                          formatLocalDateTime(
-                                        s['start_date']?.toString(),
-                                      );
-
-                                      final entryDeadlineText =
-                                          formatLocalDateTime(
-                                        s['entry_close_at']?.toString(),
-                                      );
-
-                                      final deadlinePassed =
-                                          s['entry_close_at'] != null &&
-                                              DateTime.parse(
-                                                s['entry_close_at'].toString(),
-                                              )
-                                                  .toLocal()
-                                                  .isBefore(DateTime.now());
-
-                                      final isAdminForShow =
-                                          !widget.demoMode &&
-                                              (bundle.isSuperAdmin ||
-                                                  bundle.adminShowIds
-                                                      .contains(showId));
-
-                                      return Padding(
-                                        padding: const EdgeInsets.only(
-                                          bottom: AppSpacing.md,
-                                        ),
-                                        child: RMCard(
-                                          onTap: () => _openEnterShow(
-                                            context,
-                                            showId,
-                                            showName,
-                                          ),
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Row(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Expanded(
-                                                    child: Text(
-                                                      showName,
-                                                      style: Theme.of(context)
-                                                          .textTheme
-                                                          .titleMedium
-                                                          ?.copyWith(
-                                                            fontWeight:
-                                                                FontWeight.w700,
-                                                          ),
-                                                    ),
-                                                  ),
-                                                  PopupMenuButton<String>(
-                                                    tooltip: 'Show Details',
-                                                    onSelected: (v) {
-                                                      if (v == 'enter') {
-                                                        _openEnterShow(
-                                                          context,
-                                                          showId,
-                                                          showName,
-                                                        );
-                                                      } else if (v ==
-                                                          'breed_counts') {
-                                                        _openBreedCounts(
-                                                          context,
-                                                          showId,
-                                                          showName,
-                                                        );
-                                                      } else if (v ==
-                                                          'payment_info') {
-                                                        _showPaymentInfo(
-                                                          context,
-                                                          showId,
-                                                          showName,
-                                                        );
-                                                      } else if (v == 'admin') {
-                                                        _openEditShow(
-                                                          context,
-                                                          showId,
-                                                        );
-                                                      }
-                                                    },
-                                                    itemBuilder: (_) => [
-                                                      const PopupMenuItem(
-                                                        value: 'enter',
-                                                        child: ListTile(
-                                                          leading:
-                                                              Icon(Icons.login),
-                                                          title:
-                                                              Text('Enter Show'),
-                                                          contentPadding:
-                                                              EdgeInsets.zero,
-                                                        ),
-                                                      ),
-                                                      const PopupMenuItem(
-                                                        value: 'breed_counts',
-                                                        child: ListTile(
-                                                          leading: Icon(
-                                                            Icons.bar_chart,
-                                                          ),
-                                                          title: Text(
-                                                            'Breed Counts',
-                                                          ),
-                                                          contentPadding:
-                                                              EdgeInsets.zero,
-                                                        ),
-                                                      ),
-                                                      const PopupMenuItem(
-                                                        value: 'payment_info',
-                                                        child: ListTile(
-                                                          leading: Icon(
-                                                            Icons
-                                                                .payments_outlined,
-                                                          ),
-                                                          title: Text(
-                                                            'Payment Info',
-                                                          ),
-                                                          contentPadding:
-                                                              EdgeInsets.zero,
-                                                        ),
-                                                      ),
-                                                      if (isAdminForShow)
-                                                        const PopupMenuItem(
-                                                          value: 'admin',
-                                                          child: ListTile(
-                                                            leading: Icon(
-                                                              Icons
-                                                                  .admin_panel_settings,
-                                                            ),
-                                                            title: Text(
-                                                              'Admin Settings',
-                                                            ),
-                                                            contentPadding:
-                                                                EdgeInsets.zero,
-                                                          ),
-                                                        ),
-                                                    ],
-                                                    child: IgnorePointer(
-                                                      child: OutlinedButton.icon(
-                                                        onPressed: () {},
-                                                        icon: const Icon(
-                                                          Icons
-                                                              .build_circle_outlined,
-                                                        ),
-                                                        label: const Text(
-                                                          'Show Details',
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                              const SizedBox(
-                                                height: AppSpacing.sm,
-                                              ),
-                                              Text(
-                                                '$formattedStartDate • $location',
-                                                style: Theme.of(context)
-                                                    .textTheme
-                                                    .bodySmall
-                                                    ?.copyWith(
-                                                      color: AppColors.muted,
-                                                    ),
-                                              ),
-                                              const SizedBox(
-                                                height: AppSpacing.md,
-                                              ),
-                                              Wrap(
-                                                spacing: AppSpacing.sm,
-                                                runSpacing: AppSpacing.sm,
-                                                children: [
-                                                  RMBadge(
-                                                    text: deadlinePassed
-                                                        ? 'Entry Closed'
-                                                        : 'Entry Deadline: $entryDeadlineText',
-                                                    icon: Icons.event_available,
-                                                    danger: deadlinePassed,
-                                                    success: !deadlinePassed,
-                                                  ),
-                                                  if (isAdminForShow)
-                                                    const RMBadge(
-                                                      text: 'Admin Access',
-                                                      icon: Icons
-                                                          .admin_panel_settings,
-                                                    ),
-                                                ],
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      );
-                                    },
                                   ),
-                          ),
-                        ],
+                                );
+                              },
+                            ),
+                          ],
+                        ),
                       );
                     },
                   );
