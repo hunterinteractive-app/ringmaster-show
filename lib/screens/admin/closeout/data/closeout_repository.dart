@@ -132,22 +132,47 @@ class CloseoutRepository {
   Future<List<Map<String, dynamic>>> loadEntriesForBalanceReport(
     String showId,
   ) async {
-    final rows = await _selectAll(
-      'entries',
-      'id,exhibitor_id,animal_id,section_id,status,'
-          'scratched_at,is_disqualified,is_test',
-      filterColumn: 'show_id',
-      filterValue: showId,
-    );
+    const pageSize = 1000;
+    final allRows = <Map<String, dynamic>>[];
 
-    return rows.where((row) {
+    for (var from = 0;; from += pageSize) {
+      final to = from + pageSize - 1;
+      final rows = await supabase
+          .rpc(
+            'report_checkin_entries',
+            params: {
+              'p_show_id': showId,
+              'p_section_id': null,
+              'p_include_scratched': false,
+            },
+          )
+          .range(from, to);
+
+      final batch = List<Map<String, dynamic>>.from(rows);
+      allRows.addAll(batch);
+
+      if (batch.length < pageSize) break;
+    }
+
+    return allRows.map((row) {
+      final mapped = Map<String, dynamic>.from(row);
+
+      // The check-in RPC uses entry_id. The unpaid balance builder expects id.
+      mapped['id'] ??= mapped['entry_id'];
+
+      // Keep these defaults so the existing balance-report filters/calculations
+      // can safely consume the RPC rows.
+      mapped['status'] ??= 'submitted';
+      mapped['is_test'] ??= false;
+      mapped['is_disqualified'] ??= false;
+
+      return mapped;
+    }).where((row) {
       final status = (row['status'] ?? '').toString().trim().toLowerCase();
       final isTest = row['is_test'] == true;
       final scratchedAt = row['scratched_at'];
 
-      return !isTest &&
-          scratchedAt == null &&
-          status != 'scratched';
+      return !isTest && scratchedAt == null && status != 'scratched';
     }).toList();
   }
 
@@ -156,13 +181,21 @@ class CloseoutRepository {
   ) async {
     if (exhibitorIds.isEmpty) return [];
 
-    final rows = await supabase
-        .from('exhibitors')
-        .select(
-          'id,showing_name,display_name,first_name,last_name,phone,type',
-        )
-        .inFilter('id', exhibitorIds);
+    final allRows = <Map<String, dynamic>>[];
+    const chunkSize = 500;
 
-    return List<Map<String, dynamic>>.from(rows);
+    for (var i = 0; i < exhibitorIds.length; i += chunkSize) {
+      final chunk = exhibitorIds.skip(i).take(chunkSize).toList();
+      final rows = await supabase
+          .from('exhibitors')
+          .select(
+            'id,showing_name,display_name,first_name,last_name,phone,type',
+          )
+          .inFilter('id', chunk);
+
+      allRows.addAll(List<Map<String, dynamic>>.from(rows));
+    }
+
+    return allRows;
   }
 }

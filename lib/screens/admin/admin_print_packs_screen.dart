@@ -1810,16 +1810,35 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
   }
 
     Future<List<Map<String, dynamic>>> _fetchEntries() async {
-      final rows = await supabase.rpc(
-        'report_checkin_entries',
-        params: {
-          'p_show_id': widget.showId,
-          'p_section_id': widget.combineSections ? null : widget.sectionId,
-          'p_include_scratched': widget.includeScratched,
-        },
-      );
+      const pageSize = 1000;
+      final list = <Map<String, dynamic>>[];
 
-      final list = (rows as List).cast<Map<String, dynamic>>();
+      for (var from = 0;; from += pageSize) {
+        final to = from + pageSize - 1;
+        final rows = await supabase
+            .rpc(
+              'report_checkin_entries',
+              params: {
+                'p_show_id': widget.showId,
+                'p_section_id': widget.combineSections ? null : widget.sectionId,
+                'p_include_scratched': widget.includeScratched,
+              },
+            )
+            .range(from, to);
+
+        final page = (rows as List).cast<Map<String, dynamic>>();
+        list.addAll(page);
+
+        if (page.length < pageSize) break;
+      }
+
+      assert(() {
+        debugPrint('CHECK-IN FETCHED ROWS: ${list.length}');
+        debugPrint(
+          'CHECK-IN SPENCER ROWS: ${list.where((e) => _safe(e, 'exhibitor_label').toLowerCase().contains('spencer baitz')).length}',
+        );
+        return true;
+      }());
 
       int toInt(dynamic value, [int fallback = 9999]) {
         if (value == null) return fallback;
@@ -1894,6 +1913,26 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
     if (n == null) return r'$—';
     return '\$${n.toStringAsFixed(2)}';
   }
+
+    String _checkInBalanceDue(List<Map<String, dynamic>> entries) {
+      if (entries.isEmpty) return r'$—';
+
+      for (final e in entries) {
+        final allShows = e['balance_due_all_shows'];
+        if (allShows != null && allShows.toString().trim().isNotEmpty) {
+          return _money(allShows);
+        }
+      }
+
+      for (final e in entries) {
+        final thisShow = e['balance_due_this_show'];
+        if (thisShow != null && thisShow.toString().trim().isNotEmpty) {
+          return _money(thisShow);
+        }
+      }
+
+      return r'$—';
+    }
     
   String _emailForExhibitor(List<Map<String, dynamic>> entries) {
     for (final e in entries) {
@@ -2045,9 +2084,24 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
       List<Map<String, dynamic>> entries) {
     final map = <String, List<Map<String, dynamic>>>{};
 
-    for (final e in entries) {
-      final exId = (e['exhibitor_id'] ?? '').toString();
-      final key = exId.isEmpty ? '_unknown' : exId;
+    for (var i = 0; i < entries.length; i++) {
+      final e = entries[i];
+      final exId = (e['exhibitor_id'] ?? '').toString().trim();
+      final exhibitorLabel = _safe(e, 'exhibitor_label').toLowerCase();
+      final exhibitorEmail = _safe(e, 'exhibitor_email').toLowerCase();
+      final exhibitorPhone = _safe(e, 'exhibitor_phone').toLowerCase();
+
+      // Prefer the database exhibitor_id. If it is ever missing, fall back to
+      // a stable exhibitor-specific key instead of grouping all unknowns together.
+      final key = exId.isNotEmpty
+          ? exId
+          : [
+              exhibitorLabel.isEmpty ? 'unknown_exhibitor' : exhibitorLabel,
+              exhibitorEmail,
+              exhibitorPhone,
+              i.toString(),
+            ].join('|');
+
       map.putIfAbsent(key, () => <Map<String, dynamic>>[]);
       map[key]!.add(e);
     }
@@ -2515,8 +2569,7 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
       final exMap = exEntries.first;
       final exName = _exhibitorNameFromEntry(exMap);
       final numberEntered = exEntries.length;
-      final balanceDue = _money(exMap['balance_due_this_show']);
-      final thisShow = _money(exMap['balance_due_this_show']);
+      final balanceDue = _checkInBalanceDue(exEntries);
       final multi = _isMultiSection(exEntries);
 
       doc.addPage(

@@ -234,27 +234,40 @@ class _AdminEntryManagementScreenState
     // Saved animals should use the same shared editor as My Animals so the
     // breed / variety / class / sex dropdown behavior stays consistent.
     if (animalId.isNotEmpty) {
-      final existingAnimal = <String, dynamic>{
-        'id': animalId,
-        'species': entry['species'],
-        'name': entry['animal_name'],
-        'tattoo': entry['tattoo'],
-        'breed': entry['breed'],
-        'variety': entry['variety'],
-        'sex': entry['sex'],
-      };
+      try {
+        final animalRow = await supabase
+            .from('animals')
+            .select(
+              'id,owner_user_id,species,name,tattoo,breed,variety,sex,birth_date,is_dob_unknown,created_at,updated_at',
+            )
+            .eq('id', animalId)
+            .maybeSingle();
 
-      final saved = await openAnimalEditorDialog(
-        context,
-        existing: existingAnimal,
-      );
-
-      if (saved == true) {
-        await _loadEntries();
         if (!mounted) return;
-        setState(() => _msg = 'Animal updated.');
+
+        if (animalRow == null) {
+          setState(() {
+            _msg = 'Could not find the saved animal record. Opened entry editor instead.';
+          });
+        } else {
+          final saved = await openAnimalEditorDialog(
+            context,
+            existing: Map<String, dynamic>.from(animalRow as Map),
+          );
+
+          if (saved == true) {
+            await _loadEntries();
+            if (!mounted) return;
+            setState(() => _msg = 'Animal updated.');
+          }
+          return;
+        }
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _msg = 'Could not load the saved animal record. Opened entry editor instead.';
+        });
       }
-      return;
     }
 
     // Local/show-only entries do not exist in the animals table, so they still
