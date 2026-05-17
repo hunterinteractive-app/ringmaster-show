@@ -194,9 +194,19 @@ class _LoginScreenState extends State<LoginScreen>
 
     try {
       if (hasTokenHash) {
+        final typeParam = uri.queryParameters['type']?.trim();
+
+        final otpType = switch (typeParam) {
+          'signup' => OtpType.signup,
+          'magiclink' => OtpType.magiclink,
+          'recovery' => OtpType.recovery,
+          'email_change' => OtpType.emailChange,
+          _ => OtpType.email,
+        };
+
         await supabase.auth.verifyOTP(
           tokenHash: tokenHash!.trim(),
-          type: OtpType.magiclink,
+          type: otpType,
         );
       } else {
         await supabase.auth.exchangeCodeForSession(code!.trim());
