@@ -2248,23 +2248,40 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
           className.startsWith('commercial fur - ');
     }
 
-    Map<String, List<Map<String, dynamic>>> _groupByVariety() {
-      final out = <String, List<Map<String, dynamic>>>{};
+  Map<String, List<Map<String, dynamic>>> _groupByVariety() {
+    final out = <String, List<Map<String, dynamic>>>{};
 
-      for (final e in _entries) {
-        final key = _isFurOrWoolEntry(e)
-            ? 'Fur / Wool'
-            : (() {
-                final variety = (e['variety'] ?? '').toString().trim();
-                return variety.isEmpty ? '(Unknown Variety)' : variety;
-              })();
+    // If the RPC returns both the original entry row and a generated Fur/Wool row
+    // for the same entry_id, keep only the Fur/Wool row in this screen.
+    final furOrWoolEntryIds = _entries
+        .where(_isFurOrWoolEntry)
+        .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
+        .where((id) => id.isNotEmpty)
+        .toSet();
 
-        out.putIfAbsent(key, () => <Map<String, dynamic>>[]);
-        out[key]!.add(e);
+    for (final e in _entries) {
+      final entryId = (e['entry_id'] ?? e['id'] ?? '').toString().trim();
+      final isFurOrWool = _isFurOrWoolEntry(e);
+
+      // Prevent the normal/base row for a fur/wool entry from also appearing
+      // under its regular variety.
+      if (!isFurOrWool && entryId.isNotEmpty && furOrWoolEntryIds.contains(entryId)) {
+        continue;
       }
 
-      return out;
+      final key = isFurOrWool
+          ? 'Fur / Wool'
+          : (() {
+              final variety = (e['variety'] ?? '').toString().trim();
+              return variety.isEmpty ? '(Unknown Variety)' : variety;
+            })();
+
+      out.putIfAbsent(key, () => <Map<String, dynamic>>[]);
+      out[key]!.add(e);
     }
+
+    return out;
+  }
 
   String _judgeNameById(String? judgeId) {
     if (judgeId == null || judgeId.isEmpty) return '';
