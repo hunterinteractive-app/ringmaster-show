@@ -18,6 +18,7 @@ import 'show_sections_dialog.dart';
 import 'show_judges_dialog.dart';
 import '../../widgets/rm_timezone_notice_banner.dart';
 import '../../services/show_permissions_service.dart';
+import '../../services/stripe_connect_service.dart';
 
 // ✅ Admin Operations (Pre-show) screens
 import 'admin_entry_management_screen.dart';
@@ -48,6 +49,8 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   ShowPermissions _permissions = ShowPermissions.none;
   bool _saving = false;
   String? _msg;
+  bool _loadingStripeStatus = false;
+  Map<String, dynamic>? _stripeStatus;
 
   final _name = TextEditingController();
   final _location = TextEditingController();
@@ -556,6 +559,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
       _selectedClubName = show['club_name']?.toString();
 
       await _loadClubs();
+      await _loadStripeStatus(showErrorInBanner: false);
 
       if (!mounted) return;
       setState(() => _loading = false);
@@ -564,6 +568,55 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
       setState(() {
         _loading = false;
         _msg = 'Load failed: $e';
+      });
+    }
+  }
+
+  Future<void> _loadStripeStatus({bool showErrorInBanner = true}) async {
+    if (mounted) {
+      setState(() => _loadingStripeStatus = true);
+    }
+
+    try {
+      final status = await StripeConnectService.getAccountStatus(widget.showId);
+
+      if (!mounted) return;
+      setState(() {
+        _stripeStatus = status;
+        _loadingStripeStatus = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadingStripeStatus = false;
+        if (showErrorInBanner) {
+          _msg = 'Stripe status check failed: $e';
+        }
+      });
+    }
+  }
+
+  Future<void> _refreshStripeStatusFromBanner() async {
+    if (mounted) {
+      setState(() {
+        _loadingStripeStatus = true;
+        _msg = null;
+      });
+    }
+
+    try {
+      await StripeConnectService.refreshAccountStatus(widget.showId);
+      await _loadStripeStatus(showErrorInBanner: true);
+
+      if (!mounted) return;
+      setState(() {
+        _msg = 'Stripe status refreshed.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadingStripeStatus = false;
+        _msg = 'Stripe status refresh failed: $e';
       });
     }
   }
@@ -1038,6 +1091,180 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
     );
   }
 
+  bool _stripeReadyForPayments() {
+    if (_stripeStatus == null) return true;
+
+    final status =
+        (_stripeStatus?['status'] ?? '').toString().toLowerCase().trim();
+    if (status == 'not_connected' || status.isEmpty) return true;
+
+    final chargesEnabled = _stripeStatus?['charges_enabled'] == true;
+    final payoutsEnabled = _stripeStatus?['payouts_enabled'] == true;
+    final detailsSubmitted = _stripeStatus?['details_submitted'] == true;
+    final cardPaymentsActive = _stripeStatus?['card_payments_active'] == true;
+    final disabledReason =
+        (_stripeStatus?['disabled_reason'] ?? '').toString().trim();
+
+    return status == 'ready' &&
+        chargesEnabled &&
+        payoutsEnabled &&
+        detailsSubmitted &&
+        cardPaymentsActive &&
+        disabledReason.isEmpty;
+  }
+
+  Widget _buildStripeAdminWarningBanner() {
+    if (_loadingStripeStatus) {
+      return Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.black.withOpacity(.05)),
+        ),
+        child: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Checking Stripe account status…',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            SizedBox(height: 8),
+            LinearProgressIndicator(),
+          ],
+        ),
+      );
+    }
+
+    if (_stripeStatus == null || _stripeReadyForPayments()) {
+      return const SizedBox.shrink();
+    }
+
+    final status = (_stripeStatus?['status'] ?? 'not_connected').toString();
+    final showPaymentAccount =
+        _stripeStatus?['show_payment_account'] as Map<String, dynamic>?;
+    final connectedAccountId =
+        (showPaymentAccount?['provider_account_id'] ??
+                showPaymentAccount?['stripe_account_id'] ??
+                '')
+            .toString()
+            .trim();
+
+    if (connectedAccountId.isEmpty || status == 'not_connected') {
+      return const SizedBox.shrink();
+    }
+
+    final chargesEnabled = _stripeStatus?['charges_enabled'] == true;
+    final payoutsEnabled = _stripeStatus?['payouts_enabled'] == true;
+    final detailsSubmitted = _stripeStatus?['details_submitted'] == true;
+    final cardPaymentsActive = _stripeStatus?['card_payments_active'] == true;
+    final disabledReason =
+        (_stripeStatus?['disabled_reason'] ?? '').toString().trim();
+
+    final requirements =
+        (_stripeStatus?['requirements'] as Map<String, dynamic>?) ?? {};
+    final currentlyDue =
+        (requirements['currently_due'] as List?)?.cast<dynamic>() ?? const [];
+    final pastDue =
+        (requirements['past_due'] as List?)?.cast<dynamic>() ?? const [];
+    final pendingVerification =
+        (requirements['pending_verification'] as List?)?.cast<dynamic>() ??
+            const [];
+
+    final issues = <String>[];
+    if (!chargesEnabled) issues.add('charges are not enabled');
+    if (!payoutsEnabled) issues.add('payouts are not enabled');
+    if (!detailsSubmitted) issues.add('details are incomplete');
+    if (!cardPaymentsActive) issues.add('card payments are not active');
+    if (disabledReason.isNotEmpty) issues.add(disabledReason);
+    if (currentlyDue.isNotEmpty) {
+      issues.add(
+        '${currentlyDue.length} Stripe requirement${currentlyDue.length == 1 ? '' : 's'} currently due',
+      );
+    }
+    if (pastDue.isNotEmpty) {
+      issues.add(
+        '${pastDue.length} Stripe requirement${pastDue.length == 1 ? '' : 's'} past due',
+      );
+    }
+    if (pendingVerification.isNotEmpty) {
+      issues.add(
+        '${pendingVerification.length} Stripe item${pendingVerification.length == 1 ? '' : 's'} pending verification',
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.orange.withOpacity(.10),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.orange.withOpacity(.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.orange.shade900),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Stripe account needs attention',
+                      style: TextStyle(
+                        color: Colors.orange.shade900,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Online payments may not work for exhibitors until this is resolved. Open Show Fees & Payments, continue Stripe setup if needed, then refresh the status.',
+                      style: TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (issues.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              'Current issue${issues.length == 1 ? '' : 's'}: ${issues.join(', ')}.',
+              style: const TextStyle(fontSize: 13),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              FilledButton.icon(
+                onPressed: (_saving || _isReadOnly) ? null : _openFees,
+                icon: const Icon(Icons.attach_money),
+                label: const Text('Open Show Fees & Payments'),
+              ),
+              OutlinedButton.icon(
+                onPressed: (_saving || _isReadOnly || _loadingStripeStatus)
+                    ? null
+                    : _refreshStripeStatusFromBanner,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Refresh Stripe Status'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1122,6 +1349,8 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                       children: [
                         const RMTimezoneNoticeBanner(),
                         _buildStatusBanner(),
+                        if (_permissions.canManageShowSettings)
+                          _buildStripeAdminWarningBanner(),
                         if (AppSession.isSupportMode)
                           Container(
                             width: double.infinity,
