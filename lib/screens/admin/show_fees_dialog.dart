@@ -356,7 +356,28 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
   }
 
   Future<void> _refreshStripeStatus() async {
-    await _loadStripeStatus(showErrorInBanner: true);
+    if (mounted) {
+      setState(() {
+        _loadingStripeStatus = true;
+        _msg = null;
+      });
+    }
+
+    try {
+      await StripeConnectService.refreshAccountStatus(widget.showId);
+      await _loadStripeStatus(showErrorInBanner: true);
+
+      if (!mounted) return;
+      setState(() {
+        _msg = 'Stripe status refreshed from Stripe.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadingStripeStatus = false;
+        _msg = 'Stripe status refresh failed: $e';
+      });
+    }
   }
 
   Future<void> _save() async {

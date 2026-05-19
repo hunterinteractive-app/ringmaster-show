@@ -98,6 +98,35 @@ class StripeConnectService {
     return data;
   }
 
+  static Future<Map<String, dynamic>> refreshAccountStatus(
+    String showId,
+  ) async {
+    final user = _supabase.auth.currentUser;
+    if (user == null) {
+      throw Exception('Not signed in.');
+    }
+
+    final response = await _supabase.functions.invoke(
+      'stripe-connect-account-status',
+      body: {
+        'show_id': showId,
+      },
+    );
+
+    final data = _normalizeMap(response.data);
+
+    if (response.status < 200 || response.status >= 300) {
+      throw Exception(
+        _extractBestError(
+          data,
+          fallback: 'Failed to refresh Stripe account status.',
+        ),
+      );
+    }
+
+    return data;
+  }
+
   // ============================================================
   // 🔐 LOGIN LINK (STRIPE DASHBOARD ACCESS)
   // ============================================================
