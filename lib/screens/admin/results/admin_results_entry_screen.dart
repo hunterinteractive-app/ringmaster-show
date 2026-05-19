@@ -5135,7 +5135,11 @@ if (storedJudgeId.isEmpty) {
         widget.entry['updated_at'] = now;
         widget.entry['_awards'] = <String>[];
       } else {
-        final awardsToSave = _selectedAwards.toList();
+        final awardsToSave = _selectedAwards
+            .map(_canonicalAwardCode)
+            .where((award) => award.trim().isNotEmpty)
+            .toSet()
+            .toList();
 
         final updated = await supabase.rpc(
           'save_results_entry',
@@ -5389,8 +5393,9 @@ if (storedJudgeId.isEmpty) {
               ),
               const SizedBox(height: 8),
               ..._visibleAwardCodes.map((award) {
+                final awardCode = _canonicalAwardCode(award);
                 final allowed = _canUseAward(award);
-                final checked = _selectedAwards.contains(award);
+                final checked = _selectedAwards.contains(awardCode);
 
                 return CheckboxListTile(
                   dense: true,
@@ -5408,13 +5413,14 @@ if (storedJudgeId.isEmpty) {
 
                             if (v == true) {
                               for (final other in pair) {
-                                if (other != award) {
-                                  _selectedAwards.remove(other);
+                                final otherCode = _canonicalAwardCode(other);
+                                if (otherCode != awardCode) {
+                                  _selectedAwards.remove(otherCode);
                                 }
                               }
-                              _selectedAwards.add(award);
+                              _selectedAwards.add(awardCode);
                             } else {
-                              _selectedAwards.remove(award);
+                              _selectedAwards.remove(awardCode);
                             }
                           });
                         },
