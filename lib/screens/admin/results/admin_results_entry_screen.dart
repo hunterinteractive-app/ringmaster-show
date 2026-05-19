@@ -56,6 +56,13 @@ const Map<String, String> cavyAwardLabels = {
   'HM': 'Honorable Mention',
 };
 
+bool _isFurEntry(Map<String, dynamic> row) {
+  final value = row['is_fur'];
+  if (value is bool) return value;
+  final text = (value ?? '').toString().trim().toLowerCase();
+  return text == 'true' || text == 't' || text == '1' || text == 'yes';
+}
+
 bool _isCavyEntry(Map<String, dynamic> row) {
   final species = (row['species'] ?? '').toString().trim().toLowerCase();
   if (species == 'cavy') return true;
@@ -432,13 +439,16 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
         }).toList();
       }
 
+      final targetIsFur = _isFurEntry(targetEntry);
+
       working = working.where((e) {
         return _classSexLabelFromEntry(e).toLowerCase() ==
-            issue.classSexLabel.toLowerCase();
+                issue.classSexLabel.toLowerCase() &&
+            _isFurEntry(e) == targetIsFur;
       }).toList();
 
       if (working.isEmpty) {
-        working = breedEntries;
+        working = breedEntries.where((e) => _isFurEntry(e) == targetIsFur).toList();
       }
 
       final targetSectionId =
@@ -459,17 +469,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
             breed: issue.breed,
             variety: issue.variety ?? '',
             classSexLabel: issue.classSexLabel,
-            isFurOrWoolClass: working.any((e) {
-              final rawClass = (e['class_name'] ?? '').toString().toLowerCase();
-              final rawGroup = (e['group_name'] ?? '').toString().toLowerCase();
-              final rawVariety = (e['variety'] ?? '').toString().toLowerCase();
-              return rawClass.contains('fur') ||
-                  rawClass.contains('wool') ||
-                  rawGroup.contains('fur') ||
-                  rawGroup.contains('wool') ||
-                  rawVariety.contains('fur') ||
-                  rawVariety.contains('wool');
-            }),
+            isFurOrWoolClass: working.any(_isFurEntry),
             entries: working,
             judges: _judges,
             onBulkJudgeApply: (entries, judgeId) async {
@@ -691,13 +691,16 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
         }).toList();
       }
 
+      final targetIsFur = _isFurEntry(target);
+
       working = working.where((e) {
         return _classSexLabelFromEntry(e).toLowerCase() ==
-            classSexLabel.toLowerCase();
+                classSexLabel.toLowerCase() &&
+            _isFurEntry(e) == targetIsFur;
       }).toList();
 
       if (working.isEmpty) {
-        working = breedEntries;
+        working = breedEntries.where((e) => _isFurEntry(e) == targetIsFur).toList();
       }
 
       final targetSectionId = (target['section_id'] ?? '').toString().trim();
@@ -717,17 +720,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
             breed: breed,
             variety: issueVariety,
             classSexLabel: classSexLabel,
-            isFurOrWoolClass: working.any((e) {
-              final rawClass = (e['class_name'] ?? '').toString().toLowerCase();
-              final rawGroup = (e['group_name'] ?? '').toString().toLowerCase();
-              final rawVariety = (e['variety'] ?? '').toString().toLowerCase();
-              return rawClass.contains('fur') ||
-                  rawClass.contains('wool') ||
-                  rawGroup.contains('fur') ||
-                  rawGroup.contains('wool') ||
-                  rawVariety.contains('fur') ||
-                  rawVariety.contains('wool');
-            }),
+            isFurOrWoolClass: working.any(_isFurEntry),
             entries: working,
             judges: _judges,
             onBulkJudgeApply: (entries, judgeId) async {
@@ -943,22 +936,22 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
       required Map<String, dynamic> entry,
       Map<String, dynamic>? conflictsWith,
     }) {
-    return _ValidationIssue(
-      code: code,
-      title: title,
-      message: message,
-      entry: entry,
-      conflictsWith: conflictsWith,
-      breed: (entry['breed'] ?? '').toString().trim(),
-      groupName: (entry['group_name'] ?? '').toString().trim().isEmpty
-          ? null
-          : (entry['group_name'] ?? '').toString().trim(),
-      variety: (entry['variety'] ?? '').toString().trim().isEmpty
-          ? null
-          : (entry['variety'] ?? '').toString().trim(),
-      classSexLabel: _classSexLabelFromEntry(entry),
-    );
-  }
+      return _ValidationIssue(
+        code: code,
+        title: title,
+        message: message,
+        entry: entry,
+        conflictsWith: conflictsWith,
+        breed: (entry['breed'] ?? '').toString().trim(),
+        groupName: (entry['group_name'] ?? '').toString().trim().isEmpty
+            ? null
+            : (entry['group_name'] ?? '').toString().trim(),
+        variety: (entry['variety'] ?? '').toString().trim().isEmpty
+            ? null
+            : (entry['variety'] ?? '').toString().trim(),
+        classSexLabel: _classSexLabelFromEntry(entry),
+      );
+    }
 
   bool isEligibleForAwards(Map<String, dynamic> e) {
     final scratched = (e['scratched_at'] ?? '').toString().trim().isNotEmpty;
@@ -1027,6 +1020,8 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
   final awardBuckets = <String, List<Map<String, dynamic>>>{};
 
   for (final e in _entries) {
+    if (_isFurEntry(e)) continue;
+
     final entryAwards = awards(e);
 
     final placement = (e['placement'] ?? '').toString().trim();
@@ -1128,6 +1123,8 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     final oppByScope = <String, Map<String, dynamic>>{};
 
     for (final e in _entries) {
+      if (_isFurEntry(e)) continue;
+
       final a = awards(e);
       final scope = scopeKey(e);
       if (a.contains(winCode)) winByScope[scope] = e;
@@ -1176,6 +1173,8 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
   );
 
   for (final e in _entries) {
+    if (_isFurEntry(e)) continue;
+
     final a = awards(e);
     final breedLower = breed(e).toLowerCase();
     final byGroup = showsByGroup(e);
@@ -2212,16 +2211,7 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
   }
 
     bool _isFurOrWoolEntry(Map<String, dynamic> e) {
-      final className = (e['class_name'] ?? '').toString().trim().toLowerCase();
-      final variety = (e['variety'] ?? '').toString().trim().toLowerCase();
-      final groupName = (e['group_name'] ?? '').toString().trim().toLowerCase();
-
-      return className.contains('fur') ||
-          className.contains('wool') ||
-          variety.contains('fur') ||
-          variety.contains('wool') ||
-          groupName.contains('fur') ||
-          groupName.contains('wool');
+      return _isFurEntry(e);
     }
 
     Map<String, List<Map<String, dynamic>>> _groupByVariety() {
@@ -2665,16 +2655,7 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
   }
 
   bool _isFurOrWoolEntry(Map<String, dynamic> e) {
-    final rawClass = (e['class_name'] ?? '').toString().trim().toLowerCase();
-    final rawGroup = (e['group_name'] ?? '').toString().trim().toLowerCase();
-    final rawVariety = (e['variety'] ?? '').toString().trim().toLowerCase();
-
-    return rawClass.contains('fur') ||
-        rawClass.contains('wool') ||
-        rawGroup.contains('fur') ||
-        rawGroup.contains('wool') ||
-        rawVariety.contains('fur') ||
-        rawVariety.contains('wool');
+    return _isFurEntry(e);
   }
 
     String _furWoolBucketLabel(Map<String, dynamic> e) {
@@ -2789,10 +2770,7 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
           breed: widget.breed,
           variety: widget.variety,
           classSexLabel: label,
-          isFurOrWoolClass: label.toLowerCase().startsWith('fur') ||
-              label.toLowerCase().startsWith('commercial fur') ||
-              label.toLowerCase().startsWith('wool') ||
-              label.toLowerCase().startsWith('fur/wool'),
+          isFurOrWoolClass: classEntries.any(_isFurEntry),
           entries: classEntries,
           judges: widget.judges,
           onBulkJudgeApply: _applyJudgeToEntries,
@@ -2828,6 +2806,15 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
         final aFirst = aRows.isEmpty ? <String, dynamic>{} : aRows.first;
         final bFirst = bRows.isEmpty ? <String, dynamic>{} : bRows.first;
 
+        final aIsFur = aRows.any(_isFurEntry);
+        final bIsFur = bRows.any(_isFurEntry);
+        if (aIsFur != bIsFur) return aIsFur ? 1 : -1;
+
+        if (aIsFur && bIsFur) {
+          final furCmp = _labelSortKey(a).compareTo(_labelSortKey(b));
+          if (furCmp != 0) return furCmp;
+        }
+
         final classCmp = _resultSortValue(aFirst, 'class_sort_order')
             .compareTo(_resultSortValue(bFirst, 'class_sort_order'));
         if (classCmp != 0) return classCmp;
@@ -2839,34 +2826,33 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
         return _resultSortText(a).compareTo(_resultSortText(b));
       });
 
-        return labels;
+    return labels;
+  }
+  Map<String, List<Map<String, dynamic>>> _groupByClassSex() {
+    final out = <String, List<Map<String, dynamic>>>{};
 
+    for (final e in _entries) {
+      final isFur = _isFurEntry(e);
+      String key;
+
+      if (isFur) {
+        key = _furWoolBucketLabel(e);
+      } else {
+        final cls = _ageClassOnly((e['class_name'] ?? '').toString());
+        final sex = (e['sex'] ?? '').toString().trim();
+        final label = [
+          if (cls.isNotEmpty) cls,
+          if (sex.isNotEmpty) sex,
+        ].join(' ');
+        key = label.isEmpty ? '(Unknown Class)' : label;
       }
 
-    Map<String, List<Map<String, dynamic>>> _groupByClassSex() {
-      final out = <String, List<Map<String, dynamic>>>{};
-
-      for (final e in _entries) {
-        String key;
-
-        if (_isFurOrWoolEntry(e)) {
-          key = _furWoolBucketLabel(e);
-        } else {
-          final cls = _ageClassOnly((e['class_name'] ?? '').toString());
-          final sex = (e['sex'] ?? '').toString().trim();
-          final label = [
-            if (cls.isNotEmpty) cls,
-            if (sex.isNotEmpty) sex,
-          ].join(' ');
-          key = label.isEmpty ? '(Unknown Class)' : label;
-        }
-
-        out.putIfAbsent(key, () => <Map<String, dynamic>>[]);
-        out[key]!.add(e);
-      }
-
-      return out;
+      out.putIfAbsent(key, () => <Map<String, dynamic>>[]);
+      out[key]!.add(e);
     }
+
+    return out;
+  }
 
   String _judgeNameById(String? judgeId) {
     if (judgeId == null || judgeId.isEmpty) return '';
