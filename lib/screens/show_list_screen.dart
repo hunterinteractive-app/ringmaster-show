@@ -16,6 +16,7 @@ import 'my_entries_screen.dart';
 import 'legal/terms_screen.dart';
 import 'legal/privacy_policy_screen.dart';
 import 'super_admin/superadmin_home_screen.dart';
+import 'package:ringmaster_show/superintendent/superintendent_shows_screen.dart';
 
 import '../config/legal_config.dart';
 import '../services/app_session.dart';
@@ -53,6 +54,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
   bool _showSearchFilters = true;
   bool _checkingLegal = true;
   bool _canAccessAdmin = false;
+  bool _canAccessSuperintendent = false;
   bool _loadingAdminAccess = true;
 
   SupportImpersonatedUser? get _impersonatedUser =>
@@ -114,6 +116,30 @@ class _ShowListScreenState extends State<ShowListScreen> {
     'DC': 'District of Columbia',
   };
 
+  Future<bool> _loadSuperintendentAccessFlag() async {
+    final userId = _effectiveUserId;
+
+    if (userId == null || widget.demoMode) {
+      return false;
+    }
+
+    try {
+      final isSuper = await RoleService.isSuperAdmin();
+      if (isSuper) return true;
+
+      final rows = await supabase
+          .from('role_assignments')
+          .select('show_id')
+          .eq('user_id', userId)
+          .eq('role', 'superintendent')
+          .limit(1);
+
+      return (rows as List).isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> _loadAdminAccess() async {
     final user = supabase.auth.currentUser;
 
@@ -121,6 +147,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
       if (!mounted) return;
       setState(() {
         _canAccessAdmin = false;
+        _canAccessSuperintendent = false;
         _loadingAdminAccess = false;
       });
       return;
@@ -130,26 +157,33 @@ class _ShowListScreenState extends State<ShowListScreen> {
       setState(() {
         _loadingAdminAccess = true;
         _canAccessAdmin = false;
+        _canAccessSuperintendent = false;
       });
     }
+
+    var canAdmin = false;
+    var canSuperintendent = false;
 
     try {
       final result = await supabase.rpc('user_has_any_show_access');
-
-      if (!mounted) return;
-
-      setState(() {
-        _canAccessAdmin = result == true;
-        _loadingAdminAccess = false;
-      });
+      canAdmin = result == true;
     } catch (_) {
-      if (!mounted) return;
-
-      setState(() {
-        _canAccessAdmin = false;
-        _loadingAdminAccess = false;
-      });
+      canAdmin = false;
     }
+
+    try {
+      canSuperintendent = await _loadSuperintendentAccessFlag();
+    } catch (_) {
+      canSuperintendent = false;
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _canAccessAdmin = canAdmin;
+      _canAccessSuperintendent = canSuperintendent;
+      _loadingAdminAccess = false;
+    });
   }
 
   static final Map<String, String> _stateNameLookup = {
@@ -917,6 +951,16 @@ class _ShowListScreenState extends State<ShowListScreen> {
             bundle: bundle,
             showAdmin: !_loadingAdminAccess && _canAccessAdmin,
             onAdmin: bundle == null ? null : () => _openAdmin(context, bundle),
+            showSuperintendent: !_loadingAdminAccess &&
+                (_canAccessSuperintendent || (bundle?.isSuperAdmin ?? false)),
+            onSuperintendent: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const SuperintendentShowsScreen(),
+                ),
+              );
+            },
             onAnimals: () {
               Navigator.push(
                 context,
@@ -1139,17 +1183,86 @@ class _ShowListScreenState extends State<ShowListScreen> {
                                   padding: const EdgeInsets.only(bottom: AppSpacing.md),
                                   child: RMCard(
                                     onTap: () => _openEnterShow(context, showId, showName),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(showName,
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .titleMedium
-                                                ?.copyWith(fontWeight: FontWeight.w700)),
-                                        const SizedBox(height: AppSpacing.sm),
-                                        Text('$formattedStartDate • $location'),
-                                      ],
+                                    child: LayoutBuilder(
+                                      builder: (context, cardConstraints) {
+                                        final compactCard = cardConstraints.maxWidth < 640;
+
+                                        final showInfo = Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              showName,
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .titleMedium
+                                                  ?.copyWith(fontWeight: FontWeight.w700),
+                                            ),
+                                            const SizedBox(height: AppSpacing.sm),
+                                            Text('$formattedStartDate • $location'),
+                                            if (entryDeadlineText.isNotEmpty) ...[
+                                              const SizedBox(height: AppSpacing.xs),
+                                              Text(
+                                                deadlinePassed
+                                                    ? 'Entries closed: $entryDeadlineText'
+                                                    : 'Entries close: $entryDeadlineText',
+                                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                      color: deadlinePassed ? AppColors.danger : AppColors.muted,
+                                                      fontWeight: FontWeight.w600,
+                                                    ),
+                                              ),
+                                            ],
+                                          ],
+                                        );
+
+                                        final actions = Wrap(
+                                          spacing: AppSpacing.sm,
+                                          runSpacing: AppSpacing.sm,
+                                          alignment: compactCard ? WrapAlignment.start : WrapAlignment.end,
+                                          children: [
+                                            OutlinedButton.icon(
+                                              onPressed: () => _openBreedCounts(context, showId, showName),
+                                              icon: const Icon(Icons.bar_chart, size: 18),
+                                              label: const Text('Breed Counts'),
+                                            ),
+                                            OutlinedButton.icon(
+                                              onPressed: () => _showPaymentInfo(context, showId, showName),
+                                              icon: const Icon(Icons.payments_outlined, size: 18),
+                                              label: const Text('Payment'),
+                                            ),
+                                            if (isAdminForShow)
+                                              OutlinedButton.icon(
+                                                onPressed: () => _openEditShow(context, showId),
+                                                icon: const Icon(Icons.settings, size: 18),
+                                                label: const Text('Manage'),
+                                              ),
+                                            FilledButton.icon(
+                                              onPressed: () => _openEnterShow(context, showId, showName),
+                                              icon: const Icon(Icons.login, size: 18),
+                                              label: const Text('Enter Show'),
+                                            ),
+                                          ],
+                                        );
+
+                                        if (compactCard) {
+                                          return Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              showInfo,
+                                              const SizedBox(height: AppSpacing.md),
+                                              actions,
+                                            ],
+                                          );
+                                        }
+
+                                        return Row(
+                                          crossAxisAlignment: CrossAxisAlignment.center,
+                                          children: [
+                                            Expanded(child: showInfo),
+                                            const SizedBox(width: AppSpacing.lg),
+                                            actions,
+                                          ],
+                                        );
+                                      },
                                     ),
                                   ),
                                 );
@@ -1247,6 +1360,8 @@ class _ResponsiveShowAppBar extends StatelessWidget
   final _ShowListBundle? bundle;
   final bool showAdmin;
   final VoidCallback? onAdmin;
+  final bool showSuperintendent;
+  final VoidCallback? onSuperintendent;
   final VoidCallback onAnimals;
   final VoidCallback onEntries;
   final VoidCallback onSuperAdmin;
@@ -1258,6 +1373,8 @@ class _ResponsiveShowAppBar extends StatelessWidget
     required this.bundle,
     required this.showAdmin,
     required this.onAdmin,
+    required this.showSuperintendent,
+    required this.onSuperintendent,
     required this.onAnimals,
     required this.onEntries,
     required this.onSuperAdmin,
@@ -1337,6 +1454,13 @@ class _ResponsiveShowAppBar extends StatelessWidget
             showLabel: showLabels,
             onTap: onAdmin!,
           ),
+        if (!demoMode && showSuperintendent && onSuperintendent != null)
+          _TopBarAction(
+            icon: Icons.fact_check,
+            label: 'Superintendent',
+            showLabel: showLabels,
+            onTap: onSuperintendent!,
+          ),
         if (!demoMode)
           _TopBarAction(
             icon: Icons.pets,
@@ -1379,15 +1503,22 @@ class _ResponsiveShowAppBar extends StatelessWidget
             tooltip: 'More',
             icon: const Icon(Icons.more_vert, color: Colors.white),
             onSelected: (value) async {
+              if (value == 'superintendent' && onSuperintendent != null) {
+                onSuperintendent!();
+              }
               if (value == 'super_admin') onSuperAdmin();
               if (value == 'logout') onLogout();
             },
             itemBuilder: (context) => [
-              if (!demoMode)
-                PopupMenuItem<String>(
+              if (!demoMode && showSuperintendent && onSuperintendent != null)
+                const PopupMenuItem<String>(
+                  value: 'superintendent',
+                  child: Text('Superintendent'),
+                ),
+              if (!demoMode && bundle?.isSuperAdmin == true)
+                const PopupMenuItem<String>(
                   value: 'super_admin',
-                  enabled: bundle?.isSuperAdmin == true,
-                  child: const Text('Super Admin'),
+                  child: Text('Super Admin'),
                 ),
               const PopupMenuItem<String>(
                 value: 'logout',
