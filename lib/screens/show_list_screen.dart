@@ -16,7 +16,6 @@ import 'my_entries_screen.dart';
 import 'legal/terms_screen.dart';
 import 'legal/privacy_policy_screen.dart';
 import 'super_admin/superadmin_home_screen.dart';
-import 'package:ringmaster_show/superintendent/superintendent_shows_screen.dart';
 
 import '../config/legal_config.dart';
 import '../services/app_session.dart';
@@ -953,14 +952,9 @@ class _ShowListScreenState extends State<ShowListScreen> {
             onAdmin: bundle == null ? null : () => _openAdmin(context, bundle),
             showSuperintendent: !_loadingAdminAccess &&
                 (_canAccessSuperintendent || (bundle?.isSuperAdmin ?? false)),
-            onSuperintendent: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const SuperintendentShowsScreen(),
-                ),
-              );
-            },
+            onSuperintendent: bundle == null
+                ? null
+                : () => _openAdmin(context, bundle),
             onAnimals: () {
               Navigator.push(
                 context,
