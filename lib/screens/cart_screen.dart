@@ -267,7 +267,7 @@ class _CartScreenState extends State<CartScreen> {
     return 'Projected Class: $className';
   }
 
-  bool get _stripeConnected {
+  bool get _stripeHasAccount {
     final account = _stripeStatus?['show_payment_account'];
     final stripeAccountId = account is Map
         ? (account['stripe_account_id'] ?? account['provider_account_id'] ?? '')
@@ -275,7 +275,11 @@ class _CartScreenState extends State<CartScreen> {
             .trim()
         : '';
 
-    if (stripeAccountId.isEmpty) return false;
+    return stripeAccountId.isNotEmpty;
+  }
+
+  bool get _stripeReady {
+    if (!_stripeHasAccount) return false;
 
     final status = (_stripeStatus?['status'] ?? '').toString().toLowerCase();
     if (status == 'ready') return true;
@@ -284,6 +288,8 @@ class _CartScreenState extends State<CartScreen> {
         _stripeStatus?['payouts_enabled'] == true &&
         _stripeStatus?['details_submitted'] == true;
   }
+
+  bool get _stripeConnected => _stripeReady;
 
   bool get _canPayOnline {
     return !_loading &&
@@ -614,10 +620,11 @@ class _CartScreenState extends State<CartScreen> {
       return;
     }
 
-    if (!_stripeConnected) {
+    if (!_stripeReady) {
       setState(() {
-        _msg =
-            'Online payment is not available for this show yet. The club has not completed Stripe setup.';
+        _msg = _stripeHasAccount
+            ? 'Online payment is not available yet. The club’s Stripe setup is incomplete.'
+            : 'Online payment is not available for this show yet. The club has not connected Stripe.';
       });
       return;
     }
@@ -923,11 +930,13 @@ class _CartScreenState extends State<CartScreen> {
                               ),
                         const SizedBox(height: 14),
                         Text(
-                          _stripeConnected
+                          _stripeReady
                               ? 'Online payment available'
-                              : 'Online payment not yet available for this show',
+                              : (_stripeHasAccount
+                                  ? 'Online payment setup incomplete'
+                                  : 'Online payment not yet available for this show'),
                           style: TextStyle(
-                            color: _stripeConnected
+                            color: _stripeReady
                                 ? Colors.green
                                 : Colors.orange.shade800,
                             fontWeight: FontWeight.w600,
@@ -1022,7 +1031,7 @@ class _CartScreenState extends State<CartScreen> {
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                   child: SizedBox(
                     width: double.infinity,
-                    child: _stripeConnected
+                    child: _stripeReady
                         ? FilledButton.icon(
                             onPressed: _canPayOnline ? _payOnline : null,
                             icon: const Icon(Icons.credit_card),
