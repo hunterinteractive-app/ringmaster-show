@@ -269,27 +269,29 @@ class _CartScreenState extends State<CartScreen> {
 
   bool get _stripeHasAccount {
     final account = _stripeStatus?['show_payment_account'];
-    final stripeAccountId = account is Map
+    final nestedStripeAccountId = account is Map
         ? (account['stripe_account_id'] ?? account['provider_account_id'] ?? '')
             .toString()
             .trim()
         : '';
 
-    return stripeAccountId.isNotEmpty;
+    final topLevelStripeAccountId = (_stripeStatus?['stripe_account_id'] ??
+            _stripeStatus?['provider_account_id'] ??
+            '')
+        .toString()
+        .trim();
+
+    return nestedStripeAccountId.isNotEmpty || topLevelStripeAccountId.isNotEmpty;
   }
 
   bool get _stripeReady {
     if (!_stripeHasAccount) return false;
-
-    final status = (_stripeStatus?['status'] ?? '').toString().toLowerCase();
-    if (status == 'ready') return true;
 
     return _stripeStatus?['charges_enabled'] == true &&
         _stripeStatus?['payouts_enabled'] == true &&
         _stripeStatus?['details_submitted'] == true;
   }
 
-  bool get _stripeConnected => _stripeReady;
 
   bool get _canPayOnline {
     return !_loading &&
@@ -298,7 +300,7 @@ class _CartScreenState extends State<CartScreen> {
         !AppSession.isSupportMode &&
         !_deadlinePassed() &&
         _items.isNotEmpty &&
-        _stripeConnected;
+        _stripeReady;
   }
 
   Map<String, dynamic> _calculateFeesForItems(
