@@ -56,6 +56,20 @@ class _ShowPaymentSettingsDialogState
   final _stripePublishableKey = TextEditingController();
   final _stripeAccountId = TextEditingController();
 
+  bool _stripeChargesEnabled = false;
+  bool _stripePayoutsEnabled = false;
+  bool _stripeDetailsSubmitted = false;
+  String _stripeAccountStatus = '';
+
+  bool get _stripeHasAccount => _stripeAccountId.text.trim().isNotEmpty;
+
+  bool get _stripeReady =>
+      _stripeHasAccount &&
+      _stripeChargesEnabled &&
+      _stripePayoutsEnabled &&
+      _stripeDetailsSubmitted &&
+      _stripeAccountStatus.toLowerCase().trim() != 'restricted';
+
   bool _squareEnabled = false;
   final _squareAppId = TextEditingController();
   final _squareLocationId = TextEditingController();
@@ -115,6 +129,36 @@ class _ShowPaymentSettingsDialogState
         _squareLocationId.text = (data['square_location_id'] ?? '').toString();
       }
 
+      final stripeLinkRows = await supabase
+          .from('show_payment_account_links')
+          .select(
+            'stripe_account_id,charges_enabled,payouts_enabled,details_submitted,account_status,updated_at,created_at',
+          )
+          .eq('show_id', widget.showId)
+          .eq('provider', 'stripe')
+          .order('updated_at', ascending: false)
+          .order('created_at', ascending: false)
+          .limit(1);
+
+      final stripeLinks = List<Map<String, dynamic>>.from(stripeLinkRows);
+      if (stripeLinks.isNotEmpty) {
+        final stripeLink = stripeLinks.first;
+        final connectedAccountId =
+            (stripeLink['stripe_account_id'] ?? '').toString().trim();
+        if (connectedAccountId.isNotEmpty) {
+          _stripeAccountId.text = connectedAccountId;
+        }
+        _stripeChargesEnabled = stripeLink['charges_enabled'] == true;
+        _stripePayoutsEnabled = stripeLink['payouts_enabled'] == true;
+        _stripeDetailsSubmitted = stripeLink['details_submitted'] == true;
+        _stripeAccountStatus = (stripeLink['account_status'] ?? '').toString();
+      } else {
+        _stripeChargesEnabled = false;
+        _stripePayoutsEnabled = false;
+        _stripeDetailsSubmitted = false;
+        _stripeAccountStatus = '';
+      }
+
       if (!mounted) return;
       setState(() => _loading = false);
     } catch (e) {
@@ -128,14 +172,12 @@ class _ShowPaymentSettingsDialogState
 
   bool _validate() {
     if ((_paymentMode == 'stripe' || _paymentMode == 'hybrid') &&
-        _stripeEnabled) {
-      if (_stripePublishableKey.text.trim().isEmpty) {
-        setState(() {
-          _msg =
-              'Stripe publishable key is required when Stripe is enabled.';
-        });
-        return false;
-      }
+        _stripeEnabled &&
+        !_stripeHasAccount) {
+      setState(() {
+        _msg = 'Connect Stripe before enabling online Stripe payments.';
+      });
+      return false;
     }
 
     if ((_paymentMode == 'square' || _paymentMode == 'hybrid') &&
@@ -400,11 +442,76 @@ class _ShowPaymentSettingsDialogState
                                           context: context,
                                           title: 'Stripe',
                                           children: [
+                                            Container(
+                                              width: double.infinity,
+                                              padding: const EdgeInsets.all(12),
+                                              decoration: BoxDecoration(
+                                                color: _stripeReady
+                                                    ? Colors.green.withOpacity(.08)
+                                                    : Colors.orange.withOpacity(.10),
+                                                borderRadius: BorderRadius.circular(12),
+                                                border: Border.all(
+                                                  color: _stripeReady
+                                                      ? Colors.green.withOpacity(.25)
+                                                      : Colors.orange.withOpacity(.35),
+                                                ),
+                                              ),
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    _stripeReady
+                                                        ? 'Ready to accept online payments'
+                                                        : (_stripeHasAccount
+                                                            ? 'Stripe setup incomplete'
+                                                            : 'Stripe not connected'),
+                                                    style: TextStyle(
+                                                      color: _stripeReady
+                                                          ? Colors.green.shade700
+                                                          : Colors.orange.shade900,
+                                                      fontWeight: FontWeight.w700,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 8),
+                                                  Wrap(
+                                                    spacing: 18,
+                                                    runSpacing: 6,
+                                                    children: [
+                                                      Text(
+                                                        'Stripe account: ${_stripeHasAccount ? _stripeAccountId.text.trim() : '—'}',
+                                                      ),
+                                                      Text(
+                                                        'Charges: ${_stripeChargesEnabled ? 'Enabled' : 'Not enabled'}',
+                                                      ),
+                                                      Text(
+                                                        'Payouts: ${_stripePayoutsEnabled ? 'Enabled' : 'Not enabled'}',
+                                                      ),
+                                                      Text(
+                                                        'Details: ${_stripeDetailsSubmitted ? 'Submitted' : 'Incomplete'}',
+                                                      ),
+                                                      if (_stripeAccountStatus
+                                                          .trim()
+                                                          .isNotEmpty)
+                                                        Text(
+                                                          'Status: $_stripeAccountStatus',
+                                                        ),
+                                                    ],
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            const SizedBox(height: 12),
                                             SwitchListTile(
                                               contentPadding: EdgeInsets.zero,
                                               title: const Text('Enable Stripe'),
+                                              subtitle: const Text(
+                                                'Only enable this after Stripe shows ready to accept online payments.',
+                                              ),
                                               value: _stripeEnabled,
-                                              onChanged: (_saving || _isReadOnly)
+                                              onChanged: (_saving ||
+                                                      _isReadOnly ||
+                                                      !_stripeReady)
                                                   ? null
                                                   : (v) => setState(
                                                         () => _stripeEnabled =
@@ -424,10 +531,10 @@ class _ShowPaymentSettingsDialogState
                                             const SizedBox(height: 12),
                                             TextField(
                                               controller: _stripeAccountId,
-                                              enabled: !_saving && !_isReadOnly && _stripeEnabled,
+                                              enabled: false,
                                               decoration: const InputDecoration(
                                                 labelText:
-                                                    'Stripe account id (optional)',
+                                                    'Connected Stripe account id',
                                                 border: OutlineInputBorder(),
                                               ),
                                             ),
