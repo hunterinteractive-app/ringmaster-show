@@ -287,6 +287,25 @@ class _CartScreenState extends State<CartScreen> {
   bool get _stripeReady {
     if (!_stripeHasAccount) return false;
 
+    final status = (_stripeStatus?['status'] ?? '').toString().toLowerCase().trim();
+    final accountStatus = (_stripeStatus?['account_status'] ??
+            (_stripeStatus?['show_payment_account'] is Map
+                ? (_stripeStatus!['show_payment_account'] as Map)['account_status']
+                : null) ??
+            '')
+        .toString()
+        .toLowerCase()
+        .trim();
+
+    final isRestricted = status == 'restricted' ||
+        accountStatus == 'restricted' ||
+        status == 'incomplete' ||
+        accountStatus == 'incomplete' ||
+        status == 'not_ready' ||
+        accountStatus == 'not_ready';
+
+    if (isRestricted) return false;
+
     return _stripeStatus?['charges_enabled'] == true &&
         _stripeStatus?['payouts_enabled'] == true &&
         _stripeStatus?['details_submitted'] == true;
@@ -657,7 +676,13 @@ class _CartScreenState extends State<CartScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _msg = 'Online payment failed: $e');
+      final errorText = e.toString();
+      final friendlyMessage = errorText.contains('not yet ready to accept charges') ||
+              errorText.contains('Stripe account is not yet ready')
+          ? 'Online payment is not available yet. The club’s Stripe setup is incomplete.'
+          : 'Online payment failed: $e';
+
+      setState(() => _msg = friendlyMessage);
     } finally {
       if (mounted) {
         setState(() => _payingOnline = false);
