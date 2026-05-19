@@ -76,6 +76,24 @@ String _awardDisplayLabel(String award, Map<String, dynamic> entry) {
   return award;
 }
 
+String _canonicalAwardCode(String award) {
+  final value = award.trim().toLowerCase();
+
+  if (value == 'best in show') return 'BIS';
+  if (value == 'reserve in show' ||
+      value == 'reserve best in show' ||
+      value == 'ris') {
+    return 'Reserve In Show';
+  }
+
+  return award.trim();
+}
+
+bool _awardListContains(List<String> awards, String award) {
+  final target = _canonicalAwardCode(award).toLowerCase();
+  return awards.any((a) => _canonicalAwardCode(a).toLowerCase() == target);
+}
+
 bool _supportsBestAgeAwards(String breedName) {
   final b = breedName.trim().toLowerCase();
   return b == 'american sable' ||
@@ -182,7 +200,9 @@ Future<Map<String, List<String>>> _loadAwardsByEntryId({
     for (final raw in awardRows as List) {
       final row = Map<String, dynamic>.from(raw as Map);
       final entryId = (row['entry_id'] ?? '').toString().trim();
-      final award = (row['award_code'] ?? '').toString().trim();
+      final award = _canonicalAwardCode(
+        (row['award_code'] ?? '').toString(),
+      );
 
       if (entryId.isEmpty || award.isEmpty) continue;
 
@@ -569,7 +589,9 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
 
         for (final row in allAwardRows) {
           final entryId = (row['entry_id'] ?? '').toString().trim();
-          final award = (row['award_code'] ?? '').toString().trim();
+          final award = _canonicalAwardCode(
+            (row['award_code'] ?? '').toString(),
+          );
           if (entryId.isEmpty || award.isEmpty) continue;
           awardsByEntryId.putIfAbsent(entryId, () => <String>[]);
           awardsByEntryId[entryId]!.add(award);
@@ -756,6 +778,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
             : _selectedSectionId,
       );
     }
+
 
   String _classSexLabelFromEntry(Map<String, dynamic> e) {
     final rawClass = (e['class_name'] ?? '').toString().trim();
@@ -1030,7 +1053,8 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
       );
     }
 
-    for (final award in entryAwards) {
+    for (final rawAward in entryAwards) {
+      final award = _canonicalAwardCode(rawAward);
       switch (award) {
         case 'BOV':
         case 'BOSV':
@@ -1063,7 +1087,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
           break;
         case 'Best 4-Class':
         case 'Best 6-Class':
-        case 'Best In Show':
+        case 'BIS':
         case 'Reserve In Show':
           final key = '${sectionId(e)}|$award';
           awardBuckets.putIfAbsent(key, () => <Map<String, dynamic>>[]);
@@ -1225,8 +1249,8 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
       }
     }
 
-    if (_finalAwardMode == 'four_six_bis' && a.contains('Best In Show')) {
-      if (!(a.contains('Best 4-Class') || a.contains('Best 6-Class'))) {
+    if (_finalAwardMode == 'four_six_bis' && _awardListContains(a, 'Best In Show')) {
+      if (!(_awardListContains(a, 'Best 4-Class') || _awardListContains(a, 'Best 6-Class'))) {
         issues.add(
           makeIssue(
             code: 'bis_requires_best_class',
@@ -1238,7 +1262,9 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
       }
     }
 
-    if (_finalAwardMode == 'bis_ris' && a.contains('Reserve In Show') && a.contains('Best In Show')) {
+    if (_finalAwardMode == 'bis_ris' &&
+        _awardListContains(a, 'Reserve In Show') &&
+        _awardListContains(a, 'Best In Show')) {
       issues.add(
         makeIssue(
           code: 'bis_ris_same_entry',
@@ -3788,7 +3814,9 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
         for (final row in (awardRows as List)) {
           final map = Map<String, dynamic>.from(row as Map);
           final entryId = (map['entry_id'] ?? '').toString().trim();
-          final award = (map['award_code'] ?? '').toString().trim();
+          final award = _canonicalAwardCode(
+            (map['award_code'] ?? '').toString(),
+          );
 
           if (entryId.isEmpty || award.isEmpty) continue;
 
@@ -4310,7 +4338,7 @@ if (storedJudgeId.isEmpty) {
     _placement = currentPlacement.isEmpty ? null : currentPlacement;
 
     _selectedAwards = (((widget.entry['_awards'] as List?) ?? const [])
-            .map((x) => x.toString().trim())
+            .map((x) => _canonicalAwardCode(x.toString()))
             .where((x) => x.isNotEmpty))
         .toSet();
 
@@ -4502,7 +4530,7 @@ if (storedJudgeId.isEmpty) {
     return options;
   }
 
-  bool _hasAward(String award) => _selectedAwards.contains(award);
+  bool _hasAward(String award) => _selectedAwards.contains(_canonicalAwardCode(award));
 
   Map<String, dynamic>? _winnerForAwardInScope({
     required String award,
