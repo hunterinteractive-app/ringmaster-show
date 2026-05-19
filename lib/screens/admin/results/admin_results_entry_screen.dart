@@ -2210,8 +2210,42 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
     _entries = [...widget.entries];
   }
 
-    bool _isFurOrWoolEntry(Map<String, dynamic> e) {
-      return _isFurEntry(e);
+    bool _isFurEntry(Map<String, dynamic> row) {
+      final value = row['is_fur'];
+      if (value is bool && value == true) return true;
+
+      final text = (value ?? '').toString().trim().toLowerCase();
+      if (text == 'true' || text == 't' || text == '1' || text == 'yes') {
+        return true;
+      }
+
+      final className = (row['class_name'] ?? '').toString().trim().toLowerCase();
+
+      return className == 'fur' ||
+          className == 'wool' ||
+          className == 'fur/wool' ||
+          className.startsWith('fur - ') ||
+          className.startsWith('wool - ') ||
+          className.startsWith('commercial fur - ');
+    }
+
+    bool _isFurOrWoolEntry(Map<String, dynamic> row) {
+      final value = row['is_fur'];
+      if (value is bool && value == true) return true;
+
+      final text = (value ?? '').toString().trim().toLowerCase();
+      if (text == 'true' || text == 't' || text == '1' || text == 'yes') {
+        return true;
+      }
+
+      final className = (row['class_name'] ?? '').toString().trim().toLowerCase();
+
+      return className == 'fur' ||
+          className == 'wool' ||
+          className == 'fur/wool' ||
+          className.startsWith('fur - ') ||
+          className.startsWith('wool - ') ||
+          className.startsWith('commercial fur - ');
     }
 
     Map<String, List<Map<String, dynamic>>> _groupByVariety() {
@@ -2219,7 +2253,7 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
 
       for (final e in _entries) {
         final key = _isFurOrWoolEntry(e)
-            ? 'Fur'
+            ? 'Fur / Wool'
             : (() {
                 final variety = (e['variety'] ?? '').toString().trim();
                 return variety.isEmpty ? '(Unknown Variety)' : variety;
@@ -2433,8 +2467,8 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
           return int.tryParse(raw?.toString() ?? '') ?? 9999;
         }
 
-        final aIsFur = a.trim().toLowerCase() == 'fur';
-        final bIsFur = b.trim().toLowerCase() == 'fur';
+        final aIsFur = a.trim().toLowerCase() == 'fur / wool';
+        final bIsFur = b.trim().toLowerCase() == 'fur / wool';
 
         if (aIsFur != bIsFur) return aIsFur ? 1 : -1;
 
@@ -2537,9 +2571,9 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
                                   showName: widget.showName,
                                   sectionLabel: widget.sectionLabel,
                                   breed: widget.breed,
-                                  variety: variety == 'Fur' ? '' : variety,
-                                  contextLabel: variety == 'Fur'
-                                      ? 'Fur'
+                                  variety: variety == 'Fur / Wool' ? '' : variety,
+                                  contextLabel: variety == 'Fur / Wool'
+                                      ? 'Fur / Wool'
                                       : (widget.parentGroupLabel ?? variety),
                                   entries: varietyEntries,
                                   judges: widget.judges,
@@ -2558,7 +2592,7 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
 
                                     return usesGroups && groupName.isNotEmpty;
                                   }),
-                                  showsByVariety: variety != 'Fur',
+                                  showsByVariety: variety != 'Fur / Wool',
                                   isQrEntryMode: widget.isQrEntryMode,
                                 ),
                               ),
