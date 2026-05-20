@@ -3573,10 +3573,6 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
 
     if (status.isEmpty) return false;
 
-    if (_entryIsPlacementEligible(e) && placement.isEmpty) {
-      return false;
-    }
-
     if (!_awardDecisionComplete(e)) {
       return false;
     }
@@ -3886,7 +3882,8 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
 
   List<String> _availablePlacements({String? excludingEntryId}) {
     final shownCount = _shownCount();
-    final all = List<String>.generate(shownCount, (i) => '${i + 1}');
+    final count = shownCount <= 0 ? _entries.length : shownCount;
+    final all = List<String>.generate(count, (i) => '${i + 1}');
 
     final used = <String>{};
     for (final e in _entries) {
@@ -5236,7 +5233,7 @@ if (storedJudgeId.isEmpty) {
     final canPlace = !scratched && effectiveResultStatus == 'Shown';
 
     if (placementOptions.isEmpty && canPlace) {
-      final count = widget.shownCount <= 0 ? 1 : widget.shownCount;
+      final count = widget.shownCount <= 0 ? widget.totalCount : widget.shownCount;
       placementOptions = List<String>.generate(count, (i) => '${i + 1}');
     }
 

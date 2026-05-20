@@ -11,6 +11,8 @@ import '../../models/base/report_request.dart';
 import '../../models/legs/legs_certificate_data.dart';
 
 class LegsReportPdfBuilder {
+  static const PdfColor arbaBlue = PdfColor.fromInt(0xFF003B9D);
+  static const PdfColor arbaBlueLight = PdfColor.fromInt(0xFFEAF1FF);
   final Uint8List arbaLogoBytes;
   final Uint8List ringMasterLogoBytes;
 
@@ -50,6 +52,22 @@ class LegsReportPdfBuilder {
     'Leg of Grand Champion is to be furnished to the exhibitor by the show secretary within 30 days of conclusion of show.',
     'Rabbits must be judged by an ARBA licensed Rabbit Judge and cavies must be judged by an ARBA licensed Cavy Judge.',
     'Only 1 leg of Grand Champion may be awarded to the same animal for the same show.',
+  ];
+  static const List<String> arbaContactLines = [
+    'American Rabbit Breeders Association, Inc.',
+    'P.O. Box 400, Knox, PA 16232',
+    'Phone: (814) 797-4129',
+    'Email: info@arba.net',
+    'Website: arba.net',
+  ];
+
+  static const List<String> arbaMembershipFeeLines = [
+    'ARBA Membership Fee Schedule',
+    'Adult: 1 year / 3 years',
+    'Youth: 1 year / 3 years',
+    'Husband/Wife: 1 year / 3 years',
+    'Family: 1 year / 3 years',
+    'Verify current fee amounts with ARBA.',
   ];
 
   Future<pw.ThemeData> _buildTheme() async {
@@ -140,7 +158,7 @@ class LegsReportPdfBuilder {
                       else
                         _blankCertificateSpace(),
                       pw.SizedBox(height: 10),
-                      _rulesBlock(),
+                      _rulesAndRequiredArbaInfoBlock(),
                     ],
                   );
                 },
@@ -216,7 +234,7 @@ class LegsReportPdfBuilder {
     return pw.Container(
       padding: const pw.EdgeInsets.fromLTRB(8, 8, 8, 7),
       decoration: pw.BoxDecoration(
-        border: pw.Border.all(color: PdfColors.blue800, width: 1),
+        border: pw.Border.all(color: arbaBlue, width: 1),
         borderRadius: pw.BorderRadius.circular(4),
       ),
       child: pw.Column(
@@ -251,7 +269,7 @@ class LegsReportPdfBuilder {
           style: pw.TextStyle(
             fontSize: 10.5,
             fontWeight: pw.FontWeight.bold,
-            color: PdfColors.blue800,
+            color: arbaBlue,
           ),
         ),
         pw.SizedBox(height: 1.5),
@@ -261,7 +279,7 @@ class LegsReportPdfBuilder {
           style: pw.TextStyle(
             fontSize: 8.5,
             fontWeight: pw.FontWeight.bold,
-            color: PdfColors.blue800,
+            color: arbaBlue,
           ),
         ),
       ],
@@ -286,7 +304,7 @@ class LegsReportPdfBuilder {
         _fillLine('REG.#'),
         pw.SizedBox(height: 6),
         pw.Table(
-          border: pw.TableBorder.all(color: PdfColors.blue800, width: 0.6),
+          border: pw.TableBorder.all(color: arbaBlue, width: 0.6),
           columnWidths: const {
             0: pw.FlexColumnWidth(1.0),
             1: pw.FlexColumnWidth(1.2),
@@ -294,7 +312,7 @@ class LegsReportPdfBuilder {
           },
           children: [
             pw.TableRow(
-              decoration: const pw.BoxDecoration(color: PdfColors.blue50),
+              decoration: const pw.BoxDecoration(color: arbaBlueLight),
               children: [
                 _tinyHeaderCell('WIN'),
                 _tinyHeaderCell('NO. ANIMALS'),
@@ -326,7 +344,7 @@ class LegsReportPdfBuilder {
       width: double.infinity,
       padding: const pw.EdgeInsets.all(5),
       decoration: pw.BoxDecoration(
-        border: pw.Border.all(color: PdfColors.blue800, width: 0.6),
+        border: pw.Border.all(color: arbaBlue, width: 0.6),
       ),
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -364,26 +382,26 @@ class LegsReportPdfBuilder {
                 fit: pw.BoxFit.contain,
               ),
             ),
-            pw.SizedBox(width: 6),
-            pw.Container(
-              width: 44,
-              height: 36,
-              alignment: pw.Alignment.center,
-              child: pw.Image(
-                pw.MemoryImage(ringMasterLogoBytes),
-                fit: pw.BoxFit.contain,
-              ),
-            ),
             pw.SizedBox(width: 8),
             pw.Expanded(
               child: pw.Align(
                 alignment: pw.Alignment.centerRight,
-                child: pw.BarcodeWidget(
-                  barcode: pw.Barcode.code128(),
-                  data: arbaBarcodeValue,
-                  width: 180,
-                  height: 40,
-                  drawText: false,
+                child: pw.Column(
+                  mainAxisSize: pw.MainAxisSize.min,
+                  children: [
+                    pw.BarcodeWidget(
+                      barcode: pw.Barcode.code128(),
+                      data: arbaBarcodeValue,
+                      width: 180,
+                      height: 34,
+                      drawText: false,
+                    ),
+                    pw.SizedBox(height: 1.5),
+                    pw.Text(
+                      arbaBarcodeValue,
+                      style: const pw.TextStyle(fontSize: 5.2),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -402,7 +420,9 @@ class LegsReportPdfBuilder {
             d.ownerAddress,
             style: const pw.TextStyle(fontSize: 7),
           ),
-        pw.SizedBox(height: 6),
+        pw.SizedBox(height: 4),
+        _requiredCertificateDataNotice(),
+        pw.SizedBox(height: 4),
         pw.Row(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
@@ -436,7 +456,7 @@ class LegsReportPdfBuilder {
               height: 54,
               padding: const pw.EdgeInsets.all(2),
               decoration: pw.BoxDecoration(
-                border: pw.Border.all(color: PdfColors.blue800, width: 0.6),
+                border: pw.Border.all(color: arbaBlue, width: 0.6),
               ),
               child: pw.BarcodeWidget(
                 barcode: pw.Barcode.qrCode(),
@@ -450,8 +470,8 @@ class LegsReportPdfBuilder {
           width: double.infinity,
           padding: const pw.EdgeInsets.all(4),
           decoration: pw.BoxDecoration(
-            border: pw.Border.all(color: PdfColors.blue800, width: 0.5),
-            color: PdfColors.blue50,
+            border: pw.Border.all(color: arbaBlue, width: 0.5),
+            color: arbaBlueLight,
           ),
           child: pw.Text(
             'Rule ${d.legRule}: ${d.legRuleDescription}',
@@ -459,6 +479,20 @@ class LegsReportPdfBuilder {
           ),
         ),
       ],
+    );
+  }
+
+  pw.Widget _requiredCertificateDataNotice() {
+    return pw.Container(
+      width: double.infinity,
+      padding: const pw.EdgeInsets.all(3),
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(color: arbaBlue, width: 0.4),
+      ),
+      child: pw.Text(
+        'All certificate data is required, including placement and higher win data, animal data, exhibitor member name, secretary and show data, barcode, human-readable code, and rules.',
+        style: const pw.TextStyle(fontSize: 5.4),
+      ),
     );
   }
 
@@ -566,7 +600,7 @@ class LegsReportPdfBuilder {
     return pw.Container(
       padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3),
       decoration: pw.BoxDecoration(
-        border: pw.Border.all(color: PdfColors.blue800, width: 0.6),
+        border: pw.Border.all(color: arbaBlue, width: 0.6),
       ),
       child: pw.Row(
         children: [
@@ -575,7 +609,7 @@ class LegsReportPdfBuilder {
             style: pw.TextStyle(
               fontSize: 7,
               fontWeight: pw.FontWeight.bold,
-              color: PdfColors.blue800,
+              color: arbaBlue,
             ),
           ),
           pw.Expanded(
@@ -604,23 +638,23 @@ class LegsReportPdfBuilder {
   }
 
   pw.Widget _blankCertificateSpace() {
-    return pw.SizedBox(height: 190);
+    return pw.SizedBox(height: 205);
   }
 
-  pw.Widget _rulesBlock() {
+  pw.Widget _rulesAndRequiredArbaInfoBlock() {
     return pw.Container(
-      padding: const pw.EdgeInsets.fromLTRB(6, 6, 6, 2),
+      padding: const pw.EdgeInsets.fromLTRB(6, 5, 6, 2),
       decoration: pw.BoxDecoration(
-        border: pw.Border.all(color: PdfColors.blue800, width: 0.8),
+        border: pw.Border.all(color: arbaBlue, width: 0.8),
       ),
       child: pw.Column(
         children: [
           pw.Text(
             'RULES GOVERNING AWARDING LEGS OF GRAND CHAMPION',
             style: pw.TextStyle(
-              fontSize: 9.5,
+              fontSize: 8.8,
               fontWeight: pw.FontWeight.bold,
-              color: PdfColors.blue800,
+              color: arbaBlue,
             ),
             textAlign: pw.TextAlign.center,
           ),
@@ -628,12 +662,12 @@ class LegsReportPdfBuilder {
           pw.Text(
             'A Leg of Grand Champion will be awarded to any rabbit or cavy that:',
             style: pw.TextStyle(
-              fontSize: 7.5,
-              color: PdfColors.blue800,
+              fontSize: 7,
+              color: arbaBlue,
             ),
             textAlign: pw.TextAlign.center,
           ),
-          pw.SizedBox(height: 5),
+          pw.SizedBox(height: 3),
           ...List.generate(legRules.length, (index) {
             return pw.Padding(
               padding: const pw.EdgeInsets.only(bottom: 2),
@@ -645,8 +679,8 @@ class LegsReportPdfBuilder {
                     child: pw.Text(
                       '${index + 1}.',
                       style: pw.TextStyle(
-                        fontSize: 6.7,
-                        color: PdfColors.blue800,
+                        fontSize: 6.1,
+                        color: arbaBlue,
                       ),
                     ),
                   ),
@@ -654,8 +688,8 @@ class LegsReportPdfBuilder {
                     child: pw.Text(
                       legRules[index],
                       style: pw.TextStyle(
-                        fontSize: 6.7,
-                        color: PdfColors.blue800,
+                        fontSize: 6.1,
+                        color: arbaBlue,
                       ),
                     ),
                   ),
@@ -663,6 +697,57 @@ class LegsReportPdfBuilder {
               ),
             );
           }),
+          pw.SizedBox(height: 4),
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Expanded(
+                child: _arbaRequiredInfoPanel(
+                  'ARBA CONTACT INFORMATION',
+                  arbaContactLines,
+                ),
+              ),
+              pw.SizedBox(width: 6),
+              pw.Expanded(
+                child: _arbaRequiredInfoPanel(
+                  'MEMBERSHIP FEE SCHEDULE',
+                  arbaMembershipFeeLines,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _arbaRequiredInfoPanel(String title, List<String> lines) {
+    return pw.Container(
+      padding: const pw.EdgeInsets.all(4),
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(color: arbaBlue, width: 0.6),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(
+            title,
+            style: pw.TextStyle(
+              fontSize: 5.8,
+              fontWeight: pw.FontWeight.bold,
+              color: arbaBlue,
+            ),
+          ),
+          pw.SizedBox(height: 2),
+          ...lines.map(
+            (line) => pw.Padding(
+              padding: const pw.EdgeInsets.only(bottom: 1),
+              child: pw.Text(
+                line,
+                style: const pw.TextStyle(fontSize: 5.2),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -679,7 +764,7 @@ class LegsReportPdfBuilder {
               '$label:',
               style: pw.TextStyle(
                 fontSize: 7,
-                color: PdfColors.blue800,
+                color: arbaBlue,
               ),
             ),
           ),
@@ -710,7 +795,7 @@ class LegsReportPdfBuilder {
               '$label:',
               style: pw.TextStyle(
                 fontSize: 6.7,
-                color: PdfColors.blue800,
+                color: arbaBlue,
               ),
             ),
           ),
@@ -735,7 +820,7 @@ class LegsReportPdfBuilder {
         style: pw.TextStyle(
           fontSize: 6.2,
           fontWeight: pw.FontWeight.bold,
-          color: PdfColors.blue800,
+          color: arbaBlue,
         ),
       ),
     );
