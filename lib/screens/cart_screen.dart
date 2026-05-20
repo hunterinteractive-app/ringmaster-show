@@ -251,10 +251,10 @@ class _CartScreenState extends State<CartScreen> {
 
     final furVariety = (it['fur_variety'] ?? '').toString().trim();
     if (furVariety.isNotEmpty) {
-      return 'Fur/Wool: $furVariety';
+      return 'Fur/Wool add-on: $furVariety';
     }
 
-    return 'Fur/Wool: Yes';
+    return 'Fur/Wool add-on: Yes';
   }
 
   String _buildClassDisplay(Map<String, dynamic> it) {

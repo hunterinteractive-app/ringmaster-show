@@ -56,11 +56,17 @@ const Map<String, String> cavyAwardLabels = {
   'HM': 'Honorable Mention',
 };
 
+
 bool _isFurEntry(Map<String, dynamic> row) {
   final value = row['is_fur'];
   if (value is bool) return value;
+
   final text = (value ?? '').toString().trim().toLowerCase();
   return text == 'true' || text == 't' || text == '1' || text == 'yes';
+}
+
+bool _isFurOrWoolEntry(Map<String, dynamic> row) {
+  return _isFurEntry(row);
 }
 
 bool _isCavyEntry(Map<String, dynamic> row) {
@@ -871,10 +877,12 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
   }
 
   bool _showsByGroup(List<Map<String, dynamic>> entries) {
-    final usesGroups = entries.any((e) => e['uses_group_awards'] == true);
+    final normalEntries = entries.where((e) => !_isFurEntry(e)).toList();
+
+    final usesGroups = normalEntries.any((e) => e['uses_group_awards'] == true);
     if (!usesGroups) return false;
 
-    final hasRealGroups = entries.any((e) {
+    final hasRealGroups = normalEntries.any((e) {
       final groupName = (
         e['group_name'] ??
         e['group_display_name'] ??
@@ -884,7 +892,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
         ''
       ).toString().trim();
 
-      return groupName.isNotEmpty;
+      return groupName.isNotEmpty && groupName != 'Fur / Wool';
     });
 
     return hasRealGroups;
@@ -1768,21 +1776,26 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
 
   Map<String, List<Map<String, dynamic>>> _groupByGroupName() {
     final out = <String, List<Map<String, dynamic>>>{};
+
     for (final e in _entries) {
-      final groupName = (
-        e['group_name'] ??
-        e['group_display_name'] ??
-        e['group_label'] ??
-        e['group'] ??
-        e['group_code'] ??
-        ''
-      ).toString().trim();
+      final isFur = _isFurEntry(e);
+      final groupName = isFur
+          ? 'Fur / Wool'
+          : (
+              e['group_name'] ??
+              e['group_display_name'] ??
+              e['group_label'] ??
+              e['group'] ??
+              e['group_code'] ??
+              ''
+            ).toString().trim();
 
       if (groupName.isEmpty) continue;
-      final key = groupName;
-      out.putIfAbsent(key, () => <Map<String, dynamic>>[]);
-      out[key]!.add(e);
+
+      out.putIfAbsent(groupName, () => <Map<String, dynamic>>[]);
+      out[groupName]!.add(e);
     }
+
     return out;
   }
 
@@ -2116,7 +2129,7 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
                     ),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () async {
-                      if (widget.showsByVariety) {
+                      if (widget.showsByVariety && groupName != 'Fur / Wool') {
                         await Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -2210,78 +2223,25 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
     _entries = [...widget.entries];
   }
 
-    bool _isFurEntry(Map<String, dynamic> row) {
-      final value = row['is_fur'];
-      if (value is bool && value == true) return true;
+    Map<String, List<Map<String, dynamic>>> _groupByVariety() {
+      final out = <String, List<Map<String, dynamic>>>{};
 
-      final text = (value ?? '').toString().trim().toLowerCase();
-      if (text == 'true' || text == 't' || text == '1' || text == 'yes') {
-        return true;
+      for (final e in _entries) {
+        String key;
+
+        if (_isFurEntry(e)) {
+          key = 'Fur / Wool';
+        } else {
+          final variety = (e['variety'] ?? '').toString().trim();
+          key = variety.isEmpty ? '(Unknown Variety)' : variety;
+        }
+
+        out.putIfAbsent(key, () => <Map<String, dynamic>>[]);
+        out[key]!.add(e);
       }
 
-      final className = (row['class_name'] ?? '').toString().trim().toLowerCase();
-
-      return className == 'fur' ||
-          className == 'wool' ||
-          className == 'fur/wool' ||
-          className.startsWith('fur - ') ||
-          className.startsWith('wool - ') ||
-          className.startsWith('commercial fur - ');
+      return out;
     }
-
-    bool _isFurOrWoolEntry(Map<String, dynamic> row) {
-      final value = row['is_fur'];
-      if (value is bool && value == true) return true;
-
-      final text = (value ?? '').toString().trim().toLowerCase();
-      if (text == 'true' || text == 't' || text == '1' || text == 'yes') {
-        return true;
-      }
-
-      final className = (row['class_name'] ?? '').toString().trim().toLowerCase();
-
-      return className == 'fur' ||
-          className == 'wool' ||
-          className == 'fur/wool' ||
-          className.startsWith('fur - ') ||
-          className.startsWith('wool - ') ||
-          className.startsWith('commercial fur - ');
-    }
-
-  Map<String, List<Map<String, dynamic>>> _groupByVariety() {
-    final out = <String, List<Map<String, dynamic>>>{};
-
-    // If the RPC returns both the original entry row and a generated Fur/Wool row
-    // for the same entry_id, keep only the Fur/Wool row in this screen.
-    final furOrWoolEntryIds = _entries
-        .where(_isFurOrWoolEntry)
-        .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
-        .where((id) => id.isNotEmpty)
-        .toSet();
-
-    for (final e in _entries) {
-      final entryId = (e['entry_id'] ?? e['id'] ?? '').toString().trim();
-      final isFurOrWool = _isFurOrWoolEntry(e);
-
-      // Prevent the normal/base row for a fur/wool entry from also appearing
-      // under its regular variety.
-      if (!isFurOrWool && entryId.isNotEmpty && furOrWoolEntryIds.contains(entryId)) {
-        continue;
-      }
-
-      final key = isFurOrWool
-          ? 'Fur / Wool'
-          : (() {
-              final variety = (e['variety'] ?? '').toString().trim();
-              return variety.isEmpty ? '(Unknown Variety)' : variety;
-            })();
-
-      out.putIfAbsent(key, () => <Map<String, dynamic>>[]);
-      out[key]!.add(e);
-    }
-
-    return out;
-  }
 
   String _judgeNameById(String? judgeId) {
     if (judgeId == null || judgeId.isEmpty) return '';
@@ -2588,8 +2548,8 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
                                   showName: widget.showName,
                                   sectionLabel: widget.sectionLabel,
                                   breed: widget.breed,
-                                  variety: variety == 'Fur / Wool' ? '' : variety,
-                                  contextLabel: variety == 'Fur / Wool'
+                                  variety: variety,
+                                  contextLabel: _isFurEntry(varietyEntries.first)
                                       ? 'Fur / Wool'
                                       : (widget.parentGroupLabel ?? variety),
                                   entries: varietyEntries,
@@ -2609,7 +2569,7 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
 
                                     return usesGroups && groupName.isNotEmpty;
                                   }),
-                                  showsByVariety: variety != 'Fur / Wool',
+                                  showsByVariety: !_isFurEntry(varietyEntries.first),
                                   isQrEntryMode: widget.isQrEntryMode,
                                 ),
                               ),
@@ -2705,9 +2665,6 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
     _entries = [...widget.entries];
   }
 
-  bool _isFurOrWoolEntry(Map<String, dynamic> e) {
-    return _isFurEntry(e);
-  }
 
     String _furWoolBucketLabel(Map<String, dynamic> e) {
       final rawClass = (e['class_name'] ?? '').toString().trim();
@@ -2731,6 +2688,14 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
 
       return rawVariety.isNotEmpty ? 'Fur/Wool - $rawVariety' : 'Fur/Wool';
     }
+  
+  bool _isFurOrWoolEntry(Map<String, dynamic> row) {
+    final value = row['is_fur'];
+    if (value is bool) return value;
+
+    final text = (value ?? '').toString().trim().toLowerCase();
+    return text == 'true' || text == 't' || text == '1' || text == 'yes';
+  }
 
   String _ageClassOnly(String raw) {
     final s = raw.trim();
@@ -2879,31 +2844,37 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
 
     return labels;
   }
-  Map<String, List<Map<String, dynamic>>> _groupByClassSex() {
-    final out = <String, List<Map<String, dynamic>>>{};
+    Map<String, List<Map<String, dynamic>>> _groupByClassSex() {
+      final out = <String, List<Map<String, dynamic>>>{};
 
-    for (final e in _entries) {
-      final isFur = _isFurEntry(e);
-      String key;
+      for (final e in _entries) {
+        String key;
 
-      if (isFur) {
-        key = _furWoolBucketLabel(e);
-      } else {
-        final cls = _ageClassOnly((e['class_name'] ?? '').toString());
-        final sex = (e['sex'] ?? '').toString().trim();
-        final label = [
-          if (cls.isNotEmpty) cls,
-          if (sex.isNotEmpty) sex,
-        ].join(' ');
-        key = label.isEmpty ? '(Unknown Class)' : label;
+        if (_isFurOrWoolEntry(e)) {
+          final furVariety = (e['variety'] ?? '').toString().trim().toLowerCase();
+          if (furVariety == 'white') {
+            key = 'White';
+          } else if (furVariety == 'colored' || furVariety == 'colour') {
+            key = 'Colored';
+          } else {
+            key = 'Colored';
+          }
+        } else {
+          final cls = _ageClassOnly((e['class_name'] ?? '').toString());
+          final sex = (e['sex'] ?? '').toString().trim();
+          final label = [
+            if (cls.isNotEmpty) cls,
+            if (sex.isNotEmpty) sex,
+          ].join(' ');
+          key = label.isEmpty ? '(Unknown Class)' : label;
+        }
+
+        out.putIfAbsent(key, () => <Map<String, dynamic>>[]);
+        out[key]!.add(e);
       }
 
-      out.putIfAbsent(key, () => <Map<String, dynamic>>[]);
-      out[key]!.add(e);
+      return out;
     }
-
-    return out;
-  }
 
   String _judgeNameById(String? judgeId) {
     if (judgeId == null || judgeId.isEmpty) return '';
@@ -5156,28 +5127,6 @@ if (storedJudgeId.isEmpty) {
       final isFurOrWoolResult = _isFurOrWoolResultRow();
 
       if (isFurOrWoolResult) {
-        await supabase
-            .from('entries')
-            .update({
-              'fur_placement': normalizedPlacement,
-              'fur_notes': normalizedDqReason,
-              'updated_at': now,
-            })
-            .eq('id', entryId);
-
-        widget.entry['placement'] = normalizedPlacement?.toString();
-        widget.entry['fur_placement'] = normalizedPlacement?.toString();
-        widget.entry['disqualified_reason'] = normalizedDqReason;
-        widget.entry['fur_notes'] = normalizedDqReason;
-        widget.entry['updated_at'] = now;
-        widget.entry['_awards'] = <String>[];
-      } else {
-        final awardsToSave = _selectedAwards
-            .map(_canonicalAwardCode)
-            .where((award) => award.trim().isNotEmpty)
-            .toSet()
-            .toList();
-
         final updated = await supabase.rpc(
           'save_results_entry',
           params: {
@@ -5193,7 +5142,7 @@ if (storedJudgeId.isEmpty) {
                 writerName.isEmpty ? 'Signed-in Writer' : writerName,
             'p_result_entered_by_phone':
                 widget.isQrEntryMode ? writerPhone : null,
-            'p_awards': awardsToSave,
+            'p_awards': <String>[],
             'p_is_qr_entry_mode': widget.isQrEntryMode,
           },
         );
@@ -5214,7 +5163,53 @@ if (storedJudgeId.isEmpty) {
             widget.isQrEntryMode ? writerPhone : null;
         widget.entry['result_entered_at'] = now;
         widget.entry['updated_at'] = now;
-        widget.entry['_awards'] = awardsToSave;
+        widget.entry['_awards'] = <String>[];
+      } else {
+        final awardsToSave = _selectedAwards
+          .map(_canonicalAwardCode)
+          .where((award) => award.trim().isNotEmpty)
+          .toSet()
+          .toList();
+
+      final updated = await supabase.rpc(
+        'save_results_entry',
+        params: {
+          'p_show_id': widget.showId,
+          'p_entry_id': entryId,
+          'p_placement': normalizedPlacement,
+          'p_result_status': effectiveStatus,
+          'p_disqualified_reason': normalizedDqReason,
+          'p_is_shown': effectiveStatus != 'No Show',
+          'p_is_disqualified': _isDisqualifiedStatus(effectiveStatus),
+          'p_judged_by_show_judge_id': normalizedJudgeId,
+          'p_result_entered_by_name':
+              writerName.isEmpty ? 'Signed-in Writer' : writerName,
+          'p_result_entered_by_phone':
+              widget.isQrEntryMode ? writerPhone : null,
+          'p_awards': widget.isFurOrWoolClass ? <String>[] : awardsToSave,
+          'p_is_qr_entry_mode': widget.isQrEntryMode,
+        },
+      );
+
+      if (updated == null) {
+        throw Exception('Save returned no result.');
+      }
+
+      // Local update (same for all entries)
+      widget.entry['placement'] = normalizedPlacement?.toString();
+      widget.entry['result_status'] = effectiveStatus;
+      widget.entry['disqualified_reason'] = normalizedDqReason;
+      widget.entry['is_shown'] = effectiveStatus != 'No Show';
+      widget.entry['is_disqualified'] = _isDisqualifiedStatus(effectiveStatus);
+      widget.entry['judged_by_show_judge_id'] = normalizedJudgeId;
+      widget.entry['result_entered_by_name'] =
+          writerName.isEmpty ? 'Signed-in Writer' : writerName;
+      widget.entry['result_entered_by_phone'] =
+          widget.isQrEntryMode ? writerPhone : null;
+      widget.entry['result_entered_at'] = now;
+      widget.entry['updated_at'] = now;
+      widget.entry['_awards'] =
+          widget.isFurOrWoolClass ? <String>[] : awardsToSave;
       }
 
       Navigator.pop(
