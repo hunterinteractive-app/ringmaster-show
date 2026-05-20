@@ -80,16 +80,16 @@ class LegsReportPdfBuilder {
 
   Future<pw.ThemeData> _buildTheme() async {
     final regular = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSans-Regular.ttf'),
+      await rootBundle.load('assets/fonts/Arial.ttf'),
     );
     final bold = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSans-Bold.ttf'),
+      await rootBundle.load('assets/fonts/Arial_Bold.ttf'),
     );
     final italic = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSans-Italic.ttf'),
+      await rootBundle.load('assets/fonts/Arial_Italic.ttf'),
     );
     final boldItalic = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSans-BoldItalic.ttf'),
+      await rootBundle.load('assets/fonts/Arial_Bold_Italic.ttf'),
     );
 
     return pw.ThemeData.withFont(
@@ -498,6 +498,7 @@ class LegsReportPdfBuilder {
       padding: const pw.EdgeInsets.all(3),
       decoration: pw.BoxDecoration(
         border: pw.Border.all(color: arbaBlue, width: 0.4),
+        borderRadius: pw.BorderRadius.circular(3),
       ),
       child: pw.Text(
         'All certificate data is required, including placement and higher win data, animal data, exhibitor member name, secretary and show data, barcode, human-readable code, and rules.',
@@ -657,6 +658,7 @@ class LegsReportPdfBuilder {
       padding: const pw.EdgeInsets.all(4),
       decoration: pw.BoxDecoration(
         border: pw.Border.all(color: arbaBlue, width: 0.6),
+        borderRadius: pw.BorderRadius.circular(3),
       ),
       child: pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -697,14 +699,14 @@ class LegsReportPdfBuilder {
       crossAxisAlignment: pw.CrossAxisAlignment.center,
       children: [
         pw.Container(
-          height: 54,
+          height: 90,
           alignment: pw.Alignment.center,
           child: pw.Image(
             pw.MemoryImage(imageBytes),
             fit: pw.BoxFit.contain,
           ),
         ),
-        pw.SizedBox(height: 2),
+        pw.SizedBox(height: 1),
         pw.Text(
           title,
           textAlign: pw.TextAlign.center,
@@ -714,7 +716,7 @@ class LegsReportPdfBuilder {
             color: arbaBlue,
           ),
         ),
-        pw.SizedBox(height: 2),
+        pw.SizedBox(height: 1),
         ...List.generate(rules.length, (index) {
           return pw.Padding(
             padding: const pw.EdgeInsets.only(bottom: 1.2),
@@ -747,6 +749,7 @@ class LegsReportPdfBuilder {
       padding: const pw.EdgeInsets.fromLTRB(6, 5, 6, 2),
       decoration: pw.BoxDecoration(
         border: pw.Border.all(color: arbaBlue, width: 0.8),
+        borderRadius: pw.BorderRadius.circular(3),
       ),
       child: pw.Column(
         children: [
@@ -827,6 +830,7 @@ class LegsReportPdfBuilder {
       padding: const pw.EdgeInsets.all(4),
       decoration: pw.BoxDecoration(
         border: pw.Border.all(color: arbaBlue, width: 0.6),
+        borderRadius: pw.BorderRadius.circular(3),
       ),
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
