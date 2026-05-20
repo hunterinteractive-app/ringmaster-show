@@ -2564,19 +2564,25 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
                                   judges: widget.judges,
                                   breedClassSystems: widget.breedClassSystems,
                                   finalAwardMode: widget.finalAwardMode,
-                                  showsByGroup: varietyEntries.any((e) {
-                                    final usesGroups = e['uses_group_awards'] == true;
-                                    final groupName = (
-                                      e['group_name'] ??
-                                      e['group_display_name'] ??
-                                      e['group_label'] ??
-                                      e['group'] ??
-                                      e['group_code'] ??
-                                      ''
-                                    ).toString().trim();
+                                  showsByGroup: !_isFurEntry(varietyEntries.first) &&
+                                      ((widget.parentGroupLabel ?? '').trim().isNotEmpty ||
+                                          varietyEntries.any((e) {
+                                            final usesGroupsRaw = e['uses_group_awards'];
+                                            final usesGroups = usesGroupsRaw == true ||
+                                                usesGroupsRaw.toString().trim().toLowerCase() == 'true' ||
+                                                usesGroupsRaw.toString().trim().toLowerCase() == 't' ||
+                                                usesGroupsRaw.toString().trim() == '1';
+                                            final groupName = (
+                                              e['group_name'] ??
+                                              e['group_display_name'] ??
+                                              e['group_label'] ??
+                                              e['group'] ??
+                                              e['group_code'] ??
+                                              ''
+                                            ).toString().trim();
 
-                                    return usesGroups && groupName.isNotEmpty;
-                                  }),
+                                            return usesGroups && groupName.isNotEmpty;
+                                          })),
                                   showsByVariety: !_isFurEntry(varietyEntries.first),
                                   isQrEntryMode: widget.isQrEntryMode,
                                 ),
@@ -4490,7 +4496,26 @@ if (storedJudgeId.isEmpty) {
     return widget.breedClassSystems[breedLower] ?? 'four';
   }
 
-  bool _breedUsesGroups() => widget.showsByGroup;
+  bool _breedUsesGroups() {
+    if (_isFurOrWoolResultRow()) return false;
+
+    if (widget.showsByGroup) return true;
+
+    final groupName = _groupName(widget.entry);
+    if (groupName.isNotEmpty && groupName != 'Fur / Wool') return true;
+
+    return widget.classEntries.any((e) {
+      if (_isFurOrWoolEntry(e)) return false;
+
+      final usesGroupsRaw = e['uses_group_awards'];
+      final usesGroups = usesGroupsRaw == true ||
+          usesGroupsRaw.toString().trim().toLowerCase() == 'true' ||
+          usesGroupsRaw.toString().trim().toLowerCase() == 't' ||
+          usesGroupsRaw.toString().trim() == '1';
+
+      return usesGroups;
+    });
+  }
   bool get _showsByVariety => widget.showsByVariety;
 
   List<String> get _visibleAwardCodes {
@@ -4503,7 +4528,7 @@ if (storedJudgeId.isEmpty) {
 
     final awards = <String>[];
 
-    if (widget.showsByGroup) {
+    if (_breedUsesGroups()) {
       awards.addAll(const ['BOG', 'BOSG']);
     }
 
