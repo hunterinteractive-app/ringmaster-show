@@ -2684,7 +2684,7 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
         return rawClass;
       }
 
-      final rawVariety = (e['variety'] ?? '').toString().trim();
+      final rawVariety = (e['fur_variety'] ?? e['variety'] ?? '').toString().trim();
 
       if (lowerClass.contains('wool')) {
         return rawVariety.isNotEmpty ? 'Wool - $rawVariety' : 'Wool';
@@ -2863,8 +2863,15 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
         String key;
 
         if (_isFurOrWoolEntry(e)) {
-          final furVariety = (e['variety'] ?? '').toString().trim().toLowerCase();
-          if (furVariety == 'white') {
+          final furVariety = (e['fur_variety'] ?? e['variety'] ?? '')
+              .toString()
+              .trim()
+              .toLowerCase();
+
+          if (furVariety == 'white' ||
+              furVariety.contains('white') ||
+              furVariety == 'rew' ||
+              furVariety == 'bew') {
             key = 'White';
           } else {
             key = 'Colored';

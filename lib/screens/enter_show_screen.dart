@@ -327,12 +327,9 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   }
 
   bool _breedUsesWhiteColoredFur(String breedName) {
-    final mode =
-        (_rabbitBreedRule(breedName)?['fur_entry_variety_mode'] ?? '')
-            .toString()
-            .trim()
-            .toLowerCase();
-    return mode == 'white_colored';
+    // For the new Fur/Wool flow, every Fur/Wool entry must be classified
+    // as White or Colored before it is added to the cart.
+    return true;
   }
 
   bool _isGiantChinchilla(String breedName) {
@@ -1616,7 +1613,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                 : (a['name'] ?? '').toString().trim(),
             'breed': a['breed'],
             'variety': a['variety'],
-            'fur_variety': isFur && _breedUsesWhiteColoredFur(breedName)
+            'fur_variety': isFur
                 ? _furVarietyForAnimalSection(animalId, sectionId)
                 : null,
             'sex': a['sex'],
