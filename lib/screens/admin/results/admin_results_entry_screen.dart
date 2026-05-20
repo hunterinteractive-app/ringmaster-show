@@ -1983,7 +1983,7 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
   @override
   Widget build(BuildContext context) {
     final grouped = _groupByGroupName();
-    final groups = grouped.keys.toList()
+    final groups = (grouped.keys.toList()
       ..sort((a, b) {
         int sortFor(String key) {
           final rows = grouped[key] ?? const <Map<String, dynamic>>[];
@@ -1996,7 +1996,7 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
         final bySort = sortFor(a).compareTo(sortFor(b));
         if (bySort != 0) return bySort;
         return a.toLowerCase().compareTo(b.toLowerCase());
-      });
+      }));
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6FB),
@@ -2232,9 +2232,10 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
         if (_isFurEntry(e)) {
           key = 'Fur / Wool';
         } else {
-          final variety = (e['variety'] ?? '').toString().trim();
-          key = variety.isEmpty ? '(Unknown Variety)' : variety;
+          key = (e['variety'] ?? '').toString().trim();
         }
+
+        if (key.isEmpty) key = '(No Variety)';
 
         out.putIfAbsent(key, () => <Map<String, dynamic>>[]);
         out[key]!.add(e);
@@ -2444,6 +2445,12 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
           return int.tryParse(raw?.toString() ?? '') ?? 9999;
         }
 
+        // Force White, then Colored at top
+        if (a == 'White') return -1;
+        if (b == 'White') return 1;
+        if (a == 'Colored') return -1;
+        if (b == 'Colored') return 1;
+
         final aIsFur = a.trim().toLowerCase() == 'fur / wool';
         final bIsFur = b.trim().toLowerCase() == 'fur / wool';
 
@@ -2451,6 +2458,7 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
 
         final bySort = sortFor(a).compareTo(sortFor(b));
         if (bySort != 0) return bySort;
+
         return a.toLowerCase().compareTo(b.toLowerCase());
       });
 
@@ -2746,12 +2754,16 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
   int _labelSortKey(String label) {
     final lower = label.trim().toLowerCase();
 
+    if (lower == 'white') return 1000;
+    if (lower == 'colored' || lower == 'colour') return 1001;
+
     if (lower.startsWith('fur - ')) return 1000;
     if (lower.startsWith('commercial fur - ')) return 1001;
     if (lower.startsWith('wool - ')) return 1002;
     if (lower == 'fur') return 1000;
     if (lower == 'wool') return 1001;
     if (lower == 'fur/wool') return 1002;
+    if (lower == 'fur / wool') return 1002;
 
     final cls = _ageClassOnly(label);
     final sexPart = lower.contains('buck') || lower.contains('boar')
@@ -2854,8 +2866,6 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
           final furVariety = (e['variety'] ?? '').toString().trim().toLowerCase();
           if (furVariety == 'white') {
             key = 'White';
-          } else if (furVariety == 'colored' || furVariety == 'colour') {
-            key = 'Colored';
           } else {
             key = 'Colored';
           }

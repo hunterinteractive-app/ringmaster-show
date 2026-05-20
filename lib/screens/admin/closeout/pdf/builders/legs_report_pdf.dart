@@ -14,11 +14,13 @@ class LegsReportPdfBuilder {
   static const PdfColor arbaBlue = PdfColor.fromInt(0xFF003B9D);
   static const PdfColor arbaBlueLight = PdfColor.fromInt(0xFFEAF1FF);
   final Uint8List arbaLogoBytes;
-  final Uint8List ringMasterLogoBytes;
+  final Uint8List grandChampionCertificateBytes;
+  final Uint8List bestInShowCertificateBytes;
 
   LegsReportPdfBuilder({
     required this.arbaLogoBytes,
-    required this.ringMasterLogoBytes,
+    required this.grandChampionCertificateBytes,
+    required this.bestInShowCertificateBytes,
   });
 
   static Future<LegsReportPdfBuilder> fromAssets() async {
@@ -26,14 +28,20 @@ class LegsReportPdfBuilder {
         .buffer
         .asUint8List();
 
-    final ringMasterLogoBytes =
-        (await rootBundle.load('assets/images/ringmaster_show_logo.png'))
+    final grandChampionCertificateBytes =
+        (await rootBundle.load('assets/images/Grand_Champion.jpeg'))
+            .buffer
+            .asUint8List();
+
+    final bestInShowCertificateBytes =
+        (await rootBundle.load('assets/images/BIS_Award.jpeg'))
             .buffer
             .asUint8List();
 
     return LegsReportPdfBuilder(
       arbaLogoBytes: arbaLogoBytes,
-      ringMasterLogoBytes: ringMasterLogoBytes,
+      grandChampionCertificateBytes: grandChampionCertificateBytes,
+      bestInShowCertificateBytes: bestInShowCertificateBytes,
     );
   }
 
@@ -62,12 +70,12 @@ class LegsReportPdfBuilder {
   ];
 
   static const List<String> arbaMembershipFeeLines = [
-    'ARBA Membership Fee Schedule',
-    'Adult: 1 year / 3 years',
-    'Youth: 1 year / 3 years',
-    'Husband/Wife: 1 year / 3 years',
-    'Family: 1 year / 3 years',
-    'Verify current fee amounts with ARBA.',
+    'Membership Fees: all non-US residents add 10 per year service charge to all fees.',
+    'Adult: 1 yr. 20 | 3 yrs. 50',
+    'Youth: 1 yr. 12 | 3 yrs. 30',
+    'Husband/Wife: 1 yr. 30 | 3 yrs. 75',
+    'Single Adult Family: 1 yr. 20 + 5 per youth | 3 yrs. 50 + 10 per youth',
+    'Two Adult Family: 1 yr. 30 + 5 per youth | 3 yrs. 75 + 10 per youth',
   ];
 
   Future<pw.ThemeData> _buildTheme() async {
@@ -157,7 +165,9 @@ class LegsReportPdfBuilder {
                         _certificate(chunk[1])
                       else
                         _blankCertificateSpace(),
-                      pw.SizedBox(height: 10),
+                      pw.SizedBox(height: 6),
+                      _requiredCertificateImagesBlock(),
+                      pw.SizedBox(height: 6),
                       _rulesAndRequiredArbaInfoBlock(),
                     ],
                   );
@@ -641,6 +651,97 @@ class LegsReportPdfBuilder {
     return pw.SizedBox(height: 205);
   }
 
+  pw.Widget _requiredCertificateImagesBlock() {
+    return pw.Container(
+      width: double.infinity,
+      padding: const pw.EdgeInsets.all(4),
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(color: arbaBlue, width: 0.6),
+      ),
+      child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Expanded(
+            child: _certificateImagePanel(
+              title: 'GRAND CHAMPION CERTIFICATE',
+              imageBytes: grandChampionCertificateBytes,
+              rules: const [
+                'A Grand Champion Certificate will be awarded to any rabbit or cavy that has won at least 3 Legs.',
+                'Only one Grand Champion Certificate will be awarded to the same rabbit or cavy.',
+              ],
+            ),
+          ),
+          pw.SizedBox(width: 8),
+          pw.Expanded(
+            child: _certificateImagePanel(
+              title: 'BEST IN SHOW CERTIFICATE',
+              imageBytes: bestInShowCertificateBytes,
+              rules: const [
+                'The ARBA will award a Best in Show Certificate to any rabbit or cavy that has won this award.',
+                'The ARBA will award a Best in Specialty Show Certificate to any rabbit or cavy that has won this award at a breed specialty show.',
+                'Send the legs showing the respective award with the fee to receive the certificate.',
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _certificateImagePanel({
+    required String title,
+    required Uint8List imageBytes,
+    required List<String> rules,
+  }) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.center,
+      children: [
+        pw.Container(
+          height: 54,
+          alignment: pw.Alignment.center,
+          child: pw.Image(
+            pw.MemoryImage(imageBytes),
+            fit: pw.BoxFit.contain,
+          ),
+        ),
+        pw.SizedBox(height: 2),
+        pw.Text(
+          title,
+          textAlign: pw.TextAlign.center,
+          style: pw.TextStyle(
+            fontSize: 6.2,
+            fontWeight: pw.FontWeight.bold,
+            color: arbaBlue,
+          ),
+        ),
+        pw.SizedBox(height: 2),
+        ...List.generate(rules.length, (index) {
+          return pw.Padding(
+            padding: const pw.EdgeInsets.only(bottom: 1.2),
+            child: pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.SizedBox(
+                  width: 8,
+                  child: pw.Text(
+                    '${index + 1}.',
+                    style: const pw.TextStyle(fontSize: 4.9),
+                  ),
+                ),
+                pw.Expanded(
+                  child: pw.Text(
+                    rules[index],
+                    style: const pw.TextStyle(fontSize: 4.9),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
   pw.Widget _rulesAndRequiredArbaInfoBlock() {
     return pw.Container(
       padding: const pw.EdgeInsets.fromLTRB(6, 5, 6, 2),
@@ -733,7 +834,7 @@ class LegsReportPdfBuilder {
           pw.Text(
             title,
             style: pw.TextStyle(
-              fontSize: 5.8,
+              fontSize: 5.5,
               fontWeight: pw.FontWeight.bold,
               color: arbaBlue,
             ),
@@ -744,7 +845,7 @@ class LegsReportPdfBuilder {
               padding: const pw.EdgeInsets.only(bottom: 1),
               child: pw.Text(
                 line,
-                style: const pw.TextStyle(fontSize: 5.2),
+                style: const pw.TextStyle(fontSize: 4.9),
               ),
             ),
           ),
