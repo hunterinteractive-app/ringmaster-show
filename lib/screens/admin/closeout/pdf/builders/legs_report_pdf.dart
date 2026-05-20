@@ -29,12 +29,12 @@ class LegsReportPdfBuilder {
         .asUint8List();
 
     final grandChampionCertificateBytes =
-        (await rootBundle.load('assets/images/Grand_Champion.jpeg'))
+        (await rootBundle.load('assets/images/Grand_Champion.png'))
             .buffer
             .asUint8List();
 
     final bestInShowCertificateBytes =
-        (await rootBundle.load('assets/images/BIS_Award.jpeg'))
+        (await rootBundle.load('assets/images/BIS_Award.png'))
             .buffer
             .asUint8List();
 
