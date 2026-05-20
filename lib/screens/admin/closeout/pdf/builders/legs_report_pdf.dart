@@ -347,6 +347,7 @@ class LegsReportPdfBuilder {
 
   pw.Widget _rightInfo(LegsCertificateData d) {
     final qrUrl = _buildLegVerificationUrl(d);
+    final arbaBarcodeValue = _buildArbaELegBarcode(d);
 
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -379,7 +380,7 @@ class LegsReportPdfBuilder {
                 alignment: pw.Alignment.centerRight,
                 child: pw.BarcodeWidget(
                   barcode: pw.Barcode.code128(),
-                  data: d.barcodeValue,
+                  data: arbaBarcodeValue,
                   width: 180,
                   height: 40,
                   drawText: false,
@@ -459,6 +460,94 @@ class LegsReportPdfBuilder {
         ),
       ],
     );
+  }
+
+  String _buildArbaELegBarcode(LegsCertificateData d) {
+    final sanction = _alphaNumericOnly(d.sanctionNumber).toUpperCase();
+    final ear = _alphaNumericOnly(d.earNumber).toUpperCase();
+    final breed = _alphaNumericOnly(d.breed).toUpperCase();
+    final variety = _alphaNumericOnly(d.variety).toUpperCase();
+    final className = _alphaNumericOnly(d.className).toUpperCase();
+    final sex = _alphaNumericOnly(d.sex).toUpperCase();
+
+    final yearDigit = d.showDate == null
+        ? '0'
+        : (d.showDate!.year % 10).toString();
+
+    final sanctionLastDigit = _lastDigit(sanction) ?? 0;
+    final yearLastDigit = int.tryParse(yearDigit) ?? 0;
+    final checkDigit = ((yearLastDigit + sanctionLastDigit) / 2).ceil();
+
+    return '*'
+        '$yearDigit'
+        '${_lastChar(breed)}'
+        '${_charAt(sanction, 0)}'
+        '${_classCode(className)}'
+        '${_charAt(sanction, 2)}'
+        '${_lastChar(ear)}'
+        '${_charAt(sanction, 4)}'
+        '${_thirdFromRightOrZero(ear)}'
+        '${_lastChar(sanction)}'
+        '${variety.isEmpty ? 'Z' : _firstChar(variety)}'
+        '${_charAt(sanction, 5)}'
+        '${_secondFromRightOrZero(ear)}'
+        '${_charAt(sanction, 3)}'
+        '${_sexCode(sex)}'
+        '${_charAt(sanction, 1)}'
+        '${_firstChar(breed)}'
+        '$checkDigit'
+        '*';
+  }
+
+  String _alphaNumericOnly(String value) {
+    return value.replaceAll(RegExp(r'[^A-Za-z0-9]'), '');
+  }
+
+  String _firstChar(String value) {
+    return value.isEmpty ? 'Z' : value[0];
+  }
+
+  String _lastChar(String value) {
+    return value.isEmpty ? '0' : value[value.length - 1];
+  }
+
+  String _charAt(String value, int index) {
+    return value.length > index ? value[index] : '0';
+  }
+
+  String _thirdFromRightOrZero(String value) {
+    return value.length >= 3 ? value[value.length - 3] : '0';
+  }
+
+  String _secondFromRightOrZero(String value) {
+    return value.length >= 2 ? value[value.length - 2] : '0';
+  }
+
+  int? _lastDigit(String value) {
+    for (var i = value.length - 1; i >= 0; i--) {
+      final digit = int.tryParse(value[i]);
+      if (digit != null) return digit;
+    }
+    return null;
+  }
+
+  String _classCode(String value) {
+    final lower = value.toLowerCase();
+    if (lower.contains('intermediate')) return 'I';
+    if (lower.contains('junior')) return 'J';
+    if (lower.contains('pre')) return 'P';
+    if (lower.contains('senior')) return 'S';
+    return value.isEmpty ? 'Z' : value[0];
+  }
+
+  String _sexCode(String value) {
+    final lower = value.toLowerCase();
+    if (lower.startsWith('b') || lower.contains('buck') || lower.contains('boar')) {
+      return 'B';
+    }
+    if (lower.startsWith('d') || lower.contains('doe')) return 'D';
+    if (lower.startsWith('s') || lower.contains('sow')) return 'D';
+    return value.isEmpty ? 'Z' : value[0];
   }
 
   String _buildLegVerificationUrl(LegsCertificateData d) {

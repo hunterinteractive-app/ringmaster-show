@@ -4350,12 +4350,6 @@ if (storedJudgeId.isEmpty) {
             .where((x) => x.isNotEmpty))
         .toSet();
 
-    if ((_placement == null || _placement!.isEmpty) &&
-        widget.shownCount == 1 &&
-        _resultStatus == 'Shown' &&
-        !_isScratched(widget.entry)) {
-      _placement = '1';
-    }
   }
 
   @override
@@ -5090,13 +5084,9 @@ if (storedJudgeId.isEmpty) {
         return;
       }
 
-      final int? normalizedPlacement = shouldClearPlacement
-          ? null
-          : int.tryParse((_placement ?? '').trim());
-
-      if (!shouldClearPlacement && normalizedPlacement == null) {
-        throw Exception('Placement is required before saving.');
-      }
+      final normalizedPlacement = shouldClearPlacement
+          ? ''
+          : (_placement ?? '').trim();
 
       String? normalizedJudgeId;
       if (_judgeId != null && _judgeId!.trim().isNotEmpty) {
@@ -5151,7 +5141,7 @@ if (storedJudgeId.isEmpty) {
           throw Exception('Save returned no result.');
         }
 
-        widget.entry['placement'] = normalizedPlacement?.toString();
+        widget.entry['placement'] = normalizedPlacement.isEmpty ? null : normalizedPlacement;
         widget.entry['result_status'] = effectiveStatus;
         widget.entry['disqualified_reason'] = normalizedDqReason;
         widget.entry['is_shown'] = effectiveStatus != 'No Show';
@@ -5196,7 +5186,7 @@ if (storedJudgeId.isEmpty) {
       }
 
       // Local update (same for all entries)
-      widget.entry['placement'] = normalizedPlacement?.toString();
+      widget.entry['placement'] = normalizedPlacement.isEmpty ? null : normalizedPlacement;
       widget.entry['result_status'] = effectiveStatus;
       widget.entry['disqualified_reason'] = normalizedDqReason;
       widget.entry['is_shown'] = effectiveStatus != 'No Show';
@@ -5399,7 +5389,7 @@ if (storedJudgeId.isEmpty) {
                   items: [
                     const DropdownMenuItem<String>(
                       value: '',
-                      child: Text(''),
+                      child: Text('(No placing)'),
                     ),
                     ...placementOptions.map(
                       (p) => DropdownMenuItem<String>(
@@ -5412,7 +5402,13 @@ if (storedJudgeId.isEmpty) {
                       ? null
                       : (v) {
                           setState(() {
-                            _placement = (v == null || v.isEmpty) ? null : v;
+                            _placement = (v == null || v.trim().isEmpty)
+                                ? null
+                                : v.trim();
+
+                            if ((_placement ?? '').trim() != '1') {
+                              _selectedAwards.clear();
+                            }
                           });
                         },
                 ),

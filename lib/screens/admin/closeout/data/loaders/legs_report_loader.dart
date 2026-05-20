@@ -481,8 +481,11 @@ class LegsReportLoader {
         final scratchedAt = _str(row['scratched_at']);
         final isShown = row['is_shown'] != false;
         final isDisqualified = row['is_disqualified'] == true;
+        final isFurOrWool = row['is_fur'] == true || row['is_wool'] == true;
 
-        if (!isShown || isDisqualified || scratchedAt.isNotEmpty) continue;
+        if (!isShown || isDisqualified || scratchedAt.isNotEmpty || isFurOrWool) {
+          continue;
+        }
 
         row['resolved_section_id'] = sectionId;
         row['resolved_section_letter'] = showLetter;
@@ -530,6 +533,11 @@ class LegsReportLoader {
       final breedSameSexRows =
           breedRows.where((e) => _str(e['sex']) == sex).toList();
       final breedSameSexAnimals = breedSameSexRows.length;
+      final breedSameSexExhibitors = breedSameSexRows
+          .map((e) => _str(e['exhibitor_id']))
+          .where((e) => e.isNotEmpty)
+          .toSet()
+          .length;
 
       final varietyRows = sameShowRows.where((e) {
         return _str(e['breed_name']) == breed &&
@@ -546,6 +554,11 @@ class LegsReportLoader {
       final varietySameSexRows =
           varietyRows.where((e) => _str(e['sex']) == sex).toList();
       final varietySameSexAnimals = varietySameSexRows.length;
+      final varietySameSexExhibitors = varietySameSexRows
+          .map((e) => _str(e['exhibitor_id']))
+          .where((e) => e.isNotEmpty)
+          .toSet()
+          .length;
 
       final groupRows = usesGroupAwards && groupName.isNotEmpty
           ? sameShowRows.where((e) {
@@ -564,6 +577,11 @@ class LegsReportLoader {
       final groupSameSexRows =
           groupRows.where((e) => _str(e['sex']) == sex).toList();
       final groupSameSexAnimals = groupSameSexRows.length;
+      final groupSameSexExhibitors = groupSameSexRows
+          .map((e) => _str(e['exhibitor_id']))
+          .where((e) => e.isNotEmpty)
+          .toSet()
+          .length;
 
       final classRows = sameShowRows.where((e) {
       return _str(e['breed_name']) == breed &&
@@ -603,12 +621,15 @@ class LegsReportLoader {
         breedAnimals: breedAnimals,
         breedExhibitors: breedExhibitors,
         breedSameSexAnimals: breedSameSexAnimals,
+        breedSameSexExhibitors: breedSameSexExhibitors,
         varietyAnimals: varietyAnimals,
         varietyExhibitors: varietyExhibitors,
         varietySameSexAnimals: varietySameSexAnimals,
+        varietySameSexExhibitors: varietySameSexExhibitors,
         groupAnimals: groupAnimals,
         groupExhibitors: groupExhibitors,
         groupSameSexAnimals: groupSameSexAnimals,
+        groupSameSexExhibitors: groupSameSexExhibitors,
         classAnimals: classAnimals,
         classExhibitors: classExhibitors,
         showAnimals: showAnimals,
@@ -662,12 +683,12 @@ class LegsReportLoader {
 
     if ((normalized == 'BOSB' || normalized == 'BOS') &&
         ctx.breedSameSexAnimals >= 5 &&
-        ctx.breedExhibitors >= 3) {
+        ctx.breedSameSexExhibitors >= 3) {
       return _LegRuleMatch(
         rule: 3,
         priority: 4,
         animalsCount: ctx.breedSameSexAnimals,
-        exhibitorsCount: ctx.breedExhibitors,
+        exhibitorsCount: ctx.breedSameSexExhibitors,
       );
     }
 
@@ -684,12 +705,12 @@ class LegsReportLoader {
 
     if (normalized == 'BOSG' &&
         ctx.groupSameSexAnimals >= 5 &&
-        ctx.groupExhibitors >= 3) {
+        ctx.groupSameSexExhibitors >= 3) {
       return _LegRuleMatch(
         rule: 5,
         priority: 6,
         animalsCount: ctx.groupSameSexAnimals,
-        exhibitorsCount: ctx.groupExhibitors,
+        exhibitorsCount: ctx.groupSameSexExhibitors,
       );
     }
 
@@ -706,12 +727,12 @@ class LegsReportLoader {
 
     if (normalized == 'BOSV' &&
         ctx.varietySameSexAnimals >= 5 &&
-        ctx.varietyExhibitors >= 3) {
+        ctx.varietySameSexExhibitors >= 3) {
       return _LegRuleMatch(
         rule: 7,
         priority: 8,
         animalsCount: ctx.varietySameSexAnimals,
-        exhibitorsCount: ctx.varietyExhibitors,
+        exhibitorsCount: ctx.varietySameSexExhibitors,
       );
     }
 
@@ -825,14 +846,17 @@ class _EntryLegContext {
   final int breedAnimals;
   final int breedExhibitors;
   final int breedSameSexAnimals;
+  final int breedSameSexExhibitors;
 
   final int varietyAnimals;
   final int varietyExhibitors;
   final int varietySameSexAnimals;
+  final int varietySameSexExhibitors;
 
   final int groupAnimals;
   final int groupExhibitors;
   final int groupSameSexAnimals;
+  final int groupSameSexExhibitors;
 
   final int classAnimals;
   final int classExhibitors;
@@ -864,12 +888,15 @@ class _EntryLegContext {
     required this.breedAnimals,
     required this.breedExhibitors,
     required this.breedSameSexAnimals,
+    required this.breedSameSexExhibitors,
     required this.varietyAnimals,
     required this.varietyExhibitors,
     required this.varietySameSexAnimals,
+    required this.varietySameSexExhibitors,
     required this.groupAnimals,
     required this.groupExhibitors,
     required this.groupSameSexAnimals,
+    required this.groupSameSexExhibitors,
     required this.classAnimals,
     required this.classExhibitors,
     required this.showAnimals,
