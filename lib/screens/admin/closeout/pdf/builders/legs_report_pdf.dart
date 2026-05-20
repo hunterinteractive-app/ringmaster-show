@@ -100,7 +100,7 @@ class LegsReportPdfBuilder {
     );
   }
 
-    Future<ReportFileResult> buildFile(
+  Future<ReportFileResult> buildFile(
       List<LegsCertificateData> data,
       ReportRequest request,
     ) async {
