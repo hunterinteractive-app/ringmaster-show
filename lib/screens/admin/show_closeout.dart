@@ -1467,7 +1467,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         final runId =
             artifact.finalizeRunId ?? _dashboard?.latestFinalize.id ?? 'manual-run';
 
-        try {
+        Future<void> generateAttempt() async {
           if (artifact.reportName == 'sweepstakes_report' ||
               artifact.reportName == 'breed_results_detail_report') {
             final breedName = _artifactMetaString(artifact, 'breed_name');
@@ -1529,12 +1529,54 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
               isNationalShow: isNationalShow,
             );
           }
-
-          onFinished(key);
-        } catch (e) {
-          onFailed(key, e);
-          rethrow;
         }
+
+        Object? lastError;
+        StackTrace? lastStack;
+
+        for (var attempt = 1; attempt <= 3; attempt++) {
+          try {
+            await generateAttempt();
+            onFinished(key);
+            return;
+          } catch (e, st) {
+            lastError = e;
+            lastStack = st;
+
+            debugPrint(
+              'REPORT GENERATION ATTEMPT $attempt FAILED: ${artifact.reportName} / ${artifact.id}',
+            );
+            debugPrint('REPORT GENERATION ERROR: $e');
+
+            if (attempt < 3) {
+              await Future.delayed(Duration(seconds: attempt * 2));
+            }
+          }
+        }
+
+        final error = lastError ?? Exception('Unknown report generation failure');
+
+        debugPrint(
+          'REPORT GENERATION FAILED AFTER RETRIES: ${artifact.reportName} / ${artifact.id}',
+        );
+        debugPrint('REPORT GENERATION ERROR: $error');
+        if (lastStack != null) {
+          debugPrint('REPORT GENERATION STACK: $lastStack');
+        }
+
+        onFailed(key, error);
+
+        await supabase
+            .from('show_report_artifacts')
+            .update({
+              'artifact_status': 'failed',
+              'error_count': 1,
+              'metadata': {
+                ...artifact.metadata,
+                'last_error': error.toString(),
+              },
+            })
+            .eq('id', artifact.id);
       }
 
       final validArtifacts = artifacts.where((a) {
@@ -1544,7 +1586,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           return _artifactMetaString(a, 'exhibitor_id') != null;
         }
 
-        if (a.reportName == 'legs') {
+        if (a.reportName == 'legs' || a.reportName == 'leg_report') {
           final exhibitorId = _artifactMetaString(a, 'exhibitor_id');
           final hasLegs = a.metadata['has_legs'] == true;
           final legsCountRaw = a.metadata['legs_count'];
@@ -1565,7 +1607,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         return true;
       }).toList();
 
-      const batchSize = 20;
+      const batchSize = 12;
 
       for (var i = 0; i < validArtifacts.length; i += batchSize) {
         final batch = validArtifacts.skip(i).take(batchSize).toList();
@@ -3147,10 +3189,50 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                   ),
                                 ),
 
+                                Builder(
+                                  builder: (context) {
+                                    final queuedRemaining =
+                                        (_dashboard?.reports ?? const <ReportArtifactSummary>[])
+                                            .where((r) => r.isCurrent)
+                                            .where(
+                                              (r) =>
+                                                  r.artifactStatus == 'queued' ||
+                                                  r.artifactStatus == 'failed',
+                                            )
+                                            .toList();
+
+                                    return OutlinedButton.icon(
+                                      onPressed: _isBusy || queuedRemaining.isEmpty
+                                          ? null
+                                          : () async {
+                                              await showDialog<bool>(
+                                                context: context,
+                                                barrierDismissible: false,
+                                                builder: (context) {
+                                                  return _GenerateAllReportsDialog(
+                                                    artifacts: queuedRemaining,
+                                                    onRun: (onStarted, onFinished, onFailed) {
+                                                      return _runGenerateAllReportsLive(
+                                                        queuedRemaining,
+                                                        onStarted: onStarted,
+                                                        onFinished: onFinished,
+                                                        onFailed: onFailed,
+                                                      );
+                                                    },
+                                                  );
+                                                },
+                                              );
+
+                                              await _refreshDashboardOnly();
+                                            },
+                                      icon: const Icon(Icons.play_circle_outline),
+                                      label: Text('Generate Remaining (${queuedRemaining.length})'),
+                                    );
+                                  },
+                                ),
+
                                 OutlinedButton.icon(
-                                  onPressed: _isBusy
-                                      ? null
-                                      : _sendAllExhibitorReports,
+                                  onPressed: _isBusy ? null : _sendAllExhibitorReports,
                                   icon: const Icon(Icons.send_outlined),
                                   label: Text(
                                     _selectedCloseoutScopeIsEntireShow
@@ -4550,7 +4632,16 @@ class _GenerateAllReportsDialogState extends State<_GenerateAllReportsDialog> {
                           contentPadding: EdgeInsets.zero,
                           leading: Icon(icon, color: color),
                           title: Text(_artifactLabel(artifact)),
-                          subtitle: Text(_friendlyReportName(artifact.reportName)),
+                          subtitle: Text(
+                            (artifact.metadata['exhibitor_name'] ?? artifact.metadata['breed_name'] ?? '')
+                                    .toString()
+                                    .trim()
+                                    .isEmpty
+                                ? _friendlyReportName(artifact.reportName)
+                                : (artifact.metadata['exhibitor_name'] ?? artifact.metadata['breed_name'])
+                                    .toString()
+                                    .trim(),
+                          ),
                           trailing: Text(status),
                         ),
                         if (failedMessage != null)
