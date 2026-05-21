@@ -765,6 +765,10 @@ class _ControlSheetsGeneratorSheetState
     final name = _safe(row, 'animal_name');
     final tattoo = _safe(row, 'tattoo').toUpperCase();
 
+    // Rabbits should print ear/tattoo only. Cavies may include the animal
+    // name because duplicate ear tags are more common there.
+    if (!_isCavyRow(row)) return tattoo;
+
     if (name.isNotEmpty && name.toUpperCase() != tattoo) {
       return '$name • $tattoo';
     }
@@ -1200,6 +1204,28 @@ class _ControlSheetsGeneratorSheetState
                 textAlign: pw.TextAlign.center,
               ),
             ),
+            pw.SizedBox(height: 5),
+            pw.Row(
+              children: [
+                pw.Text(
+                  'Writer: ',
+                  style: pw.TextStyle(
+                    fontSize: _scaled(9),
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.Expanded(
+                  child: pw.Container(
+                    height: 10,
+                    decoration: pw.BoxDecoration(
+                      border: pw.Border(
+                        bottom: pw.BorderSide(width: 0.6, color: PdfColors.black),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
             pw.SizedBox(height: 8),
           ],
         );
@@ -1208,9 +1234,14 @@ class _ControlSheetsGeneratorSheetState
       pw.Widget _compactClassHeaderBlock({
         required int blockIndex,
         required int totalBlocks,
+        required String breed,
         required String color,
         required String cls,
         required String sex,
+        required int breedCount,
+        required int breedExhibitorCount,
+        required int groupCount,
+        required int groupExhibitorCount,
         required int rabbitCount,
         required int exhibitorCount,
       }) {
@@ -1229,15 +1260,39 @@ class _ControlSheetsGeneratorSheetState
           child: pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.stretch,
             children: [
+              pw.Text('Breed: $breed', style: title),
+              pw.SizedBox(height: 2),
               pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
+                  pw.Text(
+                    'No. in Breed: $breedCount   Breed Exhibitors: $breedExhibitorCount',
+                    style: small,
+                  ),
                   pw.Text('Breed Class ${blockIndex + 1} of $totalBlocks', style: small),
-                  pw.Text('No. in Class: $rabbitCount   No. Exhibitors: $exhibitorCount', style: small),
                 ],
               ),
-              pw.SizedBox(height: 3),
-              pw.Text(color.trim().isEmpty ? 'Standard' : color, style: title),
+              pw.SizedBox(height: 2),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(
+                    'Group: ${color.trim().isEmpty ? 'Standard' : color}',
+                    style: title,
+                  ),
+                  pw.Text(
+                    'No. in Group: $groupCount   Group Exhibitors: $groupExhibitorCount',
+                    style: small,
+                  ),
+                ],
+              ),
+              pw.SizedBox(height: 2),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('No. in Class: $rabbitCount   Class Exhibitors: $exhibitorCount', style: small),
+                ],
+              ),
               pw.SizedBox(height: 2),
               pw.Row(
                 children: [
@@ -1286,6 +1341,10 @@ class _ControlSheetsGeneratorSheetState
       }) {
         final h = pw.TextStyle(fontSize: _scaled(13), fontWeight: pw.FontWeight.bold);
         final c = pw.TextStyle(fontSize: _scaled(12.5), fontWeight: pw.FontWeight.bold);
+        final specialsCell = pw.TextStyle(
+          fontSize: _scaled(9, max: 10),
+          fontWeight: pw.FontWeight.bold,
+        );
         final specialsText = specialsList.join(', ');
         final specialsHeader = ageSpecial.isNotEmpty
             ? 'Specials\n$ageSpecial'
@@ -1295,8 +1354,8 @@ class _ControlSheetsGeneratorSheetState
           return pw.Table(
             border: pw.TableBorder.all(width: 0.4),
             columnWidths: {
-              0: const pw.FixedColumnWidth(58),
-              1: const pw.FlexColumnWidth(1),
+              0: const pw.FixedColumnWidth(64),
+              1: const pw.FlexColumnWidth(.85),
               2: const pw.FixedColumnWidth(110),
             },
             children: [
@@ -1342,8 +1401,8 @@ class _ControlSheetsGeneratorSheetState
         return pw.Table(
           border: pw.TableBorder.all(width: 0.4),
           columnWidths: {
-            0: const pw.FixedColumnWidth(58),
-            1: const pw.FlexColumnWidth(1),
+            0: const pw.FixedColumnWidth(64),
+            1: const pw.FlexColumnWidth(.85),
             2: const pw.FixedColumnWidth(105),
             3: const pw.FixedColumnWidth(78),
           },
@@ -1386,7 +1445,7 @@ class _ControlSheetsGeneratorSheetState
                   ),
                   pw.Padding(
                     padding: const pw.EdgeInsets.all(3),
-                    child: pw.Text(specialsText, style: c),
+                    child: pw.Text(specialsText, style: specialsCell),
                   ),
                 ],
               );
@@ -1432,6 +1491,25 @@ class _ControlSheetsGeneratorSheetState
         );
       }
 
+      double _estimatedClassBlockHeight({
+        required int rowCount,
+        required bool includeQr,
+        required bool isFurOrWool,
+      }) {
+        // Conservative estimate in PDF points. Text in the Ear #, Exhibitor,
+        // and Specials cells can wrap to multiple lines, so this intentionally
+        // estimates taller than a simple one-line table row. The goal is to
+        // start a class on a new page before the pdf package is forced to split
+        // the class table between pages.
+        final headerHeight = 84.0;
+        final qrHeight = includeQr ? 64.0 : 0.0;
+        final furNoteHeight = isFurOrWool ? 18.0 : 0.0;
+        final tableHeaderHeight = 28.0;
+        final rowHeight = 28.0;
+        final bottomGap = 12.0;
+        return headerHeight + qrHeight + furNoteHeight + tableHeaderHeight + (rowCount * rowHeight) + bottomGap;
+      }
+
       for (final sectionGroup in sectionPageGroups.entries) {
         final sectionTitle = sectionGroup.key;
         final pages = sectionGroup.value;
@@ -1439,7 +1517,7 @@ class _ControlSheetsGeneratorSheetState
         doc.addPage(
           pw.MultiPage(
             pageFormat: PdfPageFormat.letter,
-            margin: const pw.EdgeInsets.fromLTRB(24, 24, 24, 26),
+            margin: const pw.EdgeInsets.fromLTRB(42, 24, 18, 26),
             theme: theme,
             header: (_) => _topHeader(
               showHeader: '${widget.showName}   $sectionTitle',
@@ -1458,6 +1536,12 @@ class _ControlSheetsGeneratorSheetState
             ),
             build: (_) {
               final widgets = <pw.Widget>[];
+              // Keep this below the physical page body height because wrapped
+              // table text can make the real rendered height larger than the
+              // simple estimate below.
+              const estimatedUsablePageHeight = 535.0;
+              const estimatedBreedHeaderHeight = 42.0;
+              var estimatedRemainingHeight = estimatedUsablePageHeight;
 
               final breedGroups = <String, List<Map<String, dynamic>>>{};
               for (final p in pages) {
@@ -1468,6 +1552,57 @@ class _ControlSheetsGeneratorSheetState
               }
 
               final breedNames = breedGroups.keys.toList();
+
+              final breedStats = <String, Map<String, int>>{};
+              final groupStats = <String, Map<String, int>>{};
+
+              for (final breedName in breedNames) {
+                final breedPagesForStats = breedGroups[breedName] ?? const <Map<String, dynamic>>[];
+                final breedEntryIds = <String>{};
+                final breedExhibitorIds = <String>{};
+                final groupEntryIdsByLabel = <String, Set<String>>{};
+                final groupExhibitorIdsByLabel = <String, Set<String>>{};
+
+                for (final p in breedPagesForStats) {
+                  final groupLabel = ((p['color'] ?? '').toString().trim().isEmpty)
+                      ? 'Standard'
+                      : (p['color'] ?? '').toString().trim();
+                  final rowsForStats = (p['rows'] as List).cast<Map<String, dynamic>>();
+
+                  groupEntryIdsByLabel.putIfAbsent(groupLabel, () => <String>{});
+                  groupExhibitorIdsByLabel.putIfAbsent(groupLabel, () => <String>{});
+
+                  for (var rowIndex = 0; rowIndex < rowsForStats.length; rowIndex++) {
+                    final row = rowsForStats[rowIndex];
+                    final entryId = _safe(row, 'entry_id').isNotEmpty
+                        ? _safe(row, 'entry_id')
+                        : _safe(row, 'id').isNotEmpty
+                            ? _safe(row, 'id')
+                            : '$breedName|$groupLabel|$rowIndex';
+                    final exhibitorId = _safe(row, 'exhibitor_id');
+
+                    breedEntryIds.add(entryId);
+                    groupEntryIdsByLabel[groupLabel]!.add(entryId);
+
+                    if (exhibitorId.isNotEmpty) {
+                      breedExhibitorIds.add(exhibitorId);
+                      groupExhibitorIdsByLabel[groupLabel]!.add(exhibitorId);
+                    }
+                  }
+                }
+
+                breedStats[breedName] = {
+                  'entries': breedEntryIds.length,
+                  'exhibitors': breedExhibitorIds.length,
+                };
+
+                for (final groupLabel in groupEntryIdsByLabel.keys) {
+                  groupStats['$breedName|$groupLabel'] = {
+                    'entries': groupEntryIdsByLabel[groupLabel]!.length,
+                    'exhibitors': groupExhibitorIdsByLabel[groupLabel]?.length ?? 0,
+                  };
+                }
+              }
 
               for (var breedIndex = 0; breedIndex < breedNames.length; breedIndex++) {
                 final breed = breedNames[breedIndex];
@@ -1485,25 +1620,31 @@ class _ControlSheetsGeneratorSheetState
                     totalBreeds: breedNames.length,
                   ),
                 );
+                estimatedRemainingHeight = estimatedUsablePageHeight - estimatedBreedHeaderHeight;
 
                 for (var i = 0; i < breedPages.length; i++) {
                   final p = breedPages[i];
                   final isFurOrWool = p['isFurOrWool'] == true;
 
-                  widgets.add(
+                  final classBlockWidgets = <pw.Widget>[
                     _compactClassHeaderBlock(
                       blockIndex: i,
                       totalBlocks: breedPages.length,
+                      breed: breed,
                       color: (p['color'] ?? '').toString(),
                       cls: (p['class'] ?? '').toString(),
                       sex: (p['sex'] ?? '').toString(),
+                      breedCount: breedStats[breed]?['entries'] ?? 0,
+                      breedExhibitorCount: breedStats[breed]?['exhibitors'] ?? 0,
+                      groupCount: groupStats['$breed|${((p['color'] ?? '').toString().trim().isEmpty) ? 'Standard' : (p['color'] ?? '').toString().trim()}']?['entries'] ?? 0,
+                      groupExhibitorCount: groupStats['$breed|${((p['color'] ?? '').toString().trim().isEmpty) ? 'Standard' : (p['color'] ?? '').toString().trim()}']?['exhibitors'] ?? 0,
                       rabbitCount: (p['rabbitCount'] as int?) ?? 0,
                       exhibitorCount: (p['exhibitorCount'] as int?) ?? 0,
                     ),
-                  );
+                  ];
 
                   if (includeQrCode) {
-                    widgets.add(
+                    classBlockWidgets.add(
                       qrResultsBlock(
                         sectionId: (p['sectionId'] ?? '').toString(),
                         breed: breed,
@@ -1512,7 +1653,7 @@ class _ControlSheetsGeneratorSheetState
                   }
 
                   if (isFurOrWool) {
-                    widgets.add(
+                    classBlockWidgets.add(
                       pw.Padding(
                         padding: const pw.EdgeInsets.only(bottom: 4),
                         child: pw.Text(
@@ -1523,7 +1664,7 @@ class _ControlSheetsGeneratorSheetState
                     );
                   }
 
-                  widgets.add(
+                  classBlockWidgets.add(
                     _compactJudgingTable(
                       groupEntries: (p['rows'] as List).cast<Map<String, dynamic>>(),
                       specialsList: (p['specials'] as List).map((x) => x.toString()).toList(),
@@ -1532,7 +1673,33 @@ class _ControlSheetsGeneratorSheetState
                     ),
                   );
 
-                  widgets.add(pw.SizedBox(height: 8));
+                  classBlockWidgets.add(pw.SizedBox(height: 8));
+
+                  final classRowCount = ((p['rows'] as List?) ?? const []).length;
+                  final estimatedClassHeight = _estimatedClassBlockHeight(
+                    rowCount: classRowCount,
+                    includeQr: includeQrCode,
+                    isFurOrWool: isFurOrWool,
+                  );
+
+                  // If a class will not fit in the estimated remaining page space,
+                  // start it on a fresh page. This avoids orphaned class headers
+                  // where the header prints at the bottom of one page and all
+                  // animals continue on the next page.
+                  if (estimatedRemainingHeight < estimatedClassHeight && widgets.isNotEmpty) {
+                    widgets.add(pw.NewPage());
+                    widgets.add(
+                      _breedHeaderBlock(
+                        breed: breed,
+                        breedIndex: breedIndex,
+                        totalBreeds: breedNames.length,
+                      ),
+                    );
+                    estimatedRemainingHeight = estimatedUsablePageHeight - estimatedBreedHeaderHeight;
+                  }
+
+                  widgets.addAll(classBlockWidgets);
+                  estimatedRemainingHeight -= estimatedClassHeight;
                 }
               }
 

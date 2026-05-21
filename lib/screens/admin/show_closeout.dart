@@ -171,6 +171,21 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       return (artifact.fileName ?? '').trim();
     }
 
+    String _artifactProgressSubtitle(ReportArtifactSummary artifact) {
+      final exhibitorName = _artifactMetaString(artifact, 'exhibitor_name');
+      if (exhibitorName != null) return exhibitorName;
+
+      final breedName = _artifactMetaString(artifact, 'breed_name');
+      final scope = _artifactMetaString(artifact, 'scope');
+      final letter = _artifactMetaString(artifact, 'show_letter');
+
+      return [
+        if (breedName != null) breedName,
+        if (scope != null || letter != null)
+          [if (scope != null) scope, if (letter != null) letter].join(' '),
+      ].where((x) => x.trim().isNotEmpty).join(' • ');
+    }
+
     String _artifactMatchText(ReportArtifactSummary artifact) {
       return _norm([
         artifact.reportName,
@@ -1281,11 +1296,11 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   }
 
     Future<void> _finalizeShow() async {
-    if (_isSupportMode) {
-      throw Exception(
-        'Finalize is disabled while viewing in support mode.',
-      );
-    }
+      if (_isSupportMode) {
+        throw Exception(
+          'Finalize is disabled while viewing in support mode.',
+        );
+      }
       final ready = await _ensureResultsReadyForReports();
 
       if (!ready) {
@@ -1315,6 +1330,35 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           );
         }
       } catch (e) {
+        final isStatementTimeout = e is PostgrestException &&
+            (e.code == '57014' ||
+                e.message.toLowerCase().contains('statement timeout') ||
+                e.message.toLowerCase().contains('canceling statement due to statement timeout'));
+
+        if (isStatementTimeout) {
+          // finalize_show can finish enough database work to queue artifacts, but
+          // PostgREST may still time out before returning to Flutter. Treat that
+          // as recoverable when queued artifacts are visible so the PDF
+          // generation step can continue instead of stopping the whole closeout.
+          await Future.delayed(const Duration(seconds: 2));
+          await _refreshDashboardOnly();
+
+          final queuedArtifactCount = await _countQueuedArtifactsForShow();
+
+          if (queuedArtifactCount > 0) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Finalize timed out waiting for the database, but $queuedArtifactCount report artifact${queuedArtifactCount == 1 ? '' : 's'} were queued. Continuing report generation.',
+                  ),
+                ),
+              );
+            }
+            return;
+          }
+        }
+
         rethrow;
       }
     }
@@ -1325,7 +1369,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           .select('id')
           .eq('show_id', widget.showId)
           .eq('is_current', true)
-          .inFilter('artifact_status', ['queued', 'generated', 'failed']);
+          .eq('artifact_status', 'queued');
 
       if (!_selectedCloseoutScopeIsEntireShow) {
         query = query.contains('metadata', {
@@ -1336,6 +1380,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       final rows = await query;
       return (rows as List).length;
     }
+
 
     Future<void> _runGenerateAllReportsLive(
       List<ReportArtifactSummary> artifacts, {
@@ -1410,10 +1455,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       );
 
       String artifactKey(ReportArtifactSummary artifact) {
-        final filePart = (artifact.fileName?.trim().isNotEmpty ?? false)
-            ? ' • ${artifact.fileName!.trim()}'
-            : '';
-        return '${artifact.reportName}::${artifact.id}$filePart';
+        final subtitle = _artifactProgressSubtitle(artifact);
+        final displayPart = subtitle.trim().isEmpty ? '' : ' • ${subtitle.trim()}';
+        return '${artifact.reportName}::${artifact.id}$displayPart';
       }
 
       Future<void> runSingle(ReportArtifactSummary artifact) async {
@@ -1496,8 +1540,19 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       final validArtifacts = artifacts.where((a) {
         if (a.id.isEmpty || a.reportName.isEmpty) return false;
 
-        if (_exhibitorReportKeys.contains(a.reportName)) {
+        if (a.reportName == 'exhibitor_report') {
           return _artifactMetaString(a, 'exhibitor_id') != null;
+        }
+
+        if (a.reportName == 'legs') {
+          final exhibitorId = _artifactMetaString(a, 'exhibitor_id');
+          final hasLegs = a.metadata['has_legs'] == true;
+          final legsCountRaw = a.metadata['legs_count'];
+          final legsCount = legsCountRaw is int
+              ? legsCountRaw
+              : int.tryParse((legsCountRaw ?? '').toString()) ?? 0;
+
+          return exhibitorId != null && (hasLegs || legsCount > 0);
         }
 
         if (a.reportName == 'sweepstakes_report' ||
@@ -1510,7 +1565,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         return true;
       }).toList();
 
-      const batchSize = 3;
+      const batchSize = 20;
 
       for (var i = 0; i < validArtifacts.length; i += batchSize) {
         final batch = validArtifacts.skip(i).take(batchSize).toList();
@@ -2996,9 +3051,17 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                                     .toList();
 
                                             if (artifactsToGenerate.isEmpty) {
-                                              throw Exception(
-                                                'Finalize completed, but there were no queued Flutter-rendered reports to generate.',
-                                              );
+                                              await _refreshDashboardOnly();
+                                              if (mounted) {
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  const SnackBar(
+                                                    content: Text(
+                                                      'Finalize completed. No queued Flutter-rendered reports needed generation.',
+                                                    ),
+                                                  ),
+                                                );
+                                              }
+                                              return;
                                             }
 
                                             final generatedOk =
