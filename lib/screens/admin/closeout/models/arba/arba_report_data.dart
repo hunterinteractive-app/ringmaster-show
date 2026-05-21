@@ -1,6 +1,10 @@
 class ArbaReportData {
   const ArbaReportData({
     required this.showName,
+    required this.sectionId,
+    required this.sectionLabel,
+    required this.scope,
+    required this.showLetter,
     required this.secretaryName,
     required this.secretaryEmail,
     required this.secretaryPhone,
@@ -30,6 +34,10 @@ class ArbaReportData {
   });
 
   final String showName;
+  final String sectionId;
+  final String sectionLabel;
+  final String scope;
+  final String showLetter;
   final String secretaryName;
   final String secretaryEmail;
   final String secretaryPhone;

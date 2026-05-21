@@ -1468,7 +1468,30 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
             artifact.finalizeRunId ?? _dashboard?.latestFinalize.id ?? 'manual-run';
 
         Future<void> generateAttempt() async {
-          if (artifact.reportName == 'sweepstakes_report' ||
+          if (artifact.reportName == 'arba_report') {
+            final scope = _artifactMetaString(artifact, 'scope');
+            final showLetter = _artifactMetaString(artifact, 'show_letter');
+
+            if (scope == null || showLetter == null) {
+              throw Exception(
+                'Missing artifact metadata for ${artifact.reportName} (${artifact.id}). '
+                'Expected scope and show_letter.',
+              );
+            }
+
+            await runner.generateSingleReport(
+              showId: widget.showId,
+              finalizeRunId: runId,
+              reportName: artifact.reportName,
+              artifactId: artifact.id,
+              scope: scope,
+              showLetter: showLetter,
+              showName: widget.showName,
+              showDate: showDate,
+              sanctionNumber: sanctionNumber,
+              isNationalShow: isNationalShow,
+            );
+          } else if (artifact.reportName == 'sweepstakes_report' ||
               artifact.reportName == 'breed_results_detail_report') {
             final breedName = _artifactMetaString(artifact, 'breed_name');
             final scope = _artifactMetaString(artifact, 'scope');
@@ -1495,7 +1518,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
               isNationalShow: isNationalShow,
             );
           } else if (artifact.reportName == 'exhibitor_report' ||
-              artifact.reportName == 'legs') {
+              artifact.reportName == 'legs' ||
+              artifact.reportName == 'leg_report') {
             final exhibitorId = _artifactMetaString(artifact, 'exhibitor_id');
             final exhibitorName = _artifactMetaString(artifact, 'exhibitor_name');
 
@@ -1582,6 +1606,11 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       final validArtifacts = artifacts.where((a) {
         if (a.id.isEmpty || a.reportName.isEmpty) return false;
 
+        if (a.reportName == 'arba_report') {
+          return _artifactMetaString(a, 'scope') != null &&
+              _artifactMetaString(a, 'show_letter') != null;
+        }
+
         if (a.reportName == 'exhibitor_report') {
           return _artifactMetaString(a, 'exhibitor_id') != null;
         }
@@ -1607,7 +1636,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         return true;
       }).toList();
 
-      const batchSize = 12;
+      const batchSize = 4;
 
       for (var i = 0; i < validArtifacts.length; i += batchSize) {
         final batch = validArtifacts.skip(i).take(batchSize).toList();
@@ -2486,6 +2515,51 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           r.artifactStatus == 'generated' &&
           (r.storageBucket?.isNotEmpty == true) &&
           (r.storagePath?.isNotEmpty == true));
+
+      if (reportName == 'arba_report' &&
+          exhibitorId == null &&
+          breedName == null &&
+          scope == null &&
+          showLetter == null) {
+        final arbaArtifacts = matches.toList()
+          ..sort((a, b) {
+            final aLabel = (_artifactMetaString(a, 'section_label') ?? '')
+                .toLowerCase();
+            final bLabel = (_artifactMetaString(b, 'section_label') ?? '')
+                .toLowerCase();
+            final labelCmp = aLabel.compareTo(bLabel);
+            if (labelCmp != 0) return labelCmp;
+
+            final aLetter = (_artifactMetaString(a, 'show_letter') ?? '')
+                .toLowerCase();
+            final bLetter = (_artifactMetaString(b, 'show_letter') ?? '')
+                .toLowerCase();
+            return aLetter.compareTo(bLetter);
+          });
+
+        if (arbaArtifacts.isEmpty) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No generated ARBA reports found.'),
+            ),
+          );
+          return;
+        }
+
+        for (final artifact in arbaArtifacts) {
+          final signedUrl = await supabase.storage
+              .from(artifact.storageBucket!)
+              .createSignedUrl(artifact.storagePath!, 60 * 5);
+
+          await launchUrlString(
+            signedUrl,
+            mode: LaunchMode.externalApplication,
+          );
+        }
+
+        return;
+      }
 
       if ((reportName == 'exhibitor_report' || reportName == 'legs') &&
           exhibitorId != null &&
@@ -4045,10 +4119,24 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
           ),
           items: _currentReports
               .map(
-                (reportName) => DropdownMenuItem<String>(
-                  value: reportName,
-                  child: Text(_friendlyReportName(reportName)),
-                ),
+                (reportName) {
+                  final count = reportName == 'arba_report'
+                      ? widget.reports
+                          .where((r) => r.reportName == reportName)
+                          .where((r) => r.isCurrent)
+                          .where((r) => r.artifactStatus == 'generated')
+                          .length
+                      : 0;
+
+                  return DropdownMenuItem<String>(
+                    value: reportName,
+                    child: Text(
+                      count > 1
+                          ? '${_friendlyReportName(reportName)} ($count)'
+                          : _friendlyReportName(reportName),
+                    ),
+                  );
+                },
               )
               .toList(),
           onChanged: _currentReports.isEmpty

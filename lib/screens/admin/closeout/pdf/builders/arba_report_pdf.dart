@@ -178,8 +178,16 @@ class ArbaReportPdfBuilder {
 
     final bytes = await pdf.save();
 
+    final section = data.sectionLabel
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+        .replaceAll(RegExp(r'_+'), '_')
+        .replaceAll(RegExp(r'^_|_$'), '');
+
     return ReportFileResult(
-      fileName: 'arba_report.pdf',
+      fileName: section.isNotEmpty
+          ? 'arba_report_$section.pdf'
+          : 'arba_report.pdf',
       mimeType: 'application/pdf',
       bytes: bytes,
     );

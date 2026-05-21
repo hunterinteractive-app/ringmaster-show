@@ -15,13 +15,23 @@ class ArbaReportLoader {
     final sectionId = artifactContext.sectionId;
     final showLetter = artifactContext.showLetter;
 
+    // ARBA reports must be scoped to one show section. If this is empty,
+    // the report would fall back to full-show data and all ARBA PDFs would match.
+    if (sectionId.isEmpty) {
+      throw Exception(
+        'ARBA report is missing section context. Regenerate from a queued ARBA artifact, not the manual ARBA report button.',
+      );
+    }
+
     final show = await repo.loadShowBasics(request.showId);
     final arbaDetails = await _loadArbaDetails(request.showId);
 
     final showNameBase = _str(show['name']);
+    final sectionLabel = artifactContext.sectionLabel;
     final showName = [
       showNameBase,
-      if (showLetter.isNotEmpty) showLetter,
+      if (sectionLabel.isNotEmpty) sectionLabel,
+      if (sectionLabel.isEmpty && showLetter.isNotEmpty) showLetter,
     ].where((e) => e.isNotEmpty).join(' - ');
 
     final secretaryName = _firstNonEmpty([
@@ -122,6 +132,10 @@ class ArbaReportLoader {
 
     return ArbaReportData(
       showName: showName,
+      sectionId: sectionId,
+      sectionLabel: artifactContext.sectionLabel,
+      scope: artifactContext.scope,
+      showLetter: showLetter,
       secretaryName: secretaryName,
       secretaryEmail: secretaryEmail,
       secretaryPhone: secretaryPhone,
@@ -230,33 +244,127 @@ class ArbaReportLoader {
   ) async {
     try {
       final artifactId = _reportArtifactIdFromRequest(request);
-      if (artifactId.isEmpty) {
+
+      if (artifactId.isNotEmpty) {
+        final row = await repo.supabase
+            .from('show_report_artifacts')
+            .select('id, metadata')
+            .eq('id', artifactId)
+            .maybeSingle();
+
+        if (row != null) {
+          final metadata = row['metadata'] is Map
+              ? Map<String, dynamic>.from(row['metadata'] as Map)
+              : <String, dynamic>{};
+
+          final context = _ArbaArtifactContext(
+            artifactId: artifactId,
+            sectionId: _str(metadata['section_id']),
+            showLetter: _str(metadata['show_letter']),
+            sectionLabel: _str(metadata['section_label']),
+            scope: _str(metadata['scope']),
+          );
+
+          if (context.sectionId.isNotEmpty) {
+            return context;
+          }
+
+          final resolved = await _resolveSectionContext(
+            request.showId,
+            scope: context.scope,
+            showLetter: context.showLetter,
+            artifactId: artifactId,
+          );
+
+          if (resolved.sectionId.isNotEmpty) {
+            return resolved;
+          }
+
+          return context;
+        }
+      }
+
+      // If no artifact row was found, fall back to request-level scope/letter.
+      // This should only happen for manual generation paths.
+      final fallbackScope = _requestString(request, 'scope');
+      final fallbackShowLetter = _requestString(request, 'showLetter');
+
+      if (fallbackScope.isEmpty && fallbackShowLetter.isEmpty) {
         return const _ArbaArtifactContext.empty();
       }
 
-      final row = await repo.supabase
-          .from('show_report_artifacts')
-          .select('id, metadata')
-          .eq('id', artifactId)
-          .maybeSingle();
-
-      if (row == null) {
-        return const _ArbaArtifactContext.empty();
-      }
-
-      final metadata = row['metadata'] is Map
-          ? Map<String, dynamic>.from(row['metadata'] as Map)
-          : <String, dynamic>{};
-
-      return _ArbaArtifactContext(
+      return _resolveSectionContext(
+        request.showId,
+        scope: fallbackScope,
+        showLetter: fallbackShowLetter,
         artifactId: artifactId,
-        sectionId: _str(metadata['section_id']),
-        showLetter: _str(metadata['show_letter']),
-        sectionLabel: _str(metadata['section_label']),
-        scope: _str(metadata['scope']),
       );
     } catch (_) {
       return const _ArbaArtifactContext.empty();
+    }
+  }
+
+  Future<_ArbaArtifactContext> _resolveSectionContext(
+    String showId, {
+    required String scope,
+    required String showLetter,
+    String artifactId = '',
+  }) async {
+    try {
+      var query = repo.supabase
+          .from('show_sections')
+          .select('id, kind, letter, display_name')
+          .eq('show_id', showId)
+          .eq('is_enabled', true);
+
+      if (scope.trim().isNotEmpty) {
+        query = query.ilike('kind', scope.trim());
+      }
+
+      if (showLetter.trim().isNotEmpty) {
+        query = query.ilike('letter', showLetter.trim());
+      }
+
+      final row = await query.limit(1).maybeSingle();
+      if (row == null) return const _ArbaArtifactContext.empty();
+
+      final kind = _str(row['kind']).toUpperCase();
+      final letter = _str(row['letter']).toUpperCase();
+      final displayName = _str(row['display_name']);
+      final sectionLabel = displayName.isNotEmpty
+          ? displayName
+          : [kind, letter].where((e) => e.isNotEmpty).join(' ');
+
+      return _ArbaArtifactContext(
+        artifactId: artifactId,
+        sectionId: _str(row['id']),
+        showLetter: letter,
+        sectionLabel: sectionLabel,
+        scope: kind,
+      );
+    } catch (_) {
+      return const _ArbaArtifactContext.empty();
+    }
+  }
+
+  String _requestString(ReportRequest request, String fieldName) {
+    try {
+      final dynamic value = (request as dynamic).toJson?[fieldName];
+      return _str(value);
+    } catch (_) {
+      try {
+        final dynamic value = (request as dynamic).metadata?[fieldName];
+        return _str(value);
+      } catch (_) {
+        try {
+          final dynamic value = fieldName == 'scope'
+              ? (request as dynamic).scope
+              : (request as dynamic).showLetter;
+          return _str(value);
+        } catch (_) {
+          return '';
+        }
+      }
     }
   }
 
@@ -554,7 +662,13 @@ class ArbaReportLoader {
     try {
       final rows = await repo.supabase.rpc(
         'report_results_entry_rows',
-        params: {'p_show_id': showId},
+        params: {
+          'p_show_id': showId,
+          'p_section_id': (sectionId != null && sectionId.trim().isNotEmpty)
+              ? sectionId.trim()
+              : null,
+          'p_show_letter': null,
+        },
       );
 
       final normalizedSpecies = species.toLowerCase().trim();
@@ -581,18 +695,23 @@ class ArbaReportLoader {
 
       if (entryIds.isEmpty) return const _ArbaBestAwardInfo.empty();
 
-      final awardRows = await repo.supabase
-          .from('entry_awards')
-          .select('entry_id, award_code')
-          .eq('show_id', showId)
-          .inFilter('entry_id', entryIds);
+      final awardRows = <Map<String, dynamic>>[];
+      for (var i = 0; i < entryIds.length; i += 100) {
+        final chunk = entryIds.skip(i).take(100).toList();
+        final chunkRows = await repo.supabase
+            .from('entry_awards')
+            .select('entry_id, award_code')
+            .inFilter('entry_id', chunk);
+
+        awardRows.addAll(List<Map<String, dynamic>>.from(chunkRows as List));
+      }
 
       final normalizedAwardCodes = awardCodes.map(_normalizeAwardCode).toSet();
       final normalizedFallbackAwardCodes =
           fallbackAwardCodes.map(_normalizeAwardCode).toSet();
 
       String? awardEntryId = _findAwardEntryId(
-        awardRows as List,
+        awardRows,
         normalizedAwardCodes,
       );
 
@@ -634,7 +753,9 @@ class ArbaReportLoader {
         ]),
         earNumber: _str(entry['tattoo']),
       );
-    } catch (_) {
+    } catch (e) {
+      // ignore: avoid_print
+      print('Failed loading ARBA best award for section $sectionId: $e');
       return const _ArbaBestAwardInfo.empty();
     }
   }

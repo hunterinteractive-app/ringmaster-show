@@ -12,9 +12,19 @@ class ReportUploadService {
 
   Future<String> upload({
     required String showId,
+    required String showName,
+    required String artifactId,
     required ReportFileResult file,
   }) async {
-    final path = 'shows/$showId/reports/${file.fileName}';
+    final safeShowName = showName
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+        .replaceAll(RegExp(r'_+'), '_')
+        .replaceAll(RegExp(r'^_|_$'), '');
+
+    final showFolder = safeShowName.isNotEmpty ? safeShowName : showId;
+    final path = 'shows/$showFolder/reports/${artifactId}_${file.fileName}';
 
     await supabase.storage.from(bucket).uploadBinary(
       path,
