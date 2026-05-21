@@ -18,6 +18,8 @@ import 'package:ringmaster_show/screens/admin/closeout/services/report_upload_se
 import 'package:ringmaster_show/services/report_email_service.dart';
 import 'package:ringmaster_show/services/app_session.dart';
 
+import 'results/admin_results_entry_screen.dart';
+
 import 'closeout/data/loaders/legs_report_loader.dart';
 import 'closeout/data/loaders/exhibitor_report_loader.dart';
 import 'closeout/data/loaders/sweepstakes_report_loader.dart';
@@ -68,6 +70,14 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   bool _loadingMissingPlacements = false;
   List<_MissingPlacementItem> _missingPlacementItems = [];
   bool _missingPlacementsLoaded = false;
+
+  bool _loadingMissingJudges = false;
+  List<_MissingJudgeItem> _missingJudgeItems = [];
+  bool _missingJudgesLoaded = false;
+
+  bool _loadingDuplicatePlacements = false;
+  List<_DuplicatePlacementGroupItem> _duplicatePlacementGroupItems = [];
+  bool _duplicatePlacementsLoaded = false;
 
   List<_CloseoutSectionSummary> _closeoutSections = [];
   List<_CloseoutScope> _closeoutScopes = [];
@@ -625,6 +635,267 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       }
     }
 
+    Future<void> _loadMissingJudges() async {
+      if (_loadingMissingJudges) return;
+
+      setState(() {
+        _loadingMissingJudges = true;
+      });
+
+      try {
+        final rows = await supabase.rpc(
+          'report_results_entry_rows',
+          params: {
+            'p_show_id': widget.showId,
+            'p_section_id': null,
+            'p_show_letter': null,
+          },
+        );
+
+        final items = <_MissingJudgeItem>[];
+
+        for (final raw in (rows as List)) {
+          final row = Map<String, dynamic>.from(raw as Map);
+
+          final scratchedAt = (row['scratched_at'] ?? '').toString().trim();
+          final isShown = row['is_shown'] != false;
+          final isDisqualified = row['is_disqualified'] == true;
+          final judgeId =
+              (row['judged_by_show_judge_id'] ?? '').toString().trim();
+
+          final isEligible =
+              scratchedAt.isEmpty && isShown && !isDisqualified;
+
+          if (!isEligible) continue;
+          if (judgeId.isNotEmpty) continue;
+
+          items.add(
+            _MissingJudgeItem(
+              entryId: (row['entry_id'] ?? '').toString(),
+              sectionLabel: (row['section_label'] ?? 'Section').toString(),
+              breedName: (row['breed_name'] ?? '').toString(),
+              groupName: null,
+              varietyName: (row['variety_name'] ?? '').toString(),
+              className: (row['class_name'] ?? '').toString(),
+              sex: (row['sex'] ?? '').toString(),
+              tattoo: (row['tattoo'] ?? '').toString(),
+              exhibitorLabel: (row['exhibitor_label'] ?? '').toString(),
+            ),
+          );
+        }
+
+        setState(() {
+          _missingJudgeItems = items;
+          _missingJudgesLoaded = true;
+        });
+      } finally {
+        setState(() {
+          _loadingMissingJudges = false;
+        });
+      }
+    }
+
+    Future<void> _loadDuplicatePlacementGroups() async {
+      if (_loadingDuplicatePlacements) return;
+
+      setState(() {
+        _loadingDuplicatePlacements = true;
+      });
+
+      try {
+        final sectionRows = await supabase
+            .from('show_sections')
+            .select('id,letter,display_name,kind')
+            .eq('show_id', widget.showId);
+
+        final sectionLabels = <String, String>{};
+        for (final raw in (sectionRows as List)) {
+          final row = Map<String, dynamic>.from(raw as Map);
+          final id = (row['id'] ?? '').toString().trim();
+          if (id.isEmpty) continue;
+
+          final displayName = (row['display_name'] ?? '').toString().trim();
+          final letter = (row['letter'] ?? '').toString().trim();
+          final kind = (row['kind'] ?? '').toString().trim();
+
+          sectionLabels[id] = displayName.isNotEmpty
+              ? displayName
+              : [
+                  if (kind.isNotEmpty) kind[0].toUpperCase() + kind.substring(1),
+                  if (letter.isNotEmpty) letter.toUpperCase(),
+                ].join(' ').trim();
+        }
+
+        const pageSize = 1000;
+        final rows = <Map<String, dynamic>>[];
+        var from = 0;
+
+        while (true) {
+          final batch = await supabase
+              .from('entries')
+              .select('''
+                id,
+                section_id,
+                exhibitor_id,
+                tattoo,
+                breed,
+                variety,
+                class_name,
+                sex,
+                placement,
+                is_shown,
+                is_disqualified,
+                scratched_at,
+                exhibitors!entries_exhibitor_id_fkey (
+                  display_name,
+                  showing_name,
+                  first_name,
+                  last_name
+                )
+              ''')
+              .eq('show_id', widget.showId)
+              .range(from, from + pageSize - 1);
+
+          final page = (batch as List)
+              .map((raw) => Map<String, dynamic>.from(raw as Map))
+              .toList();
+
+          rows.addAll(page);
+
+          if (page.length < pageSize) break;
+          from += pageSize;
+        }
+
+        final grouped = <String, List<_DuplicatePlacementEntryItem>>{};
+        final labels = <String, _DuplicatePlacementGroupItem>{};
+
+        String clean(dynamic value) => (value ?? '').toString().trim();
+        String norm(dynamic value) => clean(value).toLowerCase();
+
+        String exhibitorLabel(dynamic rawExhibitor) {
+          if (rawExhibitor is! Map) return '';
+          final ex = Map<String, dynamic>.from(rawExhibitor);
+          final display = clean(ex['display_name']);
+          final showing = clean(ex['showing_name']);
+          final first = clean(ex['first_name']);
+          final last = clean(ex['last_name']);
+
+          if (display.isNotEmpty) return display;
+          if (showing.isNotEmpty) return showing;
+          return [first, last].where((x) => x.isNotEmpty).join(' ').trim();
+        }
+
+        for (final row in rows) {
+
+          final scratchedAt = clean(row['scratched_at']);
+          final isShown = row['is_shown'] != false;
+          final isDisqualified = row['is_disqualified'] == true;
+          final placement = clean(row['placement']);
+
+          final isEligible = scratchedAt.isEmpty && isShown && !isDisqualified;
+
+          if (!isEligible) continue;
+          if (placement.isEmpty) continue;
+
+          final sectionId = clean(row['section_id']);
+          final sectionLabel = sectionLabels[sectionId] ?? 'Section';
+          final breedName = clean(row['breed']);
+          final varietyName = clean(row['variety']);
+          final className = clean(row['class_name']);
+          final sex = clean(row['sex']);
+
+          final key = [
+            norm(sectionId),
+            norm(breedName),
+            norm(varietyName),
+            norm(className),
+            norm(sex),
+            norm(placement),
+          ].join('|');
+
+          grouped.putIfAbsent(key, () => []);
+          grouped[key]!.add(
+            _DuplicatePlacementEntryItem(
+              entryId: clean(row['id']),
+              tattoo: clean(row['tattoo']),
+              exhibitorLabel: exhibitorLabel(row['exhibitors']),
+            ),
+          );
+
+          labels[key] = _DuplicatePlacementGroupItem(
+            sectionLabel: sectionLabel,
+            breedName: breedName,
+            groupName: null,
+            varietyName: varietyName.isEmpty ? null : varietyName,
+            className: className,
+            sex: sex,
+            placement: placement,
+            entries: const [],
+          );
+        }
+
+        final items = <_DuplicatePlacementGroupItem>[];
+
+        for (final entry in grouped.entries) {
+          if (entry.value.length <= 1) continue;
+
+          final label = labels[entry.key];
+          if (label == null) continue;
+
+          final duplicateEntries = entry.value
+            ..sort((a, b) => a.tattoo.toLowerCase().compareTo(
+                  b.tattoo.toLowerCase(),
+                ));
+
+          items.add(
+            _DuplicatePlacementGroupItem(
+              sectionLabel: label.sectionLabel,
+              breedName: label.breedName,
+              groupName: label.groupName,
+              varietyName: label.varietyName,
+              className: label.className,
+              sex: label.sex,
+              placement: label.placement,
+              entries: duplicateEntries,
+            ),
+          );
+        }
+
+        items.sort((a, b) {
+          final sectionCmp =
+              a.sectionLabel.toLowerCase().compareTo(b.sectionLabel.toLowerCase());
+          if (sectionCmp != 0) return sectionCmp;
+
+          final breedCmp =
+              a.breedName.toLowerCase().compareTo(b.breedName.toLowerCase());
+          if (breedCmp != 0) return breedCmp;
+
+          final classCmp =
+              a.className.toLowerCase().compareTo(b.className.toLowerCase());
+          if (classCmp != 0) return classCmp;
+
+          return a.placement.compareTo(b.placement);
+        });
+
+        if (!mounted) return;
+        setState(() {
+          _duplicatePlacementGroupItems = items;
+          _duplicatePlacementsLoaded = true;
+        });
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed loading duplicate placements: $e')),
+        );
+      } finally {
+        if (mounted) {
+          setState(() {
+            _loadingDuplicatePlacements = false;
+          });
+        }
+      }
+    }
+
     Future<void> _sendExhibitorArtifactsEmail({
       required List<ReportArtifactSummary> artifacts,
       required String to,
@@ -667,6 +938,146 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       );
     }
 
+    Future<void> _openResultsEntryFix(String entryId) async {
+      final cleanEntryId = entryId.trim();
+      if (cleanEntryId.isEmpty) return;
+
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => AdminResultsEntryScreen(
+            showId: widget.showId,
+            showName: widget.showName,
+            initialEntryId: cleanEntryId,
+          ),
+        ),
+      );
+
+      if (!mounted) return;
+      await _refreshDashboardOnly();
+
+      setState(() {
+        _missingPlacementsLoaded = false;
+        _missingPlacementItems = [];
+        _missingJudgesLoaded = false;
+        _missingJudgeItems = [];
+        _duplicatePlacementsLoaded = false;
+        _duplicatePlacementGroupItems = [];
+      });
+    }
+
+    Widget _buildMissingJudgesPanel() {
+      final count = _dashboard?.resultsReadiness.missingJudgeCount ?? 0;
+      if (count <= 0) return const SizedBox.shrink();
+
+      return ExpansionTile(
+        title: Text('$count missing judges'),
+        onExpansionChanged: (expanded) async {
+          if (expanded && !_missingJudgesLoaded) {
+            await _loadMissingJudges();
+          }
+        },
+        children: [
+          if (_loadingMissingJudges)
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_missingJudgeItems.isEmpty)
+            const ListTile(
+              title: Text('No missing judge rows found.'),
+            )
+          else
+            ..._missingJudgeItems.map(
+              (e) => ListTile(
+                title: Text(e.tattoo.isEmpty ? '(No ear #)' : e.tattoo),
+                subtitle: Text(
+                  [
+                    e.sectionLabel,
+                    e.breedName,
+                    if (e.varietyName != null && e.varietyName!.isNotEmpty)
+                      e.varietyName!,
+                    e.className,
+                    e.sex,
+                    if (e.exhibitorLabel.isNotEmpty) e.exhibitorLabel,
+                  ].join(' • '),
+                ),
+                trailing: TextButton.icon(
+                  icon: const Icon(Icons.build, size: 18),
+                  label: const Text('Fix'),
+                  onPressed: () => _openResultsEntryFix(e.entryId),
+                ),
+                onTap: () => _openResultsEntryFix(e.entryId),
+              ),
+            ),
+        ],
+      );
+    }
+    
+    Widget _buildDuplicatePlacementGroupsPanel() {
+      final count =
+          _dashboard?.resultsReadiness.duplicatePlacementGroupCount ?? 0;
+      if (count <= 0) return const SizedBox.shrink();
+
+      return ExpansionTile(
+        title: Text('$count duplicate placements'),
+        subtitle: const Text('Tap to view duplicated placements.'),
+        onExpansionChanged: (expanded) async {
+          if (expanded && !_duplicatePlacementsLoaded) {
+            await _loadDuplicatePlacementGroups();
+          }
+        },
+        children: [
+          if (_loadingDuplicatePlacements)
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_duplicatePlacementsLoaded && _duplicatePlacementGroupItems.isEmpty)
+            const ListTile(
+              title: Text('No duplicate placement rows found.'),
+              subtitle: Text(
+                'The readiness count found duplicates, but the detail loader did not match them. Check entries fields for breed, variety, class_name, sex, placement, scratched_at, is_shown, and is_disqualified.',
+              ),
+            )
+          else
+            ..._duplicatePlacementGroupItems.map((group) {
+              final firstEntryId = group.entries.isEmpty ? '' : group.entries.first.entryId;
+
+              return ListTile(
+                title: Text(
+                  [
+                    group.sectionLabel,
+                    group.breedName,
+                    if (group.varietyName != null && group.varietyName!.isNotEmpty)
+                      group.varietyName!,
+                    group.className,
+                    group.sex,
+                    'Place ${group.placement}',
+                  ].where((x) => x.trim().isNotEmpty).join(' • '),
+                ),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: group.entries
+                      .map((e) => Text('${e.tattoo.isEmpty ? '(No ear #)' : e.tattoo} • ${e.exhibitorLabel}'))
+                      .toList(),
+                ),
+                trailing: TextButton.icon(
+                  icon: const Icon(Icons.build, size: 18),
+                  label: const Text('Fix'),
+                  onPressed: firstEntryId.isEmpty
+                      ? null
+                      : () => _openResultsEntryFix(firstEntryId),
+                ),
+                onTap: firstEntryId.isEmpty
+                    ? null
+                    : () => _openResultsEntryFix(firstEntryId),
+              );
+            }),
+        ],
+      );
+    }
+    
     Widget _buildMissingPlacementsPanel() {
       final readiness = _dashboard?.resultsReadiness;
       final missingCount = readiness?.missingPlacementCount ?? 0;
@@ -750,6 +1161,11 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                             Text(parts.join(' • ')),
                           ],
                         ),
+                      ),
+                      TextButton.icon(
+                        icon: const Icon(Icons.build, size: 18),
+                        label: const Text('Fix'),
+                        onPressed: () => _openResultsEntryFix(item.entryId),
                       ),
                     ],
                   ),
@@ -2392,6 +2808,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                 ),
                               ),
                               _buildMissingPlacementsPanel(),
+                              _buildMissingJudgesPanel(),
+                              _buildDuplicatePlacementGroupsPanel(),
                               const SizedBox(height: 16),
                             ],
 
@@ -4563,6 +4981,64 @@ enum _CloseoutScopeType {
   cavyAllBreed,
   specialty,
   custom,
+}
+
+class _MissingJudgeItem {
+  final String entryId;
+  final String sectionLabel;
+  final String breedName;
+  final String? groupName;
+  final String? varietyName;
+  final String className;
+  final String sex;
+  final String tattoo;
+  final String exhibitorLabel;
+
+  const _MissingJudgeItem({
+    required this.entryId,
+    required this.sectionLabel,
+    required this.breedName,
+    required this.groupName,
+    required this.varietyName,
+    required this.className,
+    required this.sex,
+    required this.tattoo,
+    required this.exhibitorLabel,
+  });
+}
+
+class _DuplicatePlacementGroupItem {
+  final String sectionLabel;
+  final String breedName;
+  final String? groupName;
+  final String? varietyName;
+  final String className;
+  final String sex;
+  final String placement;
+  final List<_DuplicatePlacementEntryItem> entries;
+
+  const _DuplicatePlacementGroupItem({
+    required this.sectionLabel,
+    required this.breedName,
+    required this.groupName,
+    required this.varietyName,
+    required this.className,
+    required this.sex,
+    required this.placement,
+    required this.entries,
+  });
+}
+
+class _DuplicatePlacementEntryItem {
+  final String entryId;
+  final String tattoo;
+  final String exhibitorLabel;
+
+  const _DuplicatePlacementEntryItem({
+    required this.entryId,
+    required this.tattoo,
+    required this.exhibitorLabel,
+  });
 }
 
 class _CloseoutScope {
