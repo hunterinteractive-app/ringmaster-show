@@ -108,42 +108,15 @@ class ArbaReportLoader {
     final bisRabbit = await _loadBestAward(
       request.showId,
       species: 'rabbit',
-      awardCodes: const ['best in show', 'bis', 'bis rabbit'],
-      fallbackAwardCodes: const ['BOB'],
-      sectionId: sectionId,
-    );
-
-    final bosRabbit = await _loadBestAward(
-      request.showId,
-      species: 'rabbit',
       awardCodes: const [
-        'best opposite sex',
-        'best opposite sex of show',
-        'bos',
-        'bos rabbit',
+        'best in show',
+        'best of show',
+        'bis',
+        'bis rabbit',
+        'best in show rabbit',
+        'best of show rabbit',
       ],
-      fallbackAwardCodes: const ['BOS'],
-      sectionId: sectionId,
-    );
-
-    final bisCavy = await _loadBestAward(
-      request.showId,
-      species: 'cavy',
-      awardCodes: const ['best in show', 'bis', 'bis cavy'],
-      fallbackAwardCodes: const ['BOB'],
-      sectionId: sectionId,
-    );
-
-    final bosCavy = await _loadBestAward(
-      request.showId,
-      species: 'cavy',
-      awardCodes: const [
-        'best opposite sex',
-        'best opposite sex of show',
-        'bos',
-        'bos cavy',
-      ],
-      fallbackAwardCodes: const ['BOS'],
+      fallbackAwardCodes: const ['BOB', 'best of breed'],
       sectionId: sectionId,
     );
 
@@ -176,18 +149,6 @@ class ArbaReportLoader {
       bisRabbitCityState: bisRabbit.cityState,
       bisRabbitBreed: bisRabbit.breed,
       bisRabbitEarNumber: bisRabbit.earNumber,
-      bosRabbitOwner: bosRabbit.owner,
-      bosRabbitCityState: bosRabbit.cityState,
-      bosRabbitBreed: bosRabbit.breed,
-      bosRabbitEarNumber: bosRabbit.earNumber,
-      bisCavyOwner: bisCavy.owner,
-      bisCavyCityState: bisCavy.cityState,
-      bisCavyBreed: bisCavy.breed,
-      bisCavyEarNumber: bisCavy.earNumber,
-      bosCavyOwner: bosCavy.owner,
-      bosCavyCityState: bosCavy.cityState,
-      bosCavyBreed: bosCavy.breed,
-      bosCavyEarNumber: bosCavy.earNumber,
     );
   }
 
@@ -601,7 +562,11 @@ class ArbaReportLoader {
 
       final entries = (rows as List)
           .map((e) => Map<String, dynamic>.from(e as Map))
-          .where((e) => _str(e['species']).toLowerCase() == normalizedSpecies)
+          .where((e) {
+            final rowSpecies = _str(e['species']).toLowerCase().trim();
+            if (rowSpecies.isEmpty) return normalizedSpecies == 'rabbit';
+            return rowSpecies == normalizedSpecies;
+          })
           .where((e) {
             if (targetSectionId.isEmpty) return true;
             return _str(e['section_id']) == targetSectionId;
@@ -689,6 +654,12 @@ class ArbaReportLoader {
 
       if (normalizedAwardCodes.contains(award)) {
         return _str(row['entry_id']);
+      }
+
+      for (final target in normalizedAwardCodes) {
+        if (award.contains(target) || target.contains(award)) {
+          return _str(row['entry_id']);
+        }
       }
     }
 

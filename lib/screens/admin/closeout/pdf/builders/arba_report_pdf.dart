@@ -96,21 +96,6 @@ class ArbaReportPdfBuilder {
     final bisRabbitBreed = _str(_tryGet(() => d.bisRabbitBreed));
     final bisRabbitEarNumber = _str(_tryGet(() => d.bisRabbitEarNumber));
 
-    final bosRabbitOwner = _str(_tryGet(() => d.bosRabbitOwner));
-    final bosRabbitCityState = _str(_tryGet(() => d.bosRabbitCityState));
-    final bosRabbitBreed = _str(_tryGet(() => d.bosRabbitBreed));
-    final bosRabbitEarNumber = _str(_tryGet(() => d.bosRabbitEarNumber));
-
-    final bisCavyOwner = _str(_tryGet(() => d.bisCavyOwner));
-    final bisCavyCityState = _str(_tryGet(() => d.bisCavyCityState));
-    final bisCavyBreed = _str(_tryGet(() => d.bisCavyBreed));
-    final bisCavyEarNumber = _str(_tryGet(() => d.bisCavyEarNumber));
-
-    final bosCavyOwner = _str(_tryGet(() => d.bosCavyOwner));
-    final bosCavyCityState = _str(_tryGet(() => d.bosCavyCityState));
-    final bosCavyBreed = _str(_tryGet(() => d.bosCavyBreed));
-    final bosCavyEarNumber = _str(_tryGet(() => d.bosCavyEarNumber));
-
     pdf.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.letter,
@@ -163,40 +148,12 @@ class ArbaReportPdfBuilder {
                 answer2: troubleReceivingSanctionClubs,
               ),
               pw.SizedBox(height: 8),
-              _sectionHeader('BEST IN SHOW / BEST OPPOSITE SEX'),
-              _bestInShowTable(
-                rows: [
-                  _ArbaBestInShowRow(
-                    award: 'BEST IN SHOW RABBIT',
-                    owner: bisRabbitOwner,
-                    cityState: bisRabbitCityState,
-                    breed: bisRabbitBreed,
-                    earNumber: bisRabbitEarNumber,
-                  ),
-                  _ArbaBestInShowRow(
-                    award: 'BEST OPPOSITE SEX RABBIT',
-                    owner: bosRabbitOwner,
-                    cityState: bosRabbitCityState,
-                    breed: bosRabbitBreed,
-                    earNumber: bosRabbitEarNumber,
-                  ),
-                  if (caviesShown != '0')
-                    _ArbaBestInShowRow(
-                      award: 'BEST IN SHOW CAVY',
-                      owner: bisCavyOwner,
-                      cityState: bisCavyCityState,
-                      breed: bisCavyBreed,
-                      earNumber: bisCavyEarNumber,
-                    ),
-                  if (caviesShown != '0')
-                    _ArbaBestInShowRow(
-                      award: 'BEST OPPOSITE SEX CAVY',
-                      owner: bosCavyOwner,
-                      cityState: bosCavyCityState,
-                      breed: bosCavyBreed,
-                      earNumber: bosCavyEarNumber,
-                    ),
-                ],
+              _sectionHeader('BEST IN SHOW RABBIT'),
+              _bisRabbitTable(
+                owner: bisRabbitOwner,
+                cityState: bisRabbitCityState,
+                breed: bisRabbitBreed,
+                earNumber: bisRabbitEarNumber,
               ),
               pw.SizedBox(height: 8),
               _signatureBlock(
@@ -565,39 +522,38 @@ class ArbaReportPdfBuilder {
     );
   }
 
-  pw.Widget _bestInShowTable({
-    required List<_ArbaBestInShowRow> rows,
+  pw.Widget _bisRabbitTable({
+    required String owner,
+    required String cityState,
+    required String breed,
+    required String earNumber,
   }) {
     return pw.Table(
       border: pw.TableBorder.all(color: PdfColors.black, width: 0.6),
       columnWidths: const {
-        0: pw.FlexColumnWidth(1.3),
-        1: pw.FlexColumnWidth(1.25),
-        2: pw.FlexColumnWidth(1.15),
-        3: pw.FlexColumnWidth(1.0),
-        4: pw.FlexColumnWidth(0.85),
+        0: pw.FlexColumnWidth(1.4),
+        1: pw.FlexColumnWidth(1.4),
+        2: pw.FlexColumnWidth(1.1),
+        3: pw.FlexColumnWidth(0.9),
       },
       children: [
         pw.TableRow(
           decoration: const pw.BoxDecoration(color: PdfColors.grey200),
           children: [
-            _headerCell('AWARD'),
             _headerCell('OWNER'),
             _headerCell('CITY & STATE'),
             _headerCell('BREED'),
             _headerCell('EAR NUMBER'),
           ],
         ),
-        for (final row in rows)
-          pw.TableRow(
-            children: [
-              _valueCell(row.award),
-              _valueCell(row.owner),
-              _valueCell(row.cityState),
-              _valueCell(row.breed),
-              _valueCell(row.earNumber),
-            ],
-          ),
+        pw.TableRow(
+          children: [
+            _valueCell(owner),
+            _valueCell(cityState),
+            _valueCell(breed),
+            _valueCell(earNumber),
+          ],
+        ),
       ],
     );
   }
@@ -650,20 +606,4 @@ class ArbaReportPdfBuilder {
       ),
     );
   }
-}
-
-class _ArbaBestInShowRow {
-  const _ArbaBestInShowRow({
-    required this.award,
-    required this.owner,
-    required this.cityState,
-    required this.breed,
-    required this.earNumber,
-  });
-
-  final String award;
-  final String owner;
-  final String cityState;
-  final String breed;
-  final String earNumber;
 }

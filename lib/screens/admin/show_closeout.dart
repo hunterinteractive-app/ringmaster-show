@@ -703,57 +703,20 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       });
 
       try {
-        final sectionRows = await supabase
-            .from('show_sections')
-            .select('id,letter,display_name,kind')
-            .eq('show_id', widget.showId);
-
-        final sectionLabels = <String, String>{};
-        for (final raw in (sectionRows as List)) {
-          final row = Map<String, dynamic>.from(raw as Map);
-          final id = (row['id'] ?? '').toString().trim();
-          if (id.isEmpty) continue;
-
-          final displayName = (row['display_name'] ?? '').toString().trim();
-          final letter = (row['letter'] ?? '').toString().trim();
-          final kind = (row['kind'] ?? '').toString().trim();
-
-          sectionLabels[id] = displayName.isNotEmpty
-              ? displayName
-              : [
-                  if (kind.isNotEmpty) kind[0].toUpperCase() + kind.substring(1),
-                  if (letter.isNotEmpty) letter.toUpperCase(),
-                ].join(' ').trim();
-        }
-
         const pageSize = 1000;
         final rows = <Map<String, dynamic>>[];
         var from = 0;
 
         while (true) {
           final batch = await supabase
-              .from('entries')
-              .select('''
-                id,
-                section_id,
-                exhibitor_id,
-                tattoo,
-                breed,
-                variety,
-                class_name,
-                sex,
-                placement,
-                is_shown,
-                is_disqualified,
-                scratched_at,
-                exhibitors!entries_exhibitor_id_fkey (
-                  display_name,
-                  showing_name,
-                  first_name,
-                  last_name
-                )
-              ''')
-              .eq('show_id', widget.showId)
+              .rpc(
+                'report_results_entry_rows',
+                params: {
+                  'p_show_id': widget.showId,
+                  'p_section_id': null,
+                  'p_show_letter': null,
+                },
+              )
               .range(from, from + pageSize - 1);
 
           final page = (batch as List)
@@ -772,37 +735,60 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         String clean(dynamic value) => (value ?? '').toString().trim();
         String norm(dynamic value) => clean(value).toLowerCase();
 
-        String exhibitorLabel(dynamic rawExhibitor) {
-          if (rawExhibitor is! Map) return '';
-          final ex = Map<String, dynamic>.from(rawExhibitor);
-          final display = clean(ex['display_name']);
-          final showing = clean(ex['showing_name']);
-          final first = clean(ex['first_name']);
-          final last = clean(ex['last_name']);
-
-          if (display.isNotEmpty) return display;
-          if (showing.isNotEmpty) return showing;
-          return [first, last].where((x) => x.isNotEmpty).join(' ').trim();
+        String resolvedBreed(Map<String, dynamic> row) {
+          final breed = clean(row['breed']);
+          if (breed.isNotEmpty) return breed;
+          return clean(row['breed_name']);
         }
 
-        for (final row in rows) {
+        String resolvedVariety(Map<String, dynamic> row) {
+          final variety = clean(row['variety']);
+          if (variety.isNotEmpty) return variety;
+          return clean(row['variety_name']);
+        }
 
+        String resolvedSectionLabel(Map<String, dynamic> row) {
+          final label = clean(row['section_label']);
+          if (label.isNotEmpty) return label;
+
+          final kind = clean(row['section_kind']);
+          final letter = clean(row['show_letter']);
+          final parts = <String>[
+            if (kind.isNotEmpty) kind[0].toUpperCase() + kind.substring(1),
+            if (letter.isNotEmpty) letter.toUpperCase(),
+          ];
+
+          return parts.isEmpty ? 'Section' : parts.join(' ');
+        }
+
+        bool isEligibleForPlacement(Map<String, dynamic> row) {
           final scratchedAt = clean(row['scratched_at']);
           final isShown = row['is_shown'] != false;
           final isDisqualified = row['is_disqualified'] == true;
+          final status = clean(row['result_status']).toLowerCase();
+
+          if (scratchedAt.isNotEmpty) return false;
+          if (!isShown) return false;
+          if (isDisqualified) return false;
+          if (status == 'no show') return false;
+          if (status.startsWith('disqualified')) return false;
+          if (status == 'unworthy of award') return false;
+
+          return true;
+        }
+
+        for (final row in rows) {
           final placement = clean(row['placement']);
-
-          final isEligible = scratchedAt.isEmpty && isShown && !isDisqualified;
-
-          if (!isEligible) continue;
           if (placement.isEmpty) continue;
+          if (!isEligibleForPlacement(row)) continue;
 
           final sectionId = clean(row['section_id']);
-          final sectionLabel = sectionLabels[sectionId] ?? 'Section';
-          final breedName = clean(row['breed']);
-          final varietyName = clean(row['variety']);
+          final sectionLabel = resolvedSectionLabel(row);
+          final breedName = resolvedBreed(row);
+          final varietyName = resolvedVariety(row);
           final className = clean(row['class_name']);
           final sex = clean(row['sex']);
+          final resultTypeKey = row['is_fur'] == true ? 'fur_wool' : 'normal';
 
           final key = [
             norm(sectionId),
@@ -810,24 +796,33 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
             norm(varietyName),
             norm(className),
             norm(sex),
+            resultTypeKey,
             norm(placement),
           ].join('|');
+
+          final entryId = clean(row['entry_id']).isNotEmpty
+              ? clean(row['entry_id'])
+              : clean(row['id']);
 
           grouped.putIfAbsent(key, () => []);
           grouped[key]!.add(
             _DuplicatePlacementEntryItem(
-              entryId: clean(row['id']),
+              entryId: entryId,
               tattoo: clean(row['tattoo']),
-              exhibitorLabel: exhibitorLabel(row['exhibitors']),
+              exhibitorLabel: clean(row['exhibitor_label']),
             ),
           );
 
           labels[key] = _DuplicatePlacementGroupItem(
             sectionLabel: sectionLabel,
             breedName: breedName,
-            groupName: null,
+            groupName: clean(row['group_name']).isEmpty
+                ? null
+                : clean(row['group_name']),
             varietyName: varietyName.isEmpty ? null : varietyName,
-            className: className,
+            className: resultTypeKey == 'fur_wool' && className.isEmpty
+                ? 'Fur / Wool'
+                : className,
             sex: sex,
             placement: placement,
             entries: const [],
@@ -837,15 +832,26 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         final items = <_DuplicatePlacementGroupItem>[];
 
         for (final entry in grouped.entries) {
-          if (entry.value.length <= 1) continue;
+          final uniqueByEntryId = <String, _DuplicatePlacementEntryItem>{};
+
+          for (final item in entry.value) {
+            final key = item.entryId.isNotEmpty
+                ? item.entryId
+                : '${item.tattoo}|${item.exhibitorLabel}';
+            uniqueByEntryId[key] = item;
+          }
+
+          final uniqueEntries = uniqueByEntryId.values.toList();
+          if (uniqueEntries.length <= 1) continue;
 
           final label = labels[entry.key];
           if (label == null) continue;
 
-          final duplicateEntries = entry.value
-            ..sort((a, b) => a.tattoo.toLowerCase().compareTo(
+          uniqueEntries.sort(
+            (a, b) => a.tattoo.toLowerCase().compareTo(
                   b.tattoo.toLowerCase(),
-                ));
+                ),
+          );
 
           items.add(
             _DuplicatePlacementGroupItem(
@@ -856,7 +862,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
               className: label.className,
               sex: label.sex,
               placement: label.placement,
-              entries: duplicateEntries,
+              entries: uniqueEntries,
             ),
           );
         }
@@ -870,9 +876,17 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
               a.breedName.toLowerCase().compareTo(b.breedName.toLowerCase());
           if (breedCmp != 0) return breedCmp;
 
+          final varietyCmp = (a.varietyName ?? '')
+              .toLowerCase()
+              .compareTo((b.varietyName ?? '').toLowerCase());
+          if (varietyCmp != 0) return varietyCmp;
+
           final classCmp =
               a.className.toLowerCase().compareTo(b.className.toLowerCase());
           if (classCmp != 0) return classCmp;
+
+          final sexCmp = a.sex.toLowerCase().compareTo(b.sex.toLowerCase());
+          if (sexCmp != 0) return sexCmp;
 
           return a.placement.compareTo(b.placement);
         });
@@ -1037,7 +1051,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
             const ListTile(
               title: Text('No duplicate placement rows found.'),
               subtitle: Text(
-                'The readiness count found duplicates, but the detail loader did not match them. Check entries fields for breed, variety, class_name, sex, placement, scratched_at, is_shown, and is_disqualified.',
+                'The readiness count found duplicates, but the detail loader did not match them. Refresh the dashboard and confirm show_results_readiness uses the same row source as results entry.',
               ),
             )
           else
@@ -1186,9 +1200,36 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         final dashboardJson = Map<String, dynamic>.from(dashboardResp as Map);
         final dashboard = CloseoutDashboard.fromJson(dashboardJson);
 
+        final readinessResp = await supabase.rpc(
+          'show_results_readiness',
+          params: {'p_show_id': widget.showId},
+        );
+
+        final freshReadiness = ResultsReadinessDto.fromJson(
+          Map<String, dynamic>.from(readinessResp as Map),
+        );
+
+        final dashboardWithFreshReadiness = CloseoutDashboard(
+          dashboard: dashboard.dashboard,
+          resultsReadiness: freshReadiness,
+          latestFinalize: dashboard.latestFinalize,
+          reports: dashboard.reports,
+          deliveries: dashboard.deliveries,
+          latestArchive: dashboard.latestArchive,
+        );
+
         if (!mounted) return;
         setState(() {
-          _dashboard = dashboard;
+          _dashboard = dashboardWithFreshReadiness;
+
+          _missingPlacementsLoaded = false;
+          _missingPlacementItems = [];
+
+          _missingJudgesLoaded = false;
+          _missingJudgeItems = [];
+
+          _duplicatePlacementsLoaded = false;
+          _duplicatePlacementGroupItems = [];
         });
       } catch (e) {
         if (!mounted) return;
@@ -1935,6 +1976,24 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       final dashboardJson = Map<String, dynamic>.from(dashboardResp as Map);
       final dashboard = CloseoutDashboard.fromJson(dashboardJson);
 
+      final readinessResp = await supabase.rpc(
+        'show_results_readiness',
+        params: {'p_show_id': widget.showId},
+      );
+
+      final freshReadiness = ResultsReadinessDto.fromJson(
+        Map<String, dynamic>.from(readinessResp as Map),
+      );
+
+      final dashboardWithFreshReadiness = CloseoutDashboard(
+        dashboard: dashboard.dashboard,
+        resultsReadiness: freshReadiness,
+        latestFinalize: dashboard.latestFinalize,
+        reports: dashboard.reports,
+        deliveries: dashboard.deliveries,
+        latestArchive: dashboard.latestArchive,
+      );
+
       await _loadArbaDetails();
       await _ensureLegsBuilder();
       await _ensureExhibitorBuilder();
@@ -1946,7 +2005,16 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
       if (!mounted) return;
       setState(() {
-        _dashboard = dashboard;
+        _dashboard = dashboardWithFreshReadiness;
+
+        _missingPlacementsLoaded = false;
+        _missingPlacementItems = [];
+
+        _missingJudgesLoaded = false;
+        _missingJudgeItems = [];
+
+        _duplicatePlacementsLoaded = false;
+        _duplicatePlacementGroupItems = [];
       });
     } catch (e) {
       if (!mounted) return;

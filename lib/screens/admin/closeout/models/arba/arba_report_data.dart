@@ -26,18 +26,6 @@ class ArbaReportData {
     required this.bisRabbitCityState,
     required this.bisRabbitBreed,
     required this.bisRabbitEarNumber,
-    required this.bosRabbitOwner,
-    required this.bosRabbitCityState,
-    required this.bosRabbitBreed,
-    required this.bosRabbitEarNumber,
-    required this.bisCavyOwner,
-    required this.bisCavyCityState,
-    required this.bisCavyBreed,
-    required this.bisCavyEarNumber,
-    required this.bosCavyOwner,
-    required this.bosCavyCityState,
-    required this.bosCavyBreed,
-    required this.bosCavyEarNumber,
     required this.superintendentArbaNumber,
   });
 
@@ -79,19 +67,4 @@ class ArbaReportData {
   final String bisRabbitCityState;
   final String bisRabbitBreed;
   final String bisRabbitEarNumber;
-
-  final String bosRabbitOwner;
-  final String bosRabbitCityState;
-  final String bosRabbitBreed;
-  final String bosRabbitEarNumber;
-
-  final String bisCavyOwner;
-  final String bisCavyCityState;
-  final String bisCavyBreed;
-  final String bisCavyEarNumber;
-
-  final String bosCavyOwner;
-  final String bosCavyCityState;
-  final String bosCavyBreed;
-  final String bosCavyEarNumber;
 }

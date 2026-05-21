@@ -444,8 +444,10 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
       }
 
       final breedEntries = allEntries.where((e) {
-        return (e['breed'] ?? '').toString().trim().toLowerCase() ==
-            issue.breed.toLowerCase();
+        final rowBreed = (e['breed'] ?? '').toString().trim();
+        final rowBreedName = (e['breed_name'] ?? '').toString().trim();
+        final rowBreedLabel = rowBreed.isNotEmpty ? rowBreed : rowBreedName;
+        return rowBreedLabel.toLowerCase() == issue.breed.toLowerCase();
       }).toList();
 
       if (breedEntries.isEmpty) return;
@@ -722,8 +724,10 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
       final targetBreedName = (target['breed_name'] ?? '').toString().trim();
       final breed = targetBreed.isNotEmpty ? targetBreed : targetBreedName;
       final breedEntries = allEntries.where((e) {
-        return (e['breed'] ?? '').toString().trim().toLowerCase() ==
-            breed.toLowerCase();
+        final rowBreed = (e['breed'] ?? '').toString().trim();
+        final rowBreedName = (e['breed_name'] ?? '').toString().trim();
+        final rowBreedLabel = rowBreed.isNotEmpty ? rowBreed : rowBreedName;
+        return rowBreedLabel.toLowerCase() == breed.toLowerCase();
       }).toList();
 
       if (breedEntries.isEmpty) return;
@@ -1055,37 +1059,31 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
   }
 
     bool showsByGroup(Map<String, dynamic> e) {
-      if (e['uses_group_awards'] != true) return false;
-
       final thisBreedRaw = (e['breed'] ?? '').toString().trim();
       final thisBreedName = (e['breed_name'] ?? '').toString().trim();
-      final thisBreed = (thisBreedRaw.isNotEmpty ? thisBreedRaw : thisBreedName)
-          .toLowerCase();
+      final thisBreed =
+          (thisBreedRaw.isNotEmpty ? thisBreedRaw : thisBreedName).toLowerCase();
+
       if (thisBreed.isEmpty) return false;
+      if (e['uses_group_awards'] == true) return true;
+      if (_breedUsesGroupAwards[thisBreed] == true) return true;
 
-      final hasRealGroupsForBreed = _entries.any((row) {
-        final rowBreedRaw = (row['breed'] ?? '').toString().trim();
-        final rowBreedName = (row['breed_name'] ?? '').toString().trim();
-        final rowBreed = (rowBreedRaw.isNotEmpty ? rowBreedRaw : rowBreedName)
-            .toLowerCase();
-        if (rowBreed != thisBreed) return false;
-
-        final groupName = (
-          row['group_name'] ??
-          row['group_display_name'] ??
-          row['group_label'] ??
-          row['group'] ??
-          row['group_code'] ??
-          ''
-        ).toString().trim();
-
-        return groupName.isNotEmpty;
-      });
-
-      return hasRealGroupsForBreed;
+      return false;
     }
 
-    bool showsByVariety(Map<String, dynamic> e) => e['uses_variety_awards'] == true;
+    bool showsByVariety(Map<String, dynamic> e) {
+      final thisBreedRaw = (e['breed'] ?? '').toString().trim();
+      final thisBreedName = (e['breed_name'] ?? '').toString().trim();
+      final thisBreed =
+          (thisBreedRaw.isNotEmpty ? thisBreedRaw : thisBreedName).toLowerCase();
+
+      if (thisBreed.isNotEmpty &&
+          _breedUsesVarietyAwards.containsKey(thisBreed)) {
+        return _breedUsesVarietyAwards[thisBreed] == true;
+      }
+
+      return e['uses_variety_awards'] == true;
+    }
 
     String sex(Map<String, dynamic> e) => (e['sex'] ?? '').toString().trim().toLowerCase();
     String breed(Map<String, dynamic> e) {
@@ -1099,8 +1097,9 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
       return (e['variety_name'] ?? '').toString().trim();
     }
     String sectionId(Map<String, dynamic> e) => (e['section_id'] ?? '').toString().trim();
+    
     String groupName(Map<String, dynamic> e) {
-      return (
+      final explicitGroup = (
         e['group_name'] ??
         e['group_display_name'] ??
         e['group_label'] ??
@@ -1108,7 +1107,22 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
         e['group_code'] ??
         ''
       ).toString().trim();
+
+      if (explicitGroup.isNotEmpty) return explicitGroup;
+
+      final breedKey = breed(e).toLowerCase();
+      final usesGroups =
+          e['uses_group_awards'] == true || _breedUsesGroupAwards[breedKey] == true;
+      final usesVarieties =
+          e['uses_variety_awards'] == true || _breedUsesVarietyAwards[breedKey] == true;
+
+      if (usesGroups && !usesVarieties) {
+        return variety(e);
+      }
+
+      return '';
     }
+
     List<String> awards(Map<String, dynamic> e) =>
         ((e['_awards'] as List?) ?? const []).map((x) => x.toString()).toList();
 
@@ -1154,7 +1168,21 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
           break;
         case 'BOG':
         case 'BOSG':
-          final key = '${sectionId(e)}|$award|${breed(e).toLowerCase()}|${groupName(e).toLowerCase()}';
+          final groupScope = groupName(e).toLowerCase();
+          if (groupScope.isEmpty) {
+            issues.add(
+              makeIssue(
+                code: 'missing_group_for_group_award',
+                title: 'Group award missing group',
+                message:
+                    '${_entryLabel(e)} has $award assigned but no group could be determined.',
+                entry: e,
+              ),
+            );
+            break;
+          }
+
+          final key = '${sectionId(e)}|$award|${breed(e).toLowerCase()}|$groupScope';
           awardBuckets.putIfAbsent(key, () => <Map<String, dynamic>>[]);
           awardBuckets[key]!.add(e);
           break;
@@ -1983,8 +2011,15 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
       final id = (e['entry_id'] ?? e['id'] ?? '').toString().trim();
 
       e['id'] ??= e['entry_id'];
-      e['breed'] ??= e['breed_name'];
-      e['variety'] ??= e['variety_name'];
+
+      final rawBreed = (e['breed'] ?? '').toString().trim();
+      final rawBreedName = (e['breed_name'] ?? '').toString().trim();
+      e['breed'] = rawBreed.isNotEmpty ? rawBreed : rawBreedName;
+
+      final rawVariety = (e['variety'] ?? '').toString().trim();
+      final rawVarietyName = (e['variety_name'] ?? '').toString().trim();
+      e['variety'] = rawVariety.isNotEmpty ? rawVariety : rawVarietyName;
+
       e['animal_name'] ??= '';
 
       final normalizedGroup = (
@@ -2232,7 +2267,9 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
                     ),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () async {
-                      if (widget.showsByVariety && groupName != 'Fur / Wool') {
+                      if (widget.showsByVariety &&
+                          groupName != 'Fur / Wool' &&
+                          groupName != '(No Group Assigned)') {
                         await Navigator.push(
                           context,
                           MaterialPageRoute(
