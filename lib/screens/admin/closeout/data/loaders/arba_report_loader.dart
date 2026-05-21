@@ -105,8 +105,45 @@ class ArbaReportLoader {
 
     final filedDate = DateTime.now();
 
-    final bisRabbit = await _loadBisRabbit(
+    final bisRabbit = await _loadBestAward(
       request.showId,
+      species: 'rabbit',
+      awardCodes: const ['best in show', 'bis', 'bis rabbit'],
+      fallbackAwardCodes: const ['BOB'],
+      sectionId: sectionId,
+    );
+
+    final bosRabbit = await _loadBestAward(
+      request.showId,
+      species: 'rabbit',
+      awardCodes: const [
+        'best opposite sex',
+        'best opposite sex of show',
+        'bos',
+        'bos rabbit',
+      ],
+      fallbackAwardCodes: const ['BOS'],
+      sectionId: sectionId,
+    );
+
+    final bisCavy = await _loadBestAward(
+      request.showId,
+      species: 'cavy',
+      awardCodes: const ['best in show', 'bis', 'bis cavy'],
+      fallbackAwardCodes: const ['BOB'],
+      sectionId: sectionId,
+    );
+
+    final bosCavy = await _loadBestAward(
+      request.showId,
+      species: 'cavy',
+      awardCodes: const [
+        'best opposite sex',
+        'best opposite sex of show',
+        'bos',
+        'bos cavy',
+      ],
+      fallbackAwardCodes: const ['BOS'],
       sectionId: sectionId,
     );
 
@@ -139,6 +176,18 @@ class ArbaReportLoader {
       bisRabbitCityState: bisRabbit.cityState,
       bisRabbitBreed: bisRabbit.breed,
       bisRabbitEarNumber: bisRabbit.earNumber,
+      bosRabbitOwner: bosRabbit.owner,
+      bosRabbitCityState: bosRabbit.cityState,
+      bosRabbitBreed: bosRabbit.breed,
+      bosRabbitEarNumber: bosRabbit.earNumber,
+      bisCavyOwner: bisCavy.owner,
+      bisCavyCityState: bisCavy.cityState,
+      bisCavyBreed: bisCavy.breed,
+      bisCavyEarNumber: bisCavy.earNumber,
+      bosCavyOwner: bosCavy.owner,
+      bosCavyCityState: bosCavy.cityState,
+      bosCavyBreed: bosCavy.breed,
+      bosCavyEarNumber: bosCavy.earNumber,
     );
   }
 
@@ -534,8 +583,11 @@ class ArbaReportLoader {
     }
   }
 
-  Future<_BisRabbitInfo> _loadBisRabbit(
+  Future<_ArbaBestAwardInfo> _loadBestAward(
     String showId, {
+    required String species,
+    required List<String> awardCodes,
+    List<String> fallbackAwardCodes = const [],
     String? sectionId,
   }) async {
     try {
@@ -544,17 +596,25 @@ class ArbaReportLoader {
         params: {'p_show_id': showId},
       );
 
+      final normalizedSpecies = species.toLowerCase().trim();
+      final targetSectionId = sectionId?.trim() ?? '';
+
       final entries = (rows as List)
           .map((e) => Map<String, dynamic>.from(e as Map))
-          .where((e) => _str(e['species']).toLowerCase() == 'rabbit')
+          .where((e) => _str(e['species']).toLowerCase() == normalizedSpecies)
+          .where((e) {
+            if (targetSectionId.isEmpty) return true;
+            return _str(e['section_id']) == targetSectionId;
+          })
           .toList();
 
       final entryIds = entries
           .map((e) => _str(e['entry_id']))
           .where((e) => e.isNotEmpty)
+          .toSet()
           .toList();
 
-      if (entryIds.isEmpty) return const _BisRabbitInfo.empty();
+      if (entryIds.isEmpty) return const _ArbaBestAwardInfo.empty();
 
       final awardRows = await repo.supabase
           .from('entry_awards')
@@ -562,53 +622,32 @@ class ArbaReportLoader {
           .eq('show_id', showId)
           .inFilter('entry_id', entryIds);
 
-      String? bisEntryId;
+      final normalizedAwardCodes = awardCodes.map(_normalizeAwardCode).toSet();
+      final normalizedFallbackAwardCodes =
+          fallbackAwardCodes.map(_normalizeAwardCode).toSet();
 
-      for (final raw in (awardRows as List)) {
-        final row = Map<String, dynamic>.from(raw as Map);
-        final award = _str(row['award_code'])
-            .toLowerCase()
-            .replaceAll('_', ' ')
-            .replaceAll('-', ' ')
-            .trim();
+      String? awardEntryId = _findAwardEntryId(
+        awardRows as List,
+        normalizedAwardCodes,
+      );
 
-        if (award == 'best in show' || award == 'bis' || award == 'bis rabbit') {
-          bisEntryId = _str(row['entry_id']);
-          break;
-        }
+      if (awardEntryId == null || awardEntryId.isEmpty) {
+        awardEntryId = _findAwardEntryId(
+          awardRows,
+          normalizedFallbackAwardCodes,
+        );
       }
 
-      // Single-breed specialty fallback:
-      // If no explicit BIS was saved, use the BOB rabbit as BIS.
-      if (bisEntryId == null || bisEntryId.isEmpty) {
-        for (final raw in (awardRows as List)) {
-          final row = Map<String, dynamic>.from(raw as Map);
-          final award = _str(row['award_code']).toUpperCase().trim();
-
-          if (award == 'BOB') {
-            bisEntryId = _str(row['entry_id']);
-            break;
-          }
-        }
-      }
-
-      if (bisEntryId == null || bisEntryId.isEmpty) {
-        return const _BisRabbitInfo.empty();
+      if (awardEntryId == null || awardEntryId.isEmpty) {
+        return const _ArbaBestAwardInfo.empty();
       }
 
       final entry = entries.firstWhere(
-        (e) => _str(e['entry_id']) == bisEntryId,
+        (e) => _str(e['entry_id']) == awardEntryId,
         orElse: () => <String, dynamic>{},
       );
 
-      if (entry.isEmpty) return const _BisRabbitInfo.empty();
-
-      final entrySectionId = _str(entry['section_id']);
-      if (sectionId != null &&
-          sectionId.trim().isNotEmpty &&
-          entrySectionId != sectionId.trim()) {
-        return const _BisRabbitInfo.empty();
-      }
+      if (entry.isEmpty) return const _ArbaBestAwardInfo.empty();
 
       final owner = _firstNonEmpty([
         _str(entry['exhibitor_showing_name']),
@@ -624,7 +663,7 @@ class ArbaReportLoader {
         _str(entry['exhibitor_state']),
       ].where((e) => e.isNotEmpty).join(', ');
 
-      return _BisRabbitInfo(
+      return _ArbaBestAwardInfo(
         owner: owner,
         cityState: cityState,
         breed: _firstNonEmpty([
@@ -634,8 +673,35 @@ class ArbaReportLoader {
         earNumber: _str(entry['tattoo']),
       );
     } catch (_) {
-      return const _BisRabbitInfo.empty();
+      return const _ArbaBestAwardInfo.empty();
     }
+  }
+
+  String? _findAwardEntryId(
+    List<dynamic> awardRows,
+    Set<String> normalizedAwardCodes,
+  ) {
+    if (normalizedAwardCodes.isEmpty) return null;
+
+    for (final raw in awardRows) {
+      final row = Map<String, dynamic>.from(raw as Map);
+      final award = _normalizeAwardCode(_str(row['award_code']));
+
+      if (normalizedAwardCodes.contains(award)) {
+        return _str(row['entry_id']);
+      }
+    }
+
+    return null;
+  }
+
+  String _normalizeAwardCode(String value) {
+    return value
+        .toLowerCase()
+        .replaceAll('_', ' ')
+        .replaceAll('-', ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
   }
 
   String _yesNo(bool value) => value ? 'Yes' : 'No';
@@ -687,20 +753,20 @@ class _ArbaArtifactContext {
         scope = '';
 }
 
-class _BisRabbitInfo {
+class _ArbaBestAwardInfo {
   final String owner;
   final String cityState;
   final String breed;
   final String earNumber;
 
-  const _BisRabbitInfo({
+  const _ArbaBestAwardInfo({
     required this.owner,
     required this.cityState,
     required this.breed,
     required this.earNumber,
   });
 
-  const _BisRabbitInfo.empty()
+  const _ArbaBestAwardInfo.empty()
       : owner = '',
         cityState = '',
         breed = '',
