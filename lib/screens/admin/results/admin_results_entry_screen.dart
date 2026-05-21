@@ -280,6 +280,8 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
   List<Map<String, dynamic>> _judges = [];
 
   final Map<String, String> _breedClassSystems = {};
+  final Map<String, bool> _breedUsesGroupAwards = {};
+  final Map<String, bool> _breedUsesVarietyAwards = {};
   String _finalAwardMode = kDefaultFinalAwardMode;
 
   @override
@@ -546,16 +548,22 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
   Future<void> _loadBreedClassSystems() async {
     final rows = await supabase
         .from('breeds')
-        .select('name,class_system')
+        .select('name,class_system,uses_group_awards,uses_variety_awards')
         .eq('is_active', true);
 
     _breedClassSystems.clear();
+    _breedUsesGroupAwards.clear();
+    _breedUsesVarietyAwards.clear();
 
     for (final row in (rows as List).cast<Map<String, dynamic>>()) {
       final name = (row['name'] ?? '').toString().trim().toLowerCase();
-      final classSystem = (row['class_system'] ?? 'four').toString().trim().toLowerCase();
+      final classSystem =
+          (row['class_system'] ?? 'four').toString().trim().toLowerCase();
+
       if (name.isNotEmpty) {
         _breedClassSystems[name] = classSystem;
+        _breedUsesGroupAwards[name] = row['uses_group_awards'] == true;
+        _breedUsesVarietyAwards[name] = row['uses_variety_awards'] == true;
       }
     }
   }
@@ -631,9 +639,31 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
         e['_awards'] = awardsByEntryId[id] ?? <String>[];
 
         e['id'] ??= e['entry_id'];
-        e['breed'] ??= e['breed_name'];
-        e['variety'] ??= e['variety_name'];
+
+        final rawBreed = (e['breed'] ?? '').toString().trim();
+        final rawBreedName = (e['breed_name'] ?? '').toString().trim();
+        e['breed'] = rawBreed.isNotEmpty ? rawBreed : rawBreedName;
+
+        final rawVariety = (e['variety'] ?? '').toString().trim();
+        final rawVarietyName = (e['variety_name'] ?? '').toString().trim();
+        e['variety'] = rawVariety.isNotEmpty ? rawVariety : rawVarietyName;
+
         e['animal_name'] ??= '';
+
+        final breedKey = (e['breed'] ?? '')
+            .toString()
+            .trim()
+            .toLowerCase();
+
+        if (breedKey.isNotEmpty) {
+          e['uses_group_awards'] = _breedUsesGroupAwards.containsKey(breedKey)
+              ? _breedUsesGroupAwards[breedKey]
+              : e['uses_group_awards'] == true;
+
+          e['uses_variety_awards'] = _breedUsesVarietyAwards.containsKey(breedKey)
+              ? _breedUsesVarietyAwards[breedKey]
+              : e['uses_variety_awards'] == true;
+        }
 
         final normalizedGroup = (
           e['group_name'] ??
@@ -688,7 +718,9 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
 
       _didAutoOpenInitialEntryFromRoot = true;
 
-      final breed = (target['breed'] ?? '').toString().trim();
+      final targetBreed = (target['breed'] ?? '').toString().trim();
+      final targetBreedName = (target['breed_name'] ?? '').toString().trim();
+      final breed = targetBreed.isNotEmpty ? targetBreed : targetBreedName;
       final breedEntries = allEntries.where((e) {
         return (e['breed'] ?? '').toString().trim().toLowerCase() ==
             breed.toLowerCase();
@@ -890,7 +922,9 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
   Map<String, List<Map<String, dynamic>>> _groupByBreed(List<Map<String, dynamic>> items) {
     final out = <String, List<Map<String, dynamic>>>{};
     for (final e in items) {
-      final breed = (e['breed_name'] ?? e['breed'] ?? '').toString().trim();
+      final rawBreed = (e['breed'] ?? '').toString().trim();
+      final rawBreedName = (e['breed_name'] ?? '').toString().trim();
+      final breed = rawBreed.isNotEmpty ? rawBreed : rawBreedName;
       final key = breed.isEmpty ? '(Unknown Breed)' : breed;
       out.putIfAbsent(key, () => <Map<String, dynamic>>[]);
       out[key]!.add(e);
@@ -900,28 +934,38 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
 
   bool _showsByGroup(List<Map<String, dynamic>> entries) {
     final normalEntries = entries.where((e) => !_isFurEntry(e)).toList();
+    if (normalEntries.isEmpty) return false;
 
-    final usesGroups = normalEntries.any((e) => e['uses_group_awards'] == true);
-    if (!usesGroups) return false;
+    final firstBreed = (normalEntries.first['breed'] ?? '').toString().trim();
+    final firstBreedName =
+        (normalEntries.first['breed_name'] ?? '').toString().trim();
 
-    final hasRealGroups = normalEntries.any((e) {
-      final groupName = (
-        e['group_name'] ??
-        e['group_display_name'] ??
-        e['group_label'] ??
-        e['group'] ??
-        e['group_code'] ??
-        ''
-      ).toString().trim();
+    final breedName =
+        (firstBreed.isNotEmpty ? firstBreed : firstBreedName).toLowerCase();
 
-      return groupName.isNotEmpty && groupName != 'Fur / Wool';
-    });
+    final breedSettingUsesGroups =
+        breedName.isNotEmpty && (_breedUsesGroupAwards[breedName] == true);
 
-    return hasRealGroups;
+    final rowUsesGroups =
+        normalEntries.any((e) => e['uses_group_awards'] == true);
+
+    return breedSettingUsesGroups || rowUsesGroups;
   }
 
   bool _showsByVariety(List<Map<String, dynamic>> entries) {
-    return entries.any((e) => e['uses_variety_awards'] == true);
+    final normalEntries = entries.where((e) => !_isFurEntry(e)).toList();
+    if (normalEntries.isEmpty) return false;
+
+    final firstBreed = (normalEntries.first['breed'] ?? '').toString().trim();
+    final firstBreedName = (normalEntries.first['breed_name'] ?? '').toString().trim();
+    final breedName = (firstBreed.isNotEmpty ? firstBreed : firstBreedName)
+        .toLowerCase();
+
+    if (breedName.isNotEmpty && _breedUsesVarietyAwards.containsKey(breedName)) {
+      return _breedUsesVarietyAwards[breedName] == true;
+    }
+
+    return normalEntries.any((e) => e['uses_variety_awards'] == true);
   }
 
   String _judgeNameById(String? judgeId) {
@@ -972,13 +1016,20 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
         message: message,
         entry: entry,
         conflictsWith: conflictsWith,
-        breed: (entry['breed'] ?? '').toString().trim(),
+        breed: (() {
+          final rawBreed = (entry['breed'] ?? '').toString().trim();
+          if (rawBreed.isNotEmpty) return rawBreed;
+          return (entry['breed_name'] ?? '').toString().trim();
+        })(),
         groupName: (entry['group_name'] ?? '').toString().trim().isEmpty
             ? null
             : (entry['group_name'] ?? '').toString().trim(),
-        variety: (entry['variety'] ?? '').toString().trim().isEmpty
-            ? null
-            : (entry['variety'] ?? '').toString().trim(),
+        variety: (() {
+          final rawVariety = (entry['variety'] ?? '').toString().trim();
+          if (rawVariety.isNotEmpty) return rawVariety;
+          final rawVarietyName = (entry['variety_name'] ?? '').toString().trim();
+          return rawVarietyName.isEmpty ? null : rawVarietyName;
+        })(),
         classSexLabel: _classSexLabelFromEntry(entry),
       );
     }
@@ -1004,35 +1055,49 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
   }
 
     bool showsByGroup(Map<String, dynamic> e) {
-    if (e['uses_group_awards'] != true) return false;
+      if (e['uses_group_awards'] != true) return false;
 
-    final thisBreed = (e['breed'] ?? '').toString().trim().toLowerCase();
-    if (thisBreed.isEmpty) return false;
+      final thisBreedRaw = (e['breed'] ?? '').toString().trim();
+      final thisBreedName = (e['breed_name'] ?? '').toString().trim();
+      final thisBreed = (thisBreedRaw.isNotEmpty ? thisBreedRaw : thisBreedName)
+          .toLowerCase();
+      if (thisBreed.isEmpty) return false;
 
-    final hasRealGroupsForBreed = _entries.any((row) {
-      final rowBreed = (row['breed'] ?? '').toString().trim().toLowerCase();
-      if (rowBreed != thisBreed) return false;
+      final hasRealGroupsForBreed = _entries.any((row) {
+        final rowBreedRaw = (row['breed'] ?? '').toString().trim();
+        final rowBreedName = (row['breed_name'] ?? '').toString().trim();
+        final rowBreed = (rowBreedRaw.isNotEmpty ? rowBreedRaw : rowBreedName)
+            .toLowerCase();
+        if (rowBreed != thisBreed) return false;
 
-      final groupName = (
-        row['group_name'] ??
-        row['group_display_name'] ??
-        row['group_label'] ??
-        row['group'] ??
-        row['group_code'] ??
-        ''
-      ).toString().trim();
+        final groupName = (
+          row['group_name'] ??
+          row['group_display_name'] ??
+          row['group_label'] ??
+          row['group'] ??
+          row['group_code'] ??
+          ''
+        ).toString().trim();
 
-      return groupName.isNotEmpty;
-    });
+        return groupName.isNotEmpty;
+      });
 
-    return hasRealGroupsForBreed;
-  }
+      return hasRealGroupsForBreed;
+    }
 
     bool showsByVariety(Map<String, dynamic> e) => e['uses_variety_awards'] == true;
 
     String sex(Map<String, dynamic> e) => (e['sex'] ?? '').toString().trim().toLowerCase();
-    String breed(Map<String, dynamic> e) => (e['breed'] ?? '').toString().trim();
-    String variety(Map<String, dynamic> e) => (e['variety'] ?? '').toString().trim();
+    String breed(Map<String, dynamic> e) {
+      final rawBreed = (e['breed'] ?? '').toString().trim();
+      if (rawBreed.isNotEmpty) return rawBreed;
+      return (e['breed_name'] ?? '').toString().trim();
+    }
+    String variety(Map<String, dynamic> e) {
+      final rawVariety = (e['variety'] ?? '').toString().trim();
+      if (rawVariety.isNotEmpty) return rawVariety;
+      return (e['variety_name'] ?? '').toString().trim();
+    }
     String sectionId(Map<String, dynamic> e) => (e['section_id'] ?? '').toString().trim();
     String groupName(Map<String, dynamic> e) {
       return (
@@ -1311,8 +1376,14 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
   String _entryLabel(Map<String, dynamic> e) {
     final animalName = (e['animal_name'] ?? '').toString().trim();
     final tattoo = (e['tattoo'] ?? '').toString().trim();
-    final breed = (e['breed'] ?? '').toString().trim();
-    final variety = (e['variety'] ?? '').toString().trim();
+    final rawBreed = (e['breed'] ?? '').toString().trim();
+    final rawBreedName = (e['breed_name'] ?? '').toString().trim();
+    final breed = rawBreed.isNotEmpty ? rawBreed : rawBreedName;
+
+    final rawVariety = (e['variety'] ?? '').toString().trim();
+    final rawVarietyName = (e['variety_name'] ?? '').toString().trim();
+    final variety = rawVariety.isNotEmpty ? rawVariety : rawVarietyName;
+
     final groupName = (e['group_name'] ?? '').toString().trim();
 
     final animalLabel = animalName.isNotEmpty && tattoo.isNotEmpty
@@ -1801,18 +1872,28 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
 
     for (final e in _entries) {
       final isFur = _isFurEntry(e);
-      final groupName = isFur
-          ? 'Fur / Wool'
-          : (
-              e['group_name'] ??
-              e['group_display_name'] ??
-              e['group_label'] ??
-              e['group'] ??
-              e['group_code'] ??
-              ''
-            ).toString().trim();
+      String groupName;
 
-      if (groupName.isEmpty) continue;
+      if (isFur) {
+        groupName = 'Fur / Wool';
+      } else {
+        groupName = (
+          e['group_name'] ??
+          e['group_display_name'] ??
+          e['group_label'] ??
+          e['group'] ??
+          e['group_code'] ??
+          ''
+        ).toString().trim();
+
+        if (groupName.isEmpty && widget.showsByVariety == false) {
+          groupName = (e['variety'] ?? e['variety_name'] ?? '').toString().trim();
+        }
+
+        if (groupName.isEmpty) {
+          groupName = '(No Group Assigned)';
+        }
+      }
 
       out.putIfAbsent(groupName, () => <Map<String, dynamic>>[]);
       out[groupName]!.add(e);
