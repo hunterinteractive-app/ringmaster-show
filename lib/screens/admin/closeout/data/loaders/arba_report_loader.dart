@@ -623,10 +623,7 @@ class ArbaReportLoader {
         ].where((e) => e.isNotEmpty).join(' '),
       ]);
 
-      final cityState = [
-        _str(entry['exhibitor_city']),
-        _str(entry['exhibitor_state']),
-      ].where((e) => e.isNotEmpty).join(', ');
+      final cityState = await _loadEntryCityState(entry);
 
       return _ArbaBestAwardInfo(
         owner: owner,
@@ -639,6 +636,35 @@ class ArbaReportLoader {
       );
     } catch (_) {
       return const _ArbaBestAwardInfo.empty();
+    }
+  }
+
+  Future<String> _loadEntryCityState(Map<String, dynamic> entry) async {
+    final fromReportRow = [
+      _str(entry['exhibitor_city']),
+      _str(entry['exhibitor_state']),
+    ].where((e) => e.isNotEmpty).join(', ');
+
+    if (fromReportRow.isNotEmpty) return fromReportRow;
+
+    final exhibitorId = _str(entry['exhibitor_id']);
+    if (exhibitorId.isEmpty) return '';
+
+    try {
+      final row = await repo.supabase
+          .from('exhibitors')
+          .select('city,state')
+          .eq('id', exhibitorId)
+          .maybeSingle();
+
+      if (row == null) return '';
+
+      return [
+        _str(row['city']),
+        _str(row['state']),
+      ].where((e) => e.isNotEmpty).join(', ');
+    } catch (_) {
+      return '';
     }
   }
 
