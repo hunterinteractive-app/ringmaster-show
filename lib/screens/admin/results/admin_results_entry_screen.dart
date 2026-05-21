@@ -90,7 +90,8 @@ String _awardDisplayLabel(String award, Map<String, dynamic> entry) {
 }
 
 String _canonicalAwardCode(String award) {
-  final value = award.trim().toLowerCase();
+  final raw = award.trim();
+  final value = raw.toLowerCase();
 
   if (value == 'best in show') return 'BIS';
   if (value == 'reserve in show' ||
@@ -99,7 +100,28 @@ String _canonicalAwardCode(String award) {
     return 'Reserve In Show';
   }
 
-  return award.trim();
+  if (value == 'bog' || value == 'best of group') return 'BOG';
+  if (value == 'bosg' ||
+      value == 'best opposite sex of group' ||
+      value == 'best opposite of group') {
+    return 'BOSG';
+  }
+
+  if (value == 'bov' || value == 'best of variety') return 'BOV';
+  if (value == 'bosv' ||
+      value == 'best opposite sex of variety' ||
+      value == 'best opposite of variety') {
+    return 'BOSV';
+  }
+
+  if (value == 'bob' || value == 'best of breed') return 'BOB';
+  if (value == 'bosb' ||
+      value == 'best opposite sex of breed' ||
+      value == 'best opposite of breed') {
+    return 'BOSB';
+  }
+
+  return raw;
 }
 
 bool _awardListContains(List<String> awards, String award) {
@@ -5154,6 +5176,16 @@ if (storedJudgeId.isEmpty) {
       final now = DateTime.now().toUtc().toIso8601String();
 
       final isFurOrWoolResult = _isFurOrWoolResultRow();
+      final awardsToSave = isFurOrWoolResult
+          ? <String>[]
+          : (_selectedAwards
+              .map((award) => _canonicalAwardCode(award))
+              .where((award) => award.trim().isNotEmpty)
+              .toSet()
+              .toList()
+            ..sort());
+
+      debugPrint('AWARDS TO SAVE: $awardsToSave');
 
       if (isFurOrWoolResult) {
         final updated = await supabase.rpc(
@@ -5171,7 +5203,7 @@ if (storedJudgeId.isEmpty) {
                 writerName.isEmpty ? 'Signed-in Writer' : writerName,
             'p_result_entered_by_phone':
                 widget.isQrEntryMode ? writerPhone : null,
-            'p_awards': <String>[],
+            'p_awards': awardsToSave,
             'p_is_qr_entry_mode': widget.isQrEntryMode,
           },
         );
@@ -5192,13 +5224,9 @@ if (storedJudgeId.isEmpty) {
             widget.isQrEntryMode ? writerPhone : null;
         widget.entry['result_entered_at'] = now;
         widget.entry['updated_at'] = now;
-        widget.entry['_awards'] = <String>[];
+        widget.entry['_awards'] = awardsToSave;
       } else {
-        final awardsToSave = _selectedAwards
-          .map(_canonicalAwardCode)
-          .where((award) => award.trim().isNotEmpty)
-          .toSet()
-          .toList();
+        
 
       final updated = await supabase.rpc(
         'save_results_entry',
