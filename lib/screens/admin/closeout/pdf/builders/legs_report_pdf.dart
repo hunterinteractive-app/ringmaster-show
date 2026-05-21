@@ -79,24 +79,11 @@ class LegsReportPdfBuilder {
   ];
 
   Future<pw.ThemeData> _buildTheme() async {
-    final regular = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/Arial.ttf'),
-    );
-    final bold = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/Arial_Bold.ttf'),
-    );
-    final italic = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/Arial_Italic.ttf'),
-    );
-    final boldItalic = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/Arial_Bold_Italic.ttf'),
-    );
-
     return pw.ThemeData.withFont(
-      base: regular,
-      bold: bold,
-      italic: italic,
-      boldItalic: boldItalic,
+      base: pw.Font.helvetica(),
+      bold: pw.Font.helveticaBold(),
+      italic: pw.Font.helveticaOblique(),
+      boldItalic: pw.Font.helveticaBoldOblique(),
     );
   }
 
