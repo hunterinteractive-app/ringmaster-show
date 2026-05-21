@@ -136,28 +136,26 @@ class LegsReportPdfBuilder {
 
           for (final chunk in chunks) {
             pdf.addPage(
-              pw.Page(
+              pw.MultiPage(
                 pageFormat: PdfPageFormat.letter,
                 margin: const pw.EdgeInsets.fromLTRB(22, 18, 22, 18),
                 theme: theme,
                 build: (_) {
-                  return pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-                    children: [
-                      _certificate(chunk[0]),
+                  return [
+                    _certificate(chunk[0]),
+                    if (chunk.length > 1) ...[
                       pw.SizedBox(height: 8),
                       _cutLine(),
                       pw.SizedBox(height: 8),
-                      if (chunk.length > 1)
-                        _certificate(chunk[1])
-                      else
-                        _blankCertificateSpace(),
-                      pw.SizedBox(height: 6),
-                      _requiredCertificateImagesBlock(),
-                      pw.SizedBox(height: 6),
-                      _rulesAndRequiredArbaInfoBlock(),
+                      _certificate(chunk[1]),
                     ],
-                  );
+                    pw.SizedBox(height: 8),
+                    _cutLine(),
+                    pw.SizedBox(height: 8),
+                    _rulesAndRequiredArbaInfoBlock(),
+                    pw.SizedBox(height: 8),
+                    _requiredCertificateImagesBlock(),
+                  ];
                 },
               ),
             );
@@ -635,9 +633,6 @@ class LegsReportPdfBuilder {
     );
   }
 
-  pw.Widget _blankCertificateSpace() {
-    return pw.SizedBox(height: 205);
-  }
 
   pw.Widget _requiredCertificateImagesBlock() {
     return pw.Container(
@@ -733,7 +728,7 @@ class LegsReportPdfBuilder {
 
   pw.Widget _rulesAndRequiredArbaInfoBlock() {
     return pw.Container(
-      padding: const pw.EdgeInsets.fromLTRB(6, 5, 6, 2),
+      padding: const pw.EdgeInsets.fromLTRB(6, 5, 6, 5),
       decoration: pw.BoxDecoration(
         border: pw.Border.all(color: arbaBlue, width: 0.8),
         borderRadius: pw.BorderRadius.circular(3),
