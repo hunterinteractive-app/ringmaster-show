@@ -567,70 +567,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       );
     }
 
-    Future<void> _calculateSweepstakesBeforeReports() async {
-      final sections = await supabase
-          .from('show_sections')
-          .select('id, kind, letter')
-          .eq('show_id', widget.showId)
-          .eq('is_enabled', true);
-
-      final selectedSectionIds = _selectedCloseoutSectionIds.toSet();
-      final targets = <String, Map<String, String>>{};
-
-      for (final raw in (sections as List)) {
-        final row = Map<String, dynamic>.from(raw as Map);
-        final sectionId = (row['id'] ?? '').toString().trim();
-        final scope = (row['kind'] ?? '').toString().trim().toUpperCase();
-        final showLetter = (row['letter'] ?? '').toString().trim().toUpperCase();
-
-        if (scope != 'OPEN' && scope != 'YOUTH') continue;
-        if (showLetter.isEmpty) continue;
-
-        if (!_selectedCloseoutScopeIsEntireShow &&
-            !selectedSectionIds.contains(sectionId)) {
-          continue;
-        }
-
-        targets['$scope|$showLetter'] = {
-          'scope': scope,
-          'showLetter': showLetter,
-        };
-      }
-
-      for (final target in targets.values) {
-        final scope = target['scope']!;
-        final showLetter = target['showLetter']!;
-
-        final existingRows = await supabase
-            .from('sweepstakes_results')
-            .select('id')
-            .eq('show_id', widget.showId)
-            .eq('scope', scope)
-            .eq('show_letter', showLetter)
-            .eq('calculation_version', 'v2')
-            .limit(1);
-
-        if ((existingRows as List).isNotEmpty) {
-          debugPrint(
-            'SWEEPSTAKES PRE-FINALIZE SKIPPED: $scope $showLetter already has v2 results.',
-          );
-          continue;
-        }
-
-        debugPrint('SWEEPSTAKES PRE-FINALIZE START: $scope $showLetter');
-
-        await supabase.rpc(
-          'calculate_sweepstakes_for_show',
-          params: {
-            'p_show_id': widget.showId,
-            'p_scope': scope,
-            'p_show_letter': showLetter,
-          },
-        );
-
-        debugPrint('SWEEPSTAKES PRE-FINALIZE DONE: $scope $showLetter');
-      }
-    }
 
     Future<void> _loadMissingPlacements() async {
       if (_loadingMissingPlacements) return;
@@ -995,6 +931,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       required String to,
       String? subject,
       String? message,
+      bool allowLegs = false, // 👈 Leg Change 
     }) async {
       if (artifacts.isEmpty) {
         throw Exception('No reports provided for exhibitor email send.');
@@ -1008,6 +945,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         to: to,
         subject: subject,
         message: message,
+        allowLegs: allowLegs,
       );
     }
 
@@ -1257,9 +1195,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                         ),
                       ),
                       TextButton.icon(
+                        onPressed: () => _openResultsEntryFix(item.entryId),
                         icon: const Icon(Icons.build, size: 18),
                         label: const Text('Fix'),
-                        onPressed: () => _openResultsEntryFix(item.entryId),
                       ),
                     ],
                   ),
@@ -1366,6 +1304,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           'Finalize is disabled while viewing in support mode.',
         );
       }
+
       final ready = await _ensureResultsReadyForReports();
 
       if (!ready) {
@@ -1378,69 +1317,26 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         throw Exception('Select at least one section before finalizing this scope.');
       }
 
-      final previousFinalizeId = _dashboard?.latestFinalize.id ?? '';
+      final response = await supabase.functions.invoke(
+        'run-closeout',
+        body: {
+          'show_id': widget.showId,
+          'section_ids': _selectedCloseoutScopeIsEntireShow
+              ? <String>[]
+              : selectedSectionIds,
+          'scope_label': _selectedCloseoutScopeLabel,
+        },
+      );
 
-      try {
-        await _calculateSweepstakesBeforeReports();
-
-        if (_selectedCloseoutScopeIsEntireShow) {
-          await supabase.rpc(
-            'finalize_show',
-            params: {'p_show_id': widget.showId},
-          );
-        } else {
-          await supabase.rpc(
-            'finalize_show_scoped',
-            params: {
-              'p_show_id': widget.showId,
-              'p_section_ids': selectedSectionIds,
-              'p_scope_label': _selectedCloseoutScopeLabel,
-            },
-          );
-        }
-      } catch (e) {
-        final isStatementTimeout = e is PostgrestException &&
-            (e.code == '57014' ||
-                e.message.toLowerCase().contains('statement timeout') ||
-                e.message.toLowerCase().contains('canceling statement due to statement timeout'));
-
-        if (isStatementTimeout) {
-          // finalize_show can finish enough database work to queue artifacts, but
-          // PostgREST may still time out before returning to Flutter. Treat that
-          // as recoverable when queued artifacts are visible so the PDF
-          // generation step can continue instead of stopping the whole closeout.
-          await Future.delayed(const Duration(seconds: 2));
-          await _refreshDashboardOnly();
-
-          final queuedArtifactCount = await _countQueuedArtifactsForShow();
-          final latestFinalizeId = _dashboard?.latestFinalize.id ?? '';
-          final hasNewFinalize = latestFinalizeId.isNotEmpty &&
-              latestFinalizeId != previousFinalizeId;
-          final hasCurrentReports = (_dashboard?.reports ?? const <ReportArtifactSummary>[])
-              .any((r) => r.isCurrent);
-
-          if (queuedArtifactCount > 0 || hasNewFinalize || hasCurrentReports) {
-            if (mounted) {
-              final details = queuedArtifactCount > 0
-                  ? '$queuedArtifactCount report artifact${queuedArtifactCount == 1 ? '' : 's'} were queued'
-                  : hasNewFinalize
-                      ? 'a new finalize run was created'
-                      : 'current report artifacts were found';
-
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'Finalize timed out waiting for the database, but $details. Continuing report generation.',
-                  ),
-                ),
-              );
-            }
-            return;
-          }
-        }
-
-        rethrow;
+      if (response.status >= 400) {
+        final data = response.data;
+        final message = data is Map && data['error'] != null
+            ? data['error'].toString()
+            : 'Server closeout failed with status ${response.status}.';
+        throw Exception(message);
       }
+
+      await _refreshDashboardOnly();
     }
 
     Future<int> _countQueuedArtifactsForShow() async {
@@ -1648,11 +1544,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
             lastError = e;
             lastStack = st;
 
-            debugPrint(
-              'REPORT GENERATION ATTEMPT $attempt FAILED: ${artifact.reportName} / ${artifact.id}',
-            );
-            debugPrint('REPORT GENERATION ERROR: $e');
-
             if (attempt < 3) {
               await Future.delayed(Duration(seconds: attempt * 2));
             }
@@ -1660,14 +1551,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         }
 
         final error = lastError ?? Exception('Unknown report generation failure');
-
-        debugPrint(
-          'REPORT GENERATION FAILED AFTER RETRIES: ${artifact.reportName} / ${artifact.id}',
-        );
-        debugPrint('REPORT GENERATION ERROR: $error');
-        if (lastStack != null) {
-          debugPrint('REPORT GENERATION STACK: $lastStack');
-        }
 
         onFailed(key, error);
 
@@ -1782,16 +1665,10 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
               _artifactMatchesSelectedScope(a),
         );
 
-        final legsReport = _newestGeneratedArtifactWhere(
-          'legs',
-          (a) =>
-              _artifactMatchesExhibitor(a, exhibitor) &&
-              _artifactMatchesSelectedScope(a),
-        );
-
+        // Temporarily block leg PDFs from bulk exhibitor emails until ARBA approval is final.
         final artifacts = <ReportArtifactSummary>[
           if (exhibitorReport != null) exhibitorReport,
-          if (legsReport != null) legsReport,
+          // if (legsReport != null) legsReport,
         ];
 
         if (artifacts.isEmpty) {
@@ -1805,7 +1682,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
             to: exhibitor.email,
             subject: '${widget.showName} - Exhibitor Reports',
             message:
-                'Attached are your exhibitor reports and legs from ${widget.showName}.',
+                //'Attached are your exhibitor reports and legs from ${widget.showName}.',
+                'Attached are your exhibitor reports from ${widget.showName}.',
           );
           sentCount++;
         } catch (_) {
@@ -1893,10 +1771,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         final first = targets.first;
         final artifactsById = <String, ReportArtifactSummary>{};
 
-        debugPrint(
-          'CLUB GROUP START: ${first.clubName} / ${first.breedName} / ${first.email}',
-        );
-
         for (final target in targets) {
           final sweepstakesArtifacts = _allGeneratedArtifactsWhere(
             'sweepstakes_report',
@@ -1919,10 +1793,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           for (final a in breedDetailArtifacts) {
             artifactsById[a.id] = a;
           }
-
-          debugPrint(
-            'CLUB GROUP TARGET: ${target.clubName} / ${target.breedName} / ${target.scope} ${target.showLetter} / ${target.email}',
-          );
         }
 
         final artifacts = artifactsById.values.toList()
@@ -1979,11 +1849,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           sentCount++;
         } catch (e, st) {
           failedCount++;
-          debugPrint(
-            'FAILED CLUB GROUP EMAIL: ${first.clubName} / ${first.breedName} / ${first.email}',
-          );
-          debugPrint('FAILED CLUB GROUP EMAIL ERROR: $e');
-          debugPrint('FAILED CLUB GROUP EMAIL STACK: $st');
         }
       }
 
@@ -1996,8 +1861,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         ),
       );
     } catch (e, st) {
-      debugPrint('SEND ALL CLUB REPORTS ERROR: $e');
-      debugPrint('SEND ALL CLUB REPORTS STACK: $st');
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2046,6 +1909,65 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       }
 
       return 'Reports are blocked until results are complete: ${parts.join(', ')}.';
+    }
+
+    Future<void> _sendAllLegsReports() async {
+      if (_isSupportMode) return;
+
+      setState(() {
+        _generatingReport = true;
+      });
+
+      try {
+        await _loadData();
+
+        final exhibitors = await _loadExhibitorEmailTargets();
+        var sentCount = 0;
+        var skippedCount = 0;
+        var failedCount = 0;
+
+        for (final exhibitor in exhibitors) {
+          final legsReport = _newestGeneratedArtifactWhere(
+            'legs',
+            (a) =>
+                _artifactMatchesExhibitor(a, exhibitor) &&
+                _artifactMatchesSelectedScope(a),
+          );
+
+          if (legsReport == null) {
+            skippedCount++;
+            continue;
+          }
+
+          try {
+            await _sendExhibitorArtifactsEmail(
+              artifacts: [legsReport],
+              to: exhibitor.email,
+              subject: '${widget.showName} - ARBA Legs',
+              message: 'Attached are your ARBA legs from ${widget.showName}.',
+              allowLegs: false,  // 👈 Leg Change 
+            );
+            sentCount++;
+          } catch (_) {
+            failedCount++;
+          }
+        }
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Legs send complete. Sent: $sentCount, skipped: $skippedCount, failed: $failedCount',
+            ),
+          ),
+        );
+      } finally {
+        if (mounted) {
+          setState(() {
+            _generatingReport = false;
+          });
+        }
+      }
     }
 
     Future<bool> _ensureResultsReadyForReports() async {
@@ -3395,6 +3317,11 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                         : 'Send $_selectedCloseoutScopeLabel Exhibitor Reports',
                                   ),
                                 ),
+                               // ElevatedButton.icon(
+                               //   onPressed: _isBusy || _isSupportMode ? null : _sendAllLegsReports,
+                               //   icon: const Icon(Icons.pets),
+                               //   label: const Text('Send All Legs'),
+                               // ),
 
                                 OutlinedButton.icon(
                                   onPressed:

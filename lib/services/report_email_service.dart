@@ -35,6 +35,7 @@ class ReportEmailService {
     String? subject,
     String? message,
     String? replyTo,
+    bool allowLegs = false, // 👈 Leg Change 
   }) async {
     final resp = await supabase.functions.invoke(
       'send-exhibitor-report-email',
@@ -45,6 +46,7 @@ class ReportEmailService {
         'subject': subject,
         'message': message,
         'reply_to': replyTo,
+        'allow_legs': allowLegs, 
       },
     );
 
