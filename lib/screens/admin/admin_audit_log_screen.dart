@@ -928,7 +928,7 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
             ),
             tabs: [
               Tab(text: 'QR Code Overrides'),
-              Tab(text: 'QR Writers'),
+              Tab(text: 'Writers'),
             ],
           ),
         ),
