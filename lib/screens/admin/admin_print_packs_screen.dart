@@ -89,6 +89,8 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
 
   bool _includeScratched = false;
   bool _combineSections = true;
+  bool _pairOpenYouthByLetter = false;
+  bool _youthFirst = false;
   bool _autoEmailCheckInSheets = false;
   bool _savingAutoEmailCheckInSheets = false;
   DateTime? _entryCloseAt;
@@ -142,38 +144,7 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
       }
 
       _sections = (rows as List).cast<Map<String, dynamic>>();
-
-      _sections.sort((a, b) {
-        int kindRank(String k) {
-          switch (k) {
-            case 'open':
-              return 0;
-            case 'youth':
-              return 1;
-            default:
-              return 99;
-          }
-        }
-
-        final ak = (a['kind'] ?? '').toString().toLowerCase();
-        final bk = (b['kind'] ?? '').toString().toLowerCase();
-
-        final kr = kindRank(ak).compareTo(kindRank(bk));
-        if (kr != 0) return kr;
-
-        final aso = a['sort_order'];
-        final bso = b['sort_order'];
-        final asoI =
-            (aso is int) ? aso : int.tryParse(aso?.toString() ?? '') ?? 9999;
-        final bsoI =
-            (bso is int) ? bso : int.tryParse(bso?.toString() ?? '') ?? 9999;
-        final soCmp = asoI.compareTo(bsoI);
-        if (soCmp != 0) return soCmp;
-
-        final al = (a['letter'] ?? '').toString().toUpperCase();
-        final bl = (b['letter'] ?? '').toString().toUpperCase();
-        return al.compareTo(bl);
-      });
+      _sortSections();
 
       if (_sections.isNotEmpty) {
         final currentStillExists = _sections.any(
@@ -197,6 +168,55 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
       });
     }
   }
+  void _sortSections() {
+    _sections.sort((a, b) {
+      int kindRank(String k) {
+        switch (k.toLowerCase()) {
+          case 'open':
+            return _youthFirst ? 1 : 0;
+          case 'youth':
+            return _youthFirst ? 0 : 1;
+          default:
+            return 99;
+        }
+      }
+
+      int toInt(dynamic value) {
+        if (value is int) return value;
+        return int.tryParse(value?.toString() ?? '') ?? 9999;
+      }
+
+      final ak = (a['kind'] ?? '').toString().toLowerCase();
+      final bk = (b['kind'] ?? '').toString().toLowerCase();
+      final al = (a['letter'] ?? '').toString().trim().toUpperCase();
+      final bl = (b['letter'] ?? '').toString().trim().toUpperCase();
+      final asoI = toInt(a['sort_order']);
+      final bsoI = toInt(b['sort_order']);
+
+      if (_pairOpenYouthByLetter) {
+        final sortCmp = asoI.compareTo(bsoI);
+        if (sortCmp != 0) return sortCmp;
+
+        final letterCmp = al.compareTo(bl);
+        if (letterCmp != 0) return letterCmp;
+
+        final kindCmp = kindRank(ak).compareTo(kindRank(bk));
+        if (kindCmp != 0) return kindCmp;
+      } else {
+        final kindCmp = kindRank(ak).compareTo(kindRank(bk));
+        if (kindCmp != 0) return kindCmp;
+
+        final sortCmp = asoI.compareTo(bsoI);
+        if (sortCmp != 0) return sortCmp;
+
+        final letterCmp = al.compareTo(bl);
+        if (letterCmp != 0) return letterCmp;
+      }
+
+      return _sectionLabel(a).compareTo(_sectionLabel(b));
+    });
+  }
+
 
   String _sectionLabel(Map<String, dynamic> s) {
     final dn = (s['display_name'] ?? '').toString().trim();
@@ -315,16 +335,30 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
           sectionLabel: sectionName,
           includeScratched: _includeScratched,
           combineSections: _combineSections,
+          pairOpenYouthByLetter: _pairOpenYouthByLetter,
+          youthFirst: _youthFirst,
         ),
       ),
     );
   }
 
   void _openControlSheetsGeneratorForSection(Map<String, dynamic> section) {
-    final sectionId = section['id']?.toString();
-    final sectionName = _sectionLabel(section);
+    _openControlSheetsGeneratorForSections(
+      sections: [section],
+      sectionLabel: _sectionLabel(section),
+    );
+  }
 
-    if (sectionId == null || sectionId.isEmpty) {
+  void _openControlSheetsGeneratorForSections({
+    required List<Map<String, dynamic>> sections,
+    required String sectionLabel,
+  }) {
+    final sectionIds = sections
+        .map((s) => s['id']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toList();
+
+    if (sectionIds.isEmpty) {
       setState(() {
         _msg = 'That section is missing an ID.';
       });
@@ -342,13 +376,43 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
           showId: widget.showId,
           showName: widget.showName,
           sections: _sections,
-          sectionId: sectionId,
-          sectionLabel: sectionName,
+          sectionIds: sectionIds,
+          sectionId: sectionIds.first,
+          sectionLabel: sectionLabel,
           includeScratched: _includeScratched,
-          combineSections: false,
+          // One generated PDF can include both Open and Youth, but the PDF
+          // content still keeps Open and Youth as separate sheet sections.
+          combineSections: sectionIds.length > 1,
+          youthFirst: _youthFirst,
         ),
       ),
     );
+  }
+
+  List<List<Map<String, dynamic>>> _controlSheetButtonGroups() {
+    if (!_pairOpenYouthByLetter) {
+      return _sections.map((s) => [s]).toList();
+    }
+
+    final byLetter = <String, List<Map<String, dynamic>>>{};
+    for (final section in _sections) {
+      final letter = (section['letter'] ?? '').toString().trim().toUpperCase();
+      final key = letter.isEmpty ? _sectionLabel(section) : letter;
+      byLetter.putIfAbsent(key, () => <Map<String, dynamic>>[]);
+      byLetter[key]!.add(section);
+    }
+
+    return byLetter.values.toList();
+  }
+
+  String _controlSheetButtonLabel(List<Map<String, dynamic>> sections) {
+    if (sections.isEmpty) return 'Section';
+    if (sections.length == 1) return _sectionLabel(sections.first);
+
+    final letter = (sections.first['letter'] ?? '').toString().trim().toUpperCase();
+    if (letter.isNotEmpty) return 'Show $letter';
+
+    return sections.map(_sectionLabel).join(' / ');
   }
 
   Widget _messageBanner() {
@@ -443,7 +507,7 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
 
     return RingMasterPageShell(
       title: 'RingMaster Show',
-      subtitle: 'Print Packs — ${widget.showName}',
+      subtitle: 'Print Show Sheets — ${widget.showName}',
       showBackButton: true,
       showHomeButton: true,
       useScrollView: false,
@@ -463,10 +527,61 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
                 _messageBanner(),
 
                 _buildSectionCard(
+                  icon: Icons.sort_outlined,
+                  title: 'Print Order',
+                  subtitle:
+                      'Choose whether Control Sheets list Open or Youth first and how they are printed.',
+                  children: [
+                    SwitchListTile(
+                      value: _pairOpenYouthByLetter,
+                      contentPadding: EdgeInsets.zero,
+                      onChanged: (v) {
+                        setState(() {
+                          _pairOpenYouthByLetter = v;
+                          _sortSections();
+                        });
+                      },
+                      title: const Text('Pair Open/Youth by show letter'),
+                      subtitle: Text(
+                        _pairOpenYouthByLetter
+                            ? (_youthFirst
+                                ? 'Print order: Youth A, Open A, Youth B, Open B…'
+                                : 'Print order: Open A, Youth A, Open B, Youth B…')
+                            : (_youthFirst
+                                ? 'Print order: all Youth sections, then all Open sections.'
+                                : 'Print order: all Open sections, then all Youth sections.'),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SegmentedButton<bool>(
+                      segments: const [
+                        ButtonSegment<bool>(
+                          value: false,
+                          label: Text('Open first'),
+                          icon: Icon(Icons.workspace_premium_outlined),
+                        ),
+                        ButtonSegment<bool>(
+                          value: true,
+                          label: Text('Youth first'),
+                          icon: Icon(Icons.school_outlined),
+                        ),
+                      ],
+                      selected: {_youthFirst},
+                      onSelectionChanged: (values) {
+                        setState(() {
+                          _youthFirst = values.first;
+                          _sortSections();
+                        });
+                      },
+                    ),
+                  ],
+                ),
+
+                _buildSectionCard(
                   icon: Icons.description_outlined,
                   title: 'Control Sheets',
                   subtitle:
-                      'Generate judge control sheets as PDF files. These are always built one section at a time.',
+                      'Generate judge control sheets as PDF files. Paired Open/Youth sections save as one PDF, but print as separate Open and Youth sheets inside it.',
                   children: [
                     SwitchListTile(
                       value: _includeScratched,
@@ -481,8 +596,8 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
                         style: TextStyle(color: Colors.red),
                       )
                     else
-                      ..._sections.map(
-                        (section) => Padding(
+                      ..._controlSheetButtonGroups().map(
+                        (sectionGroup) => Padding(
                           padding: const EdgeInsets.only(bottom: 10),
                           child: SizedBox(
                             width: double.infinity,
@@ -495,11 +610,13 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
                                   borderRadius: BorderRadius.circular(14),
                                 ),
                               ),
-                              onPressed: () =>
-                                  _openControlSheetsGeneratorForSection(section),
+                              onPressed: () => _openControlSheetsGeneratorForSections(
+                                sections: sectionGroup,
+                                sectionLabel: _controlSheetButtonLabel(sectionGroup),
+                              ),
                               icon: const Icon(Icons.download),
                               label: Text(
-                                'Download Control Sheets — ${_sectionLabel(section)}',
+                                'Download Control Sheets — ${_controlSheetButtonLabel(sectionGroup)}',
                               ),
                             ),
                           ),
@@ -715,18 +832,22 @@ class _ControlSheetsGeneratorSheet extends StatefulWidget {
   final String showName;
   final List<Map<String, dynamic>> sections;
   final String? sectionId;
+  final List<String> sectionIds;
   final String sectionLabel;
   final bool includeScratched;
   final bool combineSections;
+  final bool youthFirst;
 
   const _ControlSheetsGeneratorSheet({
     required this.showId,
     required this.showName,
     required this.sections,
     required this.sectionId,
+    required this.sectionIds,
     required this.sectionLabel,
     required this.includeScratched,
     required this.combineSections,
+    required this.youthFirst,
   });
 
   @override
@@ -879,16 +1000,71 @@ class _ControlSheetsGeneratorSheetState
   }
 
   Future<List<Map<String, dynamic>>> _fetchEntries() async {
-    final rows = await supabase.rpc(
-      'report_control_sheet_entries',
-      params: {
-        'p_show_id': widget.showId,
-        'p_section_id': widget.combineSections ? null : widget.sectionId,
-        'p_include_scratched': widget.includeScratched,
-      },
-    );
+    final raw = <Map<String, dynamic>>[];
+    final idsToFetch = widget.sectionIds.isNotEmpty
+        ? widget.sectionIds
+        : [if ((widget.sectionId ?? '').isNotEmpty) widget.sectionId!];
 
-    final raw = (rows as List).cast<Map<String, dynamic>>();
+    int kindRankForSectionId(String sectionId) {
+      final section = widget.sections.firstWhere(
+        (s) => (s['id'] ?? '').toString() == sectionId,
+        orElse: () => const <String, dynamic>{},
+      );
+
+      final kind = (section['kind'] ?? '').toString().toLowerCase();
+      switch (kind) {
+        case 'open':
+          return widget.youthFirst ? 1 : 0;
+        case 'youth':
+          return widget.youthFirst ? 0 : 1;
+        default:
+          return 99;
+      }
+    }
+
+    int sortOrderForSectionId(String sectionId) {
+      final section = widget.sections.firstWhere(
+        (s) => (s['id'] ?? '').toString() == sectionId,
+        orElse: () => const <String, dynamic>{},
+      );
+      final value = section['sort_order'];
+      if (value is int) return value;
+      return int.tryParse(value?.toString() ?? '') ?? 9999;
+    }
+
+    String letterForSectionId(String sectionId) {
+      final section = widget.sections.firstWhere(
+        (s) => (s['id'] ?? '').toString() == sectionId,
+        orElse: () => const <String, dynamic>{},
+      );
+      return (section['letter'] ?? '').toString().trim().toUpperCase();
+    }
+
+    final sortedIdsToFetch = [...idsToFetch]
+      ..sort((a, b) {
+        final sortCmp = sortOrderForSectionId(a).compareTo(sortOrderForSectionId(b));
+        if (sortCmp != 0) return sortCmp;
+
+        final letterCmp = letterForSectionId(a).compareTo(letterForSectionId(b));
+        if (letterCmp != 0) return letterCmp;
+
+        final kindCmp = kindRankForSectionId(a).compareTo(kindRankForSectionId(b));
+        if (kindCmp != 0) return kindCmp;
+
+        return a.compareTo(b);
+      });
+
+    for (final sectionId in sortedIdsToFetch) {
+      final rows = await supabase.rpc(
+        'report_control_sheet_entries',
+        params: {
+          'p_show_id': widget.showId,
+          'p_section_id': sectionId,
+          'p_include_scratched': widget.includeScratched,
+        },
+      );
+      raw.addAll((rows as List).cast<Map<String, dynamic>>());
+    }
 
     final byEntryId = <String, Map<String, dynamic>>{};
 
@@ -1018,6 +1194,7 @@ class _ControlSheetsGeneratorSheetState
           : <MapEntry<String, List<Map<String, dynamic>>>>[
               MapEntry(widget.sectionId ?? '', rows),
             ];
+
 
       final allPages = <Map<String, dynamic>>[];
 
@@ -1155,6 +1332,9 @@ class _ControlSheetsGeneratorSheetState
             'sectionTitle': widget.combineSections
                 ? _sectionTitleFromRow(first)
                 : widget.sectionLabel,
+            'sectionKind': _safe(first, 'section_kind').toLowerCase(),
+            'sectionLetter': _safe(first, 'section_letter').toUpperCase(),
+            'sectionSortOrder': _toInt(first['section_sort_order']),
             'breed': _safe(first, 'breed'),
             'color': isFurOrWool ? '' : _colorLabel(first),
             'class': isFurOrWool
@@ -1167,16 +1347,168 @@ class _ControlSheetsGeneratorSheetState
             'specials': _specialsForRow(first),
             'ageSpecial': _ageSpecialForRow(first),
             'isFurOrWool': isFurOrWool,
+            'groupSortOrder': _sortValue(first, 'group_sort_order'),
+            'varietySortOrder': _sortValue(first, 'variety_sort_order'),
+            'classSortRank': _classSortRankForPrint(
+              isFurOrWool
+                  ? _furWoolLabel(first)
+                  : _ageOnly(_safe(first, 'class_name')),
+            ),
           });
         }
       }
 
       // BEGIN REPLACEMENT BLOCK
-      final sectionPageGroups = <String, List<Map<String, dynamic>>>{};
-      for (final p in allPages) {
-        final sectionTitle = (p['sectionTitle'] ?? '').toString();
-        sectionPageGroups.putIfAbsent(sectionTitle, () => <Map<String, dynamic>>[]);
-        sectionPageGroups[sectionTitle]!.add(p);
+      String sectionKindForPage(Map<String, dynamic> page) {
+        final rawKind = (page['sectionKind'] ?? '').toString().trim().toLowerCase();
+        if (rawKind == 'open' || rawKind == 'youth') return rawKind;
+
+        final title = (page['sectionTitle'] ?? '').toString().trim().toLowerCase();
+        if (title.startsWith('open') || title.contains(' open ')) return 'open';
+        if (title.startsWith('youth') || title.contains(' youth ')) return 'youth';
+
+        return rawKind;
+      }
+
+      int sectionKindRank(Map<String, dynamic> page) {
+        final kind = sectionKindForPage(page);
+        switch (kind) {
+          case 'open':
+            return widget.youthFirst ? 1 : 0;
+          case 'youth':
+            return widget.youthFirst ? 0 : 1;
+          default:
+            return 99;
+        }
+      }
+
+      String sectionLetterForPage(Map<String, dynamic> page) {
+        final rawLetter = (page['sectionLetter'] ?? '').toString().trim().toUpperCase();
+        if (rawLetter.isNotEmpty) return rawLetter;
+
+        final title = (page['sectionTitle'] ?? '').toString().trim().toUpperCase();
+        final match = RegExp(r'\b([A-Z])$').firstMatch(title);
+        return match?.group(1) ?? '';
+      }
+
+      int pageInt(Map<String, dynamic> page, String key) {
+        final value = page[key];
+        if (value is int) return value;
+        return int.tryParse(value?.toString() ?? '') ?? 9999;
+      }
+
+      int compareControlPages(Map<String, dynamic> a, Map<String, dynamic> b) {
+        if (widget.combineSections) {
+          // Paired control sheets should be ordered by breed, then by section.
+          // This keeps Open A American Fuzzy Lop together, then Youth A
+          // American Fuzzy Lop together, instead of splitting the same breed
+          // into repeated Open/Youth runs by class or sex.
+          final breedCmp = (a['breed'] ?? '')
+              .toString()
+              .toLowerCase()
+              .compareTo((b['breed'] ?? '').toString().toLowerCase());
+          if (breedCmp != 0) return breedCmp;
+
+          final kindCmp = sectionKindRank(a).compareTo(sectionKindRank(b));
+          if (kindCmp != 0) return kindCmp;
+
+          final sectionSortCmp = pageInt(a, 'sectionSortOrder')
+              .compareTo(pageInt(b, 'sectionSortOrder'));
+          if (sectionSortCmp != 0) return sectionSortCmp;
+
+          final sectionLetterCmp = sectionLetterForPage(a).compareTo(sectionLetterForPage(b));
+          if (sectionLetterCmp != 0) return sectionLetterCmp;
+
+          final titleCmp = (a['sectionTitle'] ?? '')
+              .toString()
+              .compareTo((b['sectionTitle'] ?? '').toString());
+          if (titleCmp != 0) return titleCmp;
+          // Stop further sorting so paired control sheets stay grouped by breed.
+          return 0;
+        } else {
+          final kindCmp = sectionKindRank(a).compareTo(sectionKindRank(b));
+          if (kindCmp != 0) return kindCmp;
+
+          final sectionSortCmp = pageInt(a, 'sectionSortOrder').compareTo(pageInt(b, 'sectionSortOrder'));
+          if (sectionSortCmp != 0) return sectionSortCmp;
+
+          final sectionLetterCmp = sectionLetterForPage(a).compareTo(sectionLetterForPage(b));
+          if (sectionLetterCmp != 0) return sectionLetterCmp;
+
+          final breedCmp = (a['breed'] ?? '')
+              .toString()
+              .toLowerCase()
+              .compareTo((b['breed'] ?? '').toString().toLowerCase());
+          if (breedCmp != 0) return breedCmp;
+        }
+
+        // Only use the fallback sorting when not combining sections
+        if (!widget.combineSections) {
+          final groupCmp = pageInt(a, 'groupSortOrder').compareTo(pageInt(b, 'groupSortOrder'));
+          if (groupCmp != 0) return groupCmp;
+
+          final varietyCmp = pageInt(a, 'varietySortOrder').compareTo(pageInt(b, 'varietySortOrder'));
+          if (varietyCmp != 0) return varietyCmp;
+
+          final colorCmp = (a['color'] ?? '')
+              .toString()
+              .toLowerCase()
+              .compareTo((b['color'] ?? '').toString().toLowerCase());
+          if (colorCmp != 0) return colorCmp;
+
+          final classCmp = pageInt(a, 'classSortRank').compareTo(pageInt(b, 'classSortRank'));
+          if (classCmp != 0) return classCmp;
+
+          final sexCmp = (a['sex'] ?? '').toString().toLowerCase().compareTo(
+                (b['sex'] ?? '').toString().toLowerCase(),
+              );
+          if (sexCmp != 0) return sexCmp;
+
+          return (a['sectionTitle'] ?? '').toString().compareTo((b['sectionTitle'] ?? '').toString());
+        }
+
+        return 0;
+      }
+
+      final sortedAllPages = [...allPages]..sort(compareControlPages);
+
+      final sortedSectionGroups = <MapEntry<String, List<Map<String, dynamic>>>>[];
+
+      if (widget.combineSections) {
+        // Keep Open and Youth as separate sheet sections inside the same PDF,
+        // while preserving the sorted Open/Youth-by-breed flow. Repeated section
+        // titles are allowed here because each run gets its own PDF header.
+        String? currentTitle;
+        List<Map<String, dynamic>> currentPages = <Map<String, dynamic>>[];
+
+        void flushCurrentRun() {
+          if (currentTitle == null || currentPages.isEmpty) return;
+          sortedSectionGroups.add(MapEntry(currentTitle!, currentPages));
+          currentPages = <Map<String, dynamic>>[];
+        }
+
+        for (final p in sortedAllPages) {
+          final sectionTitle = (p['sectionTitle'] ?? '').toString().trim().isEmpty
+              ? 'Section'
+              : (p['sectionTitle'] ?? '').toString().trim();
+
+          if (currentTitle != null && currentTitle != sectionTitle) {
+            flushCurrentRun();
+          }
+
+          currentTitle = sectionTitle;
+          currentPages.add(p);
+        }
+
+        flushCurrentRun();
+      } else {
+        final sectionPageGroups = <String, List<Map<String, dynamic>>>{};
+        for (final p in sortedAllPages) {
+          final sectionTitle = (p['sectionTitle'] ?? '').toString();
+          sectionPageGroups.putIfAbsent(sectionTitle, () => <Map<String, dynamic>>[]);
+          sectionPageGroups[sectionTitle]!.add(p);
+        }
+        sortedSectionGroups.addAll(sectionPageGroups.entries);
       }
 
       pw.Widget _topHeader({required String showHeader}) {
@@ -1234,6 +1566,7 @@ class _ControlSheetsGeneratorSheetState
       pw.Widget _compactClassHeaderBlock({
         required int blockIndex,
         required int totalBlocks,
+        required String sectionTitle,
         required String breed,
         required String color,
         required String cls,
@@ -1260,17 +1593,26 @@ class _ControlSheetsGeneratorSheetState
           child: pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.stretch,
             children: [
-              pw.Text('Breed: $breed', style: title),
-              pw.SizedBox(height: 2),
               pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
-                  pw.Text(
-                    'No. in Breed: $breedCount   Breed Exhibitors: $breedExhibitorCount',
-                    style: small,
+                  pw.Expanded(
+                    child: pw.Text(
+                      sectionTitle.trim().isEmpty
+                          ? 'Breed: $breed'
+                          : '$sectionTitle — $breed',
+                      style: title,
+                    ),
                   ),
+                  pw.SizedBox(width: 8),
                   pw.Text('Breed Class ${blockIndex + 1} of $totalBlocks', style: small),
                 ],
+              ),
+              pw.SizedBox(height: 2),
+              pw.Text(
+                'No. in Breed: $breedCount   Breed Exhibitors: $breedExhibitorCount',
+                style: small,
               ),
               pw.SizedBox(height: 2),
               pw.Row(
@@ -1309,6 +1651,7 @@ class _ControlSheetsGeneratorSheetState
         required String breed,
         required int breedIndex,
         required int totalBreeds,
+        String? sectionHint,
       }) {
         return pw.Container(
           margin: const pw.EdgeInsets.only(top: 4, bottom: 6),
@@ -1510,7 +1853,7 @@ class _ControlSheetsGeneratorSheetState
         return headerHeight + qrHeight + furNoteHeight + tableHeaderHeight + (rowCount * rowHeight) + bottomGap;
       }
 
-      for (final sectionGroup in sectionPageGroups.entries) {
+      for (final sectionGroup in sortedSectionGroups) {
         final sectionTitle = sectionGroup.key;
         final pages = sectionGroup.value;
 
@@ -1618,6 +1961,7 @@ class _ControlSheetsGeneratorSheetState
                     breed: breed,
                     breedIndex: breedIndex,
                     totalBreeds: breedNames.length,
+                    sectionHint: null,
                   ),
                 );
                 estimatedRemainingHeight = estimatedUsablePageHeight - estimatedBreedHeaderHeight;
@@ -1630,6 +1974,7 @@ class _ControlSheetsGeneratorSheetState
                     _compactClassHeaderBlock(
                       blockIndex: i,
                       totalBlocks: breedPages.length,
+                      sectionTitle: (p['sectionTitle'] ?? '').toString(),
                       breed: breed,
                       color: (p['color'] ?? '').toString(),
                       cls: (p['class'] ?? '').toString(),
@@ -1693,6 +2038,7 @@ class _ControlSheetsGeneratorSheetState
                         breed: breed,
                         breedIndex: breedIndex,
                         totalBreeds: breedNames.length,
+                        sectionHint: null,
                       ),
                     );
                     estimatedRemainingHeight = estimatedUsablePageHeight - estimatedBreedHeaderHeight;
@@ -1743,9 +2089,7 @@ class _ControlSheetsGeneratorSheetState
       );
       final bytes = await doc.save();
 
-      final name = widget.combineSections
-          ? 'control_compact_${widget.showName}_ALL_SECTIONS${includeQrCode ? '_QR' : ''}.pdf'
-          : 'control_compact_${widget.showName}_${widget.sectionLabel}${includeQrCode ? '_QR' : ''}.pdf';
+      final name = 'control_compact_${widget.showName}_${widget.sectionLabel}${includeQrCode ? '_QR' : ''}.pdf';
 
       final savedPath = await _savePdfToUserChosenLocation(
         bytes: Uint8List.fromList(bytes),
@@ -1804,7 +2148,7 @@ class _ControlSheetsGeneratorSheetState
             const SizedBox(height: 6),
             Text(
               widget.combineSections
-                  ? 'Mode: Combined (pages grouped by class)'
+                  ? 'Mode: Paired PDF — Open and Youth remain separate sheets'
                   : 'Mode: Single section',
               style: Theme.of(context).textTheme.bodySmall,
             ),
@@ -1945,6 +2289,8 @@ class _CheckInGeneratorSheet extends StatefulWidget {
   final String sectionLabel;
   final bool includeScratched;
   final bool combineSections;
+  final bool pairOpenYouthByLetter;
+  final bool youthFirst;
 
   const _CheckInGeneratorSheet({
     required this.showId,
@@ -1954,6 +2300,8 @@ class _CheckInGeneratorSheet extends StatefulWidget {
     required this.sectionLabel,
     required this.includeScratched,
     required this.combineSections,
+    required this.pairOpenYouthByLetter,
+    required this.youthFirst,
   });
 
   @override
@@ -2016,9 +2364,9 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
       int kindRank(String k) {
         switch (k.toLowerCase()) {
           case 'open':
-            return 0;
+            return widget.youthFirst ? 1 : 0;
           case 'youth':
-            return 1;
+            return widget.youthFirst ? 0 : 1;
           default:
             return 99;
         }
@@ -2030,16 +2378,21 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
 
         final sectionKindCmp = kindRank(_safe(a, 'section_kind'))
             .compareTo(kindRank(_safe(b, 'section_kind')));
-        if (sectionKindCmp != 0) return sectionKindCmp;
-
         final sectionSortCmp = toInt(a['section_sort_order'])
             .compareTo(toInt(b['section_sort_order']));
-        if (sectionSortCmp != 0) return sectionSortCmp;
-
         final sectionLetterCmp = _safe(a, 'section_letter')
             .toUpperCase()
             .compareTo(_safe(b, 'section_letter').toUpperCase());
-        if (sectionLetterCmp != 0) return sectionLetterCmp;
+
+        if (widget.pairOpenYouthByLetter) {
+          if (sectionSortCmp != 0) return sectionSortCmp;
+          if (sectionLetterCmp != 0) return sectionLetterCmp;
+          if (sectionKindCmp != 0) return sectionKindCmp;
+        } else {
+          if (sectionKindCmp != 0) return sectionKindCmp;
+          if (sectionSortCmp != 0) return sectionSortCmp;
+          if (sectionLetterCmp != 0) return sectionLetterCmp;
+        }
 
         final exhibitorCmp = _safe(a, 'exhibitor_label')
             .toLowerCase()
