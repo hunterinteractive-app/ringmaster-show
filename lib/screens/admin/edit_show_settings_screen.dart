@@ -28,6 +28,7 @@ import 'admin_print_packs_screen.dart';
 // ✅ Admin Operations (Post-show) screens
 import 'results/admin_results_entry_screen.dart';
 import 'package:ringmaster_show/screens/admin/show_closeout.dart';
+import 'admin_audit_log_screen.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -51,6 +52,104 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   String? _msg;
   bool _loadingStripeStatus = false;
   Map<String, dynamic>? _stripeStatus;
+  Map<String, dynamic>? _myStaffPin;
+  bool _loadingPins = false;
+  bool _regeneratingPins = false;
+  Future<void> _loadStaffPins() async {
+    setState(() => _loadingPins = true);
+
+    try {
+      final userId = supabase.auth.currentUser?.id;
+      if (userId == null || userId.isEmpty) {
+        throw Exception('No signed-in user found.');
+      }
+
+      final rows = await supabase.rpc(
+        'get_my_show_staff_approval_pin',
+        params: {
+          'p_show_id': widget.showId,
+        },
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => throw Exception('PIN lookup timed out.'),
+      );
+      if (!mounted) return;
+      setState(() {
+        final list = rows as List;
+        _myStaffPin = list.isEmpty
+            ? null
+            : Map<String, dynamic>.from(list.first as Map);
+        _loadingPins = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadingPins = false;
+        _msg = 'Failed to load your staff PIN: $e';
+      });
+    }
+  }
+
+  Future<void> _regenerateStaffPins() async {
+    if (AppSession.isSupportMode) {
+      setState(() => _msg = 'Regenerating PINs is disabled while viewing in support mode.');
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Regenerate Staff PINs?'),
+            content: const Text(
+              'This will replace your approval PIN for this show. You will need the new code before approving corrections.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Regenerate'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (!confirmed) return;
+
+    setState(() {
+      _regeneratingPins = true;
+      _msg = null;
+    });
+
+    try {
+      await supabase.rpc(
+        'regenerate_my_show_staff_approval_pin',
+        params: {
+          'p_show_id': widget.showId,
+        },
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => throw Exception('PIN generation timed out.'),
+      );
+
+      await _loadStaffPins();
+
+      if (!mounted) return;
+      setState(() {
+        _regeneratingPins = false;
+        _msg = 'Your staff PIN was regenerated.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _regeneratingPins = false;
+        _msg = 'Failed to regenerate your staff PIN: $e';
+      });
+    }
+  }
 
   final _name = TextEditingController();
   final _location = TextEditingController();
@@ -560,6 +659,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
 
       await _loadClubs();
       await _loadStripeStatus(showErrorInBanner: false);
+      await _loadStaffPins();
 
       if (!mounted) return;
       setState(() => _loading = false);
@@ -796,6 +896,18 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
       context,
       showId: widget.showId,
       showName: _effectiveShowName(),
+    );
+  }
+
+  void _openAuditLogTable() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AdminAuditLogScreen(
+          showId: widget.showId,
+          showName: _effectiveShowName(),
+        ),
+      ),
     );
   }
 
@@ -1267,6 +1379,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: 70,
@@ -1408,13 +1521,83 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                             ),
                           ),
 
-                        if (_permissions.canManageShowSettings)
+                        if (_permissions.canManageShow || _permissions.canEnterResults || _permissions.canFinalizeShow)
+                          _buildSectionCard(
+                            title: 'Staff Approval PINs',
+                            subtitle: 'Use these codes to approve corrections during judging.',
+                            children: [
+                              if (_loadingPins)
+                                const LinearProgressIndicator(),
+                              if (!_loadingPins && _myStaffPin == null)
+                                const Text('No active approval PIN was found for your account on this show.'),
+                              if (!_loadingPins && _myStaffPin != null)
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(.04),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        ((_myStaffPin!['role'] ?? '').toString())
+                                            .replaceAll('_', ' ')
+                                            .toUpperCase(),
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.black54,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        (_myStaffPin!['pin_code'] ?? '').toString(),
+                                        style: const TextStyle(
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.w800,
+                                          letterSpacing: 2,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              if (!_loadingPins) ...[
+                                const SizedBox(height: 12),
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: OutlinedButton.icon(
+                                    onPressed: (_saving || _isReadOnly || _loadingPins || _regeneratingPins)
+                                        ? null
+                                        : _regenerateStaffPins,
+                                    icon: _regeneratingPins
+                                        ? const SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(strokeWidth: 2),
+                                          )
+                                        : const Icon(Icons.refresh),
+                                    label: Text(
+                                      _regeneratingPins
+                                          ? 'Generating…'
+                                          : _myStaffPin == null
+                                              ? 'Generate My PIN'
+                                              : 'Regenerate My PIN',
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+
+                        if (_permissions.canManageShow)
                           _buildSectionCard(
                             title: 'Basic Show Info',
                             children: [
                               TextField(
                                 controller: _name,
-                                enabled: !_saving && !_isReadOnly,
+                                enabled: !_saving && !_isReadOnly && _permissions.canManageShowSettings,
                                 decoration: const InputDecoration(
                                   labelText: 'Show name (required)',
                                   border: OutlineInputBorder(),
@@ -1423,7 +1606,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                               const SizedBox(height: 12),
                               TextField(
                                 controller: _location,
-                                enabled: !_saving && !_isReadOnly,
+                                enabled: !_saving && !_isReadOnly && _permissions.canManageShowSettings,
                                 decoration: const InputDecoration(
                                   labelText: 'Location (required)',
                                   border: OutlineInputBorder(),
@@ -1474,7 +1657,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                       ),
                                     ),
                                 ],
-                                onChanged: (_saving || _isReadOnly || _loadingClubs || !_canManageHostingClubs)
+                                onChanged: (_saving || _isReadOnly || _loadingClubs || !_canManageHostingClubs || !_permissions.canManageShowSettings)
                                     ? null
                                     : (value) async {
                                         if (value == null) return;
@@ -1827,6 +2010,13 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                   title: 'Role Assignments',
                                   subtitle: 'Assign Show Superintendent, and Other Staff Roles',
                                   onTap: (_saving || _isReadOnly) ? null : _openRoleAssignments,
+                                ),
+                              if (_permissions.canManageShowSettings)
+                                _buildSettingsActionTile(
+                                  icon: Icons.history,
+                                  title: 'Audit Log Table',
+                                  subtitle: 'Review QR overrides and writer activity for this show',
+                                  onTap: _saving ? null : _openAuditLogTable,
                                 ),
 //                               _buildSettingsActionTile(
 //                                 icon: Icons.rule,

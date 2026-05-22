@@ -3380,6 +3380,13 @@ class ResultsAnimalsScreen extends StatefulWidget {
   final String? writerName;
   final String? writerPhone;
   final bool isQrEntryMode;
+  final Future<void> Function({
+    required String entryId,
+    required String fieldName,
+    required String newValue,
+    required String reason,
+    required String pinCode,
+  })? onQrCorrectionApply;
 
 
   const ResultsAnimalsScreen({
@@ -3401,6 +3408,7 @@ class ResultsAnimalsScreen extends StatefulWidget {
     this.writerName,
     this.writerPhone,
     this.isQrEntryMode = false,
+    this.onQrCorrectionApply,
     this.initialEntryIdToOpen,
   });
 
@@ -3759,6 +3767,238 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
       return Colors.green.withOpacity(.22);
     }
     return Colors.red.withOpacity(.18);
+  }
+
+  bool get _canRequestQrCorrection =>
+      widget.isQrEntryMode == true && widget.onQrCorrectionApply != null;
+
+  String _entryCorrectionLabel(Map<String, dynamic> entry) {
+    final tattoo = (entry['tattoo'] ?? entry['ear_number'] ?? '').toString().trim();
+    final animalName = (entry['animal_name'] ?? '').toString().trim();
+    final variety = (entry['variety'] ?? entry['variety_name'] ?? '').toString().trim();
+    final className = (entry['class_name'] ?? '').toString().trim();
+    final sex = (entry['sex'] ?? '').toString().trim();
+    final classSex = [className, sex].where((x) => x.isNotEmpty).join(' ');
+
+    final parts = <String>[
+      if (animalName.isNotEmpty) animalName,
+      if (tattoo.isNotEmpty) 'Ear # $tattoo',
+      if (variety.isNotEmpty) variety,
+      if (classSex.isNotEmpty) classSex,
+    ];
+
+    return parts.isEmpty ? 'Selected animal' : parts.join(' • ');
+  }
+
+  String? _validateCorrectionValue(String fieldName, String value) {
+    final text = value.trim();
+    if (text.isEmpty) return 'Enter the corrected value.';
+
+    switch (fieldName) {
+      case 'tattoo':
+        if (text.length > 30) return 'Ear number is too long.';
+        return null;
+      case 'class_name':
+        const allowed = {
+          'pre-junior',
+          'pre junior',
+          'prejunior',
+          'junior',
+          'intermediate',
+          'senior',
+          'open',
+        };
+        if (!allowed.contains(text.toLowerCase())) {
+          return 'Class must be Pre-Junior, Junior, Intermediate, Senior, or Open.';
+        }
+        return null;
+      case 'sex':
+        const allowed = {'buck', 'doe', 'boar', 'sow'};
+        if (!allowed.contains(text.toLowerCase())) {
+          return 'Sex must be Buck, Doe, Boar, or Sow.';
+        }
+        return null;
+      case 'variety':
+        if (text.length > 80) return 'Variety is too long.';
+        return null;
+      default:
+        return null;
+    }
+  }
+
+  Future<void> _showQrCorrectionDialog(Map<String, dynamic> entry) async {
+    if (!_canRequestQrCorrection) return;
+
+    final entryId = (entry['entry_id'] ?? entry['id'] ?? '').toString().trim();
+    if (entryId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to request correction: missing entry id.')),
+      );
+      return;
+    }
+
+    final formKey = GlobalKey<FormState>();
+    final newValueController = TextEditingController();
+    final reasonController = TextEditingController();
+    final pinController = TextEditingController();
+    String fieldName = 'tattoo';
+    bool saving = false;
+
+    try {
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) {
+          return StatefulBuilder(
+            builder: (context, setDialogState) {
+              Future<void> submit() async {
+                if (!formKey.currentState!.validate()) return;
+
+                final digitsOnlyPin =
+                    pinController.text.trim().replaceAll(RegExp(r'[^0-9]'), '');
+
+                setDialogState(() => saving = true);
+
+                try {
+                  await widget.onQrCorrectionApply!(
+                    entryId: entryId,
+                    fieldName: fieldName,
+                    newValue: newValueController.text.trim(),
+                    reason: reasonController.text.trim(),
+                    pinCode: digitsOnlyPin,
+                  );
+
+                  if (!mounted) return;
+                  Navigator.of(dialogContext).pop();
+                  await _reloadAll();
+                  if (!mounted) return;
+                  setState(() {
+                    _msg = 'Correction saved and logged.';
+                  });
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Correction saved and logged.')),
+                  );
+                } catch (e) {
+                  setDialogState(() => saving = false);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Correction failed: $e')),
+                  );
+                }
+              }
+
+              return AlertDialog(
+                title: const Text('Request Correction'),
+                content: SingleChildScrollView(
+                  child: Form(
+                    key: formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          _entryCorrectionLabel(entry),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: Colors.black54,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        DropdownButtonFormField<String>(
+                          value: fieldName,
+                          decoration: const InputDecoration(
+                            labelText: 'Correction needed',
+                          ),
+                          items: const [
+                            DropdownMenuItem(value: 'tattoo', child: Text('Ear number')),
+                            DropdownMenuItem(value: 'class_name', child: Text('Class')),
+                            DropdownMenuItem(value: 'sex', child: Text('Sex')),
+                            DropdownMenuItem(value: 'variety', child: Text('Variety')),
+                          ],
+                          onChanged: saving
+                              ? null
+                              : (value) {
+                                  if (value == null) return;
+                                  setDialogState(() {
+                                    fieldName = value;
+                                    newValueController.clear();
+                                  });
+                                },
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: newValueController,
+                          enabled: !saving,
+                          textInputAction: TextInputAction.next,
+                          decoration: const InputDecoration(
+                            labelText: 'Corrected value',
+                          ),
+                          validator: (value) =>
+                              _validateCorrectionValue(fieldName, value ?? ''),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: reasonController,
+                          enabled: !saving,
+                          minLines: 2,
+                          maxLines: 4,
+                          decoration: const InputDecoration(
+                            labelText: 'Reason / staff note',
+                          ),
+                          validator: (value) {
+                            final text = (value ?? '').trim();
+                            if (text.length < 4) return 'Enter a brief reason.';
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: pinController,
+                          enabled: !saving,
+                          keyboardType: TextInputType.number,
+                          obscureText: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Staff approval PIN',
+                          ),
+                          validator: (value) {
+                            final digits =
+                                (value ?? '').replaceAll(RegExp(r'[^0-9]'), '');
+                            if (digits.length < 4 || digits.length > 6) {
+                              return 'Enter a 4–6 digit approval PIN.';
+                            }
+                            return null;
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: saving ? null : () => Navigator.of(dialogContext).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton.icon(
+                    onPressed: saving ? null : submit,
+                    icon: saving
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.verified_user_outlined),
+                    label: Text(saving ? 'Saving...' : 'Save Correction'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      newValueController.dispose();
+      reasonController.dispose();
+      pinController.dispose();
+    }
   }
 
   @override
@@ -4306,24 +4546,53 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
                     borderRadius: BorderRadius.circular(20),
                     side: BorderSide(color: _rowBorder(e)),
                   ),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
-                    title: Text(
-                      animalName.isNotEmpty && tattoo.isNotEmpty
-                          ? '$animalName • $tattoo'
-                          : animalName.isNotEmpty
-                              ? animalName
-                              : tattoo.isEmpty
-                                  ? '(No ear #)'
-                                  : tattoo,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    subtitle: Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Text(subtitleParts.join(' • ')),
-                    ),
-                    trailing: const Icon(Icons.chevron_right),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(20),
                     onTap: () => _openResultEntryAt(i),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      animalName.isNotEmpty && tattoo.isNotEmpty
+                                          ? '$animalName • $tattoo'
+                                          : animalName.isNotEmpty
+                                              ? animalName
+                                              : tattoo.isEmpty
+                                                  ? '(No ear #)'
+                                                  : tattoo,
+                                      style: const TextStyle(fontWeight: FontWeight.w700),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(subtitleParts.join(' • ')),
+                                  ],
+                                ),
+                              ),
+                              const Icon(Icons.chevron_right),
+                            ],
+                          ),
+                          if (_canRequestQrCorrection) ...[
+                            const SizedBox(height: 10),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: OutlinedButton.icon(
+                                onPressed: () => _showQrCorrectionDialog(e),
+                                icon: const Icon(Icons.edit_note_outlined),
+                                label: const Text('Request Correction'),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
                   ),
                 );
               },

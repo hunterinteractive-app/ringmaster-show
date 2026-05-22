@@ -823,6 +823,55 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
     }
   }
 
+  Future<void> _applyEntryCorrection({
+    required String entryId,
+    required String fieldName,
+    required String newValue,
+    required String reason,
+    required String pinCode,
+  }) async {
+    final cleanEntryId = entryId.trim();
+    final cleanFieldName = fieldName.trim();
+    final cleanNewValue = newValue.trim();
+    final cleanReason = reason.trim();
+    final cleanPinCode = pinCode.trim();
+
+    if (cleanEntryId.isEmpty) {
+      throw Exception('Missing entry id.');
+    }
+
+    await supabase.rpc(
+      'apply_entry_correction',
+      params: {
+        'p_show_id': widget.showId,
+        'p_entry_id': cleanEntryId,
+        'p_field_name': cleanFieldName,
+        'p_new_value': cleanNewValue,
+        'p_reason': cleanReason,
+        'p_writer_name': widget.writerName,
+        'p_writer_phone': widget.writerPhone,
+        'p_pin_code': cleanPinCode,
+      },
+    );
+
+    for (final e in _entries) {
+      final id = (e['entry_id'] ?? e['id'] ?? '').toString().trim();
+      if (id != cleanEntryId) continue;
+
+      e[cleanFieldName] = cleanNewValue;
+
+      if (cleanFieldName == 'tattoo') {
+        e['ear_number'] = cleanNewValue;
+      }
+
+      if (cleanFieldName == 'variety') {
+        e['variety_name'] = cleanNewValue;
+      }
+    }
+
+    if (mounted) setState(() {});
+  }
+
   Widget _judgeDropdown({
     required String labelText,
     required List<Map<String, dynamic>> entries,
@@ -1036,6 +1085,7 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
           writerName: widget.writerName,
           writerPhone: widget.writerPhone,
           isQrEntryMode: true,
+          onQrCorrectionApply: _applyEntryCorrection,
         ),
       ),
     );
