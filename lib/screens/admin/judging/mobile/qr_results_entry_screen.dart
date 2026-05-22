@@ -47,6 +47,9 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
   bool _showsByGroup = false;
   bool _showsByVariety = false;
 
+  static String? _rememberedWriterName;
+  static String? _rememberedWriterPhone;
+
   String? _writerName;
   String? _writerPhone;
   bool _qrLocked = false;
@@ -55,6 +58,38 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
   @override
   void initState() {
     super.initState();
+    _writerName = _rememberedWriterName;
+    _writerPhone = _rememberedWriterPhone;
+    _loadAll();
+  }
+
+  @override
+  void didUpdateWidget(covariant QrResultsEntryScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    final qrTargetChanged = oldWidget.showId != widget.showId ||
+        oldWidget.sectionId != widget.sectionId ||
+        oldWidget.breedId != widget.breedId ||
+        oldWidget.token != widget.token ||
+        oldWidget.varietyKey != widget.varietyKey ||
+        oldWidget.groupKey != widget.groupKey ||
+        oldWidget.classSexLabel != widget.classSexLabel;
+
+    if (!qrTargetChanged) return;
+
+    _writerName = _rememberedWriterName;
+    _writerPhone = _rememberedWriterPhone;
+    _qrLocked = false;
+    _qrLockStartsAt = null;
+    _entries = [];
+    _judges = [];
+    _breedClassSystems.clear();
+    _showsByGroup = false;
+    _showsByVariety = false;
+    _showName = 'Show';
+    _sectionLabel = 'Section';
+    _finalAwardMode = kDefaultFinalAwardMode;
+
     _loadAll();
   }
 
@@ -537,7 +572,12 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
         showName: _showName,
         sectionLabel: _sectionLabel,
         breed: widget.breedId,
+        initialName: _rememberedWriterName,
+        initialPhone: _rememberedWriterPhone,
         onContinue: (name, phone) {
+          _rememberedWriterName = name;
+          _rememberedWriterPhone = phone;
+
           setState(() {
             _writerName = name;
             _writerPhone = phone;
@@ -1125,12 +1165,16 @@ class _QrWriterInfoScreen extends StatefulWidget {
   final String showName;
   final String sectionLabel;
   final String breed;
+  final String? initialName;
+  final String? initialPhone;
   final void Function(String name, String phone) onContinue;
 
   const _QrWriterInfoScreen({
     required this.showName,
     required this.sectionLabel,
     required this.breed,
+    this.initialName,
+    this.initialPhone,
     required this.onContinue,
   });
 
@@ -1140,8 +1184,15 @@ class _QrWriterInfoScreen extends StatefulWidget {
 
 class _QrWriterInfoScreenState extends State<_QrWriterInfoScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _phoneController = TextEditingController();
+  late final TextEditingController _nameController;
+  late final TextEditingController _phoneController;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.initialName ?? '');
+    _phoneController = TextEditingController(text: widget.initialPhone ?? '');
+  }
 
   @override
   void dispose() {
