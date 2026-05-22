@@ -132,41 +132,27 @@ class LegsReportPdfBuilder {
           ),
         );
       } else {
-        final grouped = _groupByExhibitor(data);
+        final sortedData = _sortCertificates(data);
 
-        for (final exhibitorGroup in grouped) {
-          final chunks = <List<LegsCertificateData>>[];
-
-          for (var i = 0; i < exhibitorGroup.length; i += 2) {
-            chunks.add(exhibitorGroup.skip(i).take(2).toList());
-          }
-
-          for (final chunk in chunks) {
-            pdf.addPage(
-              pw.MultiPage(
-                pageFormat: PdfPageFormat.letter,
-                margin: const pw.EdgeInsets.fromLTRB(22, 18, 22, 18),
-                theme: theme,
-                build: (_) {
-                  return [
-                    _certificate(chunk[0]),
-                    if (chunk.length > 1) ...[
-                      pw.SizedBox(height: 8),
-                      _cutLine(),
-                      pw.SizedBox(height: 8),
-                      _certificate(chunk[1]),
-                    ],
-                    pw.SizedBox(height: 8),
-                    _cutLine(),
-                    pw.SizedBox(height: 8),
-                    _rulesAndRequiredArbaInfoBlock(),
-                    pw.SizedBox(height: 8),
-                    _requiredCertificateImagesBlock(),
-                  ];
-                },
-              ),
-            );
-          }
+        for (final certificate in sortedData) {
+          pdf.addPage(
+            pw.MultiPage(
+              pageFormat: PdfPageFormat.letter,
+              margin: const pw.EdgeInsets.fromLTRB(22, 18, 22, 18),
+              theme: theme,
+              build: (_) {
+                return [
+                  _certificate(certificate),
+                  pw.SizedBox(height: 8),
+                  _cutLine(),
+                  pw.SizedBox(height: 8),
+                  _rulesAndRequiredArbaInfoBlock(),
+                  pw.SizedBox(height: 8),
+                  _requiredCertificateImagesBlock(),
+                ];
+              },
+            ),
+          );
         }
       }
 
@@ -179,10 +165,10 @@ class LegsReportPdfBuilder {
       );
     }
 
-  List<List<LegsCertificateData>> _groupByExhibitor(
+  List<LegsCertificateData> _sortCertificates(
     List<LegsCertificateData> data,
   ) {
-    final sorted = [...data]
+    return [...data]
       ..sort((a, b) {
         final exhibitorCompare = a.exhibitorName.compareTo(b.exhibitorName);
         if (exhibitorCompare != 0) return exhibitorCompare;
@@ -192,45 +178,8 @@ class LegsReportPdfBuilder {
 
         return a.earNumber.compareTo(b.earNumber);
       });
-
-    final groups = <List<LegsCertificateData>>[];
-    List<LegsCertificateData> current = [];
-    String currentKey = '';
-
-    for (final item in sorted) {
-      final key = _exhibitorGroupKey(item);
-
-      if (current.isEmpty) {
-        current = [item];
-        currentKey = key;
-        continue;
-      }
-
-      if (key == currentKey) {
-        current.add(item);
-      } else {
-        groups.add(current);
-        current = [item];
-        currentKey = key;
-      }
-    }
-
-    if (current.isNotEmpty) {
-      groups.add(current);
-    }
-
-    return groups;
   }
 
-  String _exhibitorGroupKey(LegsCertificateData d) {
-    final exhibitorId = d.exhibitorId.trim();
-    if (exhibitorId.isNotEmpty) return 'id:$exhibitorId';
-
-    final exhibitorNumber = d.exhibitorNumber.trim().toLowerCase();
-    if (exhibitorNumber.isNotEmpty) return 'num:$exhibitorNumber';
-
-    return 'name:${d.exhibitorName.trim().toLowerCase()}';
-  }
 
   pw.Widget _certificate(LegsCertificateData d) {
     return pw.Container(
@@ -366,7 +315,9 @@ class LegsReportPdfBuilder {
   }
 
   pw.Widget _rightInfo(LegsCertificateData d) {
-    final qrUrl = _buildLegVerificationUrl(d);
+    // QR verification is currently hidden. Keep this builder call available
+    // for restoring the QR code later.
+    // final qrUrl = _buildLegVerificationUrl(d);
     final arbaBarcodeValue = _buildArbaELegBarcode(d);
 
     return pw.Column(
@@ -452,6 +403,9 @@ class LegsReportPdfBuilder {
                 ],
               ),
             ),
+            // QR verification block hidden for now. Restore this block if
+            // RingMaster verification QR codes are needed later.
+            /*
             pw.SizedBox(width: 8),
             pw.Container(
               width: 54,
@@ -465,6 +419,7 @@ class LegsReportPdfBuilder {
                 data: qrUrl,
               ),
             ),
+            */
           ],
         ),
         pw.SizedBox(height: 6),
