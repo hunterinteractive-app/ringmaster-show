@@ -246,26 +246,42 @@ class ExhibitorReportLoader {
     List<String> entryIds,
   ) async {
     try {
-      if (entryIds.isEmpty) return {};
+      final uniqueEntryIds = entryIds
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toSet()
+          .toList();
 
-      final rows = await repo.supabase
-          .from('sweepstakes_entry_results')
-          .select('entry_id, points')
-          .eq('show_id', showId)
-          .inFilter('entry_id', entryIds);
+      if (uniqueEntryIds.isEmpty) return {};
 
       final map = <String, int>{};
 
-      for (final row in List<Map<String, dynamic>>.from(rows)) {
-        final entryId = _str(row['entry_id']);
-        if (entryId.isEmpty) continue;
+      for (var i = 0; i < uniqueEntryIds.length; i += 100) {
+        final chunk = uniqueEntryIds.skip(i).take(100).toList();
 
-        final points = _toInt(row['points']);
-        map[entryId] = (map[entryId] ?? 0) + points;
+        final rows = await repo.supabase
+            .from('sweepstakes_entry_results')
+            .select('entry_id, points')
+            .inFilter('entry_id', chunk);
+
+        for (final row in List<Map<String, dynamic>>.from(rows as List)) {
+          final entryId = _str(row['entry_id']);
+          if (entryId.isEmpty) continue;
+
+          final points = _toInt(row['points']);
+          map[entryId] = (map[entryId] ?? 0) + points;
+        }
       }
 
+      // ignore: avoid_print
+      print(
+        'EXHIBITOR REPORT SWEEPSTAKES DEBUG loaded points for ${map.length} of ${uniqueEntryIds.length} entries in show $showId.',
+      );
+
       return map;
-    } catch (_) {
+    } catch (e) {
+      // ignore: avoid_print
+      print('Failed loading exhibitor sweepstakes points for show $showId: $e');
       return {};
     }
   }

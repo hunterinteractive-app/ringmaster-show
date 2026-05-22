@@ -50,30 +50,45 @@ class LegsReportLoader {
         _str(show['secretary_email']),
       ]);
 
-      final awardsRows = await repo.supabase
-          .from('entry_awards')
-          .select('''
-            id,
-            show_id,
-            award_code,
-            entries!entry_awards_entry_id_fkey (
-              id,
-              show_id,
-              exhibitor_id,
-              tattoo,
-              breed,
-              class_name,
-              sex,
-              species,
-              is_shown
-            )
-          ''')
-          .eq('show_id', showId);
-
-      final awards = List<Map<String, dynamic>>.from(awardsRows);
-
       final entryContext = await _loadShownEntryContext(showId);
       if (entryContext.isEmpty) return const [];
+
+      final contextEntryIds = entryContext.keys
+          .where((id) => id.trim().isNotEmpty)
+          .toSet()
+          .toList();
+
+      final awards = <Map<String, dynamic>>[];
+      for (var i = 0; i < contextEntryIds.length; i += 100) {
+        final chunk = contextEntryIds.skip(i).take(100).toList();
+        final awardChunkRows = await repo.supabase
+            .from('entry_awards')
+            .select('''
+              id,
+              show_id,
+              entry_id,
+              award_code,
+              entries!entry_awards_entry_id_fkey (
+                id,
+                show_id,
+                exhibitor_id,
+                tattoo,
+                breed,
+                class_name,
+                sex,
+                species,
+                is_shown
+              )
+            ''')
+            .inFilter('entry_id', chunk);
+
+        awards.addAll(List<Map<String, dynamic>>.from(awardChunkRows as List));
+      }
+
+      // ignore: avoid_print
+      print(
+        'LEG DEBUG loaded ${awards.length} award rows for ${contextEntryIds.length} shown/scoped entries.',
+      );
 
       final judgeRefs = entryContext.values
           .map((e) => e.showJudgeRowId)
@@ -170,7 +185,9 @@ class LegsReportLoader {
 
         final species = _str(entry['species']).toLowerCase();
         if (species != 'rabbit' && species != 'cavy') continue;
-        if (entry['is_shown'] != true) continue;
+        // Treat null as shown. Older rows may not have is_shown explicitly set,
+        // and report_results_entry_rows treats null as shown as well.
+        if (entry['is_shown'] == false) continue;
 
         final entryId = _str(entry['id']);
         final exhibitorId = _str(entry['exhibitor_id']);
@@ -640,15 +657,42 @@ class LegsReportLoader {
     return byEntryId;
   }
 
+  bool _isBestInShowAward(String normalized) {
+    final compact = normalized
+        .replaceAll(RegExp(r'[^A-Z0-9]+'), '')
+        .toUpperCase();
+
+    return compact == 'BIS' ||
+        compact == 'BESTINSHOW' ||
+        compact == 'BESTOFSHOW' ||
+        compact == 'BESTINSHOWRABBIT' ||
+        compact == 'BESTINSHOWCAVY' ||
+        compact.startsWith('BIS') ||
+        compact.endsWith('BIS') ||
+        (compact.contains('BEST') && compact.contains('SHOW'));
+  }
+
+  bool _isReserveInShowAward(String normalized) {
+    final compact = normalized
+        .replaceAll(RegExp(r'[^A-Z0-9]+'), '')
+        .toUpperCase();
+
+    return compact == 'RIS' ||
+        compact == 'RESERVEINSHOW' ||
+        compact == 'RESERVEOFSHOW' ||
+        compact == 'RESERVEBESTINSHOW' ||
+        compact.startsWith('RIS') ||
+        compact.endsWith('RIS') ||
+        (compact.contains('RESERVE') && compact.contains('SHOW'));
+  }
+
   _LegRuleMatch? _determineLegRule({
     required String awardCode,
     required _EntryLegContext ctx,
   }) {
     final normalized = awardCode.toUpperCase();
 
-    if ((normalized == 'BIS' ||
-            normalized == 'BEST_IN_SHOW' ||
-            normalized == 'BEST IN SHOW') &&
+    if (_isBestInShowAward(normalized) &&
         ctx.showAnimals >= 5 &&
         ctx.showExhibitors >= 3) {
       return _LegRuleMatch(
@@ -659,7 +703,7 @@ class LegsReportLoader {
       );
     }
 
-    if ((normalized == 'RIS' || normalized == 'RESERVE_IN_SHOW') &&
+    if (_isReserveInShowAward(normalized) &&
         ctx.showAnimals >= 5 &&
         ctx.showExhibitors >= 3) {
       return _LegRuleMatch(

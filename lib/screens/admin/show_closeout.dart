@@ -567,6 +567,41 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       );
     }
 
+    Future<void> _calculateSweepstakesBeforeReports() async {
+      final sections = await supabase
+          .from('show_sections')
+          .select('id, kind, letter')
+          .eq('show_id', widget.showId)
+          .eq('is_enabled', true);
+
+      final targets = <String, Map<String, String>>{};
+
+      for (final raw in (sections as List)) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        final scope = (row['kind'] ?? '').toString().trim().toUpperCase();
+        final showLetter = (row['letter'] ?? '').toString().trim().toUpperCase();
+
+        if (scope != 'OPEN' && scope != 'YOUTH') continue;
+        if (showLetter.isEmpty) continue;
+
+        targets['$scope|$showLetter'] = {
+          'scope': scope,
+          'showLetter': showLetter,
+        };
+      }
+
+      for (final target in targets.values) {
+        await supabase.rpc(
+          'calculate_sweepstakes_for_show',
+          params: {
+            'p_show_id': widget.showId,
+            'p_scope': target['scope'],
+            'p_show_letter': target['showLetter'],
+          },
+        );
+      }
+    }
+
     Future<void> _loadMissingPlacements() async {
       if (_loadingMissingPlacements) return;
 
@@ -1389,6 +1424,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       required void Function(String artifactKey, Object error) onFailed,
     }) async {
       await _saveArbaDetails();
+      await _calculateSweepstakesBeforeReports();
       await _ensureLegsBuilder();
       await _ensureExhibitorBuilder();
       await _ensureUnpaidBalancesBuilder();
@@ -2337,6 +2373,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         });
 
         await _saveArbaDetails();
+        await _calculateSweepstakesBeforeReports();
         await _ensureLegsBuilder();
         await _ensureExhibitorBuilder();
         await _ensureUnpaidBalancesBuilder();
