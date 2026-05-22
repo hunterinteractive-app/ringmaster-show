@@ -574,15 +574,22 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           .eq('show_id', widget.showId)
           .eq('is_enabled', true);
 
+      final selectedSectionIds = _selectedCloseoutSectionIds.toSet();
       final targets = <String, Map<String, String>>{};
 
       for (final raw in (sections as List)) {
         final row = Map<String, dynamic>.from(raw as Map);
+        final sectionId = (row['id'] ?? '').toString().trim();
         final scope = (row['kind'] ?? '').toString().trim().toUpperCase();
         final showLetter = (row['letter'] ?? '').toString().trim().toUpperCase();
 
         if (scope != 'OPEN' && scope != 'YOUTH') continue;
         if (showLetter.isEmpty) continue;
+
+        if (!_selectedCloseoutScopeIsEntireShow &&
+            !selectedSectionIds.contains(sectionId)) {
+          continue;
+        }
 
         targets['$scope|$showLetter'] = {
           'scope': scope,
@@ -591,14 +598,37 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       }
 
       for (final target in targets.values) {
+        final scope = target['scope']!;
+        final showLetter = target['showLetter']!;
+
+        final existingRows = await supabase
+            .from('sweepstakes_results')
+            .select('id')
+            .eq('show_id', widget.showId)
+            .eq('scope', scope)
+            .eq('show_letter', showLetter)
+            .eq('calculation_version', 'v2')
+            .limit(1);
+
+        if ((existingRows as List).isNotEmpty) {
+          debugPrint(
+            'SWEEPSTAKES PRE-FINALIZE SKIPPED: $scope $showLetter already has v2 results.',
+          );
+          continue;
+        }
+
+        debugPrint('SWEEPSTAKES PRE-FINALIZE START: $scope $showLetter');
+
         await supabase.rpc(
           'calculate_sweepstakes_for_show',
           params: {
             'p_show_id': widget.showId,
-            'p_scope': target['scope'],
-            'p_show_letter': target['showLetter'],
+            'p_scope': scope,
+            'p_show_letter': showLetter,
           },
         );
+
+        debugPrint('SWEEPSTAKES PRE-FINALIZE DONE: $scope $showLetter');
       }
     }
 
@@ -1348,7 +1378,11 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         throw Exception('Select at least one section before finalizing this scope.');
       }
 
+      final previousFinalizeId = _dashboard?.latestFinalize.id ?? '';
+
       try {
+        await _calculateSweepstakesBeforeReports();
+
         if (_selectedCloseoutScopeIsEntireShow) {
           await supabase.rpc(
             'finalize_show',
@@ -1379,13 +1413,24 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           await _refreshDashboardOnly();
 
           final queuedArtifactCount = await _countQueuedArtifactsForShow();
+          final latestFinalizeId = _dashboard?.latestFinalize.id ?? '';
+          final hasNewFinalize = latestFinalizeId.isNotEmpty &&
+              latestFinalizeId != previousFinalizeId;
+          final hasCurrentReports = (_dashboard?.reports ?? const <ReportArtifactSummary>[])
+              .any((r) => r.isCurrent);
 
-          if (queuedArtifactCount > 0) {
+          if (queuedArtifactCount > 0 || hasNewFinalize || hasCurrentReports) {
             if (mounted) {
+              final details = queuedArtifactCount > 0
+                  ? '$queuedArtifactCount report artifact${queuedArtifactCount == 1 ? '' : 's'} were queued'
+                  : hasNewFinalize
+                      ? 'a new finalize run was created'
+                      : 'current report artifacts were found';
+
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(
-                    'Finalize timed out waiting for the database, but $queuedArtifactCount report artifact${queuedArtifactCount == 1 ? '' : 's'} were queued. Continuing report generation.',
+                    'Finalize timed out waiting for the database, but $details. Continuing report generation.',
                   ),
                 ),
               );
@@ -1424,7 +1469,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       required void Function(String artifactKey, Object error) onFailed,
     }) async {
       await _saveArbaDetails();
-      await _calculateSweepstakesBeforeReports();
+
       await _ensureLegsBuilder();
       await _ensureExhibitorBuilder();
       await _ensureUnpaidBalancesBuilder();
@@ -2373,7 +2418,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         });
 
         await _saveArbaDetails();
-        await _calculateSweepstakesBeforeReports();
         await _ensureLegsBuilder();
         await _ensureExhibitorBuilder();
         await _ensureUnpaidBalancesBuilder();

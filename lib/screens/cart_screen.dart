@@ -35,6 +35,7 @@ class _CartScreenState extends State<CartScreen> {
   bool _payingOnline = false;
   bool _handledStripeReturn = false;
   String? _msg;
+  String? _checkoutUrl;
 
   List<Map<String, dynamic>> _items = [];
   Map<String, dynamic>? _show;
@@ -59,6 +60,7 @@ class _CartScreenState extends State<CartScreen> {
     setState(() {
       _loading = true;
       _msg = null;
+      _checkoutUrl = null;
     });
 
     try {
@@ -653,6 +655,7 @@ class _CartScreenState extends State<CartScreen> {
     setState(() {
       _payingOnline = true;
       _msg = null;
+      _checkoutUrl = null;
     });
 
     try {
@@ -663,17 +666,18 @@ class _CartScreenState extends State<CartScreen> {
       final launched = await launchUrl(
         uri,
         mode: LaunchMode.platformDefault,
+        webOnlyWindowName: '_self',
       );
 
       if (!launched) {
-        throw Exception('Could not open Stripe Checkout.');
+        if (!mounted) return;
+        setState(() {
+          _checkoutUrl = checkoutUrl;
+          _msg =
+              'Stripe Checkout could not open automatically. Tap Open Payment Page below to continue.';
+        });
+        return;
       }
-
-      if (!mounted) return;
-      setState(() {
-        _msg =
-            'Stripe Checkout opened. After payment, return here and use Reload if needed.';
-      });
     } catch (e) {
       if (!mounted) return;
       final errorText = e.toString();
@@ -682,7 +686,10 @@ class _CartScreenState extends State<CartScreen> {
           ? 'Online payment is not available yet. The club’s Stripe setup is incomplete.'
           : 'Online payment failed: $e';
 
-      setState(() => _msg = friendlyMessage);
+      setState(() {
+        _checkoutUrl = null;
+        _msg = friendlyMessage;
+      });
     } finally {
       if (mounted) {
         setState(() => _payingOnline = false);
@@ -867,12 +874,31 @@ class _CartScreenState extends State<CartScreen> {
                           color: Colors.red.withOpacity(.25),
                         ),
                       ),
-                      child: Text(
-                        _msg!,
-                        style: const TextStyle(
-                          color: Colors.red,
-                          fontWeight: FontWeight.w600,
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _msg!,
+                            style: const TextStyle(
+                              color: Colors.red,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          if (_checkoutUrl != null) ...[
+                            const SizedBox(height: 10),
+                            OutlinedButton.icon(
+                              onPressed: () {
+                                launchUrl(
+                                  Uri.parse(_checkoutUrl!),
+                                  mode: LaunchMode.platformDefault,
+                                  webOnlyWindowName: '_self',
+                                );
+                              },
+                              icon: const Icon(Icons.open_in_new),
+                              label: const Text('Open Payment Page'),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                   ),

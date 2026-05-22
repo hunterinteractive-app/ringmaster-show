@@ -34,10 +34,48 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
   List<Map<String, dynamic>> _entries = [];
   final Set<String> _expandedShowIds = {};
 
+  void _handleStripeSuccessReturn() {
+    final uri = Uri.base;
+    final fragment = uri.fragment;
+
+    if (!fragment.contains('stripe=success')) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+
+      await _load(); // use your existing entries reload method
+
+      if (!mounted) return;
+
+      await showDialog<void>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Payment Successful'),
+          content: const Text(
+            'Your payment was received and your entries have been submitted successfully.',
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      html.window.history.replaceState(null, '', '${Uri.base.origin}/#/entries');
+    });
+  }
+
   @override
   void initState() {
     super.initState();
-    _load();
+    final hasStripeSuccessReturn = Uri.base.fragment.contains('stripe=success');
+
+    if (hasStripeSuccessReturn) {
+      _handleStripeSuccessReturn();
+    } else {
+      _load();
+    }
   }
 
   Future<void> _load() async {
