@@ -93,12 +93,17 @@ String _canonicalAwardCode(String award) {
   final raw = award.trim();
   final value = raw.toLowerCase();
 
-  if (value == 'best in show') return 'BIS';
+  if (value == 'best in show' || value == 'best in show rabbit') {
+    return 'Best In Show';
+  }
+  if (value == 'bis') return 'BIS';
+
   if (value == 'reserve in show' ||
       value == 'reserve best in show' ||
-      value == 'ris') {
+      value == 'reserve in show rabbit') {
     return 'Reserve In Show';
   }
+  if (value == 'ris') return 'RIS';
 
   if (value == 'bog' || value == 'best of group') return 'BOG';
   if (value == 'bosg' ||
@@ -169,8 +174,427 @@ const List<String> kResultStatuses = [
   'Unworthy of Award',
 ];
 
+
 bool _isDisqualifiedStatus(String status) {
   return status.trim().toLowerCase().startsWith('disqualified');
+}
+
+// --- Shared Smart Completion/Status Helpers for Results Entry Highlighting ---
+
+enum _ResultScopeStatus {
+  notStarted,
+  inProgress,
+  needsAttention,
+  complete,
+}
+
+class _ResultScopeCompletion {
+  final _ResultScopeStatus status;
+  final int completedBasics;
+  final int totalBasics;
+
+  const _ResultScopeCompletion({
+    required this.status,
+    required this.completedBasics,
+    required this.totalBasics,
+  });
+}
+
+bool _entryHasBasicOutcome(Map<String, dynamic> entry) {
+  final placement = (entry['placement'] ?? '').toString().trim();
+  final status = (entry['result_status'] ?? '').toString().trim();
+  final isShown = entry['is_shown'];
+  final isDisqualified = entry['is_disqualified'];
+  final dqReason = (entry['disqualified_reason'] ?? '').toString().trim();
+
+  if (placement.isNotEmpty) return true;
+  if (isShown == false) return true;
+  if (isDisqualified == true) return true;
+  if (dqReason.isNotEmpty) return true;
+
+  return status == 'No Show' ||
+      status == 'Unworthy of Award' ||
+      _isDisqualifiedStatus(status);
+}
+
+bool _entryHasAnyResultOrAwardData(Map<String, dynamic> entry) {
+  final resultStatus = (entry['result_status'] ?? '').toString().trim();
+  final enteredAt = (entry['result_entered_at'] ?? '').toString().trim();
+  final awards = ((entry['_awards'] as List?) ?? const [])
+      .map((x) => x.toString().trim())
+      .where((x) => x.isNotEmpty)
+      .toList();
+
+  return _entryHasBasicOutcome(entry) ||
+      resultStatus.isNotEmpty ||
+      enteredAt.isNotEmpty ||
+      awards.isNotEmpty;
+}
+
+String _entryScopeSectionId(Map<String, dynamic> entry) {
+  return (entry['section_id'] ?? '').toString().trim().toLowerCase();
+}
+
+String _entryScopeBreed(Map<String, dynamic> entry) {
+  final rawBreed = (entry['breed'] ?? '').toString().trim();
+  if (rawBreed.isNotEmpty) return rawBreed.toLowerCase();
+  return (entry['breed_name'] ?? '').toString().trim().toLowerCase();
+}
+
+String _entryScopeVariety(Map<String, dynamic> entry) {
+  final rawVariety = (entry['variety'] ?? '').toString().trim();
+  if (rawVariety.isNotEmpty) return rawVariety.toLowerCase();
+  return (entry['variety_name'] ?? '').toString().trim().toLowerCase();
+}
+
+String _entryScopeGroup(Map<String, dynamic> entry) {
+  return (
+    entry['group_name'] ??
+    entry['group_display_name'] ??
+    entry['group_label'] ??
+    entry['group'] ??
+    entry['group_code'] ??
+    ''
+  ).toString().trim().toLowerCase();
+}
+
+bool _entryUsesVarietyAwards(Map<String, dynamic> entry) {
+  final raw = entry['uses_variety_awards'];
+  return raw == true ||
+      raw.toString().trim().toLowerCase() == 'true' ||
+      raw.toString().trim().toLowerCase() == 't' ||
+      raw.toString().trim() == '1';
+}
+
+bool _entryUsesGroupAwards(Map<String, dynamic> entry) {
+  final raw = entry['uses_group_awards'];
+  return raw == true ||
+      raw.toString().trim().toLowerCase() == 'true' ||
+      raw.toString().trim().toLowerCase() == 't' ||
+      raw.toString().trim() == '1';
+}
+
+List<String> _entryAwardCodes(Map<String, dynamic> entry) {
+  return ((entry['_awards'] as List?) ?? const [])
+      .map((x) => _canonicalAwardCode(x.toString()))
+      .where((x) => x.trim().isNotEmpty)
+      .toList();
+}
+
+int _awardCount(List<Map<String, dynamic>> entries, String awardCode) {
+  final target = _canonicalAwardCode(awardCode).toLowerCase();
+  return entries.where((entry) {
+    return _entryAwardCodes(entry).any(
+      (award) => _canonicalAwardCode(award).toLowerCase() == target,
+    );
+  }).length;
+}
+
+String _entryShortAnimalLabel(Map<String, dynamic> entry) {
+  final animalName = (entry['animal_name'] ?? '').toString().trim();
+  final tattoo = (entry['tattoo'] ?? '').toString().trim();
+
+  if (animalName.isNotEmpty && tattoo.isNotEmpty) return '$animalName / $tattoo';
+  if (animalName.isNotEmpty) return animalName;
+  if (tattoo.isNotEmpty) return tattoo;
+
+  final exhibitor = (entry['exhibitor_label'] ?? '').toString().trim();
+  if (exhibitor.isNotEmpty) return exhibitor;
+
+  return 'Selected';
+}
+
+String _specialsSummaryForEntries(
+  List<Map<String, dynamic>> entries,
+  List<String> awardCodes,
+) {
+  final parts = <String>[];
+
+  for (final awardCode in awardCodes) {
+    final target = _canonicalAwardCode(awardCode).toLowerCase();
+    final winners = entries.where((entry) {
+      return _entryAwardCodes(entry).any(
+        (award) => _canonicalAwardCode(award).toLowerCase() == target,
+      );
+    }).toList();
+
+    if (winners.isEmpty) continue;
+
+    final labels = winners.map(_entryShortAnimalLabel).toList();
+    parts.add('${_canonicalAwardCode(awardCode)}: ${labels.join(', ')}');
+  }
+
+  if (parts.isEmpty) return '';
+  return 'Specials: ${parts.join(' • ')}';
+}
+
+Map<String, List<Map<String, dynamic>>> _bucketEntries(
+  List<Map<String, dynamic>> entries,
+  String Function(Map<String, dynamic>) keyBuilder,
+) {
+  final buckets = <String, List<Map<String, dynamic>>>{};
+  for (final entry in entries) {
+    final key = keyBuilder(entry);
+    if (key.trim().isEmpty) continue;
+    buckets.putIfAbsent(key, () => <Map<String, dynamic>>[]);
+    buckets[key]!.add(entry);
+  }
+  return buckets;
+}
+
+String _entrySexKey(Map<String, dynamic> entry) {
+  final sex = (entry['sex'] ?? '').toString().trim().toLowerCase();
+  if (sex.contains('buck') || sex.contains('boar')) return 'male';
+  if (sex.contains('doe') || sex.contains('sow')) return 'female';
+  return '';
+}
+
+bool _entryIsEligibleForSpecialAward(Map<String, dynamic> entry) {
+  final scratched = (entry['scratched_at'] ?? '').toString().trim().isNotEmpty;
+  if (scratched) return false;
+
+  final placement = (entry['placement'] ?? '').toString().trim();
+  final status = (entry['result_status'] ?? '').toString().trim();
+  final isShown = entry['is_shown'];
+  final isDisqualified = entry['is_disqualified'];
+
+  if (isShown == false) return false;
+  if (isDisqualified == true) return false;
+  if (status == 'No Show' ||
+      status == 'Unworthy of Award' ||
+      _isDisqualifiedStatus(status)) {
+    return false;
+  }
+
+  // In this workflow, specials can only be selected on first-place animals.
+  return placement == '1';
+}
+
+Map<String, dynamic>? _singleAwardWinner(
+  List<Map<String, dynamic>> entries,
+  String awardCode,
+) {
+  final target = _canonicalAwardCode(awardCode).toLowerCase();
+  for (final entry in entries) {
+    final hasAward = _entryAwardCodes(entry).any(
+      (award) => _canonicalAwardCode(award).toLowerCase() == target,
+    );
+    if (hasAward) return entry;
+  }
+  return null;
+}
+
+bool _hasEligibleOppositeSexCandidate(
+  List<Map<String, dynamic>> entries,
+  Map<String, dynamic> winner,
+) {
+  final winnerId = (winner['entry_id'] ?? winner['id'] ?? '').toString().trim();
+  final winnerSex = _entrySexKey(winner);
+  if (winnerSex.isEmpty) return false;
+
+  for (final entry in entries) {
+    final entryId = (entry['entry_id'] ?? entry['id'] ?? '').toString().trim();
+    if (entryId.isNotEmpty && entryId == winnerId) continue;
+    if (!_entryIsEligibleForSpecialAward(entry)) continue;
+
+    final entrySex = _entrySexKey(entry);
+    if (entrySex.isNotEmpty && entrySex != winnerSex) return true;
+  }
+
+  return false;
+}
+
+bool _requiredAwardCountsAreValid({
+  required Iterable<List<Map<String, dynamic>>> buckets,
+  required List<String> awardCodes,
+  required bool enforceMissing,
+}) {
+  for (final bucket in buckets) {
+    if (bucket.isEmpty) continue;
+
+    for (final awardCode in awardCodes) {
+      final count = _awardCount(bucket, awardCode);
+
+      // Duplicate awards are always an error once they exist.
+      if (count > 1) return false;
+    }
+
+    if (!enforceMissing) continue;
+
+    final eligibleCandidates = bucket.where(_entryIsEligibleForSpecialAward).toList();
+
+    // If every animal in the scope is DQ, No Show, Unworthy, scratched, or otherwise
+    // has no first-place animal, there is no special award to require.
+    if (eligibleCandidates.isEmpty) continue;
+
+    if (awardCodes.length >= 2) {
+      final primaryAward = awardCodes[0];
+      final oppositeAward = awardCodes[1];
+
+      final primaryCount = _awardCount(bucket, primaryAward);
+      if (primaryCount != 1) return false;
+
+      final primaryWinner = _singleAwardWinner(bucket, primaryAward);
+      if (primaryWinner == null) return false;
+
+      final oppositeCount = _awardCount(bucket, oppositeAward);
+      final hasOppositeCandidate = _hasEligibleOppositeSexCandidate(
+        eligibleCandidates,
+        primaryWinner,
+      );
+
+      // BOS/BOSV/BOSG is only required when there is an eligible opposite-sex animal.
+      if (hasOppositeCandidate && oppositeCount != 1) return false;
+
+      // If an opposite award exists when no opposite-sex candidate exists, it is still
+      // bad data and should flag red.
+      if (!hasOppositeCandidate && oppositeCount > 0) return false;
+
+      continue;
+    }
+
+    for (final awardCode in awardCodes) {
+      if (_awardCount(bucket, awardCode) != 1) return false;
+    }
+  }
+
+  return true;
+}
+
+_ResultScopeCompletion _resultCompletionForEntries(
+  List<Map<String, dynamic>> entries, {
+  required bool requireVarietyAwards,
+  required bool requireGroupAwards,
+  required bool requireBreedAwards,
+}) {
+  final totalBasics = entries.length;
+  final completedBasics = entries.where(_entryHasBasicOutcome).length;
+  final anyData = entries.any(_entryHasAnyResultOrAwardData);
+
+  if (entries.isEmpty || !anyData) {
+    return _ResultScopeCompletion(
+      status: _ResultScopeStatus.notStarted,
+      completedBasics: completedBasics,
+      totalBasics: totalBasics,
+    );
+  }
+
+  final allBasicsComplete = totalBasics > 0 && completedBasics >= totalBasics;
+  final normalEntries = entries.where((entry) => !_isFurEntry(entry)).toList();
+
+  bool awardCountsValid = true;
+
+  if (normalEntries.isNotEmpty && requireVarietyAwards) {
+    final varietyBuckets = _bucketEntries(normalEntries, (entry) {
+      final sectionId = _entryScopeSectionId(entry);
+      final breed = _entryScopeBreed(entry);
+      final variety = _entryScopeVariety(entry);
+      if (sectionId.isEmpty || breed.isEmpty || variety.isEmpty) return '';
+      return '$sectionId|$breed|$variety';
+    });
+
+    awardCountsValid = awardCountsValid &&
+        _requiredAwardCountsAreValid(
+          buckets: varietyBuckets.values,
+          awardCodes: const ['BOV', 'BOSV'],
+          enforceMissing: allBasicsComplete,
+        );
+  }
+
+  if (normalEntries.isNotEmpty && requireGroupAwards) {
+    final groupBuckets = _bucketEntries(normalEntries, (entry) {
+      final sectionId = _entryScopeSectionId(entry);
+      final breed = _entryScopeBreed(entry);
+      final group = _entryScopeGroup(entry);
+      if (sectionId.isEmpty || breed.isEmpty || group.isEmpty) return '';
+      return '$sectionId|$breed|$group';
+    });
+
+    awardCountsValid = awardCountsValid &&
+        _requiredAwardCountsAreValid(
+          buckets: groupBuckets.values,
+          awardCodes: const ['BOG', 'BOSG'],
+          enforceMissing: allBasicsComplete,
+        );
+  }
+
+  if (normalEntries.isNotEmpty && requireBreedAwards) {
+    final breedBuckets = _bucketEntries(normalEntries, (entry) {
+      final sectionId = _entryScopeSectionId(entry);
+      final breed = _entryScopeBreed(entry);
+      if (sectionId.isEmpty || breed.isEmpty) return '';
+      return '$sectionId|$breed';
+    });
+
+    awardCountsValid = awardCountsValid &&
+        _requiredAwardCountsAreValid(
+          buckets: breedBuckets.values,
+          awardCodes: const ['BOB', 'BOSB'],
+          enforceMissing: allBasicsComplete,
+        );
+  }
+
+  if (!awardCountsValid) {
+    return _ResultScopeCompletion(
+      status: _ResultScopeStatus.needsAttention,
+      completedBasics: completedBasics,
+      totalBasics: totalBasics,
+    );
+  }
+
+  if (!allBasicsComplete) {
+    return _ResultScopeCompletion(
+      status: _ResultScopeStatus.inProgress,
+      completedBasics: completedBasics,
+      totalBasics: totalBasics,
+    );
+  }
+
+  return _ResultScopeCompletion(
+    status: _ResultScopeStatus.complete,
+    completedBasics: completedBasics,
+    totalBasics: totalBasics,
+  );
+}
+
+String _resultScopeStatusLabel(_ResultScopeStatus status) {
+  switch (status) {
+    case _ResultScopeStatus.complete:
+      return 'Complete';
+    case _ResultScopeStatus.needsAttention:
+      return 'Needs Attention';
+    case _ResultScopeStatus.inProgress:
+      return 'In Progress';
+    case _ResultScopeStatus.notStarted:
+      return 'Not Started';
+  }
+}
+
+IconData _resultScopeStatusIcon(_ResultScopeStatus status) {
+  switch (status) {
+    case _ResultScopeStatus.complete:
+      return Icons.check_circle;
+    case _ResultScopeStatus.needsAttention:
+      return Icons.error;
+    case _ResultScopeStatus.inProgress:
+      return Icons.pending;
+    case _ResultScopeStatus.notStarted:
+      return Icons.radio_button_unchecked;
+  }
+}
+
+Color _resultScopeStatusColor(BuildContext context, _ResultScopeStatus status) {
+  final colorScheme = Theme.of(context).colorScheme;
+  switch (status) {
+    case _ResultScopeStatus.complete:
+      return Colors.green;
+    case _ResultScopeStatus.needsAttention:
+      return Colors.red;
+    case _ResultScopeStatus.inProgress:
+      return Colors.orange;
+    case _ResultScopeStatus.notStarted:
+      return colorScheme.onSurfaceVariant;
+  }
 }
 
 String _dqReasonFromStatus(String status) {
@@ -1005,52 +1429,41 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
   }
 
   // --- Completion/Status Highlighting Helpers ---
-  bool _hasResult(Map<String, dynamic> entry) {
-    final resultStatus = (entry['result_status'] ?? '').toString().trim();
-    final placement = (entry['placement'] ?? '').toString().trim();
-    final enteredAt = (entry['result_entered_at'] ?? '').toString().trim();
-    final isShown = entry['is_shown'];
-    final isDisqualified = entry['is_disqualified'];
-    final dqReason = (entry['disqualified_reason'] ?? '').toString().trim();
+  _ResultScopeCompletion _completionFor(List<Map<String, dynamic>> entries) {
+    return _resultCompletionForEntries(
+      entries,
+      requireVarietyAwards: _showsByVariety(entries),
+      requireGroupAwards: _showsByGroup(entries),
+      requireBreedAwards: true,
+    );
+  }
 
-    return resultStatus.isNotEmpty ||
-        placement.isNotEmpty ||
-        enteredAt.isNotEmpty ||
-        isShown == false ||
-        isDisqualified == true ||
-        dqReason.isNotEmpty;
+  bool _hasResult(Map<String, dynamic> entry) {
+    return _entryHasBasicOutcome(entry);
   }
 
   int _completedCount(List<Map<String, dynamic>> entries) {
-    return entries.where(_hasResult).length;
+    return _completionFor(entries).completedBasics;
   }
 
   bool _isComplete(List<Map<String, dynamic>> entries) {
-    return entries.isNotEmpty && _completedCount(entries) >= entries.length;
+    return _completionFor(entries).status == _ResultScopeStatus.complete;
   }
 
   bool _isInProgress(List<Map<String, dynamic>> entries) {
-    final completed = _completedCount(entries);
-    return completed > 0 && completed < entries.length;
+    return _completionFor(entries).status == _ResultScopeStatus.inProgress;
   }
 
   String _statusLabel(List<Map<String, dynamic>> entries) {
-    if (_isComplete(entries)) return 'Complete';
-    if (_isInProgress(entries)) return 'In Progress';
-    return 'Not Started';
+    return _resultScopeStatusLabel(_completionFor(entries).status);
   }
 
   IconData _statusIcon(List<Map<String, dynamic>> entries) {
-    if (_isComplete(entries)) return Icons.check_circle;
-    if (_isInProgress(entries)) return Icons.pending;
-    return Icons.radio_button_unchecked;
+    return _resultScopeStatusIcon(_completionFor(entries).status);
   }
 
   Color _statusColor(BuildContext context, List<Map<String, dynamic>> entries) {
-    final colorScheme = Theme.of(context).colorScheme;
-    if (_isComplete(entries)) return Colors.green;
-    if (_isInProgress(entries)) return colorScheme.primary;
-    return colorScheme.onSurfaceVariant;
+    return _resultScopeStatusColor(context, _completionFor(entries).status);
   }
 
   List<_ValidationIssue> _buildValidationIssues() {
@@ -1776,6 +2189,10 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                             final count = breedEntries.length;
                             final completed = _completedCount(breedEntries);
                             final statusColor = _statusColor(context, breedEntries);
+                            final breedSpecials = _specialsSummaryForEntries(
+                              breedEntries,
+                              const ['BOB', 'BOSB'],
+                            );
                             final byGroup = _showsByGroup(breedEntries);
                             final byVariety = _showsByVariety(breedEntries);
 
@@ -1836,7 +2253,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                                 subtitle: Padding(
                                   padding: const EdgeInsets.only(top: 6),
                                   child: Text(
-                                    '$completed/$count entered • ${_statusLabel(breedEntries)}\n$flowLabel • ${_judgeSummary(breedEntries)}',
+                                    '$completed/$count entered • ${_statusLabel(breedEntries)}\n$flowLabel • ${_judgeSummary(breedEntries)}${breedSpecials.isEmpty ? '' : '\n$breedSpecials'}',
                                   ),
                                 ),
                                 trailing: const Icon(Icons.chevron_right),
@@ -2022,53 +2439,43 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
   }
 
   // --- Completion/Status Highlighting Helpers ---
-  bool _hasResult(Map<String, dynamic> entry) {
-    final resultStatus = (entry['result_status'] ?? '').toString().trim();
-    final placement = (entry['placement'] ?? '').toString().trim();
-    final enteredAt = (entry['result_entered_at'] ?? '').toString().trim();
-    final isShown = entry['is_shown'];
-    final isDisqualified = entry['is_disqualified'];
-    final dqReason = (entry['disqualified_reason'] ?? '').toString().trim();
+  _ResultScopeCompletion _completionFor(List<Map<String, dynamic>> entries) {
+    return _resultCompletionForEntries(
+      entries,
+      requireVarietyAwards: widget.showsByVariety,
+      requireGroupAwards: true,
+      requireBreedAwards: false,
+    );
+  }
 
-    return resultStatus.isNotEmpty ||
-        placement.isNotEmpty ||
-        enteredAt.isNotEmpty ||
-        isShown == false ||
-        isDisqualified == true ||
-        dqReason.isNotEmpty;
+  bool _hasResult(Map<String, dynamic> entry) {
+    return _entryHasBasicOutcome(entry);
   }
 
   int _completedCount(List<Map<String, dynamic>> entries) {
-    return entries.where(_hasResult).length;
+    return _completionFor(entries).completedBasics;
   }
 
   bool _isComplete(List<Map<String, dynamic>> entries) {
-    return entries.isNotEmpty && _completedCount(entries) >= entries.length;
+    return _completionFor(entries).status == _ResultScopeStatus.complete;
   }
 
   bool _isInProgress(List<Map<String, dynamic>> entries) {
-    final completed = _completedCount(entries);
-    return completed > 0 && completed < entries.length;
+    return _completionFor(entries).status == _ResultScopeStatus.inProgress;
   }
 
   String _statusLabel(List<Map<String, dynamic>> entries) {
-    if (_isComplete(entries)) return 'Complete';
-    if (_isInProgress(entries)) return 'In Progress';
-    return 'Not Started';
+    return _resultScopeStatusLabel(_completionFor(entries).status);
   }
 
   IconData _statusIcon(List<Map<String, dynamic>> entries) {
-    if (_isComplete(entries)) return Icons.check_circle;
-    if (_isInProgress(entries)) return Icons.pending;
-    return Icons.radio_button_unchecked;
+    return _resultScopeStatusIcon(_completionFor(entries).status);
   }
 
   Color _statusColor(BuildContext context, List<Map<String, dynamic>> entries) {
-    final colorScheme = Theme.of(context).colorScheme;
-    if (_isComplete(entries)) return Colors.green;
-    if (_isInProgress(entries)) return colorScheme.primary;
-    return colorScheme.onSurfaceVariant;
+    return _resultScopeStatusColor(context, _completionFor(entries).status);
   }
+
 
   String? _singleJudgeId(List<Map<String, dynamic>> entries) {
     final ids = entries
@@ -2353,6 +2760,12 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
                 final count = groupEntries.length;
                 final completed = _completedCount(groupEntries);
                 final statusColor = _statusColor(context, groupEntries);
+                final groupSpecials = _specialsSummaryForEntries(
+                  groupEntries,
+                  widget.showsByVariety
+                      ? const ['BOG', 'BOSG', 'BOV', 'BOSV']
+                      : const ['BOG', 'BOSG'],
+                );
 
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
@@ -2377,7 +2790,7 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
                     subtitle: Padding(
                       padding: const EdgeInsets.only(top: 6),
                       child: Text(
-                        '$completed/$count entered • ${_statusLabel(groupEntries)}\n${_judgeSummary(groupEntries)}',
+                        '$completed/$count entered • ${_statusLabel(groupEntries)}\n${_judgeSummary(groupEntries)}${groupSpecials.isEmpty ? '' : '\n$groupSpecials'}',
                       ),
                     ),
                     trailing: const Icon(Icons.chevron_right),
@@ -2529,6 +2942,44 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
     final id = ids.first;
     final name = _judgeNameById(id);
     return name.isEmpty ? 'Judge: Not set' : 'Judge: $name';
+  }
+
+  // --- Completion/Status Highlighting Helpers ---
+  _ResultScopeCompletion _completionFor(List<Map<String, dynamic>> entries) {
+    return _resultCompletionForEntries(
+      entries,
+      requireVarietyAwards: entries.any((entry) => !_isFurEntry(entry)),
+      requireGroupAwards: false,
+      requireBreedAwards: false,
+    );
+  }
+
+  bool _hasResult(Map<String, dynamic> entry) {
+    return _entryHasBasicOutcome(entry);
+  }
+
+  int _completedCount(List<Map<String, dynamic>> entries) {
+    return _completionFor(entries).completedBasics;
+  }
+
+  bool _isComplete(List<Map<String, dynamic>> entries) {
+    return _completionFor(entries).status == _ResultScopeStatus.complete;
+  }
+
+  bool _isInProgress(List<Map<String, dynamic>> entries) {
+    return _completionFor(entries).status == _ResultScopeStatus.inProgress;
+  }
+
+  String _statusLabel(List<Map<String, dynamic>> entries) {
+    return _resultScopeStatusLabel(_completionFor(entries).status);
+  }
+
+  IconData _statusIcon(List<Map<String, dynamic>> entries) {
+    return _resultScopeStatusIcon(_completionFor(entries).status);
+  }
+
+  Color _statusColor(BuildContext context, List<Map<String, dynamic>> entries) {
+    return _resultScopeStatusColor(context, _completionFor(entries).status);
   }
 
   String? _singleJudgeId(List<Map<String, dynamic>> entries) {
@@ -2744,7 +3195,6 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ),
-          
                     if (_msg != null) ...[
                       const SizedBox(height: 12),
                       Align(
@@ -2774,10 +3224,17 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
                 final variety = varieties[i];
                 final varietyEntries = grouped[variety]!;
                 final count = varietyEntries.length;
+                final completed = _completedCount(varietyEntries);
+                final statusColor = _statusColor(context, varietyEntries);
+                final varietySpecials = _specialsSummaryForEntries(
+                  varietyEntries,
+                  const ['BOV', 'BOSV'],
+                );
 
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
                   elevation: 0,
+                  color: statusColor.withOpacity(0.06),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
                   ),
@@ -2788,6 +3245,13 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
                       children: [
                         ListTile(
                           contentPadding: EdgeInsets.zero,
+                          leading: CircleAvatar(
+                            backgroundColor: statusColor.withOpacity(0.12),
+                            child: Icon(
+                              _statusIcon(varietyEntries),
+                              color: statusColor,
+                            ),
+                          ),
                           title: Text(
                             variety,
                             style: const TextStyle(fontWeight: FontWeight.w700),
@@ -2795,7 +3259,7 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
                           subtitle: Padding(
                             padding: const EdgeInsets.only(top: 6),
                             child: Text(
-                              '$count entr${count == 1 ? 'y' : 'ies'} • ${_judgeSummary(varietyEntries)}',
+                              '$completed/$count entered • ${_statusLabel(varietyEntries)}\n${_judgeSummary(varietyEntries)}${varietySpecials.isEmpty ? '' : '\n$varietySpecials'}',
                             ),
                           ),
                           trailing: const Icon(Icons.chevron_right),
@@ -3183,6 +3647,44 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
     return name.isEmpty ? 'Judge: Not set' : 'Judge: $name';
   }
 
+  // --- Completion/Status Highlighting Helpers ---
+  _ResultScopeCompletion _completionFor(List<Map<String, dynamic>> entries) {
+    return _resultCompletionForEntries(
+      entries,
+      requireVarietyAwards: false,
+      requireGroupAwards: false,
+      requireBreedAwards: false,
+    );
+  }
+
+  bool _hasResult(Map<String, dynamic> entry) {
+    return _entryHasBasicOutcome(entry);
+  }
+
+  int _completedCount(List<Map<String, dynamic>> entries) {
+    return _completionFor(entries).completedBasics;
+  }
+
+  bool _isComplete(List<Map<String, dynamic>> entries) {
+    return _completionFor(entries).status == _ResultScopeStatus.complete;
+  }
+
+  bool _isInProgress(List<Map<String, dynamic>> entries) {
+    return _completionFor(entries).status == _ResultScopeStatus.inProgress;
+  }
+
+  String _statusLabel(List<Map<String, dynamic>> entries) {
+    return _resultScopeStatusLabel(_completionFor(entries).status);
+  }
+
+  IconData _statusIcon(List<Map<String, dynamic>> entries) {
+    return _resultScopeStatusIcon(_completionFor(entries).status);
+  }
+
+  Color _statusColor(BuildContext context, List<Map<String, dynamic>> entries) {
+    return _resultScopeStatusColor(context, _completionFor(entries).status);
+  }
+
   String? _singleJudgeId(List<Map<String, dynamic>> entries) {
     final ids = entries
         .map((e) => (e['judged_by_show_judge_id'] ?? '').toString().trim())
@@ -3435,15 +3937,46 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
                 final label = labels[i];
                 final classEntries = grouped[label]!;
                 final count = classEntries.length;
+                final completed = _completedCount(classEntries);
+                final statusColor = _statusColor(context, classEntries);
+                final classSpecials = _specialsSummaryForEntries(
+                  classEntries,
+                  const [
+                    'BOV',
+                    'BOSV',
+                    'BOG',
+                    'BOSG',
+                    'BOB',
+                    'BOSB',
+                    'Best Junior',
+                    'Best Intermediate',
+                    'Best Senior',
+                    'Best 4-Class',
+                    'Best 6-Class',
+                    'Best In Show',
+                    'Reserve In Show',
+                    'BIS',
+                    'RIS',
+                    'HM',
+                  ],
+                );
 
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
                   elevation: 0,
+                  color: statusColor.withOpacity(0.06),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: ListTile(
                     contentPadding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
+                    leading: CircleAvatar(
+                      backgroundColor: statusColor.withOpacity(0.12),
+                      child: Icon(
+                        _statusIcon(classEntries),
+                        color: statusColor,
+                      ),
+                    ),
                     title: Text(
                       label,
                       style: const TextStyle(fontWeight: FontWeight.w700),
@@ -3451,7 +3984,7 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
                     subtitle: Padding(
                       padding: const EdgeInsets.only(top: 6),
                       child: Text(
-                        '$count entr${count == 1 ? 'y' : 'ies'} • ${_judgeSummary(classEntries)}',
+                        '$completed/$count entered • ${_statusLabel(classEntries)}\n${_judgeSummary(classEntries)}${classSpecials.isEmpty ? '' : '\n$classSpecials'}',
                       ),
                     ),
                     trailing: const Icon(Icons.chevron_right),
@@ -3829,40 +4362,32 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
     return false;
   }
 
-  bool _awardDecisionComplete(Map<String, dynamic> e) {
-    if (!_entryIsAwardEligible(e)) return true;
-    if (!_placedFirst(e)) return true;
+    bool _awardDecisionComplete(Map<String, dynamic> e) {
+      final awards = _awardsForEntry(e);
 
-    final awards = _awardsForEntry(e);
-    if (awards.isNotEmpty) {
+      // No award selected is not automatically an error.
+      // The higher-level cards handle required BOV/BOSV, BOG/BOSG, BOB/BOSB.
+      if (awards.isEmpty) return true;
+
       return !_entryHasValidationProblem(e);
     }
 
-    return false;
-  }
+    bool _isEntryComplete(Map<String, dynamic> e) {
+      if (_isScratched(e)) return true;
 
-  bool _isEntryComplete(Map<String, dynamic> e) {
-    final scratched = _isScratched(e);
-    if (scratched) return true;
+      final judgeId = (e['judged_by_show_judge_id'] ?? '').toString().trim();
+      if (judgeId.isEmpty) return false;
 
-    final judgeId = (e['judged_by_show_judge_id'] ?? '').toString().trim();
-    if (judgeId.isEmpty) return false;
+      // Basic animal outcome is required:
+      // placement, DQ, No Show, or Unworthy.
+      if (!_entryHasBasicOutcome(e)) return false;
 
-    final status = (e['result_status'] ?? '').toString().trim();
-    final placement = (e['placement'] ?? '').toString().trim();
+      if (!_awardDecisionComplete(e)) return false;
 
-    if (status.isEmpty) return false;
+      if (_entryHasValidationProblem(e)) return false;
 
-    if (!_awardDecisionComplete(e)) {
-      return false;
+      return true;
     }
-
-    if (_entryHasValidationProblem(e)) {
-      return false;
-    }
-
-    return true;
-  }
 
   Color _rowTint(Map<String, dynamic> e) {
     if (_isEntryComplete(e)) {
