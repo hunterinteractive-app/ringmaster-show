@@ -1090,6 +1090,150 @@ class _ControlSheetsGeneratorSheetState
       raw.addAll((rows as List).cast<Map<String, dynamic>>());
     }
 
+    // The report_control_sheet_entries RPC may not include is_fur/is_wool,
+    // and older versions may exclude fur-only rows entirely. Enrich the RPC
+    // result from entries, then add any missing fur/wool rows as a fallback so
+    // Fur/Wool control sheets still print.
+    final rpcEntryIds = <String>{};
+    for (final row in raw) {
+      final entryId = _safe(row, 'entry_id').isNotEmpty
+          ? _safe(row, 'entry_id')
+          : _safe(row, 'id');
+      if (entryId.isNotEmpty) rpcEntryIds.add(entryId);
+    }
+
+    final entryFlagRows = <Map<String, dynamic>>[];
+    final entryIdsList = rpcEntryIds.toList();
+    for (var i = 0; i < entryIdsList.length; i += 100) {
+      final chunk = entryIdsList.skip(i).take(100).toList();
+      if (chunk.isEmpty) continue;
+
+      final rows = await supabase
+          .from('entries')
+          .select('id,is_fur,is_wool')
+          .inFilter('id', chunk);
+
+      entryFlagRows.addAll(List<Map<String, dynamic>>.from(rows));
+    }
+
+    final flagsByEntryId = <String, Map<String, dynamic>>{};
+    for (final row in entryFlagRows) {
+      final id = (row['id'] ?? '').toString();
+      if (id.isNotEmpty) flagsByEntryId[id] = row;
+    }
+
+    for (final row in raw) {
+      final entryId = _safe(row, 'entry_id').isNotEmpty
+          ? _safe(row, 'entry_id')
+          : _safe(row, 'id');
+      final flags = flagsByEntryId[entryId];
+      if (flags == null) continue;
+      row['is_fur'] = flags['is_fur'];
+      row['is_wool'] = flags['is_wool'];
+    }
+
+    for (final sectionId in sortedIdsToFetch) {
+      final missingFurRows = await supabase
+          .from('entries')
+          .select('''
+            id,
+            show_id,
+            section_id,
+            exhibitor_id,
+            animal_id,
+            animal_name,
+            tattoo,
+            breed,
+            variety,
+            sex,
+            class_name,
+            species,
+            is_fur,
+            is_wool,
+            scratched_at,
+            exhibitors:exhibitor_id (
+              display_name,
+              showing_name,
+              first_name,
+              last_name
+            ),
+            show_sections:section_id (
+              kind,
+              letter,
+              display_name,
+              sort_order
+            )
+          ''')
+          .eq('show_id', widget.showId)
+          .eq('section_id', sectionId)
+          .or('is_fur.eq.true,is_wool.eq.true')
+          .order('breed')
+          .order('variety')
+          .order('class_name')
+          .order('sex')
+          .order('tattoo');
+
+      for (final row in List<Map<String, dynamic>>.from(missingFurRows)) {
+        final entryId = (row['id'] ?? '').toString();
+        if (entryId.isEmpty || rpcEntryIds.contains(entryId)) continue;
+
+        final exhibitor = row['exhibitors'];
+        final exhibitorMap = exhibitor is Map<String, dynamic>
+            ? exhibitor
+            : <String, dynamic>{};
+        final section = row['show_sections'];
+        final sectionMap = section is Map<String, dynamic>
+            ? section
+            : <String, dynamic>{};
+
+        final displayName = (exhibitorMap['display_name'] ?? '').toString().trim();
+        final showingName = (exhibitorMap['showing_name'] ?? '').toString().trim();
+        final firstName = (exhibitorMap['first_name'] ?? '').toString().trim();
+        final lastName = (exhibitorMap['last_name'] ?? '').toString().trim();
+        final fullName = [firstName, lastName].where((v) => v.isNotEmpty).join(' ');
+
+        final sectionKind = (sectionMap['kind'] ?? '').toString().trim();
+        final sectionLetter = (sectionMap['letter'] ?? '').toString().trim().toUpperCase();
+        final sectionDisplayName = (sectionMap['display_name'] ?? '').toString().trim();
+        final sectionLabel = sectionDisplayName.isNotEmpty
+            ? sectionDisplayName
+            : sectionLetter.isEmpty
+                ? sectionKind
+                : '${sectionKind.isEmpty ? 'Section' : sectionKind[0].toUpperCase() + sectionKind.substring(1).toLowerCase()} $sectionLetter';
+
+        raw.add({
+          'entry_id': entryId,
+          'id': entryId,
+          'section_id': row['section_id'],
+          'section_kind': sectionKind,
+          'section_letter': sectionLetter,
+          'section_label': sectionLabel,
+          'section_sort_order': sectionMap['sort_order'],
+          'exhibitor_id': row['exhibitor_id'],
+          'exhibitor_label': displayName.isNotEmpty
+              ? displayName
+              : showingName.isNotEmpty
+                  ? showingName
+                  : fullName,
+          'animal_id': row['animal_id'],
+          'animal_name': row['animal_name'],
+          'tattoo': row['tattoo'],
+          'breed': row['breed'],
+          'variety': row['variety'],
+          'group_name': '',
+          'sex': row['sex'],
+          'class_name': row['class_name'],
+          'species': row['species'],
+          'is_fur': row['is_fur'],
+          'is_wool': row['is_wool'],
+          'group_sort_order': 9999,
+          'variety_sort_order': 9999,
+          'uses_group_awards': false,
+          'uses_variety_awards': false,
+        });
+      }
+    }
+
     final byEntryId = <String, Map<String, dynamic>>{};
 
     for (final row in raw) {
