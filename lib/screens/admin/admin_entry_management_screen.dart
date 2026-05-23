@@ -2213,8 +2213,10 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
         }
       }
 
-      final rows = _selectedSectionIds.map((sectionId) {
-        return {
+      final rows = <Map<String, dynamic>>[];
+
+      for (final sectionId in _selectedSectionIds) {
+        final baseRow = {
           'show_id': widget.showId,
           'section_id': sectionId,
           'exhibitor_id': resolvedExhibitorId,
@@ -2235,18 +2237,33 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
               ? _classValue
               : (_className.text.trim().isEmpty ? null : _className.text.trim()),
           'notes': _notes.text.trim().isEmpty ? null : _notes.text.trim(),
-          'is_fur': _isFur,
-          'fur_variety': _isFur && (_furVarietyValue?.trim().isNotEmpty == true)
-              ? _furVarietyValue!.trim()
-              : null,
-          'fur_notes': _isFur && _furNotes.text.trim().isNotEmpty
-              ? _furNotes.text.trim()
-              : null,
           'status': 'entered',
           'created_at': DateTime.now().toUtc().toIso8601String(),
           'updated_at': DateTime.now().toUtc().toIso8601String(),
         };
-      }).toList();
+
+        // Main class entry (always non-fur)
+        rows.add({
+          ...baseRow,
+          'is_fur': false,
+          'fur_variety': null,
+          'fur_notes': null,
+        });
+
+        // Separate fur/wool entry
+        if (_isFur) {
+          rows.add({
+            ...baseRow,
+            'is_fur': true,
+            'fur_variety': _furVarietyValue?.trim().isNotEmpty == true
+                ? _furVarietyValue!.trim()
+                : null,
+            'fur_notes': _furNotes.text.trim().isNotEmpty
+                ? _furNotes.text.trim()
+                : null,
+          });
+        }
+      }
 
       await supabase.from('entries').insert(rows);
 
