@@ -1098,7 +1098,7 @@ class _ControlSheetsGeneratorSheetState
 
       final rows = await supabase
           .from('entries')
-          .select('id,is_fur,is_wool')
+          .select('id,is_fur')
           .inFilter('id', chunk);
 
       entryFlagRows.addAll(List<Map<String, dynamic>>.from(rows));
@@ -1117,7 +1117,7 @@ class _ControlSheetsGeneratorSheetState
       final flags = flagsByEntryId[entryId];
       if (flags == null) continue;
       row['is_fur'] = flags['is_fur'];
-      row['is_wool'] = flags['is_wool'];
+      row['is_wool'] = false;
     }
 
     for (final sectionId in sortedIdsToFetch) {
@@ -1137,7 +1137,6 @@ class _ControlSheetsGeneratorSheetState
             class_name,
             species,
             is_fur,
-            is_wool,
             scratched_at,
             exhibitors:exhibitor_id (
               display_name,
@@ -1154,7 +1153,7 @@ class _ControlSheetsGeneratorSheetState
           ''')
           .eq('show_id', widget.showId)
           .eq('section_id', sectionId)
-          .or('is_fur.eq.true,is_wool.eq.true')
+          .eq('is_fur', true)
           .order('breed')
           .order('variety')
           .order('class_name')
@@ -1213,7 +1212,7 @@ class _ControlSheetsGeneratorSheetState
           'class_name': row['class_name'],
           'species': row['species'],
           'is_fur': row['is_fur'],
-          'is_wool': row['is_wool'],
+          'is_wool': false,
           'group_sort_order': 9999,
           'variety_sort_order': 9999,
           'uses_group_awards': false,
