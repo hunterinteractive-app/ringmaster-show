@@ -2219,7 +2219,7 @@ class _ControlSheetsGeneratorSheetState
                     ),
                   ];
 
-                  if (includeQrCode && false) {
+                  if (includeQrCode) {
                     classBlockWidgets.add(
                       qrResultsBlock(
                         sectionId: (p['sectionId'] ?? '').toString(),
