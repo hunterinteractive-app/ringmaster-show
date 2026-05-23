@@ -1578,7 +1578,35 @@ class _ControlSheetsGeneratorSheetState
               .toString()
               .compareTo((b['sectionTitle'] ?? '').toString());
           if (titleCmp != 0) return titleCmp;
-          // Stop further sorting so paired control sheets stay grouped by breed.
+
+          // Within each breed/section, keep normal breed classes first and
+          // push Fur/Wool sheets to the end of that breed.
+          final aIsFurOrWool = a['isFurOrWool'] == true;
+          final bIsFurOrWool = b['isFurOrWool'] == true;
+          if (aIsFurOrWool != bIsFurOrWool) {
+            return aIsFurOrWool ? 1 : -1;
+          }
+
+          final groupCmp = pageInt(a, 'groupSortOrder').compareTo(pageInt(b, 'groupSortOrder'));
+          if (groupCmp != 0) return groupCmp;
+
+          final varietyCmp = pageInt(a, 'varietySortOrder').compareTo(pageInt(b, 'varietySortOrder'));
+          if (varietyCmp != 0) return varietyCmp;
+
+          final colorCmp = (a['color'] ?? '')
+              .toString()
+              .toLowerCase()
+              .compareTo((b['color'] ?? '').toString().toLowerCase());
+          if (colorCmp != 0) return colorCmp;
+
+          final classCmp = pageInt(a, 'classSortRank').compareTo(pageInt(b, 'classSortRank'));
+          if (classCmp != 0) return classCmp;
+
+          final sexCmp = (a['sex'] ?? '').toString().toLowerCase().compareTo(
+                (b['sex'] ?? '').toString().toLowerCase(),
+              );
+          if (sexCmp != 0) return sexCmp;
+
           return 0;
         } else {
           final kindCmp = sectionKindRank(a).compareTo(sectionKindRank(b));
