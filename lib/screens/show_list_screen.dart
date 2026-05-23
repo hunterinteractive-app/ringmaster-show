@@ -16,6 +16,7 @@ import 'my_entries_screen.dart';
 import 'legal/terms_screen.dart';
 import 'legal/privacy_policy_screen.dart';
 import 'super_admin/superadmin_home_screen.dart';
+import 'package:ringmaster_show/superintendent/superintendent_shows_screen.dart';
 
 import '../config/legal_config.dart';
 import '../services/app_session.dart';
@@ -954,7 +955,14 @@ class _ShowListScreenState extends State<ShowListScreen> {
                 (_canAccessSuperintendent || (bundle?.isSuperAdmin ?? false)),
             onSuperintendent: bundle == null
                 ? null
-                : () => _openAdmin(context, bundle),
+                : () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const SuperintendentShowsScreen(),
+                      ),
+                    );
+                  },
             onAnimals: () {
               Navigator.push(
                 context,
@@ -1448,13 +1456,14 @@ class _ResponsiveShowAppBar extends StatelessWidget
             showLabel: showLabels,
             onTap: onAdmin!,
           ),
-        if (!demoMode && showSuperintendent && onSuperintendent != null)
-          _TopBarAction(
-            icon: Icons.fact_check,
-            label: 'Superintendent',
-            showLabel: showLabels,
-            onTap: onSuperintendent!,
-          ),
+        // TEMP DISABLED: Superintendent screen (feature not yet released)
+        // if (!demoMode && showSuperintendent && onSuperintendent != null)
+        //   _TopBarAction(
+        //     icon: Icons.fact_check,
+        //     label: 'Superintendent',
+        //     showLabel: showLabels,
+        //     onTap: onSuperintendent!,
+        //   ),
         if (!demoMode)
           _TopBarAction(
             icon: Icons.pets,
@@ -1497,18 +1506,20 @@ class _ResponsiveShowAppBar extends StatelessWidget
             tooltip: 'More',
             icon: const Icon(Icons.more_vert, color: Colors.white),
             onSelected: (value) async {
-              if (value == 'superintendent' && onSuperintendent != null) {
-                onSuperintendent!();
-              }
+              // TEMP DISABLED: Superintendent screen (feature not yet released)
+              // if (value == 'superintendent' && onSuperintendent != null) {
+              //   onSuperintendent!();
+              // }
               if (value == 'super_admin') onSuperAdmin();
               if (value == 'logout') onLogout();
             },
             itemBuilder: (context) => [
-              if (!demoMode && showSuperintendent && onSuperintendent != null)
-                const PopupMenuItem<String>(
-                  value: 'superintendent',
-                  child: Text('Superintendent'),
-                ),
+              // TEMP DISABLED: Superintendent screen (feature not yet released)
+              // if (!demoMode && showSuperintendent && onSuperintendent != null)
+              //   const PopupMenuItem<String>(
+              //     value: 'superintendent',
+              //     child: Text('Superintendent'),
+              //   ),
               if (!demoMode && bundle?.isSuperAdmin == true)
                 const PopupMenuItem<String>(
                   value: 'super_admin',

@@ -956,11 +956,23 @@ class _ControlSheetsGeneratorSheetState
   }
 
   bool _isFurOrWoolRow(Map<String, dynamic> row) {
+    final rawIsFur = row['is_fur'];
+    final isFurFlag = rawIsFur == true ||
+        rawIsFur?.toString().trim().toLowerCase() == 'true' ||
+        rawIsFur?.toString().trim() == '1';
+
+    final rawIsWool = row['is_wool'];
+    final isWoolFlag = rawIsWool == true ||
+        rawIsWool?.toString().trim().toLowerCase() == 'true' ||
+        rawIsWool?.toString().trim() == '1';
+
     final className = _safe(row, 'class_name').toLowerCase();
     final groupName = _safe(row, 'group_name').toLowerCase();
     final variety = _safe(row, 'variety').toLowerCase();
 
-    return className.contains('fur') ||
+    return isFurFlag ||
+        isWoolFlag ||
+        className.contains('fur') ||
         className.contains('wool') ||
         groupName.contains('fur') ||
         groupName.contains('wool') ||
@@ -969,17 +981,29 @@ class _ControlSheetsGeneratorSheetState
   }
 
   String _furWoolLabel(Map<String, dynamic> row) {
+    final rawIsFur = row['is_fur'];
+    final isFurFlag = rawIsFur == true ||
+        rawIsFur?.toString().trim().toLowerCase() == 'true' ||
+        rawIsFur?.toString().trim() == '1';
+
+    final rawIsWool = row['is_wool'];
+    final isWoolFlag = rawIsWool == true ||
+        rawIsWool?.toString().trim().toLowerCase() == 'true' ||
+        rawIsWool?.toString().trim() == '1';
+
     final className = _safe(row, 'class_name').toLowerCase();
     final groupName = _safe(row, 'group_name').toLowerCase();
     final variety = _safe(row, 'variety').toLowerCase();
 
-    if (className.contains('wool') ||
+    if (isWoolFlag ||
+        className.contains('wool') ||
         groupName.contains('wool') ||
         variety.contains('wool')) {
       return 'Wool';
     }
 
-    if (className.contains('fur') ||
+    if (isFurFlag ||
+        className.contains('fur') ||
         groupName.contains('fur') ||
         variety.contains('fur')) {
       return 'Fur';

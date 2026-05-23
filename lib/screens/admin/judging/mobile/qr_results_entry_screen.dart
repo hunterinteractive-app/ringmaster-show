@@ -741,6 +741,55 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
     return name.isEmpty ? 'Judge: Not set' : 'Judge: $name';
   }
 
+  // --- Status/completion highlighting helpers ---
+  bool _hasResult(Map<String, dynamic> entry) {
+    final resultStatus = (entry['result_status'] ?? '').toString().trim();
+    final placement = (entry['placement'] ?? '').toString().trim();
+    final enteredAt = (entry['result_entered_at'] ?? '').toString().trim();
+    final isShown = entry['is_shown'];
+    final isDisqualified = entry['is_disqualified'];
+    final dqReason = (entry['disqualified_reason'] ?? '').toString().trim();
+
+    return resultStatus.isNotEmpty ||
+        placement.isNotEmpty ||
+        enteredAt.isNotEmpty ||
+        isShown == false ||
+        isDisqualified == true ||
+        dqReason.isNotEmpty;
+  }
+
+  int _completedCount(List<Map<String, dynamic>> entries) {
+    return entries.where(_hasResult).length;
+  }
+
+  bool _isComplete(List<Map<String, dynamic>> entries) {
+    return entries.isNotEmpty && _completedCount(entries) >= entries.length;
+  }
+
+  bool _isInProgress(List<Map<String, dynamic>> entries) {
+    final completed = _completedCount(entries);
+    return completed > 0 && completed < entries.length;
+  }
+
+  String _statusLabel(List<Map<String, dynamic>> entries) {
+    if (_isComplete(entries)) return 'Complete';
+    if (_isInProgress(entries)) return 'In Progress';
+    return 'Not Started';
+  }
+
+  IconData _statusIcon(List<Map<String, dynamic>> entries) {
+    if (_isComplete(entries)) return Icons.check_circle;
+    if (_isInProgress(entries)) return Icons.pending;
+    return Icons.radio_button_unchecked;
+  }
+
+  Color _statusColor(BuildContext context, List<Map<String, dynamic>> entries) {
+    final colorScheme = Theme.of(context).colorScheme;
+    if (_isComplete(entries)) return Colors.green;
+    if (_isInProgress(entries)) return colorScheme.primary;
+    return colorScheme.onSurfaceVariant;
+  }
+
   bool _isFurOrWoolClass(List<Map<String, dynamic>> entries) {
     return entries.any((e) {
       final rawClass = (e['class_name'] ?? '').toString().toLowerCase();
@@ -929,12 +978,14 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
         padding: const EdgeInsets.all(16),
         itemCount: labels.length,
         itemBuilder: (context, i) {
-        
           final label = labels[i];
           final rows = grouped[label] ?? const <Map<String, dynamic>>[];
+          final completed = _completedCount(rows);
+          final statusColor = _statusColor(context, rows);
 
           return Card(
             elevation: 0,
+            color: statusColor.withOpacity(0.06),
             margin: const EdgeInsets.only(bottom: 12),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
@@ -946,6 +997,13 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
                 children: [
                   ListTile(
                     contentPadding: EdgeInsets.zero,
+                    leading: CircleAvatar(
+                      backgroundColor: statusColor.withOpacity(0.12),
+                      child: Icon(
+                        _statusIcon(rows),
+                        color: statusColor,
+                      ),
+                    ),
                     title: Text(
                       label,
                       style: const TextStyle(fontWeight: FontWeight.w700),
@@ -953,7 +1011,7 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
                     subtitle: Padding(
                       padding: const EdgeInsets.only(top: 6),
                       child: Text(
-                        '${rows.length} entr${rows.length == 1 ? 'y' : 'ies'} • ${_judgeSummary(rows)}',
+                        '$completed/${rows.length} entered • ${_statusLabel(rows)}\n${_judgeSummary(rows)}',
                       ),
                     ),
                     trailing: const Icon(Icons.chevron_right),
@@ -1100,6 +1158,8 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
         .where((x) => x.isNotEmpty)
         .toSet()
         .length;
+    final completedCount = _completedCount(_entries);
+    final breedStatusColor = _statusColor(context, _entries);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6FB),
@@ -1141,7 +1201,8 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
                     spacing: 8,
                     runSpacing: 8,
                     children: [
-                      _pill('${_entries.length} entries'),
+                      _pill('$completedCount/${_entries.length} entered'),
+                      _pill(_statusLabel(_entries)),
                       _pill('$exhibitorCount exhibitors'),
                       _pill(_judgeSummary(_entries)),
                     ],
@@ -1171,18 +1232,28 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
           const SizedBox(height: 12),
           Card(
             elevation: 0,
+            color: breedStatusColor.withOpacity(0.06),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
             ),
             child: ListTile(
               contentPadding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
+              leading: CircleAvatar(
+                backgroundColor: breedStatusColor.withOpacity(0.12),
+                child: Icon(
+                  _statusIcon(_entries),
+                  color: breedStatusColor,
+                ),
+              ),
               title: Text(
                 widget.breed,
                 style: const TextStyle(fontWeight: FontWeight.w800),
               ),
-              subtitle: const Padding(
-                padding: EdgeInsets.only(top: 6),
-                child: Text('Tap to choose group, variety, or class.'),
+              subtitle: Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  '$completedCount/${_entries.length} entered • ${_statusLabel(_entries)}\nTap to choose group, variety, or class.',
+                ),
               ),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => _openNextLevel(_entries),

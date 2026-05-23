@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:ringmaster_show/screens/admin/judging/mobile/qr_results_entry_screen.dart';
+import 'package:ringmaster_show/screens/admin/judging/mobile/table_qr_queue_screen.dart';
 
 import 'screens/login_screen.dart';
 import 'screens/show_list_screen.dart';
@@ -40,11 +41,15 @@ Uri? _qrUriFromBrowser() {
 
   if (fragment.isNotEmpty) {
     final uri = Uri.parse(fragment);
-    if (uri.path == '/qr-results-entry') return uri;
+    if (uri.path == '/qr-results-entry' || uri.path == '/qr-table-results') {
+      return uri;
+    }
   }
 
   final path = Uri.base.path.trim();
-  if (path.endsWith('/qr-results-entry')) return Uri.base;
+  if (path.endsWith('/qr-results-entry') || path.endsWith('/qr-table-results')) {
+    return Uri.base;
+  }
 
   return null;
 }
@@ -75,6 +80,16 @@ Widget _qrScreenFromUri(Uri uri) {
   );
 }
 
+Widget _tableQrScreenFromUri(Uri uri) {
+  return TableQrQueueScreen(
+    showId: uri.queryParameters['showId'] ?? '',
+    tableNumber: uri.queryParameters['table'] ??
+        uri.queryParameters['tableNumber'] ??
+        '',
+    token: uri.queryParameters['token'] ?? '',
+  );
+}
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -90,6 +105,12 @@ class MyApp extends StatelessWidget {
 
         if (Uri.base.fragment.isNotEmpty) {
           uri = Uri.parse(Uri.base.fragment);
+        }
+
+        if (uri.path == '/qr-table-results') {
+          return MaterialPageRoute(
+            builder: (_) => _tableQrScreenFromUri(uri),
+          );
         }
 
         if (uri.path == '/qr-results-entry') {
@@ -216,6 +237,9 @@ class _RootState extends State<Root> {
     final demoMode = initialDemoMode || _demoModeFromBrowser();
 
     if (qrUri != null) {
+      if (qrUri.path == '/qr-table-results') {
+        return _tableQrScreenFromUri(qrUri);
+      }
       return _qrScreenFromUri(qrUri);
     }
 

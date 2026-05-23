@@ -1004,6 +1004,55 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     return name.isEmpty ? 'Judge: Not set' : 'Judge: $name';
   }
 
+  // --- Completion/Status Highlighting Helpers ---
+  bool _hasResult(Map<String, dynamic> entry) {
+    final resultStatus = (entry['result_status'] ?? '').toString().trim();
+    final placement = (entry['placement'] ?? '').toString().trim();
+    final enteredAt = (entry['result_entered_at'] ?? '').toString().trim();
+    final isShown = entry['is_shown'];
+    final isDisqualified = entry['is_disqualified'];
+    final dqReason = (entry['disqualified_reason'] ?? '').toString().trim();
+
+    return resultStatus.isNotEmpty ||
+        placement.isNotEmpty ||
+        enteredAt.isNotEmpty ||
+        isShown == false ||
+        isDisqualified == true ||
+        dqReason.isNotEmpty;
+  }
+
+  int _completedCount(List<Map<String, dynamic>> entries) {
+    return entries.where(_hasResult).length;
+  }
+
+  bool _isComplete(List<Map<String, dynamic>> entries) {
+    return entries.isNotEmpty && _completedCount(entries) >= entries.length;
+  }
+
+  bool _isInProgress(List<Map<String, dynamic>> entries) {
+    final completed = _completedCount(entries);
+    return completed > 0 && completed < entries.length;
+  }
+
+  String _statusLabel(List<Map<String, dynamic>> entries) {
+    if (_isComplete(entries)) return 'Complete';
+    if (_isInProgress(entries)) return 'In Progress';
+    return 'Not Started';
+  }
+
+  IconData _statusIcon(List<Map<String, dynamic>> entries) {
+    if (_isComplete(entries)) return Icons.check_circle;
+    if (_isInProgress(entries)) return Icons.pending;
+    return Icons.radio_button_unchecked;
+  }
+
+  Color _statusColor(BuildContext context, List<Map<String, dynamic>> entries) {
+    final colorScheme = Theme.of(context).colorScheme;
+    if (_isComplete(entries)) return Colors.green;
+    if (_isInProgress(entries)) return colorScheme.primary;
+    return colorScheme.onSurfaceVariant;
+  }
+
   List<_ValidationIssue> _buildValidationIssues() {
     final issues = <_ValidationIssue>[];
 
@@ -1725,6 +1774,8 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                             final breed = breeds[i];
                             final breedEntries = grouped[breed]!;
                             final count = breedEntries.length;
+                            final completed = _completedCount(breedEntries);
+                            final statusColor = _statusColor(context, breedEntries);
                             final byGroup = _showsByGroup(breedEntries);
                             final byVariety = _showsByVariety(breedEntries);
 
@@ -1758,6 +1809,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                             return Card(
                               margin: const EdgeInsets.only(bottom: 12),
                               elevation: 0,
+                              color: statusColor.withOpacity(0.06),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(20),
                               ),
@@ -1768,6 +1820,13 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                                   18,
                                   14,
                                 ),
+                                leading: CircleAvatar(
+                                  backgroundColor: statusColor.withOpacity(0.12),
+                                  child: Icon(
+                                    _statusIcon(breedEntries),
+                                    color: statusColor,
+                                  ),
+                                ),
                                 title: Text(
                                   breed,
                                   style: const TextStyle(
@@ -1777,7 +1836,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                                 subtitle: Padding(
                                   padding: const EdgeInsets.only(top: 6),
                                   child: Text(
-                                    '$count entr${count == 1 ? 'y' : 'ies'} • $flowLabel • ${_judgeSummary(breedEntries)}',
+                                    '$completed/$count entered • ${_statusLabel(breedEntries)}\n$flowLabel • ${_judgeSummary(breedEntries)}',
                                   ),
                                 ),
                                 trailing: const Icon(Icons.chevron_right),
@@ -1962,6 +2021,55 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
     return name.isEmpty ? 'Judge: Not set' : 'Judge: $name';
   }
 
+  // --- Completion/Status Highlighting Helpers ---
+  bool _hasResult(Map<String, dynamic> entry) {
+    final resultStatus = (entry['result_status'] ?? '').toString().trim();
+    final placement = (entry['placement'] ?? '').toString().trim();
+    final enteredAt = (entry['result_entered_at'] ?? '').toString().trim();
+    final isShown = entry['is_shown'];
+    final isDisqualified = entry['is_disqualified'];
+    final dqReason = (entry['disqualified_reason'] ?? '').toString().trim();
+
+    return resultStatus.isNotEmpty ||
+        placement.isNotEmpty ||
+        enteredAt.isNotEmpty ||
+        isShown == false ||
+        isDisqualified == true ||
+        dqReason.isNotEmpty;
+  }
+
+  int _completedCount(List<Map<String, dynamic>> entries) {
+    return entries.where(_hasResult).length;
+  }
+
+  bool _isComplete(List<Map<String, dynamic>> entries) {
+    return entries.isNotEmpty && _completedCount(entries) >= entries.length;
+  }
+
+  bool _isInProgress(List<Map<String, dynamic>> entries) {
+    final completed = _completedCount(entries);
+    return completed > 0 && completed < entries.length;
+  }
+
+  String _statusLabel(List<Map<String, dynamic>> entries) {
+    if (_isComplete(entries)) return 'Complete';
+    if (_isInProgress(entries)) return 'In Progress';
+    return 'Not Started';
+  }
+
+  IconData _statusIcon(List<Map<String, dynamic>> entries) {
+    if (_isComplete(entries)) return Icons.check_circle;
+    if (_isInProgress(entries)) return Icons.pending;
+    return Icons.radio_button_unchecked;
+  }
+
+  Color _statusColor(BuildContext context, List<Map<String, dynamic>> entries) {
+    final colorScheme = Theme.of(context).colorScheme;
+    if (_isComplete(entries)) return Colors.green;
+    if (_isInProgress(entries)) return colorScheme.primary;
+    return colorScheme.onSurfaceVariant;
+  }
+
   String? _singleJudgeId(List<Map<String, dynamic>> entries) {
     final ids = entries
         .map((e) => (e['judged_by_show_judge_id'] ?? '').toString().trim())
@@ -2041,9 +2149,6 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
     if (!mounted) return;
 
     if (refreshed.isEmpty) {
-      debugPrint(
-        'WARNING: _reloadEntries returned 0 rows. Keeping current entries.',
-      );
       setState(() {});
       return;
     }
@@ -2246,15 +2351,25 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
                 final groupName = groups[i];
                 final groupEntries = grouped[groupName]!;
                 final count = groupEntries.length;
+                final completed = _completedCount(groupEntries);
+                final statusColor = _statusColor(context, groupEntries);
 
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
                   elevation: 0,
+                  color: statusColor.withOpacity(0.06),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: ListTile(
                     contentPadding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
+                    leading: CircleAvatar(
+                      backgroundColor: statusColor.withOpacity(0.12),
+                      child: Icon(
+                        _statusIcon(groupEntries),
+                        color: statusColor,
+                      ),
+                    ),
                     title: Text(
                       groupName,
                       style: const TextStyle(fontWeight: FontWeight.w700),
@@ -2262,7 +2377,7 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
                     subtitle: Padding(
                       padding: const EdgeInsets.only(top: 6),
                       child: Text(
-                        '$count entr${count == 1 ? 'y' : 'ies'} • ${_judgeSummary(groupEntries)}',
+                        '$completed/$count entered • ${_statusLabel(groupEntries)}\n${_judgeSummary(groupEntries)}',
                       ),
                     ),
                     trailing: const Icon(Icons.chevron_right),
@@ -2488,9 +2603,6 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
     if (!mounted) return;
 
     if (refreshed.isEmpty) {
-      debugPrint(
-        'WARNING: _reloadEntries returned 0 rows. Keeping current entries.',
-      );
       setState(() {});
       return;
     }
@@ -3143,9 +3255,6 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
     if (!mounted) return;
 
     if (refreshed.isEmpty) {
-      debugPrint(
-        'WARNING: _reloadEntries returned 0 rows. Keeping current entries.',
-      );
       setState(() {});
       return;
     }
@@ -4188,15 +4297,6 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
       }).toList();
 
       if (refreshed.isEmpty) {
-        debugPrint(
-          'WARNING: _reloadAll found 0 refreshed rows. '
-          'Keeping existing entries. '
-          'showId=${widget.showId}, '
-          'breed=${widget.breed}, '
-          'variety=${widget.variety}, '
-          'class=${widget.classSexLabel}, '
-          'ids=${currentIds.length}',
-        );
 
         if (mounted) setState(() {});
         return;
@@ -4253,7 +4353,6 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
 
       _openInitialEntryIfNeeded();
     } catch (e) {
-      debugPrint('Results reload failed, keeping existing entries: $e');
       if (mounted) {
         setState(() {
           _msg = 'Results updated. Reload warning: $e';
@@ -5484,6 +5583,30 @@ if (storedJudgeId.isEmpty) {
     return 'Signed-in Writer';
   }
 
+  Future<void> _recordJudgingSessionEntry({
+    required String entryId,
+    required String? judgeId,
+  }) async {
+    if (!widget.isQrEntryMode) return;
+
+    final normalizedJudgeId = (judgeId ?? '').trim();
+    if (normalizedJudgeId.isEmpty) return;
+
+    try {
+      await supabase.rpc(
+        'record_judging_session_entry',
+        params: {
+          'p_show_id': widget.showId,
+          'p_judge_id': normalizedJudgeId,
+          'p_entry_id': entryId,
+          'p_table_number': null,
+        },
+      );
+    } catch (e) {
+      debugPrint('Judging session tracking failed: $e');
+    }
+  }
+
   Future<void> _save({required bool goNext}) async {
     setState(() {
       _saving = true;
@@ -5508,6 +5631,7 @@ if (storedJudgeId.isEmpty) {
           : (user == null ? '' : _writerNameFromUser(user));
 
       final writerPhone = (widget.writerPhone ?? '').trim();
+
 
       if (widget.isQrEntryMode) {
         if (writerName.isEmpty || writerPhone.isEmpty) {
@@ -5572,8 +5696,6 @@ if (storedJudgeId.isEmpty) {
               .toList()
             ..sort());
 
-      debugPrint('AWARDS TO SAVE: $awardsToSave');
-
       if (isFurOrWoolResult) {
         final updated = await supabase.rpc(
           'save_results_entry',
@@ -5598,6 +5720,11 @@ if (storedJudgeId.isEmpty) {
         if (updated == null) {
           throw Exception('Save returned no result.');
         }
+
+        await _recordJudgingSessionEntry(
+          entryId: entryId,
+          judgeId: normalizedJudgeId,
+        );
 
         widget.entry['placement'] = normalizedPlacement.isEmpty ? null : normalizedPlacement;
         widget.entry['result_status'] = effectiveStatus;
@@ -5638,6 +5765,11 @@ if (storedJudgeId.isEmpty) {
       if (updated == null) {
         throw Exception('Save returned no result.');
       }
+
+      await _recordJudgingSessionEntry(
+        entryId: entryId,
+        judgeId: normalizedJudgeId,
+      );
 
       // Local update (same for all entries)
       widget.entry['placement'] = normalizedPlacement.isEmpty ? null : normalizedPlacement;
