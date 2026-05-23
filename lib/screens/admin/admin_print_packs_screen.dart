@@ -1138,7 +1138,7 @@ class _ControlSheetsGeneratorSheetState
             species,
             is_fur,
             scratched_at,
-            exhibitors:exhibitor_id (
+            exhibitors:entries_exhibitor_id_fkey (
               display_name,
               showing_name,
               first_name,
