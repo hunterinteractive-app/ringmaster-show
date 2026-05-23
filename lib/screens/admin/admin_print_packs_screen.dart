@@ -93,6 +93,8 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
   bool _youthFirst = false;
   bool _autoEmailCheckInSheets = false;
   bool _savingAutoEmailCheckInSheets = false;
+  bool _isSuperAdmin = false;
+  bool _loadingSuperAdmin = true;
   DateTime? _entryCloseAt;
   DateTime? _checkInSheetsAutoEmailedAt;
   String? _checkInSheetsAutoEmailError;
@@ -100,8 +102,54 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
   @override
   void initState() {
     super.initState();
-    _loadSections();
+    _loadInitialData();
   }
+
+  Future<void> _loadInitialData() async {
+    await Future.wait([
+      _loadSuperAdminStatus(),
+      _loadSections(),
+    ]);
+  }
+
+  Future<void> _loadSuperAdminStatus() async {
+    setState(() {
+      _loadingSuperAdmin = true;
+    });
+
+    try {
+      final userId = supabase.auth.currentUser?.id;
+      if (userId == null || userId.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _isSuperAdmin = false;
+          _loadingSuperAdmin = false;
+        });
+        return;
+      }
+
+      final rows = await supabase
+          .from('role_assignments')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('role', 'super_admin')
+          .limit(1);
+
+      if (!mounted) return;
+      setState(() {
+        _isSuperAdmin = (rows as List).isNotEmpty;
+        _loadingSuperAdmin = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isSuperAdmin = false;
+        _loadingSuperAdmin = false;
+      });
+    }
+  }
+
+  bool get _showQrPrintFeatures => _isSuperAdmin;
 
   Future<void> _loadSections() async {
     setState(() {
@@ -515,11 +563,11 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
       actions: [
         IconButton(
           tooltip: 'Reload sections',
-          onPressed: _loading ? null : _loadSections,
+          onPressed: _loading ? null : _loadInitialData,
           icon: const Icon(Icons.refresh),
         ),
       ],
-      body: _loading
+      body: (_loading || _loadingSuperAdmin)
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               padding: const EdgeInsets.all(16),
@@ -2171,7 +2219,7 @@ class _ControlSheetsGeneratorSheetState
                     ),
                   ];
 
-                  if (includeQrCode) {
+                  if (includeQrCode && false) {
                     classBlockWidgets.add(
                       qrResultsBlock(
                         sectionId: (p['sectionId'] ?? '').toString(),
