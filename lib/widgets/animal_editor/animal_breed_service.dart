@@ -81,6 +81,7 @@ class AnimalBreedService {
     required String species,
     required String breedId,
     required List<Map<String, dynamic>> breedOptions,
+    String? showId,
   }) async {
     final matchedBreed = breedOptions.firstWhere(
       (b) => (b['id'] ?? '').toString() == breedId,
@@ -119,12 +120,66 @@ class AnimalBreedService {
       ];
     }
 
-    final res = await supabase
+    final globalRows = await supabase
         .from('varieties')
         .select('id,name')
         .eq('breed_id', breedId)
         .order('name');
 
-    return (res as List).cast<Map<String, dynamic>>();
+    final globalVarieties = (globalRows as List)
+        .cast<Map<String, dynamic>>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+
+    final trimmedShowId = showId?.trim();
+
+    // When this editor is opened from inside a show, respect the show's
+    // enabled/disabled/custom variety list. When showId is null, keep using
+    // the global list so My Animals still works outside a show.
+    if (trimmedShowId == null || trimmedShowId.isEmpty) {
+      return globalVarieties;
+    }
+
+    final showRows = await supabase
+        .from('show_varieties')
+        .select('id,variety_id,custom_name,is_enabled')
+        .eq('show_id', trimmedShowId)
+        .eq('breed_id', breedId);
+
+    final showVarieties =
+        (showRows as List).cast<Map<String, dynamic>>();
+
+    final disabledVarietyIds = showVarieties
+        .where((row) => row['is_enabled'] == false)
+        .map((row) => (row['variety_id'] ?? '').toString())
+        .where((id) => id.isNotEmpty)
+        .toSet();
+
+    final effective = globalVarieties.where((row) {
+      final id = (row['id'] ?? '').toString();
+      return !disabledVarietyIds.contains(id);
+    }).toList();
+
+    for (final row in showVarieties) {
+      if (row['is_enabled'] != true) continue;
+
+      final customName =
+          (row['custom_name'] ?? '').toString().trim();
+      if (customName.isEmpty) continue;
+
+      effective.add({
+        'id': (row['id'] ?? customName).toString(),
+        'name': customName,
+      });
+    }
+
+    effective.sort((a, b) {
+      return (a['name'] ?? '')
+          .toString()
+          .toLowerCase()
+          .compareTo((b['name'] ?? '').toString().toLowerCase());
+    });
+
+    return effective;
   }
 }

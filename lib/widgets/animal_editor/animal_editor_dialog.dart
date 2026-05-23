@@ -11,7 +11,13 @@ final supabase = Supabase.instance.client;
 
 class AnimalEditorDialog extends StatefulWidget {
   final Map<String, dynamic>? existing;
-  const AnimalEditorDialog({super.key, this.existing});
+  final String? showId;
+
+  const AnimalEditorDialog({
+    super.key,
+    this.existing,
+    this.showId,
+  });
 
   @override
   State<AnimalEditorDialog> createState() => _AnimalEditorDialogState();
@@ -218,6 +224,7 @@ class _AnimalEditorDialogState extends State<AnimalEditorDialog> {
         species: _species,
         breedId: breedId,
         breedOptions: _breedOptions,
+        showId: widget.showId,
       );
 
       if (!mounted) return;

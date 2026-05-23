@@ -7,11 +7,13 @@ import 'animal_editor_dialog.dart';
 Future<bool?> openAnimalEditorDialog(
   BuildContext context, {
   Map<String, dynamic>? existing,
+  String? showId,
 }) {
   return showDialog<bool>(
     context: context,
     builder: (_) => AnimalEditorDialog(
       existing: existing,
+      showId: showId,
     ),
   );
 }

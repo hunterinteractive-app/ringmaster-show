@@ -253,6 +253,7 @@ class _AdminEntryManagementScreenState
           final saved = await openAnimalEditorDialog(
             context,
             existing: Map<String, dynamic>.from(animalRow as Map),
+            showId: widget.showId,
           );
 
           if (saved == true) {

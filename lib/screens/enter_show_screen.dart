@@ -229,7 +229,11 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
       setState(() => _msg = 'Adding animals is disabled while viewing in support mode.');
       return;
     }
-    final saved = await openAnimalEditorDialog(context);
+    
+    final saved = await openAnimalEditorDialog(
+    context,
+    showId: widget.showId,
+  );
 
     if (saved == true) {
       await _reloadAll();

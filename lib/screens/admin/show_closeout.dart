@@ -1665,10 +1665,10 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
               _artifactMatchesSelectedScope(a),
         );
 
-        // Temporarily block leg PDFs from bulk exhibitor emails until ARBA approval is final.
+        // Temporarily send exhibitor reports only while ARBA leg approval is pending.
+        // Leave legs out of this bulk email until approval is final.
         final artifacts = <ReportArtifactSummary>[
           if (exhibitorReport != null) exhibitorReport,
-          // if (legsReport != null) legsReport,
         ];
 
         if (artifacts.isEmpty) {
@@ -1911,64 +1911,15 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       return 'Reports are blocked until results are complete: ${parts.join(', ')}.';
     }
 
-    Future<void> _sendAllLegsReports() async {
-      if (_isSupportMode) return;
-
-      setState(() {
-        _generatingReport = true;
-      });
-
-      try {
-        await _loadData();
-
-        final exhibitors = await _loadExhibitorEmailTargets();
-        var sentCount = 0;
-        var skippedCount = 0;
-        var failedCount = 0;
-
-        for (final exhibitor in exhibitors) {
-          final legsReport = _newestGeneratedArtifactWhere(
-            'legs',
-            (a) =>
-                _artifactMatchesExhibitor(a, exhibitor) &&
-                _artifactMatchesSelectedScope(a),
-          );
-
-          if (legsReport == null) {
-            skippedCount++;
-            continue;
-          }
-
-          try {
-            await _sendExhibitorArtifactsEmail(
-              artifacts: [legsReport],
-              to: exhibitor.email,
-              subject: '${widget.showName} - ARBA Legs',
-              message: 'Attached are your ARBA legs from ${widget.showName}.',
-              allowLegs: false,  // 👈 Leg Change 
-            );
-            sentCount++;
-          } catch (_) {
-            failedCount++;
-          }
-        }
-
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Legs send complete. Sent: $sentCount, skipped: $skippedCount, failed: $failedCount',
-            ),
-          ),
-        );
-      } finally {
-        if (mounted) {
-          setState(() {
-            _generatingReport = false;
-          });
-        }
-      }
-    }
+  Future<void> _sendAllLegsReports() async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'ARBA legs email sending is temporarily disabled while approval is pending. Exhibitor reports can still be sent without legs.',
+        ),
+      ),
+    );
+  }
 
     Future<bool> _ensureResultsReadyForReports() async {
       final resp = await supabase.rpc(

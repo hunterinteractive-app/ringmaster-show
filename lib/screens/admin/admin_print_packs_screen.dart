@@ -554,7 +554,7 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
     final hasSections = _sections.isNotEmpty;
 
     return RingMasterPageShell(
-      title: 'RingMaster Show',
+      title: 'RingMaster One Show',
       subtitle: 'Print Show Sheets — ${widget.showName}',
       showBackButton: true,
       showHomeButton: true,
@@ -1770,21 +1770,57 @@ class _ControlSheetsGeneratorSheetState
             pw.SizedBox(height: 5),
             pw.Row(
               children: [
-                pw.Text(
-                  'Writer: ',
-                  style: pw.TextStyle(
-                    fontSize: _scaled(9),
-                    fontWeight: pw.FontWeight.bold,
+                pw.Expanded(
+                  child: pw.Row(
+                    children: [
+                      pw.Text(
+                        'Judge: ',
+                        style: pw.TextStyle(
+                          fontSize: _scaled(9),
+                          fontWeight: pw.FontWeight.bold,
+                        ),
+                      ),
+                      pw.Expanded(
+                        child: pw.Container(
+                          height: 10,
+                          decoration: pw.BoxDecoration(
+                            border: pw.Border(
+                              bottom: pw.BorderSide(
+                                width: 0.6,
+                                color: PdfColors.black,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
+                pw.SizedBox(width: 18),
                 pw.Expanded(
-                  child: pw.Container(
-                    height: 10,
-                    decoration: pw.BoxDecoration(
-                      border: pw.Border(
-                        bottom: pw.BorderSide(width: 0.6, color: PdfColors.black),
+                  child: pw.Row(
+                    children: [
+                      pw.Text(
+                        'Writer: ',
+                        style: pw.TextStyle(
+                          fontSize: _scaled(9),
+                          fontWeight: pw.FontWeight.bold,
+                        ),
                       ),
-                    ),
+                      pw.Expanded(
+                        child: pw.Container(
+                          height: 10,
+                          decoration: pw.BoxDecoration(
+                            border: pw.Border(
+                              bottom: pw.BorderSide(
+                                width: 0.6,
+                                color: PdfColors.black,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -1809,12 +1845,8 @@ class _ControlSheetsGeneratorSheetState
         required int rabbitCount,
         required int exhibitorCount,
       }) {
-        final label = pw.TextStyle(fontSize: _scaled(8.5), fontWeight: pw.FontWeight.bold);
-        final small = pw.TextStyle(fontSize: _scaled(8));
-        final title = pw.TextStyle(fontSize: _scaled(9.5), fontWeight: pw.FontWeight.bold);
-
         return pw.Container(
-          margin: const pw.EdgeInsets.only(top: 4, bottom: 4),
+          margin: const pw.EdgeInsets.only(top: 14, bottom: 4),
           padding: const pw.EdgeInsets.only(bottom: 4),
           decoration: pw.BoxDecoration(
             border: pw.Border(
@@ -1826,52 +1858,61 @@ class _ControlSheetsGeneratorSheetState
             children: [
               pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                crossAxisAlignment: pw.CrossAxisAlignment.center,
                 children: [
                   pw.Expanded(
                     child: pw.Text(
-                      sectionTitle.trim().isEmpty
-                          ? 'Breed: $breed'
-                          : '$sectionTitle — $breed',
-                      style: title,
+                      'Breed: $breed',
+                      style: pw.TextStyle(
+                        fontSize: _scaled(16, max: 16),
+                        fontWeight: pw.FontWeight.bold,
+                      ),
                     ),
                   ),
-                  pw.SizedBox(width: 8),
-                  pw.Text('Breed Class ${blockIndex + 1} of $totalBlocks', style: small),
-                ],
-              ),
-              pw.SizedBox(height: 2),
-              pw.Text(
-                'No. in Breed: $breedCount   Breed Exhibitors: $breedExhibitorCount',
-                style: small,
-              ),
-              pw.SizedBox(height: 2),
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
+                  pw.SizedBox(width: 12),
                   pw.Text(
-                    'Group: ${color.trim().isEmpty ? 'Standard' : color}',
-                    style: title,
-                  ),
-                  pw.Text(
-                    'No. in Group: $groupCount   Group Exhibitors: $groupExhibitorCount',
-                    style: small,
+                    'No. In Breed: $breedCount   No. Exhibitors: $breedExhibitorCount',
+                    style: pw.TextStyle(
+                      fontSize: _scaled(10),
+                      fontWeight: pw.FontWeight.bold,
+                    ),
                   ),
                 ],
               ),
-              pw.SizedBox(height: 2),
+              pw.SizedBox(height: 6),
               pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: pw.CrossAxisAlignment.center,
                 children: [
-                  pw.Text('No. in Class: $rabbitCount   Class Exhibitors: $exhibitorCount', style: small),
+                  pw.Expanded(
+                    child: pw.Text(
+                      'Variety: ${color.trim().isEmpty ? 'Standard' : color.replaceAll(' / ', '/')}',
+                      style: pw.TextStyle(
+                        fontSize: _scaled(13),
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  pw.SizedBox(width: 12),
+                  pw.Text(
+                    'No. In Variety: $groupCount   No. Exhibitors: $groupExhibitorCount',
+                    style: pw.TextStyle(
+                      fontSize: _scaled(10),
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
                 ],
               ),
-              pw.SizedBox(height: 2),
-              pw.Row(
-                children: [
-                  pw.Expanded(child: pw.Text('Class: $cls', style: label)),
-                  pw.Expanded(child: pw.Text('Sex: $sex', style: label)),
-                ],
+              pw.SizedBox(height: 10),
+              pw.Center(
+                child: pw.Text(
+                  'Class: $cls        Sex: $sex',
+                  style: pw.TextStyle(
+                    fontSize: _scaled(16, max: 16),
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                  textAlign: pw.TextAlign.center,
+                ),
               ),
             ],
           ),
@@ -1884,27 +1925,7 @@ class _ControlSheetsGeneratorSheetState
         required int totalBreeds,
         String? sectionHint,
       }) {
-        return pw.Container(
-          margin: const pw.EdgeInsets.only(top: 4, bottom: 6),
-          padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-          decoration: pw.BoxDecoration(
-            color: PdfColors.grey200,
-            border: pw.Border.all(width: 0.5, color: PdfColors.grey600),
-          ),
-          child: pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-            children: [
-              pw.Text(
-                'Breed: $breed',
-                style: pw.TextStyle(fontSize: _scaled(11), fontWeight: pw.FontWeight.bold),
-              ),
-              pw.Text(
-                'Breed ${breedIndex + 1} of $totalBreeds',
-                style: pw.TextStyle(fontSize: _scaled(8.5)),
-              ),
-            ],
-          ),
-        );
+        return pw.SizedBox.shrink();
       }
 
       pw.Widget _compactJudgingTable({
@@ -2056,7 +2077,7 @@ class _ControlSheetsGeneratorSheetState
               pw.SizedBox(width: 8),
               pw.Expanded(
                 child: pw.Text(
-                  'Scan to enter results directly into RingMaster Show. Please also fill out control sheet in full.',
+                  'Scan to enter results directly into RingMaster One Show. Please also fill out control sheet in full.',
                   style: pw.TextStyle(fontSize: _scaled(7.5), fontWeight: pw.FontWeight.bold),
                 ),
               ),
@@ -2098,7 +2119,7 @@ class _ControlSheetsGeneratorSheetState
             ),
             footer: (context) => pw.Row(
               children: [
-                pw.Text('RingMaster Show', style: pw.TextStyle(fontSize: _scaled(8))),
+                pw.Text('RingMaster One Show', style: pw.TextStyle(fontSize: _scaled(8))),
                 pw.Spacer(),
                 pw.Text(
                   'Page ${context.pageNumber} of ${context.pagesCount}',
@@ -2114,7 +2135,7 @@ class _ControlSheetsGeneratorSheetState
               // table text can make the real rendered height larger than the
               // simple estimate below.
               const estimatedUsablePageHeight = 535.0;
-              const estimatedBreedHeaderHeight = 42.0;
+              const estimatedBreedHeaderHeight = 0.0;
               var estimatedRemainingHeight = estimatedUsablePageHeight;
 
               final breedGroups = <String, List<Map<String, dynamic>>>{};
@@ -2187,14 +2208,6 @@ class _ControlSheetsGeneratorSheetState
                   widgets.add(pw.NewPage());
                 }
 
-                widgets.add(
-                  _breedHeaderBlock(
-                    breed: breed,
-                    breedIndex: breedIndex,
-                    totalBreeds: breedNames.length,
-                    sectionHint: null,
-                  ),
-                );
                 estimatedRemainingHeight = estimatedUsablePageHeight - estimatedBreedHeaderHeight;
 
                 for (var i = 0; i < breedPages.length; i++) {
@@ -2249,7 +2262,7 @@ class _ControlSheetsGeneratorSheetState
                     ),
                   );
 
-                  classBlockWidgets.add(pw.SizedBox(height: 8));
+                  classBlockWidgets.add(pw.SizedBox(height: 10));
 
                   final classRowCount = ((p['rows'] as List?) ?? const []).length;
                   final estimatedClassHeight = _estimatedClassBlockHeight(
@@ -3444,7 +3457,7 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
               pw.Row(
                 children: [
                   pw.Text(
-                    'RingMaster Show',
+                    'RingMaster One Show',
                     style: pw.TextStyle(fontSize: 9),
                   ),
                   pw.Spacer(),
