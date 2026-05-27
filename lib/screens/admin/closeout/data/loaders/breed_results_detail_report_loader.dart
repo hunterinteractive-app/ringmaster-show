@@ -23,6 +23,11 @@ class BreedResultsDetailReportLoader {
       scope: scope,
       showLetter: showLetter,
     );
+    final arbaSanctionNumber = await _loadArbaSanctionNumber(
+      showId: showId,
+      scope: scope,
+      showLetter: showLetter,
+    );
 
     if (breedName.isEmpty) {
       throw Exception('Breed Results Detail Report requires breedName.');
@@ -68,7 +73,7 @@ class BreedResultsDetailReportLoader {
         scope: scope,
         showLetter: 'ALL',
         judgeName: sections.isNotEmpty ? sections.first.judgeName : '',
-        arbaSanction: '',
+        arbaSanction: arbaSanctionNumber,
         nationalClubSanction: '',
         breedSanctionNumber: breedSanctionNumber,
         hostClubName: showHeader.hostClubName,
@@ -96,7 +101,7 @@ class BreedResultsDetailReportLoader {
       scope: scope,
       showLetter: showLetter,
       judgeName: section.judgeName,
-      arbaSanction: '',
+      arbaSanction: arbaSanctionNumber,
       nationalClubSanction: '',
       breedSanctionNumber: breedSanctionNumber,
       hostClubName: showHeader.hostClubName,
@@ -299,17 +304,19 @@ class BreedResultsDetailReportLoader {
     Map<String, dynamic> row,
     Map<String, _JudgedCount> counts,
   ) {
-    final award = _normalizeAwardLabel(_safe(row['award_code']));
+    final rawAwardCode = _safe(row['award_code']);
+    final award = _normalizeAwardLabel(rawAwardCode);
     final variety = _safe(row['variety_name']);
     final className = _safe(row['class_name']);
-    final count = _countForAward(award, variety, className, counts);
+    final sex = _safe(row['sex']);
+    final count = _countForAward(rawAwardCode, variety, className, sex, counts);
 
     return BreedAward(
       award: award,
       animal: _animalLabel(row),
       className: className,
       exhibitorName: _safe(row['exhibitor_label']),
-      sex: _safe(row['sex']),
+      sex: sex,
       variety: variety,
       animalsJudged: count.animals,
       exhibitorsJudged: count.exhibitors,
@@ -332,6 +339,16 @@ class BreedResultsDetailReportLoader {
     final counts = <String, _JudgedCount>{};
     counts['BREED'] = countFor(rows);
 
+    final sexes = rows
+        .map((r) => _sexKey(_safe(r['sex'])))
+        .where((s) => s.isNotEmpty)
+        .toSet();
+
+    for (final sex in sexes) {
+      final sexRows = rows.where((r) => _sexKey(_safe(r['sex'])) == sex);
+      counts['BREED_SEX::$sex'] = countFor(sexRows);
+    }
+
     final varieties = rows
         .map((r) => _safe(r['variety_name']))
         .where((v) => v.isNotEmpty)
@@ -340,6 +357,18 @@ class BreedResultsDetailReportLoader {
     for (final variety in varieties) {
       final varietyRows = rows.where((r) => _safe(r['variety_name']) == variety);
       counts['VARIETY::$variety'] = countFor(varietyRows);
+
+      final varietySexes = varietyRows
+          .map((r) => _sexKey(_safe(r['sex'])))
+          .where((s) => s.isNotEmpty)
+          .toSet();
+
+      for (final sex in varietySexes) {
+        final varietySexRows = varietyRows.where(
+          (r) => _sexKey(_safe(r['sex'])) == sex,
+        );
+        counts['VARIETY_SEX::$variety::$sex'] = countFor(varietySexRows);
+      }
     }
 
     return counts;
@@ -349,19 +378,72 @@ class BreedResultsDetailReportLoader {
     String award,
     String variety,
     String className,
+    String sex,
     Map<String, _JudgedCount> counts,
   ) {
     final upper = award.toUpperCase();
+    final sexKey = _sexKey(sex);
 
-    if (upper == 'BOB' || upper == 'BOSB' || upper == 'BOS') {
+    if (upper == 'BOSB' || upper == 'BOS') {
+      if (sexKey.isNotEmpty) {
+        return counts['BREED_SEX::$sexKey'] ?? const _JudgedCount();
+      }
       return counts['BREED'] ?? const _JudgedCount();
     }
 
-    if (upper == 'BOV' || upper == 'BOSV') {
+    if (upper == 'BOB') {
+      return counts['BREED'] ?? const _JudgedCount();
+    }
+
+    if (upper == 'BOSV') {
+      if (sexKey.isNotEmpty) {
+        return counts['VARIETY_SEX::$variety::$sexKey'] ?? const _JudgedCount();
+      }
+      return counts['VARIETY::$variety'] ?? const _JudgedCount();
+    }
+
+    if (upper == 'BOV') {
       return counts['VARIETY::$variety'] ?? const _JudgedCount();
     }
 
     return counts['BREED'] ?? const _JudgedCount();
+  }
+
+  Future<String> _loadArbaSanctionNumber({
+    required String showId,
+    required String scope,
+    required String showLetter,
+  }) async {
+    final sectionQuery = repo.supabase
+        .from('show_sections')
+        .select('id')
+        .eq('show_id', showId)
+        .eq('kind', scope.toLowerCase());
+
+    final sectionResponse = showLetter == 'ALL'
+        ? await sectionQuery.limit(1).maybeSingle()
+        : await sectionQuery.eq('letter', showLetter).maybeSingle();
+
+    final sectionId = sectionResponse == null
+        ? ''
+        : (Map<String, dynamic>.from(sectionResponse)['id'] ?? '').toString();
+
+    var query = repo.supabase
+        .from('show_sanctions')
+        .select('sanction_number')
+        .eq('show_id', showId)
+        .eq('sanctioning_body', 'ARBA');
+
+    if (sectionId.isNotEmpty) {
+      query = query.eq('section_id', sectionId);
+    }
+
+    final response = await query.limit(1).maybeSingle();
+    if (response == null) return '';
+
+    return (Map<String, dynamic>.from(response)['sanction_number'] ?? '')
+        .toString()
+        .trim();
   }
 
   Future<String> _loadBreedSanctionNumber({
@@ -587,6 +669,15 @@ class BreedResultsDetailReportLoader {
     if (animal.isNotEmpty) return animal;
     if (tattoo.isNotEmpty) return tattoo;
     return 'Animal';
+  }
+
+  String _sexKey(String sex) {
+    final s = sex.toLowerCase().trim();
+    if (s.contains('buck') || s == 'b') return 'buck';
+    if (s.contains('doe') || s == 'd') return 'doe';
+    if (s.contains('boar') || s == 'male' || s == 'm') return 'boar';
+    if (s.contains('sow') || s == 'female' || s == 'f') return 'sow';
+    return s;
   }
 
   String _safe(Object? value, {String fallback = ''}) {

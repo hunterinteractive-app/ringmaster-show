@@ -99,6 +99,7 @@ class LegsReportLoader {
       final judgeNamesByRef = await _loadJudgeNamesByShowJudgeId(judgeRefs);
 
       final candidates = <_LegCandidate>[];
+      
 
       // Add synthetic FIRST-place leg checks because 1st place is stored on entries.placement,
       // not usually in entry_awards.
@@ -130,23 +131,9 @@ class LegsReportLoader {
                   'leg_${showId}_${ctx.sectionLetter}_${entryId}_r${ruleMatch.rule}_first',
               showId: showId,
               exhibitorId: ctx.exhibitorId,
-              exhibitorNumber: ctx.exhibitorLabel,
-              exhibitorName: _firstNonEmpty([
-                ctx.exhibitorShowingName,
-                ctx.exhibitorLabel,
-                [
-                  ctx.exhibitorFirstName,
-                  ctx.exhibitorLastName,
-                ].where((e) => e.isNotEmpty).join(' '),
-                'Unknown Exhibitor',
-              ]),
-              ownerAddress: [
-                ctx.exhibitorAddressLine1,
-                ctx.exhibitorAddressLine2,
-                ctx.exhibitorCity,
-                ctx.exhibitorState,
-                ctx.exhibitorZip,
-              ].where((e) => e.isNotEmpty).join(', '),
+              exhibitorNumber: _safeShowExhibitorNumber(ctx),
+              exhibitorName: _safeExhibitorName(ctx),
+              ownerAddress: _formatOwnerAddress(ctx),
               entryId: entryId,
               earNumber: ctx.tattoo,
               breed: ctx.breed,
@@ -211,32 +198,16 @@ class LegsReportLoader {
           'Judge Not Available',
         ]);
 
-        final exhibitorName = _firstNonEmpty([
-          ctx.exhibitorShowingName,
-          ctx.exhibitorLabel,
-          [
-            ctx.exhibitorFirstName,
-            ctx.exhibitorLastName,
-          ].where((e) => e.isNotEmpty).join(' '),
-          'Unknown Exhibitor',
-        ]);
+        final exhibitorName = _safeExhibitorName(ctx);
 
-        final ownerAddress = [
-          ctx.exhibitorAddressLine1,
-          ctx.exhibitorAddressLine2,
-          ctx.exhibitorCity,
-          ctx.exhibitorState,
-          ctx.exhibitorZip,
-        ].where((e) => e.isNotEmpty).join(', ');
+        final ownerAddress = _formatOwnerAddress(ctx);
 
         final earNumber = _firstNonEmpty([
           _str(entry['tattoo']),
           ctx.tattoo,
         ]);
 
-        final exhibitorNumber = _firstNonEmpty([
-          ctx.exhibitorLabel,
-        ]);
+        final exhibitorNumber = _safeShowExhibitorNumber(ctx);
 
         final showLetter = ctx.sectionLetter.toUpperCase();
 
@@ -510,11 +481,22 @@ class LegsReportLoader {
       }
     }
 
+    final exhibitorIds = allRows
+        .map((e) => _str(e['exhibitor_id']))
+        .where((e) => e.isNotEmpty)
+        .toSet()
+        .toList();
+
+    final exhibitorProfiles = await _loadExhibitorProfiles(exhibitorIds);
+
     final byEntryId = <String, _EntryLegContext>{};
 
     for (final row in allRows) {
       final entryId = _str(row['entry_id']);
       if (entryId.isEmpty) continue;
+
+      final exhibitorId = _str(row['exhibitor_id']);
+      final exhibitorProfile = exhibitorProfiles[exhibitorId];
 
       final sectionLetter = _str(row['resolved_section_letter']).toUpperCase();
       final breed = _str(row['breed_name']);
@@ -601,11 +583,11 @@ class LegsReportLoader {
           .length;
 
       final classRows = sameShowRows.where((e) {
-      return _str(e['breed_name']) == breed &&
-          _str(e['variety_name']) == varietyDisplay &&
-          _str(e['class_name']) == className &&
-          _str(e['sex']) == sex;
-    }).toList();
+        return _str(e['breed_name']) == breed &&
+            _str(e['variety_name']) == varietyDisplay &&
+            _str(e['class_name']) == className &&
+            _str(e['sex']) == sex;
+      }).toList();
 
       final classAnimals = classRows.length;
       final classExhibitors = classRows
@@ -621,20 +603,52 @@ class LegsReportLoader {
         usesGroupAwards: usesGroupAwards,
         showJudgeRowId: showJudgeRowId,
         tattoo: _str(row['tattoo']),
-        exhibitorId: _str(row['exhibitor_id']),
+        exhibitorId: exhibitorId,
         breed: breed,
         className: className,
         sex: sex,
         placement: int.tryParse(_str(row['placement'])) ?? 0,
-        exhibitorLabel: _str(row['exhibitor_label']),
-        exhibitorShowingName: _str(row['exhibitor_showing_name']),
-        exhibitorFirstName: _str(row['exhibitor_first_name']),
-        exhibitorLastName: _str(row['exhibitor_last_name']),
-        exhibitorAddressLine1: _str(row['exhibitor_address_line1']),
-        exhibitorAddressLine2: _str(row['exhibitor_address_line2']),
-        exhibitorCity: _str(row['exhibitor_city']),
-        exhibitorState: _str(row['exhibitor_state']),
-        exhibitorZip: _str(row['exhibitor_zip']),
+        exhibitorLabel: _firstNonEmpty([
+          exhibitorProfile?.displayName ?? '',
+          exhibitorProfile?.showingName ?? '',
+          _str(row['exhibitor_label']),
+        ]),
+        exhibitorNumber: _firstNonEmpty([
+          exhibitorProfile?.exhibitorNumber ?? '',
+          _str(row['exhibitor_number']),
+        ]),
+        exhibitorShowingName: _firstNonEmpty([
+          exhibitorProfile?.showingName ?? '',
+          _str(row['exhibitor_showing_name']),
+        ]),
+        exhibitorFirstName: _firstNonEmpty([
+          exhibitorProfile?.firstName ?? '',
+          _str(row['exhibitor_first_name']),
+        ]),
+        exhibitorLastName: _firstNonEmpty([
+          exhibitorProfile?.lastName ?? '',
+          _str(row['exhibitor_last_name']),
+        ]),
+        exhibitorAddressLine1: _firstNonEmpty([
+          exhibitorProfile?.addressLine1 ?? '',
+          _str(row['exhibitor_address_line1']),
+        ]),
+        exhibitorAddressLine2: _firstNonEmpty([
+          exhibitorProfile?.addressLine2 ?? '',
+          _str(row['exhibitor_address_line2']),
+        ]),
+        exhibitorCity: _firstNonEmpty([
+          exhibitorProfile?.city ?? '',
+          _str(row['exhibitor_city']),
+        ]),
+        exhibitorState: _firstNonEmpty([
+          exhibitorProfile?.state ?? '',
+          _str(row['exhibitor_state']),
+        ]),
+        exhibitorZip: _firstNonEmpty([
+          exhibitorProfile?.zip ?? '',
+          _str(row['exhibitor_zip']),
+        ]),
         breedAnimals: breedAnimals,
         breedExhibitors: breedExhibitors,
         breedSameSexAnimals: breedSameSexAnimals,
@@ -655,6 +669,93 @@ class LegsReportLoader {
     }
 
     return byEntryId;
+  }
+
+  Future<Map<String, _ExhibitorProfile>> _loadExhibitorProfiles(
+    List<String> exhibitorIds,
+  ) async {
+    if (exhibitorIds.isEmpty) return {};
+
+    final profiles = <String, _ExhibitorProfile>{};
+
+    for (var i = 0; i < exhibitorIds.length; i += 100) {
+      final chunk = exhibitorIds.skip(i).take(100).toList();
+
+      try {
+        final rows = await repo.supabase
+            .from('exhibitors')
+            .select('''
+              id,
+              exhibitor_number,
+              display_name,
+              showing_name,
+              first_name,
+              last_name,
+              address_line1,
+              address_line2,
+              city,
+              state,
+              zip
+            ''')
+            .inFilter('id', chunk);
+
+        for (final raw in List<Map<String, dynamic>>.from(rows as List)) {
+          final id = _str(raw['id']);
+          if (id.isEmpty) continue;
+
+          profiles[id] = _ExhibitorProfile(
+            exhibitorNumber: _str(raw['exhibitor_number']),
+            displayName: _str(raw['display_name']),
+            showingName: _str(raw['showing_name']),
+            firstName: _str(raw['first_name']),
+            lastName: _str(raw['last_name']),
+            addressLine1: _str(raw['address_line1']),
+            addressLine2: _str(raw['address_line2']),
+            city: _str(raw['city']),
+            state: _str(raw['state']),
+            zip: _str(raw['zip']),
+          );
+        }
+      } catch (e) {
+        // If exhibitor_number has not been added yet, retry without it so the
+        // address still hydrates for ARBA verification.
+        final rows = await repo.supabase
+            .from('exhibitors')
+            .select('''
+              id,
+              display_name,
+              showing_name,
+              first_name,
+              last_name,
+              address_line1,
+              address_line2,
+              city,
+              state,
+              zip
+            ''')
+            .inFilter('id', chunk);
+
+        for (final raw in List<Map<String, dynamic>>.from(rows as List)) {
+          final id = _str(raw['id']);
+          if (id.isEmpty) continue;
+
+          profiles[id] = _ExhibitorProfile(
+            exhibitorNumber: '',
+            displayName: _str(raw['display_name']),
+            showingName: _str(raw['showing_name']),
+            firstName: _str(raw['first_name']),
+            lastName: _str(raw['last_name']),
+            addressLine1: _str(raw['address_line1']),
+            addressLine2: _str(raw['address_line2']),
+            city: _str(raw['city']),
+            state: _str(raw['state']),
+            zip: _str(raw['zip']),
+          );
+        }
+      }
+    }
+
+    return profiles;
   }
 
   bool _isBestInShowAward(String normalized) {
@@ -810,6 +911,58 @@ class LegsReportLoader {
     return null;
   }
 
+  String _safeExhibitorName(_EntryLegContext ctx) {
+    final memberName = [
+      ctx.exhibitorFirstName,
+      ctx.exhibitorLastName,
+    ].where((e) => e.trim().isNotEmpty).join(' ').trim();
+
+    return _firstNonEmpty([
+      memberName,
+      ctx.exhibitorShowingName,
+      ctx.exhibitorLabel,
+      'UNKNOWN EXHIBITOR',
+    ]);
+  }
+
+  String _safeShowExhibitorNumber(_EntryLegContext ctx) {
+    final showNumber = ctx.exhibitorNumber.trim();
+    final label = ctx.exhibitorLabel.trim();
+    final memberName = _safeExhibitorName(ctx).trim();
+
+    // EXH# must be the show-specific exhibitor number. Guard against the RPC
+    // accidentally returning the exhibitor label/name as the number.
+    if (showNumber.isNotEmpty &&
+        showNumber.toLowerCase() != label.toLowerCase() &&
+        showNumber.toLowerCase() != memberName.toLowerCase()) {
+      return showNumber;
+    }
+
+    return 'UNASSIGNED';
+  }
+
+  String _formatOwnerAddress(_EntryLegContext ctx) {
+    final streetLines = [
+      ctx.exhibitorAddressLine1,
+      ctx.exhibitorAddressLine2,
+    ].where((e) => e.trim().isNotEmpty).toList();
+
+    final cityStateZip = [
+      ctx.exhibitorCity,
+      [
+        ctx.exhibitorState,
+        ctx.exhibitorZip,
+      ].where((e) => e.trim().isNotEmpty).join(' '),
+    ].where((e) => e.trim().isNotEmpty).join(', ');
+
+    final formatted = [
+      ...streetLines,
+      cityStateZip,
+    ].where((e) => e.trim().isNotEmpty).join('\n');
+
+    return formatted.isNotEmpty ? formatted : 'ADDRESS NOT PROVIDED';
+  }
+
   String _sectionFromCertificateId(String value) {
     final parts = value.split('_');
     if (parts.length >= 4) {
@@ -836,6 +989,32 @@ class LegsReportLoader {
     if (value is DateTime) return value;
     return DateTime.tryParse(value.toString());
   }
+}
+
+class _ExhibitorProfile {
+  final String exhibitorNumber;
+  final String displayName;
+  final String showingName;
+  final String firstName;
+  final String lastName;
+  final String addressLine1;
+  final String addressLine2;
+  final String city;
+  final String state;
+  final String zip;
+
+  const _ExhibitorProfile({
+    required this.exhibitorNumber,
+    required this.displayName,
+    required this.showingName,
+    required this.firstName,
+    required this.lastName,
+    required this.addressLine1,
+    required this.addressLine2,
+    required this.city,
+    required this.state,
+    required this.zip,
+  });
 }
 
 class _LegCandidate {
@@ -878,6 +1057,7 @@ class _EntryLegContext {
   final int placement;
 
   final String exhibitorLabel;
+  final String exhibitorNumber;
   final String exhibitorShowingName;
   final String exhibitorFirstName;
   final String exhibitorLastName;
@@ -921,6 +1101,7 @@ class _EntryLegContext {
     required this.sex,
     required this.placement,
     required this.exhibitorLabel,
+    required this.exhibitorNumber,
     required this.exhibitorShowingName,
     required this.exhibitorFirstName,
     required this.exhibitorLastName,

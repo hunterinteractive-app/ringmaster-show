@@ -77,7 +77,11 @@ class ExhibitorReportPdfBuilder {
 
       String cleanFilePart(String input) {
         return input
+            // remove UUID / long id-like fragments
+            .replaceAll(RegExp(r'\b[0-9a-fA-F\-]{8,}\b'), '')
+            // remove invalid filename characters
             .replaceAll(RegExp(r'[\\/:*?"<>|]'), '')
+            // collapse whitespace
             .replaceAll(RegExp(r'\s+'), ' ')
             .trim();
       }

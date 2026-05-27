@@ -178,15 +178,20 @@ class ArbaReportPdfBuilder {
 
     final bytes = await pdf.save();
 
+    // Clean section name to remove UUID-like strings
     final section = data.sectionLabel
         .toLowerCase()
         .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
         .replaceAll(RegExp(r'_+'), '_')
         .replaceAll(RegExp(r'^_|_$'), '');
+    final cleanedSection = section
+        .replaceAll(RegExp(r'\b[0-9a-fA-F\-]{8,}\b'), '')
+        .replaceAll(RegExp(r'_+'), '_')
+        .replaceAll(RegExp(r'^_|_$'), '');
 
     return ReportFileResult(
-      fileName: section.isNotEmpty
-          ? 'arba_report_$section.pdf'
+      fileName: cleanedSection.isNotEmpty
+          ? 'arba_report_$cleanedSection.pdf'
           : 'arba_report.pdf',
       mimeType: 'application/pdf',
       bytes: bytes,

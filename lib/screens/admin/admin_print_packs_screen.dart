@@ -2591,14 +2591,6 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
         if (page.length < pageSize) break;
       }
 
-      assert(() {
-        debugPrint('CHECK-IN FETCHED ROWS: ${list.length}');
-        debugPrint(
-          'CHECK-IN SPENCER ROWS: ${list.where((e) => _safe(e, 'exhibitor_label').toLowerCase().contains('spencer baitz')).length}',
-        );
-        return true;
-      }());
-
       int toInt(dynamic value, [int fallback = 9999]) {
         if (value == null) return fallback;
         if (value is int) return value;

@@ -74,6 +74,7 @@ class BreedResultsDetailReportPdf {
               judgeName: section.judgeName,
               showName: showName,
               showDate: showDate,
+              arbaSanctionNumber: data.arbaSanction,
               breedSanctionNumber: data.breedSanctionNumber,
               hostClubName: data.hostClubName,
               showLocation: data.showLocation,
@@ -116,9 +117,17 @@ class BreedResultsDetailReportPdf {
   }) {
     String clean(String input) {
       return input
+          // remove UUID / long id-like fragments
+          .replaceAll(RegExp(r'\b[0-9a-fA-F\-]{8,}\b'), '')
+          // remove non filename-safe chars
           .replaceAll(RegExp(r'[^\w\s-]'), '')
           .trim()
-          .replaceAll(RegExp(r'\s+'), '_');
+          // collapse spaces to underscores
+          .replaceAll(RegExp(r'\s+'), '_')
+          // collapse multiple underscores
+          .replaceAll(RegExp(r'_+'), '_')
+          // trim leading/trailing underscores
+          .replaceAll(RegExp(r'^_|_$'), '');
     }
 
     return '${clean(showName)}_${clean(breedName)}_Breed_Results_Detail_Report_${clean(scope.toUpperCase())}_${clean(showLetter.toUpperCase())}.pdf';
@@ -131,6 +140,7 @@ class BreedResultsDetailReportPdf {
     required String judgeName,
     required String showName,
     required String showDate,
+    required String arbaSanctionNumber,
     required String breedSanctionNumber,
     required String hostClubName,
     required String showLocation,
@@ -219,10 +229,16 @@ class BreedResultsDetailReportPdf {
                     infoRow2('Breed', breedName, 'Show', '$scope - $showLetter'),
                     infoRow2('Judge', judgeName.isEmpty ? 'Judge Not Listed' : judgeName, '', ''),
                     infoRow2(
+                      'ARBA Sanction',
+                      arbaSanctionNumber,
                       'Breed Sanction',
                       breedSanctionNumber,
+                    ),
+                    infoRow2(
                       'Secretary',
                       secretaryName,
+                      '',
+                      '',
                     ),
                     infoRow2(
                       'Contact',
@@ -390,6 +406,7 @@ class BreedResultsDetailReportPdf {
         'Class',
         'Exhibitor',
         'Judged',
+        'Beaten',
       ],
       data: rows
           .map(
@@ -402,6 +419,9 @@ class BreedResultsDetailReportPdf {
               r.exhibitorName,
               r.animalsJudged > 0
                   ? '${r.animalsJudged}/${r.exhibitorsJudged}'
+                  : '',
+              r.animalsJudged > 0
+                  ? '${r.animalsJudged - 1}'
                   : '',
             ],
           )
@@ -418,12 +438,13 @@ class BreedResultsDetailReportPdf {
       cellPadding: const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 4),
       columnWidths: {
         0: const pw.FixedColumnWidth(74),
-        1: const pw.FlexColumnWidth(1.2),
+        1: const pw.FlexColumnWidth(1.15),
         2: const pw.FixedColumnWidth(28),
-        3: const pw.FlexColumnWidth(1.1),
-        4: const pw.FlexColumnWidth(1.1),
-        5: const pw.FlexColumnWidth(1.4),
-        6: const pw.FixedColumnWidth(42),
+        3: const pw.FlexColumnWidth(1.0),
+        4: const pw.FlexColumnWidth(1.0),
+        5: const pw.FlexColumnWidth(1.25),
+        6: const pw.FixedColumnWidth(38),
+        7: const pw.FixedColumnWidth(36),
       },
     );
   }

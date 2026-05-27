@@ -9,9 +9,6 @@ import 'package:ringmaster_show/services/app_session.dart';
 
 final supabase = Supabase.instance.client;
 
-/// Supported:
-/// - four_six_bis
-/// - bis_ris
 const String kDefaultFinalAwardMode = 'four_six_bis';
 
 const List<String> kBestAgeAwardCodes = [
@@ -833,15 +830,16 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
         if (label.isEmpty) label = masterJudgeId;
       }
 
-      if (!result.any((j) => (j['id'] ?? '').toString().trim() == masterJudgeId)) {
+      if (!result.any((j) =>
+          (j['id'] ?? '').toString().trim() == masterJudgeId)) {
         result.add({
-        'id': masterJudgeId,           // THIS is what gets saved
-        'judge_id': masterJudgeId,     // same saved id
-        'assignment_id': assignmentId, // only for fallback matching
-        'name': label,
-      });
+          'id': masterJudgeId,
+          'judge_id': masterJudgeId,
+          'assignment_id': assignmentId,
+          'name': label,
+        });
+      }
     }
-  }
 
     result.sort((a, b) {
       final an = (a['name'] ?? '').toString().toLowerCase();
@@ -915,57 +913,66 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
 
       final sectionName = _sectionNameForEntry(targetEntry);
 
-      await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ResultsAnimalsScreen(
-            showId: widget.showId,
-            showName: widget.showName,
-            sectionLabel: sectionName,
-            breed: issue.breed,
-            variety: issue.variety ?? '',
-            classSexLabel: issue.classSexLabel,
-            isFurOrWoolClass: working.any(_isFurEntry),
-            entries: working,
-            judges: _judges,
-            onBulkJudgeApply: (entries, judgeId) async {
-              if (AppSession.isSupportMode) {
-                setState(() {
-                  _msg = 'Results changes are disabled while viewing in support mode.';
-                });
-                return;
-              }
-              final ids = entries
-                  .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
-                  .where((x) => x.isNotEmpty)
-                  .toList();
-              if (ids.isEmpty) return;
+      try {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ResultsAnimalsScreen(
+              showId: widget.showId,
+              showName: widget.showName,
+              sectionLabel: sectionName,
+              breed: issue.breed,
+              variety: issue.variety ?? '',
+              classSexLabel: issue.classSexLabel,
+              isFurOrWoolClass: working.any(_isFurEntry),
+              entries: working,
+              judges: _judges,
+              onBulkJudgeApply: (entries, judgeId) async {
+                if (AppSession.isSupportMode) {
+                  setState(() {
+                    _msg = 'Results changes are disabled while viewing in support mode.';
+                  });
+                  return;
+                }
 
-              if (!widget.isQrEntryMode) {
-                await ShowLockService.assertShowUnlocked(widget.showId);
-              }
+                final ids = entries
+                    .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
+                    .where((x) => x.isNotEmpty)
+                    .toList();
 
-              await supabase
-                  .from('entries')
-                  .update({
-                    'judged_by_show_judge_id':
-                        (judgeId == null || judgeId.isEmpty) ? null : judgeId,
-                    'updated_at': DateTime.now().toUtc().toIso8601String(),
-                  })
-                  .inFilter('id', ids);
-            },
-            initialJudgeId: _singleJudgeIdFromEntries(working),
-            breedClassSystems: _breedClassSystems,
-            finalAwardMode: _finalAwardMode,
-            showsByGroup: byGroup,
-            showsByVariety: byVariety,
-            isQrEntryMode: widget.isQrEntryMode,
-            initialEntryIdToOpen:
-                (targetEntry['entry_id'] ?? targetEntry['id'] ?? '')
-                    .toString(),
+                if (ids.isEmpty) return;
+
+                if (!widget.isQrEntryMode) {
+                  await ShowLockService.assertShowUnlocked(widget.showId);
+                }
+
+                await supabase
+                    .from('entries')
+                    .update({
+                      'judged_by_show_judge_id':
+                          (judgeId == null || judgeId.isEmpty) ? null : judgeId,
+                      'updated_at': DateTime.now().toUtc().toIso8601String(),
+                    })
+                    .inFilter('id', ids);
+              },
+              initialJudgeId: _singleJudgeIdFromEntries(working),
+              breedClassSystems: _breedClassSystems,
+              finalAwardMode: _finalAwardMode,
+              showsByGroup: byGroup,
+              showsByVariety: byVariety,
+              isQrEntryMode: widget.isQrEntryMode,
+              initialEntryIdToOpen:
+                  (targetEntry['entry_id'] ?? targetEntry['id'] ?? '')
+                      .toString(),
+            ),
           ),
-        ),
-      );
+        );
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _msg = 'Error: $e';
+        });
+      }
 
       await _loadEntries();
       if (mounted) setState(() {});
@@ -1030,8 +1037,6 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
 
       final awardsByEntryId = <String, List<String>>{};
 
-      // 🔥 CHUNKED QUERY FIX (prevents PostgREST 400 from large inFilter lists)
-      // TODO: Refactor into shared helper if reused in multiple loaders
       if (entryIds.isNotEmpty) {
         final allAwardRows = <Map<String, dynamic>>[];
 
@@ -1198,55 +1203,62 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
 
       final sectionName = _sectionNameForEntry(target);
 
-      await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ResultsAnimalsScreen(
-            showId: widget.showId,
-            showName: widget.showName,
-            sectionLabel: sectionName,
-            breed: breed,
-            variety: issueVariety,
-            classSexLabel: classSexLabel,
-            isFurOrWoolClass: working.any(_isFurEntry),
-            entries: working,
-            judges: _judges,
-            onBulkJudgeApply: (entries, judgeId) async {
-              if (AppSession.isSupportMode) {
-                setState(() {
-                  _msg = 'Results changes are disabled while viewing in support mode.';
-                });
-                return;
-              }
-              final ids = entries
-                  .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
-                  .where((x) => x.isNotEmpty)
-                  .toList();
-              if (ids.isEmpty) return;
+      try {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ResultsAnimalsScreen(
+              showId: widget.showId,
+              showName: widget.showName,
+              sectionLabel: sectionName,
+              breed: breed,
+              variety: issueVariety,
+              classSexLabel: classSexLabel,
+              isFurOrWoolClass: working.any(_isFurEntry),
+              entries: working,
+              judges: _judges,
+              onBulkJudgeApply: (entries, judgeId) async {
+                if (AppSession.isSupportMode) {
+                  setState(() {
+                    _msg = 'Results changes are disabled while viewing in support mode.';
+                  });
+                  return;
+                }
+                final ids = entries
+                    .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
+                    .where((x) => x.isNotEmpty)
+                    .toList();
+                if (ids.isEmpty) return;
 
-              if (!widget.isQrEntryMode) {
-                await ShowLockService.assertShowUnlocked(widget.showId);
-              }
+                if (!widget.isQrEntryMode) {
+                  await ShowLockService.assertShowUnlocked(widget.showId);
+                }
 
-              await supabase
-                  .from('entries')
-                  .update({
-                    'judged_by_show_judge_id':
-                        (judgeId == null || judgeId.isEmpty) ? null : judgeId,
-                    'updated_at': DateTime.now().toUtc().toIso8601String(),
-                  })
-                  .inFilter('id', ids);
-            },
-            initialJudgeId: _singleJudgeIdFromEntries(working),
-            breedClassSystems: _breedClassSystems,
-            finalAwardMode: _finalAwardMode,
-            showsByGroup: byGroup,
-            showsByVariety: byVariety,
-            isQrEntryMode: widget.isQrEntryMode,
-            initialEntryIdToOpen: targetId,
+                await supabase
+                    .from('entries')
+                    .update({
+                      'judged_by_show_judge_id':
+                          (judgeId == null || judgeId.isEmpty) ? null : judgeId,
+                      'updated_at': DateTime.now().toUtc().toIso8601String(),
+                    })
+                    .inFilter('id', ids);
+              },
+              initialJudgeId: _singleJudgeIdFromEntries(working),
+              breedClassSystems: _breedClassSystems,
+              finalAwardMode: _finalAwardMode,
+              showsByGroup: byGroup,
+              showsByVariety: byVariety,
+              isQrEntryMode: widget.isQrEntryMode,
+              initialEntryIdToOpen: targetId,
+            ),
           ),
-        ),
-      );
+        );
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _msg = 'Error: $e';
+        });
+      }
 
       await _loadEntries();
       if (mounted) setState(() {});
@@ -1334,17 +1346,9 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
       _msg = null;
     });
 
-    try {
-      await _loadEntries();
-      if (!mounted) return;
-      setState(() => _loading = false);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _msg = 'Load failed: $e';
-      });
-    }
+    await _loadEntries();
+    if (!mounted) return;
+    setState(() => _loading = false);
   }
 
   Map<String, List<Map<String, dynamic>>> _groupByBreed(List<Map<String, dynamic>> items) {
@@ -1861,7 +1865,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
   }
 
   return issues;
-}
+  }
 
   String _entryLabel(Map<String, dynamic> e) {
     final animalName = (e['animal_name'] ?? '').toString().trim();
@@ -6117,7 +6121,6 @@ if (storedJudgeId.isEmpty) {
     final normalizedJudgeId = (judgeId ?? '').trim();
     if (normalizedJudgeId.isEmpty) return;
 
-    try {
       await supabase.rpc(
         'record_judging_session_entry',
         params: {
@@ -6127,10 +6130,7 @@ if (storedJudgeId.isEmpty) {
           'p_table_number': null,
         },
       );
-    } catch (e) {
-      debugPrint('Judging session tracking failed: $e');
     }
-  }
 
   Future<void> _save({required bool goNext}) async {
     setState(() {

@@ -109,9 +109,26 @@ class RibbonPayoutReportPdf {
 
     final bytes = await pdf.save();
 
+    String clean(String input) {
+      return input
+          // remove UUID / long id-like fragments
+          .replaceAll(RegExp(r'\b[0-9a-fA-F\-]{8,}\b'), '')
+          // remove non filename-safe chars
+          .replaceAll(RegExp(r'[^\w\s-]'), '')
+          .trim()
+          // collapse spaces to underscores
+          .replaceAll(RegExp(r'\s+'), '_')
+          // collapse multiple underscores
+          .replaceAll(RegExp(r'_+'), '_')
+          // trim leading/trailing underscores
+          .replaceAll(RegExp(r'^_|_$'), '');
+    }
+
+    final cleanedShowName = clean(req.showName ?? 'show');
+
     return ReportFileResult(
       bytes: Uint8List.fromList(bytes),
-      fileName: '${req.showName ?? 'show'}_ribbon_payout_report.pdf',
+      fileName: '${cleanedShowName}_ribbon_payout_report.pdf',
       mimeType: 'application/pdf',
     );
   }

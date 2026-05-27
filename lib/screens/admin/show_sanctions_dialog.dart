@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/services/show_lock_service.dart';
+import 'sanction_directory_screen.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -57,6 +58,7 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
   final Map<String, TextEditingController> _controllers = {};
   final Map<String, String> _existingRecordIds = {};
   final Map<String, bool> _useArbaByRowKey = {};
+  final Map<String, String> _requestStatusByCellKey = {};
 
   int _selectedTabIndex = 0;
   String? _arbaBreedClubId;
@@ -245,6 +247,7 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
   Future<void> _buildPrebuiltRows() async {
     _rows.clear();
     _useArbaByRowKey.clear();
+    _requestStatusByCellKey.clear();
     _arbaBreedClubId = null;
     _arbaDefaultEmail = null;
 
@@ -453,11 +456,12 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
     }
     _controllers.clear();
     _existingRecordIds.clear();
+    _requestStatusByCellKey.clear();
 
     final res = await supabase
         .from(_table)
         .select(
-          'id,show_id,section_id,sanctioning_body,club_name,breed_name,sanction_number,notes,breed_club_id,secretary_email,sweepstakes_email,use_arba_number',
+          'id,show_id,section_id,sanctioning_body,club_name,breed_name,sanction_number,notes,breed_club_id,secretary_email,sweepstakes_email,use_arba_number,request_status',
         )
         .eq('show_id', widget.showId);
 
@@ -509,6 +513,12 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
           final id = (existing['id'] ?? '').toString().trim();
           if (id.isNotEmpty) {
             _existingRecordIds[key] = id;
+          }
+
+          final requestStatus =
+              (existing['request_status'] ?? '').toString().trim();
+          if (requestStatus.isNotEmpty) {
+            _requestStatusByCellKey[key] = requestStatus;
           }
 
           final savedUseArba = existing['use_arba_number'] == true;
@@ -687,6 +697,7 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
             'section_id': section.id,
             'sanction_number': value,
             'notes': null,
+            'request_status': value.isNotEmpty ? 'received' : null,
           };
 
           switch (row.rowType) {
@@ -847,6 +858,7 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                           'ARBA Number:',
                           height: rowHeight,
                           isBold: true,
+                          fillColor: _rowStatusColorForSections('__ARBA__', _sections.map((s) => s.id)),
                         ),
                         _centerCell(const SizedBox.shrink(), height: rowHeight),
                         ..._sections.map((s) {
@@ -856,6 +868,7 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                             enabled: !_saving && !_isReadOnly,
                             height: rowHeight,
                             hintText: '',
+                            fillColor: _cellStatusColor('__ARBA__', s.id),
                           );
                         }),
                       ],
@@ -887,6 +900,7 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                           _labelCell(
                             row.label,
                             height: smallRowHeight,
+                            fillColor: _rowStatusColorForSections(row.key, row.allowedSectionIds),
                           ),
                           _centerCell(
                             Checkbox(
@@ -933,6 +947,7 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                               enabled: !_saving && !_isReadOnly && !locked,
                               height: smallRowHeight,
                               hintText: '',
+                              fillColor: _cellStatusColor(row.key, s.id),
                             );
                           }),
                         ],
@@ -965,24 +980,54 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
     String text, {
     required double height,
     bool isBold = false,
+    Color? fillColor,
   }) {
     return SizedBox(
       height: height,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            text,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontWeight: isBold ? FontWeight.w700 : FontWeight.w500,
-              fontSize: 13,
+      child: ColoredBox(
+        color: fillColor ?? Colors.transparent,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              text,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontWeight: isBold ? FontWeight.w700 : FontWeight.w500,
+                fontSize: 13,
+              ),
             ),
           ),
         ),
       ),
     );
+  }
+
+  Color? _rowStatusColorForSections(String rowKey, Iterable<String> sectionIds) {
+    var hasGreen = false;
+    var hasOrange = false;
+    var hasBlue = false;
+    var hasRed = false;
+
+    for (final sectionId in sectionIds) {
+      final color = _cellStatusColor(rowKey, sectionId);
+      if (color == Colors.red.shade100) {
+        hasRed = true;
+      } else if (color == Colors.green.shade100) {
+        hasGreen = true;
+      } else if (color == Colors.blue.shade100) {
+        hasBlue = true;
+      } else if (color == Colors.orange.shade100) {
+        hasOrange = true;
+      }
+    }
+
+    if (hasRed) return Colors.red.shade100;
+    if (hasGreen) return Colors.green.shade100;
+    if (hasBlue) return Colors.blue.shade100;
+    if (hasOrange) return Colors.orange.shade100;
+    return null;
   }
 
   Widget _centerCell(Widget child, {required double height}) {
@@ -997,28 +1042,54 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
     required bool enabled,
     required double height,
     required String hintText,
+    Color? fillColor,
   }) {
     return SizedBox(
       height: height,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-        child: TextField(
-          controller: controller,
-          enabled: enabled,
-          textAlignVertical: TextAlignVertical.center,
-          style: const TextStyle(fontSize: 13),
-          decoration: InputDecoration(
-            isDense: true,
-            hintText: hintText,
-            border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 6,
-              vertical: 8,
+      child: ColoredBox(
+        color: fillColor ?? Colors.transparent,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          child: TextField(
+            controller: controller,
+            enabled: enabled,
+            textAlignVertical: TextAlignVertical.center,
+            style: const TextStyle(fontSize: 13),
+            decoration: InputDecoration(
+              isDense: true,
+              hintText: hintText,
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 6,
+                vertical: 8,
+              ),
             ),
           ),
         ),
       ),
     );
+  }
+
+  Color? _cellStatusColor(String rowKey, String sectionId) {
+    final value = _controllerFor(rowKey, sectionId).text.trim();
+    if (value.isNotEmpty) {
+      return Colors.green.shade100;
+    }
+
+    final status = _requestStatusByCellKey[_cellKey(rowKey, sectionId)]
+        ?.trim()
+        .toLowerCase();
+
+    switch (status) {
+      case 'secretary_requested':
+        return Colors.orange.shade100;
+      case 'exhibitor_requested':
+        return Colors.blue.shade100;
+      case 'problem':
+        return Colors.red.shade100;
+      default:
+        return null;
+    }
   }
 
   @override
@@ -1093,12 +1164,43 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Sections are pulled from this show only and sorted Open first, Youth last.',
-                          style: Theme.of(context).textTheme.bodyMedium,
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Sections are pulled from this show only and sorted Open first, Youth last.',
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            OutlinedButton.icon(
+                              onPressed: _saving
+                                  ? null
+                                  : () async {
+                                      await Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder: (_) => SanctionDirectoryScreen(
+                                            showId: widget.showId,
+                                          ),
+                                        ),
+                                      );
+
+                                      if (!mounted) return;
+                                      setState(() {
+                                        _loading = true;
+                                      });
+                                      await _loadAll();
+                                    },
+                              icon: const Icon(Icons.open_in_new),
+                              label: const Text('Open Sanction Directory'),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 12),
                         _buildTabs(),
+                        const SizedBox(height: 8),
+                        _buildStatusLegend(),
                         const SizedBox(height: 12),
                         TextField(
                           controller: _searchController,
@@ -1200,6 +1302,31 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
       ),
     );
   }
+
+  Widget _buildStatusLegend() {
+    return Wrap(
+      spacing: 10,
+      runSpacing: 8,
+      children: const [
+        _SanctionStatusLegendItem(
+          color: Color(0xFFFFECB3),
+          label: 'Secretary requested',
+        ),
+        _SanctionStatusLegendItem(
+          color: Color(0xFFBBDEFB),
+          label: 'Exhibitor requested',
+        ),
+        _SanctionStatusLegendItem(
+          color: Color(0xFFC8E6C9),
+          label: 'Received / number entered',
+        ),
+        _SanctionStatusLegendItem(
+          color: Color(0xFFFFCDD2),
+          label: 'Problem / broken link',
+        ),
+      ],
+    );
+  }
 }
 
 class _SectionColumn {
@@ -1256,4 +1383,39 @@ class _SanctionRowModel {
     required this.speciesRank,
     required this.rowRank,
   });
+}
+
+class _SanctionStatusLegendItem extends StatelessWidget {
+  const _SanctionStatusLegendItem({
+    required this.color,
+    required this.label,
+  });
+
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 14,
+          height: 14,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: Colors.black.withOpacity(.12)),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+        ),
+      ],
+    );
+  }
 }

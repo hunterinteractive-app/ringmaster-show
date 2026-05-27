@@ -148,9 +148,17 @@ class SweepstakesReportPdf {
   }) {
     String clean(String input) {
       return input
+          // remove UUID / long id-like fragments
+          .replaceAll(RegExp(r'\b[0-9a-fA-F\-]{8,}\b'), '')
+          // remove non filename-safe chars
           .replaceAll(RegExp(r'[^\w\s-]'), '')
           .trim()
-          .replaceAll(RegExp(r'\s+'), '_');
+          // collapse spaces to underscores
+          .replaceAll(RegExp(r'\s+'), '_')
+          // collapse multiple underscores
+          .replaceAll(RegExp(r'_+'), '_')
+          // trim leading/trailing underscores
+          .replaceAll(RegExp(r'^_|_$'), '');
     }
 
     final safeShowName = clean(showName);

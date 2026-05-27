@@ -118,7 +118,14 @@ class LegsReportPdfBuilder {
             : (request.exhibitorName ?? '').trim(),
       );
 
-      final fileName = '$cleanedShowName - $cleanedExhibitorName - Legs.pdf';
+      // Remove any UUID-like fragments from exhibitor name (sometimes passed in)
+      final cleanedExhibitorNameNoId = cleanedExhibitorName
+          .replaceAll(RegExp(r'\b[0-9a-fA-F\-]{8,}\b'), '')
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
+
+      final fileName =
+          '$cleanedShowName - $cleanedExhibitorNameNoId - Legs.pdf';
 
       if (data.isEmpty) {
         pdf.addPage(
@@ -206,31 +213,51 @@ class LegsReportPdfBuilder {
               ),
             ],
           ),
+          pw.SizedBox(height: 6),
+          _winDetailsBlock(d),
         ],
       ),
     );
   }
 
   pw.Widget _certificateHeader() {
-    return pw.Column(
+    return pw.Row(
+      crossAxisAlignment: pw.CrossAxisAlignment.center,
       children: [
-        pw.Text(
-          'AMERICAN RABBIT BREEDERS ASSOCIATION, INC.',
-          textAlign: pw.TextAlign.center,
-          style: pw.TextStyle(
-            fontSize: 10.5,
-            fontWeight: pw.FontWeight.bold,
-            color: arbaBlue,
+        pw.Container(
+          width: 42,
+          height: 42,
+          alignment: pw.Alignment.center,
+          child: pw.Image(
+            pw.MemoryImage(arbaLogoBytes),
+            fit: pw.BoxFit.contain,
           ),
         ),
-        pw.SizedBox(height: 1.5),
-        pw.Text(
-          'E-LEG OF GRAND CHAMPION CERTIFICATE',
-          textAlign: pw.TextAlign.center,
-          style: pw.TextStyle(
-            fontSize: 8.5,
-            fontWeight: pw.FontWeight.bold,
-            color: arbaBlue,
+        pw.SizedBox(width: 8),
+        pw.Expanded(
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.center,
+            children: [
+              pw.Text(
+                'AMERICAN RABBIT BREEDERS ASSOCIATION, INC.',
+                textAlign: pw.TextAlign.center,
+                style: pw.TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: pw.FontWeight.bold,
+                  color: arbaBlue,
+                ),
+              ),
+              pw.SizedBox(height: 1.5),
+              pw.Text(
+                'E-LEG OF GRAND CHAMPION CERTIFICATE',
+                textAlign: pw.TextAlign.center,
+                style: pw.TextStyle(
+                  fontSize: 8.5,
+                  fontWeight: pw.FontWeight.bold,
+                  color: arbaBlue,
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -243,7 +270,12 @@ class LegsReportPdfBuilder {
       children: [
         pw.Row(
           children: [
-            pw.Expanded(child: _boxedMiniPair('EXH#', d.exhibitorNumber)),
+            pw.Expanded(
+              child: _boxedMiniPair(
+                'EXH#',
+                _displayExhibitorNumber(d),
+              ),
+            ),
             pw.SizedBox(width: 4),
             pw.Expanded(child: _boxedMiniPair('EAR#', d.earNumber)),
           ],
@@ -253,32 +285,6 @@ class LegsReportPdfBuilder {
         pw.SizedBox(height: 6),
         _fillLine('BORN'),
         _fillLine('REG.#'),
-        pw.SizedBox(height: 6),
-        pw.Table(
-          border: pw.TableBorder.all(color: arbaBlue, width: 0.6),
-          columnWidths: const {
-            0: pw.FlexColumnWidth(1.0),
-            1: pw.FlexColumnWidth(1.2),
-            2: pw.FlexColumnWidth(1.2),
-          },
-          children: [
-            pw.TableRow(
-              decoration: const pw.BoxDecoration(color: arbaBlueLight),
-              children: [
-                _tinyHeaderCell('WIN'),
-                _tinyHeaderCell('NO. ANIMALS'),
-                _tinyHeaderCell('NO. EXHIBITORS'),
-              ],
-            ),
-            pw.TableRow(
-              children: [
-                _tinyValueCell(d.winCode),
-                _tinyValueCell('${d.animalsCount}'),
-                _tinyValueCell('${d.exhibitorsCount}'),
-              ],
-            ),
-          ],
-        ),
       ],
     );
   }
@@ -305,7 +311,7 @@ class LegsReportPdfBuilder {
                 padding: const pw.EdgeInsets.only(bottom: 1.5),
                 child: pw.Text(
                   line,
-                  style: const pw.TextStyle(fontSize: 8.5),
+                  style: const pw.TextStyle(fontSize: 9.5),
                 ),
               ),
             )
@@ -361,20 +367,7 @@ class LegsReportPdfBuilder {
           ],
         ),
         pw.SizedBox(height: 6),
-        pw.Text(
-          d.exhibitorName.isEmpty ? 'UNKNOWN EXHIBITOR' : d.exhibitorName,
-          style: pw.TextStyle(
-            fontSize: 8,
-            fontWeight: pw.FontWeight.bold,
-          ),
-        ),
-        if (d.ownerAddress.isNotEmpty)
-          pw.Text(
-            d.ownerAddress,
-            style: const pw.TextStyle(fontSize: 7),
-          ),
-        pw.SizedBox(height: 4),
-        _requiredCertificateDataNotice(),
+        _exhibitorVerificationBlock(d),
         pw.SizedBox(height: 4),
         pw.Row(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -422,36 +415,58 @@ class LegsReportPdfBuilder {
             */
           ],
         ),
-        pw.SizedBox(height: 6),
-        pw.Container(
-          width: double.infinity,
-          padding: const pw.EdgeInsets.all(4),
-          decoration: pw.BoxDecoration(
-            border: pw.Border.all(color: arbaBlue, width: 0.5),
-            color: arbaBlueLight,
-          ),
-          child: pw.Text(
-            'Rule ${d.legRule}: ${d.legRuleDescription}',
-            style: const pw.TextStyle(fontSize: 6.5),
-          ),
-        ),
       ],
     );
   }
 
-  pw.Widget _requiredCertificateDataNotice() {
+  pw.Widget _exhibitorVerificationBlock(LegsCertificateData d) {
     return pw.Container(
       width: double.infinity,
-      padding: const pw.EdgeInsets.all(3),
+      padding: const pw.EdgeInsets.all(5),
       decoration: pw.BoxDecoration(
-        border: pw.Border.all(color: arbaBlue, width: 0.4),
+        border: pw.Border.all(color: arbaBlue, width: 0.6),
         borderRadius: pw.BorderRadius.circular(3),
       ),
-      child: pw.Text(
-        'All certificate data is required, including placement and higher win data, animal data, exhibitor member name, secretary and show data, barcode, human-readable code, and rules.',
-        style: const pw.TextStyle(fontSize: 5.4),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(
+            d.exhibitorName.isEmpty ? 'UNKNOWN EXHIBITOR' : d.exhibitorName,
+            style: pw.TextStyle(
+              fontSize: 9,
+              fontWeight: pw.FontWeight.bold,
+            ),
+          ),
+          pw.SizedBox(height: 2),
+          ..._buildAddressLines(d),
+        ],
       ),
     );
+  }
+
+  List<pw.Widget> _buildAddressLines(LegsCertificateData d) {
+    final raw = d.ownerAddress.trim();
+
+    if (raw.isEmpty) {
+      return [
+        pw.Text(
+          'Address not available',
+          style: const pw.TextStyle(fontSize: 6.7),
+        ),
+      ];
+    }
+
+    final parts = raw.split('\n')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+
+    return parts.map((line) {
+      return pw.Text(
+        line,
+        style: const pw.TextStyle(fontSize: 6.7),
+      );
+    }).toList();
   }
 
   String _buildArbaELegBarcode(LegsCertificateData d) {
@@ -552,6 +567,20 @@ class LegsReportPdfBuilder {
     final encodedId = Uri.encodeComponent(id);
 
     return 'https://show.ringmasterone.com/verify-leg?id=$encodedId';
+  }
+
+  String _displayExhibitorNumber(LegsCertificateData d) {
+    final showExhibitorNumber = d.exhibitorNumber.trim();
+    final exhibitorName = d.exhibitorName.trim();
+
+    // EXH# should be the show-specific exhibitor number only. Guard against
+    // upstream fallbacks that accidentally pass the exhibitor name here.
+    if (showExhibitorNumber.isNotEmpty &&
+        showExhibitorNumber.toLowerCase() != exhibitorName.toLowerCase()) {
+      return showExhibitorNumber;
+    }
+
+    return 'ERROR';
   }
 
   pw.Widget _boxedMiniPair(String label, String value) {
@@ -901,7 +930,7 @@ class LegsReportPdfBuilder {
         text,
         textAlign: pw.TextAlign.center,
         style: pw.TextStyle(
-          fontSize: 6.2,
+          fontSize: 7.2,
           fontWeight: pw.FontWeight.bold,
           color: arbaBlue,
         ),
@@ -915,9 +944,76 @@ class LegsReportPdfBuilder {
       child: pw.Text(
         text,
         textAlign: pw.TextAlign.center,
-        style: const pw.TextStyle(fontSize: 6.8),
+        style: const pw.TextStyle(fontSize: 7.5),
       ),
     );
+  }
+
+  pw.Widget _winDetailsBlock(LegsCertificateData d) {
+    return pw.Container(
+      width: double.infinity,
+      padding: const pw.EdgeInsets.all(5),
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(color: arbaBlue, width: 0.6),
+        borderRadius: pw.BorderRadius.circular(3),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(
+            'PLACEMENT / WIN DATA',
+            style: pw.TextStyle(
+              fontSize: 7,
+              fontWeight: pw.FontWeight.bold,
+              color: arbaBlue,
+            ),
+          ),
+          pw.SizedBox(height: 3),
+          pw.Table(
+            border: pw.TableBorder.all(color: arbaBlue, width: 0.45),
+            columnWidths: const {
+              0: pw.FlexColumnWidth(1.1),
+              1: pw.FlexColumnWidth(1.5),
+              2: pw.FlexColumnWidth(1.2),
+              3: pw.FlexColumnWidth(1.2),
+              4: pw.FlexColumnWidth(3.6),
+            },
+            children: [
+              pw.TableRow(
+                decoration: const pw.BoxDecoration(color: arbaBlueLight),
+                children: [
+                  _tinyHeaderCell('WIN'),
+                  _tinyHeaderCell('CLASS / AWARD'),
+                  _tinyHeaderCell('NO. ANIMALS'),
+                  _tinyHeaderCell('NO. EXHIBITORS'),
+                  _tinyHeaderCell('QUALIFYING BASIS'),
+                ],
+              ),
+              pw.TableRow(
+                children: [
+                  _tinyValueCell(d.winCode),
+                  _tinyValueCell(_awardScopeLabel(d)),
+                  _tinyValueCell('${d.animalsCount}'),
+                  _tinyValueCell('${d.exhibitorsCount}'),
+                  _tinyValueCell('Rule ${d.legRule}: ${d.legRuleDescription}'),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _awardScopeLabel(LegsCertificateData d) {
+    final parts = <String>[
+      if (d.breed.trim().isNotEmpty) d.breed.trim(),
+      if (d.variety.trim().isNotEmpty) d.variety.trim(),
+      if (d.className.trim().isNotEmpty) d.className.trim(),
+      if (d.sex.trim().isNotEmpty) d.sex.trim(),
+    ];
+
+    return parts.isEmpty ? 'Award' : parts.join(' / ');
   }
 
   String _fmtDate(DateTime? value) {

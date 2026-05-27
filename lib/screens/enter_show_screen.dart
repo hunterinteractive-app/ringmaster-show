@@ -656,32 +656,58 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   Future<void> _loadPaymentSettings() async {
     _furEntriesEnabled = false;
 
+    double readPrice(Map<String, dynamic> row, String key) {
+      final value = row[key];
+      if (value == null) return 0;
+      if (value is num) return value.toDouble();
+      return double.tryParse(value.toString()) ?? 0;
+    }
+
+    bool rowHasFurFee(Map<String, dynamic> row) {
+      final possibleFurPrices = <double>[
+        readPrice(row, 'fur_entry_fee'),
+        readPrice(row, 'fur_fee'),
+        readPrice(row, 'fur_wool_fee'),
+        readPrice(row, 'fur_price'),
+        readPrice(row, 'fur_wool_price'),
+      ];
+
+      return possibleFurPrices.any((price) => price > 0);
+    }
+
     try {
-      final row = await supabase
+      // Older/global fee setup.
+      final showPaymentRow = await supabase
           .from('show_payment_settings')
           .select()
           .eq('show_id', widget.showId)
           .maybeSingle();
 
-      if (row == null) return;
-
-      double readPrice(String key) {
-        final value = row[key];
-        if (value == null) return 0;
-        if (value is num) return value.toDouble();
-        return double.tryParse(value.toString()) ?? 0;
+      if (showPaymentRow != null &&
+          rowHasFurFee(Map<String, dynamic>.from(showPaymentRow))) {
+        _furEntriesEnabled = true;
+        return;
       }
-
-      final possibleFurPrices = <double>[
-        readPrice('fur_entry_fee'),
-        readPrice('fur_fee'),
-        readPrice('fur_wool_fee'),
-        readPrice('fur_price'),
-        readPrice('fur_wool_price'),
-      ];
-
-      _furEntriesEnabled = possibleFurPrices.any((price) => price > 0);
     } catch (_) {
+      // Keep checking the newer section-level fee setup below.
+    }
+
+    try {
+      // Newer/current fee setup used by checkout and show fees.
+      final sectionFeeRows = await supabase
+          .from('show_section_fee_settings')
+          .select('fur_fee,fur_entry_fee,fur_wool_fee,fur_price,fur_wool_price')
+          .eq('show_id', widget.showId);
+
+      for (final row in (sectionFeeRows as List).cast<Map<String, dynamic>>()) {
+        if (rowHasFurFee(row)) {
+          _furEntriesEnabled = true;
+          return;
+        }
+      }
+    } catch (_) {
+      // If neither fee table can be read, leave Fur/Wool disabled rather than
+      // blocking normal entries.
       _furEntriesEnabled = false;
     }
   }
@@ -1845,7 +1871,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
           if (_furEntriesEnabled &&
               _selected[id] == true &&
               _selectedSectionIds.isNotEmpty &&
-              _safeString(a, 'species').toLowerCase() != 'cavy') ...[
+              _safeString(a, 'species').toLowerCase() == 'rabbit') ...[
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,

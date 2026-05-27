@@ -1,5 +1,3 @@
-// lib/screens/admin/closeout/services/report_upload_service.dart
-
 import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/base/report_file_result.dart';
@@ -24,7 +22,21 @@ class ReportUploadService {
         .replaceAll(RegExp(r'^_|_$'), '');
 
     final showFolder = safeShowName.isNotEmpty ? safeShowName : showId;
-    final path = 'shows/$showFolder/reports/${artifactId}_${file.fileName}';
+    final versionFolder = _buildReportVersionFolder();
+
+    // Determine version number (V1, V2, etc.) based on existing files for today
+    final tempBase = 'shows/$showFolder/reports/versions/$versionFolder/';
+    final existing = await supabase.storage.from(bucket).list(path: tempBase);
+
+    final version = existing.length + 1;
+    final versionLabel = 'V$version';
+    final baseFolder = 'shows/$showFolder/reports/versions/${versionFolder}_$versionLabel/';
+
+    // Keep each generation in its own timestamped folder so older reports are preserved.
+    // Example:
+    // shows/my_show/reports/versions/2026-05-26_19-42-08/my_show_arba_report_open_c.pdf
+    final path =
+        '${baseFolder}${safeShowName}_${file.fileName}';
 
     await supabase.storage.from(bucket).uploadBinary(
       path,
@@ -36,6 +48,18 @@ class ReportUploadService {
     );
 
     return path;
+  }
+
+  String _buildReportVersionFolder() {
+    final now = DateTime.now().toUtc();
+    final year = now.year.toString().padLeft(4, '0');
+    final month = now.month.toString().padLeft(2, '0');
+    final day = now.day.toString().padLeft(2, '0');
+    final hour = now.hour.toString().padLeft(2, '0');
+    final minute = now.minute.toString().padLeft(2, '0');
+    final second = now.second.toString().padLeft(2, '0');
+
+    return '${year}-${month}-${day}';
   }
 
     Future<void> markGenerated({

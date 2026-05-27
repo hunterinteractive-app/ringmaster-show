@@ -1656,6 +1656,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       int sentCount = 0;
       int skippedCount = 0;
       int failedCount = 0;
+      final sendErrors = <String>[];
 
       for (final exhibitor in exhibitors) {
         final exhibitorReport = _newestGeneratedArtifactWhere(
@@ -1686,19 +1687,64 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                 'Attached are your exhibitor reports from ${widget.showName}.',
           );
           sentCount++;
-        } catch (_) {
+        } catch (e, st) {
           failedCount++;
+
+          final errorText = e.toString().trim().isEmpty
+              ? 'Unknown email send error. Check Supabase function logs for send-exhibitor-report-email.'
+              : e.toString();
+
+          if (sendErrors.length < 5) {
+            sendErrors.add('${exhibitor.exhibitorName} <${exhibitor.email}>: $errorText');
+          }
         }
       }
 
       if (!mounted) return;
+
+      final summary =
+          'Exhibitor report send complete. Sent: $sentCount, skipped: $skippedCount, failed: $failedCount';
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Exhibitor report send complete. Sent: $sentCount, skipped: $skippedCount, failed: $failedCount',
-          ),
+          duration: const Duration(seconds: 8),
+          content: Text(summary),
         ),
       );
+
+      if (failedCount > 0 && sendErrors.isNotEmpty) {
+        await showDialog<void>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Exhibitor email send errors'),
+            content: SingleChildScrollView(
+              child: Text(sendErrors.join('\n\n')),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+        );
+      } else if (failedCount > 0) {
+        await showDialog<void>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Exhibitor email send failed'),
+            content: const Text(
+              'The email send failed, but no error message was returned to the app. Check the Supabase Edge Function logs for the exhibitor email function.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
