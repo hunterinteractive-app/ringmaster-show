@@ -427,10 +427,10 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
 
   Future<_EnterShowLoadBundle> _loadAll() async {
     await _loadShowContext();
+    final sections = await _loadEnabledSections();
     await _loadPaymentSettings();
     await _loadCommercialClasses();
     final animals = await _loadAnimals();
-    final sections = await _loadEnabledSections();
     final exhibitors = await _loadActiveExhibitors();
 
     if (exhibitors.isNotEmpty && _selectedExhibitorId == null) {
@@ -693,18 +693,21 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     }
 
     try {
-      // Newer/current fee setup used by checkout and show fees.
-      // Select all columns here so this does not fail if an older database
-      // only has fur_fee and not one of the legacy/alternate column names.
-      final sectionFeeRows = await supabase
-          .from('show_section_fee_settings')
-          .select()
-          .eq('show_id', widget.showId);
+      // Current fee setup is section-level. The table is keyed by section_id,
+      // not always by show_id, so load the enabled section IDs first and use
+      // those to decide whether Fur entries should be visible.
+      final sectionIds = _sectionById.keys.toList();
+      if (sectionIds.isNotEmpty) {
+        final sectionFeeRows = await supabase
+            .from('show_section_fee_settings')
+            .select()
+            .inFilter('section_id', sectionIds);
 
-      for (final row in (sectionFeeRows as List).cast<Map<String, dynamic>>()) {
-        if (rowHasFurFee(row)) {
-          _furEntriesEnabled = true;
-          return;
+        for (final row in (sectionFeeRows as List).cast<Map<String, dynamic>>()) {
+          if (rowHasFurFee(row)) {
+            _furEntriesEnabled = true;
+            return;
+          }
         }
       }
     } catch (_) {
@@ -1300,7 +1303,8 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
         );
       }
       for (final sectionId in _selectedSectionIds) {
-        if (!_isFurSelectedForAnimalSection(animalId, sectionId)) {
+        if (!_furEntriesEnabled ||
+            !_isFurSelectedForAnimalSection(animalId, sectionId)) {
           continue;
         }
 
@@ -1498,19 +1502,21 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                   (a) {
                     final animalId = (a['id'] ?? '').toString();
 
-                    final furDescriptions = (_selectedSectionIds
-                        .where((sectionId) =>
-                            _isFurSelectedForAnimalSection(animalId, sectionId))
-                        .map((sectionId) {
-                          final sectionLabel = _sectionLabelForId(sectionId);
-                          final furVariety =
-                              _furVarietyForAnimalSection(animalId, sectionId);
-                          if (furVariety != null && furVariety.isNotEmpty) {
-                            return '$sectionLabel ($furVariety)';
-                          }
-                          return sectionLabel;
-                        }).toList()
-                      ..sort());
+                    final furDescriptions = _furEntriesEnabled
+                        ? (_selectedSectionIds
+                            .where((sectionId) =>
+                                _isFurSelectedForAnimalSection(animalId, sectionId))
+                            .map((sectionId) {
+                              final sectionLabel = _sectionLabelForId(sectionId);
+                              final furVariety =
+                                  _furVarietyForAnimalSection(animalId, sectionId);
+                              if (furVariety != null && furVariety.isNotEmpty) {
+                                return '$sectionLabel ($furVariety)';
+                              }
+                              return sectionLabel;
+                            }).toList()
+                          ..sort())
+                        : <String>[];
 
                     final furText = furDescriptions.isEmpty
                         ? ''
@@ -1642,7 +1648,8 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
 
           itemsToAdd.add(baseItem);
 
-          if (_isFurSelectedForAnimalSection(animalId, sectionId)) {
+          if (_furEntriesEnabled &&
+              _isFurSelectedForAnimalSection(animalId, sectionId)) {
             itemsToAdd.add({
               ...baseItem,
               'variety': _furVarietyForAnimalSection(animalId, sectionId),
@@ -1868,7 +1875,8 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                     });
                   },
           ),
-          if (_safeString(a, 'species').toLowerCase() == 'rabbit') ...[
+          if (_furEntriesEnabled &&
+              _safeString(a, 'species').toLowerCase() == 'rabbit') ...[
             const SizedBox(height: 8),
             Text(
               _selectedSectionIds.isEmpty
