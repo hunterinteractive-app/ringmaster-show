@@ -1,3 +1,5 @@
+// lib/screens/admin/closeout/data/loaders/breed_results_detail_report_data.dart
+
 class BreedResultsDetailReportData {
   final String showId;
   final String breedName;
@@ -59,6 +61,7 @@ class BreedResultsDetailSection {
 class BreedAward {
   final String award;
   final String animal;
+  final String breedName;
   final String className;
   final String exhibitorName;
   final String sex;
@@ -69,6 +72,7 @@ class BreedAward {
   const BreedAward({
     required this.award,
     required this.animal,
+    this.breedName = '',
     required this.className,
     required this.exhibitorName,
     this.sex = '',

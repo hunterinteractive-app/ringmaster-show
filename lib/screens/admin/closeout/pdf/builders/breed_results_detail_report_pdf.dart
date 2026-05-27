@@ -278,9 +278,18 @@ class BreedResultsDetailReportPdf {
   }) {
     final widgets = <pw.Widget>[];
 
-    if (breedAwards.isNotEmpty) {
-      widgets.add(_sectionTitle('Breed Awards'));
-      widgets.add(_buildAwardTable(breedAwards));
+    final overallAwards = breedAwards.where((a) => _isOverallAward(a.award)).toList();
+    final breedOnlyAwards = breedAwards.where((a) => !_isOverallAward(a.award)).toList();
+
+    if (overallAwards.isNotEmpty) {
+      widgets.add(_sectionTitle('Overall Show Awards'));
+      widgets.add(_buildAwardTable(overallAwards, includeBreed: true));
+      widgets.add(pw.SizedBox(height: 12));
+    }
+
+    if (breedOnlyAwards.isNotEmpty) {
+      widgets.add(_sectionTitle('Show Awards'));
+      widgets.add(_buildAwardTable(breedOnlyAwards, includeBreed: true));
       widgets.add(pw.SizedBox(height: 12));
     }
 
@@ -388,7 +397,16 @@ class BreedResultsDetailReportPdf {
       case 'BIS':
         return 'Best in Show';
       case 'RIS':
+      case 'RBIS':
         return 'Reserve in Show';
+      case 'B4C':
+        return 'Best 4-Class';
+      case 'B6C':
+        return 'Best 6-Class';
+      case 'BOG':
+        return 'Best of Group';
+      case 'BOSG':
+        return 'Best Opposite Sex of Group';
       case 'HM':
         return 'Honorable Mention';
       default:
@@ -396,34 +414,64 @@ class BreedResultsDetailReportPdf {
     }
   }
 
-  pw.Widget _buildAwardTable(List<BreedAward> rows) {
+  bool _isOverallAward(String code) {
+    switch (code.toUpperCase().trim()) {
+      case 'BIS':
+      case 'RIS':
+      case 'RBIS':
+      case 'B4C':
+      case 'B6C':
+      case 'HM':
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  pw.Widget _buildAwardTable(List<BreedAward> rows, {bool includeBreed = false}) {
     return pw.TableHelper.fromTextArray(
-      headers: const [
-        'Award',
-        'Animal',
-        'Sex',
-        'Variety',
-        'Class',
-        'Exhibitor',
-        'Judged',
-        'Beaten',
-      ],
+      headers: includeBreed
+          ? const [
+              'Award',
+              'Animal',
+              'Breed',
+              'Variety',
+              'Class',
+              'Sex',
+              'Judged',
+            ]
+          : const [
+              'Award',
+              'Animal',
+              'Variety',
+              'Class',
+              'Sex',
+              'Judged',
+            ],
       data: rows
           .map(
-            (r) => [
-              _awardLabel(r.award),
-              r.animal,
-              r.sex,
-              r.variety,
-              r.className,
-              r.exhibitorName,
-              r.animalsJudged > 0
-                  ? '${r.animalsJudged}/${r.exhibitorsJudged}'
-                  : '',
-              r.animalsJudged > 0
-                  ? '${r.animalsJudged - 1}'
-                  : '',
-            ],
+            (r) => includeBreed
+                ? [
+                    _awardLabel(r.award),
+                    r.animal,
+                    r.breedName,
+                    r.variety,
+                    r.className,
+                    r.sex,
+                    r.animalsJudged > 0
+                        ? '${r.animalsJudged}/${r.exhibitorsJudged}'
+                        : '',
+                  ]
+                : [
+                    _awardLabel(r.award),
+                    r.animal,
+                    r.variety,
+                    r.className,
+                    r.sex,
+                    r.animalsJudged > 0
+                        ? '${r.animalsJudged}/${r.exhibitorsJudged}'
+                        : '',
+                  ],
           )
           .toList(),
       headerDecoration: const pw.BoxDecoration(color: PdfColors.blueGrey700),
@@ -436,16 +484,24 @@ class BreedResultsDetailReportPdf {
       border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
       oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
       cellPadding: const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 4),
-      columnWidths: {
-        0: const pw.FixedColumnWidth(74),
-        1: const pw.FlexColumnWidth(1.15),
-        2: const pw.FixedColumnWidth(28),
-        3: const pw.FlexColumnWidth(1.0),
-        4: const pw.FlexColumnWidth(1.0),
-        5: const pw.FlexColumnWidth(1.25),
-        6: const pw.FixedColumnWidth(38),
-        7: const pw.FixedColumnWidth(36),
-      },
+      columnWidths: includeBreed
+          ? {
+              0: const pw.FixedColumnWidth(86),
+              1: const pw.FlexColumnWidth(1.05),
+              2: const pw.FlexColumnWidth(1.0),
+              3: const pw.FlexColumnWidth(1.0),
+              4: const pw.FlexColumnWidth(0.9),
+              5: const pw.FixedColumnWidth(30),
+              6: const pw.FixedColumnWidth(40),
+            }
+          : {
+              0: const pw.FixedColumnWidth(86),
+              1: const pw.FlexColumnWidth(1.1),
+              2: const pw.FlexColumnWidth(1.0),
+              3: const pw.FlexColumnWidth(0.9),
+              4: const pw.FixedColumnWidth(30),
+              5: const pw.FixedColumnWidth(40),
+            },
     );
   }
 
