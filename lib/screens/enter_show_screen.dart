@@ -694,9 +694,11 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
 
     try {
       // Newer/current fee setup used by checkout and show fees.
+      // Select all columns here so this does not fail if an older database
+      // only has fur_fee and not one of the legacy/alternate column names.
       final sectionFeeRows = await supabase
           .from('show_section_fee_settings')
-          .select('fur_fee,fur_entry_fee,fur_wool_fee,fur_price,fur_wool_price')
+          .select()
           .eq('show_id', widget.showId);
 
       for (final row in (sectionFeeRows as List).cast<Map<String, dynamic>>()) {
@@ -1869,14 +1871,23 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                   },
           ),
           if (_furEntriesEnabled &&
-              _selected[id] == true &&
-              _selectedSectionIds.isNotEmpty &&
               _safeString(a, 'species').toLowerCase() == 'rabbit') ...[
             const SizedBox(height: 8),
+            Text(
+              _selectedSectionIds.isEmpty
+                  ? 'Fur/Wool available: select a section first.'
+                  : _selected[id] != true
+                      ? 'Fur/Wool available: check this animal to choose White or Colored fur entries.'
+                      : 'Optional Fur/Wool entries: choose White or Colored for each section.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+            const SizedBox(height: 6),
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: _selectedSectionIds
+              children: (_selected[id] == true ? _selectedSectionIds : <String>{})
                   .where((sectionId) => !_sectionIsMeatOnly(sectionId))
                   .map((sectionId) {
                 final label = _sectionLabelForId(sectionId);
