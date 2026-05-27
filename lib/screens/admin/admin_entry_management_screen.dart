@@ -114,6 +114,45 @@ class _AdminEntryManagementScreenState
     }
   }
 
+  Future<void> _openEditExhibitor(Map<String, dynamic> entry) async {
+    if (AppSession.isSupportMode) {
+      setState(() => _msg = 'Exhibitor editing is disabled while viewing in support mode.');
+      return;
+    }
+
+    final exhibitor = entry['exhibitors'];
+    if (exhibitor is! Map<String, dynamic>) {
+      setState(() => _msg = 'Could not load exhibitor details for editing.');
+      return;
+    }
+
+    final ownerUserId = (exhibitor['owner_user_id'] ?? '').toString().trim();
+    if (ownerUserId.isNotEmpty) {
+      setState(() => _msg = 'This exhibitor already has an account, so their profile information cannot be edited here.');
+      return;
+    }
+
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _themedBottomSheetShell(
+        context,
+        child: _EditExhibitorSheet(
+          exhibitor: Map<String, dynamic>.from(exhibitor),
+          showId: widget.showId,
+        ),
+      ),
+    );
+
+    if (saved == true) {
+      await _loadEntries();
+      if (!mounted) return;
+      setState(() => _msg = 'Exhibitor updated.');
+    }
+  }
+
   Future<void> _loadEntries() async {
     var q = supabase
         .from('entries')
@@ -122,7 +161,7 @@ class _AdminEntryManagementScreenState
           'tattoo,animal_name,breed,variety,fur_variety,sex,class_name,notes,status,created_at,updated_at,scratched_at,'
           'is_fur,fur_placement,fur_notes,'
           'show_sections(id,letter,display_name,kind),'
-          'exhibitors!entries_exhibitor_id_fkey(id,display_name,first_name,last_name)',
+          'exhibitors!entries_exhibitor_id_fkey(id,display_name,showing_name,first_name,last_name,email,phone,address_line1,address_line2,city,state,zip,arba_number,owner_user_id,is_local_only,type)',
         )
         .eq('show_id', widget.showId);
 
@@ -375,6 +414,7 @@ class _AdminEntryManagementScreenState
     final successMessages = {
       'Entry updated.',
       'Animal updated.',
+      'Exhibitor updated.',
       'Scratched.',
       'Unscratched.',
       'Animal moved.',
@@ -561,6 +601,9 @@ class _AdminEntryManagementScreenState
 
                             final exhibitorName =
                                 _exhibitorDisplayName(exEntries.first);
+                            final firstExhibitor = exEntries.first['exhibitors'];
+                            final canEditExhibitor = firstExhibitor is Map<String, dynamic> &&
+                                ((firstExhibitor['owner_user_id'] ?? '').toString().trim().isEmpty);
                             final isExpanded =
                                 _expandedExhibitorIds.contains(exKey);
 
@@ -587,11 +630,23 @@ class _AdminEntryManagementScreenState
                                     }
                                   });
                                 },
-                                title: Text(
-                                  exhibitorName,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                                title: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        exhibitorName,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                    if (canEditExhibitor && !AppSession.isSupportMode)
+                                      TextButton.icon(
+                                        onPressed: () => _openEditExhibitor(exEntries.first),
+                                        icon: const Icon(Icons.edit, size: 18),
+                                        label: const Text('Edit Exhibitor'),
+                                      ),
+                                  ],
                                 ),
                                 subtitle: Text(
                                   '${exEntries.length} entr${exEntries.length == 1 ? 'y' : 'ies'}',
@@ -1352,6 +1407,357 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
   }
 }
 
+class _EditExhibitorSheet extends StatefulWidget {
+  final Map<String, dynamic> exhibitor;
+  final String showId;
+
+  const _EditExhibitorSheet({
+    required this.exhibitor,
+    required this.showId,
+  });
+
+  @override
+  State<_EditExhibitorSheet> createState() => _EditExhibitorSheetState();
+}
+
+class _EditExhibitorSheetState extends State<_EditExhibitorSheet> {
+  bool _saving = false;
+  String? _msg;
+
+  late final TextEditingController _showingName;
+  late final TextEditingController _firstName;
+  late final TextEditingController _lastName;
+  late final TextEditingController _email;
+  late final TextEditingController _phone;
+  late final TextEditingController _addressLine1;
+  late final TextEditingController _addressLine2;
+  late final TextEditingController _city;
+  late final TextEditingController _state;
+  late final TextEditingController _zip;
+  late final TextEditingController _arbaNumber;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _showingName = TextEditingController(
+      text: (widget.exhibitor['showing_name'] ??
+              widget.exhibitor['display_name'] ??
+              '')
+          .toString()
+          .trim(),
+    );
+    _firstName = TextEditingController(
+      text: (widget.exhibitor['first_name'] ?? '').toString().trim(),
+    );
+    _lastName = TextEditingController(
+      text: (widget.exhibitor['last_name'] ?? '').toString().trim(),
+    );
+    _email = TextEditingController(
+      text: (widget.exhibitor['email'] ?? '').toString().trim(),
+    );
+    _phone = TextEditingController(
+      text: (widget.exhibitor['phone'] ?? '').toString().trim(),
+    );
+    _addressLine1 = TextEditingController(
+      text: (widget.exhibitor['address_line1'] ?? '').toString().trim(),
+    );
+    _addressLine2 = TextEditingController(
+      text: (widget.exhibitor['address_line2'] ?? '').toString().trim(),
+    );
+    _city = TextEditingController(
+      text: (widget.exhibitor['city'] ?? '').toString().trim(),
+    );
+    _state = TextEditingController(
+      text: (widget.exhibitor['state'] ?? '').toString().trim().toUpperCase(),
+    );
+    _zip = TextEditingController(
+      text: (widget.exhibitor['zip'] ?? '').toString().trim(),
+    );
+    _arbaNumber = TextEditingController(
+      text: (widget.exhibitor['arba_number'] ?? '').toString().trim(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _showingName.dispose();
+    _firstName.dispose();
+    _lastName.dispose();
+    _email.dispose();
+    _phone.dispose();
+    _addressLine1.dispose();
+    _addressLine2.dispose();
+    _city.dispose();
+    _state.dispose();
+    _zip.dispose();
+    _arbaNumber.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (AppSession.isSupportMode) {
+      setState(() => _msg = 'Exhibitor editing is disabled while viewing in support mode.');
+      return;
+    }
+
+    final ownerUserId =
+        (widget.exhibitor['owner_user_id'] ?? '').toString().trim();
+    if (ownerUserId.isNotEmpty) {
+      setState(() => _msg = 'This exhibitor already has an account and cannot be edited here.');
+      return;
+    }
+
+    final exhibitorId = (widget.exhibitor['id'] ?? '').toString().trim();
+    if (exhibitorId.isEmpty) {
+      setState(() => _msg = 'Missing exhibitor ID.');
+      return;
+    }
+
+    final showing = _showingName.text.trim();
+    final first = _firstName.text.trim();
+    final last = _lastName.text.trim();
+    final email = _email.text.trim();
+    final phone = _phone.text.trim();
+    final addressLine1 = _addressLine1.text.trim();
+    final addressLine2 = _addressLine2.text.trim();
+    final city = _city.text.trim();
+    final state = _state.text.trim().toUpperCase();
+    final zip = _zip.text.trim();
+    final arbaNumber = _arbaNumber.text.trim();
+
+    if (showing.isEmpty && first.isEmpty && last.isEmpty) {
+      setState(() => _msg = 'Enter at least a showing name or first/last name.');
+      return;
+    }
+    if (addressLine1.isEmpty) {
+      setState(() => _msg = 'Enter address line 1.');
+      return;
+    }
+    if (city.isEmpty) {
+      setState(() => _msg = 'Enter city.');
+      return;
+    }
+    if (state.isEmpty) {
+      setState(() => _msg = 'Enter state.');
+      return;
+    }
+    if (zip.isEmpty) {
+      setState(() => _msg = 'Enter ZIP code.');
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+      _msg = null;
+    });
+
+    try {
+      await ShowLockService.assertShowUnlocked(widget.showId);
+
+      await supabase.from('exhibitors').update({
+        'showing_name': showing.isEmpty ? null : showing,
+        'display_name': showing.isEmpty ? null : showing,
+        'first_name': first.isEmpty ? null : first,
+        'last_name': last.isEmpty ? null : last,
+        'email': email.isEmpty ? null : email.toLowerCase(),
+        'phone': phone.isEmpty ? null : phone,
+        'address_line1': addressLine1,
+        'address_line2': addressLine2.isEmpty ? null : addressLine2,
+        'city': city,
+        'state': state,
+        'zip': zip,
+        'arba_number': arbaNumber.isEmpty ? null : arbaNumber,
+      }).eq('id', exhibitorId).isFilter('owner_user_id', null);
+
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _msg = 'Save failed: $e';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 10,
+        bottom: bottomInset + 16,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Edit Exhibitor', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 8),
+            if (_msg != null)
+              Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.red.withOpacity(.25)),
+                ),
+                child: Text(
+                  _msg!,
+                  style: const TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            TextField(
+              controller: _showingName,
+              enabled: !_saving && !AppSession.isSupportMode,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: 'Showing Name',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _firstName,
+                    enabled: !_saving && !AppSession.isSupportMode,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(
+                      labelText: 'First Name',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextField(
+                    controller: _lastName,
+                    enabled: !_saving && !AppSession.isSupportMode,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(
+                      labelText: 'Last Name',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _email,
+              enabled: !_saving && !AppSession.isSupportMode,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(
+                labelText: 'Email',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _phone,
+              enabled: !_saving && !AppSession.isSupportMode,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                labelText: 'Phone',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _arbaNumber,
+              enabled: !_saving && !AppSession.isSupportMode,
+              decoration: const InputDecoration(
+                labelText: 'ARBA Number',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _addressLine1,
+              enabled: !_saving && !AppSession.isSupportMode,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: 'Address Line 1 *',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _addressLine2,
+              enabled: !_saving && !AppSession.isSupportMode,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: 'Address Line 2',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _city,
+              enabled: !_saving && !AppSession.isSupportMode,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: 'City *',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: TextField(
+                    controller: _state,
+                    enabled: !_saving && !AppSession.isSupportMode,
+                    textCapitalization: TextCapitalization.characters,
+                    inputFormatters: [UpperCaseTextFormatter()],
+                    decoration: const InputDecoration(
+                      labelText: 'State *',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  flex: 3,
+                  child: TextField(
+                    controller: _zip,
+                    enabled: !_saving && !AppSession.isSupportMode,
+                    decoration: const InputDecoration(
+                      labelText: 'ZIP Code *',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFD4A623),
+                foregroundColor: Colors.black87,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+              onPressed: (_saving || AppSession.isSupportMode) ? null : _save,
+              child: Text(_saving ? 'Saving…' : 'Save Exhibitor'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _MoveEntrySheet extends StatefulWidget {
   final Map<String, dynamic> entry;
   final List<Map<String, dynamic>> sections;
@@ -1551,6 +1957,12 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
   final _lastName = TextEditingController();
   final _email = TextEditingController();
   final _phone = TextEditingController();
+  final _arbaNumber = TextEditingController();
+  final _addressLine1 = TextEditingController();
+  final _addressLine2 = TextEditingController();
+  final _city = TextEditingController();
+  final _state = TextEditingController();
+  final _zip = TextEditingController();
 
   String _exhibitorType = 'adult';
   String _species = 'rabbit';
@@ -1626,6 +2038,12 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     _lastName.dispose();
     _email.dispose();
     _phone.dispose();
+    _arbaNumber.dispose();
+    _addressLine1.dispose();
+    _addressLine2.dispose();
+    _city.dispose();
+    _state.dispose();
+    _zip.dispose();
     _animalName.dispose();
     _tattoo.dispose();
     _breed.dispose();
@@ -1664,7 +2082,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
       existing = await supabase
           .from('exhibitors')
           .select(
-            'id,showing_name,display_name,first_name,last_name,email,phone,type,owner_user_id,is_active,is_local_only,created_for_show_id',
+            'id,showing_name,display_name,first_name,last_name,email,phone,address_line1,address_line2,city,state,zip,arba_number,type,owner_user_id,is_active,is_local_only,created_for_show_id',
           )
           .eq('created_for_show_id', widget.showId)
           .eq('is_active', true)
@@ -1676,7 +2094,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
       existing = await supabase
           .from('exhibitors')
           .select(
-            'id,showing_name,display_name,first_name,last_name,email,phone,type,owner_user_id,is_active,is_local_only,created_for_show_id',
+            'id,showing_name,display_name,first_name,last_name,email,phone,address_line1,address_line2,city,state,zip,arba_number,type,owner_user_id,is_active,is_local_only,created_for_show_id',
           )
           .eq('created_for_show_id', widget.showId)
           .eq('is_active', true)
@@ -1694,7 +2112,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
       final res = await supabase
           .from('exhibitors')
           .select(
-            'id,showing_name,display_name,first_name,last_name,email,phone,type,owner_user_id,is_active,is_local_only,created_for_show_id',
+            'id,showing_name,display_name,first_name,last_name,email,phone,address_line1,address_line2,city,state,zip,arba_number,type,owner_user_id,is_active,is_local_only,created_for_show_id',
           )
           .eq('is_active', true)
           .order('display_name', ascending: true);
@@ -2018,6 +2436,12 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     final last = _lastName.text.trim();
     final email = _email.text.trim();
     final phone = _phone.text.trim();
+    final arbaNumber = _arbaNumber.text.trim();
+    final addressLine1 = _addressLine1.text.trim();
+    final addressLine2 = _addressLine2.text.trim();
+    final city = _city.text.trim();
+    final state = _state.text.trim().toUpperCase();
+    final zip = _zip.text.trim();
 
     if (showing.isEmpty &&
         display.isEmpty &&
@@ -2028,37 +2452,50 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
       );
     }
 
-    final existing = await supabase
-      .from('exhibitors')
-      .select(
-        'id,showing_name,display_name,first_name,last_name,email,phone,type,owner_user_id,is_active,is_local_only,created_for_show_id',
-      )
-      .eq('showing_name', showing)
-      .eq('created_for_show_id', widget.showId)
-      .maybeSingle();
-
-  if (existing != null) {
-    final existingType =
-        (existing['type'] ?? '').toString().trim().toLowerCase();
-    final wantedType = _exhibitorType.trim().toLowerCase();
-
-    if (existingType == wantedType) {
-      final row = Map<String, dynamic>.from(existing);
-      final alreadyLoaded = _exhibitors.any(
-        (e) => (e['id'] ?? '').toString() == (row['id'] ?? '').toString(),
-      );
-      if (!alreadyLoaded) {
-        _exhibitors.add(row);
-      }
-      return row['id'].toString();
+    if (addressLine1.isEmpty) {
+      throw Exception('Enter address line 1.');
+    }
+    if (city.isEmpty) {
+      throw Exception('Enter city.');
+    }
+    if (state.isEmpty) {
+      throw Exception('Enter state.');
+    }
+    if (zip.isEmpty) {
+      throw Exception('Enter ZIP code.');
     }
 
-  throw Exception(
-    'An exhibitor named "$showing" already exists for this show as '
-    '${existingType.isEmpty ? 'a different type' : existingType}. '
-    'Please use the existing exhibitor or change the showing name.',
-  );
-}
+    final existing = await supabase
+        .from('exhibitors')
+        .select(
+          'id,showing_name,display_name,first_name,last_name,email,phone,address_line1,address_line2,city,state,zip,arba_number,type,owner_user_id,is_active,is_local_only,created_for_show_id',
+        )
+        .eq('showing_name', showing)
+        .eq('created_for_show_id', widget.showId)
+        .maybeSingle();
+
+    if (existing != null) {
+      final existingType =
+          (existing['type'] ?? '').toString().trim().toLowerCase();
+      final wantedType = _exhibitorType.trim().toLowerCase();
+
+      if (existingType == wantedType) {
+        final row = Map<String, dynamic>.from(existing);
+        final alreadyLoaded = _exhibitors.any(
+          (e) => (e['id'] ?? '').toString() == (row['id'] ?? '').toString(),
+        );
+        if (!alreadyLoaded) {
+          _exhibitors.add(row);
+        }
+        return row['id'].toString();
+      }
+
+      throw Exception(
+        'An exhibitor named "$showing" already exists for this show as '
+        '${existingType.isEmpty ? 'a different type' : existingType}. '
+        'Please use the existing exhibitor or change the showing name.',
+      );
+    }
 
     final inserted = await supabase
         .from('exhibitors')
@@ -2068,6 +2505,12 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
           'first_name': first.isEmpty ? null : first,
           'last_name': last.isEmpty ? null : last,
           'phone': phone.isEmpty ? null : phone,
+          'arba_number': arbaNumber.isEmpty ? null : arbaNumber,
+          'address_line1': addressLine1,
+          'address_line2': addressLine2.isEmpty ? null : addressLine2,
+          'city': city,
+          'state': state,
+          'zip': zip,
           'type': _exhibitorType,
           'is_active': true,
           'is_local_only': true,
@@ -2076,7 +2519,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
           'email': email.isEmpty ? null : email.toLowerCase(),
         })
         .select(
-          'id,showing_name,display_name,first_name,last_name,email,phone,type,owner_user_id,is_active,is_local_only,created_for_show_id',
+          'id,showing_name,display_name,first_name,last_name,email,phone,address_line1,address_line2,city,state,zip,arba_number,type,owner_user_id,is_active,is_local_only,created_for_show_id',
         )
         .single();
 
@@ -2293,6 +2736,14 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
         _variety.clear();
         _notes.clear();
         _furNotes.clear();
+        if (_addNewExhibitor) {
+          _arbaNumber.clear();
+          _addressLine1.clear();
+          _addressLine2.clear();
+          _city.clear();
+          _state.clear();
+          _zip.clear();
+        }
         _isFur = false;
         _saving = false;
         _msg = 'Saved. Add another.';
@@ -2479,6 +2930,75 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                         border: OutlineInputBorder(),
                       ),
                     ),
+                    TextField(
+                      controller: _arbaNumber,
+                      enabled: !_saving && !AppSession.isSupportMode,
+                      decoration: const InputDecoration(
+                        labelText: 'ARBA Number',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _addressLine1,
+                      enabled: !_saving && !AppSession.isSupportMode,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: const InputDecoration(
+                        labelText: 'Address Line 1 *',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _addressLine2,
+                      enabled: !_saving && !AppSession.isSupportMode,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: const InputDecoration(
+                        labelText: 'Address Line 2',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _city,
+                      enabled: !_saving && !AppSession.isSupportMode,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: const InputDecoration(
+                        labelText: 'City *',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: TextField(
+                            controller: _state,
+                            enabled: !_saving && !AppSession.isSupportMode,
+                            textCapitalization: TextCapitalization.characters,
+                            inputFormatters: [UpperCaseTextFormatter()],
+                            decoration: const InputDecoration(
+                              labelText: 'State *',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          flex: 3,
+                          child: TextField(
+                            controller: _zip,
+                            enabled: !_saving && !AppSession.isSupportMode,
+                            decoration: const InputDecoration(
+                              labelText: 'ZIP Code *',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
                     const SizedBox(height: 10),
                     DropdownButtonFormField<String>(
                       value: _exhibitorType,
