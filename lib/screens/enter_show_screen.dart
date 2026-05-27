@@ -1229,10 +1229,6 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
         _selectedSectionIds.add(sectionId);
       }
 
-      if (!_furEntriesEnabled) {
-        _furSectionIdsByAnimal.clear();
-        _furVarietyByAnimalSection.clear();
-      }
 
       _ensureSelectedExhibitorStillAllowed();
 
@@ -1304,8 +1300,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
         );
       }
       for (final sectionId in _selectedSectionIds) {
-        if (!_furEntriesEnabled ||
-            !_isFurSelectedForAnimalSection(animalId, sectionId)) {
+        if (!_isFurSelectedForAnimalSection(animalId, sectionId)) {
           continue;
         }
 
@@ -1503,21 +1498,19 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                   (a) {
                     final animalId = (a['id'] ?? '').toString();
 
-                    final furDescriptions = _furEntriesEnabled
-                        ? (_selectedSectionIds
-                            .where((sectionId) =>
-                                _isFurSelectedForAnimalSection(animalId, sectionId))
-                            .map((sectionId) {
-                              final sectionLabel = _sectionLabelForId(sectionId);
-                              final furVariety =
-                                  _furVarietyForAnimalSection(animalId, sectionId);
-                              if (furVariety != null && furVariety.isNotEmpty) {
-                                return '$sectionLabel ($furVariety)';
-                              }
-                              return sectionLabel;
-                            }).toList()
-                          ..sort())
-                        : <String>[];
+                    final furDescriptions = (_selectedSectionIds
+                        .where((sectionId) =>
+                            _isFurSelectedForAnimalSection(animalId, sectionId))
+                        .map((sectionId) {
+                          final sectionLabel = _sectionLabelForId(sectionId);
+                          final furVariety =
+                              _furVarietyForAnimalSection(animalId, sectionId);
+                          if (furVariety != null && furVariety.isNotEmpty) {
+                            return '$sectionLabel ($furVariety)';
+                          }
+                          return sectionLabel;
+                        }).toList()
+                      ..sort());
 
                     final furText = furDescriptions.isEmpty
                         ? ''
@@ -1629,29 +1622,34 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
 
         for (final sectionId in _selectedSectionIds) {
           if (_sectionIsMeatOnly(sectionId)) continue;
-          final isFur = _furEntriesEnabled &&
-              _isFurSelectedForAnimalSection(animalId, sectionId);
-          final breedName = (a['breed'] ?? '').toString().trim();
 
-          itemsToAdd.add({
+          final animalName = (a['name'] ?? '').toString().trim();
+          final baseItem = <String, dynamic>{
             'cart_id': cartId,
             'section_id': sectionId,
             'animal_id': animalId,
             'exhibitor_id': _selectedExhibitorId,
             'species': a['species'],
             'tattoo': a['tattoo'],
-            'animal_name': (a['name'] ?? '').toString().trim().isEmpty
-                ? null
-                : (a['name'] ?? '').toString().trim(),
+            'animal_name': animalName.isEmpty ? null : animalName,
             'breed': a['breed'],
             'variety': a['variety'],
-            'fur_variety': isFur
-                ? _furVarietyForAnimalSection(animalId, sectionId)
-                : null,
+            'fur_variety': null,
             'sex': a['sex'],
             'class_name': className.isNotEmpty ? className : null,
-            'is_fur': isFur,
-          });
+            'is_fur': false,
+          };
+
+          itemsToAdd.add(baseItem);
+
+          if (_isFurSelectedForAnimalSection(animalId, sectionId)) {
+            itemsToAdd.add({
+              ...baseItem,
+              'variety': _furVarietyForAnimalSection(animalId, sectionId),
+              'fur_variety': _furVarietyForAnimalSection(animalId, sectionId),
+              'is_fur': true,
+            });
+          }
         }
       }
 
@@ -1870,15 +1868,14 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                     });
                   },
           ),
-          if (_furEntriesEnabled &&
-              _safeString(a, 'species').toLowerCase() == 'rabbit') ...[
+          if (_safeString(a, 'species').toLowerCase() == 'rabbit') ...[
             const SizedBox(height: 8),
             Text(
               _selectedSectionIds.isEmpty
-                  ? 'Fur/Wool available: select a section first.'
+                  ? 'Fur entry option: select a show section first.'
                   : _selected[id] != true
-                      ? 'Fur/Wool available: check this animal to choose White or Colored fur entries.'
-                      : 'Optional Fur/Wool entries: choose White or Colored for each section.',
+                      ? 'Fur entry option: check this animal to add White or Colored fur.'
+                      : 'Optional Fur entry: choose White or Colored for each selected section.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
@@ -1904,7 +1901,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     FilterChip(
-                      label: Text('$label Fur/Wool'),
+                      label: Text('$label Fur Entry'),
                       selected: furSelected,
                       onSelected: (_submitting || disabled)
                           ? null
@@ -1924,7 +1921,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                               ? selectedFurVariety
                               : null,
                           decoration: const InputDecoration(
-                            labelText: 'Fur/Wool Class',
+                            labelText: 'Fur Class',
                             border: OutlineInputBorder(),
                             isDense: true,
                           ),
