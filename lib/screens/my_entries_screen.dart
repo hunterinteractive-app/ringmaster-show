@@ -347,6 +347,19 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
     return (rows as List).cast<Map<String, dynamic>>();
   }
 
+  Future<List<Map<String, dynamic>>> _loadMyExhibitors() async {
+    final userId = AppSession.effectiveUserId;
+    if (userId == null) return [];
+
+    final rows = await supabase
+        .from('exhibitors')
+        .select('id,showing_name,display_name')
+        .eq('owner_user_id', userId)
+        .order('display_name', ascending: true);
+
+    return (rows as List).cast<Map<String, dynamic>>();
+  }
+
   Future<void> _editEntry(Map<String, dynamic> entry) async {
     if (AppSession.isSupportMode) {
       setState(() {
@@ -364,13 +377,46 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
     }
 
     final animals = await _loadMyAnimals();
+    final exhibitors = await _loadMyExhibitors();
+    final showSections = _sectionsById.values
+        .where((s) => (s['show_id'] ?? '').toString() == showId)
+        .toList()
+      ..sort((a, b) {
+        int kindRank(dynamic value) {
+          final v = (value ?? '').toString().trim().toLowerCase();
+          if (v == 'open') return 0;
+          if (v == 'youth') return 1;
+          return 99;
+        }
+
+        int toInt(dynamic value, [int fallback = 9999]) {
+          if (value == null) return fallback;
+          if (value is int) return value;
+          return int.tryParse(value.toString()) ?? fallback;
+        }
+
+        final kindCmp = kindRank(a['kind']).compareTo(kindRank(b['kind']));
+        if (kindCmp != 0) return kindCmp;
+
+        final sortCmp = toInt(a['sort_order']).compareTo(toInt(b['sort_order']));
+        if (sortCmp != 0) return sortCmp;
+
+        return (a['letter'] ?? '').toString().compareTo(
+              (b['letter'] ?? '').toString(),
+            );
+      });
 
     final result = await showDialog<_EditEntryResult>(
       context: context,
       builder: (_) => _EditEntryDialogV2(
         initialClassName: (entry['class_name'] ?? '').toString(),
         initialAnimalId: (entry['animal_id'] ?? '').toString(),
+        initialSectionId: (entry['section_id'] ?? '').toString(),
+        initialExhibitorId: (entry['exhibitor_id'] ?? '').toString(),
         animals: animals,
+        exhibitors: exhibitors,
+        sections: showSections,
+        sectionLabel: _sectionLabel,
         onAddNewAnimal: () async {
           await Navigator.push(
             context,
@@ -386,6 +432,26 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
     final newClass = result.className.trim();
     if (newClass.isEmpty) {
       setState(() => _msg = 'Class is required.');
+      return;
+    }
+
+    final newSectionId = result.sectionId.trim();
+    if (newSectionId.isEmpty) {
+      setState(() => _msg = 'Show section is required.');
+      return;
+    }
+
+    final newExhibitorId = result.exhibitorId.trim();
+    if (newExhibitorId.isEmpty) {
+      setState(() => _msg = 'Exhibitor is required.');
+      return;
+    }
+
+    final exhibitorBelongsToAccount = exhibitors.any(
+      (e) => (e['id'] ?? '').toString() == newExhibitorId,
+    );
+    if (!exhibitorBelongsToAccount) {
+      setState(() => _msg = 'Selected exhibitor was not found on your account.');
       return;
     }
 
@@ -416,6 +482,8 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
         'variety': a['variety'],
         'sex': a['sex'],
         'class_name': newClass,
+        'section_id': newSectionId,
+        'exhibitor_id': newExhibitorId,
       }).eq('id', entry['id']);
 
       await _load();
@@ -1395,24 +1463,38 @@ class _ShowExpansionCard extends StatelessWidget {
 class _EditEntryResult {
   final String animalId;
   final String className;
+  final String sectionId;
+  final String exhibitorId;
 
   _EditEntryResult({
     required this.animalId,
     required this.className,
+    required this.sectionId,
+    required this.exhibitorId,
   });
 }
 
 class _EditEntryDialogV2 extends StatefulWidget {
   final String initialAnimalId;
   final String initialClassName;
+  final String initialSectionId;
+  final String initialExhibitorId;
   final List<Map<String, dynamic>> animals;
+  final List<Map<String, dynamic>> exhibitors;
+  final List<Map<String, dynamic>> sections;
+  final String Function(String? sectionId) sectionLabel;
   final Future<void> Function() onAddNewAnimal;
   final Future<List<Map<String, dynamic>>> Function() reloadAnimals;
 
   const _EditEntryDialogV2({
     required this.initialAnimalId,
     required this.initialClassName,
+    required this.initialSectionId,
+    required this.initialExhibitorId,
     required this.animals,
+    required this.exhibitors,
+    required this.sections,
+    required this.sectionLabel,
     required this.onAddNewAnimal,
     required this.reloadAnimals,
   });
@@ -1424,6 +1506,8 @@ class _EditEntryDialogV2 extends StatefulWidget {
 class _EditEntryDialogV2State extends State<_EditEntryDialogV2> {
   late List<Map<String, dynamic>> _animals;
   late String _animalId;
+  late String _sectionId;
+  late String _exhibitorId;
   late TextEditingController _classCtrl;
   bool _busy = false;
 
@@ -1432,6 +1516,8 @@ class _EditEntryDialogV2State extends State<_EditEntryDialogV2> {
     super.initState();
     _animals = widget.animals;
     _animalId = widget.initialAnimalId;
+    _sectionId = widget.initialSectionId;
+    _exhibitorId = widget.initialExhibitorId;
     _classCtrl = TextEditingController(text: widget.initialClassName);
   }
 
@@ -1451,6 +1537,16 @@ class _EditEntryDialogV2State extends State<_EditEntryDialogV2> {
         ? tattoo
         : (name.isNotEmpty ? name : (a['id'] ?? '').toString());
     return '$top — $breed • $variety • $sex';
+  }
+
+  String _exhibitorLabel(Map<String, dynamic> e) {
+    final showingName = (e['showing_name'] ?? '').toString().trim();
+    if (showingName.isNotEmpty) return showingName;
+
+    final displayName = (e['display_name'] ?? '').toString().trim();
+    if (displayName.isNotEmpty) return displayName;
+
+    return (e['id'] ?? '').toString();
   }
 
   Future<void> _addNewAnimal() async {
@@ -1477,6 +1573,12 @@ class _EditEntryDialogV2State extends State<_EditEntryDialogV2> {
   Widget build(BuildContext context) {
     final hasSelected =
         _animals.any((a) => (a['id'] ?? '').toString() == _animalId);
+    final hasSelectedSection = widget.sections.any(
+      (s) => (s['id'] ?? '').toString() == _sectionId,
+    );
+    final hasSelectedExhibitor = widget.exhibitors.any(
+      (e) => (e['id'] ?? '').toString() == _exhibitorId,
+    );
 
     return AlertDialog(
       title: const Text('Edit Entry'),
@@ -1486,6 +1588,42 @@ class _EditEntryDialogV2State extends State<_EditEntryDialogV2> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              DropdownButtonFormField<String>(
+                value: hasSelectedSection ? _sectionId : null,
+                items: widget.sections.map((s) {
+                  final id = (s['id'] ?? '').toString();
+                  return DropdownMenuItem<String>(
+                    value: id,
+                    child: Text(widget.sectionLabel(id)),
+                  );
+                }).toList(),
+                onChanged: _busy
+                    ? null
+                    : (v) => setState(() => _sectionId = v ?? _sectionId),
+                decoration: const InputDecoration(
+                  labelText: 'Show / Section',
+                  helperText: 'Move this entry to another open/youth show section.',
+                ),
+              ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                value: hasSelectedExhibitor ? _exhibitorId : null,
+                items: widget.exhibitors.map((e) {
+                  final id = (e['id'] ?? '').toString();
+                  return DropdownMenuItem<String>(
+                    value: id,
+                    child: Text(_exhibitorLabel(e)),
+                  );
+                }).toList(),
+                onChanged: _busy
+                    ? null
+                    : (v) => setState(() => _exhibitorId = v ?? _exhibitorId),
+                decoration: const InputDecoration(
+                  labelText: 'Exhibitor',
+                  helperText: 'Move this entry to another exhibitor on your account.',
+                ),
+              ),
+              const SizedBox(height: 10),
               DropdownButtonFormField<String>(
                 value: hasSelected ? _animalId : null,
                 items: _animals.map((a) {
@@ -1542,6 +1680,8 @@ class _EditEntryDialogV2State extends State<_EditEntryDialogV2> {
                     _EditEntryResult(
                       animalId: _animalId,
                       className: _classCtrl.text,
+                      sectionId: _sectionId,
+                      exhibitorId: _exhibitorId,
                     ),
                   );
                 },
