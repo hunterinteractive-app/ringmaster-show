@@ -2591,6 +2591,41 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
         if (page.length < pageSize) break;
       }
 
+      final exhibitorIds = list
+          .map((e) => (e['exhibitor_id'] ?? '').toString().trim())
+          .where((id) => id.isNotEmpty)
+          .toSet()
+          .toList();
+
+      if (exhibitorIds.isNotEmpty) {
+        final exhibitorNumberById = <String, String>{};
+        const exhibitorPageSize = 500;
+
+        for (var i = 0; i < exhibitorIds.length; i += exhibitorPageSize) {
+          final chunk = exhibitorIds.skip(i).take(exhibitorPageSize).toList();
+          final exhibitorRows = await supabase
+              .from('exhibitors')
+              .select('id, exhibitor_number')
+              .inFilter('id', chunk);
+
+          for (final row in (exhibitorRows as List).cast<Map<String, dynamic>>()) {
+            final id = (row['id'] ?? '').toString().trim();
+            final number = (row['exhibitor_number'] ?? '').toString().trim();
+            if (id.isNotEmpty && number.isNotEmpty) {
+              exhibitorNumberById[id] = number;
+            }
+          }
+        }
+
+        for (final entry in list) {
+          final exhibitorId = (entry['exhibitor_id'] ?? '').toString().trim();
+          final exhibitorNumber = exhibitorNumberById[exhibitorId];
+          if (exhibitorNumber != null && exhibitorNumber.isNotEmpty) {
+            entry['exhibitor_number'] = exhibitorNumber;
+          }
+        }
+      }
+
       int toInt(dynamic value, [int fallback = 9999]) {
         if (value == null) return fallback;
         if (value is int) return value;
@@ -2670,25 +2705,46 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
     return '\$${n.toStringAsFixed(2)}';
   }
 
-    String _checkInBalanceDue(List<Map<String, dynamic>> entries) {
-      if (entries.isEmpty) return r'$—';
+  String _moneyFromCents(dynamic value) {
+    final n = value is num ? value : num.tryParse(value?.toString() ?? '');
+    if (n == null) return r'$—';
+    return '\$${(n / 100).toStringAsFixed(2)}';
+  }
 
-      for (final e in entries) {
-        final allShows = e['balance_due_all_shows'];
-        if (allShows != null && allShows.toString().trim().isNotEmpty) {
-          return _money(allShows);
-        }
+  bool _hasValue(dynamic value) {
+    return value != null && value.toString().trim().isNotEmpty;
+  }
+
+  String _checkInBalanceDue(List<Map<String, dynamic>> entries) {
+    if (entries.isEmpty) return r'$—';
+
+    // New balance source from report_show_exhibitor_balances / updated check-in RPC.
+    // These values are stored in cents.
+    for (final e in entries) {
+      final dueCents = e['balance_due_cents'];
+      if (_hasValue(dueCents)) {
+        return _moneyFromCents(dueCents);
       }
-
-      for (final e in entries) {
-        final thisShow = e['balance_due_this_show'];
-        if (thisShow != null && thisShow.toString().trim().isNotEmpty) {
-          return _money(thisShow);
-        }
-      }
-
-      return r'$—';
     }
+
+    // Backward-compatible fallback for the older check-in RPC fields.
+    // These values were already dollar amounts.
+    for (final e in entries) {
+      final thisShow = e['balance_due_this_show'];
+      if (_hasValue(thisShow)) {
+        return _money(thisShow);
+      }
+    }
+
+    for (final e in entries) {
+      final allShows = e['balance_due_all_shows'];
+      if (_hasValue(allShows)) {
+        return _money(allShows);
+      }
+    }
+
+    return r'$—';
+  }
     
   String _emailForExhibitor(List<Map<String, dynamic>> entries) {
     for (final e in entries) {
@@ -2823,6 +2879,23 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
   String _exhibitorNameFromEntry(Map<String, dynamic> entry) {
     final dn = _safe(entry, 'exhibitor_label');
     return dn.isEmpty ? '(Unknown Exhibitor)' : dn;
+  }
+
+  String _exhibitorNumberFromEntry(Map<String, dynamic> entry) {
+    const keys = [
+      'exhibitor_number',
+      'show_exhibitor_number',
+      'show_exhibitor_no',
+      'exhibitor_no',
+      'entry_exhibitor_number',
+    ];
+
+    for (final key in keys) {
+      final value = _safe(entry, key);
+      if (value.isNotEmpty) return value;
+    }
+
+    return '';
   }
 
   String _groupVarietyLabel(Map<String, dynamic> row) {
@@ -3046,7 +3119,11 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
 
     final totalPages = exhibitorKeys.length;
 
-    pw.Widget _grayBar({required String left, required String right}) {
+    pw.Widget _grayBar({
+      required String left,
+      required String right,
+      String? trailing,
+    }) {
       return pw.Container(
         padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 10),
         decoration: pw.BoxDecoration(
@@ -3057,6 +3134,7 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
         child: pw.Row(
           children: [
             pw.Expanded(
+              flex: 2,
               child: pw.Text(
                 left,
                 style: pw.TextStyle(
@@ -3068,40 +3146,28 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
             pw.Expanded(
               child: pw.Align(
                 alignment: pw.Alignment.centerRight,
-                child: pw.Text(right, style: pw.TextStyle(fontSize: 11)),
+                child: pw.Text(
+                  right,
+                  style: pw.TextStyle(fontSize: 11),
+                ),
               ),
             ),
+            if (trailing != null && trailing.trim().isNotEmpty) ...[
+              pw.SizedBox(width: 18),
+              pw.Text(
+                trailing,
+                style: pw.TextStyle(
+                  fontSize: 11,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+            ],
           ],
         ),
       );
     }
 
-    pw.Widget _balanceBox({required String balanceDue}) {
-      return pw.Container(
-        padding: const pw.EdgeInsets.all(6),
-        child: pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.end,
-          children: [
-            pw.Text(
-              'Balance Due',
-              style: pw.TextStyle(
-                fontSize: 12,
-                fontWeight: pw.FontWeight.bold,
-                decoration: pw.TextDecoration.underline,
-              ),
-            ),
-            pw.SizedBox(height: 6),
-            pw.Text(
-              balanceDue,
-              style: pw.TextStyle(
-                fontSize: 11,
-                fontWeight: pw.FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
+    // _balanceBox removed as per instructions.
 
     pw.Widget _infoBlockLeft(Map<String, dynamic> ex) {
       final a1 = _safe(ex, 'exhibitor_address_line1');
@@ -3324,6 +3390,10 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
 
       final exMap = exEntries.first;
       final exName = _exhibitorNameFromEntry(exMap);
+      final exhibitorNumber = _exhibitorNumberFromEntry(exMap);
+      final exhibitorLabel = exhibitorNumber.isEmpty
+          ? exName
+          : '$exName    Exhibitor #: $exhibitorNumber';
       final numberEntered = exEntries.length;
       final balanceDue = _checkInBalanceDue(exEntries);
       final multi = _isMultiSection(exEntries);
@@ -3375,19 +3445,10 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
 
             widgets.add(pw.SizedBox(height: 8));
             widgets.add(
-              pw.Row(
-                children: [
-                  pw.Spacer(),
-                  _balanceBox(balanceDue: balanceDue),
-                ],
-              ),
-            );
-
-            widgets.add(pw.SizedBox(height: 8));
-            widgets.add(
               _grayBar(
-                left: exName,
+                left: exhibitorLabel,
                 right: 'Number Entered  $numberEntered',
+                trailing: 'Balance Due: $balanceDue',
               ),
             );
 
@@ -3729,34 +3790,84 @@ class _RemarkCardsGeneratorSheetState extends State<_RemarkCardsGeneratorSheet> 
   }
 
   Future<List<Map<String, dynamic>>> _fetchEntries() async {
-    final rows = await supabase.rpc(
-      'report_checkin_entries',
-      params: {
-        'p_show_id': widget.showId,
-        'p_section_id': _selectedSectionId,
-        'p_include_scratched': widget.includeScratched,
-      },
-    );
+    const pageSize = 1000;
+    final out = <Map<String, dynamic>>[];
 
-    final out = (rows as List).cast<Map<String, dynamic>>();
+    for (var from = 0;; from += pageSize) {
+      final to = from + pageSize - 1;
+      final rows = await supabase
+          .rpc(
+            'report_checkin_entries',
+            params: {
+              'p_show_id': widget.showId,
+              'p_section_id': _selectedSectionId,
+              'p_include_scratched': widget.includeScratched,
+            },
+          )
+          .range(from, to);
+
+      final page = (rows as List).cast<Map<String, dynamic>>();
+      out.addAll(page);
+
+      if (page.length < pageSize) break;
+    }
+
+    int toInt(dynamic value, [int fallback = 9999]) {
+      if (value == null) return fallback;
+      if (value is int) return value;
+      return int.tryParse(value.toString()) ?? fallback;
+    }
+
+    int cmpText(String ak, String bk) =>
+        ak.toLowerCase().compareTo(bk.toLowerCase());
 
     out.sort((a, b) {
-      int cmp(String ak, String bk) =>
-          ak.toLowerCase().compareTo(bk.toLowerCase());
+      final sectionSortCmp = toInt(a['section_sort_order'])
+          .compareTo(toInt(b['section_sort_order']));
+      if (sectionSortCmp != 0) return sectionSortCmp;
 
-      final breedCmp = cmp(_safe(a, 'breed'), _safe(b, 'breed'));
+      final sectionLetterCmp = cmpText(
+        _safe(a, 'section_letter'),
+        _safe(b, 'section_letter'),
+      );
+      if (sectionLetterCmp != 0) return sectionLetterCmp;
+
+      final breedSortCmp = toInt(a['breed_sort_order'])
+          .compareTo(toInt(b['breed_sort_order']));
+      if (breedSortCmp != 0) return breedSortCmp;
+
+      final breedCmp = cmpText(_safe(a, 'breed'), _safe(b, 'breed'));
       if (breedCmp != 0) return breedCmp;
 
-      final varietyCmp = cmp(_groupVarietyLabel(a), _groupVarietyLabel(b));
+      final groupSortCmp = toInt(a['group_sort_order'])
+          .compareTo(toInt(b['group_sort_order']));
+      if (groupSortCmp != 0) return groupSortCmp;
+
+      final varietySortCmp = toInt(a['variety_sort_order'])
+          .compareTo(toInt(b['variety_sort_order']));
+      if (varietySortCmp != 0) return varietySortCmp;
+
+      final varietyCmp = cmpText(_groupVarietyLabel(a), _groupVarietyLabel(b));
       if (varietyCmp != 0) return varietyCmp;
 
-      final classCmp = cmp(_safe(a, 'class_name'), _safe(b, 'class_name'));
+      final classSortCmp = toInt(a['class_sort_order'])
+          .compareTo(toInt(b['class_sort_order']));
+      if (classSortCmp != 0) return classSortCmp;
+
+      final classCmp = cmpText(_safe(a, 'class_name'), _safe(b, 'class_name'));
       if (classCmp != 0) return classCmp;
 
-      final coopCmp = cmp(_safe(a, 'coop_number'), _safe(b, 'coop_number'));
+      final sexSortCmp = toInt(a['sex_sort_order'])
+          .compareTo(toInt(b['sex_sort_order']));
+      if (sexSortCmp != 0) return sexSortCmp;
+
+      final sexCmp = cmpText(_safe(a, 'sex'), _safe(b, 'sex'));
+      if (sexCmp != 0) return sexCmp;
+
+      final coopCmp = cmpText(_safe(a, 'coop_number'), _safe(b, 'coop_number'));
       if (coopCmp != 0) return coopCmp;
 
-      return cmp(_safe(a, 'tattoo'), _safe(b, 'tattoo'));
+      return cmpText(_safe(a, 'tattoo'), _safe(b, 'tattoo'));
     });
 
     return out;

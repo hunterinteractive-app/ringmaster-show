@@ -1,4 +1,6 @@
-// lib/screens/admin/closeout/data/loaders/unpaid_balances_report_loader.dart
+// lib/screens/admin/closeout/models/unpaid/unpaid_balances_report_loader.dart
+
+import 'dart:convert';
 
 import '../../models/base/report_request.dart';
 import '../../models/unpaid/unpaid_balances_report_data.dart';
@@ -13,148 +15,33 @@ class UnpaidBalancesReportLoader {
     final showId = request.showId;
 
     final show = await repo.loadShowBasics(showId);
-    final feeSettings = await repo.loadShowFeeSettings(showId);
-    final sectionFeeSettings = await repo.loadShowSectionFeeSettings(showId);
-    final sections = await repo.loadShowSections(showId);
-    final entries = await repo.loadEntriesForBalanceReport(showId);
-
-    final validEntries = entries.where((row) {
-      final scratchedAt = row['scratched_at'];
-      final isDisqualified = row['is_disqualified'] == true;
-      final isTest = row['is_test'] == true;
-
-      return scratchedAt == null && !isDisqualified && !isTest;
-    }).map((e) => Map<String, dynamic>.from(e)).toList();
-
-    final exhibitorIds = validEntries
-        .map((e) => _str(e['exhibitor_id']))
-        .where((e) => e.isNotEmpty)
-        .toSet()
-        .toList();
-
-    final exhibitorRows = await repo.loadExhibitorsByIds(exhibitorIds);
-
-    final exhibitorById = <String, Map<String, dynamic>>{
-      for (final row in exhibitorRows) _str(row['id']): row,
-    };
-
-    final sectionById = <String, Map<String, dynamic>>{
-      for (final row in sections) _str(row['id']): row,
-    };
-
-    final sectionFeeById = <String, Map<String, dynamic>>{
-      for (final row in sectionFeeSettings) _str(row['section_id']): row,
-    };
-
-    final groupedByExhibitor = <String, List<Map<String, dynamic>>>{};
-
-    for (final entry in validEntries) {
-      final exhibitorId = _str(entry['exhibitor_id']);
-      if (exhibitorId.isEmpty) continue;
-
-      groupedByExhibitor.putIfAbsent(exhibitorId, () => []).add(entry);
-    }
-
-    final currency = _str(feeSettings?['currency']).isEmpty
-        ? 'USD'
-        : _str(feeSettings?['currency']);
-
-    final feePerEntry = _asDouble(feeSettings?['fee_per_entry']);
-    final feePerShow = _asDouble(feeSettings?['fee_per_show']);
-    final discountEnabled =
-        feeSettings?['multi_show_discount_enabled'] == true;
-    final discountType =
-        _str(feeSettings?['multi_show_discount_type']).toLowerCase();
-    final discountValue = _asDouble(feeSettings?['multi_show_discount_value']);
+    final balanceRows = await repo.loadShowExhibitorBalancesReport(showId);
 
     final rows = <UnpaidBalanceRow>[];
 
-    for (final entry in groupedByExhibitor.entries) {
-      final exhibitorId = entry.key;
-      final exhibitorEntries = entry.value;
-      final exhibitor = exhibitorById[exhibitorId] ?? const <String, dynamic>{};
+    for (final balance in balanceRows) {
+      final totalDue = _centsToDollars(balance['balance_due_cents']);
 
-      final exhibitorName = _resolveExhibitorName(exhibitor);
-      final exhibitorType = _titleCase(_str(exhibitor['type']));
-      final phone = _str(exhibitor['phone']);
-
-      final sectionCounts = <String, int>{};
-      for (final item in exhibitorEntries) {
-        final sectionId = _str(item['section_id']);
-        final section = sectionById[sectionId];
-        final sectionLabel = _buildSectionLabel(section);
-        sectionCounts[sectionLabel] = (sectionCounts[sectionLabel] ?? 0) + 1;
-      }
-
-      final sectionRows = sectionCounts.entries
-          .map(
-            (e) => SectionCountRow(
-              label: e.key,
-              count: e.value,
-            ),
-          )
-          .toList()
-        ..sort((a, b) => a.label.compareTo(b.label));
-
-      final entryCount = exhibitorEntries.length;
-      final subtotal = exhibitorEntries.fold<double>(0.0, (sum, item) {
-        final sectionId = _str(item['section_id']);
-        final sectionFees = sectionFeeById[sectionId];
-        final sectionEntryFee = _asDouble(
-          sectionFees?['fee_per_entry'],
-          fallback: feePerEntry,
-        );
-
-        final furFee = item['is_fur'] == true
-            ? _asDouble(sectionFees?['fur_fee'])
-            : 0.0;
-
-        return sum + sectionEntryFee + furFee;
-      });
-
-      final chargedSectionIds = exhibitorEntries
-          .map((item) => _str(item['section_id']))
-          .where((id) => id.isNotEmpty)
-          .toSet();
-
-      final showFee = chargedSectionIds.fold<double>(0.0, (sum, sectionId) {
-        final sectionFees = sectionFeeById[sectionId];
-        final sectionShowFee = _asDouble(
-          sectionFees?['fee_per_show'],
-          fallback: feePerShow,
-        );
-        return sum + sectionShowFee;
-      });
-
-      final discount = _calculateMultiShowDiscount(
-        exhibitorEntries,
-        sectionFeeById: sectionFeeById,
-        fallbackFeePerEntry: feePerEntry,
-        discountEnabled: discountEnabled,
-        discountType: discountType,
-        discountValue: discountValue,
-      );
-
-      final totalDue = (subtotal + showFee) - discount;
-
-      final row = UnpaidBalanceRow(
-        exhibitorId: exhibitorId,
-        exhibitorName: exhibitorName,
-        exhibitorType: exhibitorType,
-        phone: phone,
-        sections: sectionRows,
-        entryCount: entryCount,
-        subtotal: subtotal,
-        showFee: showFee,
-        discount: discount,
-        totalDue: totalDue < 0 ? 0.0 : totalDue,
-      );
-
-      if (request.hideZeroBalances && row.totalDue <= 0) {
+      if (request.hideZeroBalances && totalDue <= 0) {
         continue;
       }
 
-      rows.add(row);
+      rows.add(
+        UnpaidBalanceRow(
+          exhibitorId: _str(balance['exhibitor_id']),
+          exhibitorName: _resolveBalanceExhibitorName(balance),
+          exhibitorType: _str(balance['exhibitor_type']).isEmpty
+              ? ''
+              : _str(balance['exhibitor_type']),
+          phone: _str(balance['phone']),
+          sections: _sectionRowsFromBreakdown(balance['section_breakdown']),
+          entryCount: _asInt(balance['entry_count']),
+          subtotal: _centsToDollars(balance['subtotal_before_discount_cents']),
+          showFee: _centsToDollars(balance['show_fee_subtotal_cents']),
+          discount: _centsToDollars(balance['discount_cents']),
+          totalDue: totalDue < 0 ? 0.0 : totalDue,
+        ),
+      );
     }
 
     rows.sort(
@@ -167,6 +54,12 @@ class UnpaidBalancesReportLoader {
     final totalEntries = rows.fold<int>(0, (sum, row) => sum + row.entryCount);
     final grandTotalDue =
         rows.fold<double>(0.0, (sum, row) => sum + row.totalDue);
+
+    final currency = balanceRows.isEmpty
+        ? 'USD'
+        : (_str(balanceRows.first['currency']).isEmpty
+            ? 'USD'
+            : _str(balanceRows.first['currency']).toUpperCase());
 
     return UnpaidBalancesReportData(
       showName: _str(show['name']),
@@ -183,93 +76,114 @@ class UnpaidBalancesReportLoader {
     );
   }
 
-  double _calculateMultiShowDiscount(
-    List<Map<String, dynamic>> entries, {
-    required Map<String, Map<String, dynamic>> sectionFeeById,
-    required double fallbackFeePerEntry,
-    required bool discountEnabled,
-    required String discountType,
-    required double discountValue,
-  }) {
-    if (!discountEnabled || entries.length < 2) return 0.0;
+  String _resolveBalanceExhibitorName(Map<String, dynamic> balance) {
+    final exhibitorName = _str(balance['exhibitor_name']);
+    if (exhibitorName.isNotEmpty) return exhibitorName;
 
-    final entriesByAnimal = <String, List<Map<String, dynamic>>>{};
-    for (final entry in entries) {
-      final animalId = _str(entry['animal_id']);
-      if (animalId.isEmpty) continue;
-      entriesByAnimal.putIfAbsent(animalId, () => []).add(entry);
-    }
-
-    var discount = 0.0;
-
-    for (final animalEntries in entriesByAnimal.values) {
-      if (animalEntries.length <= 1) continue;
-
-      final sorted = [...animalEntries]
-        ..sort((a, b) {
-          final aFee = _entryFeeForDiscount(
-            a,
-            sectionFeeById: sectionFeeById,
-            fallbackFeePerEntry: fallbackFeePerEntry,
-          );
-          final bFee = _entryFeeForDiscount(
-            b,
-            sectionFeeById: sectionFeeById,
-            fallbackFeePerEntry: fallbackFeePerEntry,
-          );
-          return bFee.compareTo(aFee);
-        });
-
-      for (final entry in sorted.skip(1)) {
-        final entryFee = _entryFeeForDiscount(
-          entry,
-          sectionFeeById: sectionFeeById,
-          fallbackFeePerEntry: fallbackFeePerEntry,
-        );
-
-        if (entryFee <= 0) continue;
-
-        if (discountType == 'percent') {
-          final pct =
-              (discountValue <= 1.0) ? discountValue : (discountValue / 100.0);
-          discount += entryFee * pct;
-        } else if (discountType == 'amount') {
-          discount += discountValue > entryFee ? entryFee : discountValue;
-        }
-      }
-    }
-
-    return discount < 0 ? 0.0 : discount;
-  }
-
-  double _entryFeeForDiscount(
-    Map<String, dynamic> entry, {
-    required Map<String, Map<String, dynamic>> sectionFeeById,
-    required double fallbackFeePerEntry,
-  }) {
-    final sectionId = _str(entry['section_id']);
-    final sectionFees = sectionFeeById[sectionId];
-    return _asDouble(
-      sectionFees?['fee_per_entry'],
-      fallback: fallbackFeePerEntry,
-    );
-  }
-
-  String _resolveExhibitorName(Map<String, dynamic> exhibitor) {
-    final showingName = _str(exhibitor['showing_name']);
+    final showingName = _str(balance['showing_name']);
     if (showingName.isNotEmpty) return showingName;
 
-    final displayName = _str(exhibitor['display_name']);
+    final displayName = _str(balance['display_name']);
     if (displayName.isNotEmpty) return displayName;
 
     final fullName = [
-      _str(exhibitor['first_name']),
-      _str(exhibitor['last_name']),
+      _str(balance['first_name']),
+      _str(balance['last_name']),
     ].where((e) => e.isNotEmpty).join(' ').trim();
 
     if (fullName.isNotEmpty) return fullName;
 
     return 'Unknown Exhibitor';
+  }
+
+  List<SectionCountRow> _sectionRowsFromBreakdown(dynamic value) {
+    final items = _jsonList(value);
+    if (items.isEmpty) return const <SectionCountRow>[];
+
+    final parsedRows = items
+        .whereType<Map>()
+        .map((item) {
+          final map = Map<String, dynamic>.from(item);
+          final label = _str(map['label']).isEmpty
+              ? _buildSectionLabel(map)
+              : _str(map['label']);
+
+          return _ParsedSectionCountRow(
+            label: label,
+            count: _asInt(map['entry_count']),
+            kind: _str(map['kind']),
+            letter: _str(map['letter']),
+          );
+        })
+        .where((row) => row.label.isNotEmpty && row.count > 0)
+        .toList();
+
+    parsedRows.sort((a, b) {
+      final kindCompare = _sectionKindRank(a.kind).compareTo(
+        _sectionKindRank(b.kind),
+      );
+      if (kindCompare != 0) return kindCompare;
+
+      final letterCompare = a.letter.toUpperCase().compareTo(
+            b.letter.toUpperCase(),
+          );
+      if (letterCompare != 0) return letterCompare;
+
+      return a.label.toLowerCase().compareTo(b.label.toLowerCase());
+    });
+
+    return parsedRows
+        .map(
+          (row) => SectionCountRow(
+            label: row.label,
+            count: row.count,
+          ),
+        )
+        .toList();
+  }
+
+  List<dynamic> _jsonList(dynamic value) {
+    if (value is List) return value;
+
+    if (value is String) {
+      final trimmed = value.trim();
+      if (trimmed.isEmpty) return const <dynamic>[];
+
+      try {
+        final decoded = jsonDecode(trimmed);
+        return decoded is List ? decoded : const <dynamic>[];
+      } catch (_) {
+        return const <dynamic>[];
+      }
+    }
+
+    return const <dynamic>[];
+  }
+
+  int _sectionKindRank(String kind) {
+    switch (kind.trim().toLowerCase()) {
+      case 'open':
+        return 0;
+      case 'youth':
+        return 1;
+      default:
+        return 9;
+    }
+  }
+
+  double _centsToDollars(dynamic value) {
+    return _asInt(value) / 100.0;
+  }
+
+  int _asInt(dynamic value, {int fallback = 0}) {
+    if (value == null) return fallback;
+    if (value is int) return value;
+    if (value is num) return value.round();
+
+    final s = value.toString().trim();
+    if (s.isEmpty) return fallback;
+
+    return int.tryParse(s) ?? double.tryParse(s)?.round() ?? fallback;
   }
 
   String _buildSectionLabel(Map<String, dynamic>? section) {
@@ -314,16 +228,6 @@ class UnpaidBalancesReportLoader {
         .join(' ');
   }
 
-  double _asDouble(dynamic value, {double fallback = 0.0}) {
-    if (value == null) return fallback;
-    if (value is num) return value.toDouble();
-
-    final s = value.toString().trim();
-    if (s.isEmpty) return fallback;
-
-    return double.tryParse(s) ?? fallback;
-  }
-
   String _str(dynamic value) {
     if (value == null) return '';
     return value.toString().trim();
@@ -334,4 +238,18 @@ class UnpaidBalancesReportLoader {
     if (value is DateTime) return value;
     return DateTime.tryParse(value.toString());
   }
+}
+
+class _ParsedSectionCountRow {
+  final String label;
+  final int count;
+  final String kind;
+  final String letter;
+
+  const _ParsedSectionCountRow({
+    required this.label,
+    required this.count,
+    required this.kind,
+    required this.letter,
+  });
 }

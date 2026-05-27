@@ -117,6 +117,38 @@ class CloseoutRepository {
     return List<Map<String, dynamic>>.from(rows);
   }
 
+  Future<List<Map<String, dynamic>>> loadShowExhibitorBalances(
+    String showId,
+  ) async {
+    return loadShowExhibitorBalancesReport(showId);
+  }
+
+  Future<List<Map<String, dynamic>>> loadShowExhibitorBalancesReport(
+    String showId,
+  ) async {
+    const pageSize = 1000;
+    final allRows = <Map<String, dynamic>>[];
+
+    for (var from = 0;; from += pageSize) {
+      final to = from + pageSize - 1;
+      final rows = await supabase
+          .rpc(
+            'report_show_exhibitor_balances',
+            params: {
+              'p_show_id': showId,
+            },
+          )
+          .range(from, to);
+
+      final batch = List<Map<String, dynamic>>.from(rows);
+      allRows.addAll(batch);
+
+      if (batch.length < pageSize) break;
+    }
+
+    return allRows;
+  }
+
   Future<List<Map<String, dynamic>>> loadShowSections(
     String showId,
   ) async {

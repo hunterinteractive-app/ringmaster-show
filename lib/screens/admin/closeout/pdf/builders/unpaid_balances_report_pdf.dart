@@ -177,7 +177,7 @@ class UnpaidBalancesReportPdfBuilder {
           ),
           pw.SizedBox(height: 6),
           pw.Text(
-            'If balances were expected, check that entries are not marked scratched, disqualified, or test, and that show fee settings produce a balance greater than zero.',
+            'If balances were expected, check that the exhibitor balance RPC is returning rows with payment_status unpaid or partial and balance_due_cents greater than zero.',
             style: const pw.TextStyle(fontSize: 8),
           ),
         ],
@@ -192,15 +192,16 @@ class UnpaidBalancesReportPdfBuilder {
         width: 0.4,
       ),
       columnWidths: const {
-        0: pw.FlexColumnWidth(0.95), // Paid
-        1: pw.FlexColumnWidth(1.80), // Exhibitor
-        2: pw.FlexColumnWidth(0.75), // Type
-        3: pw.FlexColumnWidth(1.15), // Phone
-        4: pw.FlexColumnWidth(1.70), // Sections
-        5: pw.FlexColumnWidth(0.55), // Entries
-        6: pw.FlexColumnWidth(0.80), // Subtotal
-        7: pw.FlexColumnWidth(0.70), // Show Fee
-        8: pw.FlexColumnWidth(0.85), // Total Due
+        0: pw.FlexColumnWidth(0.70), // Paid
+        1: pw.FlexColumnWidth(1.65), // Exhibitor
+        2: pw.FlexColumnWidth(0.70), // Type
+        3: pw.FlexColumnWidth(1.05), // Phone
+        4: pw.FlexColumnWidth(1.65), // Sections
+        5: pw.FlexColumnWidth(0.50), // Entries
+        6: pw.FlexColumnWidth(0.72), // Subtotal
+        7: pw.FlexColumnWidth(0.65), // Show Fee
+        8: pw.FlexColumnWidth(0.65), // Discount
+        9: pw.FlexColumnWidth(0.82), // Balance Due
       },
       children: [
         _headerRow(),
@@ -235,7 +236,8 @@ class UnpaidBalancesReportPdfBuilder {
         cell('Entries', alignment: pw.Alignment.centerRight),
         cell('Subtotal', alignment: pw.Alignment.centerRight),
         cell('Show Fee', alignment: pw.Alignment.centerRight),
-        cell('Total Due', alignment: pw.Alignment.centerRight),
+        cell('Discount', alignment: pw.Alignment.centerRight),
+        cell('Balance Due', alignment: pw.Alignment.centerRight),
       ],
     );
   }
@@ -260,11 +262,11 @@ class UnpaidBalancesReportPdfBuilder {
 
     return pw.TableRow(
       verticalAlignment: pw.TableCellVerticalAlignment.middle,
-        children: [
-          pw.Padding(
-            padding: const pw.EdgeInsets.all(4),
-            child: _paidCheckboxCell(),
-          ),
+      children: [
+        pw.Padding(
+          padding: const pw.EdgeInsets.all(4),
+          child: _paidCheckboxCell(),
+        ),
         textCell(row.exhibitorName),
         textCell(row.exhibitorType),
         textCell(row.phone),
@@ -283,6 +285,10 @@ class UnpaidBalancesReportPdfBuilder {
         ),
         textCell(
           _money(row.showFee, currency: null),
+          alignment: pw.Alignment.centerRight,
+        ),
+        textCell(
+          row.discount > 0 ? '-${_money(row.discount, currency: null)}' : '',
           alignment: pw.Alignment.centerRight,
         ),
         textCell(
@@ -391,7 +397,7 @@ class UnpaidBalancesReportPdfBuilder {
             pw.SizedBox(height: 4),
             pw.Divider(thickness: 0.5),
             _totalLine(
-              'Grand Total Due',
+              'Grand Balance Due',
               _money(data.grandTotalDue, currency: data.currency),
               bold: true,
             ),
