@@ -3,6 +3,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:screenshot/screenshot.dart';
+import 'package:ringmaster_show/services/help_report_service.dart';
 
 import 'package:ringmaster_show/screens/admin/judging/mobile/qr_results_entry_screen.dart';
 import 'package:ringmaster_show/screens/admin/judging/mobile/table_qr_queue_screen.dart';
@@ -95,38 +97,41 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'RingMaster Show',
-      theme: AppTheme.lightTheme,
-      home: const Root(),
-      onGenerateRoute: (settings) {
-        final routeUri = Uri.parse(settings.name ?? '');
-        Uri uri = routeUri;
+    return Screenshot(
+      controller: HelpReportService.screenshotController,
+      child: MaterialApp(
+        title: 'RingMaster Show',
+        theme: AppTheme.lightTheme,
+        home: const Root(),
+        onGenerateRoute: (settings) {
+          final routeUri = Uri.parse(settings.name ?? '');
+          Uri uri = routeUri;
 
-        if (Uri.base.fragment.isNotEmpty) {
-          uri = Uri.parse(Uri.base.fragment);
-        }
+          if (Uri.base.fragment.isNotEmpty) {
+            uri = Uri.parse(Uri.base.fragment);
+          }
 
-        if (uri.path == '/qr-table-results') {
-          return MaterialPageRoute(
-            builder: (_) => _tableQrScreenFromUri(uri),
-          );
-        }
+          if (uri.path == '/qr-table-results') {
+            return MaterialPageRoute(
+              builder: (_) => _tableQrScreenFromUri(uri),
+            );
+          }
 
-        if (uri.path == '/qr-results-entry') {
-          return MaterialPageRoute(
-            builder: (_) => _qrScreenFromUri(uri),
-          );
-        }
+          if (uri.path == '/qr-results-entry') {
+            return MaterialPageRoute(
+              builder: (_) => _qrScreenFromUri(uri),
+            );
+          }
 
-        if (uri.path == '/demo') {
-          return MaterialPageRoute(
-            builder: (_) => const DemoLoginScreen(),
-          );
-        }
+          if (uri.path == '/demo') {
+            return MaterialPageRoute(
+              builder: (_) => const DemoLoginScreen(),
+            );
+          }
 
-        return null;
-      },
+          return null;
+        },
+      ),
     );
   }
 }

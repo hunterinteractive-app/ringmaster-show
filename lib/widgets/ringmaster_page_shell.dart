@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/screens/show_list_screen.dart';
+import 'package:ringmaster_show/widgets/help_report_dialog.dart';
 
 class RingMasterPageShell extends StatelessWidget {
   final String title;
@@ -23,6 +24,9 @@ class RingMasterPageShell extends StatelessWidget {
   final Widget? floatingActionButton;
   final FloatingActionButtonLocation? floatingActionButtonLocation;
 
+  final String? showId;
+  final bool showHelpButton;
+
   const RingMasterPageShell({
     super.key,
     required this.title,
@@ -40,6 +44,8 @@ class RingMasterPageShell extends StatelessWidget {
     this.headerColor,
     this.floatingActionButton,
     this.floatingActionButtonLocation,
+    this.showId,
+    this.showHelpButton = true,
   });
 
   bool _canPop(BuildContext context) {
@@ -49,6 +55,10 @@ class RingMasterPageShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final route = ModalRoute.of(context);
+    final routeName = route?.settings.name;
+    final routeArgs = route?.settings.arguments;
+    final effectiveShowId = showId ?? _showIdFromRouteArguments(routeArgs);
     final screenWidth = MediaQuery.of(context).size.width;
 
     final isMobile = screenWidth < 700;
@@ -102,6 +112,19 @@ class RingMasterPageShell extends StatelessWidget {
           );
 
     final resolvedActions = <Widget>[
+      if (showHelpButton)
+        IconButton(
+          tooltip: 'Report an issue',
+          icon: const Icon(Icons.help_outline),
+          onPressed: () => showDialog<void>(
+            context: context,
+            builder: (_) => HelpReportDialog(
+              pageTitle: title,
+              pageRoute: routeName,
+              showId: effectiveShowId,
+            ),
+          ),
+        ),
       if (showHomeButton)
         IconButton(
           tooltip: 'Home',
@@ -189,6 +212,31 @@ class RingMasterPageShell extends StatelessWidget {
       ),
     );
   }
+}
+
+String? _showIdFromRouteArguments(Object? args) {
+  if (args == null) return null;
+
+  if (args is String && args.trim().isNotEmpty) {
+    return args.trim();
+  }
+
+  if (args is Map) {
+    final possibleKeys = [
+      'showId',
+      'show_id',
+      'id',
+    ];
+
+    for (final key in possibleKeys) {
+      final value = args[key];
+      if (value != null && value.toString().trim().isNotEmpty) {
+        return value.toString().trim();
+      }
+    }
+  }
+
+  return null;
 }
 
 class _MobileHeader extends StatelessWidget {

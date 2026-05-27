@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/widgets/help_report_dialog.dart';
 import 'dart:convert';
 import 'dart:html' as html;
 import 'dart:typed_data';
@@ -1423,6 +1424,18 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
             tooltip: 'Reload',
             icon: const Icon(Icons.refresh),
             onPressed: _saving ? null : _load,
+          ),
+          IconButton(
+            tooltip: 'Report an issue',
+            icon: const Icon(Icons.help_outline),
+            onPressed: () => showDialog<void>(
+              context: context,
+              builder: (_) => HelpReportDialog(
+                pageTitle: 'Show Settings — $_showNameForTitle',
+                pageRoute: ModalRoute.of(context)?.settings.name,
+                showId: widget.showId,
+              ),
+            ),
           ),
         ],
       ),

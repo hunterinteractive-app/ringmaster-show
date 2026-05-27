@@ -41,6 +41,8 @@ dependencies:
   barcode_widget: ^2.0.4
   uuid: ^4.5.1
   shared_preferences: ^2.3.3
+  device_info_plus: ^11.3.0
+  screenshot: ^3.0.0
 
 
 

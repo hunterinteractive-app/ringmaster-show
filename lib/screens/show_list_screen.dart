@@ -7,6 +7,8 @@ import 'package:ringmaster_show/screens/admin/admin_shows_screen.dart';
 import 'package:ringmaster_show/screens/admin/edit_show_settings_screen.dart';
 import 'package:ringmaster_show/screens/admin/entries_by_breed_section_table.dart';
 
+import 'package:ringmaster_show/widgets/help_report_dialog.dart';
+
 
 import 'login_screen.dart';
 import 'my_animals_screen.dart';
@@ -994,6 +996,15 @@ class _ShowListScreenState extends State<ShowListScreen> {
                 ),
               );
             },
+            onHelp: () => showDialog<void>(
+              context: context,
+              builder: (_) => HelpReportDialog(
+                pageTitle: widget.demoMode
+                    ? 'Demo Mode — RingMaster Show'
+                    : 'Upcoming Shows',
+                pageRoute: ModalRoute.of(context)?.settings.name,
+              ),
+            ),
             onLogout: () => _logout(context),
             demoMode: widget.demoMode,
           ),
@@ -1368,6 +1379,7 @@ class _ResponsiveShowAppBar extends StatelessWidget
   final VoidCallback onEntries;
   final VoidCallback onSuperAdmin;
   final VoidCallback onAccount;
+  final VoidCallback onHelp;
   final VoidCallback onLogout;
   final bool demoMode;
 
@@ -1381,6 +1393,7 @@ class _ResponsiveShowAppBar extends StatelessWidget
     required this.onEntries,
     required this.onSuperAdmin,
     required this.onAccount,
+    required this.onHelp,
     required this.onLogout,
     this.demoMode = false,
   });
@@ -1501,6 +1514,12 @@ class _ResponsiveShowAppBar extends StatelessWidget
             showLabel: showLabels || medium,
             onTap: onAccount,
           ),
+        _TopBarAction(
+          icon: Icons.help_outline,
+          label: 'Help',
+          showLabel: showLabels || medium,
+          onTap: onHelp,
+        ),
         if (!showLabels)
           PopupMenuButton<String>(
             tooltip: 'More',
@@ -1511,6 +1530,7 @@ class _ResponsiveShowAppBar extends StatelessWidget
               //   onSuperintendent!();
               // }
               if (value == 'super_admin') onSuperAdmin();
+              if (value == 'help') onHelp();
               if (value == 'logout') onLogout();
             },
             itemBuilder: (context) => [
@@ -1525,6 +1545,10 @@ class _ResponsiveShowAppBar extends StatelessWidget
                   value: 'super_admin',
                   child: Text('Super Admin'),
                 ),
+              const PopupMenuItem<String>(
+                value: 'help',
+                child: Text('Help'),
+              ),
               const PopupMenuItem<String>(
                 value: 'logout',
                 child: Text('Logout'),
