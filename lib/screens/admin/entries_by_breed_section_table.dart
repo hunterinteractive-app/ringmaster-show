@@ -576,6 +576,83 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
     );
   }
 
+  Widget _overallTotalsHeader() {
+    final totalShowing = _breedGroups.fold<int>(
+      0,
+      (sum, breed) => sum + breed.rabbitCount,
+    );
+
+    final totalExhibitors = <String>{};
+    for (final breed in _breedGroups) {
+      for (final exhibitors in breed.exhibitorsBySection.values) {
+        totalExhibitors.addAll(exhibitors);
+      }
+    }
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black.withOpacity(0.06)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Entry Totals',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 10),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                ..._sections.map((s) {
+                  final sid = s['id'].toString();
+                  var showing = 0;
+                  final exhibitors = <String>{};
+
+                  for (final breed in _breedGroups) {
+                    showing += _countForSection(breed.countsBySection, sid);
+                    exhibitors.addAll(breed.exhibitorsBySection[sid] ?? const <String>{});
+                  }
+
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: _summaryChip(
+                      widget.showExhibitorCounts
+                          ? '${_sectionHeader(s)}: $showing/${exhibitors.length}'
+                          : '${_sectionHeader(s)}: $showing',
+                    ),
+                  );
+                }),
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: _summaryChip(
+                    widget.showExhibitorCounts
+                        ? 'Overall: $totalShowing/${totalExhibitors.length}'
+                        : 'Overall: $totalShowing',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _summaryChip(String text) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -879,6 +956,7 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
                 ),
               ),
               _countsLegendBar(),
+              _overallTotalsHeader(),
               Expanded(
                 child: ListView.builder(
                   padding: const EdgeInsets.all(12),
