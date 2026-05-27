@@ -353,7 +353,7 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
 
     final rows = await supabase
         .from('exhibitors')
-        .select('id,showing_name,display_name')
+        .select('id,showing_name,display_name,is_youth')
         .eq('owner_user_id', userId)
         .order('display_name', ascending: true);
 
@@ -452,6 +452,35 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
     );
     if (!exhibitorBelongsToAccount) {
       setState(() => _msg = 'Selected exhibitor was not found on your account.');
+      return;
+    }
+
+    final selectedSection = showSections
+        .where((s) => (s['id'] ?? '').toString() == newSectionId)
+        .toList();
+    if (selectedSection.isEmpty) {
+      setState(() => _msg = 'Selected show section was not found.');
+      return;
+    }
+
+    final selectedExhibitor = exhibitors
+        .where((e) => (e['id'] ?? '').toString() == newExhibitorId)
+        .toList();
+    if (selectedExhibitor.isEmpty) {
+      setState(() => _msg = 'Selected exhibitor was not found on your account.');
+      return;
+    }
+
+    final sectionKind =
+        (selectedSection.first['kind'] ?? '').toString().trim().toLowerCase();
+    final isYouthSection = sectionKind == 'youth';
+    final exhibitorIsYouth = selectedExhibitor.first['is_youth'] == true;
+
+    if (isYouthSection && !exhibitorIsYouth) {
+      setState(
+        () => _msg =
+            'Adult exhibitors cannot be moved into Youth shows. Select a youth exhibitor or an Open show.',
+      );
       return;
     }
 
@@ -1549,6 +1578,18 @@ class _EditEntryDialogV2State extends State<_EditEntryDialogV2> {
     return (e['id'] ?? '').toString();
   }
 
+  bool _isYouthSectionId(String sectionId) {
+    final match = widget.sections.where(
+      (s) => (s['id'] ?? '').toString() == sectionId,
+    );
+    if (match.isEmpty) return false;
+    return (match.first['kind'] ?? '').toString().trim().toLowerCase() == 'youth';
+  }
+
+  bool _isYouthExhibitor(Map<String, dynamic> e) {
+    return e['is_youth'] == true;
+  }
+
   Future<void> _addNewAnimal() async {
     setState(() => _busy = true);
     try {
@@ -1599,7 +1640,29 @@ class _EditEntryDialogV2State extends State<_EditEntryDialogV2> {
                 }).toList(),
                 onChanged: _busy
                     ? null
-                    : (v) => setState(() => _sectionId = v ?? _sectionId),
+                    : (v) {
+                        if (v == null) return;
+                        setState(() {
+                          _sectionId = v;
+
+                          if (_isYouthSectionId(_sectionId)) {
+                            final selectedExhibitor = widget.exhibitors.where(
+                              (e) =>
+                                  (e['id'] ?? '').toString() == _exhibitorId,
+                            );
+                            if (selectedExhibitor.isNotEmpty &&
+                                !_isYouthExhibitor(selectedExhibitor.first)) {
+                              final firstYouth = widget.exhibitors.where(
+                                _isYouthExhibitor,
+                              );
+                              if (firstYouth.isNotEmpty) {
+                                _exhibitorId =
+                                    (firstYouth.first['id'] ?? '').toString();
+                              }
+                            }
+                          }
+                        });
+                      },
                 decoration: const InputDecoration(
                   labelText: 'Show / Section',
                   helperText: 'Move this entry to another open/youth show section.',
@@ -1610,14 +1673,33 @@ class _EditEntryDialogV2State extends State<_EditEntryDialogV2> {
                 value: hasSelectedExhibitor ? _exhibitorId : null,
                 items: widget.exhibitors.map((e) {
                   final id = (e['id'] ?? '').toString();
+                  final isYouthSection = _isYouthSectionId(_sectionId);
+                  final isBlockedAdultInYouth =
+                      isYouthSection && !_isYouthExhibitor(e);
+                  final label = isBlockedAdultInYouth
+                      ? '${_exhibitorLabel(e)} — not eligible for Youth'
+                      : _exhibitorLabel(e);
+
                   return DropdownMenuItem<String>(
                     value: id,
-                    child: Text(_exhibitorLabel(e)),
+                    enabled: !isBlockedAdultInYouth,
+                    child: Text(label),
                   );
                 }).toList(),
                 onChanged: _busy
                     ? null
-                    : (v) => setState(() => _exhibitorId = v ?? _exhibitorId),
+                    : (v) {
+                        if (v == null) return;
+                        final selected = widget.exhibitors.where(
+                          (e) => (e['id'] ?? '').toString() == v,
+                        );
+                        if (_isYouthSectionId(_sectionId) &&
+                            selected.isNotEmpty &&
+                            !_isYouthExhibitor(selected.first)) {
+                          return;
+                        }
+                        setState(() => _exhibitorId = v);
+                      },
                 decoration: const InputDecoration(
                   labelText: 'Exhibitor',
                   helperText: 'Move this entry to another exhibitor on your account.',
