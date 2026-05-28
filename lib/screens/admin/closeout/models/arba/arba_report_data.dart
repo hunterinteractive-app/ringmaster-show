@@ -1,3 +1,5 @@
+// lib/screens/admin/closeout/models/arba/arba_report_data.dart
+
 class ArbaReportData {
   const ArbaReportData({
     required this.showName,

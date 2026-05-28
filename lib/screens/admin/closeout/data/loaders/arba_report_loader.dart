@@ -742,7 +742,10 @@ class ArbaReportLoader {
         ].where((e) => e.isNotEmpty).join(' '),
       ]);
 
-      final cityState = await _loadEntryCityState(entry);
+      final cityState = await _loadEntryCityState(
+        entry,
+        entryId: awardEntryId,
+      );
 
       return _ArbaBestAwardInfo(
         owner: owner,
@@ -760,13 +763,41 @@ class ArbaReportLoader {
     }
   }
 
-  Future<String> _loadEntryCityState(Map<String, dynamic> entry) async {
-    final fromReportRow = [
-      _str(entry['exhibitor_city']),
-      _str(entry['exhibitor_state']),
-    ].where((e) => e.isNotEmpty).join(', ');
+  Future<String> _loadEntryCityState(
+    Map<String, dynamic> entry, {
+    String? entryId,
+  }) async {
+    final fromReportRow = _formatAddressParts([
+      _firstNonEmpty([
+        _str(entry['exhibitor_address_line1']),
+        _str(entry['address_line1']),
+      ]),
+      _firstNonEmpty([
+        _str(entry['exhibitor_address_line2']),
+        _str(entry['address_line2']),
+      ]),
+      _formatCityStateZip(
+        city: _firstNonEmpty([
+          _str(entry['exhibitor_city']),
+          _str(entry['city']),
+        ]),
+        state: _firstNonEmpty([
+          _str(entry['exhibitor_state']),
+          _str(entry['state']),
+        ]),
+        zip: _firstNonEmpty([
+          _str(entry['exhibitor_zip']),
+          _str(entry['exhibitor_postal_code']),
+          _str(entry['zip']),
+          _str(entry['postal_code']),
+        ]),
+      ),
+    ]);
 
     if (fromReportRow.isNotEmpty) return fromReportRow;
+
+    final fromEntryJoin = await _loadEntryAddressByEntryId(entryId);
+    if (fromEntryJoin.isNotEmpty) return fromEntryJoin;
 
     final exhibitorId = _str(entry['exhibitor_id']);
     if (exhibitorId.isEmpty) return '';
@@ -774,19 +805,87 @@ class ArbaReportLoader {
     try {
       final row = await repo.supabase
           .from('exhibitors')
-          .select('city,state')
+          .select('address_line1,address_line2,city,state,zip')
           .eq('id', exhibitorId)
           .maybeSingle();
 
       if (row == null) return '';
 
-      return [
-        _str(row['city']),
-        _str(row['state']),
-      ].where((e) => e.isNotEmpty).join(', ');
-    } catch (_) {
+      return _formatAddressParts([
+        _str(row['address_line1']),
+        _str(row['address_line2']),
+        _formatCityStateZip(
+          city: _str(row['city']),
+          state: _str(row['state']),
+          zip: _str(row['zip']),
+        ),
+      ]);
+    } catch (e) {
+      // ignore: avoid_print
+      print('Failed loading ARBA exhibitor address for $exhibitorId: $e');
       return '';
     }
+  }
+
+  Future<String> _loadEntryAddressByEntryId(String? entryId) async {
+    final id = _str(entryId);
+    if (id.isEmpty) return '';
+
+    try {
+      final row = await repo.supabase
+          .from('entries')
+          .select('''
+            id,
+            exhibitor:exhibitors(
+              address_line1,
+              address_line2,
+              city,
+              state,
+              zip
+            )
+          ''')
+          .eq('id', id)
+          .maybeSingle();
+
+      if (row == null) return '';
+
+      final exhibitorRaw = row['exhibitor'];
+      if (exhibitorRaw is! Map) return '';
+
+      final exhibitor = Map<String, dynamic>.from(exhibitorRaw);
+      return _formatAddressParts([
+        _str(exhibitor['address_line1']),
+        _str(exhibitor['address_line2']),
+        _formatCityStateZip(
+          city: _str(exhibitor['city']),
+          state: _str(exhibitor['state']),
+          zip: _str(exhibitor['zip']),
+        ),
+      ]);
+    } catch (e) {
+      // ignore: avoid_print
+      print('Failed loading ARBA exhibitor address by entry $id: $e');
+      return '';
+    }
+  }
+
+  String _formatAddressParts(List<String> parts) {
+    return parts.where((e) => e.trim().isNotEmpty).join(', ');
+  }
+
+  String _formatCityStateZip({
+    required String city,
+    required String state,
+    required String zip,
+  }) {
+    final cityState = [
+      city,
+      state,
+    ].where((e) => e.trim().isNotEmpty).join(', ');
+
+    if (cityState.isEmpty) return zip;
+    if (zip.isEmpty) return cityState;
+    return '$cityState $zip';
   }
 
   String? _findAwardEntryId(

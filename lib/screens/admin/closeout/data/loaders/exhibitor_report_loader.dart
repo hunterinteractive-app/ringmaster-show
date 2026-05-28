@@ -155,13 +155,10 @@ class ExhibitorReportLoader {
       'Unknown Exhibitor',
     ]);
 
-    final address1 = _str(first['exhibitor_address_line1']);
-    final address2 = _str(first['exhibitor_address_line2']);
-    final cityStateZip = [
-      _str(first['exhibitor_city']),
-      _str(first['exhibitor_state']),
-      _str(first['exhibitor_zip']),
-    ].where((e) => e.isNotEmpty).join(' ');
+    final exhibitorAddress = await _loadExhibitorAddress(
+      exhibitorId: exhibitorId,
+      fallbackRow: first,
+    );
 
     // Use the same loader that creates the actual leg certificates.
     final earnedLegEntryIds = <String>{};
@@ -228,10 +225,8 @@ class ExhibitorReportLoader {
 
     return ExhibitorReportData(
       exhibitorName: exhibitorName,
-      exhibitorAddress: [address1, address2]
-          .where((e) => e.isNotEmpty)
-          .join(', '),
-      exhibitorCityStateZip: cityStateZip,
+      exhibitorAddress: exhibitorAddress.addressLines,
+      exhibitorCityStateZip: exhibitorAddress.cityStateZip,
       showName: showName,
       showDate: showDate,
       showLocation: showLocation,
@@ -239,6 +234,89 @@ class ExhibitorReportLoader {
       secretaryEmail: secretaryEmail,
       entries: entryRows,
     );
+  }
+
+  Future<_ExhibitorAddress> _loadExhibitorAddress({
+    required String exhibitorId,
+    required Map<String, dynamic> fallbackRow,
+  }) async {
+    final fromReportRow = _ExhibitorAddress(
+      addressLines: _formatAddressLines([
+        _firstNonEmpty([
+          _str(fallbackRow['exhibitor_address_line1']),
+          _str(fallbackRow['address_line1']),
+        ]),
+        _firstNonEmpty([
+          _str(fallbackRow['exhibitor_address_line2']),
+          _str(fallbackRow['address_line2']),
+        ]),
+      ]),
+      cityStateZip: _formatCityStateZip(
+        city: _firstNonEmpty([
+          _str(fallbackRow['exhibitor_city']),
+          _str(fallbackRow['city']),
+        ]),
+        state: _firstNonEmpty([
+          _str(fallbackRow['exhibitor_state']),
+          _str(fallbackRow['state']),
+        ]),
+        zip: _firstNonEmpty([
+          _str(fallbackRow['exhibitor_zip']),
+          _str(fallbackRow['exhibitor_postal_code']),
+          _str(fallbackRow['zip']),
+          _str(fallbackRow['postal_code']),
+        ]),
+      ),
+    );
+
+    if (fromReportRow.hasAnyAddress) return fromReportRow;
+
+    if (exhibitorId.trim().isEmpty) return const _ExhibitorAddress.empty();
+
+    try {
+      final row = await repo.supabase
+          .from('exhibitors')
+          .select('address_line1,address_line2,city,state,zip')
+          .eq('id', exhibitorId)
+          .maybeSingle();
+
+      if (row == null) return const _ExhibitorAddress.empty();
+
+      return _ExhibitorAddress(
+        addressLines: _formatAddressLines([
+          _str(row['address_line1']),
+          _str(row['address_line2']),
+        ]),
+        cityStateZip: _formatCityStateZip(
+          city: _str(row['city']),
+          state: _str(row['state']),
+          zip: _str(row['zip']),
+        ),
+      );
+    } catch (e) {
+      // ignore: avoid_print
+      print('Failed loading exhibitor report address for $exhibitorId: $e');
+      return const _ExhibitorAddress.empty();
+    }
+  }
+
+  String _formatAddressLines(List<String> parts) {
+    return parts.where((e) => e.trim().isNotEmpty).join(', ');
+  }
+
+  String _formatCityStateZip({
+    required String city,
+    required String state,
+    required String zip,
+  }) {
+    final cityState = [
+      city,
+      state,
+    ].where((e) => e.trim().isNotEmpty).join(', ');
+
+    if (cityState.isEmpty) return zip;
+    if (zip.isEmpty) return cityState;
+    return '$cityState $zip';
   }
 
   Future<Map<String, int>> _loadAnimalSweepstakesPointsByEntryId(
@@ -706,6 +784,23 @@ class ExhibitorReportLoader {
     if (value is DateTime) return value;
     return DateTime.tryParse(value.toString());
   }
+}
+
+class _ExhibitorAddress {
+  final String addressLines;
+  final String cityStateZip;
+
+  const _ExhibitorAddress({
+    required this.addressLines,
+    required this.cityStateZip,
+  });
+
+  const _ExhibitorAddress.empty()
+      : addressLines = '',
+        cityStateZip = '';
+
+  bool get hasAnyAddress =>
+      addressLines.trim().isNotEmpty || cityStateZip.trim().isNotEmpty;
 }
 
 class _EntryLegContext {

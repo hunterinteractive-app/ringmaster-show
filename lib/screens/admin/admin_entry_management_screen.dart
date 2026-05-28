@@ -120,12 +120,13 @@ class _AdminEntryManagementScreenState
       return;
     }
 
-    final exhibitor = entry['exhibitors'];
-    if (exhibitor is! Map<String, dynamic>) {
+    final exhibitorRaw = entry['exhibitors'];
+    if (exhibitorRaw is! Map) {
       setState(() => _msg = 'Could not load exhibitor details for editing.');
       return;
     }
 
+    final exhibitor = Map<String, dynamic>.from(exhibitorRaw);
     final ownerUserId = (exhibitor['owner_user_id'] ?? '').toString().trim();
     if (ownerUserId.isNotEmpty) {
       setState(() => _msg = 'This exhibitor already has an account, so their profile information cannot be edited here.');
@@ -140,7 +141,7 @@ class _AdminEntryManagementScreenState
       builder: (_) => _themedBottomSheetShell(
         context,
         child: _EditExhibitorSheet(
-          exhibitor: Map<String, dynamic>.from(exhibitor),
+          exhibitor: exhibitor,
           showId: widget.showId,
         ),
       ),
@@ -161,7 +162,7 @@ class _AdminEntryManagementScreenState
           'tattoo,animal_name,breed,variety,fur_variety,sex,class_name,notes,status,created_at,updated_at,scratched_at,'
           'is_fur,fur_placement,fur_notes,'
           'show_sections(id,letter,display_name,kind),'
-          'exhibitors!entries_exhibitor_id_fkey(id,display_name,showing_name,first_name,last_name,email,phone,address_line1,address_line2,city,state,zip,arba_number,owner_user_id,is_local_only,type)',
+          'exhibitors!entries_exhibitor_id_fkey(id,display_name,showing_name,first_name,last_name,email,phone,address_line1,address_line2,city,state,zip,arba_number,owner_user_id,is_local_only,type,is_merged,merged_into_exhibitor_id)',
         )
         .eq('show_id', widget.showId);
 
@@ -602,7 +603,7 @@ class _AdminEntryManagementScreenState
                             final exhibitorName =
                                 _exhibitorDisplayName(exEntries.first);
                             final firstExhibitor = exEntries.first['exhibitors'];
-                            final canEditExhibitor = firstExhibitor is Map<String, dynamic> &&
+                            final canEditExhibitor = firstExhibitor is Map &&
                                 ((firstExhibitor['owner_user_id'] ?? '').toString().trim().isEmpty);
                             final isExpanded =
                                 _expandedExhibitorIds.contains(exKey);
@@ -1555,20 +1556,32 @@ class _EditExhibitorSheetState extends State<_EditExhibitorSheet> {
     try {
       await ShowLockService.assertShowUnlocked(widget.showId);
 
-      await supabase.from('exhibitors').update({
-        'showing_name': showing.isEmpty ? null : showing,
-        'display_name': showing.isEmpty ? null : showing,
-        'first_name': first.isEmpty ? null : first,
-        'last_name': last.isEmpty ? null : last,
-        'email': email.isEmpty ? null : email.toLowerCase(),
-        'phone': phone.isEmpty ? null : phone,
-        'address_line1': addressLine1,
-        'address_line2': addressLine2.isEmpty ? null : addressLine2,
-        'city': city,
-        'state': state,
-        'zip': zip,
-        'arba_number': arbaNumber.isEmpty ? null : arbaNumber,
-      }).eq('id', exhibitorId).isFilter('owner_user_id', null);
+      final updated = await supabase
+          .from('exhibitors')
+          .update({
+            'showing_name': showing.isEmpty ? null : showing,
+            'display_name': showing.isEmpty ? null : showing,
+            'first_name': first.isEmpty ? null : first,
+            'last_name': last.isEmpty ? null : last,
+            'email': email.isEmpty ? null : email.toLowerCase(),
+            'phone': phone.isEmpty ? null : phone,
+            'address_line1': addressLine1,
+            'address_line2': addressLine2.isEmpty ? null : addressLine2,
+            'city': city,
+            'state': state,
+            'zip': zip,
+            'arba_number': arbaNumber.isEmpty ? null : arbaNumber,
+          })
+          .eq('id', exhibitorId)
+          .filter('owner_user_id', 'is', 'null')
+          .select('id')
+          .maybeSingle();
+
+      if (updated == null) {
+        throw Exception(
+          'No exhibitor was updated. This usually means the exhibitor now has an account or your role does not have permission to update exhibitor profiles.',
+        );
+      }
 
       if (!mounted) return;
       Navigator.pop(context, true);
@@ -2082,10 +2095,11 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
       existing = await supabase
           .from('exhibitors')
           .select(
-            'id,showing_name,display_name,first_name,last_name,email,phone,address_line1,address_line2,city,state,zip,arba_number,type,owner_user_id,is_active,is_local_only,created_for_show_id',
+            'id,showing_name,display_name,first_name,last_name,email,phone,address_line1,address_line2,city,state,zip,arba_number,type,owner_user_id,is_active,is_local_only,created_for_show_id,is_merged,merged_into_exhibitor_id',
           )
           .eq('created_for_show_id', widget.showId)
           .eq('is_active', true)
+          .or('is_merged.is.null,is_merged.eq.false')
           .eq('showing_name', showing)
           .maybeSingle();
     }
@@ -2094,10 +2108,11 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
       existing = await supabase
           .from('exhibitors')
           .select(
-            'id,showing_name,display_name,first_name,last_name,email,phone,address_line1,address_line2,city,state,zip,arba_number,type,owner_user_id,is_active,is_local_only,created_for_show_id',
+            'id,showing_name,display_name,first_name,last_name,email,phone,address_line1,address_line2,city,state,zip,arba_number,type,owner_user_id,is_active,is_local_only,created_for_show_id,is_merged,merged_into_exhibitor_id',
           )
           .eq('created_for_show_id', widget.showId)
           .eq('is_active', true)
+          .or('is_merged.is.null,is_merged.eq.false')
           .eq('first_name', first)
           .eq('last_name', last)
           .maybeSingle();
@@ -2112,9 +2127,10 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
       final res = await supabase
           .from('exhibitors')
           .select(
-            'id,showing_name,display_name,first_name,last_name,email,phone,address_line1,address_line2,city,state,zip,arba_number,type,owner_user_id,is_active,is_local_only,created_for_show_id',
+            'id,showing_name,display_name,first_name,last_name,email,phone,address_line1,address_line2,city,state,zip,arba_number,type,owner_user_id,is_active,is_local_only,created_for_show_id,is_merged,merged_into_exhibitor_id',
           )
           .eq('is_active', true)
+          .or('is_merged.is.null,is_merged.eq.false')
           .order('display_name', ascending: true);
 
       _exhibitors = (res as List).cast<Map<String, dynamic>>();
@@ -2130,7 +2146,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     }
   }
 
-  String _exhibitorLabel(Map<String, dynamic> e) {
+  String _exhibitorName(Map<String, dynamic> e) {
     final showing = (e['showing_name'] ?? '').toString().trim();
     if (showing.isNotEmpty) return showing;
 
@@ -2143,6 +2159,101 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     if (combined.isNotEmpty) return combined;
 
     return '(Unnamed Exhibitor)';
+  }
+
+  String _exhibitorLabel(Map<String, dynamic> e) {
+    final name = _exhibitorName(e);
+    final city = (e['city'] ?? '').toString().trim();
+    final state = (e['state'] ?? '').toString().trim().toUpperCase();
+    final location = [city, state].where((s) => s.isNotEmpty).join(', ');
+
+    if (location.isEmpty) return name;
+    return '$name — $location';
+  }
+
+  Map<String, dynamic>? _selectedExhibitor() {
+    final id = _exhibitorId;
+    if (id == null || id.isEmpty) return null;
+
+    for (final exhibitor in _exhibitors) {
+      if ((exhibitor['id'] ?? '').toString() == id) {
+        return exhibitor;
+      }
+    }
+
+    return null;
+  }
+
+  Widget _selectedExhibitorContactCard() {
+    final exhibitor = _selectedExhibitor();
+    if (exhibitor == null) return const SizedBox.shrink();
+
+    final name = _exhibitorName(exhibitor);
+    final email = (exhibitor['email'] ?? '').toString().trim();
+    final phone = (exhibitor['phone'] ?? '').toString().trim();
+    final addressLine1 = (exhibitor['address_line1'] ?? '').toString().trim();
+    final addressLine2 = (exhibitor['address_line2'] ?? '').toString().trim();
+    final city = (exhibitor['city'] ?? '').toString().trim();
+    final state = (exhibitor['state'] ?? '').toString().trim().toUpperCase();
+    final zip = (exhibitor['zip'] ?? '').toString().trim();
+    final arbaNumber = (exhibitor['arba_number'] ?? '').toString().trim();
+    final type = (exhibitor['type'] ?? '').toString().trim();
+
+    final cityStateZip = [
+      [city, state].where((s) => s.isNotEmpty).join(', '),
+      zip,
+    ].where((s) => s.isNotEmpty).join(' ');
+
+    final rows = <Widget>[
+      _contactLine('Name', name),
+      if (type.isNotEmpty) _contactLine('Type', type),
+      if (email.isNotEmpty) _contactLine('Email', email),
+      if (phone.isNotEmpty) _contactLine('Phone', phone),
+      if (arbaNumber.isNotEmpty) _contactLine('ARBA #', arbaNumber),
+      if (addressLine1.isNotEmpty) _contactLine('Address', addressLine1),
+      if (addressLine2.isNotEmpty) _contactLine('Address 2', addressLine2),
+      if (cityStateZip.isNotEmpty) _contactLine('City/State/ZIP', cityStateZip),
+    ];
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.black.withOpacity(.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Selected Exhibitor Contact',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          ...rows,
+        ],
+      ),
+    );
+  }
+
+  Widget _contactLine(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: RichText(
+        text: TextSpan(
+          style: const TextStyle(color: Colors.black87, fontSize: 13),
+          children: [
+            TextSpan(
+              text: '$label: ',
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+            TextSpan(text: value),
+          ],
+        ),
+      ),
+    );
   }
 
   String _animalLabel(Map<String, dynamic> a) {
@@ -3015,7 +3126,8 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                           : (v) => setState(() => _exhibitorType = v ?? 'adult'),
                     ),
                   ] else ...[
-                    DropdownButtonFormField<String>(
+                  DropdownButtonFormField<String>(
+                      isExpanded: true,
                       value: _exhibitorId,
                       decoration: const InputDecoration(
                         labelText: 'Exhibitor',
@@ -3025,7 +3137,10 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                           .map(
                             (e) => DropdownMenuItem<String>(
                               value: e['id'].toString(),
-                              child: Text(_exhibitorLabel(e)),
+                              child: Text(
+                                _exhibitorLabel(e),
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                           )
                           .toList(),
@@ -3041,6 +3156,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                               await _loadAnimalsForSelectedExhibitor();
                             },
                     ),
+                    _selectedExhibitorContactCard(),
                   ],
                   const SizedBox(height: 14),
                   SwitchListTile(

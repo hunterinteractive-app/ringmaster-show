@@ -214,6 +214,35 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       return matches.isEmpty ? null : matches.first;
     }
 
+    List<ReportArtifactSummary> _currentArtifactsForReportGroup(
+      String reportName,
+    ) {
+      final artifacts = (_dashboard?.reports ?? const <ReportArtifactSummary>[])
+          .where((artifact) => artifact.reportName == reportName)
+          .where((artifact) => artifact.isCurrent)
+          .where(_artifactMatchesSelectedScope)
+          .toList()
+        ..sort((a, b) {
+          final aScope = (_artifactMetaString(a, 'scope') ?? '').toUpperCase();
+          final bScope = (_artifactMetaString(b, 'scope') ?? '').toUpperCase();
+          final scopeCmp = aScope.compareTo(bScope);
+          if (scopeCmp != 0) return scopeCmp;
+
+          final aLetter = (_artifactMetaString(a, 'show_letter') ?? '').toUpperCase();
+          final bLetter = (_artifactMetaString(b, 'show_letter') ?? '').toUpperCase();
+          final letterCmp = aLetter.compareTo(bLetter);
+          if (letterCmp != 0) return letterCmp;
+
+          final aGenerated = DateTime.tryParse(a.generatedAt ?? '') ??
+              DateTime.fromMillisecondsSinceEpoch(0);
+          final bGenerated = DateTime.tryParse(b.generatedAt ?? '') ??
+              DateTime.fromMillisecondsSinceEpoch(0);
+          return bGenerated.compareTo(aGenerated);
+        });
+
+      return artifacts;
+    }
+
     bool _artifactMatchesSelectedScope(
       ReportArtifactSummary artifact,
     ) {
@@ -2317,6 +2346,70 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     return targets;
   }
 
+  Future<void> _generateCurrentReportGroupByName(String reportName) async {
+    if (reportName != 'unpaid_balances_report') {
+      final ready = await _ensureResultsReadyForReports();
+      if (!ready) return;
+    }
+
+    final artifacts = _currentArtifactsForReportGroup(reportName);
+
+    if (artifacts.isEmpty) {
+      await _generateReportByName(reportName);
+      return;
+    }
+
+    setState(() {
+      _generatingReport = true;
+      _error = null;
+    });
+
+    final started = <String>{};
+    final finished = <String>{};
+    final failed = <String, Object>{};
+
+    try {
+      await _runGenerateAllReportsLive(
+        artifacts,
+        onStarted: started.add,
+        onFinished: finished.add,
+        onFailed: (artifactKey, error) {
+          failed[artifactKey] = error;
+        },
+      );
+
+      await _refreshDashboardOnly();
+
+      if (!mounted) return;
+
+      final generatedCount = finished.length;
+      final failedCount = failed.length;
+      final label = reportName.replaceAll('_', ' ');
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 8),
+          content: Text(
+            failedCount == 0
+                ? 'Generated $generatedCount $label report${generatedCount == 1 ? '' : 's'}.'
+                : 'Generated $generatedCount report${generatedCount == 1 ? '' : 's'}; $failedCount failed.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed generating report group: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _generatingReport = false;
+        });
+      }
+    }
+  }
+
     Future<void> _generateReportByName(
       String reportName, {
       String? breedName,
@@ -3352,15 +3445,27 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                 String? showLetter,
                                 String? exhibitorId,
                                 String? exhibitorName,
-                              }) =>
-                                  _generateReportByName(
-                                reportName,
-                                breedName: breedName,
-                                scope: scope,
-                                showLetter: showLetter,
-                                exhibitorId: exhibitorId,
-                                exhibitorName: exhibitorName,
-                              ),
+                              }) {
+                                final isSingleTarget =
+                                    breedName != null ||
+                                    scope != null ||
+                                    showLetter != null ||
+                                    exhibitorId != null ||
+                                    exhibitorName != null;
+
+                                if (!isSingleTarget && reportName == 'arba_report') {
+                                  return _generateCurrentReportGroupByName(reportName);
+                                }
+
+                                return _generateReportByName(
+                                  reportName,
+                                  breedName: breedName,
+                                  scope: scope,
+                                  showLetter: showLetter,
+                                  exhibitorId: exhibitorId,
+                                  exhibitorName: exhibitorName,
+                                );
+                              },
                               onDownload: (
                                 reportName, {
                                 String? exhibitorId,
