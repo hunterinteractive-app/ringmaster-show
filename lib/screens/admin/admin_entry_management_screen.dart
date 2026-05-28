@@ -2636,8 +2636,9 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     );
 
     final ownerUserId = (exhibitor['owner_user_id'] ?? '').toString().trim();
+    final exhibitorId = (exhibitor['id'] ?? '').toString().trim();
 
-    if (ownerUserId.isEmpty) {
+    if (ownerUserId.isEmpty && exhibitorId.isEmpty) {
       if (mounted) {
         setState(() {
           _animals = [];
@@ -2648,11 +2649,17 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     }
 
     try {
-      final res = await supabase
+      var query = supabase
           .from('animals')
-          .select('id,owner_user_id,name,tattoo,breed,variety,sex,species')
-          .eq('owner_user_id', ownerUserId)
-          .order('created_at', ascending: false);
+          .select('id,owner_user_id,exhibitor_id,name,tattoo,breed,variety,sex,species');
+
+      if (ownerUserId.isNotEmpty) {
+        query = query.eq('owner_user_id', ownerUserId);
+      } else {
+        query = query.eq('exhibitor_id', exhibitorId);
+      }
+
+      final res = await query.order('created_at', ascending: false);
 
       if (!mounted) return;
       setState(() {
@@ -2880,7 +2887,52 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
         }
       }
 
-      final animalId = _useLocalAnimal ? null : _animal!['id'];
+      String? animalId;
+
+      if (_useLocalAnimal) {
+        final ownerUserId = (exhibitor['owner_user_id'] ?? '').toString().trim();
+        final canSaveLocalAnimalToExhibitor = ownerUserId.isEmpty;
+
+        if (canSaveLocalAnimalToExhibitor) {
+          final existingLocalAnimal = await supabase
+              .from('animals')
+              .select('id')
+              .eq('exhibitor_id', resolvedExhibitorId)
+              .eq('tattoo', _tattoo.text.trim().toUpperCase())
+              .eq('breed', _breed.text.trim())
+              .eq('species', _species)
+              .maybeSingle();
+
+          if (existingLocalAnimal != null) {
+            animalId = (existingLocalAnimal['id'] ?? '').toString();
+          } else {
+            final insertedAnimal = await supabase
+                .from('animals')
+                .insert({
+                  'owner_user_id': null,
+                  'exhibitor_id': resolvedExhibitorId,
+                  'species': _species,
+                  'name': _animalName.text.trim().isEmpty
+                      ? null
+                      : _animalName.text.trim(),
+                  'tattoo': _tattoo.text.trim().toUpperCase(),
+                  'breed': _breed.text.trim(),
+                  'variety': _variety.text.trim().isEmpty
+                      ? null
+                      : _variety.text.trim(),
+                  'sex': _sexValue,
+                  'created_at': DateTime.now().toUtc().toIso8601String(),
+                  'updated_at': DateTime.now().toUtc().toIso8601String(),
+                })
+                .select('id')
+                .single();
+
+            animalId = (insertedAnimal['id'] ?? '').toString();
+          }
+        }
+      } else {
+        animalId = (_animal!['id'] ?? '').toString();
+      }
 
       if (animalId != null) {
         for (final sectionId in _selectedSectionIds) {
@@ -2963,7 +3015,11 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
 
       setState(() {
         _animal = null;
-        _animals = _addNewExhibitor ? [] : _animals;
+        if (!_addNewExhibitor && _exhibitorId != null) {
+          _loadAnimalsForSelectedExhibitor();
+        } else {
+          _animals = _addNewExhibitor ? [] : _animals;
+        }
         _species = 'rabbit';
         _breedId = null;
         _breedOptions = [];
