@@ -96,6 +96,11 @@ class ArbaReportPdfBuilder {
     final bisRabbitBreed = _str(_tryGet(() => d.bisRabbitBreed));
     final bisRabbitEarNumber = _str(_tryGet(() => d.bisRabbitEarNumber));
 
+    final bisCavyOwner = _str(_tryGet(() => d.bisCavyOwner));
+    final bisCavyCityState = _str(_tryGet(() => d.bisCavyCityState));
+    final bisCavyBreed = _str(_tryGet(() => d.bisCavyBreed));
+    final bisCavyEarNumber = _str(_tryGet(() => d.bisCavyEarNumber));
+
     pdf.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.letter,
@@ -149,11 +154,19 @@ class ArbaReportPdfBuilder {
               ),
               pw.SizedBox(height: 8),
               _sectionHeader('BEST IN SHOW RABBIT'),
-              _bisRabbitTable(
+              _bisWinnerTable(
                 owner: bisRabbitOwner,
                 cityState: bisRabbitCityState,
                 breed: bisRabbitBreed,
                 earNumber: bisRabbitEarNumber,
+              ),
+              pw.SizedBox(height: 6),
+              _sectionHeader('BEST IN SHOW CAVY'),
+              _bisWinnerTable(
+                owner: bisCavyOwner,
+                cityState: bisCavyCityState,
+                breed: bisCavyBreed,
+                earNumber: bisCavyEarNumber,
               ),
               pw.SizedBox(height: 8),
               _signatureBlock(
@@ -535,7 +548,7 @@ class ArbaReportPdfBuilder {
     );
   }
 
-  pw.Widget _bisRabbitTable({
+  pw.Widget _bisWinnerTable({
     required String owner,
     required String cityState,
     required String breed,

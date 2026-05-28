@@ -115,20 +115,49 @@ class ArbaReportLoader {
 
     final filedDate = DateTime.now();
 
-    final bisRabbit = await _loadBestAward(
-      request.showId,
-      species: 'rabbit',
-      awardCodes: const [
-        'best in show',
-        'best of show',
-        'bis',
-        'bis rabbit',
-        'best in show rabbit',
-        'best of show rabbit',
-      ],
-      fallbackAwardCodes: const ['BOB', 'best of breed'],
-      sectionId: sectionId,
-    );
+    final bisRabbit = rabbitsShown == 0
+        ? const _ArbaBestAwardInfo(
+            owner: 'No rabbits shown',
+            cityState: '',
+            breed: '',
+            earNumber: '',
+          )
+        : await _loadBestAward(
+            request.showId,
+            species: 'rabbit',
+            awardCodes: const [
+              'best in show',
+              'best of show',
+              'bis',
+              'bis rabbit',
+              'best in show rabbit',
+              'best of show rabbit',
+            ],
+            fallbackAwardCodes: const ['BOB', 'best of breed'],
+            sectionId: sectionId,
+          );
+
+    final bisCavy = caviesShown == 0
+        ? const _ArbaBestAwardInfo(
+            owner: 'No cavies shown',
+            cityState: '',
+            breed: '',
+            earNumber: '',
+          )
+        : await _loadBestAward(
+            request.showId,
+            species: 'cavy',
+            awardCodes: const [
+              'best in show',
+              'best of show',
+              'bis',
+              'bis cavy',
+              'best in show cavy',
+              'best of show cavy',
+            ],
+            fallbackAwardCodes: const ['BOB', 'best of breed'],
+            sectionId: sectionId,
+          );
 
     return ArbaReportData(
       showName: showName,
@@ -163,6 +192,10 @@ class ArbaReportLoader {
       bisRabbitCityState: bisRabbit.cityState,
       bisRabbitBreed: bisRabbit.breed,
       bisRabbitEarNumber: bisRabbit.earNumber,
+      bisCavyOwner: bisCavy.owner,
+      bisCavyCityState: bisCavy.cityState,
+      bisCavyBreed: bisCavy.breed,
+      bisCavyEarNumber: bisCavy.earNumber,
     );
   }
 
@@ -674,18 +707,32 @@ class ArbaReportLoader {
       final normalizedSpecies = species.toLowerCase().trim();
       final targetSectionId = sectionId?.trim() ?? '';
 
-      final entries = (rows as List)
+      final allRows = (rows as List)
           .map((e) => Map<String, dynamic>.from(e as Map))
-          .where((e) {
-            final rowSpecies = _str(e['species']).toLowerCase().trim();
-            if (rowSpecies.isEmpty) return normalizedSpecies == 'rabbit';
-            return rowSpecies == normalizedSpecies;
-          })
           .where((e) {
             if (targetSectionId.isEmpty) return true;
             return _str(e['section_id']) == targetSectionId;
           })
           .toList();
+
+      final allEntryIds = allRows
+          .map((e) => _str(e['entry_id']))
+          .where((e) => e.isNotEmpty)
+          .toSet()
+          .toList();
+
+      final speciesByEntryId = await _loadEntrySpeciesById(allEntryIds);
+
+      final entries = allRows.where((e) {
+        final entryId = _str(e['entry_id']);
+        final rowSpecies = _firstNonEmpty([
+          _str(e['species']),
+          _str(speciesByEntryId[entryId]),
+        ]).toLowerCase().trim();
+
+        if (rowSpecies.isEmpty) return normalizedSpecies == 'rabbit';
+        return rowSpecies == normalizedSpecies;
+      }).toList();
 
       final entryIds = entries
           .map((e) => _str(e['entry_id']))
@@ -761,6 +808,37 @@ class ArbaReportLoader {
       print('Failed loading ARBA best award for section $sectionId: $e');
       return const _ArbaBestAwardInfo.empty();
     }
+  }
+
+  Future<Map<String, String>> _loadEntrySpeciesById(List<String> entryIds) async {
+    final ids = entryIds.where((e) => e.trim().isNotEmpty).toSet().toList();
+    if (ids.isEmpty) return const {};
+
+    final output = <String, String>{};
+
+    try {
+      for (var i = 0; i < ids.length; i += 100) {
+        final chunk = ids.skip(i).take(100).toList();
+        final rows = await repo.supabase
+            .from('entries')
+            .select('id, species')
+            .inFilter('id', chunk);
+
+        for (final raw in rows as List) {
+          final row = Map<String, dynamic>.from(raw as Map);
+          final id = _str(row['id']);
+          final species = _str(row['species']).toLowerCase().trim();
+          if (id.isNotEmpty && species.isNotEmpty) {
+            output[id] = species;
+          }
+        }
+      }
+    } catch (e) {
+      // ignore: avoid_print
+      print('Failed loading ARBA entry species lookup: $e');
+    }
+
+    return output;
   }
 
   Future<String> _loadEntryCityState(

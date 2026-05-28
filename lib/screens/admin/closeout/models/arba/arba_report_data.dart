@@ -32,6 +32,10 @@ class ArbaReportData {
     required this.bisRabbitCityState,
     required this.bisRabbitBreed,
     required this.bisRabbitEarNumber,
+    required this.bisCavyOwner,
+    required this.bisCavyCityState,
+    required this.bisCavyBreed,
+    required this.bisCavyEarNumber,
     required this.superintendentArbaNumber,
   });
 
@@ -77,4 +81,9 @@ class ArbaReportData {
   final String bisRabbitCityState;
   final String bisRabbitBreed;
   final String bisRabbitEarNumber;
+
+  final String bisCavyOwner;
+  final String bisCavyCityState;
+  final String bisCavyBreed;
+  final String bisCavyEarNumber;
 }
