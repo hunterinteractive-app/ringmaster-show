@@ -58,6 +58,23 @@ class _ShowListScreenState extends State<ShowListScreen> {
   bool _canAccessAdmin = false;
   bool _canAccessSuperintendent = false;
   bool _loadingAdminAccess = true;
+  bool _claimingLocalExhibitors = false;
+  Future<void> _claimLocalExhibitorsForCurrentUser() async {
+    if (widget.demoMode || SupportImpersonationSession.isActive) return;
+    if (_claimingLocalExhibitors) return;
+
+    final user = supabase.auth.currentUser;
+    if (user == null) return;
+
+    _claimingLocalExhibitors = true;
+    try {
+      await supabase.rpc('claim_local_exhibitors_for_current_user');
+    } catch (e) {
+      debugPrint('Local exhibitor claim failed: $e');
+    } finally {
+      _claimingLocalExhibitors = false;
+    }
+  }
 
   SupportImpersonatedUser? get _impersonatedUser =>
       SupportImpersonationSession.current.value;
@@ -617,6 +634,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
         profile?['accepted_privacy_version'] == LegalConfig.currentPrivacyVersion;
 
     if (termsOk && privacyOk) {
+      await _claimLocalExhibitorsForCurrentUser();
       await _loadAdminAccess();
       if (!mounted) return;
       setState(() {
@@ -666,6 +684,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
 
     if (!mounted) return;
 
+    await _claimLocalExhibitorsForCurrentUser();
     await _loadAdminAccess();
     if (!mounted) return;
     setState(() {
