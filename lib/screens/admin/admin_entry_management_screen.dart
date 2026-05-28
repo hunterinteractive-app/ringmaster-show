@@ -128,10 +128,7 @@ class _AdminEntryManagementScreenState
 
     final exhibitor = Map<String, dynamic>.from(exhibitorRaw);
     final ownerUserId = (exhibitor['owner_user_id'] ?? '').toString().trim();
-    if (ownerUserId.isNotEmpty) {
-      setState(() => _msg = 'This exhibitor already has an account, so their profile information cannot be edited here.');
-      return;
-    }
+    final readOnly = ownerUserId.isNotEmpty;
 
     final saved = await showModalBottomSheet<bool>(
       context: context,
@@ -143,6 +140,7 @@ class _AdminEntryManagementScreenState
         child: _EditExhibitorSheet(
           exhibitor: exhibitor,
           showId: widget.showId,
+          readOnly: readOnly,
         ),
       ),
     );
@@ -151,6 +149,8 @@ class _AdminEntryManagementScreenState
       await _loadEntries();
       if (!mounted) return;
       setState(() => _msg = 'Exhibitor updated.');
+    } else if (readOnly && mounted) {
+      setState(() => _msg = null);
     }
   }
 
@@ -603,8 +603,9 @@ class _AdminEntryManagementScreenState
                             final exhibitorName =
                                 _exhibitorDisplayName(exEntries.first);
                             final firstExhibitor = exEntries.first['exhibitors'];
-                            final canEditExhibitor = firstExhibitor is Map &&
-                                ((firstExhibitor['owner_user_id'] ?? '').toString().trim().isEmpty);
+                            final hasExhibitor = firstExhibitor is Map;
+                            final exhibitorHasAccount = hasExhibitor &&
+                                ((firstExhibitor['owner_user_id'] ?? '').toString().trim().isNotEmpty);
                             final isExpanded =
                                 _expandedExhibitorIds.contains(exKey);
 
@@ -641,11 +642,18 @@ class _AdminEntryManagementScreenState
                                         ),
                                       ),
                                     ),
-                                    if (canEditExhibitor && !AppSession.isSupportMode)
+                                    if (hasExhibitor && !AppSession.isSupportMode)
                                       TextButton.icon(
                                         onPressed: () => _openEditExhibitor(exEntries.first),
-                                        icon: const Icon(Icons.edit, size: 18),
-                                        label: const Text('Edit Exhibitor'),
+                                        icon: Icon(
+                                          exhibitorHasAccount ? Icons.visibility : Icons.edit,
+                                          size: 18,
+                                        ),
+                                        label: Text(
+                                          exhibitorHasAccount
+                                              ? 'View Exhibitor'
+                                              : 'Edit Exhibitor',
+                                        ),
                                       ),
                                   ],
                                 ),
@@ -1411,10 +1419,12 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
 class _EditExhibitorSheet extends StatefulWidget {
   final Map<String, dynamic> exhibitor;
   final String showId;
+  final bool readOnly;
 
   const _EditExhibitorSheet({
     required this.exhibitor,
     required this.showId,
+    this.readOnly = false,
   });
 
   @override
@@ -1609,7 +1619,25 @@ class _EditExhibitorSheetState extends State<_EditExhibitorSheet> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Edit Exhibitor', style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              widget.readOnly ? 'View Exhibitor' : 'Edit Exhibitor',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            if (widget.readOnly) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.blue.withOpacity(.25)),
+                ),
+                child: const Text(
+                  'This exhibitor has an account. Show secretaries can view the contact information here, but profile changes must be made by the exhibitor from their account.',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
             const SizedBox(height: 8),
             if (_msg != null)
               Container(
@@ -1630,7 +1658,7 @@ class _EditExhibitorSheetState extends State<_EditExhibitorSheet> {
               ),
             TextField(
               controller: _showingName,
-              enabled: !_saving && !AppSession.isSupportMode,
+              enabled: !_saving && !AppSession.isSupportMode && !widget.readOnly,
               textCapitalization: TextCapitalization.words,
               decoration: const InputDecoration(
                 labelText: 'Showing Name',
@@ -1643,7 +1671,7 @@ class _EditExhibitorSheetState extends State<_EditExhibitorSheet> {
                 Expanded(
                   child: TextField(
                     controller: _firstName,
-                    enabled: !_saving && !AppSession.isSupportMode,
+                    enabled: !_saving && !AppSession.isSupportMode && !widget.readOnly,
                     textCapitalization: TextCapitalization.words,
                     decoration: const InputDecoration(
                       labelText: 'First Name',
@@ -1655,7 +1683,7 @@ class _EditExhibitorSheetState extends State<_EditExhibitorSheet> {
                 Expanded(
                   child: TextField(
                     controller: _lastName,
-                    enabled: !_saving && !AppSession.isSupportMode,
+                    enabled: !_saving && !AppSession.isSupportMode && !widget.readOnly,
                     textCapitalization: TextCapitalization.words,
                     decoration: const InputDecoration(
                       labelText: 'Last Name',
@@ -1668,7 +1696,7 @@ class _EditExhibitorSheetState extends State<_EditExhibitorSheet> {
             const SizedBox(height: 10),
             TextField(
               controller: _email,
-              enabled: !_saving && !AppSession.isSupportMode,
+              enabled: !_saving && !AppSession.isSupportMode && !widget.readOnly,
               keyboardType: TextInputType.emailAddress,
               decoration: const InputDecoration(
                 labelText: 'Email',
@@ -1678,7 +1706,7 @@ class _EditExhibitorSheetState extends State<_EditExhibitorSheet> {
             const SizedBox(height: 10),
             TextField(
               controller: _phone,
-              enabled: !_saving && !AppSession.isSupportMode,
+              enabled: !_saving && !AppSession.isSupportMode && !widget.readOnly,
               keyboardType: TextInputType.phone,
               decoration: const InputDecoration(
                 labelText: 'Phone',
@@ -1688,7 +1716,7 @@ class _EditExhibitorSheetState extends State<_EditExhibitorSheet> {
             const SizedBox(height: 10),
             TextField(
               controller: _arbaNumber,
-              enabled: !_saving && !AppSession.isSupportMode,
+              enabled: !_saving && !AppSession.isSupportMode && !widget.readOnly,
               decoration: const InputDecoration(
                 labelText: 'ARBA Number',
                 border: OutlineInputBorder(),
@@ -1697,7 +1725,7 @@ class _EditExhibitorSheetState extends State<_EditExhibitorSheet> {
             const SizedBox(height: 10),
             TextField(
               controller: _addressLine1,
-              enabled: !_saving && !AppSession.isSupportMode,
+              enabled: !_saving && !AppSession.isSupportMode && !widget.readOnly,
               textCapitalization: TextCapitalization.words,
               decoration: const InputDecoration(
                 labelText: 'Address Line 1 *',
@@ -1707,7 +1735,7 @@ class _EditExhibitorSheetState extends State<_EditExhibitorSheet> {
             const SizedBox(height: 10),
             TextField(
               controller: _addressLine2,
-              enabled: !_saving && !AppSession.isSupportMode,
+              enabled: !_saving && !AppSession.isSupportMode && !widget.readOnly,
               textCapitalization: TextCapitalization.words,
               decoration: const InputDecoration(
                 labelText: 'Address Line 2',
@@ -1717,7 +1745,7 @@ class _EditExhibitorSheetState extends State<_EditExhibitorSheet> {
             const SizedBox(height: 10),
             TextField(
               controller: _city,
-              enabled: !_saving && !AppSession.isSupportMode,
+              enabled: !_saving && !AppSession.isSupportMode && !widget.readOnly,
               textCapitalization: TextCapitalization.words,
               decoration: const InputDecoration(
                 labelText: 'City *',
@@ -1731,7 +1759,7 @@ class _EditExhibitorSheetState extends State<_EditExhibitorSheet> {
                   flex: 2,
                   child: TextField(
                     controller: _state,
-                    enabled: !_saving && !AppSession.isSupportMode,
+                    enabled: !_saving && !AppSession.isSupportMode && !widget.readOnly,
                     textCapitalization: TextCapitalization.characters,
                     inputFormatters: [UpperCaseTextFormatter()],
                     decoration: const InputDecoration(
@@ -1745,7 +1773,7 @@ class _EditExhibitorSheetState extends State<_EditExhibitorSheet> {
                   flex: 3,
                   child: TextField(
                     controller: _zip,
-                    enabled: !_saving && !AppSession.isSupportMode,
+                    enabled: !_saving && !AppSession.isSupportMode && !widget.readOnly,
                     decoration: const InputDecoration(
                       labelText: 'ZIP Code *',
                       border: OutlineInputBorder(),
@@ -1755,15 +1783,24 @@ class _EditExhibitorSheetState extends State<_EditExhibitorSheet> {
               ],
             ),
             const SizedBox(height: 14),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFFD4A623),
-                foregroundColor: Colors.black87,
-                padding: const EdgeInsets.symmetric(vertical: 16),
+            if (widget.readOnly)
+              OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Close'),
+              )
+            else
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFD4A623),
+                  foregroundColor: Colors.black87,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                onPressed: (_saving || AppSession.isSupportMode) ? null : _save,
+                child: Text(_saving ? 'Saving…' : 'Save Exhibitor'),
               ),
-              onPressed: (_saving || AppSession.isSupportMode) ? null : _save,
-              child: Text(_saving ? 'Saving…' : 'Save Exhibitor'),
-            ),
           ],
         ),
       ),
@@ -1971,6 +2008,8 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
   final _email = TextEditingController();
   final _phone = TextEditingController();
   final _arbaNumber = TextEditingController();
+  final _exhibitorSearch = TextEditingController();
+  final _exhibitorSearchFocus = FocusNode();
   final _addressLine1 = TextEditingController();
   final _addressLine2 = TextEditingController();
   final _city = TextEditingController();
@@ -2038,6 +2077,9 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     _loadExhibitors();
     _firstName.addListener(_autoFillShowingName);
     _lastName.addListener(_autoFillShowingName);
+    _exhibitorSearch.addListener(() {
+      if (mounted) setState(() {});
+    });
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _loadBreedsForSpecies();
@@ -2052,6 +2094,8 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     _email.dispose();
     _phone.dispose();
     _arbaNumber.dispose();
+    _exhibitorSearch.dispose();
+    _exhibitorSearchFocus.dispose();
     _addressLine1.dispose();
     _addressLine2.dispose();
     _city.dispose();
@@ -2066,6 +2110,43 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     _notes.dispose();
     _furNotes.dispose();
     super.dispose();
+  }
+  List<Map<String, dynamic>> _filteredExhibitors([String? searchText]) {
+    final query = (searchText ?? _exhibitorSearch.text).trim().toLowerCase();
+    if (query.isEmpty) return _exhibitors;
+
+    return _exhibitors.where((e) {
+      final haystack = [
+        _exhibitorName(e),
+        _exhibitorLabel(e),
+        e['first_name'],
+        e['last_name'],
+        e['showing_name'],
+        e['display_name'],
+        e['email'],
+        e['phone'],
+        e['arba_number'],
+        e['city'],
+        e['state'],
+        e['zip'],
+      ].where((v) => v != null).map((v) => v.toString().toLowerCase()).join(' ');
+
+      return haystack.contains(query);
+    }).toList();
+  }
+  void _selectExhibitor(Map<String, dynamic> exhibitor) {
+    final id = (exhibitor['id'] ?? '').toString();
+    if (id.isEmpty) return;
+
+    setState(() {
+      _exhibitorId = id;
+      _exhibitorSearch.text = _exhibitorLabel(exhibitor);
+      _animal = null;
+      _animals = [];
+      _msg = null;
+    });
+
+    _loadAnimalsForSelectedExhibitor();
   }
 
   void _autoFillShowingName() {
@@ -2380,6 +2461,57 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
 
           if (!stillValidVariety) {
             _variety.clear();
+          }
+        });
+        return;
+      }
+
+      // Cavy-specific loader
+      if (_species == 'cavy') {
+        final cavyRowsRes = await supabase
+            .from('cavy_sop_variety_order')
+            .select('variety_name,variety_sort_order')
+            .eq('breed_name', breedName)
+            .order('variety_sort_order')
+            .order('variety_name');
+
+        final cavyRows = (cavyRowsRes as List).cast<Map<String, dynamic>>();
+
+        final effective = <Map<String, dynamic>>[];
+        final seenNames = <String>{};
+
+        for (final row in cavyRows) {
+          final name = (row['variety_name'] ?? '').toString().trim();
+          if (name.isEmpty) continue;
+
+          final key = name.toLowerCase();
+          if (seenNames.contains(key)) continue;
+          seenNames.add(key);
+
+          effective.add({
+            'id': 'cavy_$key',
+            'name': name,
+          });
+        }
+
+        if (!mounted) return;
+        setState(() {
+          _varietyOptions = effective;
+          _loadingVarieties = false;
+
+          if (effective.length == 1) {
+            _variety.text = (effective.first['name'] ?? '').toString();
+          } else {
+            final currentVariety = _variety.text.trim().toLowerCase();
+            final stillValidVariety = currentVariety.isNotEmpty &&
+                _varietyOptions.any(
+                  (v) => (v['name'] ?? '').toString().trim().toLowerCase() ==
+                      currentVariety,
+                );
+
+            if (!stillValidVariety) {
+              _variety.clear();
+            }
           }
         });
         return;
@@ -2984,6 +3116,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                               _exhibitorId = null;
                               _animal = null;
                               _animals = [];
+                              _exhibitorSearch.clear();
                               _msg = null;
                             });
                           },
@@ -3126,39 +3259,152 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                           : (v) => setState(() => _exhibitorType = v ?? 'adult'),
                     ),
                   ] else ...[
-                  DropdownButtonFormField<String>(
-                      isExpanded: true,
-                      value: _exhibitorId,
-                      decoration: const InputDecoration(
-                        labelText: 'Exhibitor',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: _exhibitors
-                          .map(
-                            (e) => DropdownMenuItem<String>(
-                              value: e['id'].toString(),
-                              child: Text(
-                                _exhibitorLabel(e),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (_saving || AppSession.isSupportMode)
-                          ? null
-                          : (v) async {
+                    RawAutocomplete<Map<String, dynamic>>(
+                      textEditingController: _exhibitorSearch,
+                      focusNode: _exhibitorSearchFocus,
+                      displayStringForOption: _exhibitorLabel,
+                      optionsBuilder: (TextEditingValue textEditingValue) {
+                        return _filteredExhibitors(textEditingValue.text);
+                      },
+                      onSelected: _selectExhibitor,
+                      fieldViewBuilder: (
+                        context,
+                        textEditingController,
+                        focusNode,
+                        onFieldSubmitted,
+                      ) {
+                        return TextField(
+                          controller: textEditingController,
+                          focusNode: focusNode,
+                          enabled: !_saving && !AppSession.isSupportMode,
+                          decoration: InputDecoration(
+                            labelText: 'Exhibitor',
+                            hintText: 'Search by name, city, state, email, phone, or ARBA #',
+                            prefixIcon: const Icon(Icons.search),
+                            suffixIcon: textEditingController.text.trim().isEmpty
+                                ? null
+                                : IconButton(
+                                    tooltip: 'Clear exhibitor',
+                                    icon: const Icon(Icons.clear),
+                                    onPressed: (_saving || AppSession.isSupportMode)
+                                        ? null
+                                        : () {
+                                            setState(() {
+                                              textEditingController.clear();
+                                              _exhibitorId = null;
+                                              _animal = null;
+                                              _animals = [];
+                                              _msg = null;
+                                            });
+                                          },
+                                  ),
+                            helperText: textEditingController.text.trim().isEmpty
+                                ? 'Start typing to search exhibitors'
+                                : '${_filteredExhibitors(textEditingController.text).length} match${_filteredExhibitors(textEditingController.text).length == 1 ? '' : 'es'} found',
+                            border: const OutlineInputBorder(),
+                          ),
+                          onChanged: (value) {
+                            final selected = _selectedExhibitor();
+                            if (selected != null && value != _exhibitorLabel(selected)) {
                               setState(() {
-                                _exhibitorId = v;
+                                _exhibitorId = null;
                                 _animal = null;
                                 _animals = [];
                                 _msg = null;
                               });
-                              await _loadAnimalsForSelectedExhibitor();
-                            },
+                            } else {
+                              setState(() {});
+                            }
+                          },
+                          onSubmitted: (_) => onFieldSubmitted(),
+                        );
+                      },
+                      optionsViewBuilder: (context, onSelected, options) {
+                        final optionList = options.toList();
+                        return Align(
+                          alignment: Alignment.topLeft,
+                          child: Material(
+                            elevation: 6,
+                            borderRadius: BorderRadius.circular(12),
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(
+                                maxHeight: 280,
+                                maxWidth: 620,
+                              ),
+                              child: ListView.separated(
+                                padding: EdgeInsets.zero,
+                                shrinkWrap: true,
+                                itemCount: optionList.length,
+                                separatorBuilder: (_, __) => const Divider(height: 1),
+                                itemBuilder: (context, index) {
+                                  final option = optionList[index];
+                                  final email = (option['email'] ?? '').toString().trim();
+                                  final phone = (option['phone'] ?? '').toString().trim();
+                                  final subtitle = [email, phone]
+                                      .where((s) => s.isNotEmpty)
+                                      .join(' • ');
+
+                                  return ListTile(
+                                    dense: true,
+                                    title: Text(
+                                      _exhibitorLabel(option),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    subtitle: subtitle.isEmpty
+                                        ? null
+                                        : Text(
+                                            subtitle,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                    onTap: () => onSelected(option),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        );
+                      },
                     ),
                     _selectedExhibitorContactCard(),
                   ],
                   const SizedBox(height: 14),
+                  if (!_addNewExhibitor && !_useLocalAnimal) ...[
+                    if (_exhibitorId == null)
+                      const Text(
+                        'Select an exhibitor first to load their animals.',
+                      )
+                    else if (_animals.isEmpty)
+                      const Text(
+                        'No saved animals found for this exhibitor. Use "Add New Animal" to enter one locally.',
+                      )
+                    else
+                      DropdownButtonFormField<Map<String, dynamic>>(
+                        value: _animal,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Saved Animal',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: _animals
+                            .map(
+                              (a) => DropdownMenuItem<Map<String, dynamic>>(
+                                value: a,
+                                child: Text(
+                                  _animalLabel(a),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (_saving || AppSession.isSupportMode)
+                            ? null
+                            : (v) => setState(() {
+                                  _animal = v;
+                                  _msg = null;
+                                }),
+                      ),
+                    const SizedBox(height: 14),
+                  ],
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Add New Animal (Local Only)'),
@@ -3336,38 +3582,11 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                               });
                             },
                     ),
-                    ] 
-                    else ...[
-                      if (_addNewExhibitor)
-                        const Text(
-                          'Select "Add New Animal" for a new walk-in exhibitor, or switch back to an existing exhibitor to load saved animals.',
-                        )
-                      else if (_exhibitorId == null)
-                        const Text(
-                          'Select an exhibitor first to load their animals.',
-                        )
-                      else if (_animals.isEmpty)
-                        const Text(
-                          'No saved animals found for this exhibitor. Use "Add New Animal" to enter one locally.',
-                        )
-                      else
-                        DropdownButtonFormField<Map<String, dynamic>>(
-                          value: _animal,
-                          decoration: const InputDecoration(
-                            labelText: 'Animal',
-                            border: OutlineInputBorder(),
-                          ),
-                          items: _animals
-                              .map(
-                                (a) => DropdownMenuItem<Map<String, dynamic>>(
-                                  value: a,
-                                  child: Text(_animalLabel(a)),
-                                ),
-                              )
-                              .toList(),
-                          onChanged:
-                              _saving ? null : (v) => setState(() => _animal = v),
-                        ),
+                    ]
+                    else if (_addNewExhibitor) ...[
+                      const Text(
+                        'Select "Add New Animal" for a new walk-in exhibitor, or switch back to an existing exhibitor to load saved animals.',
+                      ),
                     ],
 
                   const SizedBox(height: 12),
