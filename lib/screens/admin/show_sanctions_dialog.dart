@@ -187,6 +187,64 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
     return v.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
   }
 
+  bool _breedNamesMatch(String a, String b) {
+    String clean(String value) {
+      var result = _normName(value)
+          .replaceAll('&', 'and')
+          .replaceAll(RegExp(r'[^a-z0-9 ]'), ' ')
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
+
+      if (result.endsWith(' rabbits')) {
+        result = result.substring(0, result.length - ' rabbits'.length).trim();
+      } else if (result.endsWith(' rabbit')) {
+        result = result.substring(0, result.length - ' rabbit'.length).trim();
+      } else if (result.endsWith(' cavies')) {
+        result = result.substring(0, result.length - ' cavies'.length).trim();
+      } else if (result.endsWith(' cavy')) {
+        result = result.substring(0, result.length - ' cavy'.length).trim();
+      }
+
+      result = result
+          .replaceAll(RegExp(r'\bchampange\b'), 'champagne')
+          .replaceAll(RegExp(r'\bd\s+argents\b'), 'dargent')
+          .replaceAll(RegExp(r'\bd\s+argent\b'), 'dargent')
+          .replaceAll(RegExp(r'\bdargents\b'), 'dargent')
+          .replaceAll(RegExp(r'\bchampagne\s+dargent\b'), 'champagne dargent')
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
+
+      return result;
+    }
+
+    final left = clean(a);
+    final right = clean(b);
+
+    if (left.isEmpty || right.isEmpty) return false;
+    if (left == right) return true;
+
+    String singularize(String value) {
+      final words = value.split(' ').where((w) => w.trim().isNotEmpty).toList();
+      if (words.isEmpty) return value;
+
+      String singularizeWord(String word) {
+        if (word == 'dargents') return 'dargent';
+        if (word.endsWith('ies')) {
+          return '${word.substring(0, word.length - 3)}y';
+        }
+        if (word.endsWith('s') && word.length > 1) {
+          return word.substring(0, word.length - 1);
+        }
+        return word;
+      }
+
+      words[words.length - 1] = singularizeWord(words.last);
+      return words.join(' ');
+    }
+
+    return singularize(left) == singularize(right);
+  }
+
   String _normalizedClubType(Map<String, dynamic> row) {
     String clean(String v) {
       return v
@@ -281,10 +339,92 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
 
     final allBreedRows = (allBreedsRes as List).cast<Map<String, dynamic>>();
 
+    final showBreedNamesBySectionId = <String, Set<String>>{};
+    final showBreedNamesForAllSections = <String>{};
+
+    try {
+      final showBreedsRes = await supabase
+          .from('show_breeds')
+          .select('section_id, breed_id, breeds(name)')
+          .eq('show_id', widget.showId);
+
+      for (final row in (showBreedsRes as List).cast<Map<String, dynamic>>()) {
+        final sectionId = (row['section_id'] ?? '').toString().trim();
+
+        final breed = row['breeds'];
+        final breedName = breed is Map
+            ? (breed['name'] ?? '').toString().trim()
+            : '';
+
+        if (breedName.isEmpty) continue;
+
+        if (sectionId.isEmpty) {
+          showBreedNamesForAllSections.add(breedName);
+        } else {
+          showBreedNamesBySectionId
+              .putIfAbsent(sectionId, () => <String>{})
+              .add(breedName);
+        }
+      }
+    } catch (_) {
+      try {
+        final showBreedsRes = await supabase
+            .from('show_breeds')
+            .select('breed_id, breeds(name)')
+            .eq('show_id', widget.showId);
+
+        for (final row in (showBreedsRes as List).cast<Map<String, dynamic>>()) {
+          final breed = row['breeds'];
+          final breedName = breed is Map
+              ? (breed['name'] ?? '').toString().trim()
+              : '';
+
+          if (breedName.isEmpty) continue;
+          showBreedNamesForAllSections.add(breedName);
+        }
+      } catch (_) {
+        // Some older databases may not have show_breeds populated for every show.
+        // The section-level breed settings below remain the primary fallback.
+      }
+    }
+
     final breedNameById = <String, String>{
       for (final b in allBreedRows)
         (b['id'] ?? '').toString(): (b['name'] ?? '').toString().trim(),
     };
+
+    try {
+      final showBreedIdsRes = await supabase
+          .from('show_breeds')
+          .select('breed_id')
+          .eq('show_id', widget.showId);
+
+      for (final row in (showBreedIdsRes as List).cast<Map<String, dynamic>>()) {
+        final breedId = (row['breed_id'] ?? '').toString().trim();
+        final breedName = breedNameById[breedId] ?? '';
+        if (breedName.isNotEmpty) {
+          showBreedNamesForAllSections.add(breedName);
+        }
+      }
+    } catch (_) {
+      // Keep using show_sections.allowed_breed_ids if show_breeds is unavailable.
+    }
+
+    try {
+      final entryBreedsRes = await supabase
+          .from('entries')
+          .select('breed')
+          .eq('show_id', widget.showId);
+
+      for (final row in (entryBreedsRes as List).cast<Map<String, dynamic>>()) {
+        final breedName = (row['breed'] ?? '').toString().trim();
+        if (breedName.isNotEmpty) {
+          showBreedNamesForAllSections.add(breedName);
+        }
+      }
+    } catch (_) {
+      // Entries are only a fallback signal. The show setup remains the primary source.
+    }
 
     final speciesRankByBreedName = <String, int>{
       for (final b in allBreedRows)
@@ -328,6 +468,19 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
             .map((id) => breedNameById[id] ?? '')
             .where((x) => x.isNotEmpty)
             .toSet();
+      }
+
+      final configuredShowBreedNames = showBreedNamesBySectionId[sectionId];
+      if (configuredShowBreedNames != null && configuredShowBreedNames.isNotEmpty) {
+        allowedBreedNamesBySectionId
+            .putIfAbsent(sectionId, () => <String>{})
+            .addAll(configuredShowBreedNames);
+      }
+
+      if (showBreedNamesForAllSections.isNotEmpty) {
+        allowedBreedNamesBySectionId
+            .putIfAbsent(sectionId, () => <String>{})
+            .addAll(showBreedNamesForAllSections);
       }
     }
 
@@ -386,11 +539,7 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
         for (final entry in allowedBreedNamesBySectionId.entries) {
           final sectionId = entry.key;
           final allowedNames = entry.value;
-          final normalizedBreedName = _normName(breedName);
-
-          final normalizedAllowedNames = allowedNames.map(_normName).toSet();
-
-          if (normalizedAllowedNames.contains(normalizedBreedName)) {
+          if (allowedNames.any((allowedName) => _breedNamesMatch(allowedName, breedName))) {
             allowedSectionIds.add(sectionId);
           }
         }
@@ -403,9 +552,20 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
         allowedSectionIds = {...allSectionIds};
       }
 
+      if (allowedSectionIds.isEmpty &&
+          (tabKind == _SanctionTabKind.nationalBreed ||
+              tabKind == _SanctionTabKind.stateBreed)) {
+        allowedSectionIds = {...allSectionIds};
+      }
+
       if (allowedSectionIds.isEmpty) continue;
 
-      final speciesRank = speciesRankByBreedName[_normName(breedName)] ?? 0;
+      final matchingSpeciesRanks = speciesRankByBreedName.entries
+          .where((entry) => _breedNamesMatch(entry.key, breedName))
+          .map((entry) => entry.value)
+          .toList();
+      final speciesRank =
+          matchingSpeciesRanks.isEmpty ? 0 : matchingSpeciesRanks.first;
       final dedupeKey =
           '$clubType|${clubName.toLowerCase()}|${breedName.toLowerCase()}|${(club['state_code'] ?? '').toString().trim().toUpperCase()}';
 
@@ -569,11 +729,31 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
 
     final search = _searchText.trim().toLowerCase();
     if (search.isNotEmpty) {
+      final normalizedSearch = _normName(search)
+          .replaceAll(RegExp(r'[^a-z0-9 ]'), ' ')
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
+
+      String searchable(String value) {
+        return _normName(value)
+            .replaceAll(RegExp(r'[^a-z0-9 ]'), ' ')
+            .replaceAll(RegExp(r'\s+'), ' ')
+            .trim();
+      }
+
       tabRows = tabRows.where((r) {
-        return r.label.toLowerCase().contains(search) ||
-            (r.breedName ?? '').toLowerCase().contains(search) ||
-            (r.clubName ?? '').toLowerCase().contains(search) ||
-            (r.stateCode ?? '').toLowerCase().contains(search);
+        final fields = [
+          r.label,
+          r.breedName ?? '',
+          r.clubName ?? '',
+          r.stateCode ?? '',
+        ];
+
+        return fields.any((field) {
+          final plain = field.toLowerCase();
+          final normalized = searchable(field);
+          return plain.contains(search) || normalized.contains(normalizedSearch);
+        });
       }).toList();
     }
 
