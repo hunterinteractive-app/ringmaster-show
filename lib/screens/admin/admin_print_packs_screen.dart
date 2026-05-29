@@ -2718,28 +2718,72 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
   String _checkInBalanceDue(List<Map<String, dynamic>> entries) {
     if (entries.isEmpty) return r'$—';
 
-    // New balance source from report_show_exhibitor_balances / updated check-in RPC.
-    // These values are stored in cents.
-    for (final e in entries) {
-      final dueCents = e['balance_due_cents'];
-      if (_hasValue(dueCents)) {
-        return _moneyFromCents(dueCents);
+    // Prefer the full exhibitor balance across the show/show package. The
+    // check-in sheet should show what the exhibitor owes in total, not just the
+    // amount attached to the selected show letter/section currently being
+    // printed.
+    const allShowCentsKeys = [
+      'balance_due_all_shows_cents',
+      'all_shows_balance_due_cents',
+      'total_balance_due_cents',
+      'exhibitor_balance_due_cents',
+    ];
+
+    for (final key in allShowCentsKeys) {
+      for (final e in entries) {
+        final value = e[key];
+        if (_hasValue(value)) {
+          return _moneyFromCents(value);
+        }
       }
     }
 
-    // Backward-compatible fallback for the older check-in RPC fields.
-    // These values were already dollar amounts.
-    for (final e in entries) {
-      final thisShow = e['balance_due_this_show'];
-      if (_hasValue(thisShow)) {
-        return _money(thisShow);
+    // Backward-compatible all-show/full-show dollar fields from older RPCs.
+    const allShowDollarKeys = [
+      'balance_due_all_shows',
+      'all_shows_balance_due',
+      'total_balance_due',
+      'exhibitor_balance_due',
+    ];
+
+    for (final key in allShowDollarKeys) {
+      for (final e in entries) {
+        final value = e[key];
+        if (_hasValue(value)) {
+          return _money(value);
+        }
       }
     }
 
-    for (final e in entries) {
-      final allShows = e['balance_due_all_shows'];
-      if (_hasValue(allShows)) {
-        return _money(allShows);
+    // Fallback only: these are usually the current show/section amount.
+    const selectedShowCentsKeys = [
+      'balance_due_cents',
+      'balance_due_this_show_cents',
+      'this_show_balance_due_cents',
+    ];
+
+    for (final key in selectedShowCentsKeys) {
+      for (final e in entries) {
+        final value = e[key];
+        if (_hasValue(value)) {
+          return _moneyFromCents(value);
+        }
+      }
+    }
+
+    // Last fallback for older check-in RPC fields. These values were already
+    // dollar amounts and usually represent only the selected show.
+    const selectedShowDollarKeys = [
+      'balance_due_this_show',
+      'this_show_balance_due',
+    ];
+
+    for (final key in selectedShowDollarKeys) {
+      for (final e in entries) {
+        final value = e[key];
+        if (_hasValue(value)) {
+          return _money(value);
+        }
       }
     }
 

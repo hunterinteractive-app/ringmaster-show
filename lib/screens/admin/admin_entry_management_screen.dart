@@ -269,50 +269,11 @@ class _AdminEntryManagementScreenState
       return;
     }
 
-    final animalId = (entry['animal_id'] ?? '').toString().trim();
-
-    // Saved animals should use the same shared editor as My Animals so the
-    // breed / variety / class / sex dropdown behavior stays consistent.
-    if (animalId.isNotEmpty) {
-      try {
-        final animalRow = await supabase
-            .from('animals')
-            .select(
-              'id,owner_user_id,species,name,tattoo,breed,variety,sex,birth_date,is_dob_unknown,created_at,updated_at',
-            )
-            .eq('id', animalId)
-            .maybeSingle();
-
-        if (!mounted) return;
-
-        if (animalRow == null) {
-          setState(() {
-            _msg = 'Could not find the saved animal record. Opened entry editor instead.';
-          });
-        } else {
-          final saved = await openAnimalEditorDialog(
-            context,
-            existing: Map<String, dynamic>.from(animalRow as Map),
-            showId: widget.showId,
-          );
-
-          if (saved == true) {
-            await _loadEntries();
-            if (!mounted) return;
-            setState(() => _msg = 'Animal updated.');
-          }
-          return;
-        }
-      } catch (e) {
-        if (!mounted) return;
-        setState(() {
-          _msg = 'Could not load the saved animal record. Opened entry editor instead.';
-        });
-      }
-    }
-
-    // Local/show-only entries do not exist in the animals table, so they still
-    // use the entry editor for the entry snapshot fields.
+    // Entry Management should edit the show entry snapshot, not the saved
+    // animal master profile. Saved animal profiles may belong to an exhibitor
+    // account, and RLS correctly prevents show staff from editing those rows.
+    // Updating the entries row keeps the current show entry correct without
+    // changing the exhibitor's saved animal profile.
     final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -926,6 +887,56 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
 
       final breedName = (matchedBreed['name'] ?? '').toString().trim();
 
+      if (_species == 'cavy') {
+        final cavyRowsRes = await supabase
+            .from('cavy_sop_variety_order')
+            .select('variety_name,variety_sort_order')
+            .eq('breed_name', breedName)
+            .order('variety_sort_order', ascending: true)
+            .order('variety_name', ascending: true);
+
+        final cavyRows = (cavyRowsRes as List).cast<Map<String, dynamic>>();
+
+        final effective = <Map<String, dynamic>>[];
+        final seen = <String>{};
+
+        for (final row in cavyRows) {
+          final varietyName = (row['variety_name'] ?? '').toString().trim();
+          if (varietyName.isEmpty) continue;
+
+          final key = varietyName.toLowerCase();
+          if (seen.contains(key)) continue;
+          seen.add(key);
+
+          effective.add({
+            'id': 'cavy_$key',
+            'name': varietyName,
+          });
+        }
+
+        final currentVariety =
+            (initialVarietyName ?? _variety.text).trim().toLowerCase();
+        final matchedVariety = effective.firstWhere(
+          (v) => (v['name'] ?? '').toString().trim().toLowerCase() == currentVariety,
+          orElse: () => <String, dynamic>{},
+        );
+
+        if (!mounted) return;
+        setState(() {
+          _varietyOptions = effective;
+          _loadingVarieties = false;
+
+          if (matchedVariety.isNotEmpty) {
+            _variety.text = (matchedVariety['name'] ?? '').toString();
+          } else if (effective.length == 1) {
+            _variety.text = (effective.first['name'] ?? '').toString();
+          } else {
+            _variety.clear();
+          }
+        });
+        return;
+      }
+
       if (_isLopBreedName(breedName)) {
         const lopOptions = [
           {'id': 'lop_broken', 'name': 'Broken'},
@@ -1137,7 +1148,7 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
         (widget.entry['show_id'] ?? '').toString(),
       );
 
-      await supabase.from('entries').update({
+      final updatePayload = <String, dynamic>{
         'animal_name': _animalName.text.trim().isEmpty
             ? null
             : _animalName.text.trim(),
@@ -1161,7 +1172,24 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
             ? _furNotes.text.trim()
             : null,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
-      }).eq('id', id);
+      };
+
+      debugPrint('Updating entry $id with: $updatePayload');
+
+      final updatedRows = await supabase
+          .from('entries')
+          .update(updatePayload)
+          .eq('id', id)
+          .select('id, animal_name, tattoo, breed, variety, sex, class_name, updated_at');
+
+      final updatedList = (updatedRows as List).cast<Map<String, dynamic>>();
+      if (updatedList.isEmpty) {
+        throw Exception(
+          'No entry row was updated. This usually means RLS blocked the update or the entry ID was not visible to this user.',
+        );
+      }
+
+      debugPrint('Entry update succeeded: ${updatedList.first}');
 
       if (!mounted) return;
       Navigator.pop(context, true);
@@ -2161,6 +2189,47 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
 
     if (combined.isNotEmpty) {
       _showingName.text = combined;
+    }
+  }
+
+  Future<void> _openSharedAnimalEditorForAdd() async {
+    if (AppSession.isSupportMode) {
+      setState(() => _msg = 'Adding animals is disabled while viewing in support mode.');
+      return;
+    }
+
+    final exhibitor = _selectedExhibitor();
+    if (exhibitor == null) {
+      setState(() => _msg = 'Select an exhibitor before adding an animal.');
+      return;
+    }
+
+    final ownerUserId = (exhibitor['owner_user_id'] ?? '').toString().trim();
+
+    // Local/no-account exhibitors cannot use the account-based shared animal editor.
+    // Keep them on the local/manual animal entry flow.
+    if (ownerUserId.isEmpty) {
+      setState(() {
+        _useLocalAnimal = true;
+        _animal = null;
+        _msg = 'This exhibitor does not have an account, so enter the animal details below.';
+      });
+      return;
+    }
+
+    final saved = await openAnimalEditorDialog(
+      context,
+      showId: widget.showId,
+    );
+
+    if (saved == true) {
+      await _loadAnimalsForSelectedExhibitor();
+      if (!mounted) return;
+
+      setState(() {
+        _useLocalAnimal = false;
+        _msg = 'Animal added. Select it from the animal list to enter it in the show.';
+      });
     }
   }
 
@@ -3486,7 +3555,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                       )
                     else if (_animals.isEmpty)
                       const Text(
-                        'No saved animals found for this exhibitor. Use "Add New Animal" to enter one locally.',
+                        'No saved animals found for this exhibitor. Use "Add New Animal" to add one.',
                       )
                     else
                       DropdownButtonFormField<Map<String, dynamic>>(
@@ -3522,23 +3591,40 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                       _selectedAnimalSummaryCard(),
                     const SizedBox(height: 14),
                   ],
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Add New Animal (Local Only)'),
-                    subtitle: const Text(
-                      'Use when the animal is not already in the system',
+                  if (!_addNewExhibitor) ...[
+                    OutlinedButton.icon(
+                      onPressed: (_saving || AppSession.isSupportMode || _exhibitorId == null)
+                          ? null
+                          : _openSharedAnimalEditorForAdd,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Add New Animal'),
                     ),
-                    value: _useLocalAnimal,
-                    onChanged: (_saving || AppSession.isSupportMode)
-                        ? null
-                        : (v) {
-                            setState(() {
-                              _useLocalAnimal = v;
-                              _animal = null;
-                              _msg = null;
-                            });
-                          },
-                  ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _exhibitorId == null
+                          ? 'Select an exhibitor before adding an animal.'
+                          : 'For account exhibitors, this opens the shared animal editor. For local/no-account exhibitors, it switches to manual animal entry.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ] else ...[
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Add New Animal'),
+                      subtitle: const Text(
+                        'Enter animal details for this new walk-in/local exhibitor',
+                      ),
+                      value: _useLocalAnimal,
+                      onChanged: (_saving || AppSession.isSupportMode)
+                          ? null
+                          : (v) {
+                              setState(() {
+                                _useLocalAnimal = v;
+                                _animal = null;
+                                _msg = null;
+                              });
+                            },
+                    ),
+                  ],
                   if (_useLocalAnimal) ...[
                     DropdownButtonFormField<String>(
                       value: _species,
