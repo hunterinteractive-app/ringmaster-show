@@ -113,7 +113,11 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
       if (showIds.isNotEmpty) {
         final shows = await supabase
             .from('shows')
-            .select('id,name,start_date,entry_close_at')
+            .select(
+              'id,name,start_date,entry_close_at,'
+              'superintendent_judge_order_published,'
+              'superintendent_judge_order_published_at',
+            )
             .inFilter('id', showIds.toList());
 
         _showsById
@@ -565,6 +569,39 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
     );
   }
 
+  bool _judgeOrderPublishedForShow(String showId) {
+    return _showsById[showId]?['superintendent_judge_order_published'] == true;
+  }
+
+  String _publishedJudgeOrderTimestamp(String showId) {
+    final raw = _showsById[showId]?['superintendent_judge_order_published_at'];
+    if (raw == null) return '';
+    return formatLocalDateTime(raw.toString());
+  }
+
+  Future<void> _openJudgeOrder(
+    BuildContext context,
+    String showId,
+    String showName,
+  ) async {
+    if (!_judgeOrderPublishedForShow(showId)) {
+      setState(() {
+        _msg = 'Judge order has not been published for this show yet.';
+      });
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (_) => _JudgeOrderDialog(
+        showId: showId,
+        showName: showName,
+        publishedAt: _publishedJudgeOrderTimestamp(showId),
+        sectionLabel: _sectionLabel,
+      ),
+    );
+  }
+
   void _downloadEntriesForShow(String showId, String showName) {
     final grouped = _grouped();
     final exhibitorBuckets =
@@ -954,6 +991,8 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
                         showId: showId,
                         onBreedCounts: _openBreedCounts,
                         onDownloadEntries: _downloadEntriesForShow,
+                        onJudgeOrder: _openJudgeOrder,
+                        judgeOrderPublished: _judgeOrderPublishedForShow(showId),
                         deadlinePassed: _deadlinePassedForShow(showId),
                         closeAt: _parseTs(_showsById[showId]?['entry_close_at']),
                         readOnly: AppSession.isSupportMode,
@@ -998,12 +1037,16 @@ class _ShowExpansionCard extends StatelessWidget {
   final ValueChanged<bool> onExpandedChanged;
   final void Function(BuildContext context, String showId, String showName) onBreedCounts;
   final void Function(String showId, String showName) onDownloadEntries;
+  final void Function(BuildContext context, String showId, String showName) onJudgeOrder;
+  final bool judgeOrderPublished;
 
   const _ShowExpansionCard({
     required this.title,
     required this.showId,
     required this.onBreedCounts,
     required this.onDownloadEntries,
+    required this.onJudgeOrder,
+    required this.judgeOrderPublished,
     required this.deadlinePassed,
     required this.closeAt,
     required this.readOnly,
@@ -1209,6 +1252,12 @@ class _ShowExpansionCard extends StatelessWidget {
                   icon: const Icon(Icons.bar_chart),
                   label: const Text('Breed Counts'),
                 ),
+                if (judgeOrderPublished)
+                  OutlinedButton.icon(
+                    onPressed: () => onJudgeOrder(context, showId, title),
+                    icon: const Icon(Icons.assignment_ind_outlined),
+                    label: const Text('Judge Order'),
+                  ),
                 OutlinedButton.icon(
                   onPressed: () => onDownloadEntries(showId, title),
                   icon: const Icon(Icons.download),
@@ -1771,4 +1820,459 @@ class _EditEntryDialogV2State extends State<_EditEntryDialogV2> {
       ],
     );
   }
+}
+// --- Judge Order Dialog and supporting classes ---
+
+class _JudgeOrderDialog extends StatefulWidget {
+  final String showId;
+  final String showName;
+  final String publishedAt;
+  final String Function(String? sectionId) sectionLabel;
+
+  const _JudgeOrderDialog({
+    required this.showId,
+    required this.showName,
+    required this.publishedAt,
+    required this.sectionLabel,
+  });
+
+  @override
+  State<_JudgeOrderDialog> createState() => _JudgeOrderDialogState();
+}
+
+class _JudgeOrderDialogState extends State<_JudgeOrderDialog> {
+  late Future<List<_JudgeOrderRow>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _loadJudgeOrder();
+  }
+
+  Future<List<_JudgeOrderRow>> _loadJudgeOrder() async {
+    final assignmentRows = await supabase
+        .from('show_judging_assignments')
+        .select(
+          'id,section_id,table_number,sort_order,breed_id,variety_key,judge_id,is_judge_change,notes',
+        )
+        .eq('show_id', widget.showId)
+        .order('table_number', ascending: true)
+        .order('sort_order', ascending: true);
+
+    final assignments = (assignmentRows as List)
+        .map((raw) => Map<String, dynamic>.from(raw as Map))
+        .toList();
+
+    final sectionRows = await supabase
+        .from('show_sections')
+        .select('id,display_name,kind,letter,sort_order')
+        .eq('show_id', widget.showId)
+        .order('sort_order', ascending: true);
+
+    final sectionsById = <String, Map<String, dynamic>>{};
+    for (final raw in sectionRows as List) {
+      final row = Map<String, dynamic>.from(raw as Map);
+      final id = (row['id'] ?? '').toString().trim();
+      if (id.isNotEmpty) sectionsById[id] = row;
+    }
+
+    String formatSectionLabel(Map<String, dynamic> section) {
+      final displayName = (section['display_name'] ?? '').toString().trim();
+      if (displayName.isNotEmpty) return displayName;
+
+      final kind = (section['kind'] ?? '').toString().trim();
+      final letter = (section['letter'] ?? '').toString().trim();
+
+      if (kind.isNotEmpty && letter.isNotEmpty) {
+        return '${kind[0].toUpperCase()}${kind.substring(1)} $letter';
+      }
+
+      if (letter.isNotEmpty) return 'Show $letter';
+      return 'Section';
+    }
+
+    String? inferredLetterFromAssignment(Map<String, dynamic> assignment) {
+      final valuesToCheck = <String>[
+        (assignment['breed_id'] ?? '').toString().trim(),
+        (assignment['variety_key'] ?? '').toString().trim(),
+        (assignment['notes'] ?? '').toString().trim(),
+      ];
+
+      for (final value in valuesToCheck) {
+        if (value.isEmpty) continue;
+
+        final pipeParts = value.split('|');
+        if (pipeParts.length > 1) {
+          final possibleLetter = pipeParts.first.trim();
+          if (possibleLetter.length <= 3 && RegExp(r'^[A-Za-z]+$').hasMatch(possibleLetter)) {
+            return possibleLetter.toUpperCase();
+          }
+        }
+
+        final match = RegExp(r'\b(?:show\s*)?([A-Za-z])\b', caseSensitive: false)
+            .firstMatch(value);
+        if (match != null) return match.group(1)!.toUpperCase();
+      }
+
+      return null;
+    }
+
+    String? inferredKindFromAssignment(Map<String, dynamic> assignment) {
+      final haystack = [
+        assignment['breed_id'],
+        assignment['variety_key'],
+        assignment['notes'],
+      ].map((value) => (value ?? '').toString().toLowerCase()).join(' ');
+
+      if (haystack.contains('youth')) return 'youth';
+      if (haystack.contains('open')) return 'open';
+      return null;
+    }
+
+    String showLabelForAssignment(Map<String, dynamic> assignment) {
+      final sectionId = (assignment['section_id'] ?? '').toString().trim();
+
+      if (sectionId.isNotEmpty) {
+        final section = sectionsById[sectionId];
+        if (section != null) {
+          return formatSectionLabel(section);
+        }
+
+        final parentLabel = widget.sectionLabel(sectionId);
+        if (parentLabel.trim().isNotEmpty && parentLabel != 'Section') {
+          return parentLabel;
+        }
+      }
+
+      final inferredLetter = inferredLetterFromAssignment(assignment);
+      final inferredKind = inferredKindFromAssignment(assignment);
+
+      if (inferredLetter != null) {
+        final matchingSections = sectionsById.values.where((section) {
+          final sectionLetter = (section['letter'] ?? '').toString().trim().toUpperCase();
+          final sectionKind = (section['kind'] ?? '').toString().trim().toLowerCase();
+
+          if (sectionLetter != inferredLetter) return false;
+          if (inferredKind != null && sectionKind != inferredKind) return false;
+          return true;
+        }).toList();
+
+        if (matchingSections.length == 1) {
+          return formatSectionLabel(matchingSections.first);
+        }
+
+        if (matchingSections.isNotEmpty) {
+          matchingSections.sort((a, b) {
+            int kindRank(Map<String, dynamic> section) {
+              final kind = (section['kind'] ?? '').toString().trim().toLowerCase();
+              if (kind == 'open') return 0;
+              if (kind == 'youth') return 1;
+              return 99;
+            }
+
+            final kindCmp = kindRank(a).compareTo(kindRank(b));
+            if (kindCmp != 0) return kindCmp;
+
+            final aSort = int.tryParse((a['sort_order'] ?? '').toString()) ?? 9999;
+            final bSort = int.tryParse((b['sort_order'] ?? '').toString()) ?? 9999;
+            return aSort.compareTo(bSort);
+          });
+
+          return formatSectionLabel(matchingSections.first);
+        }
+      }
+
+      if (sectionsById.length == 1) {
+        return formatSectionLabel(sectionsById.values.first);
+      }
+
+      return inferredLetter == null ? 'Show not set' : 'Show $inferredLetter';
+    }
+
+    final judgeIds = assignments
+        .map((row) => (row['judge_id'] ?? '').toString().trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+
+    final judgesById = <String, Map<String, dynamic>>{};
+    if (judgeIds.isNotEmpty) {
+      final judgeRows = await supabase
+          .from('judges')
+          .select('id,display_name,name,first_name,last_name,arba_judge_number')
+          .inFilter('id', judgeIds);
+
+      for (final raw in judgeRows as List) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        final id = (row['id'] ?? '').toString();
+        if (id.isNotEmpty) judgesById[id] = row;
+      }
+    }
+
+    String judgeLabel(String? judgeId) {
+      final id = (judgeId ?? '').trim();
+      if (id.isEmpty) return 'Judge not set';
+
+      final judge = judgesById[id];
+      if (judge == null) return 'Judge not set';
+
+      final displayName = (judge['display_name'] ?? '').toString().trim();
+      final name = (judge['name'] ?? '').toString().trim();
+      final first = (judge['first_name'] ?? '').toString().trim();
+      final last = (judge['last_name'] ?? '').toString().trim();
+      final number = (judge['arba_judge_number'] ?? '').toString().trim();
+
+      final baseName = displayName.isNotEmpty
+          ? displayName
+          : name.isNotEmpty
+              ? name
+              : [first, last].where((part) => part.isNotEmpty).join(' ');
+
+      if (baseName.trim().isEmpty) return 'Judge not set';
+      if (number.isNotEmpty && !baseName.contains('#$number')) {
+        return '$baseName (#$number)';
+      }
+
+      return baseName;
+    }
+
+    final rows = <_JudgeOrderRow>[];
+    String? activeJudgeId;
+
+    for (final assignment in assignments) {
+      final isJudgeChange = assignment['is_judge_change'] == true ||
+          (assignment['breed_id'] ?? '').toString() == '__judge_change__';
+
+      if (isJudgeChange) {
+        final judgeId = (assignment['judge_id'] ?? '').toString().trim();
+        if (judgeId.isNotEmpty) activeJudgeId = judgeId;
+        continue;
+      }
+
+      final breed = (assignment['breed_id'] ?? '').toString().trim();
+      final cleanBreed = breed.contains('|')
+          ? breed.split('|').last.trim()
+          : breed;
+      if (cleanBreed.isEmpty || cleanBreed == '__judge_change__') continue;
+
+      final variety = (assignment['variety_key'] ?? '').toString().trim();
+
+      int parseIntValue(dynamic value, int fallback) {
+        if (value is int) return value;
+        if (value is num) return value.toInt();
+        return int.tryParse((value ?? '').toString().trim()) ?? fallback;
+      }
+
+      final tableNumber = parseIntValue(assignment['table_number'], 0);
+      final sortOrder = parseIntValue(assignment['sort_order'], 9999);
+
+      rows.add(
+        _JudgeOrderRow(
+          tableNumber: tableNumber,
+          showLabel: showLabelForAssignment(assignment),
+          judgeLabel: judgeLabel(activeJudgeId),
+          breed: cleanBreed,
+          variety: variety,
+          sortOrder: sortOrder,
+        ),
+      );
+    }
+
+    return rows;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screenSize = MediaQuery.of(context).size;
+    final dialogWidth = screenSize.width < 760 ? screenSize.width - 24 : 720.0;
+    final dialogHeight = screenSize.height < 720 ? screenSize.height * 0.86 : 640.0;
+
+    return AlertDialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+      titlePadding: const EdgeInsets.fromLTRB(18, 16, 18, 4),
+      contentPadding: const EdgeInsets.fromLTRB(18, 8, 18, 8),
+      actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+      title: Text(
+        '${widget.showName} Judge Order',
+        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w800,
+              fontSize: screenSize.width < 520 ? 20 : null,
+            ),
+      ),
+      content: SizedBox(
+        width: dialogWidth,
+        height: dialogHeight,
+        child: FutureBuilder<List<_JudgeOrderRow>>(
+          future: _future,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            if (snapshot.hasError) {
+              return Center(
+                child: Text(
+                  'Judge order failed to load: ${snapshot.error}',
+                  textAlign: TextAlign.center,
+                ),
+              );
+            }
+
+            final rows = snapshot.data ?? const <_JudgeOrderRow>[];
+            if (rows.isEmpty) {
+              return const Center(
+                child: Text('No judge order has been added yet.'),
+              );
+            }
+
+            final groupedByTable = <int, List<_JudgeOrderRow>>{};
+            for (final row in rows) {
+              groupedByTable.putIfAbsent(row.tableNumber, () => <_JudgeOrderRow>[]);
+              groupedByTable[row.tableNumber]!.add(row);
+            }
+
+            final tableNumbers = groupedByTable.keys.toList()..sort();
+
+            return CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (widget.publishedAt.trim().isNotEmpty) ...[
+                        Text(
+                          'Published ${widget.publishedAt}',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                        const SizedBox(height: 6),
+                      ],
+                      Text(
+                        'Assignments may change at the show table.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+                  ),
+                ),
+                for (final tableNumber in tableNumbers) ...[
+                  SliverToBoxAdapter(
+                    child: _JudgeOrderTableBlock(
+                      tableNumber: tableNumber,
+                      rows: List<_JudgeOrderRow>.from(
+                        groupedByTable[tableNumber] ?? const <_JudgeOrderRow>[],
+                      )..sort((a, b) => a.sortOrder.compareTo(b.sortOrder)),
+                    ),
+                  ),
+                  const SliverToBoxAdapter(child: SizedBox(height: 10)),
+                ],
+              ],
+            );
+          },
+        ),
+      ),
+      actions: [
+        FilledButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Close'),
+        ),
+      ],
+    );
+  }
+}
+
+class _JudgeOrderTableBlock extends StatelessWidget {
+  final int tableNumber;
+  final List<_JudgeOrderRow> rows;
+
+  const _JudgeOrderTableBlock({
+    required this.tableNumber,
+    required this.rows,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final label = tableNumber <= 0 ? 'Table' : 'Table $tableNumber';
+    final sortedRows = List<_JudgeOrderRow>.from(rows)
+      ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.bg,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w900,
+                ),
+          ),
+          const SizedBox(height: 8),
+          ...sortedRows.map((row) {
+            final breedLabel = row.variety.isEmpty
+                ? row.breed
+                : '${row.breed} • ${row.variety}';
+
+            return Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    breedLabel,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                  ),
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 2,
+                    children: [
+                      Text('Show: ${row.showLabel}'),
+                      Text('Judge: ${row.judgeLabel}'),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+class _JudgeOrderRow {
+  final int tableNumber;
+  final String showLabel;
+  final String judgeLabel;
+  final String breed;
+  final String variety;
+  final int sortOrder;
+
+  const _JudgeOrderRow({
+    required this.tableNumber,
+    required this.showLabel,
+    required this.judgeLabel,
+    required this.breed,
+    required this.variety,
+    required this.sortOrder,
+  });
 }

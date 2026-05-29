@@ -27,6 +27,7 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
   int _extraTableCount = 0;
   bool _isAutoFilling = false;
   bool _isSyncingEntries = false;
+  bool _isSavingPublishedState = false;
   String _addBreedSortMode = 'letter';
   String? _addBreedShowLetter;
 
@@ -74,6 +75,103 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
     );
   }
 
+  Future<bool> _confirmPublishWithIssues(_LineupData data) async {
+    final conflictCount = _lineupConflictCount(data.assignments);
+    if (conflictCount <= 0) return true;
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Publish judge order?'),
+        content: Text(
+          'This line-up still has $conflictCount item${conflictCount == 1 ? '' : 's'} needing attention. Exhibitors will be able to see the published judge order.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Publish Anyway'),
+          ),
+        ],
+      ),
+    );
+
+    return result == true;
+  }
+
+  int _lineupConflictCount(List<Map<String, dynamic>> assignments) {
+    var count = 0;
+    for (final row in assignments) {
+      final isJudgeChange = row['is_judge_change'] == true ||
+          (row['breed_id'] ?? '').toString() == '__judge_change__';
+      if (isJudgeChange) continue;
+
+      final hasDuplicate = row['duplicate_judge_breed'] == true;
+      final hasOverride = (row['override_reason'] ?? row['notes'] ?? '')
+          .toString()
+          .trim()
+          .isNotEmpty;
+
+      if (hasDuplicate && !hasOverride) count += 1;
+    }
+    return count;
+  }
+
+  Future<void> _setJudgeOrderPublished(
+    _LineupData data,
+    bool value,
+  ) async {
+    if (_isSavingPublishedState) return;
+
+    if (value) {
+      final confirmed = await _confirmPublishWithIssues(data);
+      if (!confirmed) return;
+    }
+
+    setState(() => _isSavingPublishedState = true);
+
+    try {
+      await supabase
+          .from('shows')
+          .update({
+            'superintendent_judge_order_published': value,
+            'superintendent_judge_order_published_at':
+                value ? DateTime.now().toUtc().toIso8601String() : null,
+            'superintendent_judge_order_published_by':
+                value ? supabase.auth.currentUser?.id : null,
+          })
+          .eq('id', widget.showId);
+
+      if (!mounted) return;
+
+      setState(() {
+        _isSavingPublishedState = false;
+        _future = _loadData();
+      });
+      await _future;
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            value
+                ? 'Judge order published for exhibitors.'
+                : 'Judge order hidden from exhibitors.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _isSavingPublishedState = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Publish update failed: $error')),
+      );
+    }
+  }
+
   Future<_LineupData> _loadData() async {
     // Load the RPCs sequentially to avoid type issues
     final assignments = await supabase.rpc(
@@ -95,6 +193,14 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
       'get_show_judge_daily_workload',
       params: {'p_show_id': widget.showId},
     );
+
+    final showRow = await supabase
+        .from('shows')
+        .select(
+          'superintendent_judge_order_published, superintendent_judge_order_published_at, superintendent_judge_order_published_by',
+        )
+        .eq('id', widget.showId)
+        .maybeSingle();
 
     final currentUserId = supabase.auth.currentUser?.id;
     final preferenceRows = currentUserId == null
@@ -122,6 +228,90 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
       for (final section in sectionRows) section['id'].toString(): section,
     };
 
+    String normalizedSectionKind(dynamic value) {
+      final raw = (value ?? '').toString().trim().toLowerCase();
+      if (raw == 'open') return 'open';
+      if (raw == 'youth') return 'youth';
+      if (raw.contains('open')) return 'open';
+      if (raw.contains('youth')) return 'youth';
+      return raw;
+    }
+
+    String? inferSectionIdForAssignment(Map<String, dynamic> row) {
+      final current = (row['section_id'] ?? '').toString().trim();
+      if (current.isNotEmpty) return current;
+
+      final letter = (row['show_letter'] ??
+              row['letter'] ??
+              row['section_letter'] ??
+              row['showLetter'] ??
+              '')
+          .toString()
+          .trim()
+          .toLowerCase();
+
+      final kind = normalizedSectionKind(
+        row['scope'] ??
+            row['section_kind'] ??
+            row['kind'] ??
+            row['breed_scope'] ??
+            row['section_label'] ??
+            row['section_name'],
+      );
+
+      final matches = sectionRows.where((section) {
+        final sectionLetter = (section['letter'] ?? '')
+            .toString()
+            .trim()
+            .toLowerCase();
+        final sectionKind = normalizedSectionKind(section['kind']);
+
+        final letterMatches = letter.isEmpty || sectionLetter == letter;
+        final kindMatches = kind.isEmpty || sectionKind == kind;
+
+        return letterMatches && kindMatches;
+      }).toList();
+
+      if (matches.length == 1) {
+        return (matches.first['id'] ?? '').toString().trim();
+      }
+
+      return null;
+    }
+
+    final sectionBackfills = <Map<String, String>>[];
+
+    for (final assignment in assignmentRows) {
+      final assignmentId = (assignment['id'] ?? '').toString().trim();
+      final existingSectionId = (assignment['section_id'] ?? '').toString().trim();
+      final inferredSectionId = inferSectionIdForAssignment(assignment);
+
+      if (existingSectionId.isEmpty &&
+          inferredSectionId != null &&
+          inferredSectionId.isNotEmpty) {
+        assignment['section_id'] = inferredSectionId;
+
+        if (assignmentId.isNotEmpty &&
+            (assignment['breed_id'] ?? '').toString() != '__judge_change__') {
+          sectionBackfills.add({
+            'id': assignmentId,
+            'section_id': inferredSectionId,
+          });
+        }
+      }
+    }
+
+    for (final backfill in sectionBackfills) {
+      try {
+        await supabase
+            .from('show_judging_assignments')
+            .update({'section_id': backfill['section_id']})
+            .eq('id', backfill['id']!);
+      } catch (error) {
+        debugPrint('Unable to backfill judging assignment section_id: $error');
+      }
+    }
+
     void applySectionMetadata(Map<String, dynamic> row) {
       final sectionId = row['section_id']?.toString();
       if (sectionId == null || sectionId.isEmpty) return;
@@ -129,19 +319,13 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
       final section = sectionById[sectionId];
       if (section == null) return;
 
-      void fillIfBlank(String key, dynamic value) {
-        final current = row[key]?.toString().trim() ?? '';
-        if (current.isEmpty && value != null) {
-          row[key] = value;
-        }
-      }
-
-      fillIfBlank('section_kind', section['kind']);
-      fillIfBlank('kind', section['kind']);
-      fillIfBlank('section_label', section['display_name']);
-      fillIfBlank('section_name', section['display_name']);
-      fillIfBlank('show_letter', section['letter']);
-      fillIfBlank('letter', section['letter']);
+      row['section_kind'] ??= section['kind'];
+      row['kind'] ??= section['kind'];
+      row['letter'] ??= section['letter'];
+      row['section_letter'] ??= section['letter'];
+      row['show_letter'] ??= section['letter'];
+      row['section_label'] ??= section['display_name'];
+      row['section_name'] ??= section['display_name'];
     }
 
     for (final row in assignmentRows) {
@@ -223,6 +407,12 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
       userPreferences: preferenceRows.isEmpty
           ? const <String, dynamic>{}
           : preferenceRows.first,
+      judgeOrderPublished:
+          (showRow?['superintendent_judge_order_published'] == true),
+      judgeOrderPublishedAt:
+          showRow?['superintendent_judge_order_published_at']?.toString(),
+      judgeOrderPublishedBy:
+          showRow?['superintendent_judge_order_published_by']?.toString(),
     );
   }
 
@@ -1155,7 +1345,14 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
                     children: [
-                      _SummaryCards(data: data),
+                      _SummaryCards(
+                        data: data,
+                        isSavingPublishedState: _isSavingPublishedState,
+                        onPublishChanged: (value) => _setJudgeOrderPublished(
+                          data,
+                          value,
+                        ),
+                      ),
                       const SizedBox(height: 16),
                       _ResponsiveTableGrid(
                         tableNumbers: tableNumbers,
@@ -1198,6 +1395,9 @@ class _LineupData {
     required this.breedCounts,
     required this.workloads,
     required this.userPreferences,
+    required this.judgeOrderPublished,
+    required this.judgeOrderPublishedAt,
+    required this.judgeOrderPublishedBy,
   });
 
   factory _LineupData.empty() => const _LineupData(
@@ -1206,6 +1406,9 @@ class _LineupData {
         breedCounts: <Map<String, dynamic>>[],
         workloads: <Map<String, dynamic>>[],
         userPreferences: <String, dynamic>{},
+        judgeOrderPublished: false,
+        judgeOrderPublishedAt: null,
+        judgeOrderPublishedBy: null,
       );
 
   final List<Map<String, dynamic>> assignments;
@@ -1213,12 +1416,21 @@ class _LineupData {
   final List<Map<String, dynamic>> breedCounts;
   final List<Map<String, dynamic>> workloads;
   final Map<String, dynamic> userPreferences;
+  final bool judgeOrderPublished;
+  final String? judgeOrderPublishedAt;
+  final String? judgeOrderPublishedBy;
 }
 
 class _SummaryCards extends StatelessWidget {
-  const _SummaryCards({required this.data});
+  const _SummaryCards({
+    required this.data,
+    required this.isSavingPublishedState,
+    required this.onPublishChanged,
+  });
 
   final _LineupData data;
+  final bool isSavingPublishedState;
+  final ValueChanged<bool> onPublishChanged;
 
   bool _isJudgeRow(Map<String, dynamic> row) {
     return row['is_judge_change'] == true ||
@@ -1337,7 +1549,104 @@ class _SummaryCards extends StatelessWidget {
               : 'Duplicate judge/breed flags',
           isWarning: conflictCount > 0,
         ),
+        _PublishJudgeOrderCard(
+          published: data.judgeOrderPublished,
+          saving: isSavingPublishedState,
+          publishedAt: data.judgeOrderPublishedAt,
+          onChanged: onPublishChanged,
+        ),
       ],
+    );
+  }
+}
+
+class _PublishJudgeOrderCard extends StatelessWidget {
+  const _PublishJudgeOrderCard({
+    required this.published,
+    required this.saving,
+    required this.publishedAt,
+    required this.onChanged,
+  });
+
+  final bool published;
+  final bool saving;
+  final String? publishedAt;
+  final ValueChanged<bool> onChanged;
+
+  String _publishedHelper() {
+    if (!published) return 'Hidden from exhibitors';
+
+    final parsed = DateTime.tryParse((publishedAt ?? '').toString());
+    if (parsed == null) return 'Visible to exhibitors';
+
+    final local = parsed.toLocal();
+    final date = '${local.month}/${local.day}/${local.year}';
+    final minute = local.minute.toString().padLeft(2, '0');
+    final hour12 = local.hour == 0
+        ? 12
+        : local.hour > 12
+            ? local.hour - 12
+            : local.hour;
+    final amPm = local.hour >= 12 ? 'PM' : 'AM';
+
+    return 'Published $date $hour12:$minute $amPm';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final color = published ? Colors.green : Colors.orange;
+
+    return Container(
+      width: 250,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            published ? Icons.visibility : Icons.visibility_off,
+            color: color,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  published ? 'Published' : 'Not Published',
+                  style: textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    color: color,
+                  ),
+                ),
+                Text(
+                  'Judge Order',
+                  style: textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _publishedHelper(),
+                  style: textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch.adaptive(
+            value: published,
+            onChanged: saving ? null : onChanged,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -2533,7 +2842,43 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
       return false;
     }
 
-    final conflicts = await _loadJudgeBreedConflicts(breed);
+    // --- BEGIN: Determine usable section_id for breed row ---
+    String? sectionIdForBreed(Map<String, dynamic> row) {
+      final directSectionId = (row['section_id'] ?? '').toString().trim();
+      if (directSectionId.isNotEmpty) return directSectionId;
+
+      final sectionIds = row['section_ids'];
+      if (sectionIds is Set<String>) {
+        final ids = sectionIds.where((id) => id.trim().isNotEmpty).toList();
+        if (ids.length == 1) return ids.first;
+      }
+
+      if (sectionIds is Iterable) {
+        final ids = sectionIds
+            .map((id) => id.toString().trim())
+            .where((id) => id.isNotEmpty)
+            .toList();
+        if (ids.length == 1) return ids.first;
+      }
+
+      return null;
+    }
+
+    final sectionId = sectionIdForBreed(breed);
+
+    if (sectionId == null || sectionId.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not determine the show letter for this breed row.'),
+          ),
+        );
+      }
+      return false;
+    }
+    // --- END: Determine usable section_id for breed row ---
+
+    final conflicts = await _loadJudgeBreedConflictsWithSectionId(breed, sectionId);
     if (!mounted) return false;
 
     final canAdd = await _confirmConflicts(breed, conflicts);
@@ -2552,7 +2897,7 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
       'upsert_show_judging_assignment',
       params: {
         'p_show_id': widget.showId,
-        'p_section_id': breed['section_id'],
+        'p_section_id': sectionId,
         'p_breed_id': breed['breed'],
         'p_variety_key': breed['variety'],
         'p_judge_id': null,
@@ -2576,6 +2921,47 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
     });
 
     return true;
+  }
+
+  // Helper to use sectionId in judge conflict check
+  Future<List<String>> _loadJudgeBreedConflictsWithSectionId(Map<String, dynamic> breed, String? sectionId) async {
+    final judgeId = _currentJudgeId;
+    if (judgeId == null || judgeId.isEmpty) return const <String>[];
+
+    try {
+      final result = await supabase.rpc(
+        'validate_show_judge_breed_conflict',
+        params: {
+          'p_show_id': widget.showId,
+          'p_section_id': sectionId,
+          'p_judge_id': judgeId,
+          'p_breed': breed['breed'],
+        },
+      );
+
+      if (result is! List) return const <String>[];
+
+      return result.map<String>((item) {
+        if (item is Map) {
+          final exhibitor = (item['exhibitor_name'] ??
+                  item['display_name'] ??
+                  item['exhibitor_display_name'] ??
+                  'Unknown exhibitor')
+              .toString();
+          final relationship = (item['relationship'] ??
+                  item['conflict_type'] ??
+                  'entry conflict')
+              .toString();
+          final scope = (item['scope'] ?? item['section_scope'] ?? '').toString();
+          final scopeLabel = scope.isEmpty ? '' : ' • $scope';
+          return '$exhibitor • $relationship$scopeLabel';
+        }
+
+        return item.toString();
+      }).toList();
+    } catch (_) {
+      return const <String>[];
+    }
   }
   // --- END: Open & Youth Pair helpers ---
 

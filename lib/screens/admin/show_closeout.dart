@@ -2075,7 +2075,13 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   }
 
   Future<void> _loadArbaDetails() async {
-    final row = await supabase
+    final showRow = await supabase
+        .from('shows')
+        .select('secretary_name, secretary_address, secretary_email, secretary_phone')
+        .eq('id', widget.showId)
+        .maybeSingle();
+
+    final arbaRow = await supabase
         .from('show_arba_report_details')
         .select('''
           secretary_name,
@@ -2092,13 +2098,34 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         .eq('show_id', widget.showId)
         .maybeSingle();
 
-    if (row == null) return;
+    final row = arbaRow ?? <String, dynamic>{};
+    final show = showRow ?? <String, dynamic>{};
 
-    _secretaryNameController.text = (row['secretary_name'] ?? '').toString();
-    _secretaryAddressController.text =
-        (row['secretary_address'] ?? '').toString();
-    _secretaryEmailController.text = (row['secretary_email'] ?? '').toString();
-    _secretaryPhoneController.text = (row['secretary_phone'] ?? '').toString();
+    String firstNonEmpty(List<dynamic> values) {
+      for (final value in values) {
+        final text = (value ?? '').toString().trim();
+        if (text.isNotEmpty) return text;
+      }
+      return '';
+    }
+
+    _secretaryNameController.text = firstNonEmpty([
+      show['secretary_name'],
+      row['secretary_name'],
+    ]);
+    _secretaryAddressController.text = firstNonEmpty([
+      show['secretary_address'],
+      row['secretary_address'],
+    ]);
+    _secretaryEmailController.text = firstNonEmpty([
+      show['secretary_email'],
+      row['secretary_email'],
+    ]);
+    _secretaryPhoneController.text = firstNonEmpty([
+      show['secretary_phone'],
+      row['secretary_phone'],
+    ]);
+
     _superintendentController.text =
         (row['superintendent_name'] ?? '').toString();
     _superintendentNumberController.text =
@@ -2182,12 +2209,28 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
   Future<void> _saveArbaDetails() async {
     try {
+      final secretaryName = _secretaryNameController.text.trim();
+      final secretaryAddress = _secretaryAddressController.text.trim();
+      final secretaryEmail = _secretaryEmailController.text.trim();
+      final secretaryPhone = _secretaryPhoneController.text.trim();
+
+      await supabase
+          .from('shows')
+          .update({
+            'secretary_name': secretaryName.isEmpty ? null : secretaryName,
+            'secretary_address': secretaryAddress.isEmpty ? null : secretaryAddress,
+            'secretary_email': secretaryEmail.isEmpty ? null : secretaryEmail,
+            'secretary_phone': secretaryPhone.isEmpty ? null : secretaryPhone,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('id', widget.showId);
+
       await supabase.from('show_arba_report_details').upsert({
         'show_id': widget.showId,
-        'secretary_name': _secretaryNameController.text.trim(),
-        'secretary_address': _secretaryAddressController.text.trim(),
-        'secretary_email': _secretaryEmailController.text.trim(),
-        'secretary_phone': _secretaryPhoneController.text.trim(),
+        'secretary_name': secretaryName,
+        'secretary_address': secretaryAddress,
+        'secretary_email': secretaryEmail,
+        'secretary_phone': secretaryPhone,
         'superintendent_name': _superintendentController.text.trim(),
         'superintendent_arba_number':
             _superintendentNumberController.text.trim(),

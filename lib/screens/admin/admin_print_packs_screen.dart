@@ -93,6 +93,12 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
   bool _youthFirst = false;
   bool _autoEmailCheckInSheets = false;
   bool _savingAutoEmailCheckInSheets = false;
+  bool _savingSecretaryInfo = false;
+  bool _secretaryInfoExpanded = true;
+  final TextEditingController _secretaryNameController = TextEditingController();
+  final TextEditingController _secretaryAddressController = TextEditingController();
+  final TextEditingController _secretaryPhoneController = TextEditingController();
+  final TextEditingController _secretaryEmailController = TextEditingController();
   bool _isSuperAdmin = false;
   bool _loadingSuperAdmin = true;
   DateTime? _entryCloseAt;
@@ -103,6 +109,15 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
   void initState() {
     super.initState();
     _loadInitialData();
+  }
+
+  @override
+  void dispose() {
+    _secretaryNameController.dispose();
+    _secretaryAddressController.dispose();
+    _secretaryPhoneController.dispose();
+    _secretaryEmailController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadInitialData() async {
@@ -161,7 +176,7 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
       final showRow = await supabase
           .from('shows')
           .select(
-            'id, entry_close_at, auto_email_checkin_sheets, checkin_sheets_auto_emailed_at, checkin_sheets_auto_email_error',
+            'id, entry_close_at, auto_email_checkin_sheets, checkin_sheets_auto_emailed_at, checkin_sheets_auto_email_error, secretary_name, secretary_address, secretary_phone, secretary_email',
           )
           .eq('id', widget.showId)
           .maybeSingle();
@@ -191,6 +206,8 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
         _checkInSheetsAutoEmailError = null;
       }
 
+      _autoFillSecretaryInfoFromShow(show);
+
       _sections = (rows as List).cast<Map<String, dynamic>>();
       _sortSections();
 
@@ -215,6 +232,21 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
         _msg = 'Failed to load sections: $e';
       });
     }
+  }
+
+  void _autoFillSecretaryInfoFromShow(Map<String, dynamic> show) {
+    final secretaryName = (show['secretary_name'] ?? '').toString().trim();
+    final secretaryAddress = (show['secretary_address'] ?? '').toString().trim();
+    final secretaryPhone = (show['secretary_phone'] ?? '').toString().trim();
+    final secretaryEmail = (show['secretary_email'] ?? '').toString().trim();
+
+    _secretaryNameController.text = secretaryName;
+    _secretaryAddressController.text = secretaryAddress;
+    _secretaryPhoneController.text = secretaryPhone;
+    _secretaryEmailController.text = secretaryEmail;
+
+    // Keep this section open by default only when it still needs attention.
+    _secretaryInfoExpanded = !_secretaryInfoComplete;
   }
   void _sortSections() {
     _sections.sort((a, b) {
@@ -297,6 +329,65 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
     return null;
   }
 
+  bool get _secretaryInfoComplete {
+    return _secretaryNameController.text.trim().isNotEmpty &&
+        _secretaryAddressController.text.trim().isNotEmpty &&
+        _secretaryPhoneController.text.trim().isNotEmpty &&
+        _secretaryEmailController.text.trim().isNotEmpty;
+  }
+
+  Future<void> _saveSecretaryInfo() async {
+    if (_savingSecretaryInfo) return;
+
+    if (AppSession.isSupportMode) {
+      setState(() {
+        _msg = 'Secretary information cannot be changed while viewing in support mode.';
+      });
+      return;
+    }
+
+    final name = _secretaryNameController.text.trim();
+    final address = _secretaryAddressController.text.trim();
+    final phone = _secretaryPhoneController.text.trim();
+    final email = _secretaryEmailController.text.trim();
+
+    if (name.isEmpty || address.isEmpty || phone.isEmpty || email.isEmpty) {
+      setState(() {
+        _secretaryInfoExpanded = true;
+        _msg = 'Please enter the show secretary name, address, phone, and email.';
+      });
+      return;
+    }
+
+    setState(() {
+      _savingSecretaryInfo = true;
+      _msg = null;
+    });
+
+    try {
+      await supabase.from('shows').update({
+        'secretary_name': name,
+        'secretary_address': address,
+        'secretary_phone': phone,
+        'secretary_email': email,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', widget.showId);
+
+      if (!mounted) return;
+      setState(() {
+        _savingSecretaryInfo = false;
+        _secretaryInfoExpanded = false;
+        _msg = 'Show secretary information saved.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _savingSecretaryInfo = false;
+        _msg = 'Failed to save show secretary information: $e';
+      });
+    }
+  }
+
   Future<void> _setAutoEmailCheckInSheets(bool value) async {
     if (_savingAutoEmailCheckInSheets) return;
 
@@ -355,6 +446,13 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
   }
 
   void _openCheckInGenerator() {
+    if (!_secretaryInfoComplete) {
+      setState(() {
+        _secretaryInfoExpanded = true;
+        _msg = 'Please save show secretary information before generating check-in sheets.';
+      });
+      return;
+    }
     if (!_combineSections &&
         (_selectedSectionId == null || _selectedSectionId!.isEmpty)) {
       setState(() {
@@ -401,6 +499,13 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
     required List<Map<String, dynamic>> sections,
     required String sectionLabel,
   }) {
+    if (!_secretaryInfoComplete) {
+      setState(() {
+        _secretaryInfoExpanded = true;
+        _msg = 'Please save show secretary information before generating control sheets.';
+      });
+      return;
+    }
     final sectionIds = sections
         .map((s) => s['id']?.toString() ?? '')
         .where((id) => id.isNotEmpty)
@@ -493,6 +598,117 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
             fontWeight: FontWeight.w600,
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildSecretaryInfoCard() {
+    final readOnly = AppSession.isSupportMode;
+    final complete = _secretaryInfoComplete;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.05),
+            blurRadius: 12,
+          ),
+        ],
+      ),
+      child: ExpansionTile(
+        initiallyExpanded: _secretaryInfoExpanded || !complete,
+        onExpansionChanged: (value) {
+          setState(() => _secretaryInfoExpanded = value);
+        },
+        leading: Icon(
+          complete ? Icons.check_circle_outline : Icons.info_outline,
+          color: complete ? Colors.green : Colors.orange,
+        ),
+        title: const Text(
+          'Show Secretary Information',
+          style: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        subtitle: Text(
+          complete
+              ? 'Saved to the show record for printed sheets and email reports.'
+              : 'Required for check-in sheets and emailed reports.',
+        ),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        children: [
+          const SizedBox(height: 8),
+          TextField(
+            controller: _secretaryNameController,
+            readOnly: readOnly,
+            textInputAction: TextInputAction.next,
+            decoration: const InputDecoration(
+              labelText: 'Show Secretary Name',
+              border: OutlineInputBorder(),
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _secretaryAddressController,
+            readOnly: readOnly,
+            textInputAction: TextInputAction.next,
+            minLines: 2,
+            maxLines: 3,
+            decoration: const InputDecoration(
+              labelText: 'Show Secretary Address',
+              border: OutlineInputBorder(),
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _secretaryPhoneController,
+            readOnly: readOnly,
+            keyboardType: TextInputType.phone,
+            textInputAction: TextInputAction.next,
+            decoration: const InputDecoration(
+              labelText: 'Show Secretary Phone',
+              border: OutlineInputBorder(),
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _secretaryEmailController,
+            readOnly: readOnly,
+            keyboardType: TextInputType.emailAddress,
+            textInputAction: TextInputAction.done,
+            decoration: const InputDecoration(
+              labelText: 'Show Secretary Email',
+              border: OutlineInputBorder(),
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.icon(
+              onPressed: readOnly || _savingSecretaryInfo
+                  ? null
+                  : _saveSecretaryInfo,
+              icon: _savingSecretaryInfo
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.save),
+              label: Text(
+                _savingSecretaryInfo ? 'Saving...' : 'Save Secretary Info',
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -597,6 +813,8 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
                       ],
                     ),
                   ),
+
+                _buildSecretaryInfoCard(),
 
                 _buildSectionCard(
                   icon: Icons.sort_outlined,

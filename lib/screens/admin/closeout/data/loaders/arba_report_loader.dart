@@ -35,21 +35,22 @@ class ArbaReportLoader {
     ].where((e) => e.isNotEmpty).join(' - ');
 
     final secretaryName = _firstNonEmpty([
-      _str(arbaDetails?['secretary_name']),
       _str(show['secretary_name']),
+      _str(arbaDetails?['secretary_name']),
     ]);
 
     final secretaryEmail = _firstNonEmpty([
-      _str(arbaDetails?['secretary_email']),
       _str(show['secretary_email']),
+      _str(arbaDetails?['secretary_email']),
     ]);
 
     final secretaryPhone = _firstNonEmpty([
-      _str(arbaDetails?['secretary_phone']),
       _str(show['secretary_phone']),
+      _str(arbaDetails?['secretary_phone']),
     ]);
 
     final secretaryAddress = _firstNonEmpty([
+      _str(show['secretary_address']),
       _str(arbaDetails?['secretary_address']),
       await _loadSecretaryAddress(),
     ]);

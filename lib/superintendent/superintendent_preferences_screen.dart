@@ -36,6 +36,7 @@ class _SuperintendentPreferencesScreenState
   String? _selectedJudgeId;
   Map<String, dynamic>? _selectedJudgeRating;
   bool _savingRating = false;
+  List<Map<String, dynamic>> _judgeRatings = const <Map<String, dynamic>>[];
 
   double _speedRating = 5;
   double _overallQualityRating = 5;
@@ -107,6 +108,7 @@ class _SuperintendentPreferencesScreenState
         .order('display_name', ascending: true);
 
     _judges = List<Map<String, dynamic>>.from(judgeRows as List);
+    await _loadJudgeRatings();
   }
 
   Future<void> _reload() async {
@@ -183,6 +185,70 @@ class _SuperintendentPreferencesScreenState
     return [city, state].where((part) => part.isNotEmpty).join(', ');
   }
 
+  Future<void> _loadJudgeRatings() async {
+    final userId = _userId;
+    if (userId == null || AppSession.isSupportMode) {
+      _judgeRatings = const <Map<String, dynamic>>[];
+      return;
+    }
+
+    final rows = await supabase.rpc('get_private_judge_ratings');
+
+    _judgeRatings = (rows as List)
+        .map((raw) {
+          final row = Map<String, dynamic>.from(raw as Map);
+          final payload = row['payload'];
+          final payloadMap = payload is Map
+              ? Map<String, dynamic>.from(payload)
+              : <String, dynamic>{};
+
+          return <String, dynamic>{
+            'user_id': row['user_id'],
+            'judge_id': row['judge_id'],
+            'updated_at': row['updated_at'],
+            ...payloadMap,
+          };
+        })
+        .toList();
+  }
+
+  String _ratedJudgeLabel(Map<String, dynamic> rating) {
+    final judge = rating['judges'];
+    if (judge is Map) {
+      return _judgeLabel(Map<String, dynamic>.from(judge));
+    }
+
+    final judgeId = (rating['judge_id'] ?? '').toString().trim();
+    final match = _judges.where((j) => (j['id'] ?? '').toString() == judgeId);
+    if (match.isNotEmpty) return _judgeLabel(match.first);
+
+    return 'Unknown Judge';
+  }
+
+  String _ratedJudgeSubtitle(Map<String, dynamic> rating) {
+    final speed = (rating['speed_rating'] ?? '').toString();
+    final quality = (rating['overall_quality_rating'] ?? '').toString();
+    final accuracy = (rating['accuracy_rating'] ?? '').toString();
+    final bestClassSystem = (rating['best_class_system'] ?? '').toString().trim();
+    final dailyHeadLimit = (rating['daily_head_limit'] ?? '').toString().trim();
+    final overageRate = (
+      rating['overage_rate_per_head'] ??
+      rating['overage_rate_per_'] ??
+      ''
+    ).toString().trim();
+
+    final parts = <String>[
+      if (speed.isNotEmpty) 'Speed $speed',
+      if (quality.isNotEmpty) 'Quality $quality',
+      if (accuracy.isNotEmpty) 'Accuracy $accuracy',
+      if (bestClassSystem.isNotEmpty && bestClassSystem != 'unknown') bestClassSystem,
+      if (dailyHeadLimit.isNotEmpty) '$dailyHeadLimit head/day',
+      if (overageRate.isNotEmpty) 'Overage $overageRate/head',
+    ];
+
+    return parts.isEmpty ? 'Tap to edit rating' : parts.join(' • ');
+  }
+
   List<Map<String, dynamic>> _filteredJudgeOptions() {
     final query = _judgeSearchController.text.trim().toLowerCase();
 
@@ -241,19 +307,23 @@ class _SuperintendentPreferencesScreenState
 
     if (AppSession.isSupportMode) return;
 
-    final ratingRows = await supabase
-        .from('show_superintendent_judge_preferences')
-        .select()
-        .eq('user_id', userId)
-        .eq('judge_id', judgeId)
-        .limit(1);
+    final ratingPayload = await supabase.rpc(
+      'get_private_judge_rating',
+      params: {'p_judge_id': judgeId},
+    );
 
-    final ratings = List<Map<String, dynamic>>.from(ratingRows as List);
-    if (ratings.isEmpty) return;
+    if (ratingPayload == null) return;
 
-    final row = ratings.first;
+    final row = ratingPayload is Map
+        ? Map<String, dynamic>.from(ratingPayload)
+        : <String, dynamic>{};
+    if (row.isEmpty) return;
+
     setState(() {
-      _selectedJudgeRating = row;
+      _selectedJudgeRating = {
+        'judge_id': judgeId,
+        ...row,
+      };
       _speedRating = ((row['speed_rating'] as num?)?.toDouble() ?? 5)
           .clamp(1, 10)
           .toDouble();
@@ -269,7 +339,10 @@ class _SuperintendentPreferencesScreenState
       _judgeNotesController.text = (row['notes'] ?? '').toString();
       _dailyHeadLimit = (row['daily_head_limit'] as num?)?.toInt() ?? 250;
       _allowsOverage = row['allows_overage'] != false;
-      _overageRatePer = (row['overage_rate_per_'] as num?)?.toDouble();
+      final rawOverageRate = row['overage_rate_per_head'] ?? row['overage_rate_per_'];
+      _overageRatePer = rawOverageRate is num
+          ? rawOverageRate.toDouble()
+          : double.tryParse(rawOverageRate?.toString() ?? '');
       _overageRateController.text = _overageRatePer?.toString() ?? '';
     });
   }
@@ -291,31 +364,38 @@ class _SuperintendentPreferencesScreenState
     }
 
     setState(() => _savingRating = true);
+    final parsedOverageRate = _overageRateController.text.trim().isEmpty
+        ? null
+        : double.tryParse(_overageRateController.text.trim());
 
     try {
-      await supabase.from('show_superintendent_judge_preferences').upsert({
-        'user_id': userId,
-        'judge_id': judgeId,
-        'speed_rating': _speedRating.round(),
-        'overall_quality_rating': _overallQualityRating.round(),
-        'accuracy_rating': _accuracyRating.round(),
-        'best_class_system': _bestClassSystem,
-        'notes': _judgeNotesController.text.trim().isEmpty
-            ? null
-            : _judgeNotesController.text.trim(),
-        'daily_head_limit': _dailyHeadLimit,
-        'allows_overage': _allowsOverage,
-        'overage_rate_per_': _overageRateController.text.trim().isEmpty
-            ? null
-            : double.tryParse(_overageRateController.text.trim()),
-        'updated_at': DateTime.now().toIso8601String(),
-      }, onConflict: 'user_id,judge_id');
+      await supabase.rpc(
+        'save_private_judge_rating',
+        params: {
+          'p_judge_id': judgeId,
+          'p_payload': {
+            'speed_rating': _speedRating.round(),
+            'overall_quality_rating': _overallQualityRating.round(),
+            'accuracy_rating': _accuracyRating.round(),
+            'best_class_system': _bestClassSystem,
+            'notes': _judgeNotesController.text.trim().isEmpty
+                ? null
+                : _judgeNotesController.text.trim(),
+            'daily_head_limit': _dailyHeadLimit,
+            'allows_overage': _allowsOverage,
+            'overage_rate_per_head': parsedOverageRate,
+            'overage_rate_per_': parsedOverageRate,
+          },
+        },
+      );
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Judge rating saved.')),
+        const SnackBar(content: Text('Judge rating saved privately.')),
       );
       await _selectJudge(judgeId);
+      await _loadJudgeRatings();
+      if (mounted) setState(() {});
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -341,6 +421,8 @@ class _SuperintendentPreferencesScreenState
         return StatefulBuilder(
           builder: (context, dialogSetState) {
             final judgeOptions = _filteredJudgeOptions();
+            final ratedJudges = _judgeRatings;
+
             Future<void> selectJudge(String? judgeId) async {
               await _selectJudge(judgeId);
               if (mounted) dialogSetState(() {});
@@ -387,7 +469,7 @@ class _SuperintendentPreferencesScreenState
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'These ratings are private to your account and are never visible to any other user.',
+                          'These ratings are private to your account and are stored as an encrypted payload.',
                           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                 color: Theme.of(context)
                                     .colorScheme
@@ -395,6 +477,54 @@ class _SuperintendentPreferencesScreenState
                               ),
                         ),
                         const SizedBox(height: 16),
+                        Text(
+                          'Your rated judges',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w900,
+                              ),
+                        ),
+                        const SizedBox(height: 8),
+                        if (ratedJudges.isEmpty)
+                          Text(
+                            'No saved judge ratings yet.',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
+                          )
+                        else
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxHeight: 220),
+                            child: ListView.separated(
+                              shrinkWrap: true,
+                              itemCount: ratedJudges.length,
+                              separatorBuilder: (_, __) => const Divider(height: 1),
+                              itemBuilder: (context, index) {
+                                final rating = ratedJudges[index];
+                                final judgeId = (rating['judge_id'] ?? '').toString();
+                                final selected = judgeId == _selectedJudgeId;
+
+                                return ListTile(
+                                  dense: true,
+                                  selected: selected,
+                                  leading: Icon(
+                                    selected ? Icons.edit : Icons.star_rate,
+                                  ),
+                                  title: Text(
+                                    _ratedJudgeLabel(rating),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  subtitle: Text(_ratedJudgeSubtitle(rating)),
+                                  trailing: const Icon(Icons.chevron_right),
+                                  onTap: () => selectJudge(judgeId),
+                                );
+                              },
+                            ),
+                          ),
+                        const SizedBox(height: 20),
                         TextField(
                           controller: _judgeSearchController,
                           decoration: const InputDecoration(
@@ -566,12 +696,22 @@ class _SuperintendentPreferencesScreenState
                           ),
                           TextField(
                             controller: _overageRateController,
-                            keyboardType: TextInputType.number,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
                             decoration: const InputDecoration(
-                              labelText: 'Overage rate (optional)',
-                              hintText: 'e.g. extra animals over 250',
+                              labelText: 'Overage rate per head (optional)',
+                              hintText: 'e.g. 2.50',
                               border: OutlineInputBorder(),
                             ),
+                            onChanged: (value) {
+                              setState(() {
+                                _overageRatePer = value.trim().isEmpty
+                                    ? null
+                                    : double.tryParse(value.trim());
+                              });
+                              dialogSetState(() {});
+                            },
                           ),
                           const SizedBox(height: 16),
                           TextField(
@@ -589,7 +729,11 @@ class _SuperintendentPreferencesScreenState
                               onPressed: _savingRating ? null : saveRating,
                               icon: const Icon(Icons.save),
                               label: Text(
-                                _savingRating ? 'Saving...' : 'Save Rating',
+                                _savingRating
+                                    ? 'Saving...'
+                                    : (_selectedJudgeRating == null
+                                        ? 'Save Rating'
+                                        : 'Update Rating'),
                               ),
                             ),
                           ),

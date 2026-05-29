@@ -138,25 +138,12 @@ class _ShowListScreenState extends State<ShowListScreen> {
   };
 
   Future<bool> _loadSuperintendentAccessFlag() async {
-    final userId = _effectiveUserId;
-
-    if (userId == null || widget.demoMode) {
+    if (widget.demoMode || SupportImpersonationSession.isActive) {
       return false;
     }
 
     try {
-      final isSuper = !SupportImpersonationSession.isActive &&
-          await RoleService.isSuperAdmin();
-      if (isSuper) return true;
-
-      final rows = await supabase
-          .from('role_assignments')
-          .select('show_id')
-          .eq('user_id', userId)
-          .eq('role', 'superintendent')
-          .limit(1);
-
-      return (rows as List).isNotEmpty;
+      return await RoleService.isSuperAdmin();
     } catch (_) {
       return false;
     }
@@ -1003,7 +990,8 @@ class _ShowListScreenState extends State<ShowListScreen> {
                         (bundle?.superAdminShowIds.isNotEmpty ?? false))),
             onAdmin: bundle == null ? null : () => _openAdmin(context, bundle),
             showSuperintendent: !_loadingAdminAccess &&
-                (_canAccessSuperintendent || (bundle?.isSuperAdmin ?? false)),
+                !SupportImpersonationSession.isActive &&
+                (bundle?.isSuperAdmin == true || _canAccessSuperintendent),
             onSuperintendent: bundle == null
                 ? null
                 : () {
@@ -1522,14 +1510,13 @@ class _ResponsiveShowAppBar extends StatelessWidget
             showLabel: showLabels,
             onTap: onAdmin!,
           ),
-        // TEMP DISABLED: Superintendent screen (feature not yet released)
-        // if (!demoMode && showSuperintendent && onSuperintendent != null)
-        //   _TopBarAction(
-        //     icon: Icons.fact_check,
-        //     label: 'Superintendent',
-        //     showLabel: showLabels,
-        //     onTap: onSuperintendent!,
-        //   ),
+        if (!demoMode && showSuperintendent && onSuperintendent != null)
+          _TopBarAction(
+            icon: Icons.fact_check,
+            label: 'Superintendent',
+            showLabel: showLabels,
+            onTap: onSuperintendent!,
+          ),
         if (!demoMode)
           _TopBarAction(
             icon: Icons.pets,
@@ -1584,21 +1571,19 @@ class _ResponsiveShowAppBar extends StatelessWidget
             tooltip: 'More',
             icon: const Icon(Icons.more_vert, color: Colors.white),
             onSelected: (value) async {
-              // TEMP DISABLED: Superintendent screen (feature not yet released)
-              // if (value == 'superintendent' && onSuperintendent != null) {
-              //   onSuperintendent!();
-              // }
+              if (value == 'superintendent' && onSuperintendent != null) {
+                onSuperintendent!();
+              }
               if (value == 'super_admin') onSuperAdmin();
               if (value == 'help') onHelp();
               if (value == 'logout') onLogout();
             },
             itemBuilder: (context) => [
-              // TEMP DISABLED: Superintendent screen (feature not yet released)
-              // if (!demoMode && showSuperintendent && onSuperintendent != null)
-              //   const PopupMenuItem<String>(
-              //     value: 'superintendent',
-              //     child: Text('Superintendent'),
-              //   ),
+              if (!demoMode && showSuperintendent && onSuperintendent != null)
+                const PopupMenuItem<String>(
+                  value: 'superintendent',
+                  child: Text('Superintendent'),
+                ),
               if (!demoMode &&
                   !SupportImpersonationSession.isActive &&
                   bundle?.isSuperAdmin == true)
