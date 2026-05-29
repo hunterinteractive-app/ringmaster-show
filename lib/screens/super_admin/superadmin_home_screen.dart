@@ -1,8 +1,9 @@
-// lib/screens/superadmin/superadmin_home_screen.dart
+// lib/screens/superadmin/super_admin_home_screen.dart
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
+import 'package:ringmaster_show/screens/super_admin/help_reports_screen.dart';
 
 import '../show_list_screen.dart';
 import 'breed_catalog_screen.dart';
@@ -92,6 +93,15 @@ class _SuperadminHomeScreenState extends State<SuperadminHomeScreen> {
       context,
       MaterialPageRoute(
         builder: (_) => const BreedCatalogScreen(),
+      ),
+    );
+  }
+
+  Future<void> _openHelpReports() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const HelpReportsScreen(),
       ),
     );
   }
@@ -228,6 +238,14 @@ class _SuperadminHomeScreenState extends State<SuperadminHomeScreen> {
                   subtitle:
                       'Open support mode and view RingMaster as another user',
                   onTap: _openImpersonateUser,
+                ),
+                const SizedBox(height: 12),
+                _SuperadminToolCard(
+                  icon: Icons.help_outline,
+                  title: 'Help Reports',
+                  subtitle:
+                      'Review issue reports, screenshots, device details, and mark reports resolved.',
+                  onTap: _openHelpReports,
                 ),
                 const SizedBox(height: 12),
                 _SuperadminToolCard(

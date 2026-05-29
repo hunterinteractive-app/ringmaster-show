@@ -7,7 +7,9 @@ import 'package:ringmaster_show/screens/admin/admin_shows_screen.dart';
 import 'package:ringmaster_show/screens/admin/edit_show_settings_screen.dart';
 import 'package:ringmaster_show/screens/admin/entries_by_breed_section_table.dart';
 
+
 import 'package:ringmaster_show/widgets/help_report_dialog.dart';
+import 'package:ringmaster_show/widgets/my_help_requests_button.dart';
 
 
 import 'login_screen.dart';
@@ -1539,6 +1541,12 @@ class _ResponsiveShowAppBar extends StatelessWidget
           showLabel: showLabels || medium,
           onTap: onHelp,
         ),
+        if (!demoMode)
+          MyHelpRequestsButton(
+            showLabel: showLabels || medium,
+            iconColor: Colors.white,
+            textColor: Colors.white,
+          ),
         if (!showLabels)
           PopupMenuButton<String>(
             tooltip: 'More',
