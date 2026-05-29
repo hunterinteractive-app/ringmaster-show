@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
+import 'package:ringmaster_show/services/app_session.dart';
 
 import '../../theme/app_theme.dart';
 import '../../widgets/rm_widgets.dart';
@@ -162,19 +163,38 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
           final items = snap.data ?? [];
 
           if (items.isEmpty) {
-            return const Padding(
-              padding: EdgeInsets.all(AppSpacing.lg),
-              child: RMEmptyState(
-                title: 'No resources available',
-                subtitle: 'There are no secretary resources available yet.',
-                icon: Icons.perm_media_outlined,
+            return Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Column(
+                children: [
+                  if (AppSession.isSupportMode) ...[
+                    _SupportModeNotice(),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
+                  const Expanded(
+                    child: Center(
+                      child: RMEmptyState(
+                        title: 'No resources available',
+                        subtitle: 'There are no secretary resources available yet.',
+                        icon: Icons.perm_media_outlined,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             );
           }
 
           return Padding(
             padding: const EdgeInsets.all(AppSpacing.lg),
-            child: ListView.separated(
+            child: Column(
+              children: [
+                if (AppSession.isSupportMode) ...[
+                  _SupportModeNotice(),
+                  const SizedBox(height: AppSpacing.md),
+                ],
+                Expanded(
+                  child: ListView.separated(
               itemCount: items.length,
               separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.md),
               itemBuilder: (context, i) {
@@ -265,8 +285,39 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
                 );
               },
             ),
+                ),
+              ],
+            ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _SupportModeNotice extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.amber.shade100,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.amber.shade300),
+      ),
+      child: const Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.support_agent, size: 18),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Support Mode — Viewing secretary resources as an admin while viewing another user.',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
       ),
     );
   }

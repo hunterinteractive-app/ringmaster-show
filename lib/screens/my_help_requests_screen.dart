@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/app_session.dart';
 
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
@@ -27,8 +28,9 @@ class _MyHelpRequestsScreenState extends State<MyHelpRequestsScreen> {
 
   Future<void> _loadReports() async {
     final user = supabase.auth.currentUser;
+    final effectiveUserId = AppSession.effectiveUserId ?? user?.id;
 
-    if (user == null) {
+    if (user == null || effectiveUserId == null || effectiveUserId.isEmpty) {
       setState(() {
         _loading = false;
         _error = 'You must be signed in to view help requests.';
@@ -45,7 +47,7 @@ class _MyHelpRequestsScreenState extends State<MyHelpRequestsScreen> {
       final rows = await supabase
           .from('help_reports')
           .select()
-          .eq('user_id', user.id)
+          .eq('user_id', effectiveUserId)
           .order('created_at', ascending: false)
           .limit(100);
 
@@ -72,6 +74,16 @@ class _MyHelpRequestsScreenState extends State<MyHelpRequestsScreen> {
     final user = supabase.auth.currentUser;
     final reportId = report['id']?.toString();
     final trimmed = message.trim();
+
+    if (AppSession.isSupportMode) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Replies are disabled while viewing as another user.'),
+        ),
+      );
+      return;
+    }
 
     if (user == null || reportId == null || reportId.isEmpty || trimmed.isEmpty) {
       return;
@@ -110,6 +122,7 @@ class _MyHelpRequestsScreenState extends State<MyHelpRequestsScreen> {
       context: context,
       builder: (_) => _MyHelpRequestDetailsDialog(
         report: report,
+        readOnly: AppSession.isSupportMode,
         onReply: (message) => _addUserReply(report, message: message),
       ),
     );
@@ -211,10 +224,12 @@ class _MyHelpRequestsScreenState extends State<MyHelpRequestsScreen> {
 class _MyHelpRequestDetailsDialog extends StatefulWidget {
   const _MyHelpRequestDetailsDialog({
     required this.report,
+    required this.readOnly,
     required this.onReply,
   });
 
   final Map<String, dynamic> report;
+  final bool readOnly;
   final Future<void> Function(String message) onReply;
 
   @override
@@ -231,17 +246,49 @@ class _MyHelpRequestDetailsDialogState
   bool _sendingReply = false;
   String? _messageError;
   List<Map<String, dynamic>> _messages = [];
+  String? _signedScreenshotUrl;
+  bool _loadingScreenshot = false;
 
   @override
   void initState() {
     super.initState();
     _loadMessages();
+    _loadScreenshotUrl();
   }
 
   @override
   void dispose() {
     _replyController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadScreenshotUrl() async {
+    final path = widget.report['screenshot_path']?.toString();
+
+    if (path != null && path.trim().isNotEmpty) {
+      setState(() => _loadingScreenshot = true);
+
+      try {
+        final signedUrl = await supabase.storage
+            .from('help-report-screenshots')
+            .createSignedUrl(path.trim(), 60 * 60);
+
+        if (!mounted) return;
+        setState(() {
+          _signedScreenshotUrl = signedUrl;
+          _loadingScreenshot = false;
+        });
+        return;
+      } catch (_) {
+        if (!mounted) return;
+        setState(() => _loadingScreenshot = false);
+      }
+    }
+
+    final existingUrl = widget.report['screenshot_url']?.toString();
+    if (existingUrl != null && existingUrl.trim().isNotEmpty) {
+      setState(() => _signedScreenshotUrl = existingUrl.trim());
+    }
   }
 
   Future<void> _loadMessages() async {
@@ -315,6 +362,7 @@ class _MyHelpRequestDetailsDialogState
     final message = widget.report['message']?.toString() ?? '';
     final status = widget.report['status']?.toString() ?? 'new';
     final createdAt = widget.report['created_at']?.toString() ?? '';
+    final screenshotPath = widget.report['screenshot_path']?.toString();
 
     return AlertDialog(
       title: Text(pageTitle),
@@ -341,6 +389,63 @@ class _MyHelpRequestDetailsDialogState
               const SizedBox(height: 6),
               SelectableText(message),
               const SizedBox(height: 16),
+              if (_signedScreenshotUrl != null &&
+                  _signedScreenshotUrl!.isNotEmpty) ...[
+                const Text(
+                  'Screenshot',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    constraints: const BoxConstraints(maxHeight: 360),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Color(0xFFE0E0E0)),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: InteractiveViewer(
+                      minScale: 0.5,
+                      maxScale: 4,
+                      child: Image.network(
+                        _signedScreenshotUrl!,
+                        fit: BoxFit.contain,
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return const SizedBox(
+                            height: 220,
+                            child: Center(child: CircularProgressIndicator()),
+                          );
+                        },
+                        errorBuilder: (context, error, stackTrace) {
+                          return SizedBox(
+                            height: 160,
+                            child: Center(
+                              child: Text(
+                                'Could not load screenshot image.'
+                                '${screenshotPath == null || screenshotPath.isEmpty ? '' : ' Path: $screenshotPath'}',
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ] else if (_loadingScreenshot) ...[
+                const Text(
+                  'Screenshot',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                const SizedBox(
+                  height: 120,
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+                const SizedBox(height: 16),
+              ],
               const Divider(),
               const Text(
                 'Conversation',
@@ -351,17 +456,27 @@ class _MyHelpRequestDetailsDialogState
               const SizedBox(height: 12),
               TextField(
                 controller: _replyController,
+                readOnly: widget.readOnly,
                 minLines: 3,
                 maxLines: 6,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Reply',
-                  hintText: 'Type a follow-up message...',
-                  border: OutlineInputBorder(),
+                  hintText: widget.readOnly
+                      ? 'Replies are disabled while viewing as another user.'
+                      : 'Type a follow-up message...',
+                  border: const OutlineInputBorder(),
                 ),
               ),
+              if (widget.readOnly) ...[
+                const SizedBox(height: 8),
+                const Text(
+                  'Support mode is read-only. Exit impersonation to reply as yourself.',
+                  style: TextStyle(fontStyle: FontStyle.italic),
+                ),
+              ],
               const SizedBox(height: 8),
               FilledButton.icon(
-                onPressed: _sendingReply ? null : _sendReply,
+                onPressed: widget.readOnly || _sendingReply ? null : _sendReply,
                 icon: _sendingReply
                     ? const SizedBox(
                         width: 16,

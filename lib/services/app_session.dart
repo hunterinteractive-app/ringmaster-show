@@ -10,6 +10,19 @@ class AppSession {
       SupportImpersonationSession.targetUserId ??
       _supabase.auth.currentUser?.id;
 
+  static String? get impersonatedUserId =>
+      SupportImpersonationSession.targetUserId;
+
+  static String? get impersonatedUserEmail => null;
+
+  static String? get impersonatedUserName => null;
+
   static bool get isSupportMode =>
       SupportImpersonationSession.isActive;
+
+  static void stopImpersonation() {
+    // SupportImpersonationSession does not expose a clear/stop method here yet.
+    // Keep this wrapper so shared widgets compile; wire this to the real
+    // impersonation exit method once exposed by SupportImpersonationSession.
+  }
 }

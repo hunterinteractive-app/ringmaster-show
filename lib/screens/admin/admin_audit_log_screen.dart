@@ -5,6 +5,7 @@ import 'dart:html' as html;
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/app_session.dart';
 
 class AdminAuditLogScreen extends StatefulWidget {
   final String showId;
@@ -633,6 +634,32 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
     );
   }
 
+  Widget _supportModeNotice(String message) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.amber.shade100,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.amber.shade300),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.support_agent, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _correctionsTab() {
     if (_loadingCorrections) {
       return _statusCard('Loading QR overrides...', loading: true);
@@ -650,6 +677,11 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
 
     return Column(
       children: [
+        if (AppSession.isSupportMode) ...[
+          _supportModeNotice(
+            'Support Mode — Viewing QR correction overrides as an admin while viewing another user.',
+          ),
+        ],
         _filters(showCorrectionFilters: true),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -749,6 +781,11 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
 
     return Column(
       children: [
+        if (AppSession.isSupportMode) ...[
+          _supportModeNotice(
+            'Support Mode — Viewing QR writer activity as an admin while viewing another user.',
+          ),
+        ],
         _filters(showCorrectionFilters: false),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),

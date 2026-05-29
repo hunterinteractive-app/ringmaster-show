@@ -928,12 +928,6 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
               entries: working,
               judges: _judges,
               onBulkJudgeApply: (entries, judgeId) async {
-                if (AppSession.isSupportMode) {
-                  setState(() {
-                    _msg = 'Results changes are disabled while viewing in support mode.';
-                  });
-                  return;
-                }
 
                 final ids = entries
                     .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
@@ -1218,12 +1212,6 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
               entries: working,
               judges: _judges,
               onBulkJudgeApply: (entries, judgeId) async {
-                if (AppSession.isSupportMode) {
-                  setState(() {
-                    _msg = 'Results changes are disabled while viewing in support mode.';
-                  });
-                  return;
-                }
                 final ids = entries
                     .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
                     .where((x) => x.isNotEmpty)
@@ -2081,7 +2069,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                         border: Border.all(color: Colors.amber.shade300),
                       ),
                       child: const Text(
-                        'Support Mode — Results entry is read-only. Result, award, and judge changes are disabled.',
+                        'Support Mode — You are entering results as an admin while viewing another user.',
                         style: TextStyle(fontWeight: FontWeight.w700),
                       ),
                     ),
@@ -2725,7 +2713,7 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
                               SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                  'Support Mode — Results entry is read-only. Result, award, and judge changes are disabled.',
+                                  'Support Mode — You are entering results as an admin while viewing another user.',
                                   style: TextStyle(fontWeight: FontWeight.w700),
                                 ),
                               ),
@@ -4933,12 +4921,6 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
   }
 
   Future<void> _applyJudgeToClass(String? judgeId) async {
-    if (AppSession.isSupportMode) {
-      setState(() {
-        _msg = 'Judge changes are disabled while viewing in support mode.';
-      });
-      return;
-    }
     setState(() {
       _savingJudge = true;
       _msg = null;
@@ -6449,7 +6431,7 @@ if (storedJudgeId.isEmpty) {
                     ),
                   ),
                 ],
-                onChanged: (_saving || AppSession.isSupportMode)
+                onChanged: _saving
                     ? null
                     : (v) {
                         setState(() {
@@ -6579,7 +6561,7 @@ if (storedJudgeId.isEmpty) {
                   const SizedBox(width: 10),
                   Expanded(
                     child: FilledButton(
-                      onPressed: (_saving || AppSession.isSupportMode) ? null : () => _save(goNext: false),
+                      onPressed: _saving ? null : () => _save(goNext: false),
                       child: Text(_saving ? 'Saving…' : 'Save'),
                     ),
                   ),
@@ -6589,7 +6571,7 @@ if (storedJudgeId.isEmpty) {
                       style: FilledButton.styleFrom(
                         backgroundColor: const Color(0xFFD4A623),
                       ),
-                      onPressed: (_saving || AppSession.isSupportMode) ? null : () => _save(goNext: true),
+                      onPressed: _saving ? null : () => _save(goNext: true),
                       child: const Text('Save & Next'),
                     ),
                   ),

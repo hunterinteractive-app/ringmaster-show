@@ -11,6 +11,8 @@ class ShowPermissions {
   final bool canManageEntries;
   final bool canManageJudges;
   final bool canManageShowSettings;
+  final bool isSupportMode;
+  final bool isReadOnlySupportMode;
 
   const ShowPermissions({
     required this.canManageShow,
@@ -20,6 +22,8 @@ class ShowPermissions {
     required this.canEmailReports,
     required this.canManageEntries,
     required this.canManageJudges,
+    required this.isSupportMode,
+    required this.isReadOnlySupportMode,
   });
 
   static const none = ShowPermissions(
@@ -30,6 +34,8 @@ class ShowPermissions {
     canEmailReports: false,
     canManageEntries: false,
     canManageJudges: false,
+    isSupportMode: false,
+    isReadOnlySupportMode: false,
   );
 }
 
@@ -41,6 +47,8 @@ class ShowPermissionsService {
   static Future<ShowPermissions> load(String showId) async {
     final user = _client.auth.currentUser;
     final effectiveUserId = AppSession.effectiveUserId ?? user?.id;
+    final isSupportMode = AppSession.isSupportMode;
+
     if (user == null || effectiveUserId == null || effectiveUserId.isEmpty) {
       return ShowPermissions.none;
     }
@@ -63,6 +71,8 @@ class ShowPermissionsService {
       canManageEntries: results[4],
       canManageJudges: results[5],
       canManageShowSettings: results[6],
+      isSupportMode: isSupportMode,
+      isReadOnlySupportMode: isSupportMode,
     );
   }
 

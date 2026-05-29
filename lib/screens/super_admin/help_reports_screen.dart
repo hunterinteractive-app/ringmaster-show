@@ -311,18 +311,50 @@ class _HelpReportDetailsDialogState extends State<_HelpReportDetailsDialog> {
   bool _sendingMessage = false;
   String? _messageError;
   List<Map<String, dynamic>> _messages = [];
+  String? _signedScreenshotUrl;
+  bool _loadingScreenshot = false;
 
   @override
   void initState() {
     super.initState();
     _loadMessages();
-  }
+    _loadScreenshotUrl();
+    }
 
   @override
   void dispose() {
     _replyController.dispose();
     super.dispose();
   }
+
+  Future<void> _loadScreenshotUrl() async {
+    final path = widget.report['screenshot_path']?.toString();
+
+    if (path != null && path.trim().isNotEmpty) {
+        setState(() => _loadingScreenshot = true);
+
+        try {
+        final signedUrl = await supabase.storage
+            .from('help-report-screenshots')
+            .createSignedUrl(path.trim(), 60 * 60);
+
+        if (!mounted) return;
+        setState(() {
+            _signedScreenshotUrl = signedUrl;
+            _loadingScreenshot = false;
+        });
+        return;
+        } catch (_) {
+        if (!mounted) return;
+        setState(() => _loadingScreenshot = false);
+        }
+    }
+
+    final existingUrl = widget.report['screenshot_url']?.toString();
+    if (existingUrl != null && existingUrl.trim().isNotEmpty) {
+        setState(() => _signedScreenshotUrl = existingUrl.trim());
+    }
+    }
 
   Future<void> _loadMessages() async {
     final reportId = widget.report['id']?.toString();
@@ -397,6 +429,10 @@ class _HelpReportDetailsDialogState extends State<_HelpReportDetailsDialog> {
     final status = widget.report['status']?.toString() ?? 'new';
     final screenshotUrl = widget.report['screenshot_url']?.toString();
     final screenshotPath = widget.report['screenshot_path']?.toString();
+    final effectiveScreenshotUrl = _signedScreenshotUrl ??
+        ((screenshotUrl != null && screenshotUrl.trim().isNotEmpty)
+            ? screenshotUrl.trim()
+            : null);
     final deviceInfo = widget.report['device_info'];
 
     return AlertDialog(
@@ -438,21 +474,68 @@ class _HelpReportDetailsDialogState extends State<_HelpReportDetailsDialog> {
               const SizedBox(height: 6),
               SelectableText(message),
               const SizedBox(height: 16),
-              if (screenshotUrl != null && screenshotUrl.isNotEmpty) ...[
+              if (effectiveScreenshotUrl != null &&
+                    effectiveScreenshotUrl.isNotEmpty) ...[
                 const Text(
-                  'Screenshot URL',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                    'Screenshot',
+                    style: TextStyle(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
-                SelectableText(screenshotUrl),
-              ] else if (screenshotPath != null && screenshotPath.isNotEmpty) ...[
+                ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                    constraints: const BoxConstraints(maxHeight: 420),
+                    decoration: BoxDecoration(
+                        border: Border.all(color: Color(0xFFE0E0E0)),
+                        borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: InteractiveViewer(
+                        minScale: 0.5,
+                        maxScale: 4,
+                        child: Image.network(
+                        effectiveScreenshotUrl,
+                        fit: BoxFit.contain,
+                        loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return const SizedBox(
+                            height: 220,
+                            child: Center(child: CircularProgressIndicator()),
+                            );
+                        },
+                        errorBuilder: (context, error, stackTrace) {
+                            return SizedBox(
+                            height: 160,
+                            child: Center(
+                                child: Text(
+                                'Could not load screenshot image.'
+                                '${screenshotPath == null || screenshotPath.isEmpty ? '' : ' Path: $screenshotPath'}',
+                                textAlign: TextAlign.center,
+                                ),
+                            ),
+                            );
+                        },
+                        ),
+                    ),
+                    ),
+                ),
+                ] else if (_loadingScreenshot) ...[
                 const Text(
-                  'Screenshot path',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                    'Screenshot',
+                    style: TextStyle(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
-                SelectableText(screenshotPath),
-              ],
+                const SizedBox(
+                    height: 120,
+                    child: Center(child: CircularProgressIndicator()),
+                ),
+                ] else if (screenshotPath != null && screenshotPath.isNotEmpty) ...[
+                const Text(
+                    'Screenshot',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                SelectableText('Screenshot saved at: $screenshotPath'),
+                ],
               const SizedBox(height: 16),
               const Divider(),
               const Text(

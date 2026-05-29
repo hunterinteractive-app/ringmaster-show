@@ -317,6 +317,14 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
   }
 
   Future<void> _assignJudge(Map<String, dynamic> judge) async {
+    if (_isReadOnly) {
+      setState(() {
+        _msg = _isFinalized
+            ? 'This show has been finalized. Judges can no longer be changed.'
+            : 'This show is locked. Judges can no longer be changed.';
+      });
+      return;
+    }
     final judgeId = (judge['id'] ?? '').toString();
     if (judgeId.isEmpty) return;
 
@@ -351,6 +359,14 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
   }
 
   Future<void> _removeAssignment(Map<String, dynamic> assignment) async {
+    if (_isReadOnly) {
+      setState(() {
+        _msg = _isFinalized
+            ? 'This show has been finalized. Judges can no longer be changed.'
+            : 'This show is locked. Judges can no longer be changed.';
+      });
+      return;
+    }
     final assignmentId = (assignment['id'] ?? '').toString();
     if (assignmentId.isEmpty) return;
 
@@ -426,7 +442,7 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
         children: [
           TextField(
             controller: _search,
-            enabled: !_saving,
+            enabled: !_saving && !_isReadOnly,
             decoration: const InputDecoration(
               labelText: 'Search judges to assign',
               hintText: 'Name, ARBA number, type, email, city, state...',
@@ -456,7 +472,7 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
                     ),
                     DropdownMenuItem(value: 'dual', child: Text('Dual Judges')),
                   ],
-                  onChanged: _saving
+                  onChanged: (_saving || _isReadOnly)
                       ? null
                       : (v) async {
                           setState(() {
@@ -486,7 +502,7 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
                       ),
                     ),
                   ],
-                  onChanged: _saving
+                  onChanged: (_saving || _isReadOnly)
                       ? null
                       : (v) async {
                           setState(() {
@@ -508,7 +524,7 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
                     DropdownMenuItem(value: 'name', child: Text('Name')),
                     DropdownMenuItem(value: 'state', child: Text('State')),
                   ],
-                  onChanged: _saving
+                  onChanged: (_saving || _isReadOnly)
                       ? null
                       : (v) async {
                           setState(() {
@@ -632,6 +648,24 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
                       padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
                       child: Column(
                         children: [
+                          if (_isReadOnly) ...[
+                            Container(
+                              width: double.infinity,
+                              margin: const EdgeInsets.only(bottom: 16),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.amber.shade100,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.amber.shade300),
+                              ),
+                              child: Text(
+                                _isFinalized
+                                    ? 'This show has been finalized. Judge assignments are view-only.'
+                                    : 'This show is locked. Judge assignments are view-only.',
+                                style: const TextStyle(fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                          ],
                           if (_msg != null)
                             Container(
                               width: double.infinity,

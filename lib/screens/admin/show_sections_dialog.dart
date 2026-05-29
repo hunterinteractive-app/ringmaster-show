@@ -234,6 +234,7 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
   }
 
   void _addSection(String kind) {
+    if (_saving || _isReadOnly) return;
     setState(() {
       _sections.add(
         _EditableSection.newRow(
@@ -247,6 +248,7 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
   }
 
   void _removeSection(int index) {
+    if (_saving || _isReadOnly) return;
     final row = _sections[index];
 
     setState(() {
@@ -261,7 +263,7 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
   }
 
   void _moveUp(int index) {
-    if (index <= 0) return;
+    if (_saving || _isReadOnly || index <= 0) return;
     setState(() {
       final item = _sections.removeAt(index);
       _sections.insert(index - 1, item);
@@ -271,7 +273,7 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
   }
 
   void _moveDown(int index) {
-    if (index >= _sections.length - 1) return;
+    if (_saving || _isReadOnly || index >= _sections.length - 1) return;
     setState(() {
       final item = _sections.removeAt(index);
       _sections.insert(index + 1, item);
@@ -281,6 +283,12 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
   }
 
     bool _validate() {
+      if (_isReadOnly) {
+        setState(() => _msg = _isFinalized
+            ? 'This show has been finalized. Sections can no longer be changed.'
+            : 'This show is locked. Sections can no longer be changed.');
+        return false;
+      }
       if (_sections.isEmpty) {
         setState(() => _msg = 'Add at least one section.');
         return false;
@@ -469,15 +477,17 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
                               subtitle: const Text(
                                 'Choose the breeds allowed in this show.',
                               ),
-                              onChanged: (value) {
-                                setInnerState(() {
-                                  if (value == true) {
-                                    working.add(breedId);
-                                  } else {
-                                    working.remove(breedId);
-                                  }
-                                });
-                              },
+                              onChanged: _isReadOnly
+                                  ? null
+                                  : (value) {
+                                      setInnerState(() {
+                                        if (value == true) {
+                                          working.add(breedId);
+                                        } else {
+                                          working.remove(breedId);
+                                        }
+                                      });
+                                    },
                             );
                           },
                         ),
@@ -821,6 +831,24 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
                         const SizedBox(height: 14),
+                        if (_isReadOnly) ...[
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.shade100,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.amber.shade300),
+                            ),
+                            child: Text(
+                              _isFinalized
+                                  ? 'This show has been finalized. Sections are view-only.'
+                                  : 'This show is locked. Sections are view-only.',
+                              style: const TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
                         if (_msg != null) ...[
                           Container(
                             width: double.infinity,

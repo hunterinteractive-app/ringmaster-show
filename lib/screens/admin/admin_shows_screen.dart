@@ -74,26 +74,24 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
   }
 
   Future<List<Map<String, dynamic>>> _loadShows() async {
-    final userId = AppSession.effectiveUserId ?? supabase.auth.currentUser?.id;
+    final realUserId = supabase.auth.currentUser?.id;
+    final effectiveUserId = AppSession.effectiveUserId ?? realUserId;
+    final userId = AppSession.isSupportMode ? realUserId : effectiveUserId;
     if (userId == null || userId.isEmpty) return [];
 
-    final superAdminRes = AppSession.isSupportMode
-        ? null
-        : await supabase
-            .from('super_admins')
-            .select('user_id')
-            .eq('user_id', userId)
-            .maybeSingle();
+    final superAdminRes = await supabase
+        .from('super_admins')
+        .select('user_id')
+        .eq('user_id', userId)
+        .maybeSingle();
 
-    final roleSuperAdminRes = AppSession.isSupportMode
-        ? null
-        : await supabase
-            .from('role_assignments')
-            .select('user_id')
-            .eq('user_id', userId)
-            .eq('role', 'super_admin')
-            .limit(1)
-            .maybeSingle();
+    final roleSuperAdminRes = await supabase
+        .from('role_assignments')
+        .select('user_id')
+        .eq('user_id', userId)
+        .eq('role', 'super_admin')
+        .limit(1)
+        .maybeSingle();
 
     final isSuperAdmin = superAdminRes != null || roleSuperAdminRes != null;
 
@@ -102,10 +100,19 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
       'is_locked,locked_at,finalized_at',
     );
 
+    // Support mode: if allowedShowIds is not empty, only show those shows.
+    if (AppSession.isSupportMode && widget.allowedShowIds.isNotEmpty) {
+      final res = await query
+          .inFilter('id', widget.allowedShowIds)
+          .order('start_date')
+          .order('location_name');
+
+      return (res as List).cast<Map<String, dynamic>>();
+    }
+
     final allowedShowIds = <String>{};
 
     if (!isSuperAdmin) {
-
       try {
         final roleRows = await supabase
             .from('role_assignments')
@@ -113,6 +120,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
             .eq('user_id', userId)
             .inFilter('role', const [
               'admin',
+              'show_admin',
               'reporting_clerk',
               'superintendent',
             ]);
@@ -215,7 +223,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
         remainingShowDays: 0,
         unlimitedActive: false,
         unlimitedExpiresAt: null,
-        message: 'Support mode is read-only.',
+        message: 'Creating shows is disabled while viewing as another user.',
       );
     }
 
@@ -506,7 +514,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
                                   SizedBox(width: AppSpacing.md),
                                   Expanded(
                                     child: Text(
-                                      'Support Mode — Show Secretary tools are read-only. Creating shows is disabled.',
+                                      'Support Mode — You are managing shows as an admin while viewing another user. Creating shows is disabled.',
                                       style: TextStyle(
                                         fontWeight: FontWeight.w700,
                                       ),

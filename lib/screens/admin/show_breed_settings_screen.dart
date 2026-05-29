@@ -620,10 +620,6 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
     required bool enabled,
     String? customName,
   }) async {
-    if (AppSession.isSupportMode) {
-      setState(() => _msg = 'Variety settings are read-only in support mode.');
-      return;
-    }
 
     try {
       await ShowLockService.assertShowUnlocked(widget.showId);
@@ -667,10 +663,6 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
     required String breedId,
     required String breedName,
   }) async {
-    if (AppSession.isSupportMode) {
-      setState(() => _msg = 'Adding show-only varieties is disabled in support mode.');
-      return;
-    }
 
     final controller = TextEditingController();
     final ok = await showDialog<bool>(
@@ -751,10 +743,6 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
     required int sortOrder,
     required bool enabled,
   }) async {
-    if (AppSession.isSupportMode) {
-      setState(() => _msg = 'Commercial class settings are read-only in support mode.');
-      return;
-    }
 
     try {
       await ShowLockService.assertShowUnlocked(widget.showId);
@@ -1163,10 +1151,6 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
       bool enabled,
       String label,
     ) async {
-      if (AppSession.isSupportMode) {
-        setState(() => _msg = 'Breed settings are read-only in support mode.');
-        return;
-      }
 
       setState(() {
         _loading = true;
@@ -1332,8 +1316,35 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Support Mode — Breed settings are read-only.',
+                        'Support Mode — You are managing breed settings as an admin while viewing another user.',
                         style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+            if (_isReadOnly)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade100,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.amber.shade300),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.lock, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _isFinalized
+                            ? 'This show has been finalized. Breed settings are view-only.'
+                            : 'This show is locked. Breed settings are view-only.',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
                     ),
                   ],

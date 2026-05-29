@@ -171,6 +171,12 @@ class _ShowPaymentSettingsDialogState
   }
 
   bool _validate() {
+    if (_isReadOnly) {
+      setState(() => _msg = _isFinalized
+          ? 'This show has been finalized. Payment settings can no longer be changed.'
+          : 'This show is locked. Payment settings can no longer be changed.');
+      return false;
+    }
     if ((_paymentMode == 'stripe' || _paymentMode == 'hybrid') &&
         _stripeEnabled &&
         !_stripeHasAccount) {
@@ -339,6 +345,24 @@ class _ShowPaymentSettingsDialogState
                           padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
                           child: Column(
                             children: [
+                              if (_isReadOnly) ...[
+                                Container(
+                                  width: double.infinity,
+                                  margin: const EdgeInsets.only(bottom: 16),
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amber.shade100,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: Colors.amber.shade300),
+                                  ),
+                                  child: Text(
+                                    _isFinalized
+                                        ? 'This show has been finalized. Payment settings are view-only.'
+                                        : 'This show is locked. Payment settings are view-only.',
+                                    style: const TextStyle(fontWeight: FontWeight.w700),
+                                  ),
+                                ),
+                              ],
                               if (_msg != null)
                                 Container(
                                   width: double.infinity,
@@ -603,7 +627,13 @@ class _ShowPaymentSettingsDialogState
                                         ),
                                       ),
                                       onPressed: (_saving || _isReadOnly) ? null : _save,
-                                      child: Text(_saving ? 'Saving…' : 'Save'),
+                                      child: Text(
+                                        _saving
+                                            ? 'Saving…'
+                                            : _isReadOnly
+                                                ? 'View Only'
+                                                : 'Save',
+                                      ),
                                     ),
                                   ),
                                 ],

@@ -225,10 +225,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   }
 
   Future<void> _openAddAnimalDialog() async {
-    if (AppSession.isSupportMode) {
-      setState(() => _msg = 'Adding animals is disabled while viewing in support mode.');
-      return;
-    }
+    
     
     final saved = await openAnimalEditorDialog(
     context,
@@ -241,10 +238,6 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   }
 
   Future<void> _openAddExhibitorDialog() async {
-    if (AppSession.isSupportMode) {
-      setState(() => _msg = 'Adding exhibitors is disabled while viewing in support mode.');
-      return;
-    }
     final saved = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (_) => const ExhibitorBuilderDialog(),
@@ -1550,10 +1543,6 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   Future<void> _addSelectedToCart(
     List<Map<String, dynamic>> eligibleAnimals,
   ) async {
-    if (AppSession.isSupportMode) {
-      setState(() => _msg = 'Adding to cart is disabled while viewing in support mode.');
-      return;
-    }
     final userId = AppSession.effectiveUserId;
     if (userId == null) {
       setState(() => _msg = 'Not signed in.');
@@ -2206,10 +2195,6 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     required Map<String, dynamic> animal,
     required String classCode,
   }) async {
-    if (AppSession.isSupportMode) {
-      setState(() => _msg = 'Commercial entries are disabled while viewing in support mode.');
-      return;
-    }
     final userId = AppSession.effectiveUserId;
     if (userId == null) {
       setState(() => _msg = 'Not signed in.');
@@ -2321,10 +2306,6 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   }
 
   Future<void> _addMeatPenToCart() async {
-    if (AppSession.isSupportMode) {
-      setState(() => _msg = 'Meat Pen entries are disabled while viewing in support mode.');
-      return;
-    }
     final userId = AppSession.effectiveUserId;
     if (userId == null) {
       setState(() => _msg = 'Not signed in.');
@@ -2449,9 +2430,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                 child: SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
-                    onPressed: (_submitting || AppSession.isSupportMode)
-                        ? null
-                        : _addMeatPenToCart,
+                    onPressed: _submitting ? null : _addMeatPenToCart,
                     icon: const Icon(Icons.set_meal),
                     label: Text('Add $label'),
                   ),
@@ -2462,9 +2441,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
             return Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: PopupMenuButton<String>(
-                enabled: !AppSession.isSupportMode &&
-                    !_submitting &&
-                    rabbitAnimals.isNotEmpty,
+                enabled: !_submitting && rabbitAnimals.isNotEmpty,
                 tooltip: 'Select rabbit for $label',
                 onSelected: (animalId) {
                   final animal = rabbitAnimals.firstWhere(

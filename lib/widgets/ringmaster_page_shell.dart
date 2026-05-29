@@ -1,6 +1,7 @@
 // lib/widgets/ringmaster_page_shell.dart
 
 import 'package:flutter/material.dart';
+import 'package:ringmaster_show/services/app_session.dart';
 import 'package:ringmaster_show/screens/show_list_screen.dart';
 import 'package:ringmaster_show/widgets/help_report_dialog.dart';
 
@@ -59,6 +60,11 @@ class RingMasterPageShell extends StatelessWidget {
     final routeName = route?.settings.name;
     final routeArgs = route?.settings.arguments;
     final effectiveShowId = showId ?? _showIdFromRouteArguments(routeArgs);
+    final isSupportMode = AppSession.isSupportMode;
+    final impersonatedLabel = AppSession.impersonatedUserName ??
+        AppSession.impersonatedUserEmail ??
+        AppSession.impersonatedUserId ??
+        AppSession.effectiveUserId;
     final screenWidth = MediaQuery.of(context).size.width;
 
     final isMobile = screenWidth < 700;
@@ -149,6 +155,20 @@ class RingMasterPageShell extends StatelessWidget {
         bottom: false,
         child: Column(
           children: [
+            if (isSupportMode)
+              _SupportModeBanner(
+                label: impersonatedLabel,
+                onExit: () {
+                  AppSession.stopImpersonation();
+
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(
+                      builder: (_) => const ShowListScreen(),
+                    ),
+                    (route) => false,
+                  );
+                },
+              ),
             Container(
               color: topColor,
               padding: EdgeInsets.fromLTRB(
@@ -205,6 +225,63 @@ class RingMasterPageShell extends StatelessWidget {
                     child: resolvedBody,
                   ),
                 ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SupportModeBanner extends StatelessWidget {
+  final String? label;
+  final VoidCallback onExit;
+
+  const _SupportModeBanner({
+    required this.label,
+    required this.onExit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final displayLabel = label == null || label!.trim().isEmpty
+        ? 'another user'
+        : label!.trim();
+
+    return Container(
+      width: double.infinity,
+      color: const Color(0xFFFFF3CD),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: SafeArea(
+        top: false,
+        bottom: false,
+        child: Row(
+          children: [
+            const Icon(
+              Icons.visibility_outlined,
+              size: 18,
+              color: Color(0xFF7A4F00),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Viewing as $displayLabel — support mode',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xFF7A4F00),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            TextButton.icon(
+              onPressed: onExit,
+              icon: const Icon(Icons.logout, size: 18),
+              label: const Text('Exit'),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF7A4F00),
+                visualDensity: VisualDensity.compact,
               ),
             ),
           ],

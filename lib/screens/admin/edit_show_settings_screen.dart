@@ -92,11 +92,6 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   }
 
   Future<void> _regenerateStaffPins() async {
-    if (AppSession.isSupportMode) {
-      setState(() => _msg = 'Regenerating PINs is disabled while viewing in support mode.');
-      return;
-    }
-
     final confirmed = await showDialog<bool>(
           context: context,
           builder: (_) => AlertDialog(
@@ -166,7 +161,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   bool _isLocked = false;
   bool _isFinalized = false;
 
-  bool get _isReadOnly => _isLocked || _isFinalized || AppSession.isSupportMode;
+  bool get _isReadOnly => _isLocked || _isFinalized;
 
   String _timezone = 'America/Indiana/Indianapolis';
   String _showNameForTitle = 'Show';
@@ -265,10 +260,6 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   }
 
   Future<void> _toggleShowLock() async {
-    if (AppSession.isSupportMode) {
-      setState(() => _msg = 'Lock and unlock are disabled while viewing in support mode.');
-      return;
-    }
     if (_isFinalized) return;
 
     final nextLocked = !_isLocked;
@@ -380,10 +371,6 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   }
 
   Future<void> _showAddClubDialog() async {
-    if (AppSession.isSupportMode) {
-      setState(() => _msg = 'Adding clubs is disabled while viewing in support mode.');
-      return;
-    }
     final controller = TextEditingController();
     bool submitting = false;
     String? errorText;
@@ -488,10 +475,6 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   }
 
   Future<void> _showManageClubsDialog() async {
-    if (AppSession.isSupportMode) {
-      setState(() => _msg = 'Managing clubs is disabled while viewing in support mode.');
-      return;
-    }
     final renamedValues = <String, TextEditingController>{};
 
     for (final club in _clubs) {
@@ -723,7 +706,6 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   }
 
   Future<void> _pickStartDate() async {
-    if (AppSession.isSupportMode) return;
     final initial = _startDate ?? DateTime.now();
     final picked = await showDatePicker(
       context: context,
@@ -736,7 +718,6 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   }
 
   Future<void> _pickEndDate() async {
-    if (AppSession.isSupportMode) return;
     final initial = _endDate ?? _startDate ?? DateTime.now();
     final picked = await showDatePicker(
       context: context,
@@ -749,7 +730,6 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   }
 
   Future<DateTime?> _pickDateTime(DateTime? current) async {
-    if (AppSession.isSupportMode) return null;
     final base = current?.toLocal() ?? DateTime.now();
     final d = await showDatePicker(
       context: context,
@@ -781,10 +761,6 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   }
 
   bool _validate() {
-    if (AppSession.isSupportMode) {
-      setState(() => _msg = 'Show settings are read-only in support mode.');
-      return false;
-    }
     if (_name.text.trim().isEmpty) {
       setState(() => _msg = 'Show name is required.');
       return false;
@@ -993,10 +969,6 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   }
 
   Future<void> _downloadLockedShowData() async {
-    if (AppSession.isSupportMode) {
-      setState(() => _msg = 'Downloading locked show data is disabled while viewing in support mode.');
-      return;
-    }
     setState(() {
       _saving = true;
       _msg = null;
@@ -1380,6 +1352,17 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final canManageShow = _permissions.canManageShow || AppSession.isSupportMode;
+    final canManageShowSettings =
+        _permissions.canManageShowSettings || AppSession.isSupportMode;
+    final canManageEntries =
+        _permissions.canManageEntries || AppSession.isSupportMode;
+    final canManageJudges =
+        _permissions.canManageJudges || AppSession.isSupportMode;
+    final canEnterResults =
+        _permissions.canEnterResults || AppSession.isSupportMode;
+    final canFinalizeShow =
+        _permissions.canFinalizeShow || AppSession.isSupportMode;
 
     return Scaffold(
       appBar: AppBar(
@@ -1454,7 +1437,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
             ? const Center(
                 child: CircularProgressIndicator(color: Colors.white),
               )
-            : !_permissions.canManageShow
+            : !canManageShow
                 ? const Center(
                     child: Text(
                       'You do not have permission to manage this show.',
@@ -1475,7 +1458,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                       children: [
                         const RMTimezoneNoticeBanner(),
                         _buildStatusBanner(),
-                        if (_permissions.canManageShowSettings)
+                        if (canManageShowSettings)
                           _buildStripeAdminWarningBanner(),
                         if (AppSession.isSupportMode)
                           Container(
@@ -1494,8 +1477,34 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                 SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
-                                    'Support Mode — Show settings are read-only. Editing, lock/unlock, downloads, and setup changes are disabled.',
+                                    'Support Mode — You are managing this show as an admin while viewing another user.',
                                     style: TextStyle(fontWeight: FontWeight.w700),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        if (_isReadOnly)
+                          Container(
+                            width: double.infinity,
+                            margin: const EdgeInsets.only(bottom: 16),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.shade100,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.amber.shade300),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(Icons.lock, size: 18),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _isFinalized
+                                        ? 'This show has been finalized. Show settings are view-only.'
+                                        : 'This show is locked. Show settings are view-only.',
+                                    style: const TextStyle(fontWeight: FontWeight.w700),
                                   ),
                                 ),
                               ],
@@ -1534,7 +1543,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                             ),
                           ),
 
-                        if (_permissions.canManageShow || _permissions.canEnterResults || _permissions.canFinalizeShow)
+                        if (canManageShow || canEnterResults || canFinalizeShow)
                           _buildSectionCard(
                             title: 'Staff Approval PINs',
                             subtitle: 'Use these codes to approve corrections during judging.',
@@ -1604,13 +1613,13 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                             ],
                           ),
 
-                        if (_permissions.canManageShow)
+                        if (canManageShow)
                           _buildSectionCard(
                             title: 'Basic Show Info',
                             children: [
                               TextField(
                                 controller: _name,
-                                enabled: !_saving && !_isReadOnly && _permissions.canManageShowSettings,
+                                enabled: !_saving && !_isReadOnly && canManageShowSettings,
                                 decoration: const InputDecoration(
                                   labelText: 'Show name (required)',
                                   border: OutlineInputBorder(),
@@ -1619,7 +1628,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                               const SizedBox(height: 12),
                               TextField(
                                 controller: _location,
-                                enabled: !_saving && !_isReadOnly && _permissions.canManageShowSettings,
+                                enabled: !_saving && !_isReadOnly && canManageShowSettings,
                                 decoration: const InputDecoration(
                                   labelText: 'Location (required)',
                                   border: OutlineInputBorder(),
@@ -1670,7 +1679,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                       ),
                                     ),
                                 ],
-                                onChanged: (_saving || _isReadOnly || _loadingClubs || !_canManageHostingClubs || !_permissions.canManageShowSettings)
+                                onChanged: (_saving || _isReadOnly || _loadingClubs || !_canManageHostingClubs || !canManageShowSettings)
                                     ? null
                                     : (value) async {
                                         if (value == null) return;
@@ -1700,7 +1709,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                             ],
                           ),
 
-                        if (_permissions.canManageShowSettings)
+                        if (canManageShowSettings)
                           _buildSectionCard(
                             title: 'Show Date',
                             children: [
@@ -1732,7 +1741,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                               ),
                             ],
                           ),
-                        if (_permissions.canManageShowSettings)
+                        if (canManageShowSettings)
                           _buildSectionCard(
                             title: 'Entry Window',
                             subtitle:
@@ -1779,7 +1788,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                               ),
                             ],
                           ),
-                        if (_permissions.canManageShowSettings)
+                        if (canManageShowSettings)
                           _buildSectionCard(
                             title: 'Publication & Awards',
                             children: [
@@ -1790,7 +1799,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                   'Controls whether this show is published.',
                                 ),
                                 value: _published,
-                                onChanged: (_saving || _isReadOnly || AppSession.isSupportMode)
+                                onChanged: (_saving || _isReadOnly)
                                     ? null
                                     : (v) async {
                                         final previous = _published;
@@ -1834,7 +1843,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                   'Enables national show reporting rules, including Top 10 Breed reporting.',
                                 ),
                                 value: _isNationalShow,
-                                onChanged: (_saving || _isReadOnly || AppSession.isSupportMode)
+                                onChanged: (_saving || _isReadOnly)
                                     ? null
                                     : (v) => setState(() => _isNationalShow = v),
                               ),
@@ -1884,23 +1893,23 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                               title: 'Judges',
                               subtitle:
                                   'Select judges available for staff assignment',
-                              onTap: (_saving || !_permissions.canManageJudges)
-                                  ? null
-                                  : () async {
-                                      final changed =
-                                          await ShowJudgesDialog.open(
-                                            context,
-                                            showId: widget.showId,
-                                            showName: _showNameForTitle,
-                                          );
-                                      if (changed == true && mounted) {
-                                        setState(
-                                          () => _msg = 'Judges updated.',
+                            onTap: (_saving || !canManageJudges)
+                                ? null
+                                : () async {
+                                    final changed =
+                                        await ShowJudgesDialog.open(
+                                          context,
+                                          showId: widget.showId,
+                                          showName: _showNameForTitle,
                                         );
-                                      }
-                                    },
+                                    if (changed == true && mounted) {
+                                      setState(
+                                        () => _msg = 'Judges updated.',
+                                      );
+                                    }
+                                  },
                             ),
-                            if (_permissions.canManageEntries)
+                            if (canManageEntries)
                               _buildSettingsActionTile(
                                 icon: Icons.edit_note,
                                 title: 'Entry Management',
@@ -1908,14 +1917,14 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                     'Search, edit, scratch, move class, add notes',
                                 onTap: _saving ? null : _openEntryManagement,
                               ),
-                            if (_permissions.canManageShow)
+                            if (canManageShow)
                               _buildSettingsActionTile(
                                 icon: Icons.bar_chart,
                                 title: 'Breed Counts',
                                 subtitle: 'Totals by breed/show',
                                 onTap: _saving ? null : _openShowReports,
                               ),
-                            if (_permissions.canManageShow)
+                            if (canManageShow)
                               _buildSettingsActionTile(
                                 icon: Icons.print,
                                 title: 'Print Packs',
@@ -1926,13 +1935,13 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                           ],
                         ),
 
-                        if (_permissions.canEnterResults ||
-                            _permissions.canFinalizeShow ||
-                            _permissions.canManageShowSettings)
+                        if (canEnterResults ||
+                            canFinalizeShow ||
+                            canManageShowSettings)
                           _buildSectionCard(
                             title: 'Post-Show Operations',
                             children: [
-                              if (_permissions.canEnterResults)
+                              if (canEnterResults)
                                 _buildSettingsActionTile(
                                   icon: Icons.fact_check,
                                   title: 'Results Entry',
@@ -1940,7 +1949,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                       'Enter placements, DQs, and specials by class',
                                   onTap: _saving ? null : _openResultsEntry,
                                 ),
-                              if (_permissions.canFinalizeShow)
+                              if (canFinalizeShow)
                                 _buildSettingsActionTile(
                                   icon: Icons.archive,
                                   title: 'Close Show/Reports',
@@ -1948,7 +1957,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                       'Finalize, send reports, and lock/download copy',
                                   onTap: _saving ? null : _openShowCloseout,
                                 ),
-                              if (_permissions.canManageShowSettings)
+                              if (canManageShowSettings)
                                 _buildSettingsActionTile(
                                   icon: _isLocked ? Icons.lock_open : Icons.lock,
                                   title: _isLocked ? 'Unlock Show' : 'Lock Show',
@@ -1957,23 +1966,23 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                       : _isLocked
                                           ? 'Allow setup changes again if corrections are needed'
                                           : 'Prevent further setup changes before closeout',
-                                  onTap: (_saving || _isFinalized || AppSession.isSupportMode)
+                                  onTap: (_saving || _isFinalized)
                                       ? null
                                       : _toggleShowLock,
                                 ),
-                              if (_isLocked && _permissions.canManageShowSettings)
+                              if (_isLocked && canManageShowSettings)
                                 _buildSettingsActionTile(
                                   icon: Icons.download_for_offline,
                                   title: 'Download Locked Show Data',
                                   subtitle: 'Download a ZIP backup of this show’s entries, results, settings, and reports',
-                                  onTap: (_saving || AppSession.isSupportMode)
+                                  onTap: _saving
                                       ? null
                                       : _downloadLockedShowData,
                                 ),
                             ],
                           ),
 
-                        if (_permissions.canManageShowSettings)
+                        if (canManageShowSettings)
                           _buildSectionCard(
                             title: 'Show Settings',
                             children: [
@@ -1982,7 +1991,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                 title: 'Breed Settings',
                                 subtitle:
                                     'Manage allowed breeds and varieties for this show',
-                                onTap: (_saving || _isReadOnly) ? null : _openBreedSettings,
+                                onTap: _saving ? null : _openBreedSettings,
                               ),
                               _buildSettingsActionTile(
                                 icon: Icons.view_module,
@@ -1990,7 +1999,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                 subtitle:
                                     'Open A/B, Youth A/B, and setup',
                                 onTap:
-                                    (_saving || _isReadOnly)
+                                    _saving
                                         ? null
                                         : () async {
                                           await ShowSectionsDialog.open(
@@ -2008,23 +2017,23 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                 title: 'Sanction Numbers',
                                 subtitle:
                                     'Add or edit ARBA and breed/club sanction numbers',
-                                onTap: (_saving || _isReadOnly) ? null : _openSanctions,
+                                onTap: _saving ? null : _openSanctions,
                               ),
                               _buildSettingsActionTile(
                                 icon: Icons.attach_money,
                                 title: 'Show Fees & Payments',
                                 subtitle:
                                     'Per-animal fees, discounts, day-of-show, and online payment setup',
-                                onTap: (_saving || _isReadOnly) ? null : _openFees,
+                                onTap: _saving ? null : _openFees,
                               ),
-                              if (_permissions.canManageShowSettings)
+                              if (canManageShowSettings)
                                 _buildSettingsActionTile(
                                   icon: Icons.manage_accounts,
                                   title: 'Role Assignments',
                                   subtitle: 'Assign Show Superintendent, and Other Staff Roles',
-                                  onTap: (_saving || _isReadOnly) ? null : _openRoleAssignments,
+                                  onTap: _saving ? null : _openRoleAssignments,
                                 ),
-                              if (_permissions.canManageShowSettings)
+                              if (canManageShowSettings)
                                 _buildSettingsActionTile(
                                   icon: Icons.history,
                                   title: 'Audit Log Table',
@@ -2043,14 +2052,20 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
 
                         const SizedBox(height: 8),
 
-                        if (_permissions.canManageShowSettings)
+                        if (canManageShowSettings)
                           FilledButton(
                             style: FilledButton.styleFrom(
                               backgroundColor: const Color(0xFFD4A623),
                               padding: const EdgeInsets.symmetric(vertical: 16),
                             ),
                             onPressed: (_saving || _isReadOnly) ? null : _save,
-                            child: Text(_saving ? 'Saving…' : 'Save Changes'),
+                            child: Text(
+                              _saving
+                                  ? 'Saving…'
+                                  : _isReadOnly
+                                      ? 'View Only'
+                                      : 'Save Changes',
+                            ),
                           ),
                       ],
                     ),

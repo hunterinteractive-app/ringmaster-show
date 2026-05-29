@@ -38,7 +38,7 @@ class _SuperintendentShowsScreenState extends State<SuperintendentShowsScreen> {
     final userId = AppSession.effectiveUserId;
     if (userId == null) return [];
 
-    final isSuperAdmin = await RoleService.isSuperAdmin();
+    final isSuperAdmin = !AppSession.isSupportMode && await RoleService.isSuperAdmin();
 
     if (isSuperAdmin) {
       final rows = await supabase
@@ -123,11 +123,12 @@ class _SuperintendentShowsScreenState extends State<SuperintendentShowsScreen> {
       subtitle: 'Build and manage judging line-ups for your assigned shows.',
       actions: [
         TextButton.icon(
-          onPressed: _openPreferences,
+          onPressed: AppSession.isSupportMode ? null : _openPreferences,
           icon: const Icon(Icons.tune),
           label: const Text('Preferences'),
           style: TextButton.styleFrom(
             foregroundColor: Colors.white,
+            disabledForegroundColor: Colors.white54,
           ),
         ),
         IconButton(
@@ -152,13 +153,33 @@ class _SuperintendentShowsScreenState extends State<SuperintendentShowsScreen> {
 
           final shows = snapshot.data ?? const <Map<String, dynamic>>[];
 
+          final supportBanner = AppSession.isSupportMode
+              ? Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade100,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.amber.shade300),
+                    ),
+                    child: const Text(
+                      'Support Mode — Showing superintendent access for the user you are viewing. Preferences are disabled.',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                )
+              : null;
+
           if (shows.isEmpty) {
             return RefreshIndicator(
               onRefresh: _refresh,
               child: ListView(
-                children: const [
-                  SizedBox(height: 120),
-                  _EmptyState(),
+                children: [
+                  if (supportBanner != null) supportBanner,
+                  const SizedBox(height: 120),
+                  const _EmptyState(),
                 ],
               ),
             );
@@ -168,10 +189,15 @@ class _SuperintendentShowsScreenState extends State<SuperintendentShowsScreen> {
             onRefresh: _refresh,
             child: ListView.separated(
               padding: const EdgeInsets.all(16),
-              itemCount: shows.length,
+              itemCount: shows.length + (supportBanner == null ? 0 : 1),
               separatorBuilder: (_, __) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
-                final show = shows[index];
+                if (supportBanner != null && index == 0) {
+                  return supportBanner;
+                }
+
+                final showIndex = index - (supportBanner == null ? 0 : 1);
+                final show = shows[showIndex];
                 return _ShowCard(
                   showName: (show['name'] ?? 'Untitled Show').toString(),
                   dateRange: _formatDateRange(show),

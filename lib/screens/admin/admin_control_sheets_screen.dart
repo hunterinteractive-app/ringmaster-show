@@ -1,7 +1,9 @@
 // lib/screens/admin/admin_control_sheets_screen.dart
-import 'package:flutter/material.dart';
+
+/* import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
+import 'package:ringmaster_show/services/app_session.dart';
 
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -632,6 +634,31 @@ class _AdminControlSheetsScreenState extends State<AdminControlSheetsScreen> {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
+                if (AppSession.isSupportMode) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade100,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.amber.shade300),
+                    ),
+                    child: const Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.support_agent, size: 18),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Support Mode — You are generating control sheets as an admin while viewing another user.',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 if (_msg != null) ...[
                   Container(
                     width: double.infinity,
@@ -718,4 +745,4 @@ class _AdminControlSheetsScreenState extends State<AdminControlSheetsScreen> {
             ),
     );
   }
-}
+} /*

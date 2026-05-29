@@ -26,6 +26,15 @@ class _AccountProfileSetupScreenState extends State<AccountProfileSetupScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (AppSession.isSupportMode) {
+        if (!mounted) return;
+        setState(() {
+          _opening = false;
+          _msg = null;
+        });
+        return;
+      }
+
       _openBuilder();
     });
   }
@@ -34,7 +43,7 @@ class _AccountProfileSetupScreenState extends State<AccountProfileSetupScreen> {
     if (AppSession.isSupportMode) {
       if (!mounted) return;
       setState(() {
-        _msg = 'Profile setup is disabled while viewing in support mode.';
+        _msg = null;
         _opening = false;
       });
       return;
@@ -111,13 +120,30 @@ class _AccountProfileSetupScreenState extends State<AccountProfileSetupScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                if (isSupportMode) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade100,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.amber.shade300),
+                    ),
+                    child: const Text(
+                      'Support Mode — Profile setup and exhibitor account changes are disabled while viewing as another user.',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                ],
                 if (!isSupportMode) ...[
                   const CircularProgressIndicator(),
                   const SizedBox(height: 20),
                 ],
                 Text(
                   isSupportMode
-                      ? 'Profile setup is read-only in support mode.'
+                      ? 'Exit impersonation to add or edit exhibitor profile information.'
                       : isEdit
                           ? 'Opening exhibitor editor...'
                           : 'Opening exhibitor builder...',

@@ -834,6 +834,14 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
     return result;
   }
   Future<void> _saveAll() async {
+    if (_isReadOnly) {
+      setState(() {
+        _msg = _isFinalized
+            ? 'This show has been finalized. Sanction numbers can no longer be changed.'
+            : 'This show is locked. Sanction numbers can no longer be changed.';
+      });
+      return;
+    }
     setState(() {
       _saving = true;
       _msg = null;
@@ -1402,6 +1410,24 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                           },
                         ),
                         const SizedBox(height: 12),
+                        if (_isReadOnly) ...[
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.shade100,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.amber.shade300),
+                            ),
+                            child: Text(
+                              _isFinalized
+                                  ? 'This show has been finalized. Sanction numbers are view-only.'
+                                  : 'This show is locked. Sanction numbers are view-only.',
+                              style: const TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
                         if (_msg != null) ...[
                           Container(
                             width: double.infinity,
@@ -1466,7 +1492,13 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                                       const EdgeInsets.symmetric(vertical: 16),
                                 ),
                                 onPressed: (_saving || _isReadOnly) ? null : _saveAll,
-                                child: Text(_saving ? 'Saving…' : 'Save'),
+                                child: Text(
+                                  _saving
+                                      ? 'Saving…'
+                                      : _isReadOnly
+                                          ? 'View Only'
+                                          : 'Save',
+                                ),
                               ),
                             ),
                           ],

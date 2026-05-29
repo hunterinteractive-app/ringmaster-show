@@ -377,6 +377,28 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
         child: Column(
           children: [
             const RMTimezoneNoticeBanner(),
+            if (AppSession.isSupportMode) ...[
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withOpacity(.10),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.orange.withOpacity(.35),
+                  ),
+                ),
+                child: const Text(
+                  'Creating shows is disabled while viewing as another user. '
+                  'Exit impersonation to create a show from your account.',
+                  style: TextStyle(
+                    color: Color(0xFF7A4F00),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
             Expanded(
               child: SingleChildScrollView(
                 child: Column(
@@ -728,13 +750,18 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
             const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
-              child: FilledButton(
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFFD4A623),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Tooltip(
+                message: AppSession.isSupportMode
+                    ? 'Exit impersonation to create a show.'
+                    : 'Create show',
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFD4A623),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                  onPressed: (_saving || AppSession.isSupportMode) ? null : _create,
+                  child: Text(_saving ? 'Creating…' : 'Create'),
                 ),
-                onPressed: (_saving || AppSession.isSupportMode) ? null : _create,
-                child: Text(_saving ? 'Creating…' : 'Create'),
               ),
             ),
           ],

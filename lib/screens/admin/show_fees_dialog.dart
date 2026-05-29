@@ -218,6 +218,12 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
   }
 
   bool _validate() {
+    if (_isReadOnly) {
+      setState(() => _msg = _isFinalized
+          ? 'This show has been finalized. Fees and payment settings can no longer be changed.'
+          : 'This show is locked. Fees and payment settings can no longer be changed.');
+      return false;
+    }
     for (final section in _sections) {
       final sectionId = section['id'].toString();
       final sectionName = _sectionLabel(section);
@@ -260,6 +266,14 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
   }
 
   Future<void> _connectStripe() async {
+    if (_isReadOnly) {
+      setState(() {
+        _msg = _isFinalized
+            ? 'This show has been finalized. Stripe setup can no longer be changed.'
+            : 'This show is locked. Stripe setup can no longer be changed.';
+      });
+      return;
+    }
     setState(() {
       _connectingStripe = true;
       _msg = null;
@@ -356,6 +370,14 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
   }
 
   Future<void> _refreshStripeStatus() async {
+    if (_isReadOnly) {
+      setState(() {
+        _msg = _isFinalized
+            ? 'This show has been finalized. Stripe status is view-only.'
+            : 'This show is locked. Stripe status is view-only.';
+      });
+      return;
+    }
     if (mounted) {
       setState(() {
         _loadingStripeStatus = true;
@@ -997,6 +1019,24 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
                         padding: const EdgeInsets.all(20),
                         child: Column(
                           children: [
+                            if (_isReadOnly) ...[
+                              Container(
+                                width: double.infinity,
+                                margin: const EdgeInsets.only(bottom: 16),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber.shade100,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Colors.amber.shade300),
+                                ),
+                                child: Text(
+                                  _isFinalized
+                                      ? 'This show has been finalized. Fees and payment settings are view-only.'
+                                      : 'This show is locked. Fees and payment settings are view-only.',
+                                  style: const TextStyle(fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                            ],
                             if (_msg != null)
                               Container(
                                 width: double.infinity,
@@ -1058,7 +1098,13 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
                                         ? null
                                         : _save,
                                     icon: const Icon(Icons.save_outlined),
-                                    label: Text(_saving ? 'Saving…' : 'Save Changes'),
+                                    label: Text(
+                                      _saving
+                                          ? 'Saving…'
+                                          : _isReadOnly
+                                              ? 'View Only'
+                                              : 'Save Changes',
+                                    ),
                                   ),
                                 ),
                               ],

@@ -118,6 +118,11 @@ class _ShowRoleAssignmentsDialogState
         return 'Show Superintendent';
       case 'reporting_clerk':
         return 'Reporting Clerk';
+      case 'admin':
+      case 'show_admin':
+        return 'Show Secretary';
+      case 'super_admin':
+        return 'Super Admin';
       default:
         return role;
     }
@@ -311,6 +316,17 @@ class _ShowRoleAssignmentsDialogState
       final wasUpdate = existing != null;
 
       if (existing != null) {
+        final existingRole = existing['role']?.toString() ?? '';
+        if (!_allowedRoles.contains(existingRole)) {
+          if (!mounted) return;
+          setState(() {
+            _saving = false;
+            _msg = '${user.label} already has ${_roleLabel(existingRole)} access. '
+                'Admin/show secretary roles cannot be changed from this dialog.';
+          });
+          return;
+        }
+
         assignmentId = existing['id']?.toString() ?? '';
         await supabase
             .from('role_assignments')
@@ -622,6 +638,10 @@ class _ShowRoleAssignmentsDialogState
                                         context: context,
                                         title: 'Add or Update Staff Role',
                                         children: [
+                                          const Text(
+                                            'Use this dialog only for Show Superintendent and Reporting Clerk access. Show Secretary/Admin access is managed separately.',
+                                          ),
+                                          const SizedBox(height: 12),
                                           DropdownButtonFormField<String>(
                                             value: _selectedRole,
                                             decoration: const InputDecoration(

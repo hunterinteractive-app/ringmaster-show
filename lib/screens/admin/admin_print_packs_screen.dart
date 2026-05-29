@@ -573,6 +573,30 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
               padding: const EdgeInsets.all(16),
               children: [
                 _messageBanner(),
+                if (AppSession.isSupportMode)
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade100,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.amber.shade300),
+                    ),
+                    child: const Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.support_agent, size: 18),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Support Mode — You are generating print packs as an admin while viewing another user.',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
 
                 _buildSectionCard(
                   icon: Icons.sort_outlined,

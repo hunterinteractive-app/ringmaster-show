@@ -145,7 +145,8 @@ class _ShowListScreenState extends State<ShowListScreen> {
     }
 
     try {
-      final isSuper = await RoleService.isSuperAdmin();
+      final isSuper = !SupportImpersonationSession.isActive &&
+          await RoleService.isSuperAdmin();
       if (isSuper) return true;
 
       final rows = await supabase
@@ -163,8 +164,9 @@ class _ShowListScreenState extends State<ShowListScreen> {
 
   Future<void> _loadAdminAccess() async {
     final user = supabase.auth.currentUser;
+    final effectiveUserId = _effectiveUserId;
 
-    if (user == null || widget.demoMode) {
+    if (user == null || effectiveUserId == null || widget.demoMode) {
       if (!mounted) return;
       setState(() {
         _canAccessAdmin = false;
@@ -186,8 +188,27 @@ class _ShowListScreenState extends State<ShowListScreen> {
     var canSuperintendent = false;
 
     try {
-      final result = await supabase.rpc('user_has_any_show_access');
-      canAdmin = result == true;
+      final roleRows = await supabase
+          .from('role_assignments')
+          .select('show_id')
+          .eq('user_id', effectiveUserId)
+          .inFilter('role', const [
+            'super_admin',
+            'admin',
+            'show_admin',
+            'superintendent',
+            'reporting_clerk',
+          ])
+          .limit(1);
+
+      final showAdminRows = await supabase
+          .from('show_admins')
+          .select('show_id')
+          .eq('user_id', effectiveUserId)
+          .limit(1);
+
+      canAdmin = (roleRows as List).isNotEmpty ||
+          (showAdminRows as List).isNotEmpty;
     } catch (_) {
       canAdmin = false;
     }
@@ -288,6 +309,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
       const allowedRoles = {
         'super_admin',
         'admin',
+        'show_admin',
         'superintendent',
         'reporting_clerk',
       };
@@ -367,14 +389,13 @@ class _ShowListScreenState extends State<ShowListScreen> {
   Future<_ShowListBundle> _loadBundle() async {
     final shows = await _loadShows();
     final isSupportMode = SupportImpersonationSession.isActive;
-    final isSuper = widget.demoMode
+    final realUserIsSuperAdmin = widget.demoMode
         ? false
-        : isSupportMode
-            ? false
-            : await RoleService.isSuperAdmin();
+        : await RoleService.isSuperAdmin();
+    final isSuper = !isSupportMode && realUserIsSuperAdmin;
 
     List<Map<String, dynamic>> superAdminShows = <Map<String, dynamic>>[];
-    if (isSuper) {
+    if (isSuper || (isSupportMode && realUserIsSuperAdmin)) {
       try {
         superAdminShows = await _loadAllShowsForSuperAdmin();
       } catch (_) {
@@ -800,9 +821,12 @@ class _ShowListScreenState extends State<ShowListScreen> {
   }
 
   void _openAdmin(BuildContext context, _ShowListBundle bundle) {
-    final allowedShowIds = bundle.isSuperAdmin
+    final allowedShowIds = SupportImpersonationSession.isActive &&
+            bundle.superAdminShowIds.isNotEmpty
         ? bundle.superAdminShowIds.toList()
-        : bundle.adminShowIds.toList();
+        : bundle.isSuperAdmin
+            ? bundle.superAdminShowIds.toList()
+            : bundle.adminShowIds.toList();
 
     Navigator.push(
       context,
@@ -972,7 +996,11 @@ class _ShowListScreenState extends State<ShowListScreen> {
         return Scaffold(
           appBar: _ResponsiveShowAppBar(
             bundle: bundle,
-            showAdmin: !_loadingAdminAccess && _canAccessAdmin,
+            showAdmin: !_loadingAdminAccess &&
+                (_canAccessAdmin ||
+                    (bundle?.canSeeAdminButton ?? false) ||
+                    (SupportImpersonationSession.isActive &&
+                        (bundle?.superAdminShowIds.isNotEmpty ?? false))),
             onAdmin: bundle == null ? null : () => _openAdmin(context, bundle),
             showSuperintendent: !_loadingAdminAccess &&
                 (_canAccessSuperintendent || (bundle?.isSuperAdmin ?? false)),
@@ -1045,7 +1073,11 @@ class _ShowListScreenState extends State<ShowListScreen> {
 
                 if (allShows.isEmpty) {
                   content = _UpcomingShowsEmptyState(
-                    showAdminButton: !_loadingAdminAccess && _canAccessAdmin,
+                    showAdminButton: !_loadingAdminAccess &&
+                        (_canAccessAdmin ||
+                            bundle.canSeeAdminButton ||
+                            (SupportImpersonationSession.isActive &&
+                                bundle.superAdminShowIds.isNotEmpty)),
                     onAdmin: () => _openAdmin(context, bundle),
                   );
                 } else {
@@ -1567,7 +1599,9 @@ class _ResponsiveShowAppBar extends StatelessWidget
               //     value: 'superintendent',
               //     child: Text('Superintendent'),
               //   ),
-              if (!demoMode && bundle?.isSuperAdmin == true)
+              if (!demoMode &&
+                  !SupportImpersonationSession.isActive &&
+                  bundle?.isSuperAdmin == true)
                 const PopupMenuItem<String>(
                   value: 'super_admin',
                   child: Text('Super Admin'),

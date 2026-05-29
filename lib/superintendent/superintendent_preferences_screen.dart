@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
+import 'package:ringmaster_show/services/app_session.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -63,7 +64,7 @@ class _SuperintendentPreferencesScreenState
     super.dispose();
   }
 
-  String? get _userId => supabase.auth.currentUser?.id;
+  String? get _userId => AppSession.effectiveUserId ?? supabase.auth.currentUser?.id;
 
   Future<void> _loadData() async {
     final userId = _userId;
@@ -77,9 +78,11 @@ class _SuperintendentPreferencesScreenState
 
     final preferences = List<Map<String, dynamic>>.from(preferenceRows as List);
     if (preferences.isEmpty) {
-      await supabase.from('show_superintendent_user_preferences').insert({
-        'user_id': userId,
-      });
+      if (!AppSession.isSupportMode) {
+        await supabase.from('show_superintendent_user_preferences').insert({
+          'user_id': userId,
+        });
+      }
     } else {
       final row = preferences.first;
       _openYouthMode = (row['open_youth_mode'] ?? _openYouthMode).toString();
@@ -115,6 +118,15 @@ class _SuperintendentPreferencesScreenState
 
   Future<void> _savePreferences() async {
     final userId = _userId;
+    if (AppSession.isSupportMode) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Preferences are disabled while viewing as another user.'),
+        ),
+      );
+      return;
+    }
     if (userId == null || _savingPreferences) return;
 
     final warnHeadCount =
@@ -227,6 +239,8 @@ class _SuperintendentPreferencesScreenState
 
     if (judgeId == null || judgeId.isEmpty) return;
 
+    if (AppSession.isSupportMode) return;
+
     final ratingRows = await supabase
         .from('show_superintendent_judge_preferences')
         .select()
@@ -263,6 +277,15 @@ class _SuperintendentPreferencesScreenState
   Future<void> _saveJudgeRating() async {
     final userId = _userId;
     final judgeId = _selectedJudgeId;
+    if (AppSession.isSupportMode) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Judge ratings are disabled while viewing as another user.'),
+        ),
+      );
+      return;
+    }
     if (userId == null || judgeId == null || judgeId.isEmpty || _savingRating) {
       return;
     }
@@ -304,6 +327,14 @@ class _SuperintendentPreferencesScreenState
   }
 
   Future<void> _openJudgeRatingsDialog() async {
+    if (AppSession.isSupportMode) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Judge ratings are disabled while viewing as another user.'),
+        ),
+      );
+      return;
+    }
     await showDialog<void>(
       context: context,
       builder: (context) {
@@ -617,9 +648,26 @@ class _SuperintendentPreferencesScreenState
             );
           }
 
+          final readOnly = AppSession.isSupportMode;
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              if (readOnly) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade100,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.amber.shade300),
+                  ),
+                  child: const Text(
+                    'Support Mode — Superintendent preferences are view-only while viewing as another user. Private judge ratings are hidden.',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
               _PreferencesCard(
                 title: 'Default table behavior',
                 icon: Icons.table_chart,
@@ -631,7 +679,9 @@ class _SuperintendentPreferencesScreenState
                       ButtonSegment(value: 'together', label: Text('Together')),
                       ButtonSegment(value: 'separate', label: Text('Separate')),
                     ],
-                    onChanged: (value) => setState(() => _openYouthMode = value),
+                    onChanged: readOnly
+                        ? null
+                        : (value) => setState(() => _openYouthMode = value),
                   ),
                   const SizedBox(height: 16),
                   _SegmentedPreference<String>(
@@ -641,7 +691,9 @@ class _SuperintendentPreferencesScreenState
                       ButtonSegment(value: 'open_first', label: Text('Open first')),
                       ButtonSegment(value: 'youth_first', label: Text('Youth first')),
                     ],
-                    onChanged: (value) => setState(() => _showOrder = value),
+                    onChanged: readOnly
+                        ? null
+                        : (value) => setState(() => _showOrder = value),
                   ),
                 ],
               ),
@@ -663,25 +715,32 @@ class _SuperintendentPreferencesScreenState
                         label: Text('Breed together'),
                       ),
                     ],
-                    onChanged: (value) => setState(() => _autoFillPriority = value),
+                    onChanged: readOnly
+                        ? null
+                        : (value) => setState(() => _autoFillPriority = value),
                   ),
                   SwitchListTile.adaptive(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Prioritize keeping same breed together'),
                     value: _prioritizeSameBreedTogether,
-                    onChanged: (value) =>
-                        setState(() => _prioritizeSameBreedTogether = value),
+                    onChanged: readOnly
+                        ? null
+                        : (value) =>
+                            setState(() => _prioritizeSameBreedTogether = value),
                   ),
                   SwitchListTile.adaptive(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Avoid same judge/breed across show letters'),
                     value: _avoidSameJudgeBreedAcrossLetters,
-                    onChanged: (value) => setState(
-                      () => _avoidSameJudgeBreedAcrossLetters = value,
-                    ),
+                    onChanged: readOnly
+                        ? null
+                        : (value) => setState(
+                              () => _avoidSameJudgeBreedAcrossLetters = value,
+                            ),
                   ),
                   TextField(
                     controller: _warnHeadCountController,
+                    readOnly: readOnly,
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(
                       labelText: 'Warn at head count',
@@ -703,7 +762,9 @@ class _SuperintendentPreferencesScreenState
                       ButtonSegment(value: 'roomy', label: Text('Roomy')),
                       ButtonSegment(value: 'compact', label: Text('Compact')),
                     ],
-                    onChanged: (value) => setState(() => _displayDensity = value),
+                    onChanged: readOnly
+                        ? null
+                        : (value) => setState(() => _displayDensity = value),
                   ),
                   const SizedBox(height: 16),
                   _SegmentedPreference<String>(
@@ -713,7 +774,9 @@ class _SuperintendentPreferencesScreenState
                       ButtonSegment(value: 'letter', label: Text('Letter')),
                       ButtonSegment(value: 'count', label: Text('Count')),
                     ],
-                    onChanged: (value) => setState(() => _defaultBreedSort = value),
+                    onChanged: readOnly
+                        ? null
+                        : (value) => setState(() => _defaultBreedSort = value),
                   ),
                 ],
               ),
@@ -721,31 +784,33 @@ class _SuperintendentPreferencesScreenState
               Align(
                 alignment: Alignment.centerRight,
                 child: FilledButton.icon(
-                  onPressed: _savingPreferences ? null : _savePreferences,
+                  onPressed: (_savingPreferences || readOnly) ? null : _savePreferences,
                   icon: const Icon(Icons.save),
                   label: Text(_savingPreferences ? 'Saving...' : 'Save Preferences'),
                 ),
               ),
-              const SizedBox(height: 24),
-              _PreferencesCard(
-                title: 'Private judge ratings',
-                icon: Icons.star_rate,
-                children: [
-                  Text(
-                    'Rate judges privately for your own future show superintendent planning.',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: FilledButton.icon(
-                      onPressed: _openJudgeRatingsDialog,
-                      icon: const Icon(Icons.open_in_new),
-                      label: const Text('Open Judge Ratings'),
+              if (!readOnly) ...[
+                const SizedBox(height: 24),
+                _PreferencesCard(
+                  title: 'Private judge ratings',
+                  icon: Icons.star_rate,
+                  children: [
+                    Text(
+                      'Rate judges privately for your own future show superintendent planning.',
+                      style: Theme.of(context).textTheme.bodyMedium,
                     ),
-                  ),
-                ],
-              ),
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: FilledButton.icon(
+                        onPressed: _openJudgeRatingsDialog,
+                        icon: const Icon(Icons.open_in_new),
+                        label: const Text('Open Judge Ratings'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
           );
         },
@@ -814,7 +879,7 @@ class _SegmentedPreference<T> extends StatelessWidget {
   final String label;
   final T selected;
   final List<ButtonSegment<T>> segments;
-  final ValueChanged<T> onChanged;
+  final ValueChanged<T>? onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -831,7 +896,9 @@ class _SegmentedPreference<T> extends StatelessWidget {
         SegmentedButton<T>(
           segments: segments,
           selected: {selected},
-          onSelectionChanged: (selection) => onChanged(selection.first),
+          onSelectionChanged: onChanged == null
+              ? null
+              : (selection) => onChanged!(selection.first),
         ),
       ],
     );

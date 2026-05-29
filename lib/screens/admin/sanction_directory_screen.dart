@@ -5,6 +5,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../widgets/ringmaster_page_shell.dart';
+import '../../services/app_session.dart';
+import '../super_admin/superadmin_home_screen.dart';
 
 final _supabase = Supabase.instance.client;
 
@@ -74,7 +76,7 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
           .from('role_assignments')
           .select('role')
           .eq('user_id', user.id)
-          .inFilter('role', ['super_admin', 'admin'])
+          .inFilter('role', ['super_admin', 'admin', 'show_admin'])
           .limit(1);
 
       final hasAdminAccess = (roleRows as List).isNotEmpty;
@@ -628,7 +630,7 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'This directory is available to Admin and Super Admin users while sanction links are being built and verified.',
+                    'This directory is available to Show Secretary/Admin and Super Admin users while sanction links are being built and verified.',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
@@ -678,6 +680,31 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (AppSession.isSupportMode) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.amber.shade100,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.amber.shade300),
+            ),
+            child: const Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.support_agent, size: 18),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Support Mode — You are managing sanction requests as an admin while viewing another user.',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
         _buildHeaderCard(context),
         const SizedBox(height: 16),
         TextField(

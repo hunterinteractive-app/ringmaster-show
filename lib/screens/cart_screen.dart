@@ -535,12 +535,6 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Future<void> _removeItem(String itemId) async {
-    if (AppSession.isSupportMode) {
-      setState(() {
-        _msg = 'Removing cart items is disabled while viewing in support mode.';
-      });
-      return;
-    }
     try {
       await supabase.from('entry_cart_items').delete().eq('id', itemId);
       await _load();
@@ -698,12 +692,6 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Future<void> _confirmDayOf() async {
-    if (AppSession.isSupportMode) {
-      setState(() {
-        _msg = 'Submitting entries is disabled while viewing in support mode.';
-      });
-      return;
-    }
     if (_items.isEmpty) {
       setState(() => _msg = 'Your cart is empty.');
       return;
@@ -856,7 +844,7 @@ class _CartScreenState extends State<CartScreen> {
                         border: Border.all(color: Colors.amber.shade300),
                       ),
                       child: const Text(
-                        'Support Mode — Cart is read-only. Remove, payment, and submit actions are disabled.',
+                        'Support Mode — You are managing this cart while viewing as another user. Online payment remains disabled.',
                         style: TextStyle(fontWeight: FontWeight.w700),
                       ),
                     ),
@@ -1063,9 +1051,7 @@ class _CartScreenState extends State<CartScreen> {
                                           icon: const Icon(
                                             Icons.delete_outline,
                                           ),
-                                          onPressed: (AppSession.isSupportMode ||
-                                                  _confirming ||
-                                                  _payingOnline)
+                                          onPressed: (_confirming || _payingOnline)
                                               ? null
                                               : () => _removeItem(
                                                     it['id'].toString(),
@@ -1096,8 +1082,7 @@ class _CartScreenState extends State<CartScreen> {
                           )
                         : FilledButton(
                             onPressed:
-                                (AppSession.isSupportMode ||
-                                        _confirming ||
+                                (_confirming ||
                                         _deadlinePassed() ||
                                         _items.isEmpty)
                                     ? null

@@ -225,12 +225,6 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
   }
 
   Future<void> _scratchEntry(Map<String, dynamic> entry) async {
-    if (AppSession.isSupportMode) {
-      setState(() {
-        _msg = 'Scratch is disabled while viewing in support mode.';
-      });
-      return;
-    }
     final id = entry['id']?.toString() ?? '';
     if (id.isEmpty) return;
 
@@ -275,12 +269,6 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
   }
 
   Future<void> _restoreEntry(Map<String, dynamic> entry) async {
-    if (AppSession.isSupportMode) {
-      setState(() {
-        _msg = 'Restore is disabled while viewing in support mode.';
-      });
-      return;
-    }
     final id = entry['id']?.toString() ?? '';
     if (id.isEmpty) return;
 
@@ -361,12 +349,6 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
   }
 
   Future<void> _editEntry(Map<String, dynamic> entry) async {
-    if (AppSession.isSupportMode) {
-      setState(() {
-        _msg = 'Editing is disabled while viewing in support mode.';
-      });
-      return;
-    }
     final showId = entry['show_id']?.toString() ?? '';
     if (showId.isEmpty) return;
 
@@ -974,6 +956,7 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
                         onDownloadEntries: _downloadEntriesForShow,
                         deadlinePassed: _deadlinePassedForShow(showId),
                         closeAt: _parseTs(_showsById[showId]?['entry_close_at']),
+                        readOnly: AppSession.isSupportMode,
                         exhibitorBuckets: grouped[showId] ?? const {},
                         exhibitorLabel: _exhibitorLabelById,
                         sectionLabel: _sectionLabel,
@@ -1004,6 +987,7 @@ class _ShowExpansionCard extends StatelessWidget {
   final String showId;
   final bool deadlinePassed;
   final DateTime? closeAt;
+  final bool readOnly;
   final Map<String, List<Map<String, dynamic>>> exhibitorBuckets;
   final String Function(String? exhibitorId) exhibitorLabel;
   final String Function(String? sectionId) sectionLabel;
@@ -1022,6 +1006,7 @@ class _ShowExpansionCard extends StatelessWidget {
     required this.onDownloadEntries,
     required this.deadlinePassed,
     required this.closeAt,
+    required this.readOnly,
     required this.exhibitorBuckets,
     required this.exhibitorLabel,
     required this.sectionLabel,
@@ -1426,8 +1411,7 @@ class _ShowExpansionCard extends StatelessWidget {
                                                                     'Status: $normalizedStatus\nSection: $section',
                                                                   ),
                                                                 ),
-                                                                trailing:
-                                                                    (canEdit ||
+                                                                trailing: (canEdit ||
                                                                             canScratch ||
                                                                             canRestore)
                                                                         ? Wrap(
@@ -1436,25 +1420,40 @@ class _ShowExpansionCard extends StatelessWidget {
                                                                             children: [
                                                                               if (canEdit)
                                                                                 IconButton(
-                                                                                  tooltip: 'Edit',
+                                                                                  tooltip: readOnly
+                                                                                      ? 'Edit while viewing as this user'
+                                                                                      : 'Edit',
                                                                                   icon: const Icon(Icons.edit),
                                                                                   onPressed: () => onEdit(e),
                                                                                 ),
                                                                               if (canScratch)
                                                                                 IconButton(
-                                                                                  tooltip: 'Scratch',
+                                                                                  tooltip: readOnly
+                                                                                      ? 'Scratch while viewing as this user'
+                                                                                      : 'Scratch',
                                                                                   icon: const Icon(Icons.remove_circle_outline),
                                                                                   onPressed: () => onScratch(e),
                                                                                 ),
                                                                               if (canRestore)
                                                                                 IconButton(
-                                                                                  tooltip: 'Restore',
+                                                                                  tooltip: readOnly
+                                                                                      ? 'Restore while viewing as this user'
+                                                                                      : 'Restore',
                                                                                   icon: const Icon(Icons.undo),
                                                                                   onPressed: () => onRestore(e),
                                                                                 ),
                                                                             ],
                                                                           )
-                                                                        : null,
+                                                                        : readOnly
+                                                                            ? const Tooltip(
+                                                                                message:
+                                                                                    'No entry actions available',
+                                                                                child: Icon(
+                                                                                  Icons.lock_outline,
+                                                                                  color: Colors.grey,
+                                                                                ),
+                                                                              )
+                                                                            : null,
                                                               ),
                                                             ),
                                                           );

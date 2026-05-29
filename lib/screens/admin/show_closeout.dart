@@ -1328,11 +1328,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   }
 
     Future<void> _finalizeShow() async {
-      if (_isSupportMode) {
-        throw Exception(
-          'Finalize is disabled while viewing in support mode.',
-        );
-      }
 
       final ready = await _ensureResultsReadyForReports();
 
@@ -2186,16 +2181,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   }
 
   Future<void> _saveArbaDetails() async {
-    if (_isSupportMode) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Saving closeout details is disabled while viewing in support mode.',
-          ),
-        ),
-      );
-      return;
-    }
     try {
       await supabase.from('show_arba_report_details').upsert({
         'show_id': widget.showId,
@@ -3033,7 +3018,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                     SizedBox(width: 10),
                                     Expanded(
                                       child: Text(
-                                        'Support Mode — Closeout tools are partially read-only. Finalize, saving, and email sending are disabled. Report generation is allowed for troubleshooting.',
+                                        'Support Mode — You are managing closeout as an admin while viewing another user. Finalize, save, and report generation are allowed. Bulk email sending remains disabled.',
                                         style: TextStyle(
                                           fontWeight: FontWeight.w700,
                                         ),

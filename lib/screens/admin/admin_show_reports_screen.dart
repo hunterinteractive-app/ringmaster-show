@@ -1,6 +1,7 @@
 // lib/screens/admin/admin_show_reports_screen.dart
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
+import 'package:ringmaster_show/services/app_session.dart';
 
 import 'entries_by_breed_section_table.dart';
 
@@ -39,6 +40,32 @@ class _AdminShowReportsScreenState extends State<AdminShowReportsScreen> {
       ],
       body: Column(
         children: [
+          if (AppSession.isSupportMode)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade100,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.amber.shade300),
+                ),
+                child: const Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.support_agent, size: 18),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Support Mode — Viewing breed count reports as an admin while viewing another user.',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.all(16),
             child: Container(

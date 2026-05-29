@@ -155,7 +155,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       actions: [
         IconButton(
           tooltip: AppSession.isSupportMode
-              ? 'Add exhibitor disabled in support mode'
+              ? 'Add exhibitor is disabled while viewing as another user'
               : 'Add Exhibitor',
           icon: const Icon(Icons.person_add_alt_1),
           onPressed: (_loading || AppSession.isSupportMode)
@@ -184,7 +184,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                         border: Border.all(color: Colors.amber.shade300),
                       ),
                       child: const Text(
-                        'Support Mode — Account settings are read-only.',
+                        'Support Mode — Account settings are view-only while viewing as another user.',
                         style: TextStyle(fontWeight: FontWeight.w700),
                       ),
                     ),
@@ -213,9 +213,11 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                   ),
                 Expanded(
                   child: _exhibitors.isEmpty
-                      ? const Center(
+                      ? Center(
                           child: Text(
-                            'No exhibitors yet.\nTap + to add one.',
+                            AppSession.isSupportMode
+                                ? 'No exhibitors yet.'
+                                : 'No exhibitors yet.\nTap + to add one.',
                             textAlign: TextAlign.center,
                           ),
                         )

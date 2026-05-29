@@ -151,6 +151,12 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
   }
 
   bool _validate() {
+    if (_isReadOnly) {
+      setState(() => _msg = _isFinalized
+          ? 'This show has been finalized. Rules can no longer be changed.'
+          : 'This show is locked. Rules can no longer be changed.');
+      return false;
+    }
     final maxPerAnimal = _parseIntOrNull(_maxEntriesPerAnimal.text);
     if (maxPerAnimal == null) {
       setState(() => _msg = 'Max entries per animal must be an integer ≥ 1.');
@@ -321,6 +327,24 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
                           padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
                           child: Column(
                             children: [
+                              if (_isReadOnly) ...[
+                                Container(
+                                  width: double.infinity,
+                                  margin: const EdgeInsets.only(bottom: 16),
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amber.shade100,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: Colors.amber.shade300),
+                                  ),
+                                  child: Text(
+                                    _isFinalized
+                                        ? 'This show has been finalized. Rules and validation settings are view-only.'
+                                        : 'This show is locked. Rules and validation settings are view-only.',
+                                    style: const TextStyle(fontWeight: FontWeight.w700),
+                                  ),
+                                ),
+                              ],
                               if (_msg != null)
                                 Container(
                                   width: double.infinity,
@@ -536,7 +560,13 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
                                         ),
                                       ),
                                       onPressed: (_saving || _isReadOnly) ? null : _save,
-                                      child: Text(_saving ? 'Saving…' : 'Save'),
+                                      child: Text(
+                                        _saving
+                                            ? 'Saving…'
+                                            : _isReadOnly
+                                                ? 'View Only'
+                                                : 'Save',
+                                      ),
                                     ),
                                   ),
                                 ],
