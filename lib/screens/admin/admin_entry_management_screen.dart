@@ -2341,14 +2341,68 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     final tattoo = (a['tattoo'] ?? '').toString().trim().toUpperCase();
     final breed = (a['breed'] ?? '').toString().trim();
     final variety = (a['variety'] ?? '').toString().trim();
+    final sex = (a['sex'] ?? '').toString().trim();
     final name = (a['name'] ?? '').toString().trim();
 
-    if (tattoo.isNotEmpty && breed.isNotEmpty) {
-      return '$tattoo • $breed${variety.isNotEmpty ? " • $variety" : ""}';
-    }
+    final parts = <String>[];
+    if (tattoo.isNotEmpty) parts.add(tattoo);
+    if (breed.isNotEmpty) parts.add(breed);
+    if (variety.isNotEmpty) parts.add(variety);
+    if (sex.isNotEmpty) parts.add(sex);
+
+    if (parts.isNotEmpty) return parts.join(' • ');
     if (name.isNotEmpty) return name;
-    if (tattoo.isNotEmpty) return tattoo;
     return '(Unnamed Animal)';
+  }
+
+  Widget _selectedAnimalSummaryCard() {
+    final animal = _animal;
+    if (animal == null) return const SizedBox.shrink();
+
+    final name = (animal['name'] ?? '').toString().trim();
+    final tattoo = (animal['tattoo'] ?? '').toString().trim().toUpperCase();
+    final breed = (animal['breed'] ?? '').toString().trim();
+    final variety = (animal['variety'] ?? '').toString().trim();
+    final sex = (animal['sex'] ?? '').toString().trim();
+    final birthDate = (animal['birth_date'] ?? '').toString().trim();
+    final dobUnknown = animal['is_dob_unknown'] == true;
+    final selectedClass = (_classValue ?? _className.text).trim();
+
+    final rows = <Widget>[
+      if (name.isNotEmpty) _contactLine('Name', name),
+      if (tattoo.isNotEmpty) _contactLine('Tattoo', tattoo),
+      if (breed.isNotEmpty) _contactLine('Breed', breed),
+      if (variety.isNotEmpty) _contactLine('Variety', variety),
+      if (sex.isNotEmpty) _contactLine('Saved Sex', sex),
+      if (birthDate.isNotEmpty) _contactLine('DOB', birthDate),
+      if (dobUnknown) _contactLine('DOB', 'Unknown'),
+      _contactLine(
+        'Entry Class',
+        selectedClass.isEmpty ? 'Select class below' : selectedClass,
+      ),
+    ];
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.black.withOpacity(.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Selected Animal Details',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          ...rows,
+        ],
+      ),
+    );
   }
 
   bool _isLopBreedName(String breedName) {
@@ -2651,7 +2705,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     try {
       var query = supabase
           .from('animals')
-          .select('id,owner_user_id,exhibitor_id,name,tattoo,breed,variety,sex,species');
+          .select('id,owner_user_id,exhibitor_id,name,tattoo,breed,variety,sex,species,birth_date,is_dob_unknown');
 
       if (ownerUserId.isNotEmpty) {
         query = query.eq('owner_user_id', ownerUserId);
@@ -2879,12 +2933,14 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
         if (_variety.text.trim().isEmpty) {
           throw Exception('Select variety');
         }
-        if (_classValue == null || _classValue!.trim().isEmpty) {
-          throw Exception('Select class');
-        }
         if (_sexValue == null || _sexValue!.trim().isEmpty) {
           throw Exception('Select sex');
         }
+      }
+
+      final selectedClass = (_classValue ?? _className.text).trim();
+      if (selectedClass.isEmpty) {
+        throw Exception('Select class');
       }
 
       String? animalId;
@@ -2972,9 +3028,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
           'breed': _useLocalAnimal ? _breed.text.trim() : _animal!['breed'],
           'variety': _useLocalAnimal ? _variety.text.trim() : _animal!['variety'],
           'sex': _useLocalAnimal ? _sexValue : _animal!['sex'],
-          'class_name': _useLocalAnimal
-              ? _classValue
-              : (_className.text.trim().isEmpty ? null : _className.text.trim()),
+          'class_name': selectedClass,
           'notes': _notes.text.trim().isEmpty ? null : _notes.text.trim(),
           'status': 'entered',
           'created_at': DateTime.now().toUtc().toIso8601String(),
@@ -3456,9 +3510,15 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                             ? null
                             : (v) => setState(() {
                                   _animal = v;
+                                  final savedSex = (v?['sex'] ?? '').toString().trim();
+                                  if (savedSex.isNotEmpty) {
+                                    _sexValue = savedSex;
+                                    _sex.text = savedSex;
+                                  }
                                   _msg = null;
                                 }),
                       ),
+                      _selectedAnimalSummaryCard(),
                     const SizedBox(height: 14),
                   ],
                   SwitchListTile(
@@ -3591,28 +3651,6 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                             },
                     ),
                     const SizedBox(height: 10),
-                    DropdownButtonFormField<String>(
-                      value: _classValue,
-                      decoration: const InputDecoration(
-                        labelText: 'Class',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: const [
-                        DropdownMenuItem(value: 'Senior', child: Text('Senior')),
-                        DropdownMenuItem(value: 'Intermediate', child: Text('Intermediate')),
-                        DropdownMenuItem(value: 'Junior', child: Text('Junior')),
-                        DropdownMenuItem(value: 'Pre-Junior', child: Text('Pre-Junior')),
-                      ],
-                      onChanged: (_saving || AppSession.isSupportMode)
-                          ? null
-                          : (value) {
-                              setState(() {
-                                _classValue = value ?? '';
-                                _className.text = _classValue ?? '';
-                                _msg = null;
-                              });
-                            },
-                    ),
                     const SizedBox(height: 10),
                     DropdownButtonFormField<String>(
                       value: _sexValue,
@@ -3644,6 +3682,31 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                         'Select "Add New Animal" for a new walk-in exhibitor, or switch back to an existing exhibitor to load saved animals.',
                       ),
                     ],
+
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: _classValue,
+                    decoration: const InputDecoration(
+                      labelText: 'Class / Age Override',
+                      helperText: 'Use this when DOB is missing or when the show secretary needs to override the calculated class.',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'Senior', child: Text('Senior')),
+                      DropdownMenuItem(value: 'Intermediate', child: Text('Intermediate')),
+                      DropdownMenuItem(value: 'Junior', child: Text('Junior')),
+                      DropdownMenuItem(value: 'Pre-Junior', child: Text('Pre-Junior')),
+                    ],
+                    onChanged: (_saving || AppSession.isSupportMode)
+                        ? null
+                        : (value) {
+                            setState(() {
+                              _classValue = value;
+                              _className.text = value ?? '';
+                              _msg = null;
+                            });
+                          },
+                  ),
 
                   const SizedBox(height: 12),
                   SwitchListTile(
