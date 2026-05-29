@@ -1566,7 +1566,7 @@ class _EditExhibitorSheetState extends State<_EditExhibitorSheet> {
     try {
       await ShowLockService.assertShowUnlocked(widget.showId);
 
-      final updated = await supabase
+      await supabase
           .from('exhibitors')
           .update({
             'showing_name': showing.isEmpty ? null : showing,
@@ -1583,15 +1583,16 @@ class _EditExhibitorSheetState extends State<_EditExhibitorSheet> {
             'arba_number': arbaNumber.isEmpty ? null : arbaNumber,
           })
           .eq('id', exhibitorId)
-          .filter('owner_user_id', 'is', 'null')
-          .select('id')
-          .maybeSingle();
+          .filter('owner_user_id', 'is', 'null');
 
-      if (updated == null) {
-        throw Exception(
-          'No exhibitor was updated. This usually means the exhibitor now has an account or your role does not have permission to update exhibitor profiles.',
-        );
-      }
+      await supabase
+          .from('entries')
+          .update({
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('show_id', widget.showId)
+          .eq('exhibitor_id', exhibitorId)
+          .limit(1);
 
       if (!mounted) return;
       Navigator.pop(context, true);
