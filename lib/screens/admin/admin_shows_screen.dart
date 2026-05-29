@@ -97,11 +97,13 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
 
     final query = supabase.from('shows').select(
       'id,name,start_date,end_date,location_name,is_published,entry_open_at,entry_close_at,created_at,'
-      'is_locked,locked_at,finalized_at',
+      'is_locked,locked_at,finalized_at,owner_user_id',
     );
 
-    // Support mode: if allowedShowIds is not empty, only show those shows.
-    if (AppSession.isSupportMode && widget.allowedShowIds.isNotEmpty) {
+    // If the previous screen already calculated allowed shows, trust that list.
+    // This avoids losing secretary access if this screen's fallback role query is
+    // narrower or blocked by RLS.
+    if (widget.allowedShowIds.isNotEmpty) {
       final res = await query
           .inFilter('id', widget.allowedShowIds)
           .order('start_date')
@@ -121,6 +123,10 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
             .inFilter('role', const [
               'admin',
               'show_admin',
+              'show_secretary',
+              'secretary',
+              'show_secretary_admin',
+              'show_secretary_full',
               'reporting_clerk',
               'superintendent',
             ]);
@@ -133,18 +139,58 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
           }
         }
       } catch (_) {
-        // No role-based show secretary access found.
+        // No role-based show secretary access found or RLS blocked role_assignments.
+      }
+
+      try {
+        final showAdminRows = await supabase
+            .from('show_admins')
+            .select('show_id')
+            .eq('user_id', userId);
+
+        for (final raw in (showAdminRows as List)) {
+          final row = Map<String, dynamic>.from(raw as Map);
+          final showId = row['show_id']?.toString();
+          if (showId != null && showId.isNotEmpty) {
+            allowedShowIds.add(showId);
+          }
+        }
+      } catch (_) {
+        // Older show secretary records may not exist in show_admins.
+      }
+
+      try {
+        final ownedRows = await supabase
+            .from('shows')
+            .select('id')
+            .eq('owner_user_id', userId);
+
+        for (final raw in (ownedRows as List)) {
+          final row = Map<String, dynamic>.from(raw as Map);
+          final showId = row['id']?.toString();
+          if (showId != null && showId.isNotEmpty) {
+            allowedShowIds.add(showId);
+          }
+        }
+      } catch (_) {
+        // Some older show records may not have owner_user_id available to this user.
       }
     }
 
-    final res = isSuperAdmin
-        ? await query.order('start_date').order('location_name')
-        : allowedShowIds.isEmpty
-            ? []
-            : await query
-                .inFilter('id', allowedShowIds.toList())
-                .order('start_date')
-                .order('location_name');
+    if (isSuperAdmin) {
+      final res = await query.order('start_date').order('location_name');
+      return (res as List).cast<Map<String, dynamic>>();
+    }
+
+    if (allowedShowIds.isEmpty) {
+      return <Map<String, dynamic>>[];
+    }
+
+    final orderedShowIds = allowedShowIds.toList();
+    final res = await query
+        .inFilter('id', orderedShowIds)
+        .order('start_date')
+        .order('location_name');
 
     return (res as List).cast<Map<String, dynamic>>();
   }
