@@ -569,9 +569,13 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
       final dedupeKey =
           '$clubType|${clubName.toLowerCase()}|${breedName.toLowerCase()}|${(club['state_code'] ?? '').toString().trim().toUpperCase()}';
 
+      final displayLabel = breedName.isNotEmpty
+          ? '$clubName — $breedName'
+          : clubName;
+
       rowMap[dedupeKey] = _SanctionRowModel(
         key: 'club::$clubId',
-        label: clubName,
+        label: displayLabel,
         rowType: _SanctionRowType.club,
         tabKind: tabKind,
         breedClubId: clubId,
