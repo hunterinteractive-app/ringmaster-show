@@ -632,6 +632,54 @@ List<Map<String, dynamic>> _mergeRefreshedEntriesWithoutDroppingCurrentRows({
   }).toList();
 }
 
+/// App-side de-duplication of results entry rows.
+List<Map<String, dynamic>> _dedupeResultsEntryRows(
+  List<Map<String, dynamic>> rows,
+) {
+  final byKey = <String, Map<String, dynamic>>{};
+
+  for (final row in rows) {
+    final entryId = (row['entry_id'] ?? row['id'] ?? '').toString().trim();
+    final isFurEntry = _isFurEntry(row);
+    final isFur = isFurEntry ? 'fur' : 'normal';
+    final furVariety = (row['fur_variety'] ?? '').toString().trim().toLowerCase();
+
+    // Keep true fur/wool rows separate only when the actual row is marked as fur.
+    // Normal entry duplicates should collapse by entry_id even if a bad SQL join
+    // returned different breed/group metadata on one of the duplicate rows.
+    final key = entryId.isNotEmpty
+        ? (isFurEntry ? '$entryId|fur|$furVariety' : entryId)
+        : [
+            (row['section_id'] ?? '').toString().trim().toLowerCase(),
+            (row['exhibitor_id'] ?? '').toString().trim().toLowerCase(),
+            (row['breed'] ?? row['breed_name'] ?? '').toString().trim().toLowerCase(),
+            (row['variety'] ?? row['variety_name'] ?? '').toString().trim().toLowerCase(),
+            (row['class_name'] ?? '').toString().trim().toLowerCase(),
+            (row['sex'] ?? '').toString().trim().toLowerCase(),
+            isFur,
+            furVariety,
+          ].join('|');
+
+    final existing = byKey[key];
+    if (existing == null) {
+      byKey[key] = row;
+      continue;
+    }
+
+    // Prefer the row that has the clearest breed award settings populated.
+    final existingHasAwardSettings =
+        existing['uses_group_awards'] == true || existing['uses_variety_awards'] == true;
+    final rowHasAwardSettings =
+        row['uses_group_awards'] == true || row['uses_variety_awards'] == true;
+
+    if (!existingHasAwardSettings && rowHasAwardSettings) {
+      byKey[key] = row;
+    }
+  }
+
+  return byKey.values.toList();
+}
+
 Future<Map<String, List<String>>> _loadAwardsByEntryId({
   required String showId,
   required Iterable<String> entryIds,
@@ -1020,9 +1068,11 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
         params: params,
       );
 
-      final entries = (rows as List)
-          .map((e) => Map<String, dynamic>.from(e as Map))
-          .toList();
+      final entries = _dedupeResultsEntryRows(
+        (rows as List)
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList(),
+      );
 
       final entryIds = entries
           .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
