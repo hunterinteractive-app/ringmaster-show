@@ -1,5 +1,3 @@
-// lib/screens/admin/closeout/data/loaders/sweepstakes_report_loader.dart
-
 import '../../models/base/report_request.dart';
 import '../../models/clubs/sweepstakes_report_data.dart';
 import '../closeout_repository.dart';
@@ -44,6 +42,14 @@ class SweepstakesReportLoader {
     }
 
     final showHeader = await _loadShowHeader(showId);
+
+    await _recalculateSweepstakes(
+      showId: showId,
+      breedName: breedName,
+      scope: scope,
+      showLetter: showLetter,
+    );
+
     final breedSanctionNumber = await _loadBreedSanctionNumber(
       showId: showId,
       breedName: breedName,
@@ -244,6 +250,54 @@ class SweepstakesReportLoader {
       rows: rows,
       sections: const [],
       noResultsFound: rows.isEmpty,
+    );
+  }
+
+  Future<void> _recalculateSweepstakes({
+    required String showId,
+    required String breedName,
+    required String scope,
+    required String showLetter,
+  }) async {
+    if (showLetter == 'ALL') {
+      final lettersResponse = await repo.supabase
+          .from('show_sections')
+          .select('letter')
+          .eq('show_id', showId)
+          .eq('is_enabled', true)
+          .eq('kind', scope.toLowerCase())
+          .order('letter');
+
+      final letters = (lettersResponse as List)
+          .map((e) => (e['letter'] ?? '').toString().trim().toUpperCase())
+          .where((e) => e.isNotEmpty)
+          .toSet()
+          .toList()
+        ..sort();
+
+      for (final letter in letters) {
+        await repo.supabase.rpc(
+          'calculate_sweepstakes_for_breed',
+          params: {
+            'p_show_id': showId,
+            'p_breed_name': breedName,
+            'p_scope': scope,
+            'p_show_letter': letter,
+          },
+        );
+      }
+
+      return;
+    }
+
+    await repo.supabase.rpc(
+      'calculate_sweepstakes_for_breed',
+      params: {
+        'p_show_id': showId,
+        'p_breed_name': breedName,
+        'p_scope': scope,
+        'p_show_letter': showLetter,
+      },
     );
   }
 

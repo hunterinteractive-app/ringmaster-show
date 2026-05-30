@@ -382,12 +382,21 @@ class SweepstakesReportPdf {
     required bool showBisPoints,
     required bool showFurPoints,
   }) {
+    final showOtherPoints = showVarietyPoints || showGroupPoints || showBisPoints;
+
     final headers = <String>[
       'Rank',
       'Exhibitor',
       'Address',
-      'ARBA Class Pts',
+      'Class',
+      if (showVarietyPoints) 'Variety',
+      if (showGroupPoints) 'Group',
+      if (showBobPoints) 'BOB/BOS',
+      if (showBisPoints) 'BIS/RIS',
+      if (showOtherPoints && !(showVarietyPoints || showGroupPoints || showBisPoints))
+        'Other',
       'Total',
+      if (showFurPoints) 'Fur/Wool',
     ];
 
     final tableData = rows.map((row) {
@@ -395,10 +404,27 @@ class SweepstakesReportPdf {
         row.rank.toString(),
         row.exhibitorName,
         row.exhibitorAddress,
-        _fmt(row.arbaClassPoints),
+        _fmt(row.classPoints),
+        if (showVarietyPoints) _fmt(row.varietyPoints),
+        if (showGroupPoints) _fmt(row.groupPoints),
+        if (showBobPoints) _fmt(row.bobPoints),
+        if (showBisPoints) _fmt(row.bisPoints),
+        if (showOtherPoints && !(showVarietyPoints || showGroupPoints || showBisPoints))
+          _fmt(row.otherPoints),
         _fmt(row.totalPoints),
+        if (showFurPoints) _fmt(row.furPoints),
       ];
     }).toList();
+
+    final columnWidths = <int, pw.TableColumnWidth>{
+      0: const pw.FixedColumnWidth(28),
+      1: const pw.FlexColumnWidth(2.0),
+      2: const pw.FlexColumnWidth(2.4),
+    };
+
+    for (var i = 3; i < headers.length; i += 1) {
+      columnWidths[i] = const pw.FixedColumnWidth(45);
+    }
 
     return pw.TableHelper.fromTextArray(
       headers: headers,
@@ -408,22 +434,16 @@ class SweepstakesReportPdf {
       ),
       headerStyle: pw.TextStyle(
         color: PdfColors.white,
-        fontSize: 8,
+        fontSize: 7,
         fontWeight: pw.FontWeight.bold,
       ),
-      cellStyle: const pw.TextStyle(fontSize: 7.5),
+      cellStyle: const pw.TextStyle(fontSize: 7),
       border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
       oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
       cellAlignment: pw.Alignment.centerLeft,
       headerAlignment: pw.Alignment.centerLeft,
-      cellPadding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-      columnWidths: {
-        0: const pw.FixedColumnWidth(30),
-        1: const pw.FlexColumnWidth(2.2),
-        2: const pw.FlexColumnWidth(3.2),
-        3: const pw.FixedColumnWidth(62),
-        4: const pw.FixedColumnWidth(44),
-      },
+      cellPadding: const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 4),
+      columnWidths: columnWidths,
     );
   }
 
@@ -451,7 +471,8 @@ class SweepstakesReportPdf {
         '- Best in Show (BIS) and Reserve Best in Show (RBIS) awards are included.',
       if (showFurPoints)
         '- Fur/Wool class awards are included when applicable.',
-      '- Total points reflect the combined value of all placements and awards earned at this show.',
+      '- The table breaks points out by source so class placement, BOB/BOS, Fur/Wool, and other award points can be reviewed separately.',
+      '- Total points reflect the combined value of all placements and awards earned at this show EXCEPT FUR/WOOL.',
     ];
 
     return pw.Container(

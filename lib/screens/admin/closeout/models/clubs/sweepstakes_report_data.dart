@@ -50,11 +50,19 @@ class SweepstakesReportData {
   bool get isProvisional =>
       verificationStatus.trim().toUpperCase() != 'VERIFIED';
 
+  bool get showClassPoints => rows.any((r) => r.classPoints != 0);
   bool get showVarietyPoints => rows.any((r) => r.varietyPoints != 0);
   bool get showGroupPoints => rows.any((r) => r.groupPoints != 0);
   bool get showBobPoints => rows.any((r) => r.bobPoints != 0);
   bool get showBisPoints => rows.any((r) => r.bisPoints != 0);
   bool get showFurPoints => rows.any((r) => r.furPoints != 0);
+  bool get showPointBreakdown =>
+      showClassPoints ||
+      showVarietyPoints ||
+      showGroupPoints ||
+      showBobPoints ||
+      showBisPoints ||
+      showFurPoints;
 }
 
 class SweepstakesReportSection {
@@ -87,6 +95,8 @@ class SweepstakesReportRow {
   final double bisPoints;
   final double furPoints;
   final double totalPoints;
+
+  double get otherPoints => varietyPoints + groupPoints + bisPoints;
 
   const SweepstakesReportRow({
     required this.rank,
