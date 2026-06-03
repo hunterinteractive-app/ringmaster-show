@@ -447,7 +447,9 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
 
     final rows = await supabase
         .from('exhibitors')
-        .select('id,showing_name,display_name,type,is_active,created_at')
+        .select(
+          'id,showing_name,display_name,type,group_shows_as_youth,is_active,created_at',
+        )
         .eq('owner_user_id', userId)
         .eq('is_active', true)
         .order('created_at', ascending: true);
@@ -471,7 +473,8 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
 
   bool _isYouthExhibitor(Map<String, dynamic> e) {
     final type = _exhibitorType(e);
-    return type == 'youth';
+    final groupShowsAsYouth = e['group_shows_as_youth'] == true;
+    return type == 'youth' || (type == 'group' && groupShowsAsYouth);
   }
 
   bool _isExhibitorAllowedForCurrentSelection(
