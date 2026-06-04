@@ -94,16 +94,50 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
     });
 
     try {
-      final rows = await supabase
+      final myExhibitorRows = await supabase
+          .from('exhibitors')
+          .select('id')
+          .eq('owner_user_id', userId);
+
+      final myExhibitorIds = (myExhibitorRows as List)
+          .map((e) => (e['id'] ?? '').toString())
+          .where((id) => id.isNotEmpty)
+          .toSet();
+
+      final selectColumns =
+          'id,show_id,exhibitor_id,animal_id,species,tattoo,breed,variety,sex,'
+          'class_name,status,section_id,created_at,exhibitor_user_id';
+
+      final rowsById = <String, Map<String, dynamic>>{};
+
+      final accountRows = await supabase
           .from('entries')
-          .select(
-            'id,show_id,exhibitor_id,animal_id,species,tattoo,breed,variety,sex,'
-            'class_name,status,section_id,created_at,exhibitor_user_id',
-          )
+          .select(selectColumns)
           .eq('exhibitor_user_id', userId)
           .order('created_at', ascending: true);
 
-      _entries = (rows as List).cast<Map<String, dynamic>>();
+      for (final row in (accountRows as List).cast<Map<String, dynamic>>()) {
+        final id = (row['id'] ?? '').toString();
+        if (id.isNotEmpty) rowsById[id] = row;
+      }
+
+      if (myExhibitorIds.isNotEmpty) {
+        final exhibitorRows = await supabase
+            .from('entries')
+            .select(selectColumns)
+            .inFilter('exhibitor_id', myExhibitorIds.toList())
+            .order('created_at', ascending: true);
+
+        for (final row in (exhibitorRows as List).cast<Map<String, dynamic>>()) {
+          final id = (row['id'] ?? '').toString();
+          if (id.isNotEmpty) rowsById[id] = row;
+        }
+      }
+
+      _entries = rowsById.values.toList()
+        ..sort((a, b) => (a['created_at'] ?? '').toString().compareTo(
+              (b['created_at'] ?? '').toString(),
+            ));
 
       final showIds = _entries
           .map((e) => (e['show_id'] ?? '').toString())
@@ -330,13 +364,45 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
     final userId = AppSession.effectiveUserId;
     if (userId == null) return [];
 
+    final myExhibitorRows = await supabase
+        .from('exhibitors')
+        .select('id')
+        .eq('owner_user_id', userId);
+
+    final myExhibitorIds = (myExhibitorRows as List)
+        .map((e) => (e['id'] ?? '').toString())
+        .where((id) => id.isNotEmpty)
+        .toSet();
+
+    final selectColumns = 'id,species,name,tattoo,breed,variety,sex,birth_date';
+    final animalsById = <String, Map<String, dynamic>>{};
+
     final ownedRows = await supabase
         .from('animals')
-        .select('id,species,name,tattoo,breed,variety,sex,birth_date')
+        .select(selectColumns)
         .eq('owner_user_id', userId)
         .order('created_at', ascending: false);
 
-    final animals = (ownedRows as List).cast<Map<String, dynamic>>();
+    for (final row in (ownedRows as List).cast<Map<String, dynamic>>()) {
+      final id = (row['id'] ?? '').toString();
+      if (id.isNotEmpty) animalsById[id] = row;
+    }
+
+    if (myExhibitorIds.isNotEmpty) {
+      final exhibitorAnimalRows = await supabase
+          .from('animals')
+          .select(selectColumns)
+          .inFilter('exhibitor_id', myExhibitorIds.toList())
+          .order('created_at', ascending: false);
+
+      for (final row
+          in (exhibitorAnimalRows as List).cast<Map<String, dynamic>>()) {
+        final id = (row['id'] ?? '').toString();
+        if (id.isNotEmpty) animalsById[id] = row;
+      }
+    }
+
+    final animals = animalsById.values.toList();
 
     final existingId = (currentAnimalId ?? '').trim();
     final alreadyLoaded = animals.any(
@@ -346,7 +412,7 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
     if (existingId.isNotEmpty && !alreadyLoaded) {
       final currentRows = await supabase
           .from('animals')
-          .select('id,species,name,tattoo,breed,variety,sex,birth_date')
+          .select(selectColumns)
           .eq('id', existingId)
           .limit(1);
 
