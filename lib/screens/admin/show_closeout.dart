@@ -1690,10 +1690,16 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
               _artifactMatchesSelectedScope(a),
         );
 
-        // Temporarily send exhibitor reports only while ARBA leg approval is pending.
-        // Leave legs out of this bulk email until approval is final.
+        final legsReport = _newestGeneratedArtifactWhere(
+          'legs',
+          (a) =>
+              _artifactMatchesExhibitor(a, exhibitor) &&
+              _artifactMatchesSelectedScope(a),
+        );
+
         final artifacts = <ReportArtifactSummary>[
           if (exhibitorReport != null) exhibitorReport,
+          if (legsReport != null) legsReport,
         ];
 
         if (artifacts.isEmpty) {
@@ -1707,8 +1713,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
             to: exhibitor.email,
             subject: '${widget.showName} - Exhibitor Reports',
             message:
-                //'Attached are your exhibitor reports and legs from ${widget.showName}.',
-                'Attached are your exhibitor reports from ${widget.showName}.',
+                'Attached are your exhibitor reports and any earned legs from ${widget.showName}.',
+            allowLegs: true,
           );
           sentCount++;
         } catch (e, st) {
@@ -1982,13 +1988,117 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     }
 
   Future<void> _sendAllLegsReports() async {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'ARBA legs email sending is temporarily disabled while approval is pending. Exhibitor reports can still be sent without legs.',
+    if (_isSupportMode) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Leg email sending is disabled while viewing in support mode.',
+          ),
         ),
-      ),
-    );
+      );
+      return;
+    }
+
+    final ready = await _ensureResultsReadyForReports();
+    if (!ready) return;
+
+    setState(() {
+      _generatingReport = true;
+    });
+
+    try {
+      await _loadData();
+
+      final exhibitors = await _loadExhibitorEmailTargets();
+
+      if (exhibitors.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No exhibitor email targets found.')),
+        );
+        return;
+      }
+
+      int sentCount = 0;
+      int skippedCount = 0;
+      int failedCount = 0;
+      final sendErrors = <String>[];
+
+      for (final exhibitor in exhibitors) {
+        final legsReport = _newestGeneratedArtifactWhere(
+          'legs',
+          (a) =>
+              _artifactMatchesExhibitor(a, exhibitor) &&
+              _artifactMatchesSelectedScope(a),
+        );
+
+        if (legsReport == null) {
+          skippedCount++;
+          continue;
+        }
+
+        try {
+          await _sendExhibitorArtifactsEmail(
+            artifacts: [legsReport],
+            to: exhibitor.email,
+            subject: '${widget.showName} - ARBA Legs',
+            message: 'Attached are your earned ARBA legs from ${widget.showName}.',
+            allowLegs: true,
+          );
+          sentCount++;
+        } catch (e) {
+          failedCount++;
+
+          final errorText = e.toString().trim().isEmpty
+              ? 'Unknown email send error. Check Supabase function logs for send-exhibitor-report-email.'
+              : e.toString();
+
+          if (sendErrors.length < 5) {
+            sendErrors.add('${exhibitor.exhibitorName} <${exhibitor.email}>: $errorText');
+          }
+        }
+      }
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 8),
+          content: Text(
+            'Leg report send complete. Sent: $sentCount, skipped: $skippedCount, failed: $failedCount',
+          ),
+        ),
+      );
+
+      if (failedCount > 0 && sendErrors.isNotEmpty) {
+        await showDialog<void>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Leg email send errors'),
+            content: SingleChildScrollView(
+              child: Text(sendErrors.join('\n\n')),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed sending leg reports: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _generatingReport = false;
+        });
+      }
+    }
   }
 
     Future<bool> _ensureResultsReadyForReports() async {
@@ -3435,11 +3545,11 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                         : 'Send $_selectedCloseoutScopeLabel Exhibitor Reports',
                                   ),
                                 ),
-                               // ElevatedButton.icon(
-                               //   onPressed: _isBusy || _isSupportMode ? null : _sendAllLegsReports,
-                               //   icon: const Icon(Icons.pets),
-                               //   label: const Text('Send All Legs'),
-                               // ),
+                                ElevatedButton.icon(
+                                  onPressed: _isBusy || _isSupportMode ? null : _sendAllLegsReports,
+                                  icon: const Icon(Icons.pets),
+                                  label: const Text('Send All Legs'),
+                                ),
 
                                 OutlinedButton.icon(
                                   onPressed:
