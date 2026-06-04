@@ -2160,42 +2160,23 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     }
   }
 
-  Future<void> _openSharedAnimalEditorForAdd() async {
-
-    final exhibitor = _selectedExhibitor();
-    if (exhibitor == null) {
-      setState(() => _msg = 'Select an exhibitor before adding an animal.');
-      return;
-    }
-
-    final ownerUserId = (exhibitor['owner_user_id'] ?? '').toString().trim();
-
-    // Local/no-account exhibitors cannot use the account-based shared animal editor.
-    // Keep them on the local/manual animal entry flow.
-    if (ownerUserId.isEmpty) {
-      setState(() {
-        _useLocalAnimal = true;
-        _animal = null;
-        _msg = 'This exhibitor does not have an account, so enter the animal details below.';
-      });
-      return;
-    }
-
-    final saved = await openAnimalEditorDialog(
-      context,
-      showId: widget.showId,
-    );
-
-    if (saved == true) {
-      await _loadAnimalsForSelectedExhibitor();
-      if (!mounted) return;
-
-      setState(() {
-        _useLocalAnimal = false;
-        _msg = 'Animal added. Select it from the animal list to enter it in the show.';
-      });
-    }
+Future<void> _openSharedAnimalEditorForAdd() async {
+  final exhibitor = _selectedExhibitor();
+  if (exhibitor == null) {
+    setState(() => _msg = 'Select an exhibitor before adding an animal.');
+    return;
   }
+
+  // Do not open the shared animal editor here. That editor runs as the
+  // logged-in show secretary, so it saves the animal under the secretary's
+  // account. This admin flow needs to collect the animal details inline and
+  // let _save() attach the animal to the selected exhibitor account.
+  setState(() {
+    _useLocalAnimal = true;
+    _animal = null;
+    _msg = 'Enter the animal details below, then save the entry.';
+  });
+}
 
   Future<Map<String, dynamic>?> _findExistingShowExhibitor() async {
     final showing = _showingName.text.trim();
@@ -2981,44 +2962,49 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
 
       if (_useLocalAnimal) {
         final ownerUserId = (exhibitor['owner_user_id'] ?? '').toString().trim();
-        final canSaveLocalAnimalToExhibitor = ownerUserId.isEmpty;
+        final normalizedTattoo = _tattoo.text.trim().toUpperCase();
+        final now = DateTime.now().toUtc().toIso8601String();
 
-        if (canSaveLocalAnimalToExhibitor) {
-          final existingLocalAnimal = await supabase
+        var existingAnimalQuery = supabase
+            .from('animals')
+            .select('id')
+            .eq('tattoo', normalizedTattoo)
+            .eq('breed', _breed.text.trim())
+            .eq('species', _species);
+
+        if (ownerUserId.isNotEmpty) {
+          existingAnimalQuery = existingAnimalQuery.eq('owner_user_id', ownerUserId);
+        } else {
+          existingAnimalQuery = existingAnimalQuery.eq('exhibitor_id', resolvedExhibitorId);
+        }
+
+        final existingAnimal = await existingAnimalQuery.maybeSingle();
+
+        if (existingAnimal != null) {
+          animalId = (existingAnimal['id'] ?? '').toString();
+        } else {
+          final insertedAnimal = await supabase
               .from('animals')
+              .insert({
+                'owner_user_id': ownerUserId.isEmpty ? null : ownerUserId,
+                'exhibitor_id': resolvedExhibitorId,
+                'species': _species,
+                'name': _animalName.text.trim().isEmpty
+                    ? null
+                    : _animalName.text.trim(),
+                'tattoo': normalizedTattoo,
+                'breed': _breed.text.trim(),
+                'variety': _variety.text.trim().isEmpty
+                    ? null
+                    : _variety.text.trim(),
+                'sex': _sexValue,
+                'created_at': now,
+                'updated_at': now,
+              })
               .select('id')
-              .eq('exhibitor_id', resolvedExhibitorId)
-              .eq('tattoo', _tattoo.text.trim().toUpperCase())
-              .eq('breed', _breed.text.trim())
-              .eq('species', _species)
-              .maybeSingle();
+              .single();
 
-          if (existingLocalAnimal != null) {
-            animalId = (existingLocalAnimal['id'] ?? '').toString();
-          } else {
-            final insertedAnimal = await supabase
-                .from('animals')
-                .insert({
-                  'owner_user_id': null,
-                  'exhibitor_id': resolvedExhibitorId,
-                  'species': _species,
-                  'name': _animalName.text.trim().isEmpty
-                      ? null
-                      : _animalName.text.trim(),
-                  'tattoo': _tattoo.text.trim().toUpperCase(),
-                  'breed': _breed.text.trim(),
-                  'variety': _variety.text.trim().isEmpty
-                      ? null
-                      : _variety.text.trim(),
-                  'sex': _sexValue,
-                  'created_at': DateTime.now().toUtc().toIso8601String(),
-                  'updated_at': DateTime.now().toUtc().toIso8601String(),
-                })
-                .select('id')
-                .single();
-
-            animalId = (insertedAnimal['id'] ?? '').toString();
-          }
+          animalId = (insertedAnimal['id'] ?? '').toString();
         }
       } else {
         animalId = (_animal!['id'] ?? '').toString();
@@ -3567,7 +3553,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                     Text(
                       _exhibitorId == null
                           ? 'Select an exhibitor before adding an animal.'
-                          : 'For account exhibitors, this opens the shared animal editor. For local/no-account exhibitors, it switches to manual animal entry.',
+                          : 'Use this to add a new animal for the selected exhibitor. Account exhibitors will have it saved to their account.',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ] else ...[
