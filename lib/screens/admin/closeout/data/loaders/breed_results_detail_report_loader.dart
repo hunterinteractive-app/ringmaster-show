@@ -17,21 +17,20 @@ class BreedResultsDetailReportLoader {
     final scope = (request.scope ?? '').trim().toUpperCase();
     final showLetter = (request.showLetter ?? '').trim().toUpperCase();
     final showHeader = await _loadShowHeader(showId);
-    final breedSanctionNumber = await _loadBreedSanctionNumber(
-      showId: showId,
-      breedName: breedName,
-      scope: scope,
-      showLetter: showLetter,
-    );
+    final breedSanctionNumber = breedName.isEmpty
+        ? ''
+        : await _loadBreedSanctionNumber(
+            showId: showId,
+            breedName: breedName,
+            scope: scope,
+            showLetter: showLetter,
+          );
     final arbaSanctionNumber = await _loadArbaSanctionNumber(
       showId: showId,
       scope: scope,
       showLetter: showLetter,
     );
-
-    if (breedName.isEmpty) {
-      throw Exception('Breed Results Detail Report requires breedName.');
-    }
+    final reportBreedLabel = breedName.isEmpty ? 'All Breeds' : breedName;
     if (scope.isEmpty) {
       throw Exception('Breed Results Detail Report requires scope.');
     }
@@ -69,7 +68,7 @@ class BreedResultsDetailReportLoader {
 
       return BreedResultsDetailReportData(
         showId: showId,
-        breedName: breedName,
+        breedName: reportBreedLabel,
         scope: scope,
         showLetter: 'ALL',
         judgeName: sections.isNotEmpty ? sections.first.judgeName : '',
@@ -97,7 +96,7 @@ class BreedResultsDetailReportLoader {
 
     return BreedResultsDetailReportData(
       showId: showId,
-      breedName: breedName,
+      breedName: reportBreedLabel,
       scope: scope,
       showLetter: showLetter,
       judgeName: section.judgeName,
@@ -122,25 +121,33 @@ class BreedResultsDetailReportLoader {
     required String scope,
     required String showLetter,
   }) async {
-    final sectionRows = await repo.supabase.rpc(
-      'report_results_entry_rows_for_breed_detail',
-      params: {
-        'p_show_id': showId,
-        'p_breed_name': breedName,
-        'p_scope': scope,
-        'p_show_letter': showLetter,
-      },
-    );
+    final sectionRows = breedName.isEmpty
+        ? await _loadOverallResultRows(
+            showId: showId,
+            scope: scope,
+            showLetter: showLetter,
+          )
+        : await repo.supabase.rpc(
+            'report_results_entry_rows_for_breed_detail',
+            params: {
+              'p_show_id': showId,
+              'p_breed_name': breedName,
+              'p_scope': scope,
+              'p_show_letter': showLetter,
+            },
+          );
 
     final rows = (sectionRows as List)
         .map((e) => Map<String, dynamic>.from(e as Map))
         .toList();
 
-    final overallRows = await _loadOverallResultRows(
-      showId: showId,
-      scope: scope,
-      showLetter: showLetter,
-    );
+    final overallRows = breedName.isEmpty
+        ? rows
+        : await _loadOverallResultRows(
+            showId: showId,
+            scope: scope,
+            showLetter: showLetter,
+          );
 
     if (rows.isEmpty) {
       return BreedResultsDetailSection(
@@ -152,15 +159,21 @@ class BreedResultsDetailReportLoader {
       );
     }
 
-    final awardsResponse = await repo.supabase.rpc(
-      'report_results_awards_for_breed_detail',
-      params: {
-        'p_show_id': showId,
-        'p_breed_name': breedName,
-        'p_scope': scope,
-        'p_show_letter': showLetter,
-      },
-    );
+    final awardsResponse = breedName.isEmpty
+        ? await _loadOverallAwardRows(
+            showId: showId,
+            scope: scope,
+            showLetter: showLetter,
+          )
+        : await repo.supabase.rpc(
+            'report_results_awards_for_breed_detail',
+            params: {
+              'p_show_id': showId,
+              'p_breed_name': breedName,
+              'p_scope': scope,
+              'p_show_letter': showLetter,
+            },
+          );
 
     final awardRows = (awardsResponse as List)
         .map((e) => Map<String, dynamic>.from(e as Map))
@@ -864,6 +877,87 @@ class BreedResultsDetailReportLoader {
     if (c == 'BEST OPPOSITE SEX OF VARIETY') return 'BOSV';
     if (c == 'BEST OPPOSITE OF VARIETY') return 'BOSV';
     return c;
+  }
+
+  Future<List<Map<String, dynamic>>> _loadOverallAwardRows({
+    required String showId,
+    required String scope,
+    required String showLetter,
+  }) async {
+    final sectionQuery = repo.supabase
+        .from('show_sections')
+        .select('id')
+        .eq('show_id', showId)
+        .eq('is_enabled', true)
+        .eq('kind', scope.toLowerCase());
+
+    final sectionResponse = showLetter == 'ALL'
+        ? await sectionQuery
+        : await sectionQuery.eq('letter', showLetter);
+
+    final sectionRows = (sectionResponse as List)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+
+    final allAwards = <Map<String, dynamic>>[];
+
+    for (final section in sectionRows) {
+      final sectionId = _safe(section['id']);
+      if (sectionId.isEmpty) continue;
+
+      final response = await repo.supabase
+          .from('entry_awards')
+          .select('''
+            award_code,
+            entry_id,
+            entries!entry_awards_entry_id_fkey!inner(
+              id,
+              animal_id,
+              section_id,
+              tattoo,
+              breed,
+              variety,
+              class_name,
+              sex,
+              exhibitor_id,
+              exhibitors!entries_exhibitor_id_fkey(first_name, last_name)
+            )
+          ''')
+          .eq('show_id', showId)
+          .eq('entries.section_id', sectionId);
+
+      for (final raw in response as List) {
+        final award = Map<String, dynamic>.from(raw as Map);
+        final entryRaw = award['entries'];
+        final entry = entryRaw is Map ? Map<String, dynamic>.from(entryRaw) : <String, dynamic>{};
+        final exhibitorRaw = entry['exhibitors'];
+        final exhibitor = exhibitorRaw is Map
+            ? Map<String, dynamic>.from(exhibitorRaw)
+            : <String, dynamic>{};
+        final exhibitorName = [
+          _safe(exhibitor['first_name']),
+          _safe(exhibitor['last_name']),
+        ].where((x) => x.isNotEmpty).join(' ');
+
+        allAwards.add({
+          ...award,
+          'entry_id': _safe(award['entry_id']),
+          'animal_id': _safe(entry['animal_id']),
+          'tattoo': _safe(entry['tattoo']),
+          'animal_label': _safe(entry['tattoo']),
+          'breed_name': _safe(entry['breed']),
+          'breed': _safe(entry['breed']),
+          'variety_name': _safe(entry['variety']),
+          'variety': _safe(entry['variety']),
+          'class_name': _safe(entry['class_name']),
+          'sex': _safe(entry['sex']),
+          'exhibitor_id': _safe(entry['exhibitor_id']),
+          'exhibitor_label': exhibitorName,
+        });
+      }
+    }
+
+    return allAwards;
   }
 
   Future<List<Map<String, dynamic>>> _loadOverallResultRows({

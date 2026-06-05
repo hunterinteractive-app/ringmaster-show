@@ -31,9 +31,6 @@ class SweepstakesReportLoader {
     final showLetter = (request.showLetter ?? '').trim().toUpperCase();
     final isNationalShow = request.isNationalShow;
 
-    if (breedName.isEmpty) {
-      throw Exception('Sweepstakes report requires breedName.');
-    }
     if (scope.isEmpty) {
       throw Exception('Sweepstakes report requires scope.');
     }
@@ -43,19 +40,23 @@ class SweepstakesReportLoader {
 
     final showHeader = await _loadShowHeader(showId);
 
-    await _recalculateSweepstakes(
-      showId: showId,
-      breedName: breedName,
-      scope: scope,
-      showLetter: showLetter,
-    );
+    if (breedName.isNotEmpty) {
+      await _recalculateSweepstakes(
+        showId: showId,
+        breedName: breedName,
+        scope: scope,
+        showLetter: showLetter,
+      );
+    }
 
-    final breedSanctionNumber = await _loadBreedSanctionNumber(
-      showId: showId,
-      breedName: breedName,
-      scope: scope,
-      showLetter: showLetter,
-    );
+    final breedSanctionNumber = breedName.isEmpty
+        ? ''
+        : await _loadBreedSanctionNumber(
+            showId: showId,
+            breedName: breedName,
+            scope: scope,
+            showLetter: showLetter,
+          );
 
     final topBreedRows = isNationalShow
         ? await _loadTopBreedRows(
@@ -85,33 +86,40 @@ class SweepstakesReportLoader {
       Map<String, dynamic>? firstHeader;
 
       for (final letter in letters) {
-        final rowsResponse = await repo.supabase
+        var rowsQuery = repo.supabase
             .from('v_sweepstakes_pdf_rows')
             .select()
             .eq('show_id', showId)
-            .ilike('breed_name', breedName)
             .eq('scope', scope)
-            .eq('show_letter', letter)
-            .order('rank', ascending: true);
+            .eq('show_letter', letter);
+
+        if (breedName.isNotEmpty) {
+          rowsQuery = rowsQuery.ilike('breed_name', breedName);
+        }
+
+        final rowsResponse = await rowsQuery.order('rank', ascending: true);
 
         final rows = (rowsResponse as List)
             .map((e) => SweepstakesReportRow.fromMap(e as Map<String, dynamic>))
             .toList();
 
-        final headerResponse = await repo.supabase
+        var headerQuery = repo.supabase
             .from('v_sweepstakes_pdf_rows')
             .select(_headerSelect)
             .eq('show_id', showId)
-            .ilike('breed_name', breedName)
             .eq('scope', scope)
-            .eq('show_letter', letter)
-            .limit(1)
-            .maybeSingle();
+            .eq('show_letter', letter);
+
+        if (breedName.isNotEmpty) {
+          headerQuery = headerQuery.ilike('breed_name', breedName);
+        }
+
+        final headerResponse = await headerQuery.limit(1).maybeSingle();
 
         final header = headerResponse == null
             ? <String, dynamic>{
                 'show_id': showId,
-                'breed_name': breedName,
+                'breed_name': breedName.isEmpty ? 'All Breeds' : breedName,
                 'scope': scope,
                 'show_letter': letter,
                 'rule_source': 'NO_RESULTS',
@@ -139,7 +147,7 @@ class SweepstakesReportLoader {
 
       return SweepstakesReportData(
         showId: showId,
-        breedName: breedName,
+        breedName: breedName.isEmpty ? 'All Breeds' : breedName,
         scope: scope,
         showLetter: 'ALL',
         isNationalShow: isNationalShow,
@@ -178,33 +186,40 @@ class SweepstakesReportLoader {
       );
     }
 
-    final rowsResponse = await repo.supabase
+    var rowsQuery = repo.supabase
         .from('v_sweepstakes_pdf_rows')
         .select()
         .eq('show_id', showId)
-        .ilike('breed_name', breedName)
         .eq('scope', scope)
-        .eq('show_letter', showLetter)
-        .order('rank', ascending: true);
+        .eq('show_letter', showLetter);
+
+    if (breedName.isNotEmpty) {
+      rowsQuery = rowsQuery.ilike('breed_name', breedName);
+    }
+
+    final rowsResponse = await rowsQuery.order('rank', ascending: true);
 
     final rows = (rowsResponse as List)
         .map((e) => SweepstakesReportRow.fromMap(e as Map<String, dynamic>))
         .toList();
 
-    final headerResponse = await repo.supabase
+    var headerQuery = repo.supabase
         .from('v_sweepstakes_pdf_rows')
         .select(_headerSelect)
         .eq('show_id', showId)
-        .ilike('breed_name', breedName)
         .eq('scope', scope)
-        .eq('show_letter', showLetter)
-        .limit(1)
-        .maybeSingle();
+        .eq('show_letter', showLetter);
+
+    if (breedName.isNotEmpty) {
+      headerQuery = headerQuery.ilike('breed_name', breedName);
+    }
+
+    final headerResponse = await headerQuery.limit(1).maybeSingle();
 
     final header = headerResponse == null
         ? <String, dynamic>{
             'show_id': showId,
-            'breed_name': breedName,
+            'breed_name': breedName.isEmpty ? 'All Breeds' : breedName,
             'scope': scope,
             'show_letter': showLetter,
             'rule_source': 'NO_RESULTS',
@@ -215,7 +230,9 @@ class SweepstakesReportLoader {
 
     return SweepstakesReportData(
       showId: (header['show_id'] ?? showId).toString(),
-      breedName: (header['breed_name'] ?? breedName).toString(),
+      breedName: breedName.isEmpty
+          ? 'All Breeds'
+          : (header['breed_name'] ?? breedName).toString(),
       scope: (header['scope'] ?? scope).toString(),
       showLetter: (header['show_letter'] ?? showLetter).toString(),
       isNationalShow: isNationalShow,

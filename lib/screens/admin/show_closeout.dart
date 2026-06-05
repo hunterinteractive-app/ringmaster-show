@@ -25,6 +25,7 @@ import 'closeout/data/loaders/exhibitor_report_loader.dart';
 import 'closeout/data/loaders/sweepstakes_report_loader.dart';
 import 'closeout/data/loaders/breed_results_detail_report_loader.dart';
 import 'closeout/data/loaders/unpaid_balances_report_loader.dart';
+import 'closeout/data/loaders/paid_exhibitor_report_loader.dart';
 import 'closeout/data/loaders/entered_exhibitors_contact_report_loader.dart';
 import 'closeout/data/loaders/ribbon_payout_report_loader.dart';
 
@@ -33,6 +34,7 @@ import 'closeout/pdf/builders/exhibitor_report_pdf.dart';
 import 'closeout/pdf/builders/sweepstakes_report_pdf.dart';
 import 'closeout/pdf/builders/breed_results_detail_report_pdf.dart';
 import 'closeout/pdf/builders/unpaid_balances_report_pdf.dart';
+import 'closeout/pdf/builders/paid_exhibitor_report_pdf.dart';
 import 'closeout/pdf/builders/entered_exhibitors_contact_report_pdf.dart';
 import 'closeout/pdf/builders/ribbon_payout_report_pdf.dart';
 
@@ -95,6 +97,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   LegsReportPdfBuilder? _legsBuilder;
   ExhibitorReportPdfBuilder? _exhibitorBuilder;
   UnpaidBalancesReportPdfBuilder? _unpaidBalancesBuilder;
+  PaidExhibitorReportPdfBuilder? _paidExhibitorReportBuilder;
   EnteredExhibitorsContactReportPdf? _enteredExhibitorsContactBuilder;
   RibbonPayoutReportPdf? _ribbonPayoutBuilder;
 
@@ -133,6 +136,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       'sweepstakes_report',
       'breed_results_detail_report',
       'unpaid_balances_report',
+      'paid_exhibitor_report',
       'cavy_points',
       'commercial_points',
       'judge_report',
@@ -176,11 +180,16 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       if (exhibitorName != null) return exhibitorName;
 
       final breedName = _artifactMetaString(artifact, 'breed_name');
+      final clubName = _artifactMetaString(artifact, 'club_name');
+      final sanctioningBody = _artifactMetaString(artifact, 'sanctioning_body');
       final scope = _artifactMetaString(artifact, 'scope');
       final letter = _artifactMetaString(artifact, 'show_letter');
 
       return [
         if (breedName != null) breedName,
+        if (breedName == null && clubName != null) clubName,
+        if (breedName == null && clubName == null && sanctioningBody != null)
+          sanctioningBody,
         if (scope != null || letter != null)
           [if (scope != null) scope, if (letter != null) letter].join(' '),
       ].where((x) => x.trim().isNotEmpty).join(' • ');
@@ -1393,6 +1402,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       await _ensureLegsBuilder();
       await _ensureExhibitorBuilder();
       await _ensureUnpaidBalancesBuilder();
+      await _ensurePaidExhibitorReportBuilder();
       await _ensureReportLogo();
       await _ensureEnteredExhibitorsContactBuilder();
       await _ensureRibbonPayoutBuilder();
@@ -1422,6 +1432,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       );
 
       final unpaidBalancesLoader = UnpaidBalancesReportLoader(repository);
+      final paidExhibitorReportLoader = PaidExhibitorReportLoader(repository);
 
       final enteredExhibitorsContactLoader =
           EnteredExhibitorsContactReportLoader(supabase);
@@ -1441,6 +1452,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         breedResultsDetailReportBuilder: breedResultsDetailReportBuilder,
         unpaidBalancesLoader: unpaidBalancesLoader,
         unpaidBalancesBuilder: _unpaidBalancesBuilder!,
+        paidExhibitorReportLoader: paidExhibitorReportLoader,
+        paidExhibitorReportBuilder: _paidExhibitorReportBuilder!,
         enteredExhibitorsContactLoader: enteredExhibitorsContactLoader,
         enteredExhibitorsContactBuilder: _enteredExhibitorsContactBuilder!,
         ribbonPayoutLoader: ribbonPayoutLoader,
@@ -1456,9 +1469,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       );
 
       String artifactKey(ReportArtifactSummary artifact) {
-        final subtitle = _artifactProgressSubtitle(artifact);
-        final displayPart = subtitle.trim().isEmpty ? '' : ' • ${subtitle.trim()}';
-        return '${artifact.reportName}::${artifact.id}$displayPart';
+        return '${artifact.reportName}::${artifact.id}';
       }
 
       Future<void> runSingle(ReportArtifactSummary artifact) async {
@@ -1498,10 +1509,10 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
             final scope = _artifactMetaString(artifact, 'scope');
             final showLetter = _artifactMetaString(artifact, 'show_letter');
 
-            if (breedName == null || scope == null || showLetter == null) {
+            if (scope == null || showLetter == null) {
               throw Exception(
                 'Missing artifact metadata for ${artifact.reportName} (${artifact.id}). '
-                'Expected breed_name, scope, and show_letter.',
+                'Expected scope and show_letter.',
               );
             }
 
@@ -1561,12 +1572,26 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
         for (var attempt = 1; attempt <= 3; attempt++) {
           try {
-            await generateAttempt();
+            await generateAttempt().timeout(
+              const Duration(minutes: 2),
+              onTimeout: () {
+                throw TimeoutException(
+                  'Report generation timed out after 2 minutes for '
+                  '${artifact.reportName} (${artifact.id}).',
+                );
+              },
+            );
             onFinished(key);
             return;
           } catch (e, st) {
             lastError = e;
             lastStack = st;
+
+            debugPrint(
+              'Report generation failed attempt $attempt/3 for '
+              '${artifact.reportName} (${artifact.id}): $e',
+            );
+            debugPrintStack(stackTrace: st);
 
             if (attempt < 3) {
               await Future.delayed(Duration(seconds: attempt * 2));
@@ -1575,6 +1600,14 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         }
 
         final error = lastError ?? Exception('Unknown report generation failure');
+
+        debugPrint(
+          'Report generation permanently failed for '
+          '${artifact.reportName} (${artifact.id}): $error',
+        );
+        if (lastStack != null) {
+          debugPrintStack(stackTrace: lastStack);
+        }
 
         onFailed(key, error);
 
@@ -1591,7 +1624,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
             .eq('id', artifact.id);
       }
 
-      final validArtifacts = artifacts.where((a) {
+      bool isRunnableArtifact(ReportArtifactSummary a) {
         if (a.id.isEmpty || a.reportName.isEmpty) return false;
 
         if (a.reportName == 'arba_report') {
@@ -1616,13 +1649,71 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
         if (a.reportName == 'sweepstakes_report' ||
             a.reportName == 'breed_results_detail_report') {
-          return _artifactMetaString(a, 'breed_name') != null &&
-              _artifactMetaString(a, 'scope') != null &&
+          return _artifactMetaString(a, 'scope') != null &&
               _artifactMetaString(a, 'show_letter') != null;
         }
 
         return true;
-      }).toList();
+      }
+
+      final validArtifacts = <ReportArtifactSummary>[];
+
+      for (final artifact in artifacts) {
+        final key = artifactKey(artifact);
+
+        if (isRunnableArtifact(artifact)) {
+          validArtifacts.add(artifact);
+          continue;
+        }
+
+        final missing = <String>[];
+        if (artifact.id.isEmpty) missing.add('id');
+        if (artifact.reportName.isEmpty) missing.add('reportName');
+
+        if (artifact.reportName == 'arba_report') {
+          if (_artifactMetaString(artifact, 'scope') == null) missing.add('metadata.scope');
+          if (_artifactMetaString(artifact, 'show_letter') == null) missing.add('metadata.show_letter');
+        } else if (artifact.reportName == 'exhibitor_report') {
+          if (_artifactMetaString(artifact, 'exhibitor_id') == null) missing.add('metadata.exhibitor_id');
+        } else if (artifact.reportName == 'legs' || artifact.reportName == 'leg_report') {
+          if (_artifactMetaString(artifact, 'exhibitor_id') == null) missing.add('metadata.exhibitor_id');
+          final hasLegs = artifact.metadata['has_legs'] == true;
+          final legsCountRaw = artifact.metadata['legs_count'];
+          final legsCount = legsCountRaw is int
+              ? legsCountRaw
+              : int.tryParse((legsCountRaw ?? '').toString()) ?? 0;
+          if (!hasLegs && legsCount <= 0) missing.add('metadata.has_legs/legs_count');
+        } else if (artifact.reportName == 'sweepstakes_report' ||
+            artifact.reportName == 'breed_results_detail_report') {
+          if (_artifactMetaString(artifact, 'scope') == null) missing.add('metadata.scope');
+          if (_artifactMetaString(artifact, 'show_letter') == null) missing.add('metadata.show_letter');
+        }
+
+        final error = Exception(
+          'Report artifact could not be generated because required metadata is missing: '
+          '${missing.isEmpty ? 'unknown required metadata' : missing.join(', ')}.',
+        );
+
+        debugPrint(
+          'Skipping invalid report artifact ${artifact.reportName} (${artifact.id}): $error',
+        );
+
+        onFailed(key, error);
+
+        if (artifact.id.isNotEmpty) {
+          await supabase
+              .from('show_report_artifacts')
+              .update({
+                'artifact_status': 'failed',
+                'error_count': 1,
+                'metadata': {
+                  ...artifact.metadata,
+                  'last_error': error.toString(),
+                },
+              })
+              .eq('id', artifact.id);
+        }
+      }
 
       const batchSize = 4;
 
@@ -2177,6 +2268,11 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         await UnpaidBalancesReportPdfBuilder.fromAssets();
   }
 
+  Future<void> _ensurePaidExhibitorReportBuilder() async {
+    _paidExhibitorReportBuilder ??=
+        await PaidExhibitorReportPdfBuilder.fromAssets();
+  }
+
   Future<void> _ensureReportLogo() async {
     if (_reportLogoBytes != null) return;
 
@@ -2285,6 +2381,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       await _ensureLegsBuilder();
       await _ensureExhibitorBuilder();
       await _ensureUnpaidBalancesBuilder();
+      await _ensurePaidExhibitorReportBuilder();
       await _ensureReportLogo();
       await _ensureEnteredExhibitorsContactBuilder();
       await _ensureRibbonPayoutBuilder();
@@ -2485,7 +2582,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   }
 
   Future<void> _generateCurrentReportGroupByName(String reportName) async {
-    if (reportName != 'unpaid_balances_report') {
+    if (reportName != 'unpaid_balances_report' &&
+        reportName != 'paid_exhibitor_report') {
       final ready = await _ensureResultsReadyForReports();
       if (!ready) return;
     }
@@ -2556,7 +2654,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       String? exhibitorId,
       String? exhibitorName,
     }) async {
-      if (reportName != 'unpaid_balances_report') {
+      if (reportName != 'unpaid_balances_report' &&
+          reportName != 'paid_exhibitor_report') {
         final ready = await _ensureResultsReadyForReports();
         if (!ready) return;
       }
@@ -2571,6 +2670,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         await _ensureLegsBuilder();
         await _ensureExhibitorBuilder();
         await _ensureUnpaidBalancesBuilder();
+        await _ensurePaidExhibitorReportBuilder();
         await _ensureReportLogo();
         await _ensureEnteredExhibitorsContactBuilder();
         await _ensureRibbonPayoutBuilder();
@@ -2599,6 +2699,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         );
 
         final unpaidBalancesLoader = UnpaidBalancesReportLoader(repository);
+        final paidExhibitorReportLoader = PaidExhibitorReportLoader(repository);
 
         final enteredExhibitorsContactLoader =
             EnteredExhibitorsContactReportLoader(supabase);
@@ -2618,6 +2719,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           breedResultsDetailReportBuilder: breedResultsDetailReportBuilder,
           unpaidBalancesLoader: unpaidBalancesLoader,
           unpaidBalancesBuilder: _unpaidBalancesBuilder!,
+          paidExhibitorReportLoader: paidExhibitorReportLoader,
+          paidExhibitorReportBuilder: _paidExhibitorReportBuilder!,
           enteredExhibitorsContactLoader: enteredExhibitorsContactLoader,
           enteredExhibitorsContactBuilder: _enteredExhibitorsContactBuilder!,
           ribbonPayoutLoader: ribbonPayoutLoader,
@@ -3098,6 +3201,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       } else if (groupKey == 'other') {
         const otherManualReports = <String>{
           'unpaid_balances_report',
+          'paid_exhibitor_report',
           'entered_exhibitors_contact_report',
           'ribbon_payout_report',
         };
@@ -4024,7 +4128,8 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
   }
 
   bool get _selectedReportIgnoresResultsReadiness =>
-    _selectedReportName == 'unpaid_balances_report';
+    _selectedReportName == 'unpaid_balances_report' ||
+    _selectedReportName == 'paid_exhibitor_report';
   
   bool get _selectedReportCanEmail {
     return _selectedReportName == 'arba_report' ||
@@ -4840,10 +4945,7 @@ class _GenerateAllReportsDialogState extends State<_GenerateAllReportsDialog> {
   }
 
   String _artifactKey(ReportArtifactSummary artifact) {
-    final filePart = (artifact.fileName?.trim().isNotEmpty ?? false)
-        ? ' • ${artifact.fileName!.trim()}'
-        : '';
-    return '${artifact.reportName}::${artifact.id}$filePart';
+    return '${artifact.reportName}::${artifact.id}';
   }
 
   String _artifactLabel(ReportArtifactSummary artifact) {
@@ -5108,6 +5210,8 @@ String _friendlyReportName(String? key) {
       return 'Breed Results Detail Report';
     case 'unpaid_balances_report':
       return 'Unpaid Exhibitor Balances';  
+    case 'paid_exhibitor_report':
+      return 'Paid Exhibitor Report';
     case 'cavy_points':
       return 'Cavy Points';
     case 'commercial_points':

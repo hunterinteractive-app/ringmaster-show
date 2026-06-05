@@ -915,7 +915,7 @@ class ArbaReportLoader {
           .from('entries')
           .select('''
             id,
-            exhibitor:exhibitors(
+            exhibitor:exhibitors!entries_exhibitor_id_fkey(
               address_line1,
               address_line2,
               city,
