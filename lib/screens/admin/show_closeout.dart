@@ -1637,14 +1637,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         }
 
         if (a.reportName == 'legs' || a.reportName == 'leg_report') {
-          final exhibitorId = _artifactMetaString(a, 'exhibitor_id');
-          final hasLegs = a.metadata['has_legs'] == true;
-          final legsCountRaw = a.metadata['legs_count'];
-          final legsCount = legsCountRaw is int
-              ? legsCountRaw
-              : int.tryParse((legsCountRaw ?? '').toString()) ?? 0;
-
-          return exhibitorId != null && (hasLegs || legsCount > 0);
+          return _artifactMetaString(a, 'exhibitor_id') != null;
         }
 
         if (a.reportName == 'sweepstakes_report' ||
@@ -1676,13 +1669,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         } else if (artifact.reportName == 'exhibitor_report') {
           if (_artifactMetaString(artifact, 'exhibitor_id') == null) missing.add('metadata.exhibitor_id');
         } else if (artifact.reportName == 'legs' || artifact.reportName == 'leg_report') {
-          if (_artifactMetaString(artifact, 'exhibitor_id') == null) missing.add('metadata.exhibitor_id');
-          final hasLegs = artifact.metadata['has_legs'] == true;
-          final legsCountRaw = artifact.metadata['legs_count'];
-          final legsCount = legsCountRaw is int
-              ? legsCountRaw
-              : int.tryParse((legsCountRaw ?? '').toString()) ?? 0;
-          if (!hasLegs && legsCount <= 0) missing.add('metadata.has_legs/legs_count');
+          if (_artifactMetaString(artifact, 'exhibitor_id') == null) {
+            missing.add('metadata.exhibitor_id');
+          }
         } else if (artifact.reportName == 'sweepstakes_report' ||
             artifact.reportName == 'breed_results_detail_report') {
           if (_artifactMetaString(artifact, 'scope') == null) missing.add('metadata.scope');
