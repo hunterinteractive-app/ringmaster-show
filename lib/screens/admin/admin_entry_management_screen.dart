@@ -2920,6 +2920,8 @@ Future<void> _openSharedAnimalEditorForAdd() async {
         orElse: () => <String, dynamic>{},
       );
 
+      final exhibitorOwnerUserId =
+          (exhibitor['owner_user_id'] ?? '').toString().trim();
       final type = (exhibitor['type'] ?? '').toString().toLowerCase();
 
       final hasYouthSection = _selectedSectionIds.any(
@@ -2961,7 +2963,6 @@ Future<void> _openSharedAnimalEditorForAdd() async {
       String? animalId;
 
       if (_useLocalAnimal) {
-        final ownerUserId = (exhibitor['owner_user_id'] ?? '').toString().trim();
         final normalizedTattoo = _tattoo.text.trim().toUpperCase();
         final now = DateTime.now().toUtc().toIso8601String();
 
@@ -2972,8 +2973,9 @@ Future<void> _openSharedAnimalEditorForAdd() async {
             .eq('breed', _breed.text.trim())
             .eq('species', _species);
 
-        if (ownerUserId.isNotEmpty) {
-          existingAnimalQuery = existingAnimalQuery.eq('owner_user_id', ownerUserId);
+        if (exhibitorOwnerUserId.isNotEmpty) {
+          existingAnimalQuery =
+              existingAnimalQuery.eq('owner_user_id', exhibitorOwnerUserId);
         } else {
           existingAnimalQuery = existingAnimalQuery.eq('exhibitor_id', resolvedExhibitorId);
         }
@@ -2986,7 +2988,7 @@ Future<void> _openSharedAnimalEditorForAdd() async {
           final insertedAnimal = await supabase
               .from('animals')
               .insert({
-                'owner_user_id': ownerUserId.isEmpty ? null : ownerUserId,
+                'owner_user_id': exhibitorOwnerUserId.isEmpty ? null : exhibitorOwnerUserId,
                 'exhibitor_id': resolvedExhibitorId,
                 'species': _species,
                 'name': _animalName.text.trim().isEmpty
@@ -3035,6 +3037,8 @@ Future<void> _openSharedAnimalEditorForAdd() async {
           'show_id': widget.showId,
           'section_id': sectionId,
           'exhibitor_id': resolvedExhibitorId,
+          'exhibitor_user_id':
+              exhibitorOwnerUserId.isEmpty ? null : exhibitorOwnerUserId,
           'animal_id': animalId,
           'species': _useLocalAnimal ? _species : _animal!['species'],
           'tattoo': _useLocalAnimal
