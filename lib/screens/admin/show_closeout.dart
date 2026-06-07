@@ -125,6 +125,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     static const List<String> _reportDisplayOrder = [
       'arba_report',
       'exhibitor_report',
+      'unpaid_balances_report',
+      'paid_exhibitor_report',
       'entered_exhibitors_contact_report',
       'legs',
       'newsletter_show_report',
@@ -135,8 +137,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       'fur_points',
       'sweepstakes_report',
       'breed_results_detail_report',
-      'unpaid_balances_report',
-      'paid_exhibitor_report',
       'cavy_points',
       'commercial_points',
       'judge_report',
@@ -459,6 +459,22 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         });
 
       return list;
+    }
+
+    Future<String?> _loadArbaReportEmailTarget() async {
+      final rows = await supabase
+          .from('show_sanctions')
+          .select('sweepstakes_email, sanctioning_body')
+          .eq('show_id', widget.showId)
+          .ilike('sanctioning_body', 'ARBA');
+
+      for (final raw in (rows as List)) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        final email = (row['sweepstakes_email'] ?? '').toString().trim();
+        if (email.isNotEmpty) return email;
+      }
+
+      return null;
     }
 
     Future<void> _loadCloseoutScopes() async {
@@ -1998,7 +2014,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           await _sendClubArtifactsEmail(
             artifacts: artifacts,
             to: first.email,
-            //to: 'zaynetort2@gmail.com',
             subject: subject,
             message: message,
           );
@@ -2981,6 +2996,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     }
   }
 
+
   Future<void> _emailReportByName(
     String reportName, {
     String? exhibitorId,
@@ -3036,6 +3052,41 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
       final artifact = list.first;
 
+      if (reportName == 'arba_report') {
+        final email = (await _loadArbaReportEmailTarget()) ?? '';
+
+        if (email.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'No ARBA email found for this report. Add the ARBA sweepstakes email to the ARBA sanction record first.',
+              ),
+            ),
+          );
+          return;
+        }
+
+        await _sendClubArtifactsEmail(
+          artifacts: list,
+          to: email,
+          subject: '${widget.showName} - ARBA Show Report',
+          message:
+              'Attached ${list.length == 1 ? 'is the ARBA show report' : 'are the ARBA show reports'} for ${widget.showName}.',
+        );
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              list.length == 1
+                  ? 'ARBA Report emailed to ARBA at $email.'
+                  : '${list.length} ARBA Reports emailed to ARBA at $email.',
+            ),
+          ),
+        );
+        return;
+      }
+
       final isClubReport = reportName == 'sweepstakes_report' ||
           reportName == 'breed_results_detail_report';
 
@@ -3081,8 +3132,12 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
       if (email.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No email found for this exhibitor.'),
+          SnackBar(
+            content: Text(
+              reportName == 'legs'
+                  ? 'No email found for this legs recipient.'
+                  : 'No email found for this exhibitor.',
+            ),
           ),
         );
         return;
@@ -3638,12 +3693,13 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                         : 'Send $_selectedCloseoutScopeLabel Exhibitor Reports',
                                   ),
                                 ),
+                                /*
                                 ElevatedButton.icon(
                                   onPressed: _isBusy || _isSupportMode ? null : _sendAllLegsReports,
                                   icon: const Icon(Icons.pets),
                                   label: const Text('Send All Legs'),
                                 ),
-
+                                */
                                 OutlinedButton.icon(
                                   onPressed:
                                       _isBusy ? null : _sendAllClubReports,
@@ -4760,7 +4816,9 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
                           )
                   : null,
               icon: const Icon(Icons.email_outlined),
-              label: const Text('Email'),
+              label: Text(
+                _selectedReportName == 'arba_report' ? 'Email to ARBA' : 'Email',
+              ),
             ),
           ],
         ),
