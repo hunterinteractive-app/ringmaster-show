@@ -68,14 +68,14 @@ bool _isFurOrWoolEntry(Map<String, dynamic> row) {
 
 bool _isCavyEntry(Map<String, dynamic> row) {
   final species = (row['species'] ?? '').toString().trim().toLowerCase();
+
+  // Species is the source of truth. Some breed names overlap between rabbits
+  // and cavies, such as American, so breed-name fallback can incorrectly
+  // classify rabbit entries as cavies and pull cavy award labels.
   if (species == 'cavy') return true;
+  if (species == 'rabbit') return false;
 
-  final breed = (row['breed'] ?? row['breed_name'] ?? '')
-      .toString()
-      .trim()
-      .toLowerCase();
-
-  return cavyBreedOrder.any((b) => b.toLowerCase() == breed);
+  return false;
 }
 
 String _awardDisplayLabel(String award, Map<String, dynamic> entry) {
@@ -1125,20 +1125,32 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
 
         e['animal_name'] ??= '';
 
-        final breedKey = (e['breed'] ?? '')
-            .toString()
-            .trim()
-            .toLowerCase();
+              final breedKey = (e['breed'] ?? '')
+                  .toString()
+                  .trim()
+                  .toLowerCase();
 
-        if (breedKey.isNotEmpty) {
-          e['uses_group_awards'] = _breedUsesGroupAwards.containsKey(breedKey)
-              ? _breedUsesGroupAwards[breedKey]
-              : e['uses_group_awards'] == true;
+              // Species is the source of truth for award flow. Some breed names overlap
+              // between rabbits and cavies, such as American. Do not let cavy breed
+              // settings force rabbit entries into group awards.
+              if (breedKey.isNotEmpty) {
+                if (_isCavyEntry(e)) {
+                  e['uses_group_awards'] = _breedUsesGroupAwards.containsKey(breedKey)
+                      ? _breedUsesGroupAwards[breedKey]
+                      : e['uses_group_awards'] == true;
 
-          e['uses_variety_awards'] = _breedUsesVarietyAwards.containsKey(breedKey)
-              ? _breedUsesVarietyAwards[breedKey]
-              : e['uses_variety_awards'] == true;
-        }
+                  e['uses_variety_awards'] = _breedUsesVarietyAwards.containsKey(breedKey)
+                      ? _breedUsesVarietyAwards[breedKey]
+                      : e['uses_variety_awards'] == true;
+                } else {
+                  e['uses_group_awards'] = false;
+
+                  // Do not override rabbit variety flow from the global breed-name map.
+                  // Breed names overlap between rabbits and cavies, so the map can point
+                  // at the wrong American row. Keep the row/RPC value as the source.
+                  e['uses_variety_awards'] = _entryUsesVarietyAwards(e);
+                }
+              }
 
         final normalizedGroup = (
           e['group_name'] ??
@@ -1413,30 +1425,41 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     final breedName =
         (firstBreed.isNotEmpty ? firstBreed : firstBreedName).toLowerCase();
 
-    final breedSettingUsesGroups =
-        breedName.isNotEmpty && (_breedUsesGroupAwards[breedName] == true);
+    final anyCavyEntry = normalEntries.any(_isCavyEntry);
+
+    final breedSettingUsesGroups = anyCavyEntry &&
+        breedName.isNotEmpty &&
+        (_breedUsesGroupAwards[breedName] == true);
 
     final rowUsesGroups =
-        normalEntries.any((e) => e['uses_group_awards'] == true);
+        normalEntries.any((e) => _isCavyEntry(e) && e['uses_group_awards'] == true);
 
     return breedSettingUsesGroups || rowUsesGroups;
   }
 
-  bool _showsByVariety(List<Map<String, dynamic>> entries) {
-    final normalEntries = entries.where((e) => !_isFurEntry(e)).toList();
-    if (normalEntries.isEmpty) return false;
+bool _showsByVariety(List<Map<String, dynamic>> entries) {
+  final normalEntries = entries.where((e) => !_isFurEntry(e)).toList();
+  if (normalEntries.isEmpty) return false;
 
-    final firstBreed = (normalEntries.first['breed'] ?? '').toString().trim();
-    final firstBreedName = (normalEntries.first['breed_name'] ?? '').toString().trim();
-    final breedName = (firstBreed.isNotEmpty ? firstBreed : firstBreedName)
-        .toLowerCase();
+  final anyRabbitEntry = normalEntries.any((e) => !_isCavyEntry(e));
 
-    if (breedName.isNotEmpty && _breedUsesVarietyAwards.containsKey(breedName)) {
-      return _breedUsesVarietyAwards[breedName] == true;
-    }
-
-    return normalEntries.any((e) => e['uses_variety_awards'] == true);
+  // For rabbits, trust the hydrated row/RPC value. Do not use the global
+  // breed-name map because names like American overlap with cavies.
+  if (anyRabbitEntry) {
+    return normalEntries.any((e) => !_isCavyEntry(e) && _entryUsesVarietyAwards(e));
   }
+
+  final firstBreed = (normalEntries.first['breed'] ?? '').toString().trim();
+  final firstBreedName = (normalEntries.first['breed_name'] ?? '').toString().trim();
+  final breedName = (firstBreed.isNotEmpty ? firstBreed : firstBreedName)
+      .toLowerCase();
+
+  if (breedName.isNotEmpty && _breedUsesVarietyAwards.containsKey(breedName)) {
+    return _breedUsesVarietyAwards[breedName] == true;
+  }
+
+  return normalEntries.any(_entryUsesVarietyAwards);
+}
 
   String _judgeNameById(String? judgeId) {
     if (judgeId == null || judgeId.isEmpty) return '';
@@ -1563,6 +1586,8 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
   }
 
     bool showsByGroup(Map<String, dynamic> e) {
+      if (!_isCavyEntry(e)) return false;
+
       final thisBreedRaw = (e['breed'] ?? '').toString().trim();
       final thisBreedName = (e['breed_name'] ?? '').toString().trim();
       final thisBreed =
@@ -1576,6 +1601,10 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     }
 
     bool showsByVariety(Map<String, dynamic> e) {
+      if (!_isCavyEntry(e)) {
+        return _entryUsesVarietyAwards(e);
+      }
+
       final thisBreedRaw = (e['breed'] ?? '').toString().trim();
       final thisBreedName = (e['breed_name'] ?? '').toString().trim();
       final thisBreed =
@@ -1586,7 +1615,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
         return _breedUsesVarietyAwards[thisBreed] == true;
       }
 
-      return e['uses_variety_awards'] == true;
+      return _entryUsesVarietyAwards(e);
     }
 
     String sex(Map<String, dynamic> e) => (e['sex'] ?? '').toString().trim().toLowerCase();
@@ -1615,10 +1644,11 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
       if (explicitGroup.isNotEmpty) return explicitGroup;
 
       final breedKey = breed(e).toLowerCase();
-      final usesGroups =
-          e['uses_group_awards'] == true || _breedUsesGroupAwards[breedKey] == true;
-      final usesVarieties =
-          e['uses_variety_awards'] == true || _breedUsesVarietyAwards[breedKey] == true;
+      final usesGroups = _isCavyEntry(e) &&
+          (e['uses_group_awards'] == true || _breedUsesGroupAwards[breedKey] == true);
+      final usesVarieties = _isCavyEntry(e)
+          ? (_entryUsesVarietyAwards(e) || _breedUsesVarietyAwards[breedKey] == true)
+          : _entryUsesVarietyAwards(e);
 
       if (usesGroups && !usesVarieties) {
         return variety(e);
@@ -1782,14 +1812,20 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     winCode: 'BOV',
     oppCode: 'BOSV',
     scopeLabel: 'variety',
-    scopeKey: (e) => '${sectionId(e)}|${breed(e).toLowerCase()}|${variety(e).toLowerCase()}',
+    scopeKey: (e) {
+      if (!showsByVariety(e)) return '';
+      return '${sectionId(e)}|${breed(e).toLowerCase()}|${variety(e).toLowerCase()}';
+    },
   );
 
   checkOpposite(
     winCode: 'BOG',
     oppCode: 'BOSG',
     scopeLabel: 'group',
-    scopeKey: (e) => '${sectionId(e)}|${breed(e).toLowerCase()}|${groupName(e).toLowerCase()}',
+    scopeKey: (e) {
+      if (!showsByGroup(e)) return '';
+      return '${sectionId(e)}|${breed(e).toLowerCase()}|${groupName(e).toLowerCase()}';
+    },
   );
 
   checkOpposite(
