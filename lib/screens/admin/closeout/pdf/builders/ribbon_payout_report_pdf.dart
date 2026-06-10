@@ -1,3 +1,5 @@
+// lib/screens/admin/closeout/pdf/builders/ribbon_report_pdf.dart
+
 import 'dart:typed_data';
 
 import 'package:pdf/pdf.dart';
@@ -14,98 +16,173 @@ class RibbonPayoutReportPdf {
   ) async {
     final pdf = pw.Document();
 
-    final rows = [...data.rows]
-      ..sort((a, b) {
-        final numCmp = a.exhibitorNumber.compareTo(b.exhibitorNumber);
-        if (numCmp != 0) return numCmp;
-        return a.exhibitorName.toLowerCase().compareTo(
-              b.exhibitorName.toLowerCase(),
-            );
-      });
+    int exhibitorNumberSortValue(String value) {
+      final trimmed = value.trim();
+      final numeric = int.tryParse(trimmed);
+      if (numeric != null) return numeric;
+      return 999999;
+    }
 
-    pdf.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.letter,
-        margin: const pw.EdgeInsets.fromLTRB(28, 24, 28, 24),
-        build: (context) => [
-          pw.Text(
-            'Ribbon Report',
-            style: pw.TextStyle(
-              fontSize: 18,
-              fontWeight: pw.FontWeight.bold,
-            ),
-          ),
-          pw.SizedBox(height: 12),
 
-          pw.Table(
-            border: pw.TableBorder.all(
-              color: PdfColors.grey500,
-              width: 0.75,
-            ),
-            columnWidths: const {
-              0: pw.FlexColumnWidth(1.2),
-              1: pw.FlexColumnWidth(1.2),
-            },
-            children: [
-              _infoRow('Event Name: ${data.eventName}', 'Sponsoring club: ${data.sponsoringClub}'),
-              _infoRow('Event Secretary: ${data.eventSecretary}', 'Event Secretary Email: ${data.eventSecretaryEmail}'),
-              _infoRow('Sponsoring Superintendent: ${data.sponsoringSuperintendent}', 'Classification: ${data.classification}'),
-              _infoRow('Show: ${data.showLetter}', 'Type: ${data.type}'),
-              _infoRow('Specialty: ${data.specialty}', 'ARBA sanction: ${data.arbaSanction}'),
-            ],
-          ),
+    String displayExhibitorNumber(String value) {
+      final trimmed = value.trim();
+      final looksLikeUuid = RegExp(
+        r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+      ).hasMatch(trimmed);
+      if (looksLikeUuid) return '';
+      return trimmed;
+    }
 
-          pw.SizedBox(height: 14),
+    String displaySponsoringClub(RibbonPayoutSectionData section) {
+      final sectionClub = section.sponsoringClub.trim();
+      if (sectionClub.isNotEmpty && sectionClub.toUpperCase() != 'ARBA') {
+        return sectionClub;
+      }
 
-          pw.Table.fromTextArray(
-            border: pw.TableBorder.all(
-              color: PdfColors.grey500,
-              width: 0.75,
+      final dataClub = data.sponsoringClub.trim();
+      if (dataClub.isNotEmpty && dataClub.toUpperCase() != 'ARBA') {
+        return dataClub;
+      }
+
+      final showName = data.showName.trim().isNotEmpty
+          ? data.showName.trim()
+          : data.eventName.trim();
+      if (showName.isEmpty) return '';
+
+      return showName
+          .replaceAll(RegExp(r'\bshow\b', caseSensitive: false), '')
+          .replaceAll(RegExp(r'\bspring\b|\bsummer\b|\bfall\b|\bwinter\b', caseSensitive: false), '')
+          .replaceAll(RegExp(r'\b20\d{2}\b'), '')
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
+    }
+
+    final sections = data.sections.isNotEmpty
+        ? data.sections
+        : [
+            RibbonPayoutSectionData(
+              sponsoringClub: data.sponsoringClub,
+              classification: data.classification,
+              showLetter: data.showLetter,
+              type: data.type,
+              specialty: data.specialty,
+              arbaSanction: data.arbaSanction,
+              rows: data.rows,
             ),
-            headerDecoration: const pw.BoxDecoration(
-              color: PdfColors.grey300,
+          ];
+
+    for (var sectionIndex = 0; sectionIndex < sections.length; sectionIndex++) {
+      final section = sections[sectionIndex];
+      if (section.rows.isEmpty) continue;
+
+      final rows = [...section.rows]
+        ..sort((a, b) {
+          final numCmp = exhibitorNumberSortValue(a.exhibitorNumber).compareTo(
+            exhibitorNumberSortValue(b.exhibitorNumber),
+          );
+          if (numCmp != 0) return numCmp;
+
+          final rawNumCmp = a.exhibitorNumber.compareTo(b.exhibitorNumber);
+          if (rawNumCmp != 0) return rawNumCmp;
+
+          return a.exhibitorName.toLowerCase().compareTo(
+                b.exhibitorName.toLowerCase(),
+              );
+        });
+
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.letter,
+          margin: const pw.EdgeInsets.fromLTRB(28, 24, 28, 24),
+          build: (context) => [
+            pw.Text(
+              'Ribbon Report',
+              style: pw.TextStyle(
+                fontSize: 18,
+                fontWeight: pw.FontWeight.bold,
+              ),
             ),
-            headerStyle: pw.TextStyle(
-              fontWeight: pw.FontWeight.bold,
-              fontSize: 10,
+            pw.SizedBox(height: 12),
+            pw.Table(
+              border: pw.TableBorder.all(
+                color: PdfColors.grey500,
+                width: 0.75,
+              ),
+              columnWidths: const {
+                0: pw.FlexColumnWidth(1.2),
+                1: pw.FlexColumnWidth(1.2),
+              },
+              children: [
+                _infoRow(
+                  'Event Name: ${data.eventName}',
+                  'Sponsoring club: ${displaySponsoringClub(section)}',
+                ),
+                _infoRow(
+                  'Event Secretary: ${data.eventSecretary}',
+                  'Event Secretary Email: ${data.eventSecretaryEmail}',
+                ),
+                _infoRow(
+                  'Sponsoring Superintendent: ${data.sponsoringSuperintendent}',
+                  'Classification: ${section.classification}',
+                ),
+                _infoRow('Show: ${section.showLetter}', 'Type: ${section.type}'),
+                _infoRow(
+                  'Specialty: ${section.specialty}',
+                  'ARBA sanction: ${section.arbaSanction}',
+                ),
+              ],
             ),
-            cellStyle: const pw.TextStyle(fontSize: 9),
-            cellAlignment: pw.Alignment.centerLeft,
-            columnWidths: const {
-              0: pw.FlexColumnWidth(1.2),
-              1: pw.FlexColumnWidth(3.2),
-              2: pw.FlexColumnWidth(0.8),
-              3: pw.FlexColumnWidth(0.8),
-              4: pw.FlexColumnWidth(0.8),
-              5: pw.FlexColumnWidth(0.8),
-              6: pw.FlexColumnWidth(0.8),
-            },
-            headers: const [
-              'Exh #',
-              'Exhibitor',
-              'Placing 1',
-              'Placing 2',
-              'Placing 3',
-              'Placing 4',
-              'Placing 5',
-            ],
-            data: rows
-                .map(
-                  (r) => [
-                    r.exhibitorNumber,
-                    r.exhibitorName,
-                    r.first.toString(),
-                    r.second.toString(),
-                    r.third.toString(),
-                    r.fourth.toString(),
-                    r.fifth.toString(),
-                  ],
-                )
-                .toList(),
-          ),
-        ],
-      ),
-    );
+            pw.SizedBox(height: 14),
+            pw.Table.fromTextArray(
+              border: pw.TableBorder.all(
+                color: PdfColors.grey500,
+                width: 0.75,
+              ),
+              headerDecoration: const pw.BoxDecoration(
+                color: PdfColors.grey300,
+              ),
+              headerStyle: pw.TextStyle(
+                fontWeight: pw.FontWeight.bold,
+                fontSize: 10,
+              ),
+              cellStyle: const pw.TextStyle(fontSize: 9),
+              cellAlignment: pw.Alignment.centerLeft,
+              columnWidths: const {
+                0: pw.FlexColumnWidth(1.2),
+                1: pw.FlexColumnWidth(3.2),
+                2: pw.FlexColumnWidth(0.8),
+                3: pw.FlexColumnWidth(0.8),
+                4: pw.FlexColumnWidth(0.8),
+                5: pw.FlexColumnWidth(0.8),
+                6: pw.FlexColumnWidth(0.8),
+              },
+              headers: const [
+                'Exh #',
+                'Exhibitor',
+                '1st',
+                '2nd',
+                '3rd',
+                '4th',
+                '5th',
+              ],
+              data: rows
+                  .map(
+                    (r) => [
+                      displayExhibitorNumber(r.exhibitorNumber),
+                      r.exhibitorName,
+                      r.first.toString(),
+                      r.second.toString(),
+                      r.third.toString(),
+                      r.fourth.toString(),
+                      r.fifth.toString(),
+                    ],
+                  )
+                  .toList(),
+            ),
+          ],
+        ),
+      );
+    }
 
     final bytes = await pdf.save();
 
@@ -128,7 +205,7 @@ class RibbonPayoutReportPdf {
 
     return ReportFileResult(
       bytes: Uint8List.fromList(bytes),
-      fileName: '${cleanedShowName}_ribbon_payout_report.pdf',
+      fileName: '${cleanedShowName}_combined_ribbon_payout_report.pdf',
       mimeType: 'application/pdf',
     );
   }

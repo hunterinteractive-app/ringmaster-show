@@ -4,6 +4,7 @@ import '../data/loaders/arba_report_loader.dart';
 import '../data/loaders/breed_results_detail_report_loader.dart';
 import '../data/loaders/entered_exhibitors_contact_report_loader.dart';
 import '../data/loaders/exhibitor_report_loader.dart';
+import '../data/loaders/judge_report_loader.dart';
 import '../data/loaders/legs_report_loader.dart';
 import '../data/loaders/paid_exhibitor_report_loader.dart';
 import '../data/loaders/ribbon_payout_report_loader.dart';
@@ -16,6 +17,7 @@ import '../models/clubs/sweepstakes_report_data.dart';
 import '../models/exhibitor/entered_exhibitors_contact_report_data.dart';
 import '../models/exhibitor/exhibitor_report_data.dart';
 import '../models/exhibitor/ribbon_payout_report_data.dart';
+import '../models/judge/judge_report_data.dart';
 import '../models/legs/legs_certificate_data.dart';
 import '../models/paid/paid_exhibitor_report_data.dart';
 import '../models/unpaid/unpaid_balances_report_data.dart';
@@ -24,6 +26,7 @@ import '../pdf/builders/arba_report_pdf.dart';
 import '../pdf/builders/breed_results_detail_report_pdf.dart';
 import '../pdf/builders/entered_exhibitors_contact_report_pdf.dart';
 import '../pdf/builders/exhibitor_report_pdf.dart';
+import '../pdf/builders/judge_report_pdf.dart';
 import '../pdf/builders/legs_report_pdf.dart';
 import '../pdf/builders/paid_exhibitor_report_pdf.dart';
 import '../pdf/builders/ribbon_payout_report_pdf.dart';
@@ -54,6 +57,8 @@ class ReportRegistry {
     required EnteredExhibitorsContactReportPdf enteredExhibitorsContactBuilder,
     required RibbonPayoutReportLoader ribbonPayoutLoader,
     required RibbonPayoutReportPdf ribbonPayoutBuilder,
+    required JudgeReportLoader judgeReportLoader,
+    required JudgeReportPdfBuilder judgeReportBuilder,
   }) : definitions = {
           'arba_report': ReportDefinition(
             reportName: 'arba_report',
@@ -142,6 +147,15 @@ class ReportRegistry {
                   data as RibbonPayoutReportData,
                   req,
                 ),
+          ),
+          'judge_report': ReportDefinition(
+            reportName: 'judge_report',
+            outputType: 'pdf',
+            loader: (req) async => await judgeReportLoader.load(
+              showId: req.showId,
+            ),
+            builder: (data, req) async =>
+                await judgeReportBuilder.buildFile(data as JudgeReportData, req),
           ),
         };
 

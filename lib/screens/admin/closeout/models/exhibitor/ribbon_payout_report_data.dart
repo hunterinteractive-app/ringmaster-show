@@ -34,6 +34,7 @@ class RibbonPayoutReportData {
   final String specialty;
   final String arbaSanction;
   final List<RibbonPayoutRow> rows;
+  final List<RibbonPayoutSectionData> sections;
 
   const RibbonPayoutReportData({
     required this.showId,
@@ -43,6 +44,27 @@ class RibbonPayoutReportData {
     required this.eventSecretary,
     required this.eventSecretaryEmail,
     required this.sponsoringSuperintendent,
+    required this.classification,
+    required this.showLetter,
+    required this.type,
+    required this.specialty,
+    required this.arbaSanction,
+    required this.rows,
+    this.sections = const [],
+  });
+}
+
+class RibbonPayoutSectionData {
+  final String sponsoringClub;
+  final String classification;
+  final String showLetter;
+  final String type;
+  final String specialty;
+  final String arbaSanction;
+  final List<RibbonPayoutRow> rows;
+
+  const RibbonPayoutSectionData({
+    required this.sponsoringClub,
     required this.classification,
     required this.showLetter,
     required this.type,

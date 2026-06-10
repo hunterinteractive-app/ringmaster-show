@@ -28,7 +28,9 @@ import 'closeout/data/loaders/unpaid_balances_report_loader.dart';
 import 'closeout/data/loaders/paid_exhibitor_report_loader.dart';
 import 'closeout/data/loaders/entered_exhibitors_contact_report_loader.dart';
 import 'closeout/data/loaders/ribbon_payout_report_loader.dart';
+import 'closeout/data/loaders/judge_report_loader.dart';
 
+import 'closeout/pdf/builders/judge_report_pdf.dart';
 import 'closeout/pdf/builders/legs_report_pdf.dart';
 import 'closeout/pdf/builders/exhibitor_report_pdf.dart';
 import 'closeout/pdf/builders/sweepstakes_report_pdf.dart';
@@ -1494,6 +1496,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         enteredExhibitorsContactBuilder: _enteredExhibitorsContactBuilder!,
         ribbonPayoutLoader: ribbonPayoutLoader,
         ribbonPayoutBuilder: _ribbonPayoutBuilder!,
+        judgeReportLoader: JudgeReportLoader(),
+        judgeReportBuilder: JudgeReportPdfBuilder(),
       );
 
       final engine = ReportEngine(registry);
@@ -2768,6 +2772,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           enteredExhibitorsContactBuilder: _enteredExhibitorsContactBuilder!,
           ribbonPayoutLoader: ribbonPayoutLoader,
           ribbonPayoutBuilder: _ribbonPayoutBuilder!,
+          judgeReportLoader: JudgeReportLoader(),
+          judgeReportBuilder: JudgeReportPdfBuilder(),
         );
 
         final engine = ReportEngine(registry);
@@ -3287,6 +3293,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           'paid_exhibitor_report',
           'entered_exhibitors_contact_report',
           'ribbon_payout_report',
+          'judge_report',
         };
 
         for (final name in otherManualReports) {
