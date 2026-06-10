@@ -17,13 +17,20 @@ class LegsReportPdfBuilder {
   final Uint8List ringMasterShowLogoBytes;
   final Uint8List grandChampionCertificateBytes;
   final Uint8List bestInShowCertificateBytes;
+  final pw.MemoryImage _arbaLogoImage;
+  final pw.MemoryImage _ringMasterShowLogoImage;
+  final pw.MemoryImage _grandChampionCertificateImage;
+  final pw.MemoryImage _bestInShowCertificateImage;
 
   LegsReportPdfBuilder({
     required this.arbaLogoBytes,
     required this.ringMasterShowLogoBytes,
     required this.grandChampionCertificateBytes,
     required this.bestInShowCertificateBytes,
-  });
+  })  : _arbaLogoImage = pw.MemoryImage(arbaLogoBytes),
+        _ringMasterShowLogoImage = pw.MemoryImage(ringMasterShowLogoBytes),
+        _grandChampionCertificateImage = pw.MemoryImage(grandChampionCertificateBytes),
+        _bestInShowCertificateImage = pw.MemoryImage(bestInShowCertificateBytes);
 
   static Future<LegsReportPdfBuilder> fromAssets() async {
     final arbaLogoBytes = (await rootBundle.load('assets/images/arba_logo.png'))
@@ -86,11 +93,24 @@ class LegsReportPdfBuilder {
   ];
 
   Future<pw.ThemeData> _buildTheme() async {
+    final regularFont = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSans-Regular.ttf'),
+    );
+    final boldFont = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSans-Bold.ttf'),
+    );
+    final italicFont = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSans-Italic.ttf'),
+    );
+    final boldItalicFont = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSans-BoldItalic.ttf'),
+    );
+
     return pw.ThemeData.withFont(
-      base: pw.Font.helvetica(),
-      bold: pw.Font.helveticaBold(),
-      italic: pw.Font.helveticaOblique(),
-      boldItalic: pw.Font.helveticaBoldOblique(),
+      base: regularFont,
+      bold: boldFont,
+      italic: italicFont,
+      boldItalic: boldItalicFont,
     );
   }
 
@@ -229,7 +249,7 @@ class LegsReportPdfBuilder {
           height: 42,
           alignment: pw.Alignment.center,
           child: pw.Image(
-            pw.MemoryImage(arbaLogoBytes),
+            _arbaLogoImage,
             fit: pw.BoxFit.contain,
           ),
         ),
@@ -337,7 +357,7 @@ class LegsReportPdfBuilder {
               height: 36,
               alignment: pw.Alignment.center,
               child: pw.Image(
-                pw.MemoryImage(arbaLogoBytes),
+                _arbaLogoImage,
                 fit: pw.BoxFit.contain,
               ),
             ),
@@ -639,7 +659,7 @@ class LegsReportPdfBuilder {
           pw.Expanded(
             child: _certificateImagePanel(
               title: 'GRAND CHAMPION CERTIFICATE',
-              imageBytes: grandChampionCertificateBytes,
+              image: _grandChampionCertificateImage,
               rules: const [
                 'A Grand Champion Certificate will be awarded to any rabbit or cavy that has won at least 3 Legs.',
                 'Only one Grand Champion Certificate will be awarded to the same rabbit or cavy.',
@@ -650,7 +670,7 @@ class LegsReportPdfBuilder {
           pw.Expanded(
             child: _certificateImagePanel(
               title: 'BEST IN SHOW CERTIFICATE',
-              imageBytes: bestInShowCertificateBytes,
+              image: _bestInShowCertificateImage,
               rules: const [
                 'The ARBA will award a Best in Show Certificate to any rabbit or cavy that has won this award.',
                 'The ARBA will award a Best in Specialty Show Certificate to any rabbit or cavy that has won this award at a breed specialty show.',
@@ -665,7 +685,7 @@ class LegsReportPdfBuilder {
 
   pw.Widget _certificateImagePanel({
     required String title,
-    required Uint8List imageBytes,
+    required pw.ImageProvider image,
     required List<String> rules,
   }) {
     return pw.Column(
@@ -675,7 +695,7 @@ class LegsReportPdfBuilder {
           height: 90,
           alignment: pw.Alignment.center,
           child: pw.Image(
-            pw.MemoryImage(imageBytes),
+            image,
             fit: pw.BoxFit.contain,
           ),
         ),
@@ -812,7 +832,7 @@ class LegsReportPdfBuilder {
                 height: 10,
                 alignment: pw.Alignment.center,
                 child: pw.Image(
-                  pw.MemoryImage(ringMasterShowLogoBytes),
+                  _ringMasterShowLogoImage,
                   fit: pw.BoxFit.contain,
                 ),
               ),

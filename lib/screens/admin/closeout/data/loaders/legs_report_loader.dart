@@ -85,11 +85,6 @@ class LegsReportLoader {
         awards.addAll(List<Map<String, dynamic>>.from(awardChunkRows as List));
       }
 
-      // ignore: avoid_print
-      print(
-        'LEG DEBUG loaded ${awards.length} award rows for ${contextEntryIds.length} shown/scoped entries.',
-      );
-
       final judgeRefs = entryContext.values
           .map((e) => e.showJudgeRowId)
           .where((e) => e.isNotEmpty)

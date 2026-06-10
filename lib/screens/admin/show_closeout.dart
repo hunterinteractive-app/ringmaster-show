@@ -1407,6 +1407,26 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     }
 
 
+    Duration _reportGenerationTimeoutFor(ReportArtifactSummary artifact) {
+      if (artifact.reportName == 'legs' || artifact.reportName == 'leg_report') {
+        return const Duration(minutes: 8);
+      }
+
+      if (artifact.reportName == 'arba_report') {
+        return const Duration(minutes: 5);
+      }
+
+      return const Duration(minutes: 3);
+    }
+
+    int _reportGenerationMaxAttemptsFor(ReportArtifactSummary artifact) {
+      if (artifact.reportName == 'legs' || artifact.reportName == 'leg_report') {
+        return 1;
+      }
+
+      return 3;
+    }
+
     Future<void> _runGenerateAllReportsLive(
       List<ReportArtifactSummary> artifacts, {
       required void Function(String artifactKey) onStarted,
@@ -1586,13 +1606,16 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         Object? lastError;
         StackTrace? lastStack;
 
-        for (var attempt = 1; attempt <= 3; attempt++) {
+        final timeout = _reportGenerationTimeoutFor(artifact);
+        final maxAttempts = _reportGenerationMaxAttemptsFor(artifact);
+
+        for (var attempt = 1; attempt <= maxAttempts; attempt++) {
           try {
             await generateAttempt().timeout(
-              const Duration(minutes: 2),
+              timeout,
               onTimeout: () {
                 throw TimeoutException(
-                  'Report generation timed out after 2 minutes for '
+                  'Report generation timed out after ${timeout.inMinutes} minutes for '
                   '${artifact.reportName} (${artifact.id}).',
                 );
               },
@@ -1604,12 +1627,12 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
             lastStack = st;
 
             debugPrint(
-              'Report generation failed attempt $attempt/3 for '
+              'Report generation failed attempt $attempt/$maxAttempts for '
               '${artifact.reportName} (${artifact.id}): $e',
             );
             debugPrintStack(stackTrace: st);
 
-            if (attempt < 3) {
+            if (attempt < maxAttempts) {
               await Future.delayed(Duration(seconds: attempt * 2));
             }
           }
@@ -1720,10 +1743,26 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         }
       }
 
+      debugPrint(
+        'CLOSEOUT GENERATE queued ${validArtifacts.length} valid artifacts: '
+        '${validArtifacts.map((a) => '${a.reportName}(${a.id})').join(', ')}',
+      );
+
+      final legArtifacts = validArtifacts
+          .where((a) => a.reportName == 'legs' || a.reportName == 'leg_report')
+          .toList();
+      final nonLegArtifacts = validArtifacts
+          .where((a) => a.reportName != 'legs' && a.reportName != 'leg_report')
+          .toList();
+
+      for (final artifact in legArtifacts) {
+        await runSingle(artifact);
+      }
+
       const batchSize = 4;
 
-      for (var i = 0; i < validArtifacts.length; i += batchSize) {
-        final batch = validArtifacts.skip(i).take(batchSize).toList();
+      for (var i = 0; i < nonLegArtifacts.length; i += batchSize) {
+        final batch = nonLegArtifacts.skip(i).take(batchSize).toList();
         await Future.wait(batch.map(runSingle));
       }
 

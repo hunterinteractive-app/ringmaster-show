@@ -38,14 +38,17 @@ class ReportUploadService {
     final path =
         '${baseFolder}${safeShowName}_${file.fileName}';
 
+    final bytes = Uint8List.fromList(file.bytes);
+
     await supabase.storage.from(bucket).uploadBinary(
       path,
-      Uint8List.fromList(file.bytes),
+      bytes,
       fileOptions: FileOptions(
         upsert: true,
         contentType: file.mimeType,
       ),
     );
+
 
     return path;
   }
@@ -59,7 +62,7 @@ class ReportUploadService {
     final minute = now.minute.toString().padLeft(2, '0');
     final second = now.second.toString().padLeft(2, '0');
 
-    return '${year}-${month}-${day}';
+    return '${year}-${month}-${day}_${hour}-${minute}';
   }
 
     Future<void> markGenerated({
