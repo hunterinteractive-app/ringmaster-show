@@ -1249,6 +1249,10 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
       );
     }
 
+    if (_selectedSectionIds.isEmpty) {
+      errors.add('Select at least one show section.');
+    }
+
     final selectedKindsByLetter = <String, Set<String>>{};
     for (final sectionId in _selectedSectionIds) {
       final letter = _sectionLetterForId(sectionId);
@@ -1650,6 +1654,15 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
             });
           }
         }
+      }
+
+      if (itemsToAdd.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _msg = 'Select at least one non-meat show section before adding animals to the cart.';
+          _submitting = false;
+        });
+        return;
       }
 
       final chosenAnimalIds = chosen.map((a) => (a['id'] as String)).toList();
