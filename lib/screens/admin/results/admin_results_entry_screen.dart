@@ -139,15 +139,24 @@ bool _supportsBestAgeAwards(String breedName) {
       b == 'checkered giant';
 }
 
+// Helper to check if a class name is a Pre-Junior class
+bool _isPreJuniorClassName(String className) {
+  final lower = className.trim().toLowerCase();
+  return lower.contains('pre-junior') ||
+      lower.contains('pre junior') ||
+      lower.contains('prejunior') ||
+      lower.startsWith('pre jr') ||
+      lower.startsWith('pre-jr');
+}
+
 bool _bestAgeAwardMatchesClass({
   required String award,
   required String className,
   required String classSystem,
 }) {
   final c = className.trim().toLowerCase();
-
   if (award == 'Best Junior') {
-    return c.contains('junior') && !c.contains('pre');
+    return c.contains('junior') && !_isPreJuniorClassName(className);
   }
 
   if (award == 'Best Senior') {
@@ -353,6 +362,9 @@ bool _entryIsEligibleForSpecialAward(Map<String, dynamic> entry) {
   final scratched = (entry['scratched_at'] ?? '').toString().trim().isNotEmpty;
   if (scratched) return false;
 
+  final className = (entry['class_name'] ?? '').toString().trim();
+  if (_isPreJuniorClassName(className)) return false;
+
   final placement = (entry['placement'] ?? '').toString().trim();
   final status = (entry['result_status'] ?? '').toString().trim();
   final isShown = entry['is_shown'];
@@ -480,7 +492,17 @@ _ResultScopeCompletion _resultCompletionForEntries(
   }
 
   final allBasicsComplete = totalBasics > 0 && completedBasics >= totalBasics;
-  final normalEntries = entries.where((entry) => !_isFurEntry(entry)).toList();
+  // Only entries eligible for specials should be used when deciding whether
+  // BOV/BOSV, BOG/BOSG, or BOB/BOSB are required. Pre-Junior entries still
+  // count toward basic result completion, but they cannot force opposite-sex
+  // specials like BOSB.
+  final normalEntries = entries.where((entry) {
+    if (_isFurEntry(entry)) return false;
+    if (_isPreJuniorClassName((entry['class_name'] ?? '').toString())) {
+      return false;
+    }
+    return true;
+  }).toList();
 
   bool awardCountsValid = true;
 
@@ -1577,6 +1599,9 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
     final scratched = (e['scratched_at'] ?? '').toString().trim().isNotEmpty;
     if (scratched) return false;
 
+    final className = (e['class_name'] ?? '').toString().trim();
+    if (_isPreJuniorClassName(className)) return false;
+
     final status = (e['result_status'] ?? '').toString().trim();
     final isShown = e['is_shown'] != false;
     final isDisqualified = e['is_disqualified'] == true;
@@ -1691,12 +1716,18 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
     }
 
     if (!isEligibleForAwards(e) && entryAwards.isNotEmpty) {
+      final className = (e['class_name'] ?? '').toString().trim();
+      final isPreJunior = _isPreJuniorClassName(className);
+
       issues.add(
         makeIssue(
           code: 'ineligible_award',
-          title: 'Ineligible rabbit has awards',
-          message:
-              '${_entryLabel(e)} has awards assigned but is scratched, disqualified, or not shown.',
+          title: isPreJunior
+              ? 'Pre-Junior cannot receive specials'
+              : 'Ineligible rabbit has awards',
+          message: isPreJunior
+              ? '${_entryLabel(e)} is Pre-Junior and cannot receive specials like BOV, BOSV, BOG, BOSG, BOB, or BOSB.'
+              : '${_entryLabel(e)} has awards assigned but is scratched, disqualified, or not shown.',
           entry: e,
         ),
       );
