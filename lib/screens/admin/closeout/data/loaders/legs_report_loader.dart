@@ -32,7 +32,7 @@ class LegsReportLoader {
 
       final showName = _str(show['name']);
       final clubName = await _loadClubName(showId);
-      final sanctionNumber = await _loadSanctionNumber(showId);
+      final sanctionNumbersBySection = await _loadSanctionNumbersBySection(showId);
       final showDate = _tryParseDate(show['start_date']);
 
       final location = [
@@ -142,7 +142,7 @@ class LegsReportLoader {
               sex: ctx.sex,
               showName: showName,
               clubName: clubName.isNotEmpty ? clubName : showName,
-              sanctionNumber: sanctionNumber,
+              sanctionNumber: _sanctionNumberForContext(ctx, sanctionNumbersBySection),
               showDate: showDate,
               location: location,
               secretaryName: secretaryName,
@@ -238,7 +238,7 @@ class LegsReportLoader {
               sex: _str(entry['sex']),
               showName: showName,
               clubName: clubName.isNotEmpty ? clubName : showName,
-              sanctionNumber: sanctionNumber,
+              sanctionNumber: _sanctionNumberForContext(ctx, sanctionNumbersBySection),
               showDate: showDate,
               location: location,
               secretaryName: secretaryName,
@@ -306,21 +306,36 @@ class LegsReportLoader {
     }
   }
 
-  Future<String> _loadSanctionNumber(String showId) async {
+  Future<Map<String, String>> _loadSanctionNumbersBySection(String showId) async {
     try {
-      final row = await repo.supabase
+      final rows = await repo.supabase
           .from('show_sanctions')
-          .select('sanction_number')
+          .select('section_id, sanction_number')
           .eq('show_id', showId)
-          .eq('sanctioning_body', 'ARBA')
-          .limit(1)
-          .maybeSingle();
+          .eq('sanctioning_body', 'ARBA');
 
-      if (row == null) return '';
-      return _str(row['sanction_number']);
+      final bySection = <String, String>{};
+
+      for (final raw in List<Map<String, dynamic>>.from(rows as List)) {
+        final sectionId = _str(raw['section_id']);
+        final sanctionNumber = _str(raw['sanction_number']);
+
+        if (sectionId.isNotEmpty && sanctionNumber.isNotEmpty) {
+          bySection[sectionId] = sanctionNumber;
+        }
+      }
+
+      return bySection;
     } catch (_) {
-      return '';
+      return {};
     }
+  }
+
+  String _sanctionNumberForContext(
+    _EntryLegContext ctx,
+    Map<String, String> sanctionNumbersBySection,
+  ) {
+    return sanctionNumbersBySection[ctx.sectionId] ?? '';
   }
 
   Future<String> _loadClubName(String showId) async {
@@ -597,6 +612,7 @@ class LegsReportLoader {
           .length;
 
       byEntryId[entryId] = _EntryLegContext(
+        sectionId: sectionId,
         sectionLetter: sectionLetter,
         varietyDisplay: varietyDisplay,
         groupName: groupName,
@@ -1044,6 +1060,7 @@ class _LegRuleMatch {
 }
 
 class _EntryLegContext {
+  final String sectionId;
   final String sectionLetter;
   final String varietyDisplay;
   final String groupName;
@@ -1089,6 +1106,7 @@ class _EntryLegContext {
   final int showExhibitors;
 
   const _EntryLegContext({
+    required this.sectionId,
     required this.sectionLetter,
     required this.varietyDisplay,
     required this.groupName,

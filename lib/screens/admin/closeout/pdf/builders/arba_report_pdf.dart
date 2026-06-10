@@ -47,7 +47,7 @@ class ArbaReportPdfBuilder {
 
     final showName = _str(_tryGet(() => d.showName));
     final sponsoringShow =
-        _str(_tryGet(() => d.clubName), fallback: showName);
+        _str(_tryGet(() => d.showName), fallback: _str(_tryGet(() => d.clubName)));
 
     final showDate = _fmtDate(_tryGet(() => d.showDate)) ?? '';
     final location = _str(_tryGet(() => d.showLocation));
