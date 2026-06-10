@@ -1241,6 +1241,7 @@ class _ControlSheetsGeneratorSheetState
 
     if (l.contains('senior')) return 'Senior';
     if (l.contains('intermediate')) return 'Intermediate';
+    if (l.contains('pre junior') || l.contains('pre-junior')) return 'Pre Junior';
     if (l.contains('junior')) return 'Junior';
     return s;
   }
@@ -1294,7 +1295,8 @@ class _ControlSheetsGeneratorSheetState
     final c = className.toLowerCase();
     if (c == 'senior') return 0;
     if (c == 'intermediate') return 1;
-    if (c == 'junior') return 2;
+    if (c == 'pre junior' || c == 'pre-junior') return 2;
+    if (c == 'junior') return 3;
     if (c == 'fur') return 1000;
     if (c == 'wool') return 1001;
     if (c == 'fur/wool') return 1002;

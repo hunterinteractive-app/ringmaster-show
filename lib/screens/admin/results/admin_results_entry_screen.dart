@@ -203,13 +203,16 @@ bool _entryHasBasicOutcome(Map<String, dynamic> entry) {
   final isShown = entry['is_shown'];
   final isDisqualified = entry['is_disqualified'];
   final dqReason = (entry['disqualified_reason'] ?? '').toString().trim();
+  final scratchedAt = (entry['scratched_at'] ?? '').toString().trim();
 
   if (placement.isNotEmpty) return true;
+  if (scratchedAt.isNotEmpty) return true;
   if (isShown == false) return true;
   if (isDisqualified == true) return true;
   if (dqReason.isNotEmpty) return true;
 
   return status == 'No Show' ||
+      status == 'Scratched' ||
       status == 'Unworthy of Award' ||
       _isDisqualifiedStatus(status);
 }
