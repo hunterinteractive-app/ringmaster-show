@@ -88,6 +88,7 @@ class _ShowRoleAssignmentsDialogState
     extends State<_ShowRoleAssignmentsDialog> {
   bool _loading = true;
   bool _saving = false;
+  bool _searching = false;
   String? _msg;
 
   final _searchController = TextEditingController();
@@ -214,10 +215,18 @@ class _ShowRoleAssignmentsDialogState
   _UserSearchResult _userFromRow(Map<String, dynamic> row) {
     final id = (row['id'] ?? row['user_id'])?.toString() ?? '';
     final email = row['email']?.toString() ?? '';
+    final firstName = row['first_name']?.toString().trim() ?? '';
+    final lastName = row['last_name']?.toString().trim() ?? '';
+    final combinedName = [firstName, lastName]
+        .where((part) => part.isNotEmpty)
+        .join(' ')
+        .trim();
+
     final displayName = (
       row['display_name'] ??
       row['full_name'] ??
       row['name'] ??
+      (combinedName.isNotEmpty ? combinedName : null) ??
       ''
     ).toString();
 
@@ -260,7 +269,7 @@ class _ShowRoleAssignmentsDialogState
     }
 
     setState(() {
-      _saving = true;
+      _searching = true;
       _msg = null;
     });
 
@@ -300,7 +309,7 @@ class _ShowRoleAssignmentsDialogState
 
             return aLabel.compareTo(bLabel);
           });
-        _saving = false;
+        _searching = false;
         if (_searchResults.isEmpty) {
           _msg = 'No matching users found.';
         }
@@ -308,7 +317,7 @@ class _ShowRoleAssignmentsDialogState
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _saving = false;
+        _searching = false;
         _msg = 'User search failed: $e';
       });
     }
@@ -692,15 +701,24 @@ class _ShowRoleAssignmentsDialogState
                                             decoration: InputDecoration(
                                               labelText: 'Search current users by name or email',
                                               border: const OutlineInputBorder(),
-                                              suffixIcon: IconButton(
-                                                tooltip: 'Search',
-                                                onPressed: _saving
-                                                    ? null
-                                                    : () => _searchUsers(
-                                                          _searchController.text,
-                                                        ),
-                                                icon: const Icon(Icons.search),
-                                              ),
+                                              suffixIcon: _searching
+                                                  ? const Padding(
+                                                      padding: EdgeInsets.all(12),
+                                                      child: SizedBox(
+                                                        width: 20,
+                                                        height: 20,
+                                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                                      ),
+                                                    )
+                                                  : IconButton(
+                                                      tooltip: 'Search',
+                                                      onPressed: _saving
+                                                          ? null
+                                                          : () => _searchUsers(
+                                                                _searchController.text,
+                                                              ),
+                                                      icon: const Icon(Icons.search),
+                                                    ),
                                             ),
                                             onChanged: _saving ? null : _queueUserSearch,
                                             onSubmitted: _saving ? null : _searchUsers,
