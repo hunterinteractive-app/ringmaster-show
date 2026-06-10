@@ -1786,16 +1786,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     }
 
   Future<void> _sendAllExhibitorReports() async {
-    if (_isSupportMode) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Exhibitor email sending is disabled while viewing in support mode.',
-          ),
-        ),
-      );
-      return;
-    }
+    if (await _blockedBySupportModeForEmailSend('Exhibitor')) return;
+    
     final ready = await _ensureResultsReadyForReports();
     if (!ready) return;
 
@@ -1929,16 +1921,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   }
 
   Future<void> _sendAllClubReports() async {
-      if (_isSupportMode) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Club email sending is disabled while viewing in support mode.',
-          ),
-        ),
-      );
-      return;
-    }
+    if (await _blockedBySupportModeForEmailSend('Club')) return;
+    
     final ready = await _ensureResultsReadyForReports();
     if (!ready) return;
 
@@ -2126,16 +2110,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     }
 
   Future<void> _sendAllLegsReports() async {
-    if (_isSupportMode) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Leg email sending is disabled while viewing in support mode.',
-          ),
-        ),
-      );
-      return;
-    }
+    if (await _blockedBySupportModeForEmailSend('Leg')) return;
 
     final ready = await _ensureResultsReadyForReports();
     if (!ready) return;
@@ -2301,6 +2276,40 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
   bool get _isBusy => _loading || _generatingReport;
   bool get _isSupportMode => AppSession.isSupportMode;
+
+  Future<bool> _currentUserIsShowSuperAdmin() async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null || userId.trim().isEmpty) return false;
+
+    final rows = await supabase
+        .from('role_assignments')
+        .select('id')
+        .eq('show_id', widget.showId)
+        .eq('user_id', userId)
+        .eq('role', 'super_admin')
+        .limit(1);
+
+    return (rows as List).isNotEmpty;
+  }
+
+  Future<bool> _blockedBySupportModeForEmailSend(String label) async {
+    if (!_isSupportMode) return false;
+
+    final isShowSuperAdmin = await _currentUserIsShowSuperAdmin();
+    if (isShowSuperAdmin) return false;
+
+    if (!mounted) return true;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '$label email sending is disabled while viewing in support mode.',
+        ),
+      ),
+    );
+
+    return true;
+  }
 
   Future<void> _ensureLegsBuilder() async {
     _legsBuilder ??= await LegsReportPdfBuilder.fromAssets();
@@ -3050,16 +3059,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     String? scope,
     String? showLetter,
   }) async {
-    if (_isSupportMode) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Email sending is disabled while viewing in support mode.',
-          ),
-        ),
-      );
-      return;
-    }
+    if (await _blockedBySupportModeForEmailSend('Report')) return;
+
     try {
       var artifacts = (_dashboard?.reports ?? const <ReportArtifactSummary>[])
           .where((r) => r.reportName == reportName)
@@ -3365,7 +3366,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                     SizedBox(width: 10),
                                     Expanded(
                                       child: Text(
-                                        'Support Mode — You are managing closeout as an admin while viewing another user. Finalize, save, and report generation are allowed. Bulk email sending remains disabled.',
+                                        'Support Mode — You are managing closeout as an admin while viewing another user. Finalize, save, and report generation are allowed. Email sending is disabled unless your account has the super_admin role for this show.',
                                         style: TextStyle(
                                           fontWeight: FontWeight.w700,
                                         ),
