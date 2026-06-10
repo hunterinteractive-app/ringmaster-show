@@ -1,5 +1,7 @@
 // lib/screens/admin/show_role_assignments_dialog.dart
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -89,6 +91,7 @@ class _ShowRoleAssignmentsDialogState
   String? _msg;
 
   final _searchController = TextEditingController();
+  Timer? _searchDebounce;
   String _selectedRole = 'superintendent';
   _UserSearchResult? _selectedUser;
 
@@ -96,6 +99,7 @@ class _ShowRoleAssignmentsDialogState
   List<_UserSearchResult> _searchResults = [];
 
   static const _allowedRoles = <String>[
+    'admin',
     'superintendent',
     'reporting_clerk',
   ];
@@ -108,6 +112,7 @@ class _ShowRoleAssignmentsDialogState
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -223,12 +228,34 @@ class _ShowRoleAssignmentsDialogState
     );
   }
 
-  Future<void> _searchUsers(String value) async {
-    final query = value.trim();
+  void _queueUserSearch(String value) {
     _selectedUser = null;
+    _searchDebounce?.cancel();
+
+    final query = value.trim();
 
     if (query.length < 2) {
-      setState(() => _searchResults = []);
+      setState(() {
+        _searchResults = [];
+        _msg = null;
+      });
+      return;
+    }
+
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+      if (!mounted) return;
+      _searchUsers(query);
+    });
+  }
+
+  Future<void> _searchUsers(String value) async {
+    final query = value.trim();
+
+    if (query.length < 2) {
+      setState(() {
+        _searchResults = [];
+        _msg = null;
+      });
       return;
     }
 
@@ -295,7 +322,7 @@ class _ShowRoleAssignmentsDialogState
     }
 
     if (!_allowedRoles.contains(_selectedRole)) {
-      setState(() => _msg = 'Only Superintendent and Reporting Clerk can be assigned here.');
+      setState(() => _msg = 'Only Show Secretary/Admin, Superintendent, and Reporting Clerk can be assigned here.');
       return;
     }
 
@@ -312,7 +339,6 @@ class _ShowRoleAssignmentsDialogState
           .eq('user_id', user.id)
           .maybeSingle();
 
-      String assignmentId;
       final wasUpdate = existing != null;
 
       if (existing != null) {
@@ -322,29 +348,22 @@ class _ShowRoleAssignmentsDialogState
           setState(() {
             _saving = false;
             _msg = '${user.label} already has ${_roleLabel(existingRole)} access. '
-                'Admin/show secretary roles cannot be changed from this dialog.';
+                'That role cannot be changed from this dialog.';
           });
           return;
         }
-
-        assignmentId = existing['id']?.toString() ?? '';
-        await supabase
-            .from('role_assignments')
-            .update({'role': _selectedRole})
-            .eq('id', assignmentId);
-      } else {
-        final inserted = await supabase
-            .from('role_assignments')
-            .insert({
-              'show_id': widget.showId,
-              'user_id': user.id,
-              'role': _selectedRole,
-            })
-            .select('id')
-            .single();
-
-        assignmentId = inserted['id']?.toString() ?? '';
       }
+
+      final assignmentId = (await supabase.rpc(
+            'assign_show_staff_role',
+            params: {
+              'p_show_id': widget.showId,
+              'p_user_id': user.id,
+              'p_role': _selectedRole,
+            },
+          ))
+              ?.toString() ??
+          '';
 
       final updatedAssignment = _RoleAssignmentRow(
         id: assignmentId,
@@ -418,10 +437,12 @@ class _ShowRoleAssignmentsDialogState
     });
 
     try {
-      await supabase
-          .from('role_assignments')
-          .delete()
-          .eq('id', assignment.id);
+      await supabase.rpc(
+        'remove_show_staff_role',
+        params: {
+          'p_assignment_id': assignment.id,
+        },
+      );
 
       if (!mounted) return;
       setState(() {
@@ -510,6 +531,7 @@ class _ShowRoleAssignmentsDialogState
         onTap: _saving
             ? null
             : () {
+                _searchDebounce?.cancel();
                 setState(() {
                   _selectedUser = user;
                   _searchController.text = user.label;
@@ -628,7 +650,7 @@ class _ShowRoleAssignmentsDialogState
                                         children: [
                                           if (_assignments.isEmpty)
                                             const Text(
-                                              'No superintendent or reporting clerk roles have been assigned yet.',
+                                              'No staff roles have been assigned yet.',
                                             )
                                           else
                                             ..._assignments.map(_buildAssignmentTile),
@@ -639,7 +661,7 @@ class _ShowRoleAssignmentsDialogState
                                         title: 'Add or Update Staff Role',
                                         children: [
                                           const Text(
-                                            'Use this dialog only for Show Superintendent and Reporting Clerk access. Show Secretary/Admin access is managed separately.',
+                                            'Use this dialog to assign Show Secretary/Admin, Show Superintendent, or Reporting Clerk access. Show Secretary/Admin gives full access to all areas of this show.',
                                           ),
                                           const SizedBox(height: 12),
                                           DropdownButtonFormField<String>(
@@ -680,6 +702,7 @@ class _ShowRoleAssignmentsDialogState
                                                 icon: const Icon(Icons.search),
                                               ),
                                             ),
+                                            onChanged: _saving ? null : _queueUserSearch,
                                             onSubmitted: _saving ? null : _searchUsers,
                                           ),
                                           if (_searchResults.isNotEmpty)
