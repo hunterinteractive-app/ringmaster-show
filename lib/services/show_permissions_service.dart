@@ -53,6 +53,22 @@ class ShowPermissionsService {
       return ShowPermissions.none;
     }
 
+    final isSuperAdmin = await _isSuperAdmin(user.id);
+
+    if (isSuperAdmin && !isSupportMode) {
+      return const ShowPermissions(
+        canManageShow: true,
+        canEnterResults: true,
+        canManageShowSettings: true,
+        canFinalizeShow: true,
+        canEmailReports: true,
+        canManageEntries: true,
+        canManageJudges: true,
+        isSupportMode: false,
+        isReadOnlySupportMode: false,
+      );
+    }
+
     final results = await Future.wait<bool>([
       _rpcBool('user_can_manage_show', showId, effectiveUserId),
       _rpcBool('user_can_enter_results', showId, effectiveUserId),
@@ -64,16 +80,31 @@ class ShowPermissionsService {
     ]);
 
     return ShowPermissions(
-      canManageShow: results[0],
-      canEnterResults: results[1],
-      canFinalizeShow: results[2],
-      canEmailReports: results[3],
-      canManageEntries: results[4],
-      canManageJudges: results[5],
-      canManageShowSettings: results[6],
+      canManageShow: isSuperAdmin || results[0],
+      canEnterResults: isSuperAdmin || results[1],
+      canFinalizeShow: isSuperAdmin || results[2],
+      canEmailReports: isSuperAdmin || results[3],
+      canManageEntries: isSuperAdmin || results[4],
+      canManageJudges: isSuperAdmin || results[5],
+      canManageShowSettings: isSuperAdmin || results[6],
       isSupportMode: isSupportMode,
       isReadOnlySupportMode: isSupportMode,
     );
+  }
+
+  static Future<bool> _isSuperAdmin(String userId) async {
+    try {
+      final result = await _client
+          .from('role_assignments')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('role', 'super_admin')
+          .limit(1);
+
+      return result.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
   }
 
   static Future<bool> _rpcBool(
