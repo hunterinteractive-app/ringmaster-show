@@ -1828,24 +1828,45 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       final sendErrors = <String>[];
 
       for (final exhibitor in exhibitors) {
-        final exhibitorReport = _newestGeneratedArtifactWhere(
+        final artifactsById = <String, ReportArtifactSummary>{};
+
+        final exhibitorReports = _allGeneratedArtifactsWhere(
           'exhibitor_report',
           (a) =>
               _artifactMatchesExhibitor(a, exhibitor) &&
               _artifactMatchesSelectedScope(a),
         );
 
-        final legsReport = _newestGeneratedArtifactWhere(
+        final legsReports = _allGeneratedArtifactsWhere(
           'legs',
           (a) =>
               _artifactMatchesExhibitor(a, exhibitor) &&
               _artifactMatchesSelectedScope(a),
         );
 
-        final artifacts = <ReportArtifactSummary>[
-          if (exhibitorReport != null) exhibitorReport,
-          if (legsReport != null) legsReport,
-        ];
+        for (final artifact in exhibitorReports) {
+          artifactsById[artifact.id] = artifact;
+        }
+
+        for (final artifact in legsReports) {
+          artifactsById[artifact.id] = artifact;
+        }
+
+        final artifacts = artifactsById.values.toList()
+          ..sort((a, b) {
+            final aReportRank = a.reportName == 'exhibitor_report' ? 0 : 1;
+            final bReportRank = b.reportName == 'exhibitor_report' ? 0 : 1;
+
+            final rankCmp = aReportRank.compareTo(bReportRank);
+            if (rankCmp != 0) return rankCmp;
+
+            final aGenerated = DateTime.tryParse(a.generatedAt ?? '') ??
+                DateTime.fromMillisecondsSinceEpoch(0);
+            final bGenerated = DateTime.tryParse(b.generatedAt ?? '') ??
+                DateTime.fromMillisecondsSinceEpoch(0);
+
+            return aGenerated.compareTo(bGenerated);
+          });
 
         if (artifacts.isEmpty) {
           skippedCount++;
@@ -5047,6 +5068,7 @@ class _GenerateAllReportsDialog extends StatefulWidget {
 class _GenerateAllReportsDialogState extends State<_GenerateAllReportsDialog> {
   bool _finished = false;
   String? _error;
+  Timer? _progressRefreshTimer;
 
   final Set<String> _completed = {};
   final Set<String> _running = {};
@@ -5068,53 +5090,67 @@ class _GenerateAllReportsDialogState extends State<_GenerateAllReportsDialog> {
     return _friendlyReportName(artifact.reportName);
   }
 
+  void _scheduleProgressRefresh() {
+    if (_progressRefreshTimer?.isActive == true) return;
+
+    _progressRefreshTimer = Timer(const Duration(milliseconds: 200), () {
+      if (!mounted) return;
+      setState(() {});
+    });
+  }
+
   @override
   void initState() {
     super.initState();
     unawaited(_start());
   }
 
-      Future<void> _start() async {
-        try {
-          await widget.onRun(
-            (reportName) {
-              if (!mounted) return;
-              setState(() {
-                _running.add(reportName);
-                _failed.remove(reportName);
-              });
-            },
-            (reportName) {
-              if (!mounted) return;
-              setState(() {
-                _running.remove(reportName);
-                _completed.add(reportName);
-              });
-            },
-            (reportName, error) {
-              if (!mounted) return;
-              setState(() {
-                _running.remove(reportName);
-                _failed[reportName] = error.toString();
-              });
-            },
-          );
+  @override
+  void dispose() {
+    _progressRefreshTimer?.cancel();
+    super.dispose();
+  }
 
+  Future<void> _start() async {
+    try {
+      await widget.onRun(
+        (reportName) {
+          _running.add(reportName);
+          _failed.remove(reportName);
+          _scheduleProgressRefresh();
+        },
+        (reportName) {
+          _running.remove(reportName);
+          _completed.add(reportName);
+          _scheduleProgressRefresh();
+        },
+        (reportName, error) {
           if (!mounted) return;
+          _progressRefreshTimer?.cancel();
           setState(() {
-            _finished = true;
-            if (_failed.isNotEmpty) {
-              _error = '${_failed.length} report(s) failed.';
-            }
+            _running.remove(reportName);
+            _failed[reportName] = error.toString();
           });
-        } catch (e) {
-          if (!mounted) return;
-          setState(() {
-            _finished = true;
-            _error = e.toString();
-          });
+        },
+      );
+
+      if (!mounted) return;
+      _progressRefreshTimer?.cancel();
+      setState(() {
+        _finished = true;
+        if (_failed.isNotEmpty) {
+          _error = '${_failed.length} report(s) failed.';
         }
-      }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      _progressRefreshTimer?.cancel();
+      setState(() {
+        _finished = true;
+        _error = e.toString();
+      });
+    }
+  }
 
     @override
     Widget build(BuildContext context) {
@@ -5141,10 +5177,10 @@ class _GenerateAllReportsDialogState extends State<_GenerateAllReportsDialog> {
                 '${_completed.length + _failed.length} of ${widget.artifacts.length} reports processed',
               ),
               const SizedBox(height: 12),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 320),
+              SizedBox(
+                height: 320,
+                width: double.maxFinite,
                 child: ListView.builder(
-                  shrinkWrap: true,
                   itemCount: widget.artifacts.length,
                   itemBuilder: (context, index) {
                     final artifact = widget.artifacts[index];
