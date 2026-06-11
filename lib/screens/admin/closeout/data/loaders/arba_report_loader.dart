@@ -71,10 +71,13 @@ class ArbaReportLoader {
       sectionId: sectionId,
     );
 
-    final clubName = await _loadClubName(
-      request.showId,
-      sectionId: sectionId,
-    );
+    final clubName = _firstNonEmpty([
+      _str(show['club_name']),
+      await _loadClubName(
+        request.showId,
+        sectionId: sectionId,
+      ),
+    ]);
 
     final rabbitsShown = await _countShownSpecies(
       request.showId,
@@ -445,12 +448,28 @@ class ArbaReportLoader {
     String? sectionId,
   }) async {
     try {
+      final showRow = await repo.supabase
+          .from('shows')
+          .select('club_name')
+          .eq('id', showId)
+          .maybeSingle();
+
+      if (showRow != null) {
+        final showMap = Map<String, dynamic>.from(showRow as Map);
+        final clubName = _str(showMap['club_name']);
+        if (clubName.isNotEmpty) return clubName;
+      }
+    } catch (_) {
+      // Fall through to sanction-table fallback below.
+    }
+
+    try {
       final row = (sectionId != null && sectionId.trim().isNotEmpty)
           ? await repo.supabase
               .from('show_sanctions')
               .select('club_name')
               .eq('show_id', showId)
-              .eq('sanctioning_body', 'ARBA')
+              .neq('club_name', 'ARBA')
               .eq('section_id', sectionId.trim())
               .limit(1)
               .maybeSingle()
@@ -458,7 +477,7 @@ class ArbaReportLoader {
               .from('show_sanctions')
               .select('club_name')
               .eq('show_id', showId)
-              .eq('sanctioning_body', 'ARBA')
+              .neq('club_name', 'ARBA')
               .limit(1)
               .maybeSingle();
 

@@ -293,47 +293,324 @@ class BreedResultsDetailReportPdf {
       widgets.add(pw.SizedBox(height: 12));
     }
 
-    for (final variety in varieties) {
-      widgets.add(_varietyHeader(variety.varietyName));
+    final regularVarieties = varieties
+        .map(_regularOnlyVarietySection)
+        .where((v) => _hasPrintableVarietyContent(v))
+        .toList();
+    final furWoolVarieties = varieties
+        .map(_furWoolOnlyVarietySection)
+        .where((v) => _hasPrintableVarietyContent(v))
+        .toList();
 
-      if (variety.awards.isNotEmpty) {
-        widgets.add(_buildAwardTable(variety.awards));
+    for (final variety in regularVarieties) {
+      widgets.addAll(_buildVarietySection(variety));
+    }
+
+    if (furWoolVarieties.isNotEmpty) {
+      widgets.add(pw.SizedBox(height: 8));
+      widgets.add(_sectionTitle('Fur / Wool Placements'));
+      widgets.addAll(_buildFurWoolPlacementSections(furWoolVarieties));
+    }
+
+    return widgets;
+  }
+
+  List<pw.Widget> _buildVarietySection(VarietySection variety) {
+    final widgets = <pw.Widget>[];
+
+    widgets.add(_varietyHeader(variety.varietyName));
+
+    if (variety.awards.isNotEmpty) {
+      widgets.add(_buildAwardTable(variety.awards));
+      widgets.add(pw.SizedBox(height: 8));
+    }
+
+    for (final sexSection in variety.sexSections) {
+      widgets.add(_sexHeader(sexSection.sexLabel));
+
+      for (final classGroup in sexSection.classes) {
+        widgets.add(
+          pw.Text(
+            '${classGroup.className} — ${classGroup.animalsJudged} animals / ${classGroup.exhibitorsJudged} exhibitors judged',
+            style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+          ),
+        );
+        widgets.add(pw.SizedBox(height: 4));
+
+        if (classGroup.rows.isEmpty) {
+          widgets.add(
+            pw.Text(
+              'No top 5 placements recorded.',
+              style: const pw.TextStyle(fontSize: 8),
+            ),
+          );
+        } else {
+          widgets.add(_buildPlacementTable(classGroup.rows));
+        }
+
         widgets.add(pw.SizedBox(height: 8));
       }
 
-      for (final sexSection in variety.sexSections) {
-        widgets.add(_sexHeader(sexSection.sexLabel));
+      widgets.add(pw.SizedBox(height: 6));
+    }
 
-        for (final classGroup in sexSection.classes) {
-          widgets.add(
-            pw.Text(
-              '${classGroup.className} — ${classGroup.animalsJudged} animals / ${classGroup.exhibitorsJudged} exhibitors judged',
-              style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
-            ),
-          );
-          widgets.add(pw.SizedBox(height: 4));
+    widgets.add(pw.SizedBox(height: 8));
+    return widgets;
+  }
 
-          if (classGroup.rows.isEmpty) {
-            widgets.add(
-              pw.Text(
-                'No top 5 placements recorded.',
-                style: const pw.TextStyle(fontSize: 8),
-              ),
+  VarietySection _regularOnlyVarietySection(VarietySection variety) {
+    return VarietySection(
+      varietyName: variety.varietyName,
+      awards: variety.awards.where((award) => !_isFurWoolAward(award, variety)).toList(),
+      sexSections: variety.sexSections
+          .map((sexSection) {
+            final classes = sexSection.classes
+                .map((classGroup) {
+                  final rows = classGroup.rows
+                      .where((row) => !_isFurWoolPlacementRow(row, classGroup, variety))
+                      .toList();
+
+                  return ClassSection(
+                    className: classGroup.className,
+                    entryCount: classGroup.entryCount,
+                    placedCount: classGroup.placedCount,
+                    animalsJudged: classGroup.animalsJudged,
+                    exhibitorsJudged: classGroup.exhibitorsJudged,
+                    rows: rows,
+                  );
+                })
+                .where((classGroup) => classGroup.rows.isNotEmpty)
+                .toList(growable: false);
+
+            return SexSection(
+              sexLabel: sexSection.sexLabel,
+              classes: classes.cast<ClassSection>(),
             );
-          } else {
-            widgets.add(_buildPlacementTable(classGroup.rows));
+          })
+          .where((sexSection) => sexSection.classes.isNotEmpty)
+          .toList(),
+    );
+  }
+
+  VarietySection _furWoolOnlyVarietySection(VarietySection variety) {
+    return VarietySection(
+      varietyName: variety.varietyName,
+      awards: variety.awards.where((award) => _isFurWoolAward(award, variety)).toList(),
+      sexSections: variety.sexSections
+          .map((sexSection) {
+            final classes = sexSection.classes
+                .map((classGroup) {
+                  final rows = classGroup.rows
+                      .where((row) => _isFurWoolPlacementRow(row, classGroup, variety))
+                      .toList();
+
+                  return ClassSection(
+                    className: classGroup.className,
+                    entryCount: classGroup.entryCount,
+                    placedCount: classGroup.placedCount,
+                    animalsJudged: classGroup.animalsJudged,
+                    exhibitorsJudged: classGroup.exhibitorsJudged,
+                    rows: rows,
+                  );
+                })
+                .where((classGroup) => classGroup.rows.isNotEmpty)
+                .toList(growable: false);
+
+            return SexSection(
+              sexLabel: sexSection.sexLabel,
+              classes: classes.cast<ClassSection>(),
+            );
+          })
+          .where((sexSection) => sexSection.classes.isNotEmpty)
+          .toList(),
+    );
+  }
+
+  bool _hasPrintableVarietyContent(VarietySection variety) {
+    if (variety.awards.isNotEmpty) return true;
+    for (final sexSection in variety.sexSections) {
+      for (final classGroup in sexSection.classes) {
+        if (classGroup.rows.isNotEmpty) return true;
+      }
+    }
+    return false;
+  }
+
+  bool _isFurWoolAward(BreedAward award, VarietySection variety) {
+    if (award.pointsCategory.trim().isNotEmpty) return true;
+    return _isFurWoolTextMatch([
+      award.variety,
+      award.className,
+      variety.varietyName,
+    ]);
+  }
+
+  bool _isFurWoolPlacementRow(
+    ClassEntry row,
+    ClassSection classGroup,
+    VarietySection variety,
+  ) {
+    if (row.pointsCategory.trim().isNotEmpty) return true;
+    return _isFurWoolTextMatch([
+      row.variety,
+      classGroup.className,
+      variety.varietyName,
+    ]);
+  }
+
+  bool _isFurWoolTextMatch(List<String> values) {
+    for (final value in values) {
+      final normalized = value.toLowerCase().trim();
+      if (normalized.contains('fur') || normalized.contains('wool')) return true;
+    }
+    return false;
+  }
+
+  List<pw.Widget> _buildFurWoolPlacementSections(List<VarietySection> varieties) {
+    final widgets = <pw.Widget>[];
+    final categoryOrder = <String>['White', 'Colored', 'Uncategorized'];
+    final awardsByCategory = <String, List<BreedAward>>{};
+    final rowsByCategory = <String, List<_FurWoolClassRows>>{};
+
+    String categoryForAward(BreedAward award, VarietySection variety) {
+      return _categoryLabelFromValues([
+        award.pointsCategory,
+        award.variety,
+        award.className,
+        variety.varietyName,
+      ]).isEmpty
+          ? 'Uncategorized'
+          : _categoryLabelFromValues([
+              award.pointsCategory,
+              award.variety,
+              award.className,
+              variety.varietyName,
+            ]);
+    }
+
+    String categoryForRow(ClassEntry row, ClassSection classGroup, VarietySection variety) {
+      return _categoryLabelFromValues([
+        row.pointsCategory,
+        row.variety,
+        classGroup.className,
+        variety.varietyName,
+      ]).isEmpty
+          ? 'Uncategorized'
+          : _categoryLabelFromValues([
+              row.pointsCategory,
+              row.variety,
+              classGroup.className,
+              variety.varietyName,
+            ]);
+    }
+
+    for (final variety in varieties) {
+      for (final award in variety.awards) {
+        final category = categoryForAward(award, variety);
+        if (category.isEmpty) continue;
+        awardsByCategory.putIfAbsent(category, () => <BreedAward>[]).add(award);
+        if (!categoryOrder.contains(category)) categoryOrder.add(category);
+      }
+
+      for (final sexSection in variety.sexSections) {
+        for (final classGroup in sexSection.classes) {
+          final groupedRows = <String, List<ClassEntry>>{};
+
+          for (final row in classGroup.rows) {
+            final category = categoryForRow(row, classGroup, variety);
+            if (category.isEmpty) continue;
+            groupedRows.putIfAbsent(category, () => <ClassEntry>[]).add(row);
+            if (!categoryOrder.contains(category)) categoryOrder.add(category);
           }
 
-          widgets.add(pw.SizedBox(height: 8));
+          for (final entry in groupedRows.entries) {
+            rowsByCategory.putIfAbsent(entry.key, () => <_FurWoolClassRows>[]).add(
+                  _FurWoolClassRows(
+                    sexLabel: sexSection.sexLabel,
+                    className: classGroup.className,
+                    animalsJudged: classGroup.animalsJudged,
+                    exhibitorsJudged: classGroup.exhibitorsJudged,
+                    rows: entry.value,
+                  ),
+                );
+          }
+        }
+      }
+    }
+
+    for (final category in categoryOrder) {
+      final awards = awardsByCategory[category] ?? const <BreedAward>[];
+      final classRows = rowsByCategory[category] ?? const <_FurWoolClassRows>[];
+      if (awards.isEmpty && classRows.isEmpty) continue;
+
+      widgets.add(_varietyHeader(category));
+
+      if (awards.isNotEmpty) {
+        widgets.add(_buildAwardTable(awards));
+        widgets.add(pw.SizedBox(height: 8));
+      }
+
+      String lastSexLabel = '';
+      for (final classGroup in classRows) {
+        if (classGroup.sexLabel != lastSexLabel) {
+          widgets.add(_sexHeader(classGroup.sexLabel));
+          lastSexLabel = classGroup.sexLabel;
         }
 
-        widgets.add(pw.SizedBox(height: 6));
+        widgets.add(
+          pw.Text(
+            '${classGroup.className} — ${classGroup.animalsJudged} animals / ${classGroup.exhibitorsJudged} exhibitors judged',
+            style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+          ),
+        );
+        widgets.add(pw.SizedBox(height: 4));
+        widgets.add(_buildPlacementTable(classGroup.rows));
+        widgets.add(pw.SizedBox(height: 8));
       }
 
       widgets.add(pw.SizedBox(height: 8));
     }
 
     return widgets;
+  }
+
+  String _categoryLabelFromValues(List<String> values) {
+    for (final value in values) {
+      final normalized = value
+          .toLowerCase()
+          .replaceAll('-', ' ')
+          .replaceAll('_', ' ')
+          .trim();
+
+      if (normalized.contains('white')) return 'White';
+      if (normalized.contains('colored') || normalized.contains('colour')) {
+        return 'Colored';
+      }
+      if (normalized.contains('color') && !normalized.contains('white')) {
+        return 'Colored';
+      }
+    }
+
+    return '';
+  }
+
+  bool _isFurOrWoolSection(VarietySection variety) {
+    if (_isFurWoolTextMatch([variety.varietyName])) return true;
+
+    for (final sexSection in variety.sexSections) {
+      for (final classGroup in sexSection.classes) {
+        if (_isFurWoolTextMatch([classGroup.className])) return true;
+        for (final row in classGroup.rows) {
+          if (_isFurWoolPlacementRow(row, classGroup, variety)) return true;
+        }
+      }
+    }
+
+    for (final award in variety.awards) {
+      if (_isFurWoolAward(award, variety)) return true;
+    }
+
+    return false;
   }
 
   pw.Widget _sectionTitle(String title) {
@@ -506,29 +783,51 @@ class BreedResultsDetailReportPdf {
   }
 
   pw.Widget _buildPlacementTable(List<ClassEntry> rows) {
+    final includeCategory = rows.any((r) => r.pointsCategory.trim().isNotEmpty);
+
     return pw.TableHelper.fromTextArray(
-      headers: const ['Place', 'Animal', 'Sex', 'Variety', 'Exhibitor'],
+      headers: includeCategory
+          ? const ['Place', 'Animal', 'Sex', 'Variety', 'Category', 'Exhibitor']
+          : const ['Place', 'Animal', 'Sex', 'Variety', 'Exhibitor'],
       data: rows
-          .map((r) => [
-                r.place,
-                r.animal,
-                r.sex,
-                r.variety,
-                r.exhibitorName,
-              ])
+          .map((r) => includeCategory
+              ? [
+                  r.place,
+                  r.animal,
+                  r.sex,
+                  r.variety,
+                  r.pointsCategory,
+                  r.exhibitorName,
+                ]
+              : [
+                  r.place,
+                  r.animal,
+                  r.sex,
+                  r.variety,
+                  r.exhibitorName,
+                ])
           .toList(),
       headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
       headerStyle: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold),
       cellStyle: const pw.TextStyle(fontSize: 7.5),
       border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
       cellPadding: const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 4),
-      columnWidths: {
-        0: const pw.FixedColumnWidth(32),
-        1: const pw.FlexColumnWidth(1.3),
-        2: const pw.FixedColumnWidth(30),
-        3: const pw.FlexColumnWidth(1.2),
-        4: const pw.FlexColumnWidth(1.6),
-      },
+      columnWidths: includeCategory
+          ? {
+              0: const pw.FixedColumnWidth(32),
+              1: const pw.FlexColumnWidth(1.25),
+              2: const pw.FixedColumnWidth(30),
+              3: const pw.FlexColumnWidth(1.05),
+              4: const pw.FixedColumnWidth(48),
+              5: const pw.FlexColumnWidth(1.5),
+            }
+          : {
+              0: const pw.FixedColumnWidth(32),
+              1: const pw.FlexColumnWidth(1.3),
+              2: const pw.FixedColumnWidth(30),
+              3: const pw.FlexColumnWidth(1.2),
+              4: const pw.FlexColumnWidth(1.6),
+            },
     );
   }
 
@@ -560,4 +859,20 @@ class BreedResultsDetailReportPdf {
       ),
     );
   }
+}
+
+class _FurWoolClassRows {
+  final String sexLabel;
+  final String className;
+  final int animalsJudged;
+  final int exhibitorsJudged;
+  final List<ClassEntry> rows;
+
+  const _FurWoolClassRows({
+    required this.sexLabel,
+    required this.className,
+    required this.animalsJudged,
+    required this.exhibitorsJudged,
+    required this.rows,
+  });
 }

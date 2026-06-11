@@ -45,9 +45,10 @@ class ArbaReportPdfBuilder {
     final rabbitsShown = _str(_tryGet(() => d.rabbitsShown));
     final caviesShown = _str(_tryGet(() => d.caviesShown));
 
-    final showName = _str(_tryGet(() => d.showName));
-    final sponsoringShow =
-        _str(_tryGet(() => d.showName), fallback: _str(_tryGet(() => d.clubName)));
+    final sponsoringShow = _str(
+      _tryGet(() => d.clubName),
+      fallback: _str(_tryGet(() => d.showName)),
+    );
 
     final showDate = _fmtDate(_tryGet(() => d.showDate)) ?? '';
     final location = _str(_tryGet(() => d.showLocation));

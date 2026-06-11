@@ -66,6 +66,7 @@ class BreedAward {
   final String exhibitorName;
   final String sex;
   final String variety;
+  final String pointsCategory;
   final int animalsJudged;
   final int exhibitorsJudged;
 
@@ -77,6 +78,7 @@ class BreedAward {
     required this.exhibitorName,
     this.sex = '',
     this.variety = '',
+    this.pointsCategory = '',
     this.animalsJudged = 0,
     this.exhibitorsJudged = 0,
   });
@@ -128,6 +130,7 @@ class ClassEntry {
   final String exhibitorName;
   final String sex;
   final String variety;
+  final String pointsCategory;
 
   const ClassEntry({
     required this.place,
@@ -135,5 +138,6 @@ class ClassEntry {
     required this.exhibitorName,
     this.sex = '',
     this.variety = '',
+    this.pointsCategory = '',
   });
 }

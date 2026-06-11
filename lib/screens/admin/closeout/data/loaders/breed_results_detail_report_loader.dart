@@ -149,7 +149,15 @@ class BreedResultsDetailReportLoader {
             showLetter: showLetter,
           );
 
-    if (rows.isEmpty) {
+    final reportRows = breedName.isEmpty
+        ? rows
+        : _mergeBreedRowsWithRelatedPointsRows(
+            breedRows: rows,
+            overallRows: overallRows,
+            breedName: breedName,
+          );
+
+    if (reportRows.isEmpty) {
       return BreedResultsDetailSection(
         showLetter: showLetter,
         judgeName: '',
@@ -179,9 +187,9 @@ class BreedResultsDetailReportLoader {
         .map((e) => Map<String, dynamic>.from(e as Map))
         .toList();
 
-    final judgeName = _deriveJudgeName(rows);
-    final counts = _buildAwardCounts(rows, overallRows: overallRows);
-    final resultRowsForAwardLookup = _mergeResultRows(rows, overallRows);
+    final judgeName = _deriveJudgeName(reportRows);
+    final counts = _buildAwardCounts(reportRows, overallRows: overallRows);
+    final resultRowsForAwardLookup = _mergeResultRows(reportRows, overallRows);
 
     final breedAwards = awardRows
         .where((a) => _isBreedAward(a['award_code']))
@@ -202,7 +210,7 @@ class BreedResultsDetailReportLoader {
       showLetter: showLetter,
       judgeName: judgeName,
       breedAwards: breedAwards,
-      varieties: _buildVarieties(rows: rows, varietyAwardMap: varietyAwardMap),
+      varieties: _buildVarieties(rows: reportRows, varietyAwardMap: varietyAwardMap),
       noResultsFound: false,
     );
   }
@@ -298,7 +306,8 @@ class BreedResultsDetailReportLoader {
               animal: _animalLabel(r),
               exhibitorName: _safe(r['exhibitor_label']),
               sex: _safe(r['sex']),
-              variety: _safe(r['variety_name']),
+              variety: _displayVarietyName(r),
+              pointsCategory: _pointsCategoryLabel(r),
             );
           })
           .toList();
@@ -362,6 +371,11 @@ class BreedResultsDetailReportLoader {
       _safe(winnerRow?['sex']),
     ]);
 
+    final pointsCategory = _firstNonEmpty([
+      _pointsCategoryLabel(row),
+      if (winnerRow != null) _pointsCategoryLabel(winnerRow),
+    ]);
+
     final animalLabel = _firstNonEmpty([
       _animalLabel(row),
       if (winnerRow != null) _animalLabel(winnerRow),
@@ -384,6 +398,7 @@ class BreedResultsDetailReportLoader {
       exhibitorName: _safe(row['exhibitor_label']),
       sex: sex,
       variety: variety,
+      pointsCategory: pointsCategory,
       animalsJudged: count.animals,
       exhibitorsJudged: count.exhibitors,
     );
@@ -917,6 +932,9 @@ class BreedResultsDetailReportLoader {
               tattoo,
               breed,
               variety,
+              fur_variety,
+              is_fur,
+              is_wool,
               class_name,
               sex,
               exhibitor_id,
@@ -949,6 +967,9 @@ class BreedResultsDetailReportLoader {
           'breed': _safe(entry['breed']),
           'variety_name': _safe(entry['variety']),
           'variety': _safe(entry['variety']),
+          'fur_variety': _safe(entry['fur_variety']),
+          'is_fur': entry['is_fur'],
+          'is_wool': entry['is_wool'],
           'class_name': _safe(entry['class_name']),
           'sex': _safe(entry['sex']),
           'exhibitor_id': _safe(entry['exhibitor_id']),
@@ -958,6 +979,51 @@ class BreedResultsDetailReportLoader {
     }
 
     return allAwards;
+  }
+
+  List<Map<String, dynamic>> _mergeBreedRowsWithRelatedPointsRows({
+    required List<Map<String, dynamic>> breedRows,
+    required List<Map<String, dynamic>> overallRows,
+    required String breedName,
+  }) {
+    final targetBreed = breedName.toLowerCase().trim();
+    final merged = <Map<String, dynamic>>[];
+    final seen = <String>{};
+
+    void addRow(Map<String, dynamic> row) {
+      final key = _resultRowKey(row);
+      if (seen.add(key)) merged.add(row);
+    }
+
+    for (final row in breedRows) {
+      addRow(row);
+    }
+
+    for (final row in overallRows) {
+      final rowBreed = _firstNonEmpty([
+        _safe(row['breed_name']),
+        _safe(row['breed']),
+      ]).toLowerCase().trim();
+      if (rowBreed != targetBreed) continue;
+      if (!_isPointsCategoryPlacementRow(row)) continue;
+      addRow(row);
+    }
+
+    return merged;
+  }
+
+  bool _isPointsCategoryPlacementRow(Map<String, dynamic> row) {
+    if (_pointsCategoryLabel(row).isNotEmpty) return true;
+    if (_safe(row['fur_variety']).isNotEmpty) return true;
+    if (row['is_fur'] == true || row['is_wool'] == true) return true;
+
+    final rowType = _firstNonEmpty([
+      _safe(row['row_type']),
+      _safe(row['result_row_type']),
+      _safe(row['line_type']),
+    ]).toLowerCase();
+
+    return rowType.contains('fur') || rowType.contains('wool');
   }
 
   Future<List<Map<String, dynamic>>> _loadOverallResultRows({
@@ -1011,10 +1077,7 @@ class BreedResultsDetailReportLoader {
 
     void addRows(List<Map<String, dynamic>> source) {
       for (final row in source) {
-        final entryId = _safe(row['entry_id']);
-        final key = entryId.isNotEmpty
-            ? 'entry::$entryId'
-            : 'tattoo::${_safe(row['tattoo']).toLowerCase()}::${_safe(row['breed_name']).toLowerCase()}';
+        final key = _resultRowKey(row);
         if (seen.add(key)) merged.add(row);
       }
     }
@@ -1022,6 +1085,84 @@ class BreedResultsDetailReportLoader {
     addRows(breedRows);
     addRows(overallRows);
     return merged;
+  }
+
+  String _resultRowKey(Map<String, dynamic> row) {
+    final entryId = _safe(row['entry_id']);
+    final lineType = _firstNonEmpty([
+      _safe(row['row_type']),
+      _safe(row['result_row_type']),
+      _safe(row['line_type']),
+      if (row['is_wool'] == true) 'wool',
+      if (row['is_fur'] == true) 'fur',
+      _safe(row['fur_variety']),
+      _pointsCategoryLabel(row),
+    ]).toLowerCase();
+
+    if (entryId.isNotEmpty) {
+      return 'entry::$entryId::$lineType';
+    }
+
+    return [
+      'fallback',
+      _safe(row['animal_id']).toLowerCase(),
+      _safe(row['tattoo']).toLowerCase(),
+      _firstNonEmpty([_safe(row['breed_name']), _safe(row['breed'])]).toLowerCase(),
+      _displayVarietyName(row).toLowerCase(),
+      _safe(row['class_name']).toLowerCase(),
+      _safe(row['sex']).toLowerCase(),
+      lineType,
+    ].join('::');
+  }
+
+  String _displayVarietyName(Map<String, dynamic> row) {
+    final furVariety = _safe(row['fur_variety']);
+    if (furVariety.isNotEmpty) return furVariety;
+
+    return _firstNonEmpty([
+      _safe(row['variety_name']),
+      _safe(row['variety']),
+    ]);
+  }
+
+  String _pointsCategoryLabel(Map<String, dynamic> row) {
+    final explicit = _firstNonEmpty([
+      _safe(row['points_category']),
+      _safe(row['pointsCategory']),
+      _safe(row['points_category_name']),
+      _safe(row['sweepstakes_category']),
+    ]);
+    if (explicit.isNotEmpty) return _normalizePointsCategory(explicit);
+
+    final furVariety = _safe(row['fur_variety']);
+    if (furVariety.isNotEmpty) return _normalizePointsCategory(furVariety);
+
+    final variety = _firstNonEmpty([
+      _safe(row['variety_name']),
+      _safe(row['variety']),
+    ]);
+    return _normalizePointsCategory(variety);
+  }
+
+  String _normalizePointsCategory(String raw) {
+    final value = raw.trim();
+    if (value.isEmpty) return '';
+
+    final normalized = value
+        .toLowerCase()
+        .replaceAll('-', ' ')
+        .replaceAll('_', ' ')
+        .trim();
+
+    if (normalized.contains('white')) return 'White';
+    if (normalized.contains('colored') || normalized.contains('colour')) {
+      return 'Colored';
+    }
+    if (normalized.contains('color') && !normalized.contains('white')) {
+      return 'Colored';
+    }
+
+    return '';
   }
 
   String _safe(Object? value, {String fallback = ''}) {

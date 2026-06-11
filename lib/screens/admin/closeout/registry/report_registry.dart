@@ -7,6 +7,7 @@ import '../data/loaders/exhibitor_report_loader.dart';
 import '../data/loaders/judge_report_loader.dart';
 import '../data/loaders/legs_report_loader.dart';
 import '../data/loaders/paid_exhibitor_report_loader.dart';
+import '../data/loaders/payback_report_loader.dart';
 import '../data/loaders/ribbon_payout_report_loader.dart';
 import '../data/loaders/sweepstakes_report_loader.dart';
 import '../data/loaders/unpaid_balances_report_loader.dart';
@@ -17,6 +18,7 @@ import '../models/clubs/sweepstakes_report_data.dart';
 import '../models/exhibitor/entered_exhibitors_contact_report_data.dart';
 import '../models/exhibitor/exhibitor_report_data.dart';
 import '../models/exhibitor/ribbon_payout_report_data.dart';
+import '../models/exhibitor/payback_report_data.dart';
 import '../models/judge/judge_report_data.dart';
 import '../models/legs/legs_certificate_data.dart';
 import '../models/paid/paid_exhibitor_report_data.dart';
@@ -29,6 +31,7 @@ import '../pdf/builders/exhibitor_report_pdf.dart';
 import '../pdf/builders/judge_report_pdf.dart';
 import '../pdf/builders/legs_report_pdf.dart';
 import '../pdf/builders/paid_exhibitor_report_pdf.dart';
+import '../pdf/builders/payback_report_pdf.dart';
 import '../pdf/builders/ribbon_payout_report_pdf.dart';
 import '../pdf/builders/sweepstakes_report_pdf.dart';
 import '../pdf/builders/unpaid_balances_report_pdf.dart';
@@ -57,6 +60,8 @@ class ReportRegistry {
     required EnteredExhibitorsContactReportPdf enteredExhibitorsContactBuilder,
     required RibbonPayoutReportLoader ribbonPayoutLoader,
     required RibbonPayoutReportPdf ribbonPayoutBuilder,
+    required PaybackReportLoader paybackReportLoader,
+    required PaybackReportPdfBuilder paybackReportBuilder,
     required JudgeReportLoader judgeReportLoader,
     required JudgeReportPdfBuilder judgeReportBuilder,
   }) : definitions = {
@@ -145,6 +150,18 @@ class ReportRegistry {
             builder: (data, req) async =>
                 await ribbonPayoutBuilder.buildFile(
                   data as RibbonPayoutReportData,
+                  req,
+                ),
+          ),
+          'payback_report': ReportDefinition(
+            reportName: 'payback_report',
+            outputType: 'pdf',
+            loader: (req) async => await paybackReportLoader.load(
+              showId: req.showId,
+            ),
+            builder: (data, req) async =>
+                await paybackReportBuilder.buildFile(
+                  data as PaybackReportData,
                   req,
                 ),
           ),

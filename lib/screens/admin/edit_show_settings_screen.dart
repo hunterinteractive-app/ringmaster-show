@@ -13,6 +13,7 @@ import '../../services/app_session.dart';
 import 'show_breed_settings_screen.dart';
 import 'show_sanctions_dialog.dart';
 import 'show_fees_dialog.dart';
+import 'payback_settings_dialog.dart';
 import 'show_role_assignments_dialog.dart';
 import 'show_rules_dialog.dart';
 import 'show_sections_dialog.dart';
@@ -865,6 +866,15 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
       context,
       showId: widget.showId,
       showName: _effectiveShowName(),
+    );
+  }
+
+  void _openPaybacks() {
+    showDialog<void>(
+      context: context,
+      builder: (_) => PaybackSettingsDialog(
+        showId: widget.showId,
+      ),
     );
   }
 
@@ -2025,6 +2035,13 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                 subtitle:
                                     'Per-animal fees, discounts, day-of-show, and online payment setup',
                                 onTap: _saving ? null : _openFees,
+                              ),
+                              _buildSettingsActionTile(
+                                icon: Icons.payments_outlined,
+                                title: 'Payback Settings',
+                                subtitle:
+                                    'Enter class payback schedules and special money by show letter',
+                                onTap: (_saving || _isReadOnly) ? null : _openPaybacks,
                               ),
                               if (canManageShowSettings)
                                 _buildSettingsActionTile(

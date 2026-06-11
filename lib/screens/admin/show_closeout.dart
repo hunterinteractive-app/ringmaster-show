@@ -29,6 +29,7 @@ import 'closeout/data/loaders/paid_exhibitor_report_loader.dart';
 import 'closeout/data/loaders/entered_exhibitors_contact_report_loader.dart';
 import 'closeout/data/loaders/ribbon_payout_report_loader.dart';
 import 'closeout/data/loaders/judge_report_loader.dart';
+import 'closeout/data/loaders/payback_report_loader.dart';
 
 import 'closeout/pdf/builders/judge_report_pdf.dart';
 import 'closeout/pdf/builders/legs_report_pdf.dart';
@@ -39,6 +40,7 @@ import 'closeout/pdf/builders/unpaid_balances_report_pdf.dart';
 import 'closeout/pdf/builders/paid_exhibitor_report_pdf.dart';
 import 'closeout/pdf/builders/entered_exhibitors_contact_report_pdf.dart';
 import 'closeout/pdf/builders/ribbon_payout_report_pdf.dart';
+import 'closeout/pdf/builders/payback_report_pdf.dart';
 
 import '../../../utils/date_time_utils.dart';
 
@@ -102,6 +104,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   PaidExhibitorReportPdfBuilder? _paidExhibitorReportBuilder;
   EnteredExhibitorsContactReportPdf? _enteredExhibitorsContactBuilder;
   RibbonPayoutReportPdf? _ribbonPayoutBuilder;
+  PaybackReportPdfBuilder? _paybackReportBuilder;
 
   static const Set<String> _exhibitorReportKeys = {
     'exhibitor_report',
@@ -118,6 +121,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       //'newsletter_show_report',
       'sweepstakes_report',
       'breed_results_detail_report',
+      'payback_report',
     };
 
   static const Set<String> _arbaReportKeys = {
@@ -133,6 +137,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       'legs',
       'newsletter_show_report',
       'ribbon_payout_report',
+      'payback_report',
       'exh_total_points',
       'exh_by_breed',
       'details_by_breed',
@@ -1444,6 +1449,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       await _ensureReportLogo();
       await _ensureEnteredExhibitorsContactBuilder();
       await _ensureRibbonPayoutBuilder();
+      await _ensurePaybackReportBuilder();
 
       final repository = CloseoutRepository(supabase);
 
@@ -1477,6 +1483,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
       final ribbonPayoutLoader = RibbonPayoutReportLoader(repository);
 
+      final paybackReportLoader = PaybackReportLoader();
+
       final registry = ReportRegistry(
         arbaLoader: arbaLoader,
         arbaBuilder: arbaBuilder,
@@ -1496,6 +1504,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         enteredExhibitorsContactBuilder: _enteredExhibitorsContactBuilder!,
         ribbonPayoutLoader: ribbonPayoutLoader,
         ribbonPayoutBuilder: _ribbonPayoutBuilder!,
+        paybackReportLoader: paybackReportLoader,
+        paybackReportBuilder: _paybackReportBuilder!,
         judgeReportLoader: JudgeReportLoader(),
         judgeReportBuilder: JudgeReportPdfBuilder(),
       );
@@ -1783,6 +1793,10 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
     Future<void> _ensureRibbonPayoutBuilder() async {
       _ribbonPayoutBuilder ??= RibbonPayoutReportPdf();
+    }
+
+    Future<void> _ensurePaybackReportBuilder() async {
+      _paybackReportBuilder ??= await PaybackReportPdfBuilder.fromAssets();
     }
 
   Future<void> _sendAllExhibitorReports() async {
@@ -2441,6 +2455,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       await _ensureReportLogo();
       await _ensureEnteredExhibitorsContactBuilder();
       await _ensureRibbonPayoutBuilder();
+      await _ensurePaybackReportBuilder();
       await _loadCloseoutScopes();
 
       if (!mounted) return;
@@ -2762,6 +2777,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
         final ribbonPayoutLoader = RibbonPayoutReportLoader(repository);
 
+        final paybackReportLoader = PaybackReportLoader();
+
         final registry = ReportRegistry(
           arbaLoader: arbaLoader,
           arbaBuilder: arbaBuilder,
@@ -2781,6 +2798,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           enteredExhibitorsContactBuilder: _enteredExhibitorsContactBuilder!,
           ribbonPayoutLoader: ribbonPayoutLoader,
           ribbonPayoutBuilder: _ribbonPayoutBuilder!,
+          paybackReportLoader: paybackReportLoader,
+          paybackReportBuilder: _paybackReportBuilder!,
           judgeReportLoader: JudgeReportLoader(),
           judgeReportBuilder: JudgeReportPdfBuilder(),
         );
@@ -5332,6 +5351,8 @@ String _friendlyReportName(String? key) {
       return 'Entered Exhibitors Contact Report';
     case 'ribbon_payout_report':
       return 'Ribbon Report';
+    case 'payback_report':
+      return 'Paybacks Report';
     case null:
       return '-';
     default:

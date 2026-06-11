@@ -31,7 +31,10 @@ class LegsReportLoader {
       final arbaDetails = await _loadArbaDetails(showId);
 
       final showName = _str(show['name']);
-      final clubName = await _loadClubName(showId);
+      final clubName = _firstNonEmpty([
+        _str(show['club_name']),
+        await _loadClubName(showId),
+      ]);
       final sanctionNumbersBySection = await _loadSanctionNumbersBySection(showId);
       final showDate = _tryParseDate(show['start_date']);
 
@@ -120,7 +123,7 @@ class LegsReportLoader {
         candidates.add(
           _LegCandidate(
             priority: ruleMatch.priority,
-            dedupeKey: '$entryId|${ctx.sectionLetter}',
+            dedupeKey: _legDedupeKey(ctx, entryId),
             data: LegsCertificateData(
               certificateId:
                   'leg_${showId}_${ctx.sectionLetter}_${entryId}_r${ruleMatch.rule}_first',
@@ -217,7 +220,7 @@ class LegsReportLoader {
         candidates.add(
           _LegCandidate(
             priority: ruleMatch.priority,
-            dedupeKey: '$entryId|$showLetter',
+            dedupeKey: _legDedupeKey(ctx, entryId),
             data: LegsCertificateData(
               certificateId: certificateId,
               showId: showId,
@@ -251,7 +254,8 @@ class LegsReportLoader {
         );
       }
 
-      // Keep only the best qualifying leg per rabbit per show letter.
+      // Keep only the best qualifying leg per exhibitor/animal/section.
+      // This prevents one animal from receiving separate certificates for BOB and RIS/BIS in the same show.
       final bestByEntryAndShow = <String, _LegCandidate>{};
       for (final candidate in candidates) {
         final key = candidate.dedupeKey;
@@ -335,11 +339,27 @@ class LegsReportLoader {
 
   Future<String> _loadClubName(String showId) async {
     try {
+      final showRow = await repo.supabase
+          .from('shows')
+          .select('club_name')
+          .eq('id', showId)
+          .maybeSingle();
+
+      if (showRow != null) {
+        final showMap = Map<String, dynamic>.from(showRow as Map);
+        final clubName = _str(showMap['club_name']);
+        if (clubName.isNotEmpty) return clubName;
+      }
+    } catch (_) {
+      // Fall through to the sanction table fallback below.
+    }
+
+    try {
       final row = await repo.supabase
           .from('show_sanctions')
           .select('club_name')
           .eq('show_id', showId)
-          .eq('sanctioning_body', 'ARBA')
+          .neq('club_name', 'ARBA')
           .limit(1)
           .maybeSingle();
 
@@ -615,6 +635,7 @@ class LegsReportLoader {
         showJudgeRowId: showJudgeRowId,
         tattoo: _str(row['tattoo']),
         exhibitorId: exhibitorId,
+        animalId: _str(row['animal_id']),
         breed: breed,
         className: className,
         sex: sex,
@@ -922,6 +943,31 @@ class LegsReportLoader {
     return null;
   }
 
+  String _legDedupeKey(_EntryLegContext ctx, String entryId) {
+    final animalId = ctx.animalId.trim();
+    final entryKey = entryId.trim();
+    final animalFallbackKey = [
+      ctx.breed.trim().toLowerCase(),
+      ctx.tattoo.trim().toLowerCase(),
+    ].where((e) => e.isNotEmpty).join('::');
+
+    final animalKey = animalId.isNotEmpty
+        ? animalId
+        : animalFallbackKey.isNotEmpty
+            ? animalFallbackKey
+            : entryKey;
+
+    final sectionKey = ctx.sectionId.trim().isNotEmpty
+        ? ctx.sectionId.trim()
+        : ctx.sectionLetter.trim().toUpperCase();
+
+    return [
+      ctx.exhibitorId.trim(),
+      animalKey,
+      sectionKey,
+    ].join('|');
+  }
+
   String _safeExhibitorName(_EntryLegContext ctx) {
     final memberName = [
       ctx.exhibitorFirstName,
@@ -1063,6 +1109,7 @@ class _EntryLegContext {
   final String showJudgeRowId;
   final String tattoo;
   final String exhibitorId;
+  final String animalId;
   final String breed;
   final String className;
   final String sex;
@@ -1109,6 +1156,7 @@ class _EntryLegContext {
     required this.showJudgeRowId,
     required this.tattoo,
     required this.exhibitorId,
+    required this.animalId,
     required this.breed,
     required this.className,
     required this.sex,
