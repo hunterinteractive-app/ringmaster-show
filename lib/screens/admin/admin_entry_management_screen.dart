@@ -2000,6 +2000,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
   bool _useLocalAnimal = false;
 
   final _showingName = TextEditingController();
+  bool _showingNameWasManuallyEdited = false;
   final _firstName = TextEditingController();
   final _lastName = TextEditingController();
   final _email = TextEditingController();
@@ -2147,16 +2148,23 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
   }
 
   void _autoFillShowingName() {
-    // Don't overwrite if user already typed something custom
-    if (_showingName.text.trim().isNotEmpty) return;
+    if (_showingNameWasManuallyEdited) return;
 
     final first = _firstName.text.trim();
     final last = _lastName.text.trim();
 
-    final combined = [first, last].where((s) => s.isNotEmpty).join(' ');
+    final combined = [
+      first,
+      last,
+    ].where((value) => value.isNotEmpty).join(' ');
 
-    if (combined.isNotEmpty) {
-      _showingName.text = combined;
+    if (_showingName.text != combined) {
+      _showingName.value = TextEditingValue(
+        text: combined,
+        selection: TextSelection.collapsed(
+          offset: combined.length,
+        ),
+      );
     }
   }
 
@@ -3258,11 +3266,13 @@ Future<void> _openSharedAnimalEditorForAdd() async {
                   if (_addNewExhibitor) ...[
                     TextField(
                       controller: _showingName,
-                      enabled: !_saving && !AppSession.isSupportMode,
-                      decoration: const InputDecoration(
-                        labelText: 'Showing Name',
-                        border: OutlineInputBorder(),
-                      ),
+                      onChanged: (value) {
+                        _showingNameWasManuallyEdited = value.trim().isNotEmpty;
+
+                        if (!_showingNameWasManuallyEdited) {
+                          _autoFillShowingName();
+                        }
+                      },
                     ),
                     const SizedBox(height: 10),
                     Row(
