@@ -32,12 +32,17 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
   final _email = TextEditingController();
+  final _otp = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
   String? _msg;
+  String? _pendingEmail;
   bool _busy = false;
   bool _showLogin = false;
   bool _handlingAuth = false;
+  bool _awaitingCode = false;
+  int _resendSeconds = 0;
+  Timer? _resendTimer;
 
   late Future<List<Map<String, dynamic>>> _publicShowsFuture;
 
@@ -239,7 +244,9 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void dispose() {
     _sub?.cancel();
+    _resendTimer?.cancel();
     _email.dispose();
+    _otp.dispose();
     _animationController.dispose();
     super.dispose();
   }
@@ -259,10 +266,48 @@ class _LoginScreenState extends State<LoginScreen>
     return (res as List).cast<Map<String, dynamic>>();
   }
 
-  Future<void> _sendLink() async {
+  void _startResendCountdown() {
+    _resendTimer?.cancel();
+
+    setState(() {
+      _resendSeconds = 60;
+    });
+
+    _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
+      if (_resendSeconds <= 1) {
+        timer.cancel();
+        setState(() {
+          _resendSeconds = 0;
+        });
+        return;
+      }
+
+      setState(() {
+        _resendSeconds--;
+      });
+    });
+  }
+
+  Future<void> _sendCode({bool isResend = false}) async {
     FocusScope.of(context).unfocus();
 
-    if (!_formKey.currentState!.validate()) return;
+    if (!isResend && !_formKey.currentState!.validate()) return;
+
+    final email = isResend
+        ? (_pendingEmail ?? '').trim().toLowerCase()
+        : _email.text.trim().toLowerCase();
+
+    if (email.isEmpty) {
+      setState(() {
+        _msg = 'Error: Enter your email address first.';
+      });
+      return;
+    }
 
     setState(() {
       _busy = true;
@@ -271,23 +316,105 @@ class _LoginScreenState extends State<LoginScreen>
 
     try {
       await supabase.auth.signInWithOtp(
-        email: _email.text.trim(),
-        emailRedirectTo: 'https://show.ringmasterone.com/login-callback',
+        email: email,
+        shouldCreateUser: true,
       );
 
       if (!mounted) return;
+
+      _otp.clear();
       setState(() {
-        _msg = 'Check your email for the login link.';
+        _pendingEmail = email;
+        _awaitingCode = true;
+        _msg = isResend
+            ? 'A new login code was sent to $email.'
+            : 'Enter the 6-digit login code sent to $email.';
+      });
+      _startResendCountdown();
+    } on AuthException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _msg = 'Error: ${e.message}';
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _msg = 'Error: $e';
+        _msg = 'Error: Unable to send the login code. Please try again.';
       });
     } finally {
       if (!mounted) return;
       setState(() => _busy = false);
     }
+  }
+
+  Future<void> _verifyCode() async {
+    FocusScope.of(context).unfocus();
+
+    final email = (_pendingEmail ?? '').trim().toLowerCase();
+    final code = _otp.text.replaceAll(RegExp(r'\D'), '');
+
+    if (email.isEmpty) {
+      setState(() {
+        _msg = 'Error: Enter your email address and request a new code.';
+        _awaitingCode = false;
+      });
+      return;
+    }
+
+    if (code.length != 6) {
+      setState(() {
+        _msg = 'Error: Enter the complete 6-digit login code.';
+      });
+      return;
+    }
+
+    setState(() {
+      _busy = true;
+      _msg = 'Verifying your login code...';
+    });
+
+    try {
+      final response = await supabase.auth.verifyOTP(
+        email: email,
+        token: code,
+        type: OtpType.email,
+      );
+
+      if (response.session == null) {
+        throw const AuthException('The login code could not be verified.');
+      }
+
+      if (!mounted) return;
+      _goToShowList();
+    } on AuthException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _msg = e.message.toLowerCase().contains('expired')
+            ? 'Error: This code has expired. Request a new code and try again.'
+            : 'Error: The code is invalid or has already been used.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _msg = 'Error: Unable to verify the login code. Please try again.';
+      });
+    } finally {
+      if (!mounted) return;
+      setState(() => _busy = false);
+    }
+  }
+
+  void _changeEmail() {
+    FocusScope.of(context).unfocus();
+    _resendTimer?.cancel();
+    _otp.clear();
+
+    setState(() {
+      _awaitingCode = false;
+      _pendingEmail = null;
+      _resendSeconds = 0;
+      _msg = null;
+    });
   }
 
   String? _validateEmail(String? value) {
@@ -393,10 +520,22 @@ class _LoginScreenState extends State<LoginScreen>
                           child: _LoginCard(
                             formKey: _formKey,
                             emailController: _email,
+                            otpController: _otp,
+                            pendingEmail: _pendingEmail,
+                            awaitingCode: _awaitingCode,
+                            resendSeconds: _resendSeconds,
                             busy: _busy,
                             message: _msg,
                             validateEmail: _validateEmail,
-                            onSendLink: _sendLink,
+                            onSendCode: () => _sendCode(),
+                            onVerifyCode: _verifyCode,
+                            onResendCode: () => _sendCode(isResend: true),
+                            onChangeEmail: _changeEmail,
+                            onOtpChanged: (value) {
+                              if (value.length == 6 && !_busy) {
+                                _verifyCode();
+                              }
+                            },
                           ),
                         ),
                       ),
@@ -1141,18 +1280,34 @@ class _LogoBlock extends StatelessWidget {
 class _LoginCard extends StatelessWidget {
   final GlobalKey<FormState> formKey;
   final TextEditingController emailController;
+  final TextEditingController otpController;
+  final String? pendingEmail;
+  final bool awaitingCode;
+  final int resendSeconds;
   final bool busy;
   final String? message;
   final String? Function(String?) validateEmail;
-  final VoidCallback onSendLink;
+  final VoidCallback onSendCode;
+  final VoidCallback onVerifyCode;
+  final VoidCallback onResendCode;
+  final VoidCallback onChangeEmail;
+  final ValueChanged<String> onOtpChanged;
 
   const _LoginCard({
     required this.formKey,
     required this.emailController,
+    required this.otpController,
+    required this.pendingEmail,
+    required this.awaitingCode,
+    required this.resendSeconds,
     required this.busy,
     required this.message,
     required this.validateEmail,
-    required this.onSendLink,
+    required this.onSendCode,
+    required this.onVerifyCode,
+    required this.onResendCode,
+    required this.onChangeEmail,
+    required this.onOtpChanged,
   });
 
   @override
@@ -1165,7 +1320,9 @@ class _LoginCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Log in or create your account',
+              awaitingCode
+                  ? 'Enter your login code'
+                  : 'Log in or create your account',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w800,
@@ -1173,47 +1330,125 @@ class _LoginCard extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
-              'Enter your email to receive a secure magic link for show entries, exhibitor tools, and admin access.',
+              awaitingCode
+                  ? 'We sent a secure 6-digit code to ${pendingEmail ?? emailController.text.trim()}.'
+                  : 'Enter your email to receive a secure 6-digit code for show entries, exhibitor tools, and show access.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: AppSpacing.lg),
-            TextFormField(
-              controller: emailController,
-              validator: validateEmail,
-              enabled: !busy,
-              keyboardType: TextInputType.emailAddress,
-              textInputAction: TextInputAction.done,
-              onFieldSubmitted: (_) {
-                if (!busy) onSendLink();
-              },
-              decoration: const InputDecoration(
-                labelText: 'Email address',
-                hintText: 'you@example.com',
-                prefixIcon: Icon(Icons.email_outlined),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: FilledButton.icon(
-                onPressed: busy ? null : onSendLink,
-                icon: busy
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Icon(Icons.login),
-                label: Text(
-                  busy ? 'Sending link…' : 'Log in / Create account',
+            if (!awaitingCode) ...[
+              TextFormField(
+                controller: emailController,
+                validator: validateEmail,
+                enabled: !busy,
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.done,
+                autofillHints: const [AutofillHints.email],
+                onFieldSubmitted: (_) {
+                  if (!busy) onSendCode();
+                },
+                decoration: const InputDecoration(
+                  labelText: 'Email address',
+                  hintText: 'you@example.com',
+                  prefixIcon: Icon(Icons.email_outlined),
                 ),
               ),
-            ),
+              const SizedBox(height: AppSpacing.lg),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: FilledButton.icon(
+                  onPressed: busy ? null : onSendCode,
+                  icon: busy
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.mark_email_read_outlined),
+                  label: Text(
+                    busy ? 'Sending code…' : 'Send login code',
+                  ),
+                ),
+              ),
+            ] else ...[
+              TextFormField(
+                controller: otpController,
+                enabled: !busy,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                textInputAction: TextInputAction.done,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 10,
+                ),
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(6),
+                ],
+                autofillHints: const [AutofillHints.oneTimeCode],
+                onChanged: onOtpChanged,
+                onFieldSubmitted: (_) {
+                  if (!busy) onVerifyCode();
+                },
+                decoration: const InputDecoration(
+                  labelText: '6-digit login code',
+                  hintText: '000000',
+                  prefixIcon: Icon(Icons.password_outlined),
+                  counterText: '',
+                ),
+                maxLength: 6,
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: FilledButton.icon(
+                  onPressed: busy ? null : onVerifyCode,
+                  icon: busy
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.login),
+                  label: Text(
+                    busy ? 'Verifying code…' : 'Continue to RingMaster Show',
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Wrap(
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: AppSpacing.xs,
+                children: [
+                  TextButton(
+                    onPressed: busy || resendSeconds > 0
+                        ? null
+                        : onResendCode,
+                    child: Text(
+                      resendSeconds > 0
+                          ? 'Resend code in ${resendSeconds}s'
+                          : 'Resend code',
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: busy ? null : onChangeEmail,
+                    child: const Text('Change email'),
+                  ),
+                ],
+              ),
+            ],
             if (message != null) ...[
               const SizedBox(height: AppSpacing.lg),
               Container(
@@ -1237,7 +1472,9 @@ class _LoginCard extends StatelessWidget {
             ],
             const SizedBox(height: AppSpacing.lg),
             Text(
-              'Use the login link from your email to continue to RingMaster Show.',
+              awaitingCode
+                  ? 'Do not share your login code. RingMaster Show will never ask you to send it by email, text, or phone.'
+                  : 'The code can only be used once and will expire after 20 minutes.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall,
             ),
