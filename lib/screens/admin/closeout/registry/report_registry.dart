@@ -5,6 +5,7 @@ import '../data/loaders/breed_results_detail_report_loader.dart';
 import '../data/loaders/entered_exhibitors_contact_report_loader.dart';
 import '../data/loaders/exhibitor_report_loader.dart';
 import '../data/loaders/judge_report_loader.dart';
+import '../data/loaders/best_display_report_loader.dart';
 import '../data/loaders/legs_report_loader.dart';
 import '../data/loaders/paid_exhibitor_report_loader.dart';
 import '../data/loaders/payback_report_loader.dart';
@@ -17,6 +18,7 @@ import '../models/clubs/breed_results_detail_report_data.dart';
 import '../models/clubs/sweepstakes_report_data.dart';
 import '../models/exhibitor/entered_exhibitors_contact_report_data.dart';
 import '../models/exhibitor/exhibitor_report_data.dart';
+import '../models/exhibitor/best_display_report_data.dart';
 import '../models/exhibitor/ribbon_payout_report_data.dart';
 import '../models/exhibitor/payback_report_data.dart';
 import '../models/judge/judge_report_data.dart';
@@ -29,6 +31,7 @@ import '../pdf/builders/breed_results_detail_report_pdf.dart';
 import '../pdf/builders/entered_exhibitors_contact_report_pdf.dart';
 import '../pdf/builders/exhibitor_report_pdf.dart';
 import '../pdf/builders/judge_report_pdf.dart';
+import '../pdf/builders/best_display_report_pdf.dart';
 import '../pdf/builders/legs_report_pdf.dart';
 import '../pdf/builders/paid_exhibitor_report_pdf.dart';
 import '../pdf/builders/payback_report_pdf.dart';
@@ -64,6 +67,8 @@ class ReportRegistry {
     required PaybackReportPdfBuilder paybackReportBuilder,
     required JudgeReportLoader judgeReportLoader,
     required JudgeReportPdfBuilder judgeReportBuilder,
+    required BestDisplayReportLoader bestDisplayReportLoader,
+    required BestDisplayReportPdfBuilder bestDisplayReportBuilder,
   }) : definitions = {
           'arba_report': ReportDefinition(
             reportName: 'arba_report',
@@ -173,6 +178,16 @@ class ReportRegistry {
             ),
             builder: (data, req) async =>
                 await judgeReportBuilder.buildFile(data as JudgeReportData, req),
+          ),
+          'best_display_report': ReportDefinition(
+            reportName: 'best_display_report',
+            outputType: 'pdf',
+            loader: (req) async => await bestDisplayReportLoader.load(req),
+            builder: (data, req) async =>
+                await bestDisplayReportBuilder.buildFile(
+                  data as BestDisplayReportData,
+                  req,
+                ),
           ),
         };
 

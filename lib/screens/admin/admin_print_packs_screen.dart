@@ -2248,8 +2248,8 @@ class _ControlSheetsGeneratorSheetState
               .compareTo((b['sectionTitle'] ?? '').toString());
           if (titleCmp != 0) return titleCmp;
 
-          // Within each breed/section, keep normal breed classes first and
-          // push Fur/Wool sheets to the end of that breed.
+          // Within each Open or Youth section, print all regular breed
+          // classes first and place Fur/Wool at the end of that section.
           final aIsFurOrWool = a['isFurOrWool'] == true;
           final bIsFurOrWool = b['isFurOrWool'] == true;
           if (aIsFurOrWool != bIsFurOrWool) {
@@ -2292,6 +2292,14 @@ class _ControlSheetsGeneratorSheetState
               .toLowerCase()
               .compareTo((b['breed'] ?? '').toString().toLowerCase());
           if (breedCmp != 0) return breedCmp;
+
+          // Fur/Wool must always print after every regular class in the breed.
+          final aIsFurOrWool = a['isFurOrWool'] == true;
+          final bIsFurOrWool = b['isFurOrWool'] == true;
+
+          if (aIsFurOrWool != bIsFurOrWool) {
+            return aIsFurOrWool ? 1 : -1;
+          }
         }
 
         // Only use the fallback sorting when not combining sections

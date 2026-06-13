@@ -29,9 +29,11 @@ import 'closeout/data/loaders/paid_exhibitor_report_loader.dart';
 import 'closeout/data/loaders/entered_exhibitors_contact_report_loader.dart';
 import 'closeout/data/loaders/ribbon_payout_report_loader.dart';
 import 'closeout/data/loaders/judge_report_loader.dart';
+import 'closeout/data/loaders/best_display_report_loader.dart';
 import 'closeout/data/loaders/payback_report_loader.dart';
 
 import 'closeout/pdf/builders/judge_report_pdf.dart';
+import 'closeout/pdf/builders/best_display_report_pdf.dart';
 import 'closeout/pdf/builders/legs_report_pdf.dart';
 import 'closeout/pdf/builders/exhibitor_report_pdf.dart';
 import 'closeout/pdf/builders/sweepstakes_report_pdf.dart';
@@ -111,7 +113,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     'legs',
   };
 
-    static const Set<String> _clubReportKeys = {
+    static const Set<String> _clubReportKeys = {       // Add here to include in Club Reports
       //'cavy_points',
       //'commercial_points',
       //'details_by_breed',
@@ -121,7 +123,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       //'newsletter_show_report',
       'sweepstakes_report',
       'breed_results_detail_report',
-      'payback_report',
     };
 
   static const Set<String> _arbaReportKeys = {
@@ -147,6 +148,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       'cavy_points',
       'commercial_points',
       'judge_report',
+      'best_display_report',
       'finalized_show_report',
       'show_statistics',
       'overall_standings',
@@ -1484,6 +1486,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       final ribbonPayoutLoader = RibbonPayoutReportLoader(repository);
 
       final paybackReportLoader = PaybackReportLoader();
+      final bestDisplayReportLoader = BestDisplayReportLoader();
+      final bestDisplayReportBuilder = BestDisplayReportPdfBuilder();
 
       final registry = ReportRegistry(
         arbaLoader: arbaLoader,
@@ -1508,6 +1512,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         paybackReportBuilder: _paybackReportBuilder!,
         judgeReportLoader: JudgeReportLoader(),
         judgeReportBuilder: JudgeReportPdfBuilder(),
+        bestDisplayReportLoader: BestDisplayReportLoader(),
+        bestDisplayReportBuilder: BestDisplayReportPdfBuilder(),
       );
 
       final engine = ReportEngine(registry);
@@ -2852,6 +2858,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           paybackReportBuilder: _paybackReportBuilder!,
           judgeReportLoader: JudgeReportLoader(),
           judgeReportBuilder: JudgeReportPdfBuilder(),
+          bestDisplayReportLoader: BestDisplayReportLoader(),
+          bestDisplayReportBuilder: BestDisplayReportPdfBuilder(),
         );
 
         final engine = ReportEngine(registry);
@@ -3374,12 +3382,14 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           if (!names.contains(name)) names.add(name);
         }
       } else if (groupKey == 'other') {
-        const otherManualReports = <String>{
+        const otherManualReports = <String>{     // Add here to include in Other Reports 
           'unpaid_balances_report',
           'paid_exhibitor_report',
           'entered_exhibitors_contact_report',
           'ribbon_payout_report',
           'judge_report',
+          'best_display_report',
+          'payback_report',
         };
 
         for (final name in otherManualReports) {

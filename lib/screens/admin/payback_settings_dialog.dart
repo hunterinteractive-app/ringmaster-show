@@ -212,11 +212,9 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
     _specialRows
       ..clear()
       ..addAll(
-        (savedSpecialRows == null || savedSpecialRows.isEmpty
-                ? _defaultSpecialMoneyRows()
-                : savedSpecialRows)
-            .map((e) => e.copy())
-            .toList(),
+        _normalizeSpecialMoneyRows(
+          savedSpecialRows ?? const <_SpecialMoneyRow>[],
+        ),
       );
   }
 
@@ -411,21 +409,6 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
   }
 
 
-  void _addSpecialRow() {
-    setState(() {
-      _specialRows.add(
-        _SpecialMoneyRow(
-          awardCode: '',
-          awardLabel: '',
-          amountCents: 0,
-          appliesToSpecies: 'rabbit',
-          breedName: null,
-          varietyName: null,
-          isEnabled: true,
-        ),
-      );
-    });
-  }
 
   String _moneyFromCents(int cents) {
     return (cents / 100).toStringAsFixed(2);
@@ -878,10 +861,11 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
                     cells: [
                       DataCell(
                         SizedBox(
-                          width: 110,
+                          width: 180,
                           child: TextFormField(
                             key: ValueKey('special-code-$index-${row.awardCode}'),
                             initialValue: row.awardCode,
+                            enabled: !row.isBuiltIn,
                             decoration: const InputDecoration(
                               hintText: 'BOB',
                               border: OutlineInputBorder(),
@@ -901,6 +885,7 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
                           child: TextFormField(
                             key: ValueKey('special-label-$index-${row.awardLabel}'),
                             initialValue: row.awardLabel,
+                            enabled: !row.isBuiltIn,
                             decoration: const InputDecoration(
                               hintText: 'Best of Breed',
                               border: OutlineInputBorder(),
@@ -936,12 +921,14 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
                                 child: Text('Cavy'),
                               ),
                             ],
-                            onChanged: (value) {
-                              setState(() {
-                                row.appliesToSpecies = value;
-                                _ensureSpecialRowTracked(row);
-                              });
-                            },
+                            onChanged: row.isBuiltIn
+                                ? null
+                                : (value) {
+                                    setState(() {
+                                      row.appliesToSpecies = value;
+                                      _ensureSpecialRowTracked(row);
+                                    });
+                                  },
                           ),
                         ),
                       ),
@@ -963,8 +950,11 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
                               decimal: true,
                             ),
                             onChanged: (value) {
-                              row.amountCents = _centsFromMoney(value);
-                              _ensureSpecialRowTracked(row);
+                              setState(() {
+                                row.amountCents = _centsFromMoney(value);
+                                row.isEnabled = row.amountCents > 0;
+                                _ensureSpecialRowTracked(row);
+                              });
                             },
                           ),
                         ),
@@ -972,12 +962,14 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
                       DataCell(
                         IconButton(
                           tooltip: row.isEnabled ? 'Enabled' : 'Disabled',
-                          onPressed: () {
-                            setState(() {
-                              row.isEnabled = !row.isEnabled;
-                              _ensureSpecialRowTracked(row);
-                            });
-                          },
+                          onPressed: row.amountCents <= 0
+                              ? null
+                              : () {
+                                  setState(() {
+                                    row.isEnabled = !row.isEnabled;
+                                    _ensureSpecialRowTracked(row);
+                                  });
+                                },
                           icon: Icon(
                             row.isEnabled
                                 ? Icons.check_circle
@@ -988,12 +980,14 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
                       DataCell(
                         IconButton(
                           tooltip: 'Remove rule',
-                          onPressed: () {
-                            setState(() {
-                              _ensureSpecialRowTracked(row);
-                              _specialRows.remove(row);
-                            });
-                          },
+                          onPressed: row.isBuiltIn
+                              ? null
+                              : () {
+                                  setState(() {
+                                    _ensureSpecialRowTracked(row);
+                                    _specialRows.remove(row);
+                                  });
+                                },
                           icon: const Icon(Icons.delete_outline),
                         ),
                       ),
@@ -1002,15 +996,6 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
                 }).toList(),
               ),
             ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: OutlinedButton.icon(
-            onPressed: _addSpecialRow,
-            icon: const Icon(Icons.add),
-            label: const Text('Add special money'),
           ),
         ),
       ],
@@ -1150,6 +1135,25 @@ class _SpecialMoneyRow {
     required this.isEnabled,
   });
 
+  bool get isBuiltIn {
+    final code = awardCode.trim().toUpperCase();
+
+    if (code.startsWith('COMMERCIAL_')) return true;
+
+    return const <String>{
+      'BIS',
+      'RIS',
+      'BD',
+      'BDPB',
+      'BOB',
+      'BOSB',
+      'BOG',
+      'BOSG',
+      'BOV',
+      'BOSV',
+    }.contains(code);
+  }
+
   _SpecialMoneyRow copy() {
     return _SpecialMoneyRow(
       awardCode: awardCode,
@@ -1170,7 +1174,9 @@ class _SpecialMoneyRow {
       appliesToSpecies: json['applies_to_species']?.toString(),
       breedName: json['breed_name']?.toString(),
       varietyName: json['variety_name']?.toString(),
-      isEnabled: json['is_enabled'] as bool? ?? true,
+      isEnabled: ((json['amount_cents'] as num?)?.toInt() ?? 0) > 0
+          ? (json['is_enabled'] as bool? ?? true)
+          : false,
     );
   }
 
@@ -1248,7 +1254,7 @@ List<_SpecialMoneyRow> _defaultSpecialMoneyRows() {
       appliesToSpecies: 'rabbit',
       breedName: null,
       varietyName: null,
-      isEnabled: true,
+      isEnabled: false,
     ),
     _SpecialMoneyRow(
       awardCode: 'RIS',
@@ -1257,7 +1263,25 @@ List<_SpecialMoneyRow> _defaultSpecialMoneyRows() {
       appliesToSpecies: 'rabbit',
       breedName: null,
       varietyName: null,
-      isEnabled: true,
+      isEnabled: false,
+    ),
+    _SpecialMoneyRow(
+      awardCode: 'BD',
+      awardLabel: 'Best Display',
+      amountCents: 0,
+      appliesToSpecies: 'rabbit',
+      breedName: null,
+      varietyName: null,
+      isEnabled: false,
+    ),
+    _SpecialMoneyRow(
+      awardCode: 'BDPB',
+      awardLabel: 'Best Display Per Breed',
+      amountCents: 0,
+      appliesToSpecies: 'rabbit',
+      breedName: null,
+      varietyName: null,
+      isEnabled: false,
     ),
     _SpecialMoneyRow(
       awardCode: 'BOB',
@@ -1266,7 +1290,7 @@ List<_SpecialMoneyRow> _defaultSpecialMoneyRows() {
       appliesToSpecies: 'rabbit',
       breedName: null,
       varietyName: null,
-      isEnabled: true,
+      isEnabled: false,
     ),
     _SpecialMoneyRow(
       awardCode: 'BOSB',
@@ -1275,7 +1299,7 @@ List<_SpecialMoneyRow> _defaultSpecialMoneyRows() {
       appliesToSpecies: 'rabbit',
       breedName: null,
       varietyName: null,
-      isEnabled: true,
+      isEnabled: false,
     ),
     _SpecialMoneyRow(
       awardCode: 'BOG',
@@ -1284,7 +1308,7 @@ List<_SpecialMoneyRow> _defaultSpecialMoneyRows() {
       appliesToSpecies: 'rabbit',
       breedName: null,
       varietyName: null,
-      isEnabled: true,
+      isEnabled: false,
     ),
     _SpecialMoneyRow(
       awardCode: 'BOSG',
@@ -1293,7 +1317,7 @@ List<_SpecialMoneyRow> _defaultSpecialMoneyRows() {
       appliesToSpecies: 'rabbit',
       breedName: null,
       varietyName: null,
-      isEnabled: true,
+      isEnabled: false,
     ),
     _SpecialMoneyRow(
       awardCode: 'BOV',
@@ -1302,7 +1326,7 @@ List<_SpecialMoneyRow> _defaultSpecialMoneyRows() {
       appliesToSpecies: 'rabbit',
       breedName: null,
       varietyName: null,
-      isEnabled: true,
+      isEnabled: false,
     ),
     _SpecialMoneyRow(
       awardCode: 'BOSV',
@@ -1311,8 +1335,9 @@ List<_SpecialMoneyRow> _defaultSpecialMoneyRows() {
       appliesToSpecies: 'rabbit',
       breedName: null,
       varietyName: null,
-      isEnabled: true,
+      isEnabled: false,
     ),
+    ..._defaultCommercialClassMoneyRows(),
     _SpecialMoneyRow(
       awardCode: 'BIS',
       awardLabel: 'Best in Show',
@@ -1320,7 +1345,7 @@ List<_SpecialMoneyRow> _defaultSpecialMoneyRows() {
       appliesToSpecies: 'cavy',
       breedName: null,
       varietyName: null,
-      isEnabled: true,
+      isEnabled: false,
     ),
     _SpecialMoneyRow(
       awardCode: 'RIS',
@@ -1329,7 +1354,25 @@ List<_SpecialMoneyRow> _defaultSpecialMoneyRows() {
       appliesToSpecies: 'cavy',
       breedName: null,
       varietyName: null,
-      isEnabled: true,
+      isEnabled: false,
+    ),
+    _SpecialMoneyRow(
+      awardCode: 'BD',
+      awardLabel: 'Best Display',
+      amountCents: 0,
+      appliesToSpecies: 'cavy',
+      breedName: null,
+      varietyName: null,
+      isEnabled: false,
+    ),
+    _SpecialMoneyRow(
+      awardCode: 'BDPB',
+      awardLabel: 'Best Display Per Breed',
+      amountCents: 0,
+      appliesToSpecies: 'cavy',
+      breedName: null,
+      varietyName: null,
+      isEnabled: false,
     ),
     _SpecialMoneyRow(
       awardCode: 'BOB',
@@ -1338,7 +1381,7 @@ List<_SpecialMoneyRow> _defaultSpecialMoneyRows() {
       appliesToSpecies: 'cavy',
       breedName: null,
       varietyName: null,
-      isEnabled: true,
+      isEnabled: false,
     ),
     _SpecialMoneyRow(
       awardCode: 'BOSB',
@@ -1347,7 +1390,7 @@ List<_SpecialMoneyRow> _defaultSpecialMoneyRows() {
       appliesToSpecies: 'cavy',
       breedName: null,
       varietyName: null,
-      isEnabled: true,
+      isEnabled: false,
     ),
     _SpecialMoneyRow(
       awardCode: 'BOV',
@@ -1356,7 +1399,7 @@ List<_SpecialMoneyRow> _defaultSpecialMoneyRows() {
       appliesToSpecies: 'cavy',
       breedName: null,
       varietyName: null,
-      isEnabled: true,
+      isEnabled: false,
     ),
     _SpecialMoneyRow(
       awardCode: 'BOSV',
@@ -1365,10 +1408,110 @@ List<_SpecialMoneyRow> _defaultSpecialMoneyRows() {
       appliesToSpecies: 'cavy',
       breedName: null,
       varietyName: null,
-      isEnabled: true,
+      isEnabled: false,
     ),
   ];
 }
+
+List<_SpecialMoneyRow> _defaultCommercialClassMoneyRows() {
+  const commercialClasses = <Map<String, String>>[
+    {'code': 'MEAT_PEN', 'label': 'Meat Pen'},
+    {'code': 'SINGLE_FRYER', 'label': 'Single Fryer'},
+    {'code': 'ROASTER', 'label': 'Roaster'},
+    {'code': 'STEWER', 'label': 'Stewer'},
+  ];
+
+  final rows = <_SpecialMoneyRow>[];
+
+  for (final commercialClass in commercialClasses) {
+    final classCode = commercialClass['code']!;
+    final classLabel = commercialClass['label']!;
+
+    for (var placement = 1; placement <= 5; placement++) {
+      rows.add(
+        _SpecialMoneyRow(
+          awardCode: 'COMMERCIAL_${classCode}_$placement',
+          awardLabel: '$classLabel - ${_placementLabelForDefault(placement)}',
+          amountCents: 0,
+          appliesToSpecies: 'rabbit',
+          breedName: classLabel,
+          varietyName: null,
+          isEnabled: false,
+        ),
+      );
+    }
+  }
+
+  return rows;
+}
+
+String _placementLabelForDefault(int placement) {
+  if (placement % 100 >= 11 && placement % 100 <= 13) {
+    return '${placement}th';
+  }
+
+  switch (placement % 10) {
+    case 1:
+      return '${placement}st';
+    case 2:
+      return '${placement}nd';
+    case 3:
+      return '${placement}rd';
+    default:
+      return '${placement}th';
+  }
+}
+
+List<_SpecialMoneyRow> _normalizeSpecialMoneyRows(
+  List<_SpecialMoneyRow> source,
+) {
+  final byKey = <String, _SpecialMoneyRow>{};
+
+  for (final row in _defaultSpecialMoneyRows()) {
+    final key = '${row.appliesToSpecies ?? 'both'}:${row.awardCode.trim().toUpperCase()}';
+    byKey[key] = row.copy();
+  }
+
+  for (final row in source) {
+    if (!row.isBuiltIn) continue;
+
+    final copy = row.copy();
+    if (copy.amountCents <= 0) {
+      copy.isEnabled = false;
+    }
+
+    final key = '${copy.appliesToSpecies ?? 'both'}:${copy.awardCode.trim().toUpperCase()}';
+    byKey[key] = copy;
+  }
+
+  final rows = byKey.values.toList()
+    ..sort((a, b) {
+      final speciesCompare = _specialMoneySpeciesSortRank(a.appliesToSpecies)
+          .compareTo(_specialMoneySpeciesSortRank(b.appliesToSpecies));
+      if (speciesCompare != 0) return speciesCompare;
+
+      final aCommercial = a.awardCode.startsWith('COMMERCIAL_');
+      final bCommercial = b.awardCode.startsWith('COMMERCIAL_');
+      if (aCommercial != bCommercial) return aCommercial ? 1 : -1;
+
+      return a.awardLabel.toLowerCase().compareTo(
+            b.awardLabel.toLowerCase(),
+          );
+    });
+
+  return rows;
+}
+int _specialMoneySpeciesSortRank(String? species) {
+  switch (species) {
+    case 'rabbit':
+      return 0;
+    case 'cavy':
+      return 1;
+    default:
+      return 2;
+  }
+}
+
 String _normalizedClassSpecies(String? value) {
   final normalized = value?.trim().toLowerCase();
   if (normalized == 'cavy') return 'cavy';
