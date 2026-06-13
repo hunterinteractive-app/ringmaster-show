@@ -340,6 +340,7 @@ class ExhibitorReportLoader {
         final rows = await repo.supabase
             .from('sweepstakes_entry_results')
             .select('entry_id, points')
+            .eq('show_id', showId)
             .inFilter('entry_id', chunk);
 
         for (final row in List<Map<String, dynamic>>.from(rows as List)) {
@@ -568,6 +569,37 @@ class ExhibitorReportLoader {
   ) {
     final byEntryIdAndShow = <String, _EntryLegContext>{};
 
+    // Class and exhibitor counts must be based only on animals that were
+    // actually shown to the judge. No Shows remain on the exhibitor report,
+    // but they must not inflate the counts used to explain leg eligibility.
+    // Keep disqualified and unworthy animals because they were presented and
+    // judged; only scratches and No Shows are excluded here.
+    final judgedRows = rows.where(_countsAsJudgedAnimal).toList();
+
+    // Build each section independently so Open A, Open B, Open C, Youth A,
+    // etc. can never share counts. Also de-duplicate by entry within a section
+    // in case the reporting RPC returns more than one result row for an animal
+    // (for example, a separate fur/wool result row).
+    final judgedRowsBySection = <String, List<Map<String, dynamic>>>{};
+
+    for (final row in judgedRows) {
+      final sectionId = _str(row['section_id']);
+      final entryId = _str(row['entry_id']);
+      if (sectionId.isEmpty || entryId.isEmpty) continue;
+
+      final sectionRows = judgedRowsBySection.putIfAbsent(
+        sectionId,
+        () => <Map<String, dynamic>>[],
+      );
+
+      final alreadyAdded = sectionRows.any(
+        (existing) => _str(existing['entry_id']) == entryId,
+      );
+      if (!alreadyAdded) {
+        sectionRows.add(row);
+      }
+    }
+
     for (final row in rows) {
       final entryId = _str(row['entry_id']);
       final sectionId = _str(row['section_id']);
@@ -575,9 +607,8 @@ class ExhibitorReportLoader {
 
       if (entryId.isEmpty || sectionId.isEmpty || showLetter.isEmpty) continue;
 
-      final scopedRows = rows.where((e) {
-        return _str(e['section_id']) == sectionId;
-      }).toList();
+      final scopedRows = judgedRowsBySection[sectionId] ??
+          const <Map<String, dynamic>>[];
 
       final breed = _str(row['breed_name']);
       final variety = _str(row['variety_name']);
@@ -665,6 +696,18 @@ class ExhibitorReportLoader {
     }
 
     return byEntryIdAndShow;
+  }
+
+  bool _countsAsJudgedAnimal(Map<String, dynamic> row) {
+    if (_str(row['scratched_at']).isNotEmpty) return false;
+    if (row['is_shown'] == false) return false;
+
+    final status = _str(row['result_status']).toLowerCase();
+    if (status == 'no show' || status == 'no_show' || status == 'noshow') {
+      return false;
+    }
+
+    return true;
   }
 
   String _displayResultOrPlacement(
