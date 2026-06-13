@@ -30,6 +30,8 @@ const List<String> cavyAwardCodes = [
   'BOSB',
   'BIS',
   'RIS',
+  '1RIS',
+  '2RIS',
   'HM',
 ];
 
@@ -50,6 +52,8 @@ const Map<String, String> cavyAwardLabels = {
 
   'BIS': 'Best in Show',
   'RIS': 'Reserve in Show',
+  '1RIS': '1st Reserve in Show',
+  '2RIS': '2nd Reserve in Show',
   'HM': 'Honorable Mention',
 };
 
@@ -101,6 +105,22 @@ String _canonicalAwardCode(String award) {
     return 'Reserve In Show';
   }
   if (value == 'ris') return 'RIS';
+
+  if (value == '1ris' ||
+      value == '1st ris' ||
+      value == 'first ris' ||
+      value == '1st reserve in show' ||
+      value == 'first reserve in show') {
+    return '1RIS';
+  }
+
+  if (value == '2ris' ||
+      value == '2nd ris' ||
+      value == 'second ris' ||
+      value == '2nd reserve in show' ||
+      value == 'second reserve in show') {
+    return '2RIS';
+  }
 
   if (value == 'bog' || value == 'best of group') return 'BOG';
   if (value == 'bosg' ||
@@ -300,17 +320,23 @@ int _awardCount(List<Map<String, dynamic>> entries, String awardCode) {
 }
 
 String _entryShortAnimalLabel(Map<String, dynamic> entry) {
+  final coopNumber = (entry['coop_number'] ?? '').toString().trim();
   final animalName = (entry['animal_name'] ?? '').toString().trim();
   final tattoo = (entry['tattoo'] ?? '').toString().trim();
 
-  if (animalName.isNotEmpty && tattoo.isNotEmpty) return '$animalName / $tattoo';
-  if (animalName.isNotEmpty) return animalName;
-  if (tattoo.isNotEmpty) return tattoo;
+  String animalLabel;
+  if (animalName.isNotEmpty && tattoo.isNotEmpty) {
+    animalLabel = '$animalName / $tattoo';
+  } else if (animalName.isNotEmpty) {
+    animalLabel = animalName;
+  } else if (tattoo.isNotEmpty) {
+    animalLabel = tattoo;
+  } else {
+    final exhibitor = (entry['exhibitor_label'] ?? '').toString().trim();
+    animalLabel = exhibitor.isNotEmpty ? exhibitor : 'Selected';
+  }
 
-  final exhibitor = (entry['exhibitor_label'] ?? '').toString().trim();
-  if (exhibitor.isNotEmpty) return exhibitor;
-
-  return 'Selected';
+  return coopNumber.isEmpty ? animalLabel : 'Coop $coopNumber • $animalLabel';
 }
 
 String _specialsSummaryForEntries(
@@ -1102,7 +1128,83 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
       final entryIds = entries
           .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
           .where((x) => x.isNotEmpty)
+          .toSet()
           .toList();
+
+      final showModeRow = await supabase
+          .from('shows')
+          .select('coop_numbering_mode')
+          .eq('id', widget.showId)
+          .maybeSingle();
+
+      final coopNumberingMode =
+          (showModeRow?['coop_numbering_mode'] ?? 'separate')
+              .toString()
+              .trim()
+              .toLowerCase();
+
+      final animalIdByEntryId = <String, String>{};
+      for (var i = 0; i < entryIds.length; i += 100) {
+        final chunk = entryIds.skip(i).take(100).toList();
+        if (chunk.isEmpty) continue;
+
+        final sourceRows = await supabase
+            .from('entries')
+            .select('id,animal_id')
+            .inFilter('id', chunk);
+
+        for (final raw in sourceRows as List) {
+          final row = Map<String, dynamic>.from(raw as Map);
+          final entryId = (row['id'] ?? '').toString().trim();
+          final animalId = (row['animal_id'] ?? '').toString().trim();
+          if (entryId.isNotEmpty && animalId.isNotEmpty) {
+            animalIdByEntryId[entryId] = animalId;
+          }
+        }
+      }
+
+      final animalIds = animalIdByEntryId.values.toSet().toList();
+      final coopNumberByAnimalAndScope = <String, String>{};
+
+      for (var i = 0; i < animalIds.length; i += 100) {
+        final chunk = animalIds.skip(i).take(100).toList();
+        if (chunk.isEmpty) continue;
+
+        final coopRows = await supabase
+            .from('show_animal_coop_numbers')
+            .select('animal_id,scope,coop_number')
+            .eq('show_id', widget.showId)
+            .inFilter('animal_id', chunk);
+
+        for (final raw in coopRows as List) {
+          final row = Map<String, dynamic>.from(raw as Map);
+          final animalId = (row['animal_id'] ?? '').toString().trim();
+          final scope = (row['scope'] ?? '').toString().trim().toLowerCase();
+          final coopNumber = (row['coop_number'] ?? '').toString().trim();
+          if (animalId.isEmpty || scope.isEmpty) continue;
+          coopNumberByAnimalAndScope['$animalId|$scope'] = coopNumber;
+        }
+      }
+
+      for (final entry in entries) {
+        final entryId =
+            (entry['entry_id'] ?? entry['id'] ?? '').toString().trim();
+        final animalId = animalIdByEntryId[entryId] ?? '';
+        entry['animal_id'] = animalId;
+
+        final sectionId = (entry['section_id'] ?? '').toString().trim();
+        final section = _sections.firstWhere(
+          (row) => (row['id'] ?? '').toString().trim() == sectionId,
+          orElse: () => <String, dynamic>{},
+        );
+        final sectionKind =
+            (section['kind'] ?? '').toString().trim().toLowerCase();
+        final scope = coopNumberingMode == 'combined' ? 'all' : sectionKind;
+
+        entry['coop_number'] = animalId.isEmpty || scope.isEmpty
+            ? ''
+            : (coopNumberByAnimalAndScope['$animalId|$scope'] ?? '');
+      }
 
       final awardsByEntryId = <String, List<String>>{};
 
@@ -1783,6 +1885,8 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
         case 'Best 6-Class':
         case 'BIS':
         case 'Reserve In Show':
+        case '1RIS':
+        case '2RIS':
           final key = '${sectionId(e)}|$award';
           awardBuckets.putIfAbsent(key, () => <Map<String, dynamic>>[]);
           awardBuckets[key]!.add(e);
@@ -1978,6 +2082,27 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
         ),
       );
     }
+
+    if (_finalAwardMode == 'bis_1ris_2ris') {
+      final hasBis = _awardListContains(a, 'Best In Show');
+      final hasFirstRis = _awardListContains(a, '1RIS');
+      final hasSecondRis = _awardListContains(a, '2RIS');
+      final finalAwardCount = [hasBis, hasFirstRis, hasSecondRis]
+          .where((selected) => selected)
+          .length;
+
+      if (finalAwardCount > 1) {
+        issues.add(
+          makeIssue(
+            code: 'bis_1ris_2ris_same_entry',
+            title: 'Animal has multiple final awards',
+            message:
+                '${_entryLabel(e)} cannot receive more than one of Best In Show, 1st Reserve in Show, or 2nd Reserve in Show.',
+            entry: e,
+          ),
+        );
+      }
+    }
   }
 
   return issues;
@@ -2004,7 +2129,10 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
                 ? tattoo
                 : '(No ear #)';
 
+    final coopNumber = (e['coop_number'] ?? '').toString().trim();
+
     return [
+      if (coopNumber.isNotEmpty) 'Coop $coopNumber',
       animalLabel,
       breed,
       if (groupName.isNotEmpty) groupName,
@@ -2174,7 +2302,9 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
                           Text(
                             _finalAwardMode == 'bis_ris'
                                 ? 'Final awards: Best in Show / Reserve in Show'
-                                : 'Final awards: Best 4-Class / Best 6-Class / Best in Show',
+                                : _finalAwardMode == 'bis_1ris_2ris'
+                                    ? 'Final awards: Best in Show / 1st Reserve in Show / 2nd Reserve in Show'
+                                    : 'Final awards: Best 4-Class / Best 6-Class / Best in Show',
                             style: const TextStyle(
                               color: Colors.white70,
                               fontSize: 14,
@@ -5250,6 +5380,7 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
               itemCount: _entries.length,
               itemBuilder: (context, i) {
                 final e = _entries[i];
+                final coopNumber = (e['coop_number'] ?? '').toString().trim();
                 final animalName = (e['animal_name'] ?? '').toString().trim();
                 final tattoo = (e['tattoo'] ?? '').toString().trim();
                 final exhibitor = _exhibitorName(e);
@@ -5299,15 +5430,22 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
+                                    if (coopNumber.isNotEmpty)
+                                      Text(
+                                        'Coop #: $coopNumber',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
                                     Text(
                                       animalName.isNotEmpty && tattoo.isNotEmpty
-                                          ? '$animalName • $tattoo'
+                                          ? '$animalName • Ear #: $tattoo'
                                           : animalName.isNotEmpty
                                               ? animalName
-                                              : tattoo.isEmpty
-                                                  ? '(No ear #)'
-                                                  : tattoo,
-                                      style: const TextStyle(fontWeight: FontWeight.w700),
+                                              : 'Ear #: ${tattoo.isEmpty ? '(No ear #)' : tattoo}',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                      ),
                                     ),
                                     const SizedBox(height: 6),
                                     Text(subtitleParts.join(' • ')),
@@ -5793,11 +5931,25 @@ if (storedJudgeId.isEmpty) {
           return currentAwards.contains('BOB');
 
         case 'RIS':
-          return currentAwards.contains('BOB') &&
+          return widget.finalAwardMode != 'bis_1ris_2ris' &&
+              currentAwards.contains('BOB') &&
               !currentAwards.contains('BIS');
 
+        case '1RIS':
+          return widget.finalAwardMode == 'bis_1ris_2ris' &&
+              currentAwards.contains('BOB') &&
+              !currentAwards.contains('BIS') &&
+              !currentAwards.contains('2RIS');
+
+        case '2RIS':
+          return widget.finalAwardMode == 'bis_1ris_2ris' &&
+              currentAwards.contains('BOB') &&
+              !currentAwards.contains('BIS') &&
+              !currentAwards.contains('1RIS');
+
         case 'HM':
-          return currentAwards.contains('BOB') &&
+          return widget.finalAwardMode != 'bis_1ris_2ris' &&
+              currentAwards.contains('BOB') &&
               !currentAwards.contains('BIS') &&
               !currentAwards.contains('RIS');
       }
@@ -5860,6 +6012,22 @@ if (storedJudgeId.isEmpty) {
         if (widget.finalAwardMode == 'bis_ris') {
           return currentAwards.contains('BOB') &&
               !currentAwards.contains('Best In Show');
+        }
+        return false;
+
+      case '1RIS':
+        if (widget.finalAwardMode == 'bis_1ris_2ris') {
+          return currentAwards.contains('BOB') &&
+              !currentAwards.contains('Best In Show') &&
+              !currentAwards.contains('2RIS');
+        }
+        return false;
+
+      case '2RIS':
+        if (widget.finalAwardMode == 'bis_1ris_2ris') {
+          return currentAwards.contains('BOB') &&
+              !currentAwards.contains('Best In Show') &&
+              !currentAwards.contains('1RIS');
         }
         return false;
     }
@@ -6441,8 +6609,10 @@ if (storedJudgeId.isEmpty) {
 
   @override
   Widget build(BuildContext context) {
+    final coopNumber =
+        (widget.entry['coop_number'] ?? '').toString().trim();
     final animalName = (widget.entry['animal_name'] ?? '').toString().trim();
-    final tattoo = (widget.entry['tattoo'] ?? '').toString();
+    final tattoo = (widget.entry['tattoo'] ?? '').toString().trim();
     final breed = (widget.entry['breed'] ?? '').toString();
     final groupName = (widget.entry['group_name'] ?? '').toString();
     final variety = (widget.entry['variety'] ?? '').toString();
@@ -6515,6 +6685,11 @@ if (storedJudgeId.isEmpty) {
                 ].where((x) => x.trim().isNotEmpty).join(' • '),
               ),
               const SizedBox(height: 4),
+              if (coopNumber.isNotEmpty)
+                Text(
+                  'Coop #: $coopNumber',
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
               Text(
                 animalName.isNotEmpty && tattoo.isNotEmpty
                     ? '$animalName • Ear #: $tattoo'

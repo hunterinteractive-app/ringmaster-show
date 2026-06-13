@@ -2137,6 +2137,18 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         );
       }
 
+      if (readiness.missingFinalAwardCount > 0) {
+        parts.add(
+          '${readiness.missingFinalAwardCount} missing final award${readiness.missingFinalAwardCount == 1 ? '' : 's'}',
+        );
+      }
+
+      if (readiness.duplicateFinalAwardCount > 0) {
+        parts.add(
+          '${readiness.duplicateFinalAwardCount} duplicate final award${readiness.duplicateFinalAwardCount == 1 ? '' : 's'}',
+        );
+      }
+
       if (parts.isEmpty) {
         return 'Results are ready for reports.';
       }
@@ -2280,19 +2292,36 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
       if (readiness.missingPlacementCount > 0) {
         parts.add(
-          '${readiness.missingPlacementCount} missing placement${readiness.missingPlacementCount == 1 ? '' : 's'}',
+          '${readiness.missingPlacementCount} missing placement'
+          '${readiness.missingPlacementCount == 1 ? '' : 's'}',
         );
       }
 
       if (readiness.missingJudgeCount > 0) {
         parts.add(
-          '${readiness.missingJudgeCount} missing judge${readiness.missingJudgeCount == 1 ? '' : 's'}',
+          '${readiness.missingJudgeCount} missing judge'
+          '${readiness.missingJudgeCount == 1 ? '' : 's'}',
         );
       }
 
       if (readiness.duplicatePlacementGroupCount > 0) {
         parts.add(
-          '${readiness.duplicatePlacementGroupCount} duplicate placement group${readiness.duplicatePlacementGroupCount == 1 ? '' : 's'}',
+          '${readiness.duplicatePlacementGroupCount} duplicate placement group'
+          '${readiness.duplicatePlacementGroupCount == 1 ? '' : 's'}',
+        );
+      }
+
+      if (readiness.missingFinalAwardCount > 0) {
+        parts.add(
+          '${readiness.missingFinalAwardCount} missing final award'
+          '${readiness.missingFinalAwardCount == 1 ? '' : 's'}',
+        );
+      }
+
+      if (readiness.duplicateFinalAwardCount > 0) {
+        parts.add(
+          '${readiness.duplicateFinalAwardCount} duplicate final award'
+          '${readiness.duplicateFinalAwardCount == 1 ? '' : 's'}',
         );
       }
 
@@ -5055,12 +5084,16 @@ class ResultsReadinessDto {
   final int missingPlacementCount;
   final int missingJudgeCount;
   final int duplicatePlacementGroupCount;
+  final int missingFinalAwardCount;
+  final int duplicateFinalAwardCount;
 
   ResultsReadinessDto({
     required this.ready,
     required this.missingPlacementCount,
     required this.missingJudgeCount,
     required this.duplicatePlacementGroupCount,
+    required this.missingFinalAwardCount,
+    required this.duplicateFinalAwardCount,
   });
 
   factory ResultsReadinessDto.fromJson(Map<String, dynamic> json) {
@@ -5072,6 +5105,10 @@ class ResultsReadinessDto {
           ((json['missing_judge_count'] ?? 0) as num).toInt(),
       duplicatePlacementGroupCount:
           ((json['duplicate_placement_group_count'] ?? 0) as num).toInt(),
+      missingFinalAwardCount:
+          (json['missing_final_award_count'] as num?)?.toInt() ?? 0,
+      duplicateFinalAwardCount:
+          (json['duplicate_final_award_count'] as num?)?.toInt() ?? 0,
     );
   }
 }

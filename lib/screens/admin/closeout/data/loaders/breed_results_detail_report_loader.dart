@@ -869,30 +869,46 @@ class BreedResultsDetailReportLoader {
     return '';
   }
 
-  String _awardCodeKey(String award) {
-    final c = award.toUpperCase().trim();
-    if (c == 'BEST IN SHOW') return 'BIS';
-    if (c == 'RESERVE IN SHOW') return 'RIS';
-    if (c == 'RESERVE BEST IN SHOW') return 'RBIS';
-    if (c == 'RESERVE OF SHOW') return 'RIS';
-    if (c == 'BEST 4 CLASS') return 'B4C';
-    if (c == 'BEST 4-CLASS') return 'B4C';
-    if (c == 'BEST FOUR CLASS') return 'B4C';
-    if (c == 'BEST 6 CLASS') return 'B6C';
-    if (c == 'BEST 6-CLASS') return 'B6C';
-    if (c == 'BEST SIX CLASS') return 'B6C';
-    if (c == 'HONORABLE MENTION') return 'HM';
-    if (c == 'BEST OF BREED') return 'BOB';
-    if (c == 'BEST OPPOSITE SEX OF BREED') return 'BOSB';
-    if (c == 'BEST OPPOSITE OF BREED') return 'BOSB';
-    if (c == 'BEST OF GROUP') return 'BOG';
-    if (c == 'BEST OPPOSITE SEX OF GROUP') return 'BOSG';
-    if (c == 'BEST OPPOSITE OF GROUP') return 'BOSG';
-    if (c == 'BEST OF VARIETY') return 'BOV';
-    if (c == 'BEST OPPOSITE SEX OF VARIETY') return 'BOSV';
-    if (c == 'BEST OPPOSITE OF VARIETY') return 'BOSV';
-    return c;
-  }
+    String _awardCodeKey(String award) {
+      final c = award.toUpperCase().trim();
+
+      if (c == 'BEST IN SHOW') return 'BIS';
+
+      if (c == 'RESERVE IN SHOW') return 'RIS';
+
+      if (c == '1RIS') return 'RIS';
+      if (c == '1ST RIS') return 'RIS';
+      if (c == 'FIRST RIS') return 'RIS';
+      if (c == '1ST RESERVE IN SHOW') return 'RIS';
+      if (c == 'FIRST RESERVE IN SHOW') return 'RIS';
+
+      if (c == '2RIS') return '2RIS';
+      if (c == '2ND RIS') return '2RIS';
+      if (c == 'SECOND RIS') return '2RIS';
+      if (c == '2ND RESERVE IN SHOW') return '2RIS';
+      if (c == 'SECOND RESERVE IN SHOW') return '2RIS';
+
+      if (c == 'RESERVE BEST IN SHOW') return 'RBIS';
+      if (c == 'RESERVE OF SHOW') return 'RIS';
+      if (c == 'BEST 4 CLASS') return 'B4C';
+      if (c == 'BEST 4-CLASS') return 'B4C';
+      if (c == 'BEST FOUR CLASS') return 'B4C';
+      if (c == 'BEST 6 CLASS') return 'B6C';
+      if (c == 'BEST 6-CLASS') return 'B6C';
+      if (c == 'BEST SIX CLASS') return 'B6C';
+      if (c == 'HONORABLE MENTION') return 'HM';
+      if (c == 'BEST OF BREED') return 'BOB';
+      if (c == 'BEST OPPOSITE SEX OF BREED') return 'BOSB';
+      if (c == 'BEST OPPOSITE OF BREED') return 'BOSB';
+      if (c == 'BEST OF GROUP') return 'BOG';
+      if (c == 'BEST OPPOSITE SEX OF GROUP') return 'BOSG';
+      if (c == 'BEST OPPOSITE OF GROUP') return 'BOSG';
+      if (c == 'BEST OF VARIETY') return 'BOV';
+      if (c == 'BEST OPPOSITE SEX OF VARIETY') return 'BOSV';
+      if (c == 'BEST OPPOSITE OF VARIETY') return 'BOSV';
+
+      return c;
+    }
 
   Future<List<Map<String, dynamic>>> _loadOverallAwardRows({
     required String showId,

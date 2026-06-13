@@ -810,13 +810,26 @@ class LegsReportLoader {
         .replaceAll(RegExp(r'[^A-Z0-9]+'), '')
         .toUpperCase();
 
+    // This club format awards BIS / 1st RIS / 2nd RIS. The 1st RIS is treated
+    // as the normal ARBA Reserve in Show award for leg purposes, while 2nd RIS
+    // is recognition-only and must never generate a leg.
+    if (compact == '2RIS' ||
+        compact == '2NDRIS' ||
+        compact == 'SECONDRIS' ||
+        compact == '2NDRESERVEINSHOW' ||
+        compact == 'SECONDRESERVEINSHOW') {
+      return false;
+    }
+
     return compact == 'RIS' ||
+        compact == '1RIS' ||
+        compact == '1STRIS' ||
+        compact == 'FIRSTRIS' ||
         compact == 'RESERVEINSHOW' ||
         compact == 'RESERVEOFSHOW' ||
         compact == 'RESERVEBESTINSHOW' ||
-        compact.startsWith('RIS') ||
-        compact.endsWith('RIS') ||
-        (compact.contains('RESERVE') && compact.contains('SHOW'));
+        compact == '1STRESERVEINSHOW' ||
+        compact == 'FIRSTRESERVEINSHOW';
   }
 
   _LegRuleMatch? _determineLegRule({

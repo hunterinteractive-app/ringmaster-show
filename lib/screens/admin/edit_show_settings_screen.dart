@@ -25,6 +25,7 @@ import '../../services/stripe_connect_service.dart';
 // ✅ Admin Operations (Pre-show) screens
 import 'admin_entry_management_screen.dart';
 import 'admin_show_reports_screen.dart';
+import 'coop_numbers_screen.dart';
 import 'admin_print_packs_screen.dart';
 
 // ✅ Admin Operations (Post-show) screens
@@ -254,6 +255,8 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
     switch (mode) {
       case 'bis_ris':
         return 'Best in Show / Reserve in Show';
+      case 'bis_1ris_2ris':
+        return 'Best in Show / 1st Reserve in Show / 2nd Reserve in Show';
       case 'four_six_bis':
       default:
         return 'Best 4-Class / Best 6-Class / Best in Show';
@@ -794,7 +797,9 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
       }
     }
 
-    if (_finalAwardMode != 'four_six_bis' && _finalAwardMode != 'bis_ris') {
+    if (_finalAwardMode != 'four_six_bis' &&
+        _finalAwardMode != 'bis_ris' &&
+        _finalAwardMode != 'bis_1ris_2ris') {
       setState(() => _msg = 'Final award mode is invalid.');
       return false;
     }
@@ -923,6 +928,18 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
       context,
       MaterialPageRoute(
         builder: (_) => AdminShowReportsScreen(
+          showId: widget.showId,
+          showName: _effectiveShowName(),
+        ),
+      ),
+    );
+  }
+
+  void _openCoopNumbers() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AdminCoopNumbersScreen(
           showId: widget.showId,
           showName: _effectiveShowName(),
         ),
@@ -1877,6 +1894,12 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                       'Best in Show / Reserve in Show',
                                     ),
                                   ),
+                                  DropdownMenuItem(
+                                    value: 'bis_1ris_2ris',
+                                    child: Text(
+                                      'Best in Show / 1st RIS / 2nd RIS',
+                                    ),
+                                  ),
                                 ],
                                 onChanged:
                                     (_saving || _isReadOnly)
@@ -1933,6 +1956,13 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                 title: 'Breed Counts',
                                 subtitle: 'Totals by breed/show',
                                 onTap: _saving ? null : _openShowReports,
+                              ),
+                            if (canManageEntries)
+                              _buildSettingsActionTile(
+                                icon: Icons.grid_on,
+                                title: 'Coop Numbers',
+                                subtitle: 'Generate, review, and manually edit coop assignments',
+                                onTap: _saving ? null : _openCoopNumbers,
                               ),
                             if (canManageShow)
                               _buildSettingsActionTile(

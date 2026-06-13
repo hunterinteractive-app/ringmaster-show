@@ -242,7 +242,7 @@ class JudgeReportPdfBuilder {
   }
 
   pw.TableRow _judgeOverviewHeaderRow() {
-    const style = pw.TextStyle(
+    final style = pw.TextStyle(
       fontSize: 8,
       fontWeight: pw.FontWeight.bold,
     );
@@ -378,7 +378,7 @@ class JudgeReportPdfBuilder {
   }
 
   pw.TableRow _breedSummaryHeaderRow() {
-    const style = pw.TextStyle(
+    final style = pw.TextStyle(
       fontSize: 8,
       fontWeight: pw.FontWeight.bold,
     );

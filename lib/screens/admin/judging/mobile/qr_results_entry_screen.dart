@@ -37,6 +37,8 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
 
   String _showName = 'Show';
   String _sectionLabel = 'Section';
+  String _sectionKind = 'open';
+  String _coopNumberingMode = 'separate';
 
   List<Map<String, dynamic>> _entries = [];
   List<Map<String, dynamic>> _judges = [];
@@ -88,6 +90,8 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
     _showsByVariety = false;
     _showName = 'Show';
     _sectionLabel = 'Section';
+    _sectionKind = 'open';
+    _coopNumberingMode = 'separate';
     _finalAwardMode = kDefaultFinalAwardMode;
 
     _loadAll();
@@ -173,7 +177,7 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
 
     final section = await supabase
         .from('show_sections')
-        .select('letter, display_name')
+        .select('letter, display_name, kind')
         .eq('id', widget.sectionId)
         .maybeSingle();
 
@@ -185,6 +189,8 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
 
     final displayName = (section['display_name'] ?? '').toString().trim();
     final letter = (section['letter'] ?? '').toString().trim();
+    _sectionKind =
+        (section['kind'] ?? 'open').toString().trim().toLowerCase();
 
     _sectionLabel = displayName.isNotEmpty
         ? displayName
@@ -281,12 +287,17 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
   Future<void> _loadShowSettings() async {
     final row = await supabase
         .from('shows')
-        .select('final_award_mode')
+        .select('final_award_mode, coop_numbering_mode')
         .eq('id', widget.showId)
         .single();
 
     _finalAwardMode =
         (row['final_award_mode'] ?? kDefaultFinalAwardMode).toString();
+    _coopNumberingMode =
+        (row['coop_numbering_mode'] ?? 'separate')
+            .toString()
+            .trim()
+            .toLowerCase();
   }
 
   Future<void> _loadEntries() async {
@@ -342,9 +353,65 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
     }
 
     final entryIds = entries
-        .map((e) => (e['entry_id'] ?? '').toString())
+        .map((e) => (e['entry_id'] ?? '').toString().trim())
         .where((x) => x.isNotEmpty)
+        .toSet()
         .toList();
+
+    final animalIdByEntryId = <String, String>{};
+    for (var i = 0; i < entryIds.length; i += 100) {
+      final chunk = entryIds.skip(i).take(100).toList();
+      if (chunk.isEmpty) continue;
+
+      final sourceRows = await supabase
+          .from('entries')
+          .select('id, animal_id')
+          .inFilter('id', chunk);
+
+      for (final raw in sourceRows as List) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        final entryId = (row['id'] ?? '').toString().trim();
+        final animalId = (row['animal_id'] ?? '').toString().trim();
+        if (entryId.isNotEmpty && animalId.isNotEmpty) {
+          animalIdByEntryId[entryId] = animalId;
+        }
+      }
+    }
+
+    final animalIds = animalIdByEntryId.values.toSet().toList();
+    final coopNumberByAnimalAndScope = <String, String>{};
+
+    for (var i = 0; i < animalIds.length; i += 100) {
+      final chunk = animalIds.skip(i).take(100).toList();
+      if (chunk.isEmpty) continue;
+
+      final coopRows = await supabase
+          .from('show_animal_coop_numbers')
+          .select('animal_id, scope, coop_number')
+          .eq('show_id', widget.showId)
+          .inFilter('animal_id', chunk);
+
+      for (final raw in coopRows as List) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        final animalId = (row['animal_id'] ?? '').toString().trim();
+        final scope = (row['scope'] ?? '').toString().trim().toLowerCase();
+        final coopNumber = (row['coop_number'] ?? '').toString().trim();
+        if (animalId.isEmpty || scope.isEmpty) continue;
+        coopNumberByAnimalAndScope['$animalId|$scope'] = coopNumber;
+      }
+    }
+
+    final coopScope =
+        _coopNumberingMode == 'combined' ? 'all' : _sectionKind;
+
+    for (final entry in entries) {
+      final entryId = (entry['entry_id'] ?? '').toString().trim();
+      final animalId = animalIdByEntryId[entryId] ?? '';
+      entry['animal_id'] = animalId;
+      entry['coop_number'] = animalId.isEmpty
+          ? ''
+          : (coopNumberByAnimalAndScope['$animalId|$coopScope'] ?? '');
+    }
 
     final awardsByEntryId = <String, List<String>>{};
 

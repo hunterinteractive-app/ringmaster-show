@@ -1,5 +1,6 @@
 // lib/screens/admin/admin_print_packs_screen.dart
 
+import 'dart:async';
 import 'dart:typed_data';
 import 'dart:convert';
 
@@ -9,6 +10,11 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:ringmaster_show/services/app_session.dart';
+
+import 'package:printing/printing.dart';
+
+import 'closeout/data/loaders/coop_cards_report_loader.dart';
+import 'closeout/pdf/builders/coop_cards_report_pdf.dart';
 
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -440,6 +446,22 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
           showName: widget.showName,
           sections: _sections,
           includeScratched: _includeScratched,
+        ),
+      ),
+    );
+  }
+
+  void _openCoopCardsGenerator() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _themedBottomSheetShell(
+        context,
+        child: _CoopCardsGeneratorSheet(
+          showId: widget.showId,
+          showName: widget.showName,
         ),
       ),
     );
@@ -1041,14 +1063,30 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
                   ],
                 ),
 
-//                      _buildSectionCard(
-//                        icon: Icons.sell_outlined,
-//                        title: 'Coop Tags',
-//                        subtitle: 'Optional feature coming next.',
-//                        children: const [
-//                          Text('Coop tag generation will be added here.'),
-//                        ],
-//                      ),
+                _buildSectionCard(
+                  icon: Icons.sell_outlined,
+                  title: 'Coop Cards',
+                  subtitle:
+                      'Generate 4 in. × 4.5 in. coop cards, four cards per US Letter sheet, with cut borders.',
+                  children: [
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFFD4A623),
+                          foregroundColor: Colors.black87,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        onPressed: hasSections ? _openCoopCardsGenerator : null,
+                        icon: const Icon(Icons.picture_as_pdf),
+                        label: const Text('Generate Coop Cards'),
+                      ),
+                    ),
+                  ],
+                ),
                       _buildSectionCard(
                         icon: Icons.rate_review_outlined,
                         title: 'Remark Cards - 🧪 IN DEVELOPMENT',
@@ -1111,6 +1149,273 @@ Widget _themedBottomSheetShell(BuildContext context, {required Widget child}) {
       ),
     ),
   );
+}
+
+// =======================================================
+// COOP CARDS GENERATOR
+// =======================================================
+
+class _CoopCardsGeneratorSheet extends StatefulWidget {
+  final String showId;
+  final String showName;
+
+  const _CoopCardsGeneratorSheet({
+    required this.showId,
+    required this.showName,
+  });
+
+  @override
+  State<_CoopCardsGeneratorSheet> createState() =>
+      _CoopCardsGeneratorSheetState();
+}
+
+class _CoopCardsGeneratorSheetState
+    extends State<_CoopCardsGeneratorSheet> {
+  bool _building = false;
+  String? _msg;
+  String _buildStatus = '';
+  String _scope = 'all';
+
+  String _safeFileName(String value) {
+    final cleaned = value
+        .replaceAll(RegExp(r'[^A-Za-z0-9_-]+'), '_')
+        .replaceAll(RegExp(r'_+'), '_')
+        .replaceAll(RegExp(r'^_|_$'), '');
+    return cleaned.isEmpty ? 'show' : cleaned;
+  }
+
+  String? get _loaderScope => _scope == 'all' ? null : _scope;
+
+  String get _scopeLabel {
+    switch (_scope) {
+      case 'open':
+        return 'Open';
+      case 'youth':
+        return 'Youth';
+      default:
+        return 'All';
+    }
+  }
+
+  Future<Uint8List> _buildPdfBytes() async {
+    if (mounted) {
+      setState(() {
+        _buildStatus = 'Loading coop card data...';
+      });
+    }
+
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+
+    final loader = CoopCardsReportLoader();
+    final data = await loader
+        .load(
+          showId: widget.showId,
+          scope: _loaderScope,
+        )
+        .timeout(
+          const Duration(seconds: 90),
+          onTimeout: () => throw TimeoutException(
+            'Loading coop card data took longer than 90 seconds.',
+          ),
+        );
+
+    if (data.cards.isEmpty) {
+      throw StateError(
+        _scope == 'all'
+            ? 'No assigned coop numbers with active entries were found.'
+            : 'No $_scopeLabel coop cards with active entries were found.',
+      );
+    }
+
+    if (mounted) {
+      setState(() {
+        _buildStatus =
+            'Building ${data.cardCount} coop cards (${(data.cardCount / 4).ceil()} pages)...';
+      });
+    }
+
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+
+    final builder = await CoopCardsReportPdfBuilder.fromAssets();
+    return builder.build(data).timeout(
+          const Duration(seconds: 120),
+          onTimeout: () => throw TimeoutException(
+            'Building the coop card PDF took longer than 2 minutes.',
+          ),
+        );
+  }
+
+  Future<void> _previewPdf() async {
+    if (_building) return;
+
+    setState(() {
+      _building = true;
+      _msg = null;
+      _buildStatus = 'Starting...';
+    });
+
+    try {
+      final bytes = await _buildPdfBytes();
+      if (!mounted) return;
+      setState(() => _buildStatus = 'Opening print preview...');
+
+      await Printing.layoutPdf(
+        name:
+            '${_safeFileName(widget.showName)}_coop_cards_${_scopeLabel.toLowerCase()}.pdf',
+        onLayout: (_) async => bytes,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _building = false;
+        _buildStatus = '';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _building = false;
+        _buildStatus = '';
+        _msg = 'Failed to generate coop cards: $e';
+      });
+    }
+  }
+
+  Future<void> _savePdf() async {
+    if (_building) return;
+
+    setState(() {
+      _building = true;
+      _msg = null;
+      _buildStatus = 'Starting...';
+    });
+
+    try {
+      final bytes = await _buildPdfBytes();
+      if (mounted) {
+        setState(() => _buildStatus = 'Waiting for save location...');
+      }
+      final suggestedName =
+          '${_safeFileName(widget.showName)}_coop_cards_${_scopeLabel.toLowerCase()}.pdf';
+
+      final path = await _savePdfToUserChosenLocation(
+        bytes: bytes,
+        suggestedName: suggestedName,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _building = false;
+        _buildStatus = '';
+        _msg = path == null
+            ? 'Save cancelled.'
+            : 'Coop cards saved to $path';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _building = false;
+        _buildStatus = '';
+        _msg = 'Failed to generate coop cards: $e';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 8,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Generate Coop Cards',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              widget.showName,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 16),
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment<String>(
+                  value: 'all',
+                  label: Text('All'),
+                ),
+                ButtonSegment<String>(
+                  value: 'open',
+                  label: Text('Open'),
+                ),
+                ButtonSegment<String>(
+                  value: 'youth',
+                  label: Text('Youth'),
+                ),
+              ],
+              selected: {_scope},
+              onSelectionChanged: _building
+                  ? null
+                  : (values) => setState(() => _scope = values.first),
+            ),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(.03),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Text(
+                'Cards print four per US Letter page. Each card is 4 in. × 4.5 in. and includes a full cut border.',
+              ),
+            ),
+            if (_msg != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _msg!,
+                style: TextStyle(
+                  color: _msg!.toLowerCase().contains('failed')
+                      ? Colors.red
+                      : Colors.green.shade700,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+            const SizedBox(height: 18),
+            FilledButton.icon(
+              onPressed: _building ? null : _previewPdf,
+              icon: _building
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.print_outlined),
+              label: Text(
+                _building
+                    ? (_buildStatus.isEmpty ? 'Building...' : _buildStatus)
+                    : 'Preview / Print',
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _building ? null : _savePdf,
+              icon: const Icon(Icons.download_outlined),
+              label: const Text('Save PDF'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 // =======================================================
@@ -1190,6 +1495,19 @@ class _ControlSheetsGeneratorSheetState
 
   String _safe(Map<String, dynamic> e, String k) =>
       (e[k] ?? '').toString().trim();
+
+  int _coopNumberSortValue(String value) {
+    final match = RegExp(r'(\d+)$').firstMatch(value.trim());
+    return match == null ? 999999 : int.tryParse(match.group(1)!) ?? 999999;
+  }
+
+  String _sectionKindForId(String sectionId) {
+    final section = widget.sections.firstWhere(
+      (s) => (s['id'] ?? '').toString() == sectionId,
+      orElse: () => const <String, dynamic>{},
+    );
+    return (section['kind'] ?? '').toString().trim().toLowerCase();
+  }
 
     int _toInt(dynamic value, [int fallback = 9999]) {
       if (value == null) return fallback;
@@ -1390,7 +1708,7 @@ class _ControlSheetsGeneratorSheetState
 
       final rows = await supabase
           .from('entries')
-          .select('id,is_fur')
+          .select('id,is_fur,animal_id')
           .inFilter('id', chunk);
 
       entryFlagRows.addAll(List<Map<String, dynamic>>.from(rows));
@@ -1410,6 +1728,7 @@ class _ControlSheetsGeneratorSheetState
       if (flags == null) continue;
       row['is_fur'] = flags['is_fur'];
       row['is_wool'] = false;
+      row['animal_id'] = flags['animal_id'];
     }
 
     for (final sectionId in sortedIdsToFetch) {
@@ -1528,7 +1847,65 @@ class _ControlSheetsGeneratorSheetState
       byEntryId.putIfAbsent(entryId, () => row);
     }
 
-    return byEntryId.values.toList();
+    final dedupedRows = byEntryId.values.toList();
+
+    final showRow = await supabase
+        .from('shows')
+        .select('coop_numbering_mode')
+        .eq('id', widget.showId)
+        .maybeSingle();
+
+    final coopMode = ((showRow as Map<String, dynamic>?)?[
+              'coop_numbering_mode'
+            ] ??
+            'separate')
+        .toString()
+        .trim()
+        .toLowerCase();
+
+    final animalIds = dedupedRows
+        .map((row) => _safe(row, 'animal_id'))
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+
+    final coopRows = <Map<String, dynamic>>[];
+    for (var i = 0; i < animalIds.length; i += 200) {
+      final chunk = animalIds.skip(i).take(200).toList();
+      if (chunk.isEmpty) continue;
+
+      final rows = await supabase
+          .from('show_animal_coop_numbers')
+          .select('animal_id, scope, coop_number')
+          .eq('show_id', widget.showId)
+          .inFilter('animal_id', chunk);
+
+      coopRows.addAll(List<Map<String, dynamic>>.from(rows));
+    }
+
+    final coopByAnimalAndScope = <String, String>{};
+    for (final coopRow in coopRows) {
+      final animalId = (coopRow['animal_id'] ?? '').toString().trim();
+      final scope = (coopRow['scope'] ?? '').toString().trim().toLowerCase();
+      final coopNumber = (coopRow['coop_number'] ?? '').toString().trim();
+      if (animalId.isEmpty || scope.isEmpty) continue;
+      coopByAnimalAndScope['$animalId|$scope'] = coopNumber;
+    }
+
+    for (final row in dedupedRows) {
+      final animalId = _safe(row, 'animal_id');
+      final sectionId = _safe(row, 'section_id');
+      final sectionKind = _safe(row, 'section_kind').isNotEmpty
+          ? _safe(row, 'section_kind').toLowerCase()
+          : _sectionKindForId(sectionId);
+      final scope = coopMode == 'combined' ? 'all' : sectionKind;
+
+      row['coop_number'] = animalId.isEmpty || scope.isEmpty
+          ? ''
+          : (coopByAnimalAndScope['$animalId|$scope'] ?? '');
+    }
+
+    return dedupedRows;
   }
 
   String _sectionTitleFromRow(Map<String, dynamic> row) {
@@ -2189,18 +2566,33 @@ class _ControlSheetsGeneratorSheetState
             ? 'Specials\n$ageSpecial'
             : 'Specials';
 
+        final sortedGroupEntries = [...groupEntries]
+          ..sort((a, b) {
+            final coopCompare = _coopNumberSortValue(_safe(a, 'coop_number'))
+                .compareTo(
+                  _coopNumberSortValue(_safe(b, 'coop_number')),
+                );
+            if (coopCompare != 0) return coopCompare;
+            return _animalPrintLabel(a).compareTo(_animalPrintLabel(b));
+          });
+
         if (isFurOrWool) {
           return pw.Table(
             border: pw.TableBorder.all(width: 0.4),
             columnWidths: {
-              0: const pw.FixedColumnWidth(64),
-              1: const pw.FlexColumnWidth(.85),
-              2: const pw.FixedColumnWidth(110),
+              0: const pw.FixedColumnWidth(52),
+              1: const pw.FixedColumnWidth(64),
+              2: const pw.FlexColumnWidth(.85),
+              3: const pw.FixedColumnWidth(100),
             },
             children: [
               pw.TableRow(
                 decoration: const pw.BoxDecoration(color: PdfColors.grey300),
                 children: [
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(3),
+                    child: pw.Text('Coop #', style: h),
+                  ),
                   pw.Padding(
                     padding: const pw.EdgeInsets.all(3),
                     child: pw.Text('Ear #', style: h),
@@ -2215,9 +2607,13 @@ class _ControlSheetsGeneratorSheetState
                   ),
                 ],
               ),
-              ...groupEntries.map((row) {
+              ...sortedGroupEntries.map((row) {
                 return pw.TableRow(
                   children: [
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(3),
+                      child: pw.Text(_safe(row, 'coop_number'), style: c),
+                    ),
                     pw.Padding(
                       padding: const pw.EdgeInsets.all(3),
                       child: pw.Text(_animalPrintLabel(row), style: c),
@@ -2240,15 +2636,20 @@ class _ControlSheetsGeneratorSheetState
         return pw.Table(
           border: pw.TableBorder.all(width: 0.4),
           columnWidths: {
-            0: const pw.FixedColumnWidth(64),
-            1: const pw.FlexColumnWidth(.85),
-            2: const pw.FixedColumnWidth(105),
-            3: const pw.FixedColumnWidth(78),
+            0: const pw.FixedColumnWidth(52),
+            1: const pw.FixedColumnWidth(64),
+            2: const pw.FlexColumnWidth(.75),
+            3: const pw.FixedColumnWidth(95),
+            4: const pw.FixedColumnWidth(76),
           },
           children: [
             pw.TableRow(
               decoration: const pw.BoxDecoration(color: PdfColors.grey300),
               children: [
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(3),
+                  child: pw.Text('Coop #', style: h),
+                ),
                 pw.Padding(
                   padding: const pw.EdgeInsets.all(3),
                   child: pw.Text('Ear #', style: h),
@@ -2267,9 +2668,13 @@ class _ControlSheetsGeneratorSheetState
                 ),
               ],
             ),
-            ...groupEntries.map((row) {
+            ...sortedGroupEntries.map((row) {
               return pw.TableRow(
                 children: [
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(3),
+                    child: pw.Text(_safe(row, 'coop_number'), style: c),
+                  ),
                   pw.Padding(
                     padding: const pw.EdgeInsets.all(3),
                     child: pw.Text(_animalPrintLabel(row), style: c),
@@ -2868,6 +3273,99 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
             entry['exhibitor_number'] = exhibitorNumber;
           }
         }
+      }
+
+      // report_checkin_entries does not currently expose the canonical
+      // animal_id, so enrich each report row from entries before looking up
+      // the animal-level coop assignment.
+      final entryIds = list
+          .map((entry) {
+            final entryId = (entry['entry_id'] ?? '').toString().trim();
+            if (entryId.isNotEmpty) return entryId;
+            return (entry['id'] ?? '').toString().trim();
+          })
+          .where((id) => id.isNotEmpty)
+          .toSet()
+          .toList();
+
+      final animalIdByEntryId = <String, String>{};
+      const entryPageSize = 500;
+
+      for (var i = 0; i < entryIds.length; i += entryPageSize) {
+        final chunk = entryIds.skip(i).take(entryPageSize).toList();
+        if (chunk.isEmpty) continue;
+
+        final entryRows = await supabase
+            .from('entries')
+            .select('id, animal_id')
+            .inFilter('id', chunk);
+
+        for (final raw in (entryRows as List).cast<Map<String, dynamic>>()) {
+          final entryId = (raw['id'] ?? '').toString().trim();
+          final animalId = (raw['animal_id'] ?? '').toString().trim();
+          if (entryId.isNotEmpty && animalId.isNotEmpty) {
+            animalIdByEntryId[entryId] = animalId;
+          }
+        }
+      }
+
+      for (final entry in list) {
+        final entryId = (entry['entry_id'] ?? '').toString().trim().isNotEmpty
+            ? (entry['entry_id'] ?? '').toString().trim()
+            : (entry['id'] ?? '').toString().trim();
+        entry['animal_id'] = animalIdByEntryId[entryId] ?? '';
+      }
+
+      final showModeRow = await supabase
+          .from('shows')
+          .select('coop_numbering_mode')
+          .eq('id', widget.showId)
+          .maybeSingle();
+
+      final coopNumberingMode =
+          ((showModeRow as Map<String, dynamic>?)?['coop_numbering_mode'] ??
+                  'separate')
+              .toString()
+              .trim()
+              .toLowerCase();
+
+      final animalIds = list
+          .map((entry) => (entry['animal_id'] ?? '').toString().trim())
+          .where((id) => id.isNotEmpty)
+          .toSet()
+          .toList();
+
+      final coopNumberByAnimalAndScope = <String, String>{};
+      const coopPageSize = 500;
+
+      for (var i = 0; i < animalIds.length; i += coopPageSize) {
+        final chunk = animalIds.skip(i).take(coopPageSize).toList();
+        if (chunk.isEmpty) continue;
+
+        final coopRows = await supabase
+            .from('show_animal_coop_numbers')
+            .select('animal_id, scope, coop_number')
+            .eq('show_id', widget.showId)
+            .inFilter('animal_id', chunk);
+
+        for (final raw in (coopRows as List).cast<Map<String, dynamic>>()) {
+          final animalId = (raw['animal_id'] ?? '').toString().trim();
+          final scope = (raw['scope'] ?? '').toString().trim().toLowerCase();
+          final coopNumber = (raw['coop_number'] ?? '').toString().trim();
+          if (animalId.isEmpty || scope.isEmpty) continue;
+          coopNumberByAnimalAndScope['$animalId|$scope'] = coopNumber;
+        }
+      }
+
+      for (final entry in list) {
+        final animalId = (entry['animal_id'] ?? '').toString().trim();
+        final sectionKind =
+            (entry['section_kind'] ?? '').toString().trim().toLowerCase();
+        final scope = coopNumberingMode == 'combined' ? 'all' : sectionKind;
+
+        entry['coop_number'] = animalId.isEmpty || scope.isEmpty
+            ? ''
+            : (coopNumberByAnimalAndScope['$animalId|$scope'] ?? '');
       }
 
       int toInt(dynamic value, [int fallback = 9999]) {
@@ -3638,7 +4136,7 @@ class _CheckInGeneratorSheetState extends State<_CheckInGeneratorSheet> {
                   ),
                   pw.Padding(
                     padding: const pw.EdgeInsets.all(6),
-                    child: pw.Text('', style: style),
+                    child: pw.Text(_safe(e, 'coop_number'), style: style),
                   ),
                   pw.Padding(
                     padding: const pw.EdgeInsets.all(6),

@@ -1011,7 +1011,7 @@ class LegsReportPdfBuilder {
               ),
               pw.TableRow(
                 children: [
-                  _tinyValueCell(d.winCode),
+                  _tinyValueCell(_displayLegWinCode(d.winCode)),
                   _tinyValueCell(_awardScopeLabel(d)),
                   _tinyValueCell('${d.animalsCount}'),
                   _tinyValueCell('${d.exhibitorsCount}'),
@@ -1023,6 +1023,26 @@ class LegsReportPdfBuilder {
         ],
       ),
     );
+  }
+
+  String _displayLegWinCode(String winCode) {
+    final compact = winCode
+        .trim()
+        .replaceAll(RegExp(r'[^A-Za-z0-9]+'), '')
+        .toUpperCase();
+
+    // The club's 1st RIS award qualifies as the standard ARBA Reserve in Show
+    // leg. Print the standard RIS code on the certificate rather than the
+    // club-specific 1RIS label.
+    if (compact == '1RIS' ||
+        compact == '1STRIS' ||
+        compact == 'FIRSTRIS' ||
+        compact == '1STRESERVEINSHOW' ||
+        compact == 'FIRSTRESERVEINSHOW') {
+      return 'RIS';
+    }
+
+    return winCode;
   }
 
   String _awardScopeLabel(LegsCertificateData d) {

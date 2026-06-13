@@ -191,9 +191,9 @@ class ExhibitorReportPdfBuilder {
         5: pw.FlexColumnWidth(0.55), // Sex
         6: pw.FlexColumnWidth(0.55), // Place
         7: pw.FlexColumnWidth(0.60), // #Cls
-        8: pw.FlexColumnWidth(0.60), // #Exh
-        9: pw.FlexColumnWidth(0.95), // Awards
-        10: pw.FlexColumnWidth(1.20), // Judge
+        8: pw.FlexColumnWidth(0.55), // #Exh
+        9: pw.FlexColumnWidth(1.25), // Awards
+        10: pw.FlexColumnWidth(1.05), // Judge
         11: pw.FlexColumnWidth(0.55), // Leg
         12: pw.FlexColumnWidth(0.55), // Spec
         13: pw.FlexColumnWidth(0.60), // Total

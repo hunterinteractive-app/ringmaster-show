@@ -70,6 +70,8 @@ class _TableQrQueueScreenState extends State<TableQrQueueScreen> {
           .map((e) => Map<String, dynamic>.from(e))
           .toList();
 
+      await _enrichCoopRanges();
+
       if (!mounted) return;
       setState(() {
         _loading = false;
@@ -85,6 +87,162 @@ class _TableQrQueueScreenState extends State<TableQrQueueScreen> {
       });
     }
   }
+
+  // --- Coop range helpers ---
+
+  int _coopNumberValue(String value) {
+    final match = RegExp(r'(\d+)$').firstMatch(value.trim());
+    return match == null ? 999999 : int.tryParse(match.group(1)!) ?? 999999;
+  }
+
+  String _coopPrefix(String value) {
+    return value.replaceAll(RegExp(r'\d+$'), '').trim().toUpperCase();
+  }
+
+  int _compareCoopNumbers(String a, String b) {
+    final prefixCompare = _coopPrefix(a).compareTo(_coopPrefix(b));
+    if (prefixCompare != 0) return prefixCompare;
+    return _coopNumberValue(a).compareTo(_coopNumberValue(b));
+  }
+
+  Future<void> _enrichCoopRanges() async {
+    if (_rows.isEmpty) return;
+
+    final showRow = await supabase
+        .from('shows')
+        .select('coop_numbering_mode')
+        .eq('id', widget.showId)
+        .maybeSingle();
+
+    final coopMode =
+        (showRow?['coop_numbering_mode'] ?? 'separate')
+            .toString()
+            .trim()
+            .toLowerCase();
+
+    final entriesBySectionAndBreed =
+        <String, List<Map<String, dynamic>>>{};
+    final allEntryIds = <String>{};
+
+    final sectionIds = _rows
+        .map((row) => (row['section_id'] ?? '').toString().trim())
+        .where((id) => id.isNotEmpty)
+        .toSet();
+
+    for (final sectionId in sectionIds) {
+      final result = await supabase.rpc(
+        'report_results_entry_rows',
+        params: {
+          'p_show_id': widget.showId,
+          'p_section_id': sectionId,
+        },
+      );
+
+      final rows = (result as List)
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+
+      for (final entry in rows) {
+        final entryId =
+            (entry['entry_id'] ?? entry['id'] ?? '').toString().trim();
+        final breed =
+            (entry['breed'] ?? entry['breed_name'] ?? '')
+                .toString()
+                .trim()
+                .toLowerCase();
+        if (entryId.isEmpty || breed.isEmpty) continue;
+
+        allEntryIds.add(entryId);
+        entriesBySectionAndBreed
+            .putIfAbsent('$sectionId|$breed', () => [])
+            .add(entry);
+      }
+    }
+
+    final animalIdByEntryId = <String, String>{};
+    final entryIds = allEntryIds.toList();
+
+    for (var i = 0; i < entryIds.length; i += 100) {
+      final chunk = entryIds.skip(i).take(100).toList();
+      if (chunk.isEmpty) continue;
+
+      final rows = await supabase
+          .from('entries')
+          .select('id,animal_id')
+          .inFilter('id', chunk);
+
+      for (final raw in rows as List) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        final entryId = (row['id'] ?? '').toString().trim();
+        final animalId = (row['animal_id'] ?? '').toString().trim();
+        if (entryId.isNotEmpty && animalId.isNotEmpty) {
+          animalIdByEntryId[entryId] = animalId;
+        }
+      }
+    }
+
+    final animalIds = animalIdByEntryId.values.toSet().toList();
+    final coopByAnimalAndScope = <String, String>{};
+
+    for (var i = 0; i < animalIds.length; i += 100) {
+      final chunk = animalIds.skip(i).take(100).toList();
+      if (chunk.isEmpty) continue;
+
+      final rows = await supabase
+          .from('show_animal_coop_numbers')
+          .select('animal_id,scope,coop_number')
+          .eq('show_id', widget.showId)
+          .inFilter('animal_id', chunk);
+
+      for (final raw in rows as List) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        final animalId = (row['animal_id'] ?? '').toString().trim();
+        final scope = (row['scope'] ?? '').toString().trim().toLowerCase();
+        final coopNumber = (row['coop_number'] ?? '').toString().trim();
+        if (animalId.isEmpty || scope.isEmpty || coopNumber.isEmpty) continue;
+        coopByAnimalAndScope['$animalId|$scope'] = coopNumber;
+      }
+    }
+
+    for (final queueRow in _rows) {
+      final sectionId = (queueRow['section_id'] ?? '').toString().trim();
+      final breed = (queueRow['breed'] ?? '').toString().trim().toLowerCase();
+      final sectionKind =
+          (queueRow['section_kind'] ?? 'open')
+              .toString()
+              .trim()
+              .toLowerCase();
+      final scope = coopMode == 'combined' ? 'all' : sectionKind;
+
+      final entries = entriesBySectionAndBreed['$sectionId|$breed'] ?? const [];
+      final coopNumbers = <String>{};
+
+      for (final entry in entries) {
+        final entryId =
+            (entry['entry_id'] ?? entry['id'] ?? '').toString().trim();
+        final animalId = animalIdByEntryId[entryId] ?? '';
+        if (animalId.isEmpty) continue;
+
+        final coopNumber = coopByAnimalAndScope['$animalId|$scope'];
+        if (coopNumber != null && coopNumber.isNotEmpty) {
+          coopNumbers.add(coopNumber);
+        }
+      }
+
+      final sorted = coopNumbers.toList()..sort(_compareCoopNumbers);
+      queueRow['_coop_count'] = sorted.length;
+
+      if (sorted.isEmpty) {
+        queueRow['_coop_range'] = '';
+      } else if (sorted.length == 1) {
+        queueRow['_coop_range'] = sorted.first;
+      } else {
+        queueRow['_coop_range'] = '${sorted.first}–${sorted.last}';
+      }
+    }
+  }
+
+  // --- end coop range helpers ---
 
   Future<void> _openBreed(
     Map<String, dynamic> row, {
@@ -295,6 +453,8 @@ class _TableQrQueueScreenState extends State<TableQrQueueScreen> {
 
                         final breed = (row['breed'] ?? '').toString();
                         final judge = (row['judge_name'] ?? '').toString();
+                        final coopRange =
+                            (row['_coop_range'] ?? '').toString().trim();
 
                         return Card(
                           margin: const EdgeInsets.only(bottom: 10),
@@ -324,7 +484,11 @@ class _TableQrQueueScreenState extends State<TableQrQueueScreen> {
                               ],
                             ),
                             subtitle: Text(
-                              '${_sectionLabel(row)} • $completed/$count entered • ${_statusLabel(row)}\nJudge: ${judge.isEmpty ? 'TBD' : judge}',
+                              [
+                                '${_sectionLabel(row)} • $completed/$count entered • ${_statusLabel(row)}',
+                                if (coopRange.isNotEmpty) 'Coops: $coopRange',
+                                'Judge: ${judge.isEmpty ? 'TBD' : judge}',
+                              ].join('\n'),
                             ),
                             trailing: const Icon(Icons.chevron_right),
                             onTap: () => _openBreed(

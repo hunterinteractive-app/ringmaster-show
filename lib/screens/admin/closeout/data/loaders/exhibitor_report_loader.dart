@@ -702,6 +702,16 @@ class ExhibitorReportLoader {
       'BEST_IN_SHOW',
       'RIS',
       'RESERVE_IN_SHOW',
+      '1RIS',
+      '1ST_RIS',
+      'FIRST_RIS',
+      '1ST_RESERVE_IN_SHOW',
+      'FIRST_RESERVE_IN_SHOW',
+      '2RIS',
+      '2ND_RIS',
+      'SECOND_RIS',
+      '2ND_RESERVE_IN_SHOW',
+      'SECOND_RESERVE_IN_SHOW',
       'HM',
       'BOB',
       'BOSB',
@@ -741,6 +751,18 @@ class ExhibitorReportLoader {
           return 'Best In Show';
         case 'RESERVE_IN_SHOW':
           return 'Reserve In Show';
+        case '1RIS':
+        case '1ST_RIS':
+        case 'FIRST_RIS':
+        case '1ST_RESERVE_IN_SHOW':
+        case 'FIRST_RESERVE_IN_SHOW':
+          return '1st Reserve In Show';
+        case '2RIS':
+        case '2ND_RIS':
+        case 'SECOND_RIS':
+        case '2ND_RESERVE_IN_SHOW':
+        case 'SECOND_RESERVE_IN_SHOW':
+          return '2nd Reserve In Show';
         case 'BEST_6_CLASS':
           return 'Best 6-Class';
         case 'BEST_4_CLASS':
