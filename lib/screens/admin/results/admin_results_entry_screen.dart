@@ -1101,8 +1101,16 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
         .eq('id', widget.showId)
         .maybeSingle();
 
-    _finalAwardMode =
-        (row?['final_award_mode'] ?? kDefaultFinalAwardMode).toString();
+    final mode = (row?['final_award_mode'] ?? kDefaultFinalAwardMode)
+        .toString()
+        .trim()
+        .toLowerCase();
+
+    _finalAwardMode = switch (mode) {
+      'bis_ris' => 'bis_ris',
+      'bis_1ris_2ris' => 'bis_1ris_2ris',
+      _ => kDefaultFinalAwardMode,
+    };
   }
 
     Future<List<Map<String, dynamic>>> _fetchHydratedEntries({
@@ -4402,11 +4410,21 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
 
     bool hasBoth(String a, String b) => awards.contains(a) && awards.contains(b);
 
+    final finalAwardCount = const [
+      'Best In Show',
+      'Reserve In Show',
+      'BIS',
+      'RIS',
+      '1RIS',
+      '2RIS',
+      'HM',
+    ].where(awards.contains).length;
+
     return hasBoth('BOV', 'BOSV') ||
         hasBoth('BOG', 'BOSG') ||
         hasBoth('BOB', 'BOSB') ||
         hasBoth('Best 4-Class', 'Best 6-Class') ||
-        hasBoth('Best In Show', 'Reserve In Show');
+        finalAwardCount > 1;
   }
 
   Map<String, dynamic>? _otherWinnerInScope({
@@ -5741,12 +5759,21 @@ if (storedJudgeId.isEmpty) {
 
       case 'Best In Show':
       case 'Reserve In Show':
-        return const ['Best In Show', 'Reserve In Show'];
-      
+      case '1RIS':
+      case '2RIS':
+        return const [
+          'Best In Show',
+          'Reserve In Show',
+          '1RIS',
+          '2RIS',
+        ];
+
       case 'BIS':
       case 'RIS':
+      case '1RIS':
+      case '2RIS':
       case 'HM':
-        return const ['BIS', 'RIS', 'HM'];
+        return const ['BIS', 'RIS', '1RIS', '2RIS', 'HM'];
 
       default:
         return const [];
@@ -5807,8 +5834,28 @@ if (storedJudgeId.isEmpty) {
     if (_isFurOrWoolResultRow()) {
       return const <String>[];
     }
+
     if (_isCavyEntry(widget.entry)) {
-      return cavyAwardCodes;
+      final awards = <String>[
+        'BJV',
+        'BIV',
+        'BSV',
+        'BJB',
+        'BIB',
+        'BSB',
+        'BOV',
+        'BOSV',
+        'BOB',
+        'BOSB',
+      ];
+
+      if (widget.finalAwardMode == 'bis_1ris_2ris') {
+        awards.addAll(const ['BIS', '1RIS', '2RIS']);
+      } else {
+        awards.addAll(const ['BIS', 'RIS', 'HM']);
+      }
+
+      return awards;
     }
 
     final awards = <String>[];
@@ -5835,6 +5882,8 @@ if (storedJudgeId.isEmpty) {
 
     if (widget.finalAwardMode == 'bis_ris') {
       awards.addAll(const ['Best In Show', 'Reserve In Show']);
+    } else if (widget.finalAwardMode == 'bis_1ris_2ris') {
+      awards.addAll(const ['Best In Show', '1RIS', '2RIS']);
     } else {
       awards.addAll(const ['Best 4-Class', 'Best 6-Class', 'Best In Show']);
     }
