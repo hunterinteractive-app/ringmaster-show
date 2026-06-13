@@ -74,7 +74,10 @@ class _CartScreenState extends State<CartScreen> {
           .from('show_fee_settings')
           .select(
             'show_id,currency,fee_per_entry,fee_per_show,fur_fee,'
-            'multi_show_discount_enabled,multi_show_discount_type,multi_show_discount_value',
+            'multi_show_discount_enabled,multi_show_discount_type,multi_show_discount_value,'
+            'multi_show_discount_basis,multi_show_discount_scope,'
+            'multi_show_discount_min_entries,multi_show_discount_max_entries,'
+            'multi_show_discount_required_shows',
           )
           .eq('show_id', widget.showId)
           .maybeSingle();
@@ -333,21 +336,39 @@ class _CartScreenState extends State<CartScreen> {
         _feeSettings?['multi_show_discount_enabled'] == true;
     final discountType = (_feeSettings?['multi_show_discount_type'] ?? '')
         .toString()
-        .toLowerCase();
+        .toLowerCase()
+        .trim();
     final discountValue =
         _asDouble(_feeSettings?['multi_show_discount_value']);
+    final discountBasis =
+        (_feeSettings?['multi_show_discount_basis'] ?? 'each_show')
+            .toString()
+            .toLowerCase()
+            .trim();
+    final discountScope =
+        (_feeSettings?['multi_show_discount_scope'] ?? 'both')
+            .toString()
+            .toLowerCase()
+            .trim();
+    final minimumEntries =
+        (_feeSettings?['multi_show_discount_min_entries'] as num?)?.toInt() ??
+            0;
+    final maximumEntries =
+        (_feeSettings?['multi_show_discount_max_entries'] as num?)?.toInt();
+    final minimumShows =
+        (_feeSettings?['multi_show_discount_required_shows'] as num?)
+                ?.toInt() ??
+            0;
 
     double entriesSubtotal = 0.0;
     double furSubtotal = 0.0;
     double showFeeSubtotal = 0.0;
-
     int furCount = 0;
 
-    final Map<String, int> perAnimalCounts = {};
-    final Set<String> chargedShowFeeSectionIds = {};
+    final Set<String> chargedShowFeeKeys = {};
 
-    for (final it in items) {
-      final sectionId = (it['section_id'] ?? '').toString();
+    for (final item in items) {
+      final sectionId = (item['section_id'] ?? '').toString();
       final sectionFee = _sectionFeeBySectionId[sectionId];
 
       final feePerEntry = _asDouble(sectionFee?['fee_per_entry']);
@@ -356,47 +377,119 @@ class _CartScreenState extends State<CartScreen> {
 
       entriesSubtotal += feePerEntry;
 
-      if (it['is_fur'] == true) {
+      if (item['is_fur'] == true) {
         furSubtotal += furFee;
         furCount += 1;
       }
 
+      final exhibitorId =
+          (item['exhibitor_id'] ?? '__unassigned__').toString();
+      final showFeeKey = '$exhibitorId|$sectionId';
       if (sectionId.isNotEmpty &&
-          !chargedShowFeeSectionIds.contains(sectionId) &&
+          !chargedShowFeeKeys.contains(showFeeKey) &&
           feePerShow > 0) {
-        chargedShowFeeSectionIds.add(sectionId);
+        chargedShowFeeKeys.add(showFeeKey);
         showFeeSubtotal += feePerShow;
-      }
-
-      final animalId = it['animal_id']?.toString();
-      if (animalId != null && animalId.isNotEmpty) {
-        perAnimalCounts[animalId] = (perAnimalCounts[animalId] ?? 0) + 1;
       }
     }
 
-    int additionalEntries = 0;
-    perAnimalCounts.forEach((_, count) {
-      if (count > 1) additionalEntries += (count - 1);
-    });
-
     double discountAmount = 0.0;
-    if (discountEnabled && additionalEntries > 0) {
-      double averageEntryFee = 0.0;
-      if (items.isNotEmpty) {
-        averageEntryFee = entriesSubtotal / items.length;
+    int qualifyingEntryCount = 0;
+    int qualifyingShowCount = 0;
+
+    if (discountEnabled &&
+        minimumEntries > 0 &&
+        minimumShows > 0 &&
+        items.isNotEmpty) {
+      final itemsByExhibitor = <String, List<Map<String, dynamic>>>{};
+
+      for (final item in items) {
+        final sectionId = (item['section_id'] ?? '').toString();
+        final section = _sectionById[sectionId];
+        final sectionKind =
+            (section?['kind'] ?? '').toString().trim().toLowerCase();
+
+        final isEligibleForScope = discountScope == 'both' ||
+            sectionKind == discountScope;
+        if (!isEligibleForScope) continue;
+
+        final exhibitorId =
+            (item['exhibitor_id'] ?? '__unassigned__').toString();
+        itemsByExhibitor
+            .putIfAbsent(exhibitorId, () => <Map<String, dynamic>>[])
+            .add(item);
       }
 
-      if (discountType == 'percent') {
-        final pct =
-            (discountValue <= 1.0) ? discountValue : (discountValue / 100.0);
-        discountAmount = (averageEntryFee * additionalEntries) * pct;
-      } else if (discountType == 'amount') {
-        discountAmount = additionalEntries * discountValue;
-      }
+      for (final exhibitorItems in itemsByExhibitor.values) {
+        final itemsBySection = <String, List<Map<String, dynamic>>>{};
 
-      final maxDiscount = averageEntryFee * additionalEntries;
-      if (discountAmount > maxDiscount) discountAmount = maxDiscount;
-      if (discountAmount < 0) discountAmount = 0;
+        for (final item in exhibitorItems) {
+          final sectionId = (item['section_id'] ?? '').toString();
+          if (sectionId.isEmpty) continue;
+          itemsBySection
+              .putIfAbsent(sectionId, () => <Map<String, dynamic>>[])
+              .add(item);
+        }
+
+        final qualifyingItems = <Map<String, dynamic>>[];
+
+        if (discountBasis == 'cumulative') {
+          final enteredSections = itemsBySection.entries
+              .where((entry) => entry.value.isNotEmpty)
+              .toList()
+            ..sort((a, b) => b.value.length.compareTo(a.value.length));
+
+          if (enteredSections.length >= minimumShows &&
+              exhibitorItems.length >= minimumEntries) {
+            qualifyingShowCount += enteredSections.length;
+
+            final maxQualifying = maximumEntries == null
+                ? exhibitorItems.length
+                : maximumEntries.clamp(0, exhibitorItems.length);
+
+            qualifyingItems.addAll(exhibitorItems.take(maxQualifying));
+          }
+        } else {
+          final qualifyingSections = itemsBySection.entries
+              .where((entry) => entry.value.length >= minimumEntries)
+              .toList()
+            ..sort((a, b) => b.value.length.compareTo(a.value.length));
+
+          if (qualifyingSections.length >= minimumShows) {
+            qualifyingShowCount += qualifyingSections.length;
+
+            for (final section in qualifyingSections) {
+              final maxForSection = maximumEntries == null
+                  ? section.value.length
+                  : maximumEntries.clamp(0, section.value.length);
+              qualifyingItems.addAll(section.value.take(maxForSection));
+            }
+          }
+        }
+
+        qualifyingEntryCount += qualifyingItems.length;
+
+        for (final item in qualifyingItems) {
+          final sectionId = (item['section_id'] ?? '').toString();
+          final sectionFee = _sectionFeeBySectionId[sectionId];
+          final regularEntryFee = _asDouble(sectionFee?['fee_per_entry']);
+
+          double itemDiscount = 0.0;
+          if (discountType == 'fixed_rate') {
+            itemDiscount = regularEntryFee - discountValue;
+          } else if (discountType == 'percent') {
+            final percent = discountValue > 1
+                ? discountValue / 100.0
+                : discountValue;
+            itemDiscount = regularEntryFee * percent;
+          } else if (discountType == 'amount') {
+            itemDiscount = discountValue;
+          }
+
+          itemDiscount = itemDiscount.clamp(0.0, regularEntryFee).toDouble();
+          discountAmount += itemDiscount;
+        }
+      }
     }
 
     final total =
@@ -409,10 +502,16 @@ class _CartScreenState extends State<CartScreen> {
       'entries_subtotal': entriesSubtotal,
       'fur_subtotal': furSubtotal,
       'show_fee': showFeeSubtotal,
-      'additional_entries': additionalEntries,
       'discount_enabled': discountEnabled,
       'discount_type': discountType,
       'discount_value': discountValue,
+      'discount_basis': discountBasis,
+      'discount_scope': discountScope,
+      'discount_min_entries': minimumEntries,
+      'discount_max_entries': maximumEntries,
+      'discount_minimum_shows': minimumShows,
+      'qualifying_entry_count': qualifyingEntryCount,
+      'qualifying_show_count': qualifyingShowCount,
       'discount_amount': discountAmount,
       'total': total < 0 ? 0.0 : total,
     };
@@ -787,7 +886,9 @@ class _CartScreenState extends State<CartScreen> {
     }
 
     if (discountAmount > 0) {
-      parts.add('- ${_money(discountAmount, currency: currency)}');
+      parts.add(
+        'Volume discount: -${_money(discountAmount, currency: currency)}',
+      );
     }
 
     parts.add('= ${_money(total, currency: currency)}');
@@ -954,7 +1055,9 @@ class _CartScreenState extends State<CartScreen> {
                                     Padding(
                                       padding: const EdgeInsets.only(top: 4),
                                       child: Text(
-                                        'Multi-show discount (${overallFee['additional_entries']} additional entries): -${_money(overallFee['discount_amount'] as double, currency: currency)}',
+                                        'Multi-show volume discount '
+                                        '(${overallFee['qualifying_entry_count']} qualifying entries): '
+                                        '-${_money(overallFee['discount_amount'] as double, currency: currency)}',
                                       ),
                                     ),
                                   const SizedBox(height: 8),

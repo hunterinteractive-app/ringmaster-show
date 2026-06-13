@@ -47,6 +47,11 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
   bool _discountEnabled = false;
   String _discountType = 'amount';
   final _discountValue = TextEditingController();
+  String _discountBasis = 'each_show';
+  String _discountScope = 'both';
+  final _discountMinimumEntries = TextEditingController();
+  final _discountMaximumEntries = TextEditingController();
+  final _discountRequiredShows = TextEditingController();
 
   final Map<String, TextEditingController> _feePerEntryBySection = {};
   final Map<String, TextEditingController> _feePerShowBySection = {};
@@ -69,6 +74,9 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
   @override
   void dispose() {
     _discountValue.dispose();
+    _discountMinimumEntries.dispose();
+    _discountMaximumEntries.dispose();
+    _discountRequiredShows.dispose();
 
     for (final c in _feePerEntryBySection.values) {
       c.dispose();
@@ -126,7 +134,12 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
             'currency,'
             'multi_show_discount_enabled,'
             'multi_show_discount_type,'
-            'multi_show_discount_value',
+            'multi_show_discount_value,'
+            'multi_show_discount_basis,'
+            'multi_show_discount_scope,'
+            'multi_show_discount_min_entries,'
+            'multi_show_discount_max_entries,'
+            'multi_show_discount_required_shows',
           )
           .eq('show_id', widget.showId)
           .maybeSingle();
@@ -163,6 +176,18 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
           (feeRow?['multi_show_discount_type'] ?? 'amount').toString();
       _discountValue.text =
           (feeRow?['multi_show_discount_value'] ?? 0).toString();
+      _discountBasis =
+          (feeRow?['multi_show_discount_basis'] ?? 'each_show').toString();
+      _discountScope =
+          (feeRow?['multi_show_discount_scope'] ?? 'both').toString();
+      _discountMinimumEntries.text =
+          (feeRow?['multi_show_discount_min_entries'] ?? 12).toString();
+      _discountMaximumEntries.text =
+          feeRow?['multi_show_discount_max_entries'] == null
+              ? ''
+              : feeRow!['multi_show_discount_max_entries'].toString();
+      _discountRequiredShows.text =
+          (feeRow?['multi_show_discount_required_shows'] ?? 3).toString();
 
       for (final section in sections) {
         final sectionId = section['id'].toString();
@@ -199,6 +224,17 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
     final x = double.tryParse(s.trim());
     if (x == null || x < 0) return null;
     return x;
+  }
+
+  int? _parsePositiveInt(String value) {
+    final parsed = int.tryParse(value.trim());
+    if (parsed == null || parsed < 1) return null;
+    return parsed;
+  }
+
+  int? _parseOptionalPositiveInt(String value) {
+    if (value.trim().isEmpty) return null;
+    return _parsePositiveInt(value);
   }
 
   String _sectionLabel(Map<String, dynamic> section) {
@@ -253,13 +289,68 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
 
     final disc = _parseMoney(_discountValue.text);
     if (disc == null) {
-      setState(() => _msg = 'Discount must be 0 or greater.');
+      setState(() => _msg = _discountType == 'fixed_rate'
+          ? 'Discounted entry rate must be 0 or greater.'
+          : 'Discount must be 0 or greater.');
       return false;
     }
 
     if (_discountEnabled && _discountType == 'percent' && disc > 100) {
       setState(() => _msg = 'Percent discount cannot exceed 100.');
       return false;
+    }
+
+    if (_discountEnabled) {
+      final minimumEntries =
+          _parsePositiveInt(_discountMinimumEntries.text);
+      if (minimumEntries == null) {
+        setState(() => _msg = 'Minimum entries must be a whole number of 1 or greater.');
+        return false;
+      }
+
+      final maximumEntries =
+          _parseOptionalPositiveInt(_discountMaximumEntries.text);
+      if (_discountMaximumEntries.text.trim().isNotEmpty &&
+          maximumEntries == null) {
+        setState(() => _msg = 'Maximum entries must be a whole number of 1 or greater, or left blank.');
+        return false;
+      }
+
+      if (maximumEntries != null && maximumEntries < minimumEntries) {
+        setState(() => _msg = 'Maximum entries cannot be less than minimum entries.');
+        return false;
+      }
+
+      final requiredShows =
+          _parsePositiveInt(_discountRequiredShows.text);
+      if (requiredShows == null) {
+        setState(() => _msg = 'Minimum number of shows must be a whole number of 1 or greater.');
+        return false;
+      }
+
+      final eligibleSectionCount = _sections.where((section) {
+        if (_discountScope == 'both') return true;
+        final kind = (section['kind'] ?? '').toString().trim().toLowerCase();
+        return kind == _discountScope;
+      }).length;
+
+      if (eligibleSectionCount == 0) {
+        setState(() => _msg = _discountScope == 'open'
+            ? 'There are no enabled Open show sections for this discount.'
+            : 'There are no enabled Youth show sections for this discount.');
+        return false;
+      }
+
+      if (requiredShows > eligibleSectionCount) {
+        final scopeLabel = _discountScope == 'both'
+            ? 'Open and Youth'
+            : _discountScope == 'open'
+                ? 'Open'
+                : 'Youth';
+        setState(() => _msg =
+            'Minimum number of shows cannot exceed the number of enabled $scopeLabel sections ($eligibleSectionCount).');
+        return false;
+      }
     }
 
     return true;
@@ -417,6 +508,18 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
         'multi_show_discount_enabled': _discountEnabled,
         'multi_show_discount_type': _discountType,
         'multi_show_discount_value': double.parse(_discountValue.text.trim()),
+        'multi_show_discount_basis': _discountBasis,
+        'multi_show_discount_scope': _discountScope,
+        'multi_show_discount_min_entries': _discountEnabled
+            ? int.parse(_discountMinimumEntries.text.trim())
+            : null,
+        'multi_show_discount_max_entries':
+            _discountEnabled && _discountMaximumEntries.text.trim().isNotEmpty
+                ? int.parse(_discountMaximumEntries.text.trim())
+                : null,
+        'multi_show_discount_required_shows': _discountEnabled
+            ? int.parse(_discountRequiredShows.text.trim())
+            : null,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       });
 
@@ -702,11 +805,11 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text(
-            'Enable multi-show discount',
+            'Enable multi-show volume discount',
             style: TextStyle(fontWeight: FontWeight.w600),
           ),
           subtitle: const Text(
-            'Applies a discount when an exhibitor enters multiple show sections.',
+            'Offer a discounted entry price when an exhibitor meets the required entry count across multiple show sections.',
           ),
           value: _discountEnabled,
           onChanged: (_saving || _isReadOnly)
@@ -717,25 +820,195 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
           const SizedBox(height: 10),
           LayoutBuilder(
             builder: (context, constraints) {
-              final stack = constraints.maxWidth < 520;
+              final stack = constraints.maxWidth < 620;
 
-              final typeField = DropdownButtonFormField<String>(
-                value: _discountType,
+              final basisField = DropdownButtonFormField<String>(
+                value: _discountBasis,
+                isExpanded: true,
                 items: const [
                   DropdownMenuItem(
-                    value: 'amount',
-                    child: Text('Amount (\$ off)'),
+                    value: 'each_show',
+                    child: Text(
+                      'Minimum entries in each required show',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                   DropdownMenuItem(
-                    value: 'percent',
-                    child: Text('Percent (% off)'),
+                    value: 'cumulative',
+                    child: Text(
+                      'Cumulative entries across required shows',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ],
                 onChanged: (_saving || _isReadOnly)
                     ? null
-                    : (v) => setState(() => _discountType = v ?? 'amount'),
+                    : (v) =>
+                        setState(() => _discountBasis = v ?? 'each_show'),
                 decoration: const InputDecoration(
-                  labelText: 'Discount type',
+                  labelText: 'How exhibitors qualify',
+                  border: OutlineInputBorder(),
+                ),
+              );
+
+              final scopeField = DropdownButtonFormField<String>(
+                value: _discountScope,
+                isExpanded: true,
+                items: const [
+                  DropdownMenuItem(
+                    value: 'both',
+                    child: Text('Open and Youth'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'open',
+                    child: Text('Open only'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'youth',
+                    child: Text('Youth only'),
+                  ),
+                ],
+                onChanged: (_saving || _isReadOnly)
+                    ? null
+                    : (v) => setState(() => _discountScope = v ?? 'both'),
+                decoration: const InputDecoration(
+                  labelText: 'Applies to',
+                  border: OutlineInputBorder(),
+                ),
+              );
+
+              if (stack) {
+                return Column(
+                  children: [
+                    basisField,
+                    const SizedBox(height: 12),
+                    scopeField,
+                  ],
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: basisField),
+                  const SizedBox(width: 12),
+                  Expanded(child: scopeField),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 12),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final stack = constraints.maxWidth < 620;
+
+              final fields = [
+                TextField(
+                  controller: _discountMinimumEntries,
+                  enabled: !_saving && !_isReadOnly,
+                  keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.next,
+                  decoration: InputDecoration(
+                    labelText: _discountBasis == 'each_show'
+                        ? 'Minimum entries per show'
+                        : 'Minimum total entries',
+                    helperText: _discountBasis == 'each_show'
+                        ? 'Example: 12 rabbits in each show'
+                        : 'Example: 36 entries across 3 shows',
+                    helperMaxLines: 2,
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+                TextField(
+                  controller: _discountMaximumEntries,
+                  enabled: !_saving && !_isReadOnly,
+                  keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: 'Maximum entries',
+                    helperText: 'Optional; leave blank for no maximum',
+                    helperMaxLines: 2,
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                TextField(
+                  controller: _discountRequiredShows,
+                  enabled: !_saving && !_isReadOnly,
+                  keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: 'Minimum number of shows',
+                    helperText: 'Example: 3 for a triple show',
+                    helperMaxLines: 2,
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ];
+
+              if (stack) {
+                return Column(
+                  children: [
+                    for (final field in fields) ...[
+                      field,
+                      const SizedBox(height: 12),
+                    ],
+                  ],
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (var i = 0; i < fields.length; i++) ...[
+                    Expanded(child: fields[i]),
+                    if (i != fields.length - 1)
+                      const SizedBox(width: 12),
+                  ],
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 12),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final stack = constraints.maxWidth < 520;
+
+              final typeField = DropdownButtonFormField<String>(
+                value: _discountType,
+                isExpanded: true,
+                items: const [
+                  DropdownMenuItem(
+                    value: 'fixed_rate',
+                    child: Text(
+                      'Fixed discounted rate per entry',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  DropdownMenuItem(
+                    value: 'amount',
+                    child: Text(
+                      'Amount off each entry',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  DropdownMenuItem(
+                    value: 'percent',
+                    child: Text(
+                      'Percent off each entry',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+                onChanged: (_saving || _isReadOnly)
+                    ? null
+                    : (v) => setState(() => _discountType = v ?? 'fixed_rate'),
+                decoration: const InputDecoration(
+                  labelText: 'Discount pricing method',
                   border: OutlineInputBorder(),
                 ),
               );
@@ -746,9 +1019,15 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
                 decoration: InputDecoration(
-                  labelText: 'Discount value',
-                  prefixText: _discountType == 'amount' ? '\$ ' : null,
+                  labelText: _discountType == 'fixed_rate'
+                      ? 'Discounted rate per entry'
+                      : 'Discount value',
+                  prefixText: _discountType == 'percent' ? null : '\$ ',
                   suffixText: _discountType == 'percent' ? '%' : null,
+                  helperText: _discountType == 'fixed_rate'
+                      ? 'Example: charge \$3.00 per qualifying entry'
+                      : null,
+                  helperMaxLines: 2,
                   border: const OutlineInputBorder(),
                 ),
               );
@@ -771,6 +1050,24 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
                 ],
               );
             },
+          ),
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF11285A).withOpacity(.05),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: const Color(0xFF11285A).withOpacity(.10),
+              ),
+            ),
+            child: Text(
+              _discountBasis == 'each_show'
+                  ? 'Example: require 12 or more entries in each of 3 ${_discountScope == 'both' ? 'Open or Youth' : _discountScope == 'open' ? 'Open' : 'Youth'} shows, then charge the selected discounted rate for qualifying entries.'
+                  : 'Example: require 36 total entries across 3 ${_discountScope == 'both' ? 'Open or Youth' : _discountScope == 'open' ? 'Open' : 'Youth'} shows, then charge the selected discounted rate for qualifying entries.',
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
           ),
         ],
       ],

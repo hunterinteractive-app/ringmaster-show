@@ -3116,6 +3116,22 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         );
       }
 
+      if (reportName == 'sweepstakes_report' ||
+          reportName == 'breed_results_detail_report') {
+        artifacts = artifacts.where((r) {
+          final artifactBreed =
+              (r.metadata['breed_name'] ?? '').toString().trim().toLowerCase();
+          final artifactScope =
+              (r.metadata['scope'] ?? '').toString().trim().toUpperCase();
+          final artifactLetter =
+              (r.metadata['show_letter'] ?? '').toString().trim().toUpperCase();
+
+          return artifactBreed == (breedName ?? '').trim().toLowerCase() &&
+              artifactScope == (scope ?? '').trim().toUpperCase() &&
+              artifactLetter == (showLetter ?? '').trim().toUpperCase();
+        });
+      }
+
       final list = artifacts.toList()
         ..sort((a, b) {
           final aDt = DateTime.tryParse(a.generatedAt ?? '') ??
@@ -4454,30 +4470,45 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
 
       final sections = await supabase
           .from('show_sections')
-          .select('id, display_name, kind, sort_order')
+          .select('id, display_name, kind, letter, sort_order')
           .eq('show_id', widget.showId)
           .eq('kind', kind)
           .eq('is_enabled', true)
           .order('sort_order');
 
-      final breedSet = <String>{};
+      final selectedLetter = _selectedShowLetter.trim().toUpperCase();
+      final matchingSections = (sections as List).where((raw) {
+        final section = Map<String, dynamic>.from(raw as Map);
+        final letter = (section['letter'] ?? '').toString().trim().toUpperCase();
 
-      for (final section in (sections as List)) {
-        final sectionId = section['id'].toString();
+        return selectedLetter.isEmpty ||
+            selectedLetter == 'ALL' ||
+            letter == selectedLetter;
+      }).toList();
+
+      final breedSet = <String>{};
+      final sectionIds = <String>[];
+
+      for (final rawSection in matchingSections) {
+        final section = Map<String, dynamic>.from(rawSection as Map);
+        final sectionId = (section['id'] ?? '').toString().trim();
+        if (sectionId.isEmpty) continue;
+
+        sectionIds.add(sectionId);
 
         final rows = await supabase.rpc(
           'report_results_entry_rows',
           params: {
             'p_show_id': widget.showId,
             'p_section_id': sectionId,
-            'p_show_letter': (_selectedShowLetter.isEmpty ||
-                    _selectedShowLetter == 'ALL')
+            'p_show_letter': selectedLetter.isEmpty || selectedLetter == 'ALL'
                 ? null
-                : _selectedShowLetter,
+                : selectedLetter,
           },
         );
 
-        for (final row in (rows as List)) {
+        for (final rawRow in (rows as List)) {
+          final row = Map<String, dynamic>.from(rawRow as Map);
           final breed = (row['breed_name'] ?? '').toString().trim();
           if (breed.isNotEmpty) {
             breedSet.add(breed);
@@ -4485,7 +4516,53 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
         }
       }
 
-      final breeds = breedSet.toList()..sort();
+      // Club reports must also include sanctioned breeds that had no entries
+      // or no animals shown. Those breeds will not be returned by the results RPC.
+      if (sectionIds.isNotEmpty) {
+        final sanctionRows = await supabase
+            .from('show_sanctions')
+            .select('breed_name, section_id')
+            .eq('show_id', widget.showId)
+            .inFilter('section_id', sectionIds);
+
+        for (final rawRow in (sanctionRows as List)) {
+          final row = Map<String, dynamic>.from(rawRow as Map);
+          final breed = (row['breed_name'] ?? '').toString().trim();
+          if (breed.isNotEmpty) {
+            breedSet.add(breed);
+          }
+        }
+      }
+
+      // Also merge current artifact metadata so newly queued/generated empty
+      // reports remain selectable even if sanction data changes later.
+      for (final artifact in widget.reports.where((r) => r.isCurrent)) {
+        if (artifact.reportName != 'sweepstakes_report' &&
+            artifact.reportName != 'breed_results_detail_report') {
+          continue;
+        }
+
+        final artifactScope =
+            (artifact.metadata['scope'] ?? '').toString().trim().toUpperCase();
+        final artifactLetter = (artifact.metadata['show_letter'] ?? '')
+            .toString()
+            .trim()
+            .toUpperCase();
+        final artifactBreed =
+            (artifact.metadata['breed_name'] ?? '').toString().trim();
+
+        final scopeMatches = artifactScope == _selectedScope.toUpperCase();
+        final letterMatches = selectedLetter.isEmpty ||
+            selectedLetter == 'ALL' ||
+            artifactLetter == selectedLetter;
+
+        if (scopeMatches && letterMatches && artifactBreed.isNotEmpty) {
+          breedSet.add(artifactBreed);
+        }
+      }
+
+      final breeds = breedSet.toList()
+        ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
 
       if (!mounted) return;
 
@@ -4494,9 +4571,13 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
 
         if (breeds.isNotEmpty) {
           final current = _breedController.text.trim();
-          if (current.isEmpty || !breeds.contains(current)) {
-            _breedController.text = breeds.first;
-          }
+          final matchingCurrent = breeds.where(
+            (breed) => breed.toLowerCase() == current.toLowerCase(),
+          );
+
+          _breedController.text = matchingCurrent.isNotEmpty
+              ? matchingCurrent.first
+              : breeds.first;
         } else {
           _breedController.clear();
         }
