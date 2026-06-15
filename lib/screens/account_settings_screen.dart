@@ -22,6 +22,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   bool _loading = true;
   String? _msg;
   List<Map<String, dynamic>> _exhibitors = [];
+  String? _primaryExhibitorId;
 
   @override
   void initState() {
@@ -57,10 +58,63 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           .eq('owner_user_id', userId)
           .order('created_at', ascending: true);
 
+      final exhibitors = (rows as List).cast<Map<String, dynamic>>();
+
+      String? primaryExhibitorId;
+      try {
+        final profile = await supabase
+            .from('profiles')
+            .select('primary_exhibitor_id')
+            .eq('user_id', userId)
+            .maybeSingle();
+
+        primaryExhibitorId = profile?['primary_exhibitor_id']?.toString();
+      } catch (_) {
+        primaryExhibitorId = null;
+      }
+
+      final activeIds = exhibitors
+          .where((e) => e['is_active'] == true)
+          .map((e) => e['id']?.toString())
+          .whereType<String>()
+          .toSet();
+
+      if (primaryExhibitorId == null ||
+          !activeIds.contains(primaryExhibitorId)) {
+        Map<String, dynamic>? defaultExhibitor;
+
+        for (final exhibitor in exhibitors) {
+          final type = (exhibitor['type'] ?? '').toString().toLowerCase();
+          final active = exhibitor['is_active'] == true;
+          if (active && type == 'adult') {
+            defaultExhibitor = exhibitor;
+            break;
+          }
+        }
+
+        if (defaultExhibitor == null) {
+          for (final exhibitor in exhibitors) {
+            if (exhibitor['is_active'] == true) {
+              defaultExhibitor = exhibitor;
+              break;
+            }
+          }
+        }
+
+        primaryExhibitorId = defaultExhibitor?['id']?.toString();
+
+        if (primaryExhibitorId != null && !AppSession.isSupportMode) {
+          await supabase.from('profiles').update({
+            'primary_exhibitor_id': primaryExhibitorId,
+          }).eq('user_id', userId);
+        }
+      }
+
       if (!mounted) return;
 
       setState(() {
-        _exhibitors = (rows as List).cast<Map<String, dynamic>>();
+        _exhibitors = exhibitors;
+        _primaryExhibitorId = primaryExhibitorId;
         _loading = false;
       });
     } catch (e) {
@@ -119,6 +173,47 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   }
 
   // ------------------------------
+  // Set Primary Exhibitor
+  // ------------------------------
+  Future<void> _setPrimaryExhibitor(Map<String, dynamic> exhibitor) async {
+    if (AppSession.isSupportMode) {
+      setState(() {
+        _msg = 'Changing the primary exhibitor is disabled while viewing in support mode.';
+      });
+      return;
+    }
+
+    final userId = AppSession.effectiveUserId;
+    final exhibitorId = exhibitor['id']?.toString();
+
+    if (userId == null || exhibitorId == null || exhibitorId.isEmpty) {
+      return;
+    }
+
+    if (exhibitor['is_active'] != true) {
+      setState(() {
+        _msg = 'Activate this exhibitor before making them primary.';
+      });
+      return;
+    }
+
+    try {
+      await supabase.from('profiles').update({
+        'primary_exhibitor_id': exhibitorId,
+      }).eq('user_id', userId);
+
+      if (!mounted) return;
+      setState(() {
+        _primaryExhibitorId = exhibitorId;
+        _msg = '${(exhibitor['display_name'] ?? 'Exhibitor').toString()} is now the primary exhibitor.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _msg = 'Unable to change primary exhibitor: $e');
+    }
+  }
+
+  // ------------------------------
   // Toggle Active
   // ------------------------------
   Future<void> _toggleActive(String id, bool newActive) async {
@@ -134,6 +229,15 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           .from('exhibitors')
           .update({'is_active': newActive})
           .eq('id', id);
+
+      if (!newActive && id == _primaryExhibitorId) {
+        final userId = AppSession.effectiveUserId;
+        if (userId != null) {
+          await supabase.from('profiles').update({
+            'primary_exhibitor_id': null,
+          }).eq('user_id', userId);
+        }
+      }
 
       await _load();
     } catch (e) {
@@ -231,6 +335,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                             final name = (e['display_name'] ?? '').toString();
                             final active = e['is_active'] == true;
                             final bd = e['birth_date']?.toString();
+                            final isPrimary = id == _primaryExhibitorId;
 
                             return Container(
                               margin: const EdgeInsets.only(bottom: 10),
@@ -249,11 +354,50 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                                   horizontal: 16,
                                   vertical: 8,
                                 ),
-                                title: Text(
-                                  name,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                                title: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        name,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                    if (isPrimary)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 4,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.blue.withOpacity(.10),
+                                          borderRadius: BorderRadius.circular(999),
+                                          border: Border.all(
+                                            color: Colors.blue.withOpacity(.30),
+                                          ),
+                                        ),
+                                        child: const Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              Icons.star,
+                                              size: 15,
+                                              color: Colors.blue,
+                                            ),
+                                            SizedBox(width: 4),
+                                            Text(
+                                              'PRIMARY',
+                                              style: TextStyle(
+                                                color: Colors.blue,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                  ],
                                 ),
                                 subtitle: Text(
                                   'Type: ${type.toUpperCase()}'
@@ -270,6 +414,9 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                                           if (v == 'edit') {
                                             _openExhibitorEditor(existing: e);
                                           }
+                                          if (v == 'primary') {
+                                            _setPrimaryExhibitor(e);
+                                          }
                                           if (v == 'deactivate') {
                                             _toggleActive(id, false);
                                           }
@@ -282,6 +429,17 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                                             value: 'edit',
                                             child: Text('Edit'),
                                           ),
+                                          if (active && !isPrimary)
+                                            const PopupMenuItem(
+                                              value: 'primary',
+                                              child: Row(
+                                                children: [
+                                                  Icon(Icons.star_outline),
+                                                  SizedBox(width: 8),
+                                                  Text('Set as primary'),
+                                                ],
+                                              ),
+                                            ),
                                           if (active)
                                             const PopupMenuItem(
                                               value: 'deactivate',

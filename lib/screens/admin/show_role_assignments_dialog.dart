@@ -42,12 +42,16 @@ class _UserSearchResult {
   final String id;
   final String email;
   final String displayName;
+  final String? exhibitorId;
 
   const _UserSearchResult({
     required this.id,
     required this.email,
     required this.displayName,
+    this.exhibitorId,
   });
+
+  String get selectionKey => '${id}_${exhibitorId ?? displayName.trim().toLowerCase()}';
 
   String get label {
     final name = displayName.trim();
@@ -234,6 +238,7 @@ class _ShowRoleAssignmentsDialogState
       id: id,
       email: email,
       displayName: displayName,
+      exhibitorId: row['exhibitor_id']?.toString(),
     );
   }
 
@@ -282,18 +287,18 @@ class _ShowRoleAssignmentsDialogState
         },
       );
 
-      final resultsById = <String, _UserSearchResult>{};
+      final resultsByKey = <String, _UserSearchResult>{};
       for (final raw in response as List) {
         final row = Map<String, dynamic>.from(raw as Map);
         final user = _userFromRow(row);
         if (user.id.isNotEmpty) {
-          resultsById[user.id] = user;
+          resultsByKey[user.selectionKey] = user;
         }
       }
 
       if (!mounted) return;
       setState(() {
-        _searchResults = resultsById.values.toList()
+        _searchResults = resultsByKey.values.toList()
           ..sort((a, b) {
             final aLabel = a.label.toLowerCase();
             final bLabel = b.label.toLowerCase();
@@ -521,7 +526,7 @@ class _ShowRoleAssignmentsDialogState
   }
 
   Widget _buildSearchResultTile(_UserSearchResult user) {
-    final selected = _selectedUser?.id == user.id;
+    final selected = _selectedUser?.selectionKey == user.selectionKey;
     return Container(
       margin: const EdgeInsets.only(top: 8),
       decoration: BoxDecoration(
@@ -536,7 +541,17 @@ class _ShowRoleAssignmentsDialogState
       child: ListTile(
         leading: Icon(selected ? Icons.check_circle : Icons.person_search),
         title: Text(user.displayName.trim().isEmpty ? user.email : user.displayName),
-        subtitle: user.email.trim().isEmpty ? null : Text(user.email),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (user.email.trim().isNotEmpty) Text(user.email),
+            if (user.exhibitorId != null)
+              const Text(
+                'Exhibitor on this account',
+                style: TextStyle(fontSize: 12),
+              ),
+          ],
+        ),
         onTap: _saving
             ? null
             : () {
@@ -670,7 +685,7 @@ class _ShowRoleAssignmentsDialogState
                                         title: 'Add or Update Staff Role',
                                         children: [
                                           const Text(
-                                            'Use this dialog to assign Show Secretary/Admin, Show Superintendent, or Reporting Clerk access. Show Secretary/Admin gives full access to all areas of this show.',
+                                            'Search by any exhibitor name or account email. Every exhibitor on an account can be selected, including non-primary exhibitors. Access is still assigned to the login account connected to that exhibitor.',
                                           ),
                                           const SizedBox(height: 12),
                                           DropdownButtonFormField<String>(
