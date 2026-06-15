@@ -3022,13 +3022,19 @@ Future<void> _openSharedAnimalEditorForAdd() async {
 
       if (animalId != null) {
         for (final sectionId in _selectedSectionIds) {
-          final dup = await supabase
+          final duplicateRows = await supabase
               .from('entries')
-              .select('id')
+              .select('id,is_fur')
               .eq('show_id', widget.showId)
               .eq('section_id', sectionId)
               .eq('animal_id', animalId)
-              .maybeSingle();
+              .limit(1);
+
+          final dup = (duplicateRows as List).isEmpty
+              ? null
+              : Map<String, dynamic>.from(
+                  (duplicateRows as List).first as Map,
+                );
 
           if (dup != null) {
             throw Exception(
@@ -3090,7 +3096,34 @@ Future<void> _openSharedAnimalEditorForAdd() async {
         }
       }
 
-      await supabase.from('entries').insert(rows);
+      final insertedRows = await supabase
+          .from('entries')
+          .insert(rows)
+          .select('id,section_id,animal_id,is_fur');
+
+      final inserted = (insertedRows as List)
+          .cast<Map<String, dynamic>>();
+
+      for (final sectionId in _selectedSectionIds) {
+        final sectionRows = inserted.where(
+          (row) => (row['section_id'] ?? '').toString() == sectionId,
+        );
+
+        final regularCount = sectionRows
+            .where((row) => row['is_fur'] != true)
+            .length;
+        final furCount = sectionRows
+            .where((row) => row['is_fur'] == true)
+            .length;
+
+        if (regularCount != 1 || (_isFur && furCount != 1)) {
+          throw Exception(
+            'Entry save verification failed for '
+            '${_sectionDisplayLabelById(sectionId)}. '
+            'Expected one regular entry${_isFur ? ' and one fur/wool entry' : ''}.',
+          );
+        }
+      }
 
       if (!mounted) return;
 
