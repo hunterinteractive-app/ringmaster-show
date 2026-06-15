@@ -515,12 +515,15 @@ class BreedResultsDetailReportPdf {
               .toSet();
 
           for (final category in classCategories) {
-            animalsJudgedByCategory[category] =
-                (animalsJudgedByCategory[category] ?? 0) +
-                    classGroup.animalsJudged;
-            exhibitorsJudgedByCategory[category] =
-                (exhibitorsJudgedByCategory[category] ?? 0) +
-                    classGroup.exhibitorsJudged;
+            final currentAnimals = animalsJudgedByCategory[category] ?? 0;
+            final currentExhibitors = exhibitorsJudgedByCategory[category] ?? 0;
+            if (classGroup.animalsJudged > currentAnimals) {
+              animalsJudgedByCategory[category] = classGroup.animalsJudged;
+            }
+            if (classGroup.exhibitorsJudged > currentExhibitors) {
+              exhibitorsJudgedByCategory[category] =
+                  classGroup.exhibitorsJudged;
+            }
           }
 
           for (final row in classGroup.rows) {
@@ -547,18 +550,20 @@ class BreedResultsDetailReportPdf {
 
       widgets.add(_varietyHeader(category));
 
+      // Display the full judged class size supplied by the loader, not merely
+      // the number of top-five placement rows printed in the table.
       final animalsJudged = animalsJudgedByCategory[category] ?? rows.length;
-      final exhibitorsJudged =
-          exhibitorsJudgedByCategory[category] ??
-              rows
-                  .map((row) => row.exhibitorName.trim())
-                  .where((name) => name.isNotEmpty)
-                  .toSet()
-                  .length;
+      final exhibitorsJudged = exhibitorsJudgedByCategory[category] ??
+          rows
+              .map((row) => row.exhibitorName.trim().toLowerCase())
+              .where((name) => name.isNotEmpty)
+              .toSet()
+              .length;
 
       widgets.add(
         pw.Text(
-          '$animalsJudged animals / $exhibitorsJudged exhibitors judged',
+          '$animalsJudged ${animalsJudged == 1 ? 'animal' : 'animals'} / '
+          '$exhibitorsJudged ${exhibitorsJudged == 1 ? 'exhibitor' : 'exhibitors'} judged',
           style: pw.TextStyle(
             fontSize: 10,
             fontWeight: pw.FontWeight.bold,

@@ -219,25 +219,60 @@ class BreedResultsDetailReportLoader {
     required List<Map<String, dynamic>> rows,
     required Map<String, List<BreedAward>> varietyAwardMap,
   }) {
-    final byVariety = <String, List<Map<String, dynamic>>>{};
+    final regularByVariety = <String, List<Map<String, dynamic>>>{};
+    final furByCategory = <String, List<Map<String, dynamic>>>{};
 
     for (final row in rows) {
+      if (_isFurOrWoolRow(row)) {
+        final category = _pointsCategoryLabel(row).isEmpty
+            ? 'Uncategorized'
+            : _pointsCategoryLabel(row);
+        furByCategory.putIfAbsent(category, () => []);
+        furByCategory[category]!.add(row);
+        continue;
+      }
+
       final varietyName =
           _safe(row['variety_name'], fallback: 'Unspecified Variety');
-      byVariety.putIfAbsent(varietyName, () => []);
-      byVariety[varietyName]!.add(row);
+      regularByVariety.putIfAbsent(varietyName, () => []);
+      regularByVariety[varietyName]!.add(row);
     }
 
-    final sortedVarietyNames = byVariety.keys.toList()..sort();
+    final sections = <VarietySection>[];
 
-    return sortedVarietyNames.map((varietyName) {
-      final varietyRows = byVariety[varietyName]!;
-      return VarietySection(
-        varietyName: varietyName,
-        awards: varietyAwardMap[varietyName] ?? const [],
-        sexSections: _buildSexSections(varietyRows),
+    final regularVarietyNames = regularByVariety.keys.toList()..sort();
+    for (final varietyName in regularVarietyNames) {
+      sections.add(
+        VarietySection(
+          varietyName: varietyName,
+          awards: varietyAwardMap[varietyName] ?? const [],
+          sexSections: _buildSexSections(regularByVariety[varietyName]!),
+        ),
       );
-    }).toList();
+    }
+
+    const preferredFurOrder = ['White', 'Colored', 'Uncategorized'];
+    final furCategories = furByCategory.keys.toList()
+      ..sort((a, b) {
+        final aIndex = preferredFurOrder.indexOf(a);
+        final bIndex = preferredFurOrder.indexOf(b);
+        final aSort = aIndex == -1 ? 999 : aIndex;
+        final bSort = bIndex == -1 ? 999 : bIndex;
+        final cmp = aSort.compareTo(bSort);
+        return cmp != 0 ? cmp : a.compareTo(b);
+      });
+
+    for (final category in furCategories) {
+      sections.add(
+        VarietySection(
+          varietyName: category,
+          awards: const [],
+          sexSections: _buildSexSections(furByCategory[category]!),
+        ),
+      );
+    }
+
+    return sections;
   }
 
   List<SexSection> _buildSexSections(List<Map<String, dynamic>> rows) {
@@ -285,8 +320,8 @@ class BreedResultsDetailReportLoader {
   ClassSection _buildFlatFurClass(List<Map<String, dynamic>> rows) {
     final sortedRows = [...rows]
       ..sort((a, b) {
-        final aPlace = _placementNumber(a['placement']);
-        final bPlace = _placementNumber(b['placement']);
+        final aPlace = _furPlacementNumber(a);
+        final bPlace = _furPlacementNumber(b);
         final cmp = aPlace.compareTo(bPlace);
         if (cmp != 0) return cmp;
         return _safe(a['exhibitor_label'])
@@ -295,11 +330,11 @@ class BreedResultsDetailReportLoader {
 
     final rowsOut = sortedRows
         .where((row) {
-          final placeNum = _placementNumber(row['placement']);
+          final placeNum = _furPlacementNumber(row);
           return placeNum >= 1 && placeNum <= 5;
         })
         .map((row) {
-          final placeNum = _placementNumber(row['placement']);
+          final placeNum = _furPlacementNumber(row);
           return ClassEntry(
             place: placeNum.toString(),
             animal: _animalLabel(row),
@@ -311,7 +346,7 @@ class BreedResultsDetailReportLoader {
         })
         .toList();
 
-    final judgedRows = rows.where(_wasJudged).toList();
+    final judgedRows = rows.where(_wasFurOrWoolJudged).toList();
 
     return ClassSection(
       className: '',
@@ -864,6 +899,30 @@ class BreedResultsDetailReportLoader {
     if (status.contains('disqualified')) return false;
 
     return true;
+  }
+
+  int _furPlacementNumber(Map<String, dynamic> row) {
+    final furPlacement = _placementNumber(row['fur_placement']);
+    if (furPlacement != 999) return furPlacement;
+    return _placementNumber(row['placement']);
+  }
+
+  bool _wasFurOrWoolJudged(Map<String, dynamic> row) {
+    if (!_isFurOrWoolRow(row)) return _wasJudged(row);
+    if (row['scratched_at'] != null) return false;
+    if (row['is_disqualified'] == true) return false;
+
+    final status = _firstNonEmpty([
+      _safe(row['fur_result_status']),
+      _safe(row['result_status']),
+      _safe(row['status']),
+    ]).toLowerCase();
+
+    if (status.contains('no show')) return false;
+    if (status.contains('scratch')) return false;
+    if (status.contains('disqualified')) return false;
+
+    return _furPlacementNumber(row) != 999 || row['is_shown'] != false;
   }
 
   int _placementNumber(Object? value) {
