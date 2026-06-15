@@ -21,6 +21,7 @@ import 'legal/terms_screen.dart';
 import 'legal/privacy_policy_screen.dart';
 import 'super_admin/superadmin_home_screen.dart';
 import 'package:ringmaster_show/superintendent/superintendent_shows_screen.dart';
+import 'account_profile_setup_screen.dart';
 
 import '../config/legal_config.dart';
 import '../services/app_session.dart';
@@ -60,22 +61,289 @@ class _ShowListScreenState extends State<ShowListScreen> {
   bool _canAccessAdmin = false;
   bool _canAccessSuperintendent = false;
   bool _loadingAdminAccess = true;
-  bool _claimingLocalExhibitors = false;
-  Future<void> _claimLocalExhibitorsForCurrentUser() async {
-    if (widget.demoMode || SupportImpersonationSession.isActive) return;
-    if (_claimingLocalExhibitors) return;
+  bool _resolvingExhibitorAccount = false;
+  // Temporary feature flag. Change to true when superintendent-role access
+  // is ready to be released.
+  static const bool _enableSuperintendentRoleAccess = false;
+  Future<bool> _ensureExhibitorAccount() async {
+    if (widget.demoMode || SupportImpersonationSession.isActive) {
+      return true;
+    }
+
+    if (_resolvingExhibitorAccount) return false;
 
     final user = supabase.auth.currentUser;
-    if (user == null) return;
+    if (user == null) return false;
 
-    _claimingLocalExhibitors = true;
+    _resolvingExhibitorAccount = true;
+
     try {
-      await supabase.rpc('claim_local_exhibitors_for_current_user');
-    } catch (e) {
-      debugPrint('Local exhibitor claim failed: $e');
+      final response = await supabase.functions.invoke(
+        'claim-or-import-exhibitor',
+        body: const {'action': 'lookup'},
+      );
+
+      final data = response.data is Map
+          ? Map<String, dynamic>.from(response.data as Map)
+          : <String, dynamic>{};
+
+      final status = (data['status'] ?? '').toString();
+
+      switch (status) {
+        case 'already_exists':
+        case 'imported':
+        case 'claimed':
+          return true;
+
+        case 'claim_confirmation_required':
+          final match = data['match'] is Map
+              ? Map<String, dynamic>.from(data['match'] as Map)
+              : <String, dynamic>{};
+
+          final shouldClaim = await _showClaimConfirmationDialog(match);
+          if (!shouldClaim) {
+            return await _openManualAccountSetup();
+          }
+
+          final exhibitorId = (match['id'] ?? '').toString();
+          if (exhibitorId.isEmpty) {
+            return await _openManualAccountSetup();
+          }
+
+          return await _claimExhibitor(exhibitorId);
+
+        case 'multiple_unclaimed_matches':
+          final rawMatches = data['matches'];
+          final matches = rawMatches is List
+              ? rawMatches
+                  .whereType<Map>()
+                  .map((row) => Map<String, dynamic>.from(row))
+                  .toList()
+              : <Map<String, dynamic>>[];
+
+          final selectedId = await _showMultipleClaimDialog(matches);
+          if (selectedId == null) {
+            return await _openManualAccountSetup();
+          }
+
+          return await _claimExhibitor(selectedId);
+
+        case 'club_not_found':
+        case 'club_multiple_matches':
+        case 'incomplete_club_match':
+          return await _openManualAccountSetup();
+
+        default:
+          throw Exception(
+            (data['message'] ??
+                    'Unable to verify or import your exhibitor account.')
+                .toString(),
+          );
+      }
+    } catch (error) {
+      if (!mounted) return false;
+
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('Unable to Set Up Account'),
+            content: Text(
+              'RingMaster Show could not verify, claim, or import your '
+              'account information.\n\n$error',
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Try Manual Setup'),
+              ),
+            ],
+          );
+        },
+      );
+
+      return await _openManualAccountSetup();
     } finally {
-      _claimingLocalExhibitors = false;
+      _resolvingExhibitorAccount = false;
     }
+  }
+
+  Future<bool> _claimExhibitor(String exhibitorId) async {
+    final response = await supabase.functions.invoke(
+      'claim-or-import-exhibitor',
+      body: {
+        'action': 'claim',
+        'exhibitor_id': exhibitorId,
+      },
+    );
+
+    final data = response.data is Map
+        ? Map<String, dynamic>.from(response.data as Map)
+        : <String, dynamic>{};
+
+    final status = (data['status'] ?? '').toString();
+
+    if (status == 'claimed' || status == 'already_exists') {
+      return true;
+    }
+
+    if (status == 'claim_unavailable') {
+      if (!mounted) return false;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'That exhibitor record is no longer available to claim.',
+          ),
+          backgroundColor: AppColors.danger,
+        ),
+      );
+
+      return await _openManualAccountSetup();
+    }
+
+    throw Exception(
+      (data['message'] ?? 'Unable to claim the exhibitor record.').toString(),
+    );
+  }
+
+  Future<bool> _openManualAccountSetup() async {
+    if (!mounted) return false;
+
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => const AccountProfileSetupScreen(),
+      ),
+    );
+
+    return saved == true;
+  }
+
+  Future<bool> _showClaimConfirmationDialog(
+    Map<String, dynamic> match,
+  ) async {
+    final displayName = (match['display_name'] ?? 'this exhibitor').toString();
+    final city = (match['city'] ?? '').toString().trim();
+    final state = (match['state'] ?? '').toString().trim();
+    final phoneLastFour = (match['phone_last_four'] ?? '').toString().trim();
+
+    final location = [city, state]
+        .where((value) => value.isNotEmpty)
+        .join(', ');
+
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogContext) {
+            return AlertDialog(
+              title: const Text('Existing Exhibitor Record Found'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'A show secretary previously created an exhibitor record '
+                    'for $displayName.',
+                  ),
+                  if (location.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text('Location: $location'),
+                  ],
+                  if (phoneLastFour.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text('Phone ending in $phoneLastFour'),
+                  ],
+                  const SizedBox(height: 12),
+                  const Text('Is this your exhibitor account?'),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('No, Create New'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  child: const Text('Yes, Link Account'),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
+  }
+
+  Future<String?> _showMultipleClaimDialog(
+    List<Map<String, dynamic>> matches,
+  ) async {
+    if (matches.isEmpty) return null;
+
+    String? selectedId;
+
+    return await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Select Your Exhibitor Record'),
+              content: SizedBox(
+                width: 520,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: matches.map((match) {
+                      final id = (match['id'] ?? '').toString();
+                      final name =
+                          (match['display_name'] ?? 'Unnamed exhibitor')
+                              .toString();
+                      final city = (match['city'] ?? '').toString().trim();
+                      final state = (match['state'] ?? '').toString().trim();
+                      final phone =
+                          (match['phone_last_four'] ?? '').toString().trim();
+
+                      final details = <String>[
+                        if (city.isNotEmpty || state.isNotEmpty)
+                          [city, state]
+                              .where((value) => value.isNotEmpty)
+                              .join(', '),
+                        if (phone.isNotEmpty) 'Phone ending in $phone',
+                      ].join(' • ');
+
+                      return RadioListTile<String>(
+                        value: id,
+                        groupValue: selectedId,
+                        title: Text(name),
+                        subtitle: details.isEmpty ? null : Text(details),
+                        onChanged: (value) {
+                          setDialogState(() {
+                            selectedId = value;
+                          });
+                        },
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Create New Instead'),
+                ),
+                FilledButton(
+                  onPressed: selectedId == null
+                      ? null
+                      : () => Navigator.of(dialogContext).pop(selectedId),
+                  child: const Text('Link Selected Account'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   SupportImpersonatedUser? get _impersonatedUser =>
@@ -142,8 +410,26 @@ class _ShowListScreenState extends State<ShowListScreen> {
       return false;
     }
 
+    final userId = _effectiveUserId;
+    if (userId == null) return false;
+
     try {
-      return await RoleService.isSuperAdmin();
+      if (await RoleService.isSuperAdmin()) {
+        return true;
+      }
+
+      if (!_enableSuperintendentRoleAccess) {
+        return false;
+      }
+
+      final roleRow = await supabase
+          .from('role_assignments')
+          .select('show_id')
+          .eq('user_id', userId)
+          .eq('role', 'superintendent')
+          .limit(1);
+
+      return (roleRow as List).isNotEmpty;
     } catch (_) {
       return false;
     }
@@ -644,7 +930,9 @@ class _ShowListScreenState extends State<ShowListScreen> {
         profile?['accepted_privacy_version'] == LegalConfig.currentPrivacyVersion;
 
     if (termsOk && privacyOk) {
-      await _claimLocalExhibitorsForCurrentUser();
+      final accountReady = await _ensureExhibitorAccount();
+      if (!accountReady || !mounted) return;
+
       await _loadAdminAccess();
       if (!mounted) return;
       setState(() {
@@ -694,7 +982,9 @@ class _ShowListScreenState extends State<ShowListScreen> {
 
     if (!mounted) return;
 
-    await _claimLocalExhibitorsForCurrentUser();
+    final accountReady = await _ensureExhibitorAccount();
+    if (!accountReady || !mounted) return;
+
     await _loadAdminAccess();
     if (!mounted) return;
     setState(() {
