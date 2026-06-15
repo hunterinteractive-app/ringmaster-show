@@ -532,7 +532,7 @@ class LegsReportLoader {
       final breed = _str(row['breed_name']);
       final varietyDisplay = _str(row['variety_name']);
       final usesGroupAwards = row['uses_group_awards'] == true;
-      final groupName = usesGroupAwards ? _str(row['group_name']) : '';
+      final groupName = _str(row['group_name']);
       final className = _str(row['class_name']);
       final sex = _str(row['sex']);
       final showJudgeRowId = _str(row['judged_by_show_judge_id']);
@@ -589,10 +589,19 @@ class LegsReportLoader {
           .toSet()
           .length;
 
-      final groupRows = usesGroupAwards && groupName.isNotEmpty
+      final normalizedBreed = breed.trim().toLowerCase();
+      final normalizedGroupName = groupName.trim().toLowerCase();
+
+      // Group awards are scoped to the breed and group within this show
+      // section. Do not require uses_group_awards to be true on every row,
+      // because older/imported result rows may contain a valid group_name
+      // while that flag is null or false.
+      final groupRows = normalizedGroupName.isNotEmpty
           ? sameShowRows.where((e) {
-              return e['uses_group_awards'] == true &&
-                  _str(e['group_name']) == groupName;
+              return _str(e['breed_name']).trim().toLowerCase() ==
+                      normalizedBreed &&
+                  _str(e['group_name']).trim().toLowerCase() ==
+                      normalizedGroupName;
             }).toList()
           : <Map<String, dynamic>>[];
 
@@ -603,8 +612,10 @@ class LegsReportLoader {
           .toSet()
           .length;
 
-      final groupSameSexRows =
-          groupRows.where((e) => _str(e['sex']) == sex).toList();
+      final normalizedSex = sex.trim().toLowerCase();
+      final groupSameSexRows = groupRows.where((e) {
+        return _str(e['sex']).trim().toLowerCase() == normalizedSex;
+      }).toList();
       final groupSameSexAnimals = groupSameSexRows.length;
       final groupSameSexExhibitors = groupSameSexRows
           .map((e) => _str(e['exhibitor_id']))
