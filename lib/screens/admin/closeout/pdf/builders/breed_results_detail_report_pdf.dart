@@ -473,6 +473,8 @@ class BreedResultsDetailReportPdf {
     final categoryOrder = <String>['White', 'Colored', 'Uncategorized'];
     final awardsByCategory = <String, List<BreedAward>>{};
     final rowsByCategory = <String, List<ClassEntry>>{};
+    final animalsJudgedByCategory = <String, int>{};
+    final exhibitorsJudgedByCategory = <String, int>{};
 
     String categoryForAward(BreedAward award, VarietySection variety) {
       final category = _categoryLabelFromValues([
@@ -507,6 +509,20 @@ class BreedResultsDetailReportPdf {
 
       for (final sexSection in variety.sexSections) {
         for (final classGroup in sexSection.classes) {
+          final classCategories = classGroup.rows
+              .map((row) => categoryForRow(row, classGroup, variety))
+              .where((category) => category.isNotEmpty)
+              .toSet();
+
+          for (final category in classCategories) {
+            animalsJudgedByCategory[category] =
+                (animalsJudgedByCategory[category] ?? 0) +
+                    classGroup.animalsJudged;
+            exhibitorsJudgedByCategory[category] =
+                (exhibitorsJudgedByCategory[category] ?? 0) +
+                    classGroup.exhibitorsJudged;
+          }
+
           for (final row in classGroup.rows) {
             final category = categoryForRow(row, classGroup, variety);
             rowsByCategory.putIfAbsent(category, () => <ClassEntry>[]).add(row);
@@ -530,6 +546,26 @@ class BreedResultsDetailReportPdf {
       if (awards.isEmpty && rows.isEmpty) continue;
 
       widgets.add(_varietyHeader(category));
+
+      final animalsJudged = animalsJudgedByCategory[category] ?? rows.length;
+      final exhibitorsJudged =
+          exhibitorsJudgedByCategory[category] ??
+              rows
+                  .map((row) => row.exhibitorName.trim())
+                  .where((name) => name.isNotEmpty)
+                  .toSet()
+                  .length;
+
+      widgets.add(
+        pw.Text(
+          '$animalsJudged animals / $exhibitorsJudged exhibitors judged',
+          style: pw.TextStyle(
+            fontSize: 10,
+            fontWeight: pw.FontWeight.bold,
+          ),
+        ),
+      );
+      widgets.add(pw.SizedBox(height: 4));
 
       if (awards.isNotEmpty) {
         widgets.add(_buildAwardTable(awards));
