@@ -532,11 +532,14 @@ class LegsReportLoader {
       final breed = _str(row['breed_name']);
       final varietyDisplay = _str(row['variety_name']);
       final usesGroupAwards = row['uses_group_awards'] == true;
-      final groupName = _str(row['group_name']);
+      final groupName = _firstNonEmpty([
+        _str(row['group_name']),
+        usesGroupAwards ? varietyDisplay : '',
+      ]);
       final className = _str(row['class_name']);
       final sex = _str(row['sex']);
       final showJudgeRowId = _str(row['judged_by_show_judge_id']);
-      
+
       final sectionId = _str(row['resolved_section_id']);
 
       final sameShowRows = allRows.where((e) {
@@ -598,10 +601,15 @@ class LegsReportLoader {
       // while that flag is null or false.
       final groupRows = normalizedGroupName.isNotEmpty
           ? sameShowRows.where((e) {
+              final rowUsesGroupAwards = e['uses_group_awards'] == true;
+              final rowGroupName = _firstNonEmpty([
+                _str(e['group_name']),
+                rowUsesGroupAwards ? _str(e['variety_name']) : '',
+              ]).trim().toLowerCase();
+
               return _str(e['breed_name']).trim().toLowerCase() ==
                       normalizedBreed &&
-                  _str(e['group_name']).trim().toLowerCase() ==
-                      normalizedGroupName;
+                  rowGroupName == normalizedGroupName;
             }).toList()
           : <Map<String, dynamic>>[];
 
