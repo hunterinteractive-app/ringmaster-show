@@ -110,7 +110,7 @@ class LegsReportLoader {
           continue;
         }
 
-        if (ctx.placement != 1) continue;
+        if (ctx.isDisqualified || ctx.placement != 1) continue;
 
         final ruleMatch = _determineLegRule(
           awardCode: 'FIRST',
@@ -161,7 +161,8 @@ class LegsReportLoader {
       }
 
       for (final row in awards) {
-        final awardCode = _str(row['award_code']).toUpperCase();
+        final rawAwardCode = _str(row['award_code']);
+        final awardCode = _normalizeAwardCode(rawAwardCode);
 
         final entryRaw = row['entries'];
         if (entryRaw is! Map) continue;
@@ -183,7 +184,7 @@ class LegsReportLoader {
         }
 
         final ctx = entryContext[entryId];
-        if (ctx == null) continue;
+        if (ctx == null || ctx.isDisqualified) continue;
 
         final ruleMatch = _determineLegRule(
           awardCode: awardCode,
@@ -496,12 +497,14 @@ class LegsReportLoader {
       for (final raw in (rows as List)) {
         final row = Map<String, dynamic>.from(raw as Map);
 
+
         final scratchedAt = _str(row['scratched_at']);
         final isShown = row['is_shown'] != false;
-        final isDisqualified = row['is_disqualified'] == true;
-        final isFurOrWool = row['is_fur'] == true || row['is_wool'] == true;
 
-        if (!isShown || isDisqualified || scratchedAt.isNotEmpty || isFurOrWool) {
+        // Animals that were exhibited and judged still count toward leg
+        // population totals even when disqualified. No-shows and scratched
+        // entries do not count.
+        if (!isShown || scratchedAt.isNotEmpty) {
           continue;
         }
 
@@ -509,7 +512,46 @@ class LegsReportLoader {
         row['resolved_section_letter'] = showLetter;
         allRows.add(row);
       }
+
     }
+
+    // A regular entry may also be represented by a separate fur/wool result
+    // row. Count the animal only once for ARBA leg eligibility, preferring the
+    // regular row when both exist. Older/manual entries may have is_fur or
+    // is_wool set on the only row, so those rows must not be discarded.
+    final dedupedRowsByAnimalAndSection = <String, Map<String, dynamic>>{};
+
+    for (final row in allRows) {
+      final sectionId = _str(row['resolved_section_id']);
+      final animalId = _str(row['animal_id']);
+      final exhibitorId = _str(row['exhibitor_id']);
+      final tattoo = _str(row['tattoo']).toLowerCase();
+      final breed = _str(row['breed_name']).toLowerCase();
+
+      final animalKey = animalId.isNotEmpty
+          ? animalId
+          : [exhibitorId, breed, tattoo].join('|');
+      final dedupeKey = '$sectionId|$animalKey';
+
+      final existing = dedupedRowsByAnimalAndSection[dedupeKey];
+      if (existing == null) {
+        dedupedRowsByAnimalAndSection[dedupeKey] = row;
+        continue;
+      }
+
+      final existingIsFurOrWool =
+          existing['is_fur'] == true || existing['is_wool'] == true;
+      final currentIsFurOrWool =
+          row['is_fur'] == true || row['is_wool'] == true;
+
+      if (existingIsFurOrWool && !currentIsFurOrWool) {
+        dedupedRowsByAnimalAndSection[dedupeKey] = row;
+      }
+    }
+
+    allRows
+      ..clear()
+      ..addAll(dedupedRowsByAnimalAndSection.values);
 
     final exhibitorIds = allRows
         .map((e) => _str(e['exhibitor_id']))
@@ -532,9 +574,14 @@ class LegsReportLoader {
       final breed = _str(row['breed_name']);
       final varietyDisplay = _str(row['variety_name']);
       final usesGroupAwards = row['uses_group_awards'] == true;
+      // Some result rows do not return uses_group_awards or group_name even
+      // though a BOG/BOSG award was entered. Use the displayed variety as the
+      // group key fallback so those legitimate group awards can still be
+      // evaluated. This does not create a leg by itself; only an actual BOG or
+      // BOSG award code is checked against these counts.
       final groupName = _firstNonEmpty([
         _str(row['group_name']),
-        usesGroupAwards ? varietyDisplay : '',
+        varietyDisplay,
       ]);
       final className = _str(row['class_name']);
       final sex = _str(row['sex']);
@@ -546,15 +593,19 @@ class LegsReportLoader {
         return _str(e['resolved_section_id']) == sectionId;
       }).toList();
 
-      final showAnimals = sameShowRows.length;
-      final showExhibitors = sameShowRows
+      final showCountRows = sameShowRows.where(_countsForShow).toList();
+      final showAnimals = showCountRows.length;
+      final showExhibitors = showCountRows
           .map((e) => _str(e['exhibitor_id']))
           .where((e) => e.isNotEmpty)
           .toSet()
           .length;
 
-      final breedRows =
-          sameShowRows.where((e) => _str(e['breed_name']) == breed).toList();
+      final breedRows = sameShowRows.where((e) {
+        return _countsForBreed(e) &&
+            _str(e['breed_name']).trim().toLowerCase() ==
+                breed.trim().toLowerCase();
+      }).toList();
       final breedAnimals = breedRows.length;
       final breedExhibitors = breedRows
           .map((e) => _str(e['exhibitor_id']))
@@ -562,8 +613,10 @@ class LegsReportLoader {
           .toSet()
           .length;
 
-      final breedSameSexRows =
-          breedRows.where((e) => _str(e['sex']) == sex).toList();
+      final normalizedSexForCounts = _normalizeSex(sex);
+      final breedSameSexRows = breedRows.where((e) {
+        return _normalizeSex(_str(e['sex'])) == normalizedSexForCounts;
+      }).toList();
       final breedSameSexAnimals = breedSameSexRows.length;
       final breedSameSexExhibitors = breedSameSexRows
           .map((e) => _str(e['exhibitor_id']))
@@ -571,9 +624,12 @@ class LegsReportLoader {
           .toSet()
           .length;
 
+      final normalizedVariety = varietyDisplay.trim().toLowerCase();
       final varietyRows = sameShowRows.where((e) {
-        return _str(e['breed_name']) == breed &&
-            _str(e['variety_name']) == varietyDisplay;
+        return _countsForVariety(e) &&
+            _str(e['breed_name']).trim().toLowerCase() ==
+                breed.trim().toLowerCase() &&
+            _str(e['variety_name']).trim().toLowerCase() == normalizedVariety;
       }).toList();
 
       final varietyAnimals = varietyRows.length;
@@ -583,8 +639,9 @@ class LegsReportLoader {
           .toSet()
           .length;
 
-      final varietySameSexRows =
-          varietyRows.where((e) => _str(e['sex']) == sex).toList();
+      final varietySameSexRows = varietyRows.where((e) {
+        return _normalizeSex(_str(e['sex'])) == normalizedSexForCounts;
+      }).toList();
       final varietySameSexAnimals = varietySameSexRows.length;
       final varietySameSexExhibitors = varietySameSexRows
           .map((e) => _str(e['exhibitor_id']))
@@ -601,13 +658,13 @@ class LegsReportLoader {
       // while that flag is null or false.
       final groupRows = normalizedGroupName.isNotEmpty
           ? sameShowRows.where((e) {
-              final rowUsesGroupAwards = e['uses_group_awards'] == true;
               final rowGroupName = _firstNonEmpty([
                 _str(e['group_name']),
-                rowUsesGroupAwards ? _str(e['variety_name']) : '',
+                _str(e['variety_name']),
               ]).trim().toLowerCase();
 
-              return _str(e['breed_name']).trim().toLowerCase() ==
+              return _countsForGroup(e) &&
+                  _str(e['breed_name']).trim().toLowerCase() ==
                       normalizedBreed &&
                   rowGroupName == normalizedGroupName;
             }).toList()
@@ -620,9 +677,9 @@ class LegsReportLoader {
           .toSet()
           .length;
 
-      final normalizedSex = sex.trim().toLowerCase();
+      final normalizedSex = _normalizeSex(sex);
       final groupSameSexRows = groupRows.where((e) {
-        return _str(e['sex']).trim().toLowerCase() == normalizedSex;
+        return _normalizeSex(_str(e['sex'])) == normalizedSex;
       }).toList();
       final groupSameSexAnimals = groupSameSexRows.length;
       final groupSameSexExhibitors = groupSameSexRows
@@ -631,11 +688,15 @@ class LegsReportLoader {
           .toSet()
           .length;
 
+
+      final normalizedClassName = className.trim().toLowerCase();
       final classRows = sameShowRows.where((e) {
-        return _str(e['breed_name']) == breed &&
-            _str(e['variety_name']) == varietyDisplay &&
-            _str(e['class_name']) == className &&
-            _str(e['sex']) == sex;
+        return _countsForClass(e) &&
+            _str(e['breed_name']).trim().toLowerCase() ==
+                breed.trim().toLowerCase() &&
+            _str(e['variety_name']).trim().toLowerCase() == normalizedVariety &&
+            _str(e['class_name']).trim().toLowerCase() == normalizedClassName &&
+            _normalizeSex(_str(e['sex'])) == normalizedSexForCounts;
       }).toList();
 
       final classAnimals = classRows.length;
@@ -659,6 +720,7 @@ class LegsReportLoader {
         className: className,
         sex: sex,
         placement: int.tryParse(_str(row['placement'])) ?? 0,
+        isDisqualified: row['is_disqualified'] == true,
         exhibitorLabel: _firstNonEmpty([
           exhibitorProfile?.displayName ?? '',
           exhibitorProfile?.showingName ?? '',
@@ -720,6 +782,79 @@ class LegsReportLoader {
     }
 
     return byEntryId;
+  }
+  String _normalizedDisqualificationType(Map<String, dynamic> row) {
+    final combined = [
+      _str(row['disqualified_reason']),
+      _str(row['result_status']),
+    ].join(' ').trim().toLowerCase();
+
+    if (combined.contains('wrong sex')) return 'wrong_sex';
+    if (combined.contains('wrong variety')) return 'wrong_variety';
+    if (combined.contains('wrong class')) return 'wrong_class';
+    if (combined.contains('no show')) return 'no_show';
+    if (combined.contains('unworthy')) return 'unworthy';
+    if (combined.contains('other')) return 'other';
+    return row['is_disqualified'] == true ? 'other' : '';
+  }
+
+  bool _countsForShow(Map<String, dynamic> row) {
+    final type = _normalizedDisqualificationType(row);
+    return type != 'no_show';
+  }
+
+  bool _countsForBreed(Map<String, dynamic> row) {
+    final type = _normalizedDisqualificationType(row);
+    return type != 'no_show' && type != 'wrong_variety';
+  }
+
+  bool _countsForGroup(Map<String, dynamic> row) {
+    final type = _normalizedDisqualificationType(row);
+    return type != 'no_show' &&
+        type != 'wrong_variety' &&
+        type != 'wrong_sex';
+  }
+
+  bool _countsForVariety(Map<String, dynamic> row) {
+    final type = _normalizedDisqualificationType(row);
+    return type != 'no_show' &&
+        type != 'wrong_variety' &&
+        type != 'wrong_sex';
+  }
+
+  bool _countsForClass(Map<String, dynamic> row) {
+    final type = _normalizedDisqualificationType(row);
+    return type != 'no_show' &&
+        type != 'wrong_variety' &&
+        type != 'wrong_class' &&
+        type != 'wrong_sex';
+  }
+
+  String _normalizeSex(String value) {
+    final compact = value
+        .trim()
+        .toUpperCase()
+        .replaceAll(RegExp(r'[^A-Z]+'), '');
+
+    // Some RPC rows return combined values such as "Junior Doe",
+    // "Senior Buck", or other labels containing the sex. Detect the
+    // canonical sex anywhere in the normalized value instead of requiring
+    // an exact match.
+    if (compact == 'D' ||
+        compact == 'F' ||
+        compact.contains('DOE') ||
+        compact.contains('FEMALE')) {
+      return 'doe';
+    }
+
+    if (compact == 'B' ||
+        compact == 'M' ||
+        compact.contains('BUCK') ||
+        compact.contains('MALE')) {
+      return 'buck';
+    }
+
+    return compact.toLowerCase();
   }
 
   Future<Map<String, _ExhibitorProfile>> _loadExhibitorProfiles(
@@ -851,11 +986,51 @@ class LegsReportLoader {
         compact == 'FIRSTRESERVEINSHOW';
   }
 
+  String _normalizeAwardCode(String value) {
+    final compact = value
+        .trim()
+        .toUpperCase()
+        .replaceAll(RegExp(r'[^A-Z0-9]+'), '');
+
+    switch (compact) {
+      case 'BOG':
+      case 'BESTOFGROUP':
+      case 'BESTGROUP':
+        return 'BOG';
+      case 'BOSG':
+      case 'BESTOPPOSITESEXOFGROUP':
+      case 'BESTOPPOSITESEXGROUP':
+      case 'BESTOPPOSITEGROUP':
+        return 'BOSG';
+      case 'BOV':
+      case 'BESTOFVARIETY':
+      case 'BESTVARIETY':
+        return 'BOV';
+      case 'BOSV':
+      case 'BESTOPPOSITESEXOFVARIETY':
+      case 'BESTOPPOSITESEXVARIETY':
+      case 'BESTOPPOSITEVARIETY':
+        return 'BOSV';
+      case 'BOB':
+      case 'BESTOFBREED':
+      case 'BESTBREED':
+        return 'BOB';
+      case 'BOSB':
+      case 'BOS':
+      case 'BESTOPPOSITESEXOFBREED':
+      case 'BESTOPPOSITESEXBREED':
+      case 'BESTOPPOSITEBREED':
+        return 'BOSB';
+      default:
+        return value.trim().toUpperCase();
+    }
+  }
+
   _LegRuleMatch? _determineLegRule({
     required String awardCode,
     required _EntryLegContext ctx,
   }) {
-    final normalized = awardCode.toUpperCase();
+    final normalized = _normalizeAwardCode(awardCode);
 
     if (_isBestInShowAward(normalized) &&
         ctx.showAnimals >= 5 &&
@@ -971,6 +1146,7 @@ class LegsReportLoader {
         exhibitorsCount: ctx.classExhibitors,
       );
     }
+
 
     return null;
   }
@@ -1138,6 +1314,7 @@ class _EntryLegContext {
   final String varietyDisplay;
   final String groupName;
   final bool usesGroupAwards;
+  final bool isDisqualified;
   final String showJudgeRowId;
   final String tattoo;
   final String exhibitorId;
@@ -1185,6 +1362,7 @@ class _EntryLegContext {
     required this.varietyDisplay,
     required this.groupName,
     required this.usesGroupAwards,
+    required this.isDisqualified,
     required this.showJudgeRowId,
     required this.tattoo,
     required this.exhibitorId,

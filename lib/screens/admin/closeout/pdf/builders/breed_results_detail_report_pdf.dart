@@ -466,73 +466,51 @@ class BreedResultsDetailReportPdf {
     return false;
   }
 
-  List<pw.Widget> _buildFurWoolPlacementSections(List<VarietySection> varieties) {
+  List<pw.Widget> _buildFurWoolPlacementSections(
+    List<VarietySection> varieties,
+  ) {
     final widgets = <pw.Widget>[];
     final categoryOrder = <String>['White', 'Colored', 'Uncategorized'];
     final awardsByCategory = <String, List<BreedAward>>{};
-    final rowsByCategory = <String, List<_FurWoolClassRows>>{};
+    final rowsByCategory = <String, List<ClassEntry>>{};
 
     String categoryForAward(BreedAward award, VarietySection variety) {
-      return _categoryLabelFromValues([
+      final category = _categoryLabelFromValues([
         award.pointsCategory,
         award.variety,
         award.className,
         variety.varietyName,
-      ]).isEmpty
-          ? 'Uncategorized'
-          : _categoryLabelFromValues([
-              award.pointsCategory,
-              award.variety,
-              award.className,
-              variety.varietyName,
-            ]);
+      ]);
+      return category.isEmpty ? 'Uncategorized' : category;
     }
 
-    String categoryForRow(ClassEntry row, ClassSection classGroup, VarietySection variety) {
-      return _categoryLabelFromValues([
+    String categoryForRow(
+      ClassEntry row,
+      ClassSection classGroup,
+      VarietySection variety,
+    ) {
+      final category = _categoryLabelFromValues([
         row.pointsCategory,
         row.variety,
         classGroup.className,
         variety.varietyName,
-      ]).isEmpty
-          ? 'Uncategorized'
-          : _categoryLabelFromValues([
-              row.pointsCategory,
-              row.variety,
-              classGroup.className,
-              variety.varietyName,
-            ]);
+      ]);
+      return category.isEmpty ? 'Uncategorized' : category;
     }
 
     for (final variety in varieties) {
       for (final award in variety.awards) {
         final category = categoryForAward(award, variety);
-        if (category.isEmpty) continue;
         awardsByCategory.putIfAbsent(category, () => <BreedAward>[]).add(award);
         if (!categoryOrder.contains(category)) categoryOrder.add(category);
       }
 
       for (final sexSection in variety.sexSections) {
         for (final classGroup in sexSection.classes) {
-          final groupedRows = <String, List<ClassEntry>>{};
-
           for (final row in classGroup.rows) {
             final category = categoryForRow(row, classGroup, variety);
-            if (category.isEmpty) continue;
-            groupedRows.putIfAbsent(category, () => <ClassEntry>[]).add(row);
+            rowsByCategory.putIfAbsent(category, () => <ClassEntry>[]).add(row);
             if (!categoryOrder.contains(category)) categoryOrder.add(category);
-          }
-
-          for (final entry in groupedRows.entries) {
-            rowsByCategory.putIfAbsent(entry.key, () => <_FurWoolClassRows>[]).add(
-                  _FurWoolClassRows(
-                    sexLabel: sexSection.sexLabel,
-                    className: classGroup.className,
-                    animalsJudged: classGroup.animalsJudged,
-                    exhibitorsJudged: classGroup.exhibitorsJudged,
-                    rows: entry.value,
-                  ),
-                );
           }
         }
       }
@@ -540,8 +518,16 @@ class BreedResultsDetailReportPdf {
 
     for (final category in categoryOrder) {
       final awards = awardsByCategory[category] ?? const <BreedAward>[];
-      final classRows = rowsByCategory[category] ?? const <_FurWoolClassRows>[];
-      if (awards.isEmpty && classRows.isEmpty) continue;
+      final rows = [...(rowsByCategory[category] ?? const <ClassEntry>[])]
+        ..sort((a, b) {
+          final aPlace = int.tryParse(a.place) ?? 9999;
+          final bPlace = int.tryParse(b.place) ?? 9999;
+          final placeCompare = aPlace.compareTo(bPlace);
+          if (placeCompare != 0) return placeCompare;
+          return a.exhibitorName.compareTo(b.exhibitorName);
+        });
+
+      if (awards.isEmpty && rows.isEmpty) continue;
 
       widgets.add(_varietyHeader(category));
 
@@ -550,28 +536,52 @@ class BreedResultsDetailReportPdf {
         widgets.add(pw.SizedBox(height: 8));
       }
 
-      String lastSexLabel = '';
-      for (final classGroup in classRows) {
-        if (classGroup.sexLabel != lastSexLabel) {
-          widgets.add(_sexHeader(classGroup.sexLabel));
-          lastSexLabel = classGroup.sexLabel;
-        }
-
+      if (rows.isEmpty) {
         widgets.add(
           pw.Text(
-            '${classGroup.className} — ${classGroup.animalsJudged} animals / ${classGroup.exhibitorsJudged} exhibitors judged',
-            style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+            'No top 5 wool placements recorded.',
+            style: const pw.TextStyle(fontSize: 8),
           ),
         );
-        widgets.add(pw.SizedBox(height: 4));
-        widgets.add(_buildPlacementTable(classGroup.rows));
-        widgets.add(pw.SizedBox(height: 8));
+      } else {
+        widgets.add(_buildFurWoolPlacementTable(rows));
       }
 
-      widgets.add(pw.SizedBox(height: 8));
+      widgets.add(pw.SizedBox(height: 10));
     }
 
     return widgets;
+  }
+  pw.Widget _buildFurWoolPlacementTable(List<ClassEntry> rows) {
+    return pw.TableHelper.fromTextArray(
+      headers: const ['Place', 'Animal', 'Category', 'Exhibitor'],
+      data: rows
+          .map(
+            (row) => [
+              row.place,
+              row.animal,
+              row.pointsCategory.trim().isNotEmpty
+                  ? row.pointsCategory
+                  : row.variety,
+              row.exhibitorName,
+            ],
+          )
+          .toList(),
+      headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
+      headerStyle: pw.TextStyle(
+        fontSize: 7.5,
+        fontWeight: pw.FontWeight.bold,
+      ),
+      cellStyle: const pw.TextStyle(fontSize: 7.5),
+      border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
+      cellPadding: const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 4),
+      columnWidths: {
+        0: const pw.FixedColumnWidth(32),
+        1: const pw.FlexColumnWidth(1.35),
+        2: const pw.FixedColumnWidth(58),
+        3: const pw.FlexColumnWidth(1.65),
+      },
+    );
   }
 
   String _categoryLabelFromValues(List<String> values) {
@@ -859,20 +869,4 @@ class BreedResultsDetailReportPdf {
       ),
     );
   }
-}
-
-class _FurWoolClassRows {
-  final String sexLabel;
-  final String className;
-  final int animalsJudged;
-  final int exhibitorsJudged;
-  final List<ClassEntry> rows;
-
-  const _FurWoolClassRows({
-    required this.sexLabel,
-    required this.className,
-    required this.animalsJudged,
-    required this.exhibitorsJudged,
-    required this.rows,
-  });
 }

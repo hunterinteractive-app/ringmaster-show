@@ -241,26 +241,90 @@ class BreedResultsDetailReportLoader {
   }
 
   List<SexSection> _buildSexSections(List<Map<String, dynamic>> rows) {
-    final bySex = <String, List<Map<String, dynamic>>>{};
+    final furRows = rows.where(_isFurOrWoolRow).toList();
+    final regularRows = rows.where((row) => !_isFurOrWoolRow(row)).toList();
+    final sections = <SexSection>[];
 
-    for (final row in rows) {
-      final sexLabel = _deriveSexLabel(row);
-      bySex.putIfAbsent(sexLabel, () => []);
-      bySex[sexLabel]!.add(row);
+    if (regularRows.isNotEmpty) {
+      final bySex = <String, List<Map<String, dynamic>>>{};
+
+      for (final row in regularRows) {
+        final sexLabel = _deriveSexLabel(row);
+        bySex.putIfAbsent(sexLabel, () => []);
+        bySex[sexLabel]!.add(row);
+      }
+
+      final sexLabels = bySex.keys.toList()
+        ..sort((a, b) {
+          final cmp = _sexSort(a).compareTo(_sexSort(b));
+          return cmp != 0 ? cmp : a.compareTo(b);
+        });
+
+      sections.addAll(
+        sexLabels.map((sexLabel) {
+          return SexSection(
+            sexLabel: sexLabel,
+            classes: _buildClasses(bySex[sexLabel]!),
+          );
+        }),
+      );
     }
 
-    final sexLabels = bySex.keys.toList()
+    if (furRows.isNotEmpty) {
+      sections.add(
+        SexSection(
+          sexLabel: '',
+          classes: [_buildFlatFurClass(furRows)],
+        ),
+      );
+    }
+
+    return sections;
+  }
+
+  ClassSection _buildFlatFurClass(List<Map<String, dynamic>> rows) {
+    final sortedRows = [...rows]
       ..sort((a, b) {
-        final cmp = _sexSort(a).compareTo(_sexSort(b));
-        return cmp != 0 ? cmp : a.compareTo(b);
+        final aPlace = _placementNumber(a['placement']);
+        final bPlace = _placementNumber(b['placement']);
+        final cmp = aPlace.compareTo(bPlace);
+        if (cmp != 0) return cmp;
+        return _safe(a['exhibitor_label'])
+            .compareTo(_safe(b['exhibitor_label']));
       });
 
-    return sexLabels.map((sexLabel) {
-      return SexSection(
-        sexLabel: sexLabel,
-        classes: _buildClasses(bySex[sexLabel]!),
-      );
-    }).toList();
+    final rowsOut = sortedRows
+        .where((row) {
+          final placeNum = _placementNumber(row['placement']);
+          return placeNum >= 1 && placeNum <= 5;
+        })
+        .map((row) {
+          final placeNum = _placementNumber(row['placement']);
+          return ClassEntry(
+            place: placeNum.toString(),
+            animal: _animalLabel(row),
+            exhibitorName: _safe(row['exhibitor_label']),
+            sex: '',
+            variety: _pointsCategoryLabel(row),
+            pointsCategory: _pointsCategoryLabel(row),
+          );
+        })
+        .toList();
+
+    final judgedRows = rows.where(_wasJudged).toList();
+
+    return ClassSection(
+      className: '',
+      entryCount: rows.length,
+      placedCount: rowsOut.length,
+      animalsJudged: judgedRows.length,
+      exhibitorsJudged: judgedRows
+          .map((row) => _safe(row['exhibitor_id']))
+          .where((id) => id.isNotEmpty)
+          .toSet()
+          .length,
+      rows: rowsOut,
+    );
   }
 
   List<ClassSection> _buildClasses(List<Map<String, dynamic>> rows) {
@@ -1028,10 +1092,22 @@ class BreedResultsDetailReportLoader {
     return merged;
   }
 
+  bool _isFurOrWoolRow(Map<String, dynamic> row) {
+    if (row['is_fur'] == true || row['is_wool'] == true) return true;
+    if (_safe(row['fur_variety']).isNotEmpty) return true;
+
+    final rowType = _firstNonEmpty([
+      _safe(row['row_type']),
+      _safe(row['result_row_type']),
+      _safe(row['line_type']),
+    ]).toLowerCase();
+
+    return rowType.contains('fur') || rowType.contains('wool');
+  }
+
   bool _isPointsCategoryPlacementRow(Map<String, dynamic> row) {
     if (_pointsCategoryLabel(row).isNotEmpty) return true;
-    if (_safe(row['fur_variety']).isNotEmpty) return true;
-    if (row['is_fur'] == true || row['is_wool'] == true) return true;
+    if (_isFurOrWoolRow(row)) return true;
 
     final rowType = _firstNonEmpty([
       _safe(row['row_type']),
