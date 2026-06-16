@@ -31,6 +31,8 @@ import 'closeout/data/loaders/ribbon_payout_report_loader.dart';
 import 'closeout/data/loaders/judge_report_loader.dart';
 import 'closeout/data/loaders/best_display_report_loader.dart';
 import 'closeout/data/loaders/payback_report_loader.dart';
+import 'closeout/data/loaders/details_by_breed_report_loader.dart';
+import 'closeout/data/loaders/exhibitor_by_breed_report_loader.dart';
 
 import 'closeout/pdf/builders/judge_report_pdf.dart';
 import 'closeout/pdf/builders/best_display_report_pdf.dart';
@@ -43,6 +45,8 @@ import 'closeout/pdf/builders/paid_exhibitor_report_pdf.dart';
 import 'closeout/pdf/builders/entered_exhibitors_contact_report_pdf.dart';
 import 'closeout/pdf/builders/ribbon_payout_report_pdf.dart';
 import 'closeout/pdf/builders/payback_report_pdf.dart';
+import 'closeout/pdf/builders/details_by_breed_report_pdf.dart';
+import 'closeout/pdf/builders/exhibitor_by_breed_report_pdf.dart';
 
 import '../../../utils/date_time_utils.dart';
 
@@ -113,16 +117,20 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     'legs',
   };
 
-    static const Set<String> _clubReportKeys = {       // Add here to include in Club Reports
-      //'cavy_points',
-      //'commercial_points',
-      //'details_by_breed',
-      //'exh_by_breed',
-      //'exh_total_points',
-      //'fur_points',
-      //'newsletter_show_report',
+    static const Set<String> _breedClubReportKeys = {
       'sweepstakes_report',
       'breed_results_detail_report',
+    };
+
+    static const Set<String> _stateClubReportKeys = {
+      'details_by_breed',
+      'exh_by_breed',
+      'best_display_report',
+    };
+
+    static const Set<String> _clubReportKeys = {
+      ..._breedClubReportKeys,
+      ..._stateClubReportKeys,
     };
 
   static const Set<String> _arbaReportKeys = {
@@ -299,8 +307,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       if (artifactScope != target.scope.trim().toUpperCase()) return false;
       if (artifactShowLetter != target.showLetter.trim().toUpperCase()) return false;
 
-      // State clubs are section-wide, so they match all breeds in that section.
-      if (target.sanctioningBody == 'STATE CLUB') {
+      // State clubs are section-wide, so they match all reports in that section.
+      if (target.sanctioningBody.trim().toUpperCase() == 'STATE CLUB') {
         return true;
       }
 
@@ -1477,6 +1485,18 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         logoBytes: _reportLogoBytes,
       );
 
+      final detailsByBreedReportLoader =
+          DetailsByBreedReportLoader(repository);
+      final detailsByBreedReportBuilder = DetailsByBreedReportPdf(
+        logoBytes: _reportLogoBytes,
+      );
+
+      final exhibitorByBreedReportLoader =
+          ExhibitorByBreedReportLoader(repository);
+      final exhibitorByBreedReportBuilder = ExhibitorByBreedReportPdf(
+        logoBytes: _reportLogoBytes,
+      );
+
       final unpaidBalancesLoader = UnpaidBalancesReportLoader(repository);
       final paidExhibitorReportLoader = PaidExhibitorReportLoader(repository);
 
@@ -1512,8 +1532,12 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         paybackReportBuilder: _paybackReportBuilder!,
         judgeReportLoader: JudgeReportLoader(),
         judgeReportBuilder: JudgeReportPdfBuilder(),
-        bestDisplayReportLoader: BestDisplayReportLoader(),
-        bestDisplayReportBuilder: BestDisplayReportPdfBuilder(),
+        bestDisplayReportLoader: bestDisplayReportLoader,
+        bestDisplayReportBuilder: bestDisplayReportBuilder,
+        detailsByBreedReportLoader: detailsByBreedReportLoader,
+        detailsByBreedReportBuilder: detailsByBreedReportBuilder,
+        exhibitorByBreedReportLoader: exhibitorByBreedReportLoader,
+        exhibitorByBreedReportBuilder: exhibitorByBreedReportBuilder,
       );
 
       final engine = ReportEngine(registry);
@@ -1560,7 +1584,10 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
               isNationalShow: isNationalShow,
             );
           } else if (artifact.reportName == 'sweepstakes_report' ||
-              artifact.reportName == 'breed_results_detail_report') {
+              artifact.reportName == 'breed_results_detail_report' ||
+              artifact.reportName == 'details_by_breed' ||
+              artifact.reportName == 'exh_by_breed' ||
+              artifact.reportName == 'best_display_report') {
             final breedName = _artifactMetaString(artifact, 'breed_name');
             final scope = _artifactMetaString(artifact, 'scope');
             final showLetter = _artifactMetaString(artifact, 'show_letter');
@@ -1700,7 +1727,10 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         }
 
         if (a.reportName == 'sweepstakes_report' ||
-            a.reportName == 'breed_results_detail_report') {
+            a.reportName == 'breed_results_detail_report' ||
+            a.reportName == 'details_by_breed' ||
+            a.reportName == 'exh_by_breed' ||
+            a.reportName == 'best_display_report') {
           return _artifactMetaString(a, 'scope') != null &&
               _artifactMetaString(a, 'show_letter') != null;
         }
@@ -1732,9 +1762,16 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
             missing.add('metadata.exhibitor_id');
           }
         } else if (artifact.reportName == 'sweepstakes_report' ||
-            artifact.reportName == 'breed_results_detail_report') {
-          if (_artifactMetaString(artifact, 'scope') == null) missing.add('metadata.scope');
-          if (_artifactMetaString(artifact, 'show_letter') == null) missing.add('metadata.show_letter');
+            artifact.reportName == 'breed_results_detail_report' ||
+            artifact.reportName == 'details_by_breed' ||
+            artifact.reportName == 'exh_by_breed' ||
+            artifact.reportName == 'best_display_report') {
+          if (_artifactMetaString(artifact, 'scope') == null) {
+            missing.add('metadata.scope');
+          }
+          if (_artifactMetaString(artifact, 'show_letter') == null) {
+            missing.add('metadata.show_letter');
+          }
         }
 
         final error = Exception(
@@ -1993,7 +2030,10 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       final grouped = <String, List<_ClubEmailTarget>>{};
 
       for (final club in clubs) {
-        final key = club.sanctioningBody == 'STATE CLUB'
+        final isStateClub =
+            club.sanctioningBody.trim().toUpperCase() == 'STATE CLUB';
+
+        final key = isStateClub
             ? '${club.sanctioningBody.trim().toLowerCase()}|${club.clubName.trim().toLowerCase()}|${club.scope.trim().toUpperCase()}|${club.showLetter.trim().toUpperCase()}|${club.email.trim().toLowerCase()}'
             : '${club.sanctioningBody.trim().toLowerCase()}|${club.clubName.trim().toLowerCase()}|${club.breedName.trim().toLowerCase()}|${club.scope.trim().toUpperCase()}|${club.showLetter.trim().toUpperCase()}|${club.email.trim().toLowerCase()}';
 
@@ -2009,29 +2049,26 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         }
 
         final first = targets.first;
+        final isStateClub =
+            first.sanctioningBody.trim().toUpperCase() == 'STATE CLUB';
         final artifactsById = <String, ReportArtifactSummary>{};
 
+        final reportNames = isStateClub
+            ? _stateClubReportKeys
+            : _breedClubReportKeys;
+
         for (final target in targets) {
-          final sweepstakesArtifacts = _allGeneratedArtifactsWhere(
-            'sweepstakes_report',
-            (a) =>
-                _artifactMatchesClubTarget(a, target) &&
-                _artifactMatchesSelectedScope(a),
-          );
+          for (final reportName in reportNames) {
+            final matchingArtifacts = _allGeneratedArtifactsWhere(
+              reportName,
+              (a) =>
+                  _artifactMatchesClubTarget(a, target) &&
+                  _artifactMatchesSelectedScope(a),
+            );
 
-          final breedDetailArtifacts = _allGeneratedArtifactsWhere(
-            'breed_results_detail_report',
-            (a) =>
-                _artifactMatchesClubTarget(a, target) &&
-                _artifactMatchesSelectedScope(a),
-          );
-
-          for (final a in sweepstakesArtifacts) {
-            artifactsById[a.id] = a;
-          }
-
-          for (final a in breedDetailArtifacts) {
-            artifactsById[a.id] = a;
+            for (final artifact in matchingArtifacts) {
+              artifactsById[artifact.id] = artifact;
+            }
           }
         }
 
@@ -2069,12 +2106,12 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         }
 
         try {
-          final subject = first.sanctioningBody == 'STATE CLUB'
+          final subject = isStateClub
               ? '${widget.showName} - ${first.clubName} Club Reports'
               : '${widget.showName} - ${first.breedName} Club Reports';
 
-          final message = first.sanctioningBody == 'STATE CLUB'
-              ? 'Attached are the club reports for ${widget.showName} for ${first.scope} ${first.showLetter}.\n\n'
+          final message = isStateClub
+              ? 'Attached are the Breed Totals, Breed Special Points, and Display Points reports for ${widget.showName} for ${first.scope} ${first.showLetter}.\n\n'
                   '${includedSanctionNumbers.isNotEmpty ? 'Included shows: ${includedSanctionNumbers.join(', ')}.' : ''}'
               : 'Attached are the sweepstakes and breed results detail reports for ${widget.showName}.\n\n'
                   '${includedSanctionNumbers.isNotEmpty ? 'Included shows: ${includedSanctionNumbers.join(', ')}.' : ''}';
@@ -2787,6 +2824,36 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         if (!ready) return;
       }
 
+      final isSectionScopedReport =
+          reportName == 'sweepstakes_report' ||
+          reportName == 'breed_results_detail_report' ||
+          reportName == 'details_by_breed' ||
+          reportName == 'exh_by_breed' ||
+          reportName == 'best_display_report';
+
+      final hasExplicitScope = (scope ?? '').trim().isNotEmpty &&
+          (showLetter ?? '').trim().isNotEmpty;
+
+      if (isSectionScopedReport && !hasExplicitScope) {
+        final scopedArtifacts = _currentArtifactsForReportGroup(reportName);
+
+        if (scopedArtifacts.isEmpty) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'No scoped artifacts are available for this report. '
+                'Re-finalize the show to seed them.',
+              ),
+            ),
+          );
+          return;
+        }
+
+        await _generateCurrentReportGroupByName(reportName);
+        return;
+      }
+
       try {
         setState(() {
           _generatingReport = true;
@@ -2846,6 +2913,16 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           sweepstakesBuilder: sweepstakesBuilder,
           breedResultsDetailReportLoader: breedResultsDetailReportLoader,
           breedResultsDetailReportBuilder: breedResultsDetailReportBuilder,
+          detailsByBreedReportLoader:
+              DetailsByBreedReportLoader(repository),
+          detailsByBreedReportBuilder: DetailsByBreedReportPdf(
+            logoBytes: _reportLogoBytes,
+          ),
+          exhibitorByBreedReportLoader:
+              ExhibitorByBreedReportLoader(repository),
+          exhibitorByBreedReportBuilder: ExhibitorByBreedReportPdf(
+            logoBytes: _reportLogoBytes,
+          ),
           unpaidBalancesLoader: unpaidBalancesLoader,
           unpaidBalancesBuilder: _unpaidBalancesBuilder!,
           paidExhibitorReportLoader: paidExhibitorReportLoader,
@@ -2888,7 +2965,10 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
             orElse: () => null,
           );
         } else if (reportName == 'sweepstakes_report' ||
-            reportName == 'breed_results_detail_report') {
+            reportName == 'breed_results_detail_report' ||
+            reportName == 'details_by_breed' ||
+            reportName == 'exh_by_breed' ||
+            reportName == 'best_display_report') {
           artifact = reports.cast<ReportArtifactSummary?>().firstWhere(
             (r) {
               if (r == null) return false;
@@ -2900,7 +2980,13 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
               final artLetter =
                   (_artifactMetaString(r, 'show_letter') ?? '').trim().toUpperCase();
 
-              return breed == (breedName ?? '').trim().toLowerCase() &&
+              final isBreedSpecific = reportName == 'sweepstakes_report' ||
+                  reportName == 'breed_results_detail_report';
+
+              final matchesBreed = !isBreedSpecific ||
+                  breed == (breedName ?? '').trim().toLowerCase();
+
+              return matchesBreed &&
                   artScope == (scope ?? '').trim().toUpperCase() &&
                   artLetter == (showLetter ?? '').trim().toUpperCase();
             },
@@ -3041,7 +3127,10 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       }
 
       if (reportName == 'sweepstakes_report' ||
-          reportName == 'breed_results_detail_report') {
+          reportName == 'breed_results_detail_report' ||
+          reportName == 'details_by_breed' ||
+          reportName == 'exh_by_breed' ||
+          reportName == 'best_display_report') {
         matches = matches.where((r) {
           final artBreed =
               (r.metadata['breed_name'] ?? '').toString().trim().toLowerCase();
@@ -3050,7 +3139,13 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           final artLetter =
               (r.metadata['show_letter'] ?? '').toString().trim().toUpperCase();
 
-          return artBreed == (breedName ?? '').trim().toLowerCase() &&
+          final isBreedSpecific = reportName == 'sweepstakes_report' ||
+              reportName == 'breed_results_detail_report';
+
+          final matchesBreed = !isBreedSpecific ||
+              artBreed == (breedName ?? '').trim().toLowerCase();
+
+          return matchesBreed &&
               artScope == (scope ?? '').trim().toUpperCase() &&
               artLetter == (showLetter ?? '').trim().toUpperCase();
         });
@@ -3233,12 +3328,21 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         final clubTargets = await _loadClubEmailTargets();
 
         final matchingTargets = clubTargets.where((target) {
-          return target.breedName.trim().toLowerCase() ==
-                  (breedName ?? '').trim().toLowerCase() &&
+          final matchesSection =
               target.scope.trim().toUpperCase() ==
                   (scope ?? '').trim().toUpperCase() &&
               target.showLetter.trim().toUpperCase() ==
                   (showLetter ?? '').trim().toUpperCase();
+
+          if (!matchesSection) return false;
+
+          // State clubs receive every breed report for the matching section/show.
+          if (target.sanctioningBody.trim().toUpperCase() == 'STATE CLUB') {
+            return true;
+          }
+
+          return target.breedName.trim().toLowerCase() ==
+              (breedName ?? '').trim().toLowerCase();
         }).toList();
 
         if (matchingTargets.isEmpty) {
@@ -3248,10 +3352,16 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           return;
         }
 
+        final target = matchingTargets.first;
+        final isStateClub =
+            target.sanctioningBody.trim().toUpperCase() == 'STATE CLUB';
+
         await _sendClubArtifactsEmail(
           artifacts: [artifact],
-          to: matchingTargets.first.email,
-          subject: '${widget.showName} - ${matchingTargets.first.breedName} Club Report',
+          to: target.email,
+          subject: isStateClub
+              ? '${widget.showName} - ${target.clubName} Club Report'
+              : '${widget.showName} - ${target.breedName} Club Report',
           message: 'Attached is the club report from ${widget.showName}.',
         );
 

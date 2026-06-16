@@ -63,7 +63,8 @@ class _ShowListScreenState extends State<ShowListScreen> {
   bool _loadingAdminAccess = true;
   bool _resolvingExhibitorAccount = false;
   // Temporary feature flag. Change to true when superintendent-role access
-  // is ready to be released.
+  // is ready to be released. Super admins always retain access.
+  // CHANGE THIS TO TRUE
   static const bool _enableSuperintendentRoleAccess = false;
   Future<bool> _ensureExhibitorAccount() async {
     if (widget.demoMode || SupportImpersonationSession.isActive) {
@@ -414,22 +415,23 @@ class _ShowListScreenState extends State<ShowListScreen> {
     if (userId == null) return false;
 
     try {
-      if (await RoleService.isSuperAdmin()) {
-        return true;
-      }
-
-      if (!_enableSuperintendentRoleAccess) {
-        return false;
-      }
-
-      final roleRow = await supabase
+      final roleRows = await supabase
           .from('role_assignments')
-          .select('show_id')
+          .select('role')
           .eq('user_id', userId)
-          .eq('role', 'superintendent')
+          .inFilter('role', const [
+            'superintendent',
+            'super_admin',
+          ])
           .limit(1);
 
-      return (roleRow as List).isNotEmpty;
+      return (roleRows as List)
+          .cast<Map<String, dynamic>>()
+          .any((row) {
+        final role = (row['role'] ?? '').toString();
+        return role == 'super_admin' ||
+            (_enableSuperintendentRoleAccess && role == 'superintendent');
+      });
     } catch (_) {
       return false;
     }
@@ -463,7 +465,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
     try {
       final roleRows = await supabase
           .from('role_assignments')
-          .select('show_id')
+          .select('show_id, role')
           .eq('user_id', effectiveUserId)
           .inFilter('role', const [
             'super_admin',
@@ -482,14 +484,24 @@ class _ShowListScreenState extends State<ShowListScreen> {
 
       canAdmin = (roleRows as List).isNotEmpty ||
           (showAdminRows as List).isNotEmpty;
+
+      canSuperintendent = (roleRows as List)
+          .cast<Map<String, dynamic>>()
+          .any((row) {
+        final role = (row['role'] ?? '').toString();
+        return role == 'super_admin' ||
+            (_enableSuperintendentRoleAccess && role == 'superintendent');
+      });
     } catch (_) {
       canAdmin = false;
     }
 
-    try {
-      canSuperintendent = await _loadSuperintendentAccessFlag();
-    } catch (_) {
-      canSuperintendent = false;
+    if (!canSuperintendent) {
+      try {
+        canSuperintendent = await _loadSuperintendentAccessFlag();
+      } catch (_) {
+        canSuperintendent = false;
+      }
     }
 
     if (!mounted) return;

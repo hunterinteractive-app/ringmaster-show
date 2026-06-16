@@ -14,6 +14,8 @@ class BestDisplayReportLoader {
 
   Future<BestDisplayReportData> load(ReportRequest request) async {
     final showId = request.showId.trim();
+    final scope = (request.scope ?? '').trim().toUpperCase();
+    final showLetter = (request.showLetter ?? '').trim().toUpperCase();
 
     if (showId.isEmpty) {
       throw Exception(
@@ -35,8 +37,8 @@ class BestDisplayReportLoader {
       'report_best_display_standings',
       params: {
         'p_show_id': showId,
-        'p_scope': null,
-        'p_show_letter': null,
+        'p_scope': scope.isEmpty ? null : scope,
+        'p_show_letter': showLetter.isEmpty ? null : showLetter,
         'p_minimum_entries': minimumEntriesRequired,
       },
     );
@@ -45,8 +47,8 @@ class BestDisplayReportLoader {
       'report_best_display_entry_rows',
       params: {
         'p_show_id': showId,
-        'p_scope': null,
-        'p_show_letter': null,
+        'p_scope': scope.isEmpty ? null : scope,
+        'p_show_letter': showLetter.isEmpty ? null : showLetter,
       },
     );
 

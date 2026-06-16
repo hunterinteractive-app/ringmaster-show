@@ -569,11 +569,10 @@ class ExhibitorReportLoader {
   ) {
     final byEntryIdAndShow = <String, _EntryLegContext>{};
 
-    // Class and exhibitor counts must be based only on animals that were
-    // actually shown to the judge. No Shows remain on the exhibitor report,
-    // but they must not inflate the counts used to explain leg eligibility.
-    // Keep disqualified and unworthy animals because they were presented and
-    // judged; only scratches and No Shows are excluded here.
+    // Match the class-size rules used for points and leg eligibility.
+    // Exclude No Shows and disqualifications for Wrong Sex, Wrong Variety,
+    // or Wrong Class. Disqualified - Other, Unworthy of Award, and normal
+    // shown entries still count as animals judged.
     final judgedRows = rows.where(_countsAsJudgedAnimal).toList();
 
     // Build each section independently so Open A, Open B, Open C, Youth A,
@@ -703,9 +702,24 @@ class ExhibitorReportLoader {
     if (row['is_shown'] == false) return false;
 
     final status = _str(row['result_status']).toLowerCase();
-    if (status == 'no show' || status == 'no_show' || status == 'noshow') {
+    final dqReason = _str(row['disqualified_reason']).toLowerCase();
+
+    if (status == 'no show' ||
+        status == 'no_show' ||
+        status == 'noshow') {
       return false;
     }
+
+    final excludesFromClassCount =
+        status.contains('wrong sex') ||
+        status.contains('wrong variety') ||
+        status.contains('wrong class') ||
+        dqReason == 'wrong sex' ||
+        dqReason == 'wrong variety' ||
+        dqReason == 'wrong class';
+
+    if (excludesFromClassCount) return false;
+
 
     return true;
   }

@@ -2,6 +2,8 @@
 
 import '../data/loaders/arba_report_loader.dart';
 import '../data/loaders/breed_results_detail_report_loader.dart';
+import '../data/loaders/details_by_breed_report_loader.dart';
+import '../data/loaders/exhibitor_by_breed_report_loader.dart';
 import '../data/loaders/entered_exhibitors_contact_report_loader.dart';
 import '../data/loaders/exhibitor_report_loader.dart';
 import '../data/loaders/judge_report_loader.dart';
@@ -15,6 +17,8 @@ import '../data/loaders/unpaid_balances_report_loader.dart';
 
 import '../models/arba/arba_report_data.dart';
 import '../models/clubs/breed_results_detail_report_data.dart';
+import '../models/clubs/details_by_breed_report_data.dart';
+import '../models/clubs/exhibitor_by_breed_report_data.dart';
 import '../models/clubs/sweepstakes_report_data.dart';
 import '../models/exhibitor/entered_exhibitors_contact_report_data.dart';
 import '../models/exhibitor/exhibitor_report_data.dart';
@@ -28,6 +32,8 @@ import '../models/unpaid/unpaid_balances_report_data.dart';
 
 import '../pdf/builders/arba_report_pdf.dart';
 import '../pdf/builders/breed_results_detail_report_pdf.dart';
+import '../pdf/builders/details_by_breed_report_pdf.dart';
+import '../pdf/builders/exhibitor_by_breed_report_pdf.dart';
 import '../pdf/builders/entered_exhibitors_contact_report_pdf.dart';
 import '../pdf/builders/exhibitor_report_pdf.dart';
 import '../pdf/builders/judge_report_pdf.dart';
@@ -55,6 +61,10 @@ class ReportRegistry {
     required SweepstakesReportPdf sweepstakesBuilder,
     required BreedResultsDetailReportLoader breedResultsDetailReportLoader,
     required BreedResultsDetailReportPdf breedResultsDetailReportBuilder,
+    required DetailsByBreedReportLoader detailsByBreedReportLoader,
+    required DetailsByBreedReportPdf detailsByBreedReportBuilder,
+    required ExhibitorByBreedReportLoader exhibitorByBreedReportLoader,
+    required ExhibitorByBreedReportPdf exhibitorByBreedReportBuilder,
     required UnpaidBalancesReportLoader unpaidBalancesLoader,
     required UnpaidBalancesReportPdfBuilder unpaidBalancesBuilder,
     required PaidExhibitorReportLoader paidExhibitorReportLoader,
@@ -115,6 +125,26 @@ class ReportRegistry {
             builder: (data, req) async =>
                 await breedResultsDetailReportBuilder.buildFile(
                   data as BreedResultsDetailReportData,
+                  req,
+                ),
+          ),
+          'details_by_breed': ReportDefinition(
+            reportName: 'details_by_breed',
+            outputType: 'pdf',
+            loader: (req) async => await detailsByBreedReportLoader.load(req),
+            builder: (data, req) async =>
+                await detailsByBreedReportBuilder.buildFile(
+                  data as DetailsByBreedReportData,
+                  req,
+                ),
+          ),
+          'exh_by_breed': ReportDefinition(
+            reportName: 'exh_by_breed',
+            outputType: 'pdf',
+            loader: (req) async => await exhibitorByBreedReportLoader.load(req),
+            builder: (data, req) async =>
+                await exhibitorByBreedReportBuilder.buildFile(
+                  data as ExhibitorByBreedReportData,
                   req,
                 ),
           ),
