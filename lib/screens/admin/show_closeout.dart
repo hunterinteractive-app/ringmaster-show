@@ -2813,6 +2813,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     Future<void> _generateReportByName(
       String reportName, {
       String? breedName,
+      String? clubName,
       String? scope,
       String? showLetter,
       String? exhibitorId,
@@ -2975,6 +2976,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
               final breed =
                   (_artifactMetaString(r, 'breed_name') ?? '').trim().toLowerCase();
+              final club =
+                  (_artifactMetaString(r, 'club_name') ?? '').trim().toLowerCase();
               final artScope =
                   (_artifactMetaString(r, 'scope') ?? '').trim().toUpperCase();
               final artLetter =
@@ -2982,11 +2985,16 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
               final isBreedSpecific = reportName == 'sweepstakes_report' ||
                   reportName == 'breed_results_detail_report';
+              final isClubSpecific = reportName == 'details_by_breed' ||
+                  reportName == 'exh_by_breed' ||
+                  reportName == 'best_display_report';
 
-              final matchesBreed = !isBreedSpecific ||
-                  breed == (breedName ?? '').trim().toLowerCase();
+              final targetMatches = isBreedSpecific
+                  ? breed == (breedName ?? '').trim().toLowerCase()
+                  : !isClubSpecific ||
+                      club == (clubName ?? '').trim().toLowerCase();
 
-              return matchesBreed &&
+              return targetMatches &&
                   artScope == (scope ?? '').trim().toUpperCase() &&
                   artLetter == (showLetter ?? '').trim().toUpperCase();
             },
@@ -3005,6 +3013,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
               metadata: {
                 if (breedName != null && breedName.trim().isNotEmpty)
                   'breed_name': breedName.trim(),
+                if (clubName != null && clubName.trim().isNotEmpty)
+                  'club_name': clubName.trim(),
                 if (scope != null && scope.trim().isNotEmpty)
                   'scope': scope.trim(),
                 if (showLetter != null && showLetter.trim().isNotEmpty)
@@ -3058,6 +3068,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     String reportName, {
     String? exhibitorId,
     String? breedName,
+    String? clubName,
     String? scope,
     String? showLetter,
   }) async {
@@ -3139,13 +3150,20 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           final artLetter =
               (r.metadata['show_letter'] ?? '').toString().trim().toUpperCase();
 
+          final artClub =
+              (r.metadata['club_name'] ?? '').toString().trim().toLowerCase();
           final isBreedSpecific = reportName == 'sweepstakes_report' ||
               reportName == 'breed_results_detail_report';
+          final isClubSpecific = reportName == 'details_by_breed' ||
+              reportName == 'exh_by_breed' ||
+              reportName == 'best_display_report';
 
-          final matchesBreed = !isBreedSpecific ||
-              artBreed == (breedName ?? '').trim().toLowerCase();
+          final targetMatches = isBreedSpecific
+              ? artBreed == (breedName ?? '').trim().toLowerCase()
+              : !isClubSpecific ||
+                  artClub == (clubName ?? '').trim().toLowerCase();
 
-          return matchesBreed &&
+          return targetMatches &&
               artScope == (scope ?? '').trim().toUpperCase() &&
               artLetter == (showLetter ?? '').trim().toUpperCase();
         });
@@ -3228,6 +3246,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     String? exhibitorId,
     String? exhibitorEmail,
     String? breedName,
+    String? clubName,
     String? scope,
     String? showLetter,
   }) async {
@@ -3249,16 +3268,27 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       }
 
       if (reportName == 'sweepstakes_report' ||
-          reportName == 'breed_results_detail_report') {
+          reportName == 'breed_results_detail_report' ||
+          reportName == 'details_by_breed' ||
+          reportName == 'exh_by_breed' ||
+          reportName == 'best_display_report') {
         artifacts = artifacts.where((r) {
           final artifactBreed =
               (r.metadata['breed_name'] ?? '').toString().trim().toLowerCase();
+          final artifactClub =
+              (r.metadata['club_name'] ?? '').toString().trim().toLowerCase();
           final artifactScope =
               (r.metadata['scope'] ?? '').toString().trim().toUpperCase();
           final artifactLetter =
               (r.metadata['show_letter'] ?? '').toString().trim().toUpperCase();
 
-          return artifactBreed == (breedName ?? '').trim().toLowerCase() &&
+          final isBreedSpecific = reportName == 'sweepstakes_report' ||
+              reportName == 'breed_results_detail_report';
+          final targetMatches = isBreedSpecific
+              ? artifactBreed == (breedName ?? '').trim().toLowerCase()
+              : artifactClub == (clubName ?? '').trim().toLowerCase();
+
+          return targetMatches &&
               artifactScope == (scope ?? '').trim().toUpperCase() &&
               artifactLetter == (showLetter ?? '').trim().toUpperCase();
         });
@@ -3322,7 +3352,10 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       }
 
       final isClubReport = reportName == 'sweepstakes_report' ||
-          reportName == 'breed_results_detail_report';
+          reportName == 'breed_results_detail_report' ||
+          reportName == 'details_by_breed' ||
+          reportName == 'exh_by_breed' ||
+          reportName == 'best_display_report';
 
       if (isClubReport) {
         final clubTargets = await _loadClubEmailTargets();
@@ -3336,9 +3369,14 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
           if (!matchesSection) return false;
 
-          // State clubs receive every breed report for the matching section/show.
-          if (target.sanctioningBody.trim().toUpperCase() == 'STATE CLUB') {
-            return true;
+          final isStateClubReport = reportName == 'details_by_breed' ||
+              reportName == 'exh_by_breed' ||
+              reportName == 'best_display_report';
+
+          if (isStateClubReport) {
+            return target.sanctioningBody.trim().toUpperCase() == 'STATE CLUB' &&
+                target.clubName.trim().toLowerCase() ==
+                    (clubName ?? '').trim().toLowerCase();
           }
 
           return target.breedName.trim().toLowerCase() ==
@@ -3980,6 +4018,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                               onGenerate: (
                                 reportName, {
                                 String? breedName,
+                                String? clubName,
                                 String? scope,
                                 String? showLetter,
                                 String? exhibitorId,
@@ -3987,6 +4026,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                               }) {
                                 final isSingleTarget =
                                     breedName != null ||
+                                    clubName != null ||
                                     scope != null ||
                                     showLetter != null ||
                                     exhibitorId != null ||
@@ -3999,6 +4039,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                 return _generateReportByName(
                                   reportName,
                                   breedName: breedName,
+                                  clubName: clubName,
                                   scope: scope,
                                   showLetter: showLetter,
                                   exhibitorId: exhibitorId,
@@ -4009,6 +4050,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                 reportName, {
                                 String? exhibitorId,
                                 String? breedName,
+                                String? clubName,
                                 String? scope,
                                 String? showLetter,
                               }) =>
@@ -4016,6 +4058,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                 reportName,
                                 exhibitorId: exhibitorId,
                                 breedName: breedName,
+                                clubName: clubName,
                                 scope: scope,
                                 showLetter: showLetter,
                               ),
@@ -4300,6 +4343,7 @@ class _ReportActionsCard extends StatefulWidget {
   final Future<void> Function(
     String reportName, {
     String? breedName,
+    String? clubName,
     String? scope,
     String? showLetter,
     String? exhibitorId,
@@ -4309,6 +4353,7 @@ class _ReportActionsCard extends StatefulWidget {
     String reportName, {
     String? exhibitorId,
     String? breedName,
+    String? clubName,
     String? scope,
     String? showLetter,
   }) onDownload;
@@ -4317,6 +4362,7 @@ class _ReportActionsCard extends StatefulWidget {
     String? exhibitorId,
     String? exhibitorEmail,
     String? breedName,
+    String? clubName,
     String? scope,
     String? showLetter,
   }) onEmail;
@@ -4345,6 +4391,7 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
   String _selectedGroup = 'arba';
   String? _selectedReportName = 'arba_report';
   final TextEditingController _breedController = TextEditingController();
+  final TextEditingController _clubController = TextEditingController();
   String _selectedScope = 'OPEN';
   String _selectedShowLetter = 'ALL';
   List<String> _availableShowLetters = [];
@@ -4376,10 +4423,17 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
       unawaited(_loadShowLetters());
       unawaited(_loadBreedsForBreedScopedReports());
     }
+
+    if (_selectedReportNeedsClubScope) {
+      unawaited(_loadShowLetters());
+      unawaited(_loadClubsForStateClubReports());
+    }
   }
 
   List<String> _availableBreeds = [];
   bool _loadingBreeds = false;
+  List<String> _availableClubs = [];
+  bool _loadingClubs = false;
 
   List<String> get _currentReports =>
       widget.groupedReportNames[_selectedGroup] ?? const [];
@@ -4412,6 +4466,21 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
       });
     }
 
+    if (_selectedReportNeedsClubScope) {
+      matches = matches.where((r) {
+        final club =
+            (r.metadata['club_name'] ?? '').toString().trim().toLowerCase();
+        final scope =
+            (r.metadata['scope'] ?? '').toString().trim().toUpperCase();
+        final letter =
+            (r.metadata['show_letter'] ?? '').toString().trim().toUpperCase();
+
+        return club == _clubController.text.trim().toLowerCase() &&
+            scope == _selectedScope.trim().toUpperCase() &&
+            letter == _selectedShowLetter.trim().toUpperCase();
+      });
+    }
+
     final list = matches.toList()
       ..sort((a, b) {
         final aDt = DateTime.tryParse(a.generatedAt ?? '') ??
@@ -4433,7 +4502,10 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
         _selectedReportName == 'exhibitor_report' ||
         _selectedReportName == 'legs' ||
         _selectedReportName == 'sweepstakes_report' ||
-        _selectedReportName == 'breed_results_detail_report';
+        _selectedReportName == 'breed_results_detail_report' ||
+        _selectedReportName == 'details_by_breed' ||
+        _selectedReportName == 'exh_by_breed' ||
+        _selectedReportName == 'best_display_report';
   }
   
   bool get _selectedReportBlocked =>
@@ -4442,6 +4514,11 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
   bool get _selectedReportNeedsBreedScope =>
     _selectedReportName == 'sweepstakes_report' ||
     _selectedReportName == 'breed_results_detail_report';
+
+  bool get _selectedReportNeedsClubScope =>
+      _selectedReportName == 'details_by_breed' ||
+      _selectedReportName == 'exh_by_breed' ||
+      _selectedReportName == 'best_display_report';
 
   bool get _selectedReportNeedsExhibitor =>
     _selectedReportName == 'exhibitor_report' ||
@@ -4751,9 +4828,122 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
     }
   }
 
+  Future<void> _loadClubsForStateClubReports() async {
+    if (_loadingClubs) return;
+
+    setState(() {
+      _loadingClubs = true;
+    });
+
+    try {
+      final selectedLetter = _selectedShowLetter.trim().toUpperCase();
+      final selectedScope = _selectedScope.trim().toUpperCase();
+      final clubs = <String>{};
+
+      for (final artifact in widget.reports.where((r) => r.isCurrent)) {
+        if (artifact.reportName != 'details_by_breed' &&
+            artifact.reportName != 'exh_by_breed' &&
+            artifact.reportName != 'best_display_report') {
+          continue;
+        }
+
+        final artifactScope =
+            (artifact.metadata['scope'] ?? '').toString().trim().toUpperCase();
+        final artifactLetter = (artifact.metadata['show_letter'] ?? '')
+            .toString()
+            .trim()
+            .toUpperCase();
+        final clubName =
+            (artifact.metadata['club_name'] ?? '').toString().trim();
+
+        if (artifactScope == selectedScope &&
+            artifactLetter == selectedLetter &&
+            clubName.isNotEmpty) {
+          clubs.add(clubName);
+        }
+      }
+
+      if (clubs.isEmpty) {
+        final kind = selectedScope == 'OPEN' ? 'open' : 'youth';
+        final sections = await supabase
+            .from('show_sections')
+            .select('id, letter')
+            .eq('show_id', widget.showId)
+            .eq('kind', kind)
+            .eq('is_enabled', true);
+
+        final sectionIds = (sections as List)
+            .where((raw) {
+              final section = Map<String, dynamic>.from(raw as Map);
+              return (section['letter'] ?? '')
+                      .toString()
+                      .trim()
+                      .toUpperCase() ==
+                  selectedLetter;
+            })
+            .map((raw) =>
+                (Map<String, dynamic>.from(raw as Map)['id'] ?? '')
+                    .toString()
+                    .trim())
+            .where((id) => id.isNotEmpty)
+            .toList();
+
+        if (sectionIds.isNotEmpty) {
+          final sanctionRows = await supabase
+              .from('show_sanctions')
+              .select('club_name, sanctioning_body, section_id')
+              .eq('show_id', widget.showId)
+              .inFilter('section_id', sectionIds)
+              .eq('sanctioning_body', 'STATE CLUB');
+
+          for (final raw in (sanctionRows as List)) {
+            final row = Map<String, dynamic>.from(raw as Map);
+            final clubName = (row['club_name'] ?? '').toString().trim();
+            if (clubName.isNotEmpty) clubs.add(clubName);
+          }
+        }
+      }
+
+      final sorted = clubs.toList()
+        ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
+      if (!mounted) return;
+
+      setState(() {
+        _availableClubs = sorted;
+        if (sorted.isNotEmpty) {
+          final current = _clubController.text.trim();
+          final matching = sorted.where(
+            (club) => club.toLowerCase() == current.toLowerCase(),
+          );
+          _clubController.text =
+              matching.isNotEmpty ? matching.first : sorted.first;
+        } else {
+          _clubController.clear();
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _availableClubs = [];
+        _clubController.clear();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed loading state clubs: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingClubs = false;
+        });
+      }
+    }
+  }
+
   @override
   void dispose() {
     _breedController.dispose();
+    _clubController.dispose();
     super.dispose();
   }
 
@@ -4818,6 +5008,13 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
               await _loadBreedsForBreedScopedReports();
             }
 
+            if (nextReport == 'details_by_breed' ||
+                nextReport == 'exh_by_breed' ||
+                nextReport == 'best_display_report') {
+              await _loadShowLetters();
+              await _loadClubsForStateClubReports();
+            }
+
             if (nextReport == 'exhibitor_report' || nextReport == 'legs') {
               await _loadExhibitors();
             }
@@ -4872,6 +5069,13 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
                       value == 'breed_results_detail_report') {
                     await _loadShowLetters();
                     await _loadBreedsForBreedScopedReports();
+                  }
+
+                  if (value == 'details_by_breed' ||
+                      value == 'exh_by_breed' ||
+                      value == 'best_display_report') {
+                    await _loadShowLetters();
+                    await _loadClubsForStateClubReports();
                   }
 
                   if (value == 'exhibitor_report' || value == 'legs') {
@@ -4978,6 +5182,104 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
           ),
         ],
 
+        if (_selectedReportNeedsClubScope) ...[
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            initialValue: _availableShowLetters.contains(_selectedShowLetter)
+                ? _selectedShowLetter
+                : (_availableShowLetters.isNotEmpty
+                    ? _availableShowLetters.first
+                    : null),
+            decoration: InputDecoration(
+              labelText: 'Show Letter',
+              border: const OutlineInputBorder(),
+              suffixIcon: _loadingShowLetters
+                  ? const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : null,
+            ),
+            items: _availableShowLetters
+                .map(
+                  (letter) => DropdownMenuItem<String>(
+                    value: letter,
+                    child: Text(letter),
+                  ),
+                )
+                .toList(),
+            onChanged: _loadingShowLetters
+                ? null
+                : (value) async {
+                    if (value == null) return;
+                    setState(() {
+                      _selectedShowLetter = value;
+                    });
+                    await _loadClubsForStateClubReports();
+                  },
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            initialValue: _availableClubs.contains(_clubController.text.trim())
+                ? _clubController.text.trim()
+                : (_availableClubs.isNotEmpty ? _availableClubs.first : null),
+            decoration: InputDecoration(
+              labelText: 'Club Name',
+              border: const OutlineInputBorder(),
+              suffixIcon: _loadingClubs
+                  ? const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : null,
+            ),
+            items: _availableClubs
+                .map(
+                  (club) => DropdownMenuItem<String>(
+                    value: club,
+                    child: Text(club),
+                  ),
+                )
+                .toList(),
+            onChanged: _loadingClubs || _availableClubs.isEmpty
+                ? null
+                : (value) {
+                    if (value == null) return;
+                    setState(() {
+                      _clubController.text = value;
+                    });
+                  },
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            initialValue: _selectedScope,
+            decoration: const InputDecoration(
+              labelText: 'Scope',
+              border: OutlineInputBorder(),
+            ),
+            items: const [
+              DropdownMenuItem(value: 'OPEN', child: Text('Open')),
+              DropdownMenuItem(value: 'YOUTH', child: Text('Youth')),
+            ],
+            onChanged: (value) async {
+              if (value == null) return;
+              setState(() {
+                _selectedScope = value;
+              });
+              await _loadShowLetters();
+              await _loadClubsForStateClubReports();
+            },
+          ),
+        ],
+
         if (_selectedReportNeedsExhibitor) ...[
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
@@ -5069,16 +5371,26 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
                       _selectedReportName == null ||
                       (_selectedReportNeedsExhibitor && _selectedExhibitorId == null) ||
                       (_selectedReportNeedsBreedScope &&
-                          _breedController.text.trim().isEmpty)
+                          _breedController.text.trim().isEmpty) ||
+                      (_selectedReportNeedsClubScope &&
+                          _clubController.text.trim().isEmpty)
                   ? null
                   : () => widget.onGenerate(
                         _selectedReportName!,
                         breedName: _selectedReportNeedsBreedScope
                             ? _breedController.text.trim()
                             : null,
-                        scope: _selectedReportNeedsBreedScope ? _selectedScope : null,
-                        showLetter:
-                            _selectedReportNeedsBreedScope ? _selectedShowLetter : null,
+                        clubName: _selectedReportNeedsClubScope
+                            ? _clubController.text.trim()
+                            : null,
+                        scope: _selectedReportNeedsBreedScope ||
+                                _selectedReportNeedsClubScope
+                            ? _selectedScope
+                            : null,
+                        showLetter: _selectedReportNeedsBreedScope ||
+                                _selectedReportNeedsClubScope
+                            ? _selectedShowLetter
+                            : null,
                         exhibitorId:
                             _selectedReportNeedsExhibitor ? _selectedExhibitorId : null,
                         exhibitorName:
@@ -5099,11 +5411,20 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
                         _selectedReportName!,
                         exhibitorId:
                             _selectedReportNeedsExhibitor ? _selectedExhibitorId : null,
-                        breedName:
-                            _selectedReportNeedsBreedScope ? _breedController.text.trim() : null,
-                        scope: _selectedReportNeedsBreedScope ? _selectedScope : null,
-                        showLetter:
-                            _selectedReportNeedsBreedScope ? _selectedShowLetter : null,
+                        breedName: _selectedReportNeedsBreedScope
+                            ? _breedController.text.trim()
+                            : null,
+                        clubName: _selectedReportNeedsClubScope
+                            ? _clubController.text.trim()
+                            : null,
+                        scope: _selectedReportNeedsBreedScope ||
+                                _selectedReportNeedsClubScope
+                            ? _selectedScope
+                            : null,
+                        showLetter: _selectedReportNeedsBreedScope ||
+                                _selectedReportNeedsClubScope
+                            ? _selectedShowLetter
+                            : null,
                       )
                   : null,
               icon: const Icon(Icons.download),
@@ -5124,10 +5445,15 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
                             breedName: _selectedReportNeedsBreedScope
                                 ? _breedController.text.trim()
                                 : null,
-                            scope: _selectedReportNeedsBreedScope
+                            clubName: _selectedReportNeedsClubScope
+                                ? _clubController.text.trim()
+                                : null,
+                            scope: _selectedReportNeedsBreedScope ||
+                                    _selectedReportNeedsClubScope
                                 ? _selectedScope
                                 : null,
-                            showLetter: _selectedReportNeedsBreedScope
+                            showLetter: _selectedReportNeedsBreedScope ||
+                                    _selectedReportNeedsClubScope
                                 ? _selectedShowLetter
                                 : null,
                           )
