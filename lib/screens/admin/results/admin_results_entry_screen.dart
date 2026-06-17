@@ -73,11 +73,15 @@ bool _isFurOrWoolEntry(Map<String, dynamic> row) {
 bool _isCavyEntry(Map<String, dynamic> row) {
   final species = (row['species'] ?? '').toString().trim().toLowerCase();
 
-  // Species is the source of truth. Some breed names overlap between rabbits
-  // and cavies, such as American, so breed-name fallback can incorrectly
-  // classify rabbit entries as cavies and pull cavy award labels.
+  // Species remains the primary source of truth. Some RPC/result rows do not
+  // include species, so fall back to cavy-only sex terminology. Do not fall
+  // back to breed name because names such as American overlap with rabbits.
   if (species == 'cavy') return true;
   if (species == 'rabbit') return false;
+
+  final sex = (row['sex'] ?? '').toString().trim().toLowerCase();
+  if (sex.contains('boar') || sex.contains('sow')) return true;
+  if (sex.contains('buck') || sex.contains('doe')) return false;
 
   return false;
 }
@@ -151,7 +155,14 @@ bool _awardListContains(List<String> awards, String award) {
   return awards.any((a) => _canonicalAwardCode(a).toLowerCase() == target);
 }
 
-bool _supportsBestAgeAwards(String breedName) {
+bool _supportsBestAgeAwards({
+  required String breedName,
+  required bool isCavy,
+}) {
+  // Every cavy breed requires Best Junior, Best Intermediate,
+  // and Best Senior awards.
+  if (isCavy) return true;
+
   final b = breedName.trim().toLowerCase();
   return b == 'american sable' ||
       b == 'american sables' ||
@@ -1996,6 +2007,34 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
     final breedLower = breed(e).toLowerCase();
     final byGroup = showsByGroup(e);
     final byVariety = showsByVariety(e);
+    final supportsBestAgeAwards = _supportsBestAgeAwards(
+      breedName: breed(e),
+      isCavy: _isCavyEntry(e),
+    );
+    if (supportsBestAgeAwards) {
+      final classSystem = _breedClassSystems[breedLower] ?? 'four';
+      final className = (e['class_name'] ?? '').toString().trim();
+
+      for (final award in kBestAgeAwardCodes) {
+        if (!a.contains(award)) continue;
+
+        if (!_bestAgeAwardMatchesClass(
+          award: award,
+          className: className,
+          classSystem: classSystem,
+        )) {
+          issues.add(
+            makeIssue(
+              code: 'best_age_wrong_class',
+              title: '$award assigned to wrong class',
+              message:
+                  '${_entryLabel(e)} has $award but is not in the matching age class.',
+              entry: e,
+            ),
+          );
+        }
+      }
+    }
 
     if (a.contains('BOB') || a.contains('BOSB')) {
       final eligible = byGroup
@@ -2017,6 +2056,7 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
       }
     }
 
+    // final classSystem is now declared above if needed.
     final classSystem = _breedClassSystems[breedLower] ?? 'four';
 
     if (a.contains('Best 4-Class')) {
@@ -4556,7 +4596,12 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
         return true;
       }
 
-      if (!_supportsBestAgeAwards(_entryBreed(e))) return true;
+      if (!_supportsBestAgeAwards(
+        breedName: _entryBreed(e),
+        isCavy: _isCavyEntry(e),
+      )) {
+        return true;
+      }
 
       if (!_bestAgeAwardMatchesClass(
         award: award,
@@ -5870,7 +5915,10 @@ if (storedJudgeId.isEmpty) {
 
     awards.addAll(const ['BOB', 'BOSB']);
 
-    if (_supportsBestAgeAwards(_breed(widget.entry))) {
+    if (_supportsBestAgeAwards(
+      breedName: _breed(widget.entry),
+      isCavy: _isCavyEntry(widget.entry),
+    )) {
       awards.addAll(kBestAgeAwardCodes.where((award) {
         return _bestAgeAwardMatchesClass(
           award: award,
@@ -6035,7 +6083,10 @@ if (storedJudgeId.isEmpty) {
       case 'Best Junior':
       case 'Best Senior':
       case 'Best Intermediate':
-        return _supportsBestAgeAwards(_breed(widget.entry)) &&
+        return _supportsBestAgeAwards(
+              breedName: _breed(widget.entry),
+              isCavy: _isCavyEntry(widget.entry),
+            ) &&
             _bestAgeAwardMatchesClass(
               award: award,
               className: (widget.entry['class_name'] ?? '').toString(),
