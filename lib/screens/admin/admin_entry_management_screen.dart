@@ -2202,7 +2202,7 @@ Future<void> _openSharedAnimalEditorForAdd() async {
             'id,showing_name,display_name,first_name,last_name,email,phone,address_line1,address_line2,city,state,zip,arba_number,type,owner_user_id,is_active,is_local_only,created_for_show_id,is_merged,merged_into_exhibitor_id',
           )
           .eq('created_for_show_id', widget.showId)
-          .eq('is_active', true)
+          .or('is_active.is.null,is_active.eq.true')
           .or('is_merged.is.null,is_merged.eq.false')
           .eq('showing_name', showing)
           .maybeSingle();
@@ -2215,7 +2215,7 @@ Future<void> _openSharedAnimalEditorForAdd() async {
             'id,showing_name,display_name,first_name,last_name,email,phone,address_line1,address_line2,city,state,zip,arba_number,type,owner_user_id,is_active,is_local_only,created_for_show_id,is_merged,merged_into_exhibitor_id',
           )
           .eq('created_for_show_id', widget.showId)
-          .eq('is_active', true)
+          .or('is_active.is.null,is_active.eq.true')
           .or('is_merged.is.null,is_merged.eq.false')
           .eq('first_name', first)
           .eq('last_name', last)
@@ -2228,16 +2228,68 @@ Future<void> _openSharedAnimalEditorForAdd() async {
 
   Future<void> _loadExhibitors() async {
     try {
-      final res = await supabase
-          .from('exhibitors')
-          .select(
-            'id,showing_name,display_name,first_name,last_name,email,phone,address_line1,address_line2,city,state,zip,arba_number,type,owner_user_id,is_active,is_local_only,created_for_show_id,is_merged,merged_into_exhibitor_id',
-          )
-          .eq('is_active', true)
-          .or('is_merged.is.null,is_merged.eq.false')
-          .order('display_name', ascending: true);
+      final exhibitorsById = <String, Map<String, dynamic>>{};
 
-      _exhibitors = (res as List).cast<Map<String, dynamic>>();
+      // Always load exhibitors already entered in this show through the entries
+      // relationship. Show staff can see these entry-linked exhibitor snapshots
+      // even when RLS does not allow a broad select from public.exhibitors.
+      final entryRows = await supabase
+          .from('entries')
+          .select(
+            'exhibitor_id,exhibitors!entries_exhibitor_id_fkey(id,showing_name,display_name,first_name,last_name,email,phone,address_line1,address_line2,city,state,zip,arba_number,type,owner_user_id,is_active,is_local_only,created_for_show_id,is_merged,merged_into_exhibitor_id)',
+          )
+          .eq('show_id', widget.showId)
+          .not('exhibitor_id', 'is', null);
+
+      for (final rawRow in (entryRows as List)) {
+        if (rawRow is! Map) continue;
+        final row = Map<String, dynamic>.from(rawRow);
+        final rawExhibitor = row['exhibitors'];
+        if (rawExhibitor is! Map) continue;
+
+        final exhibitor = Map<String, dynamic>.from(rawExhibitor);
+        final id = (exhibitor['id'] ?? row['exhibitor_id'] ?? '')
+            .toString()
+            .trim();
+        if (id.isEmpty) continue;
+
+        final isMerged = exhibitor['is_merged'] == true;
+        final isActive = exhibitor['is_active'];
+        if (isMerged || isActive == false) continue;
+
+        exhibitorsById[id] = exhibitor;
+      }
+
+      // Also include any additional exhibitor rows the current user's RLS
+      // permissions allow, without losing the entry-linked exhibitors above.
+      try {
+        final directRows = await supabase
+            .from('exhibitors')
+            .select(
+              'id,showing_name,display_name,first_name,last_name,email,phone,address_line1,address_line2,city,state,zip,arba_number,type,owner_user_id,is_active,is_local_only,created_for_show_id,is_merged,merged_into_exhibitor_id',
+            )
+            .or('is_active.is.null,is_active.eq.true')
+            .or('is_merged.is.null,is_merged.eq.false')
+            .order('display_name', ascending: true);
+
+        for (final rawExhibitor in (directRows as List)) {
+          if (rawExhibitor is! Map) continue;
+          final exhibitor = Map<String, dynamic>.from(rawExhibitor);
+          final id = (exhibitor['id'] ?? '').toString().trim();
+          if (id.isEmpty) continue;
+          exhibitorsById[id] = exhibitor;
+        }
+      } catch (_) {
+        // Entry-linked exhibitors are enough for this admin workflow when the
+        // broad exhibitors query is restricted by RLS.
+      }
+
+      _exhibitors = exhibitorsById.values.toList()
+        ..sort(
+          (a, b) => _exhibitorName(a)
+              .toLowerCase()
+              .compareTo(_exhibitorName(b).toLowerCase()),
+        );
 
       if (!mounted) return;
       setState(() => _loading = false);
