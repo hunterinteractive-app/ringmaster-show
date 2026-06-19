@@ -865,13 +865,15 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
     final resultStatus = (entry['result_status'] ?? '').toString().trim();
     final placement = (entry['placement'] ?? '').toString().trim();
     final enteredAt = (entry['result_entered_at'] ?? '').toString().trim();
-    final isShown = entry['is_shown'];
     final isDisqualified = entry['is_disqualified'];
     final dqReason = (entry['disqualified_reason'] ?? '').toString().trim();
 
+    // Do not count `is_shown == false` by itself. In the results RPC that can
+    // be the default value for rows that have not been touched yet, which made
+    // the QR breed rollup show 13/13 complete even when only a few rows were
+    // actually entered.
     return placement.isNotEmpty ||
         enteredAt.isNotEmpty ||
-        isShown == false ||
         isDisqualified == true ||
         dqReason.isNotEmpty ||
         _isCompletedResultStatus(resultStatus);
