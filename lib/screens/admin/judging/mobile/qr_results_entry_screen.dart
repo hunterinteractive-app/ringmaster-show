@@ -846,12 +846,12 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
 
     if (incompleteStatuses.contains(normalized)) return false;
 
-    // Count only statuses that represent a finished entry result.
-    return normalized == 'shown' ||
-        normalized == 'placed' ||
-        normalized == 'complete' ||
-        normalized == 'completed' ||
-        normalized == 'no_show' ||
+    // Match the main results-entry screen's basic completion behavior. Do not
+    // count generic/default statuses like `Shown`, `Placed`, `Complete`, or
+    // `Completed` by themselves because the RPC can return those before a real
+    // row outcome has been entered. A row is complete when it has placement,
+    // result_entered_at, DQ data, or one of these explicit non-placement outcomes.
+    return normalized == 'no_show' ||
         normalized == 'no-show' ||
         normalized == 'noshow' ||
         normalized == 'disqualified' ||
