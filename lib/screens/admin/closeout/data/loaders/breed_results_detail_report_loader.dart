@@ -892,11 +892,14 @@ class BreedResultsDetailReportLoader {
       _safe(row['result_status']),
       _safe(row['status']),
     ]).toLowerCase();
+    final dqReason = _safe(row['disqualified_reason']).toLowerCase();
+    final combined = '$status $dqReason';
 
-    if (status.contains('no show')) return false;
-    if (status.contains('wrong')) return false;
-    if (status.contains('scratch')) return false;
-    if (status.contains('disqualified')) return false;
+    if (combined.contains('no show')) return false;
+    if (combined.contains('wrong')) return false;
+    if (combined.contains('overweight')) return false;
+    if (combined.contains('scratch')) return false;
+    if (combined.contains('disqualified')) return false;
 
     return true;
   }
@@ -917,10 +920,13 @@ class BreedResultsDetailReportLoader {
       _safe(row['result_status']),
       _safe(row['status']),
     ]).toLowerCase();
+    final dqReason = _safe(row['disqualified_reason']).toLowerCase();
+    final combined = '$status $dqReason';
 
-    if (status.contains('no show')) return false;
-    if (status.contains('scratch')) return false;
-    if (status.contains('disqualified')) return false;
+    if (combined.contains('no show')) return false;
+    if (combined.contains('scratch')) return false;
+    if (combined.contains('overweight')) return false;
+    if (combined.contains('disqualified')) return false;
 
     return _furPlacementNumber(row) != 999 || row['is_shown'] != false;
   }

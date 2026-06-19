@@ -832,6 +832,9 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
 
     if (normalized.isEmpty) return false;
 
+    final compact = rawStatus.trim().toLowerCase();
+    if (compact.startsWith('disqualified')) return true;
+
     // These statuses can exist while a row is still waiting for an actual
     // result and should not make the QR rollup look complete.
     const incompleteStatuses = {

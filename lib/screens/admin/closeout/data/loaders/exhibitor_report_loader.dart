@@ -426,7 +426,7 @@ class ExhibitorReportLoader {
     }
 
     for (final rowsInClass in grouped.values) {
-      final classSize = rowsInClass.length;
+      final classSize = rowsInClass.where(_countsAsJudgedAnimal).length;
 
       rowsInClass.sort((a, b) {
         final aPlacement = int.tryParse(_str(a['placement'])) ?? 999;
@@ -571,8 +571,8 @@ class ExhibitorReportLoader {
 
     // Match the class-size rules used for points and leg eligibility.
     // Exclude No Shows and disqualifications for Wrong Sex, Wrong Variety,
-    // or Wrong Class. Disqualified - Other, Unworthy of Award, and normal
-    // shown entries still count as animals judged.
+    // Wrong Class, or Overweight. Disqualified - Other, Unworthy of Award,
+    // and normal shown entries still count as animals judged.
     final judgedRows = rows.where(_countsAsJudgedAnimal).toList();
 
     // Build each section independently so Open A, Open B, Open C, Youth A,
@@ -714,13 +714,13 @@ class ExhibitorReportLoader {
         status.contains('wrong sex') ||
         status.contains('wrong variety') ||
         status.contains('wrong class') ||
+        status.contains('overweight') ||
         dqReason == 'wrong sex' ||
         dqReason == 'wrong variety' ||
-        dqReason == 'wrong class';
+        dqReason == 'wrong class' ||
+        dqReason == 'overweight';
 
     if (excludesFromClassCount) return false;
-
-
     return true;
   }
 

@@ -203,6 +203,7 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
 
       return _rowContainsSearch(row, const [
         'result_entered_by_name',
+        'result_entered_by_user_id',
         'result_entered_by_phone',
         'breed',
         'variety',
@@ -219,12 +220,19 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
     for (final row in _filteredWriterRows) {
       final name = _text(row, 'result_entered_by_name');
       final phone = _text(row, 'result_entered_by_phone');
-      if (name.isEmpty && phone.isEmpty) continue;
+      final userId = _text(row, 'result_entered_by_user_id');
 
-      final key = '$name|$phone';
+      final key = [
+        if (userId.isNotEmpty) userId,
+        if (name.isNotEmpty) name,
+        if (phone.isNotEmpty) phone,
+      ].join('|');
+
+      if (key.isEmpty) continue;
+
       final item = grouped.putIfAbsent(key, () {
         return {
-          'name': name,
+          'name': name.isEmpty ? 'Unknown Writer' : name,
           'phone': phone,
           'count': 0,
           'last_at': row['result_entered_at'],
@@ -818,7 +826,7 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
                   separatorBuilder: (_, __) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     final row = rows[index];
-                    final name = (row['name'] ?? '').toString().trim();
+                    final name = (row['name'] ?? 'Unknown Writer').toString().trim();
                     final phone = (row['phone'] ?? '').toString().trim();
                     final count = ((row['count'] as int?) ?? 0);
                     final classes = ((row['classes'] as Set<String>).toList()..sort());
@@ -849,7 +857,7 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
                             ),
                           ),
                           title: Text(
-                            name.isEmpty ? '(Unknown Writer)' : name,
+                            name.isEmpty ? 'Unknown Writer' : name,
                             style: const TextStyle(
                               fontWeight: FontWeight.w800,
                               fontSize: 16,

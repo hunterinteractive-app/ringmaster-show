@@ -207,6 +207,7 @@ const List<String> kResultStatuses = [
   'Disqualified - Wrong Sex',
   'Disqualified - Wrong Variety',
   'Disqualified - Wrong Class',
+  'Disqualified - Overweight',
   'Disqualified - Other',
   'Unworthy of Award',
 ];
@@ -663,7 +664,8 @@ String _dqReasonFromStatus(String status) {
   final parts = trimmed.split('-');
   if (parts.length < 2) return 'Other';
 
-  return parts.sublist(1).join('-').trim();
+  final reason = parts.sublist(1).join('-').trim();
+  return reason.isEmpty ? 'Other' : reason;
 }
 
 int _resultSortValue(Map<String, dynamic> row, String key) {
@@ -676,6 +678,10 @@ String _resultSortText(dynamic value) {
   return (value ?? '').toString().trim().toLowerCase();
 }
 
+String _entryId(Map<String, dynamic> row) {
+  return (row['entry_id'] ?? row['id'] ?? '').toString().trim();
+}
+
 List<Map<String, dynamic>> _mergeRefreshedEntriesWithoutDroppingCurrentRows({
   required List<Map<String, dynamic>> currentEntries,
   required List<Map<String, dynamic>> refreshedEntries,
@@ -683,14 +689,21 @@ List<Map<String, dynamic>> _mergeRefreshedEntriesWithoutDroppingCurrentRows({
   final refreshedById = <String, Map<String, dynamic>>{};
 
   for (final e in refreshedEntries) {
-    final id = (e['entry_id'] ?? e['id'] ?? '').toString().trim();
+    final id = _entryId(e);
     if (id.isNotEmpty) refreshedById[id] = e;
   }
 
   return currentEntries.map((current) {
-    final id = (current['entry_id'] ?? current['id'] ?? '').toString().trim();
+    final id = _entryId(current);
     if (id.isEmpty) return current;
-    return refreshedById[id] ?? current;
+
+    final refreshed = refreshedById[id];
+    if (refreshed == null) return current;
+
+    return <String, dynamic>{
+      ...current,
+      ...refreshed,
+    };
   }).toList();
 }
 
@@ -2660,6 +2673,7 @@ class _ResultsGroupScreen extends StatefulWidget {
 
 class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
   late List<Map<String, dynamic>> _entries;
+  late final List<String> _entryNavigationOrder;
   String? _msg;
   bool _savingJudge = false;
 
@@ -4358,6 +4372,7 @@ class ResultsAnimalsScreen extends StatefulWidget {
 
 class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
   late List<Map<String, dynamic>> _entries;
+  late final List<String> _entryNavigationOrder;
   String? _msg;
   bool _savingJudge = false;
   String? _currentJudgeId;
@@ -4955,6 +4970,11 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
     _currentJudgeId = _normalizeJudgeId(widget.initialJudgeId);
     _sortEntries();
 
+    _entryNavigationOrder = _entries
+        .map(_entryId)
+        .where((id) => id.isNotEmpty)
+        .toList(growable: false);
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _openInitialEntryIfNeeded();
     });
@@ -5175,7 +5195,10 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
         e['_awards'] = awardsByEntryId[id] ?? <String>[];
       }
 
-      _entries = refreshed;
+      _entries = _mergeRefreshedEntriesWithoutDroppingCurrentRows(
+        currentEntries: _entries,
+        refreshedEntries: refreshed,
+      );
       _sortEntries();
 
       final judgeIds = _entries
@@ -5189,7 +5212,6 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
 
       if (mounted) setState(() {});
 
-      _openInitialEntryIfNeeded();
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -5277,6 +5299,7 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
     if (index < 0 || index >= _entries.length) return;
 
     final entry = _entries[index];
+    final openedEntryId = (entry['entry_id'] ?? entry['id'] ?? '').toString().trim();
 
     final result = await showModalBottomSheet<ResultsEntryOutcome>(
       context: context,
@@ -5318,21 +5341,28 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
 
     if (!result.goNext) return;
 
-    final nextIndex = index + 1;
-    if (nextIndex < _entries.length) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _openResultEntryAt(nextIndex);
-        }
-      });
-      return;
+    final openedNavIndex = _entryNavigationOrder.indexOf(openedEntryId);
+
+    final nextEntryId =
+        openedNavIndex >= 0 && openedNavIndex + 1 < _entryNavigationOrder.length
+            ? _entryNavigationOrder[openedNavIndex + 1]
+            : '';
+
+    if (nextEntryId.isNotEmpty) {
+      final nextIndex = _entries.indexWhere((e) => _entryId(e) == nextEntryId);
+
+      if (nextIndex >= 0) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _openResultEntryAt(nextIndex);
+          }
+        });
+        return;
+      }
     }
 
-    if (result.goNext) {
-      await _reloadAll();
-      if (!mounted) return;
-      Navigator.pop(context, true);
-    }
+    if (!mounted) return;
+    Navigator.pop(context, true);
   }
 
   @override
@@ -5658,6 +5688,8 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
           _resultStatus = 'Disqualified - Wrong Variety';
         } else if (dqReason == 'Wrong Class') {
           _resultStatus = 'Disqualified - Wrong Class';
+        } else if (dqReason == 'Overweight') {
+          _resultStatus = 'Disqualified - Overweight';
         } else {
           _resultStatus = 'Disqualified - Other';
         }

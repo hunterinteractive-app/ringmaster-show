@@ -691,13 +691,17 @@ class DetailsByBreedReportLoader {
     if (!_bool(row['is_shown'], fallback: true)) return false;
 
     final status = _text(row, ['result_status', 'status']).toLowerCase();
-    if (status.contains('no show') ||
-        status.contains('scratch') ||
-        status.contains('disqual') ||
-        status.contains('wrong sex') ||
-        status.contains('wrong variety') ||
-        status.contains('wrong class') ||
-        status.contains('unworthy')) {
+    final dqReason = _text(row, ['disqualified_reason']).toLowerCase();
+    final combined = '$status $dqReason';
+
+    if (combined.contains('no show') ||
+        combined.contains('scratch') ||
+        combined.contains('disqual') ||
+        combined.contains('wrong sex') ||
+        combined.contains('wrong variety') ||
+        combined.contains('wrong class') ||
+        combined.contains('overweight') ||
+        combined.contains('unworthy')) {
       return false;
     }
 

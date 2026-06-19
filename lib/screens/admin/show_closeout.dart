@@ -664,10 +664,29 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           final scratchedAt = (row['scratched_at'] ?? '').toString().trim();
           final isShown = row['is_shown'] != false;
           final isDisqualified = row['is_disqualified'] == true;
+          final status = (row['result_status'] ?? row['status'] ?? '')
+              .toString()
+              .trim()
+              .toLowerCase();
+          final dqReason = (row['disqualified_reason'] ?? '')
+              .toString()
+              .trim()
+              .toLowerCase();
+          final combinedStatus = '$status $dqReason';
+          final excludedStatus = combinedStatus.contains('no show') ||
+              combinedStatus.contains('scratch') ||
+              combinedStatus.contains('disqual') ||
+              combinedStatus.contains('wrong sex') ||
+              combinedStatus.contains('wrong variety') ||
+              combinedStatus.contains('wrong class') ||
+              combinedStatus.contains('overweight') ||
+              combinedStatus.contains('unworthy');
           final placement = (row['placement'] ?? '').toString().trim();
 
-          final isEligibleForPlacement =
-              scratchedAt.isEmpty && isShown && !isDisqualified;
+          final isEligibleForPlacement = scratchedAt.isEmpty &&
+              isShown &&
+              !isDisqualified &&
+              !excludedStatus;
 
           if (!isEligibleForPlacement) continue;
           if (placement.isNotEmpty) continue;
@@ -747,11 +766,30 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           final scratchedAt = (row['scratched_at'] ?? '').toString().trim();
           final isShown = row['is_shown'] != false;
           final isDisqualified = row['is_disqualified'] == true;
+          final status = (row['result_status'] ?? row['status'] ?? '')
+              .toString()
+              .trim()
+              .toLowerCase();
+          final dqReason = (row['disqualified_reason'] ?? '')
+              .toString()
+              .trim()
+              .toLowerCase();
+          final combinedStatus = '$status $dqReason';
+          final excludedStatus = combinedStatus.contains('no show') ||
+              combinedStatus.contains('scratch') ||
+              combinedStatus.contains('disqual') ||
+              combinedStatus.contains('wrong sex') ||
+              combinedStatus.contains('wrong variety') ||
+              combinedStatus.contains('wrong class') ||
+              combinedStatus.contains('overweight') ||
+              combinedStatus.contains('unworthy');
           final judgeId =
               (row['judged_by_show_judge_id'] ?? '').toString().trim();
 
-          final isEligible =
-              scratchedAt.isEmpty && isShown && !isDisqualified;
+          final isEligible = scratchedAt.isEmpty &&
+              isShown &&
+              !isDisqualified &&
+              !excludedStatus;
 
           if (!isEligible) continue;
           if (judgeId.isNotEmpty) continue;
@@ -853,13 +891,20 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           final isShown = row['is_shown'] != false;
           final isDisqualified = row['is_disqualified'] == true;
           final status = clean(row['result_status']).toLowerCase();
+          final dqReason = clean(row['disqualified_reason']).toLowerCase();
+          final combinedStatus = '$status $dqReason';
 
           if (scratchedAt.isNotEmpty) return false;
           if (!isShown) return false;
           if (isDisqualified) return false;
-          if (status == 'no show') return false;
-          if (status.startsWith('disqualified')) return false;
-          if (status == 'unworthy of award') return false;
+          if (combinedStatus.contains('no show')) return false;
+          if (combinedStatus.contains('scratch')) return false;
+          if (combinedStatus.contains('disqual')) return false;
+          if (combinedStatus.contains('wrong sex')) return false;
+          if (combinedStatus.contains('wrong variety')) return false;
+          if (combinedStatus.contains('wrong class')) return false;
+          if (combinedStatus.contains('overweight')) return false;
+          if (combinedStatus.contains('unworthy')) return false;
 
           return true;
         }

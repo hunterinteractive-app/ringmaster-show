@@ -792,6 +792,7 @@ class LegsReportLoader {
     if (combined.contains('wrong sex')) return 'wrong_sex';
     if (combined.contains('wrong variety')) return 'wrong_variety';
     if (combined.contains('wrong class')) return 'wrong_class';
+    if (combined.contains('overweight')) return 'overweight';
     if (combined.contains('no show')) return 'no_show';
     if (combined.contains('unworthy')) return 'unworthy';
     if (combined.contains('other')) return 'other';
@@ -827,6 +828,7 @@ class LegsReportLoader {
     return type != 'no_show' &&
         type != 'wrong_variety' &&
         type != 'wrong_class' &&
+        type != 'overweight' &&
         type != 'wrong_sex';
   }
 

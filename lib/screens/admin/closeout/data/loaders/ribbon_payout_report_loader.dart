@@ -54,8 +54,28 @@ class RibbonPayoutReportLoader {
       final scratchedAt = (row['scratched_at'] ?? '').toString().trim();
       final isShown = row['is_shown'] != false;
       final isDisqualified = row['is_disqualified'] == true;
+      final status = (row['result_status'] ?? row['status'] ?? '')
+          .toString()
+          .trim()
+          .toLowerCase();
+      final dqReason = (row['disqualified_reason'] ?? '')
+          .toString()
+          .trim()
+          .toLowerCase();
+      final combinedStatus = '$status $dqReason';
+      final excludedStatus = combinedStatus.contains('no show') ||
+          combinedStatus.contains('scratch') ||
+          combinedStatus.contains('disqual') ||
+          combinedStatus.contains('wrong sex') ||
+          combinedStatus.contains('wrong variety') ||
+          combinedStatus.contains('wrong class') ||
+          combinedStatus.contains('overweight') ||
+          combinedStatus.contains('unworthy');
 
-      if (scratchedAt.isNotEmpty || !isShown || isDisqualified) {
+      if (scratchedAt.isNotEmpty ||
+          !isShown ||
+          isDisqualified ||
+          excludedStatus) {
         continue;
       }
 
