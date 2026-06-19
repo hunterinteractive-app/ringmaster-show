@@ -562,6 +562,21 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
     }
   }
 
+  Future<List<Map<String, dynamic>>> _reloadEntriesForDrilldown() async {
+    await _loadEntries();
+
+    _showsByGroup = _computeShowsByGroup(_entries);
+    _showsByVariety = _computeShowsByVariety(_entries);
+
+    if (mounted) {
+      setState(() {});
+    }
+
+    return _entries
+        .map((entry) => Map<String, dynamic>.from(entry))
+        .toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -667,6 +682,7 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
       writerName: _writerName!,
       writerPhone: _writerPhone!,
       onBulkJudgeApply: _applyJudgeToEntries,
+      onReloadEntries: _reloadEntriesForDrilldown,
     );
   }
 }
@@ -688,6 +704,7 @@ class _QrBreedDrilldownScreen extends StatefulWidget {
     List<Map<String, dynamic>> entries,
     String? judgeId,
   ) onBulkJudgeApply;
+  final Future<List<Map<String, dynamic>>> Function() onReloadEntries;
 
   const _QrBreedDrilldownScreen({
     required this.showId,
@@ -703,6 +720,7 @@ class _QrBreedDrilldownScreen extends StatefulWidget {
     required this.writerName,
     required this.writerPhone,
     required this.onBulkJudgeApply,
+    required this.onReloadEntries,
   });
 
   @override
@@ -809,6 +827,40 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
   }
 
   // --- Status/completion highlighting helpers ---
+  bool _isCompletedResultStatus(String rawStatus) {
+    final normalized = rawStatus.trim().toLowerCase().replaceAll(' ', '_');
+
+    if (normalized.isEmpty) return false;
+
+    // These statuses can exist while a row is still waiting for an actual
+    // result and should not make the QR rollup look complete.
+    const incompleteStatuses = {
+      'pending',
+      'not_started',
+      'not-started',
+      'in_progress',
+      'in-progress',
+      'started',
+      'open',
+    };
+
+    if (incompleteStatuses.contains(normalized)) return false;
+
+    // Count only statuses that represent a finished entry result.
+    return normalized == 'shown' ||
+        normalized == 'placed' ||
+        normalized == 'complete' ||
+        normalized == 'completed' ||
+        normalized == 'no_show' ||
+        normalized == 'no-show' ||
+        normalized == 'noshow' ||
+        normalized == 'disqualified' ||
+        normalized == 'dq' ||
+        normalized == 'unworthy_of_award' ||
+        normalized == 'unworthy-of-award' ||
+        normalized == 'unworthy';
+  }
+
   bool _hasResult(Map<String, dynamic> entry) {
     final resultStatus = (entry['result_status'] ?? '').toString().trim();
     final placement = (entry['placement'] ?? '').toString().trim();
@@ -817,12 +869,12 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
     final isDisqualified = entry['is_disqualified'];
     final dqReason = (entry['disqualified_reason'] ?? '').toString().trim();
 
-    return resultStatus.isNotEmpty ||
-        placement.isNotEmpty ||
+    return placement.isNotEmpty ||
         enteredAt.isNotEmpty ||
         isShown == false ||
         isDisqualified == true ||
-        dqReason.isNotEmpty;
+        dqReason.isNotEmpty ||
+        _isCompletedResultStatus(resultStatus);
   }
 
   int _completedCount(List<Map<String, dynamic>> entries) {
@@ -1215,7 +1267,20 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
       ),
     );
 
-    if (mounted) setState(() {});
+    try {
+      final refreshedEntries = await widget.onReloadEntries();
+
+      if (!mounted) return;
+      setState(() {
+        _entries = refreshedEntries;
+        _msg = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _msg = 'Results were saved, but the status could not be refreshed: $e';
+      });
+    }
   }
 
   @override
