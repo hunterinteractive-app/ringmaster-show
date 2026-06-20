@@ -17,6 +17,8 @@ import 'my_animals_screen.dart';
 import 'enter_show_screen.dart';
 import 'account_settings_screen.dart';
 import 'my_entries_screen.dart';
+import 'package:ringmaster_show/screens/exhibitor_past_reports_screen.dart'
+    as past_reports;
 import 'legal/terms_screen.dart';
 import 'legal/privacy_policy_screen.dart';
 import 'super_admin/superadmin_home_screen.dart';
@@ -1184,6 +1186,15 @@ class _ShowListScreenState extends State<ShowListScreen> {
     );
   }
 
+  void _openPastShowReports(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const past_reports.ExhibitorPastReportsScreen(),
+      ),
+    );
+  }
+
   Future<void> _showPaymentInfo(
     BuildContext context,
     String showId,
@@ -1316,6 +1327,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
                 MaterialPageRoute(builder: (_) => const MyEntriesScreen()),
               );
             },
+            onPastShowReports: () => _openPastShowReports(context),
             onSuperAdmin: () {
               Navigator.push(
                 context,
@@ -1720,6 +1732,7 @@ class _ResponsiveShowAppBar extends StatelessWidget
   final VoidCallback? onSuperintendent;
   final VoidCallback onAnimals;
   final VoidCallback onEntries;
+  final VoidCallback onPastShowReports;
   final VoidCallback onSuperAdmin;
   final VoidCallback onAccount;
   final VoidCallback onHelp;
@@ -1734,6 +1747,7 @@ class _ResponsiveShowAppBar extends StatelessWidget
     required this.onSuperintendent,
     required this.onAnimals,
     required this.onEntries,
+    required this.onPastShowReports,
     required this.onSuperAdmin,
     required this.onAccount,
     required this.onHelp,
@@ -1833,6 +1847,13 @@ class _ResponsiveShowAppBar extends StatelessWidget
             showLabel: showLabels,
             onTap: onEntries,
           ),
+        if (!demoMode)
+          _TopBarAction(
+            icon: Icons.description_outlined,
+            label: 'Past Show Reports',
+            showLabel: showLabels,
+            onTap: onPastShowReports,
+          ),
         if (showSuperAdminInline)
           FutureBuilder<bool>(
             future: Future.value(
@@ -1876,6 +1897,7 @@ class _ResponsiveShowAppBar extends StatelessWidget
               if (value == 'superintendent' && onSuperintendent != null) {
                 onSuperintendent!();
               }
+              if (value == 'past_show_reports') onPastShowReports();
               if (value == 'super_admin') onSuperAdmin();
               if (value == 'help') onHelp();
               if (value == 'logout') onLogout();
@@ -1885,6 +1907,11 @@ class _ResponsiveShowAppBar extends StatelessWidget
                 const PopupMenuItem<String>(
                   value: 'superintendent',
                   child: Text('Superintendent'),
+                ),
+              if (!demoMode)
+                const PopupMenuItem<String>(
+                  value: 'past_show_reports',
+                  child: Text('Past Show Reports'),
                 ),
               if (!demoMode &&
                   !SupportImpersonationSession.isActive &&
