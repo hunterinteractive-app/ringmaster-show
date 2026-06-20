@@ -1857,7 +1857,7 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
           code: 'ineligible_award',
           title: isPreJunior
               ? 'Pre-Junior cannot receive specials'
-              : 'Ineligible rabbit has awards',
+              : 'Ineligible animal has awards',
           message: isPreJunior
               ? '${_entryLabel(e)} is Pre-Junior and cannot receive specials like BOV, BOSV, BOG, BOSG, BOB, or BOSB.'
               : '${_entryLabel(e)} has awards assigned but is scratched, disqualified, or not shown.',
@@ -1937,7 +1937,7 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
           code: 'duplicate_award',
           title: 'Duplicate award winner',
           message:
-              '$awardCode is assigned to more than one rabbit: '
+              '$awardCode is assigned to more than one animal: '
               '${_entryLabel(first)}'
               '${second != null ? ' and ${_entryLabel(second)}' : ''}.',
           entry: first,
@@ -1960,7 +1960,8 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
       if (_isFurEntry(e)) continue;
 
       final a = awards(e);
-      final scope = scopeKey(e);
+      final scope = scopeKey(e).trim();
+      if (scope.isEmpty) continue;
       if (a.contains(winCode)) winByScope[scope] = e;
       if (a.contains(oppCode)) oppByScope[scope] = e;
     }
@@ -1990,8 +1991,19 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
     oppCode: 'BOSV',
     scopeLabel: 'variety',
     scopeKey: (e) {
+      final entryBreed = breed(e).toLowerCase();
+      final entryVariety = variety(e).toLowerCase();
+      if (entryBreed.isEmpty || entryVariety.isEmpty) return '';
+
+      // Cavies always validate BOV/BOSV within breed + variety. Some cavy rows
+      // may not have uses_variety_awards hydrated correctly, but BOV/BOSV should
+      // never be compared across different cavy breeds.
+      if (_isCavyEntry(e)) {
+        return '${sectionId(e)}|$entryBreed|$entryVariety';
+      }
+
       if (!showsByVariety(e)) return '';
-      return '${sectionId(e)}|${breed(e).toLowerCase()}|${variety(e).toLowerCase()}';
+      return '${sectionId(e)}|$entryBreed|$entryVariety';
     },
   );
 
@@ -2049,19 +2061,35 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
     }
 
     if (a.contains('BOB') || a.contains('BOSB')) {
-      final eligible = byGroup
-          ? (a.contains('BOG') || a.contains('BOSG'))
-          : byVariety
-              ? (a.contains('BOV') || a.contains('BOSV'))
-              : true;
+      final isCavy = _isCavyEntry(e);
+
+      // Cavies do not use the rabbit BOG/BOSG step. Even when a cavy row has a
+      // group/display bucket such as Marked, BOB/BOSB should validate from
+      // BOV/BOSV. Rabbits that truly use group awards still validate from
+      // BOG/BOSG.
+      final eligible = isCavy
+          ? (a.contains('BOV') || a.contains('BOSV'))
+          : byGroup
+              ? (a.contains('BOG') || a.contains('BOSG'))
+              : byVariety
+                  ? (a.contains('BOV') || a.contains('BOSV'))
+                  : true;
 
       if (!eligible) {
+        final requiredSource = isCavy
+            ? 'BOV/BOSV'
+            : byGroup
+                ? 'BOG/BOSG'
+                : byVariety
+                    ? 'BOV/BOSV'
+                    : 'as eligible for direct breed awards';
+
         issues.add(
           makeIssue(
             code: 'bob_source',
             title: 'Invalid breed award source',
             message:
-                '${_entryLabel(e)} has BOB/BOSB but is not marked ${byGroup ? 'BOG/BOSG' : byVariety ? 'BOV/BOSV' : 'as eligible for direct breed awards'}.',
+                '${_entryLabel(e)} has BOB/BOSB but is not marked $requiredSource.',
             entry: e,
           ),
         );
