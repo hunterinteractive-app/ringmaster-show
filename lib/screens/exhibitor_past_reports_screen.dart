@@ -38,8 +38,8 @@ class _ExhibitorPastReportsScreenState
 
   String get _introText {
     return _isViewingAs
-        ? 'Viewing finalized exhibitor reports and ARBA legs for the selected View As user.'
-        : 'Download finalized exhibitor reports and ARBA legs from your past shows.';
+        ? 'Viewing exhibitor reports and ARBA legs. Reports will be available for up to 1 year after they are generated.'
+        : 'Download exhibitor reports and ARBA legs from your past shows. Reports will be available for up to 1 year after they are generated.';
   }
 
   @override
@@ -509,7 +509,7 @@ class _EmptyState extends StatelessWidget {
               Text(
                 isViewingAs
                     ? 'This means the selected user does not currently match any finalized exhibitor reports or ARBA legs through entries, owner profile, or claimed profile.'
-                    : 'Finalized exhibitor reports and ARBA legs will appear here after a show secretary generates closeout reports.',
+                    : 'Finalized exhibitor reports and ARBA legs will appear here after a show secretary generates closeout reports. Reports will be available for up to 1 year after they are generated.',
                 textAlign: TextAlign.center,
                 style: Theme.of(
                   context,
