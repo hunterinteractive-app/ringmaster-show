@@ -53,6 +53,10 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
   final _discountMaximumEntries = TextEditingController();
   final _discountRequiredShows = TextEditingController();
 
+  String _onlinePaymentFeeMode = 'club_absorbs';
+  static const String _onlinePaymentFeeDisclosure =
+      'This show charges an Online Payment Fee for electronic payments. This fee helps cover payment processing costs, payment provider charges, and online entry services.';
+
   final Map<String, TextEditingController> _feePerEntryBySection = {};
   final Map<String, TextEditingController> _feePerShowBySection = {};
   final Map<String, TextEditingController> _furFeeBySection = {};
@@ -121,12 +125,17 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
     try {
       final show = await StripeConnectService.supabase
           .from('shows')
-          .select('is_locked,finalized_at')
+          .select('is_locked,finalized_at,online_payment_fee_mode')
           .eq('id', widget.showId)
           .single();
 
       _isLocked = show['is_locked'] == true;
       _isFinalized = (show['finalized_at'] ?? '').toString().trim().isNotEmpty;
+      final loadedOnlinePaymentFeeMode =
+          (show['online_payment_fee_mode'] ?? 'club_absorbs').toString();
+      _onlinePaymentFeeMode = loadedOnlinePaymentFeeMode == 'pass_to_exhibitor'
+          ? 'pass_to_exhibitor'
+          : 'club_absorbs';
 
       final feeRow = await StripeConnectService.supabase
           .from('show_fee_settings')
@@ -503,6 +512,14 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
 
     try {
       await ShowLockService.assertShowUnlocked(widget.showId);
+      await StripeConnectService.supabase.from('shows').update({
+        'online_payment_fee_mode': _onlinePaymentFeeMode,
+        'online_payment_fee_label': 'Online Payment Fee',
+        'online_payment_fee_description': _onlinePaymentFeeDisclosure,
+        'online_payment_provider': 'stripe',
+        'online_payment_fee_updated_at': DateTime.now().toUtc().toIso8601String(),
+        'online_payment_fee_updated_by': StripeConnectService.supabase.auth.currentUser?.id,
+      }).eq('id', widget.showId);
       await StripeConnectService.supabase.from('show_fee_settings').upsert({
         'show_id': widget.showId,
         'multi_show_discount_enabled': _discountEnabled,
@@ -1075,6 +1092,74 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
     );
   }
 
+  Widget _buildOnlinePaymentFeeSection() {
+    return _section(
+      'Online Payment Fee',
+      [
+        Text(
+          'Choose how online payment costs are handled for this show.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 8),
+        RadioGroup<String>(
+          groupValue: _onlinePaymentFeeMode,
+          onChanged: (value) {
+            if (_saving || _isReadOnly) return;
+            setState(() => _onlinePaymentFeeMode = value ?? 'club_absorbs');
+          },
+          child: Opacity(
+            opacity: (_saving || _isReadOnly) ? .65 : 1,
+            child: Column(
+              children: const [
+                RadioListTile<String>(
+                  contentPadding: EdgeInsets.zero,
+                  value: 'club_absorbs',
+                  title: Text(
+                    'Club absorbs fees',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: Text(
+                    'The exhibitor pays only their show-defined fees. Online payment costs are deducted from the club payout.',
+                  ),
+                ),
+                RadioListTile<String>(
+                  contentPadding: EdgeInsets.zero,
+                  value: 'pass_to_exhibitor',
+                  title: Text(
+                    'Pass Online Payment Fee to exhibitors',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: Text(
+                    'The exhibitor pays an added Online Payment Fee at checkout. This fee helps cover payment processing costs, payment provider charges, and RingMaster online entry services.',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (_onlinePaymentFeeMode == 'pass_to_exhibitor') ...[
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF11285A).withValues(alpha: .05),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: const Color(0xFF11285A).withValues(alpha: .10),
+              ),
+            ),
+            child: const Text(
+              _onlinePaymentFeeDisclosure,
+              style: TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ),
+        ],
+      ],
+      icon: Icons.receipt_long_outlined,
+    );
+  }
+
   Widget _buildStripeSection() {
     final status = (_stripeStatus?['status'] ?? 'not_connected').toString();
     final color = _statusColor(status);
@@ -1365,6 +1450,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
                                   children: [
                                     _buildSectionFeesSection(),
                                     _buildDiscountSection(),
+                                    _buildOnlinePaymentFeeSection(),
                                     _buildStripeSection(),
                                   ],
                                 ),

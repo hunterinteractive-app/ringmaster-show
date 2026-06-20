@@ -44,6 +44,13 @@ class _CartScreenState extends State<CartScreen> {
   Map<String, Map<String, dynamic>> _sectionFeeBySectionId = {};
   Map<String, dynamic>? _stripeStatus;
 
+  static const double _ringMasterPlatformFeePercent = 0.02;
+  static const double _stripeProcessingFeePercent = 0.029;
+  static const int _stripeProcessingFixedCents = 30;
+  static const String _defaultOnlinePaymentFeeLabel = 'Online Payment Fee';
+  static const String _defaultOnlinePaymentFeeDescription =
+      'This show charges an Online Payment Fee for electronic payments. This fee helps cover payment processing costs, payment provider charges, and online entry services.';
+
   final Map<String, String> _exhibitorLabelById = {};
 
   @override
@@ -66,7 +73,11 @@ class _CartScreenState extends State<CartScreen> {
     try {
       final show = await supabase
           .from('shows')
-          .select('id,name,entry_close_at,entry_open_at,start_date')
+          .select(
+            'id,name,entry_close_at,entry_open_at,start_date,'
+            'online_payment_fee_mode,online_payment_fee_label,'
+            'online_payment_fee_description,online_payment_provider',
+          )
           .eq('id', widget.showId)
           .single();
 
@@ -249,6 +260,98 @@ class _CartScreenState extends State<CartScreen> {
   String _money(double v, {String? currency}) {
     final sym = _currencySymbol(currency);
     return '$sym${v.toStringAsFixed(2)}';
+  }
+
+  int _dollarsToCents(double amount) {
+    if (!amount.isFinite || amount <= 0) return 0;
+    return (amount * 100).round();
+  }
+
+  double _centsToDollars(int cents) {
+    return cents <= 0 ? 0.0 : cents / 100.0;
+  }
+
+  bool get _passesOnlinePaymentFeeToExhibitor {
+    return (_show?['online_payment_fee_mode'] ?? 'club_absorbs')
+            .toString()
+            .trim() ==
+        'pass_to_exhibitor';
+  }
+
+  String get _onlinePaymentFeeLabel {
+    final label = (_show?['online_payment_fee_label'] ?? '')
+        .toString()
+        .trim();
+    return label.isEmpty ? _defaultOnlinePaymentFeeLabel : label;
+  }
+
+  String get _onlinePaymentFeeDescription {
+    final description = (_show?['online_payment_fee_description'] ?? '')
+        .toString()
+        .trim();
+    return description.isEmpty
+        ? _defaultOnlinePaymentFeeDescription
+        : description;
+  }
+
+  int _calculateOnlinePaymentFeeCentsFromBase(int baseAmountCents) {
+    if (baseAmountCents <= 0) return 0;
+
+    const combinedPercent =
+        _ringMasterPlatformFeePercent + _stripeProcessingFeePercent;
+
+    if (combinedPercent <= 0 && _stripeProcessingFixedCents <= 0) {
+      return 0;
+    }
+
+    if (combinedPercent >= 1) return 0;
+
+    var estimatedFeeCents =
+        ((baseAmountCents + _stripeProcessingFixedCents) /
+                    (1 - combinedPercent) -
+                baseAmountCents)
+            .ceil();
+
+    if (estimatedFeeCents < 0) estimatedFeeCents = 0;
+
+    for (var i = 0; i < 10; i++) {
+      final grossAmountCents = baseAmountCents + estimatedFeeCents;
+      final estimatedPlatformFeeCents =
+          (grossAmountCents * _ringMasterPlatformFeePercent).round();
+      final estimatedProcessingFeeCents =
+          (grossAmountCents * _stripeProcessingFeePercent +
+                  _stripeProcessingFixedCents)
+              .ceil();
+      final requiredFeeCents =
+          estimatedPlatformFeeCents + estimatedProcessingFeeCents;
+
+      if (estimatedFeeCents >= requiredFeeCents) {
+        return estimatedFeeCents;
+      }
+
+      estimatedFeeCents = requiredFeeCents;
+    }
+
+    return estimatedFeeCents;
+  }
+
+  Map<String, dynamic> _buildCheckoutFeePreview(Map<String, dynamic> fee) {
+    final showBalanceTotal = fee['total'] as double;
+    final showBalanceTotalCents = _dollarsToCents(showBalanceTotal);
+    final onlinePaymentFeeCents =
+        _stripeReady && _passesOnlinePaymentFeeToExhibitor
+            ? _calculateOnlinePaymentFeeCentsFromBase(showBalanceTotalCents)
+            : 0;
+    final totalDueCents = showBalanceTotalCents + onlinePaymentFeeCents;
+
+    return {
+      'show_balance_total_cents': showBalanceTotalCents,
+      'online_payment_fee_cents': onlinePaymentFeeCents,
+      'total_due_cents': totalDueCents,
+      'show_balance_total': _centsToDollars(showBalanceTotalCents),
+      'online_payment_fee': _centsToDollars(onlinePaymentFeeCents),
+      'total_due': _centsToDollars(totalDueCents),
+    };
   }
 
   String? _buildFurDisplay(Map<String, dynamic> it) {
@@ -900,6 +1003,9 @@ class _CartScreenState extends State<CartScreen> {
   Widget build(BuildContext context) {
     final overallFee = _calculateFeesForItems(_items);
     final currency = overallFee['currency'] as String;
+    final checkoutPreview = _buildCheckoutFeePreview(overallFee);
+    final onlinePaymentFee = checkoutPreview['online_payment_fee'] as double;
+    final totalDue = checkoutPreview['total_due'] as double;
     final grouped = _groupItemsByExhibitor();
     final hasFeeConfig =
         _feeSettings != null && _sectionFeeBySectionId.isNotEmpty;
@@ -1060,9 +1166,17 @@ class _CartScreenState extends State<CartScreen> {
                                         '-${_money(overallFee['discount_amount'] as double, currency: currency)}',
                                       ),
                                     ),
+                                  if (onlinePaymentFee > 0) ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '$_onlinePaymentFeeLabel: ${_money(onlinePaymentFee, currency: currency)}',
+                                    ),
+                                  ],
                                   const SizedBox(height: 8),
                                   Text(
-                                    'Total: ${_money(overallFee['total'] as double, currency: currency)}',
+                                    onlinePaymentFee > 0
+                                        ? 'Total Due Today: ${_money(totalDue, currency: currency)}'
+                                        : 'Total: ${_money(overallFee['total'] as double, currency: currency)}',
                                     style: Theme.of(context)
                                         .textTheme
                                         .titleSmall
@@ -1070,6 +1184,31 @@ class _CartScreenState extends State<CartScreen> {
                                           fontWeight: FontWeight.w700,
                                         ),
                                   ),
+                                  if (onlinePaymentFee > 0) ...[
+                                    const SizedBox(height: 8),
+                                    Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF11285A)
+                                            .withValues(alpha: .05),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: const Color(0xFF11285A)
+                                              .withValues(alpha: .10),
+                                        ),
+                                      ),
+                                      child: Text(
+                                        _onlinePaymentFeeDescription,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
                         const SizedBox(height: 14),
@@ -1180,7 +1319,7 @@ class _CartScreenState extends State<CartScreen> {
                             label: Text(
                               _payingOnline
                                   ? 'Opening Checkout…'
-                                  : 'Pay ${_money(overallFee['total'] as double, currency: currency)} Online',
+                                  : 'Pay ${_money(totalDue, currency: currency)} Online',
                             ),
                           )
                         : FilledButton(
