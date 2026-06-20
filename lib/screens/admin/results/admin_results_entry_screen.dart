@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:ringmaster_show/services/show_lock_service.dart';
-import 'package:ringmaster_show/utils/cavy/cavy_sop_order.dart';
 import 'package:ringmaster_show/services/app_session.dart';
 
 final supabase = Supabase.instance.client;
@@ -2245,7 +2244,7 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
                           : ListView.separated(
                               controller: scrollController,
                               itemCount: issues.length,
-                              separatorBuilder: (_, __) => const Divider(height: 1),
+                              separatorBuilder: (_, _) => const Divider(height: 1),
                               itemBuilder: (context, i) {
                                 final issue = issues[i];
                                 return ListTile(
@@ -2400,9 +2399,9 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
                       width: double.infinity,
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.red.withOpacity(.08),
+                        color: Colors.red.withValues(alpha: .08),
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.red.withOpacity(.20)),
+                        border: Border.all(color: Colors.red.withValues(alpha: .20)),
                       ),
                       child: Text(
                         _msg!,
@@ -2425,7 +2424,7 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
                       child: Column(
                         children: [
                           DropdownButtonFormField<String>(
-                            value: _selectedSectionId ?? '',
+                            initialValue: _selectedSectionId ?? '',
                             decoration: const InputDecoration(
                               labelText: 'Show Letter / Section',
                             ),
@@ -2447,13 +2446,13 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
                           Container(
                             decoration: BoxDecoration(
                               color: issues.isEmpty
-                                  ? Colors.green.withOpacity(.08)
-                                  : Colors.orange.withOpacity(.10),
+                                  ? Colors.green.withValues(alpha: .08)
+                                  : Colors.orange.withValues(alpha: .10),
                               borderRadius: BorderRadius.circular(16),
                               border: Border.all(
                                 color: issues.isEmpty
-                                    ? Colors.green.withOpacity(.20)
-                                    : Colors.orange.withOpacity(.22),
+                                    ? Colors.green.withValues(alpha: .20)
+                                    : Colors.orange.withValues(alpha: .22),
                               ),
                             ),
                             child: ListTile(
@@ -2537,7 +2536,7 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
                             return Card(
                               margin: const EdgeInsets.only(bottom: 12),
                               elevation: 0,
-                              color: statusColor.withOpacity(0.06),
+                              color: statusColor.withValues(alpha: 0.06),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(20),
                               ),
@@ -2549,7 +2548,7 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
                                   14,
                                 ),
                                 leading: CircleAvatar(
-                                  backgroundColor: statusColor.withOpacity(0.12),
+                                  backgroundColor: statusColor.withValues(alpha: 0.12),
                                   child: Icon(
                                     _statusIcon(breedEntries),
                                     color: statusColor,
@@ -2990,7 +2989,7 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
                     ),
                     const SizedBox(height: 14),
                     DropdownButtonFormField<String>(
-                      value: _singleJudgeId(_entries),
+                      initialValue: _singleJudgeId(_entries),
                       decoration: const InputDecoration(
                         labelText: 'Judge for this breed',
                       ),
@@ -3082,14 +3081,14 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
                   elevation: 0,
-                  color: statusColor.withOpacity(0.06),
+                  color: statusColor.withValues(alpha: 0.06),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: ListTile(
                     contentPadding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
                     leading: CircleAvatar(
-                      backgroundColor: statusColor.withOpacity(0.12),
+                      backgroundColor: statusColor.withValues(alpha: 0.12),
                       child: Icon(
                         _statusIcon(groupEntries),
                         color: statusColor,
@@ -3546,7 +3545,7 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
                   elevation: 0,
-                  color: statusColor.withOpacity(0.06),
+                  color: statusColor.withValues(alpha: 0.06),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
                   ),
@@ -3558,7 +3557,7 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
                         ListTile(
                           contentPadding: EdgeInsets.zero,
                           leading: CircleAvatar(
-                            backgroundColor: statusColor.withOpacity(0.12),
+                            backgroundColor: statusColor.withValues(alpha: 0.12),
                             child: Icon(
                               _statusIcon(varietyEntries),
                               color: statusColor,
@@ -3623,7 +3622,7 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
                         const SizedBox(height: 10),
                         DropdownButtonFormField<String>(
                           key: ValueKey('variety-judge-$variety-${_singleJudgeId(varietyEntries) ?? 'mixed'}'),
-                          value: _singleJudgeId(varietyEntries),
+                          initialValue: _singleJudgeId(varietyEntries),
                           decoration: const InputDecoration(
                             labelText: 'Judge for this variety',
                           ),
@@ -4195,7 +4194,7 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
                     const SizedBox(height: 14),
 
                     DropdownButtonFormField<String>(
-                      value: _singleJudgeId(_entries),
+                      initialValue: _singleJudgeId(_entries),
                       decoration: const InputDecoration(
                         labelText: 'Judge for this class',
                       ),
@@ -4276,14 +4275,14 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
                   elevation: 0,
-                  color: statusColor.withOpacity(0.06),
+                  color: statusColor.withValues(alpha: 0.06),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: ListTile(
                     contentPadding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
                     leading: CircleAvatar(
-                      backgroundColor: statusColor.withOpacity(0.12),
+                      backgroundColor: statusColor.withValues(alpha: 0.12),
                       child: Icon(
                         _statusIcon(classEntries),
                         color: statusColor,
@@ -4344,6 +4343,7 @@ class ResultsAnimalsScreen extends StatefulWidget {
 
 
   const ResultsAnimalsScreen({
+    super.key,
     required this.showId,
     required this.showName,
     required this.sectionLabel,
@@ -4719,16 +4719,16 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
 
   Color _rowTint(Map<String, dynamic> e) {
     if (_isEntryComplete(e)) {
-      return Colors.green.withOpacity(.10);
+      return Colors.green.withValues(alpha: .10);
     }
-    return Colors.red.withOpacity(.08);
+    return Colors.red.withValues(alpha: .08);
   }
 
   Color _rowBorder(Map<String, dynamic> e) {
     if (_isEntryComplete(e)) {
-      return Colors.green.withOpacity(.22);
+      return Colors.green.withValues(alpha: .22);
     }
-    return Colors.red.withOpacity(.18);
+    return Colors.red.withValues(alpha: .18);
   }
 
   bool get _canRequestQrCorrection =>
@@ -4866,7 +4866,7 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
                         ),
                         const SizedBox(height: 16),
                         DropdownButtonFormField<String>(
-                          value: fieldName,
+                          initialValue: fieldName,
                           decoration: const InputDecoration(
                             labelText: 'Correction needed',
                           ),
@@ -5409,7 +5409,7 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
                     ),
                     const SizedBox(height: 14),
                     DropdownButtonFormField<String>(
-                      value: _currentJudgeId,
+                      initialValue: _currentJudgeId,
                       decoration: const InputDecoration(
                         labelText: 'Judge for this class',
                       ),
@@ -5576,7 +5576,7 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(.05),
+        color: Colors.black.withValues(alpha: .05),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
@@ -5620,6 +5620,7 @@ class ResultsEntrySheet extends StatefulWidget {
   final String? initialJudgeId;
 
   const ResultsEntrySheet({
+    super.key,
     required this.showId,
     required this.entry,
     required this.classEntries,
@@ -6795,9 +6796,9 @@ if (storedJudgeId.isEmpty) {
                   margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(.08),
+                    color: Colors.red.withValues(alpha: .08),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.red.withOpacity(.20)),
+                    border: Border.all(color: Colors.red.withValues(alpha: .20)),
                   ),
                   child: Text(
                     _msg!,
@@ -6835,9 +6836,9 @@ if (storedJudgeId.isEmpty) {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(.10),
+                    color: Colors.orange.withValues(alpha: .10),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.orange.withOpacity(.22)),
+                    border: Border.all(color: Colors.orange.withValues(alpha: .22)),
                   ),
                   child: const Text(
                     'This animal is scratched. Placement and awards will be cleared.',
@@ -6850,7 +6851,7 @@ if (storedJudgeId.isEmpty) {
               ],
               const SizedBox(height: 14),
               DropdownButtonFormField<String>(
-                value: _judgeId,
+                initialValue: _judgeId,
                 decoration: const InputDecoration(
                   labelText: 'Judge',
                 ),
@@ -6876,7 +6877,7 @@ if (storedJudgeId.isEmpty) {
               ),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
-                value: _resultStatus,
+                initialValue: _resultStatus,
                 decoration: const InputDecoration(
                   labelText: 'Result Status',
                 ),
@@ -6908,7 +6909,7 @@ if (storedJudgeId.isEmpty) {
               const SizedBox(height: 10),
               if (canPlace)
                 DropdownButtonFormField<String>(
-                  value: (_placement != null && placementOptions.contains(_placement))
+                  initialValue: (_placement != null && placementOptions.contains(_placement))
                       ? _placement
                       : '',
                   decoration: const InputDecoration(

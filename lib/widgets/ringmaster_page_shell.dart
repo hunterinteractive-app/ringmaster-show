@@ -55,7 +55,6 @@ class RingMasterPageShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final route = ModalRoute.of(context);
     final routeName = route?.settings.name;
     final routeArgs = route?.settings.arguments;
@@ -69,7 +68,6 @@ class RingMasterPageShell extends StatelessWidget {
 
     final isMobile = screenWidth < 700;
     final isTablet = screenWidth >= 700 && screenWidth < 1100;
-    final isDesktop = screenWidth >= 1100;
 
     final topColor = headerColor ?? const Color(0xFF11285A);
     final pageBg = backgroundColor ?? const Color(0xFFF4F6FB);
@@ -404,7 +402,7 @@ class _MobileHeader extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: Colors.white.withOpacity(.9),
+                          color: Colors.white.withValues(alpha: .9),
                           fontSize: subtitleSize,
                           fontWeight: FontWeight.w400,
                           height: 1.1,
@@ -513,7 +511,7 @@ class _WideHeader extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: Colors.white.withOpacity(.9),
+                    color: Colors.white.withValues(alpha: .9),
                     fontSize: subtitleSize,
                   ),
                 ),

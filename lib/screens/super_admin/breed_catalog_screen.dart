@@ -281,10 +281,10 @@ class _BreedCatalogScreenState extends State<BreedCatalogScreen> {
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: (isError ? Colors.red : Colors.green).withOpacity(.08),
+        color: (isError ? Colors.red : Colors.green).withValues(alpha: .08),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: (isError ? Colors.red : Colors.green).withOpacity(.22),
+          color: (isError ? Colors.red : Colors.green).withValues(alpha: .22),
         ),
       ),
       child: Text(
@@ -358,7 +358,7 @@ class _BreedCatalogScreenState extends State<BreedCatalogScreen> {
               if (species == 'rabbit')
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    value: classSystem,
+                    initialValue: classSystem,
                     decoration: const InputDecoration(
                       labelText: 'Class system',
                     ),

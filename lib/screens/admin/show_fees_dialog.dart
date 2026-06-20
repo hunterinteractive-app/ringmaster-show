@@ -573,7 +573,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.05),
+            color: Colors.black.withValues(alpha: .05),
             blurRadius: 12,
           ),
         ],
@@ -637,9 +637,9 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(.10),
+        color: color.withValues(alpha: .10),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withOpacity(.25)),
+        border: Border.all(color: color.withValues(alpha: .25)),
       ),
       child: Text(
         text,
@@ -733,7 +733,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
             decoration: BoxDecoration(
               color: const Color(0xFFF8FAFD),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.black.withOpacity(.06)),
+              border: Border.all(color: Colors.black.withValues(alpha: .06)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -823,7 +823,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
               final stack = constraints.maxWidth < 620;
 
               final basisField = DropdownButtonFormField<String>(
-                value: _discountBasis,
+                initialValue: _discountBasis,
                 isExpanded: true,
                 items: const [
                   DropdownMenuItem(
@@ -854,7 +854,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
               );
 
               final scopeField = DropdownButtonFormField<String>(
-                value: _discountScope,
+                initialValue: _discountScope,
                 isExpanded: true,
                 items: const [
                   DropdownMenuItem(
@@ -976,7 +976,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
               final stack = constraints.maxWidth < 520;
 
               final typeField = DropdownButtonFormField<String>(
-                value: _discountType,
+                initialValue: _discountType,
                 isExpanded: true,
                 items: const [
                   DropdownMenuItem(
@@ -1056,10 +1056,10 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
             width: double.infinity,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFF11285A).withOpacity(.05),
+              color: const Color(0xFF11285A).withValues(alpha: .05),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: const Color(0xFF11285A).withOpacity(.10),
+                color: const Color(0xFF11285A).withValues(alpha: .10),
               ),
             ),
             child: Text(
@@ -1110,10 +1110,10 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
           width: double.infinity,
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: const Color(0xFF11285A).withOpacity(.05),
+            color: const Color(0xFF11285A).withValues(alpha: .05),
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: const Color(0xFF11285A).withOpacity(.10),
+              color: const Color(0xFF11285A).withValues(alpha: .10),
             ),
           ),
           child: const Text(
@@ -1159,9 +1159,9 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(.08),
+                color: Colors.orange.withValues(alpha: .08),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.orange.withOpacity(.20)),
+                border: Border.all(color: Colors.orange.withValues(alpha: .20)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1341,13 +1341,13 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
                                   color: success
-                                      ? Colors.green.withOpacity(.08)
-                                      : Colors.red.withOpacity(.08),
+                                      ? Colors.green.withValues(alpha: .08)
+                                      : Colors.red.withValues(alpha: .08),
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
                                     color: success
-                                        ? Colors.green.withOpacity(.25)
-                                        : Colors.red.withOpacity(.25),
+                                        ? Colors.green.withValues(alpha: .25)
+                                        : Colors.red.withValues(alpha: .25),
                                   ),
                                 ),
                                 child: Text(

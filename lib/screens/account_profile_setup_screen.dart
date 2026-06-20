@@ -156,10 +156,10 @@ class _AccountProfileSetupScreenState extends State<AccountProfileSetupScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.red.withOpacity(.08),
+                      color: Colors.red.withValues(alpha: .08),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: Colors.red.withOpacity(.25),
+                        color: Colors.red.withValues(alpha: .25),
                       ),
                     ),
                     child: Text(

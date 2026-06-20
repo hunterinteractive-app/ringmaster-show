@@ -244,7 +244,17 @@ class ArbaReportLoader {
         ]);
 
         final number = _str(j['arba_judge_number']);
-        return number.isEmpty ? name : '$name - $number';
+        if (number.isEmpty) return name;
+
+        final normalizedName = name.toLowerCase();
+        final normalizedNumber = number.toLowerCase();
+        if (normalizedName.contains('#$normalizedNumber') ||
+            normalizedName.contains('($normalizedNumber)') ||
+            normalizedName.contains(normalizedNumber)) {
+          return name;
+        }
+
+        return '$name - $number';
       }).where((e) => e.trim().isNotEmpty).toList();
     } catch (_) {
       return const [];
@@ -598,86 +608,6 @@ class ArbaReportLoader {
     }
   }
 
-  Future<List<String>> _loadJudgeNames(
-    String showId, {
-    String? sectionId,
-  }) async {
-    try {
-      Future<List<Map<String, dynamic>>> loadAssignments({bool filterSection = false}) async {
-        var query = repo.supabase
-            .from('judge_assignments')
-            .select('judge_id, assignment_label, created_at, section_id')
-            .eq('show_id', showId);
-
-        if (filterSection && sectionId != null && sectionId.trim().isNotEmpty) {
-          query = query.eq('section_id', sectionId.trim());
-        }
-
-        final rows = await query.order('created_at');
-        return List<Map<String, dynamic>>.from(rows);
-      }
-
-      var assignments = await loadAssignments(
-        filterSection: sectionId != null && sectionId.trim().isNotEmpty,
-      );
-
-      // Fallback: if nothing matched the section, use all judges for the show
-      if (assignments.isEmpty) {
-        assignments = await loadAssignments(filterSection: false);
-      }
-
-      if (assignments.isEmpty) return const [];
-
-      final judgeIds = assignments
-          .map((e) => _str(e['judge_id']))
-          .where((e) => e.isNotEmpty)
-          .toSet()
-          .toList();
-
-      if (judgeIds.isEmpty) return const [];
-
-      final judgeRows = await repo.supabase
-          .from('judges')
-          .select('id, name, first_name, last_name, arba_judge_number')
-          .inFilter('id', judgeIds);
-
-      final judges = List<Map<String, dynamic>>.from(judgeRows);
-
-      final byId = <String, Map<String, dynamic>>{};
-      for (final row in judges) {
-        byId[_str(row['id'])] = row;
-      }
-
-      final seen = <String>{};
-      final output = <String>[];
-
-      for (final assignment in assignments) {
-        final judgeId = _str(assignment['judge_id']);
-        if (judgeId.isEmpty || seen.contains(judgeId)) continue;
-
-        final judge = byId[judgeId];
-        if (judge == null) continue;
-
-        final name = _str(judge['name']).isNotEmpty
-            ? _str(judge['name'])
-            : [
-                _str(judge['first_name']),
-                _str(judge['last_name']),
-              ].where((e) => e.isNotEmpty).join(' ');
-
-        final arbaNumber = _str(judge['arba_judge_number']);
-
-        if (name.isEmpty && arbaNumber.isEmpty) continue;
-
-        output.add(arbaNumber.isEmpty ? name : '$name - $arbaNumber');
-        seen.add(judgeId);
-      }
-
-      return output;
-    } catch (_) {
-      return const [];
-    }
-  }
 
   Future<String> _loadSignedByName() async {
     try {

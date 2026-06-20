@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:printing/printing.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/services/app_session.dart';
 
@@ -27,6 +26,7 @@ class CheckInGeneratorSheet extends StatefulWidget {
   final bool youthFirst;
 
   const CheckInGeneratorSheet({
+    super.key,
     required this.showId,
     required this.showName,
     required this.sections,
@@ -55,7 +55,7 @@ class _CheckInGeneratorSheetState extends State<CheckInGeneratorSheet> {
         .eq('id', widget.showId)
         .maybeSingle();
 
-    _showRow = (row as Map<String, dynamic>?) ?? <String, dynamic>{};
+    _showRow = row ?? <String, dynamic>{};
   }
 
 Future<List<Map<String, dynamic>>> _fetchEntries() async {
@@ -174,8 +174,7 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
         .maybeSingle();
 
     final coopNumberingMode =
-        ((showModeRow as Map<String, dynamic>?)?['coop_numbering_mode'] ??
-                'separate')
+        ((showModeRow?['coop_numbering_mode']) ?? 'separate')
             .toString()
             .trim()
             .toLowerCase();
@@ -815,7 +814,7 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
 
     final totalPages = exhibitorKeys.length;
 
-    pw.Widget _grayBar({
+    pw.Widget grayBar({
       required String left,
       required String right,
       String? trailing,
@@ -865,7 +864,7 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
 
     // _balanceBox removed as per instructions.
 
-    pw.Widget _infoBlockLeft(Map<String, dynamic> ex) {
+    pw.Widget infoBlockLeft(Map<String, dynamic> ex) {
       final a1 = _safe(ex, 'exhibitor_address_line1');
       final a2 = _safe(ex, 'exhibitor_address_line2');
       final city = _safe(ex, 'exhibitor_city');
@@ -898,7 +897,7 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
       );
     }
 
-    pw.Widget _infoBlockRight() {
+    pw.Widget infoBlockRight() {
       String s2(Map<String, dynamic>? m, String k) =>
           (m == null) ? '' : (m[k] ?? '').toString().trim();
 
@@ -935,7 +934,7 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
       );
     }
 
-    pw.Widget _instructions() {
+    pw.Widget instructions() {
       return pw.Padding(
         padding: const pw.EdgeInsets.only(top: 10),
         child: pw.Column(
@@ -965,7 +964,7 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
       );
     }
 
-    pw.Widget _entriesTable(List<Map<String, dynamic>> exEntries) {
+    pw.Widget entriesTable(List<Map<String, dynamic>> exEntries) {
       final h = pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold);
       final c = pw.TextStyle(fontSize: 10);
 
@@ -1143,7 +1142,7 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
 
             widgets.add(pw.SizedBox(height: 8));
             widgets.add(
-              _grayBar(
+              grayBar(
                 left: exhibitorLabel,
                 right: 'Number Entered  $numberEntered',
                 trailing: 'Balance Due: $balanceDue',
@@ -1167,14 +1166,14 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
               pw.Row(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
-                  pw.Expanded(child: _infoBlockLeft(exMap)),
+                  pw.Expanded(child: infoBlockLeft(exMap)),
                   pw.SizedBox(width: 24),
-                  pw.Container(width: 190, child: _infoBlockRight()),
+                  pw.Container(width: 190, child: infoBlockRight()),
                 ],
               ),
             );
 
-            widgets.add(_instructions());
+            widgets.add(instructions());
 
             if (widget.combineSections) {
               final bySection = _groupEntriesBySection(exEntries);
@@ -1197,10 +1196,10 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
                   ),
                 );
                 widgets.add(pw.SizedBox(height: 4));
-                widgets.add(_entriesTable(blockEntries));
+                widgets.add(entriesTable(blockEntries));
               }
             } else {
-              widgets.add(_entriesTable(exEntries));
+              widgets.add(entriesTable(exEntries));
             }
 
             widgets.add(pw.SizedBox(height: 12));
@@ -1336,13 +1335,13 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: isSuccess
-                      ? Colors.green.withOpacity(.08)
-                      : Colors.red.withOpacity(.08),
+                      ? Colors.green.withValues(alpha: .08)
+                      : Colors.red.withValues(alpha: .08),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: isSuccess
-                        ? Colors.green.withOpacity(.25)
-                        : Colors.red.withOpacity(.25),
+                        ? Colors.green.withValues(alpha: .25)
+                        : Colors.red.withValues(alpha: .25),
                   ),
                 ),
                 child: Text(

@@ -6,7 +6,6 @@ import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/services/show_lock_service.dart';
 import 'package:ringmaster_show/services/app_session.dart';
-import 'package:ringmaster_show/widgets/animal_editor/open_animal_editor_dialog.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -372,13 +371,13 @@ class _AdminEntryManagementScreenState
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: isSuccess
-              ? Colors.green.withOpacity(.08)
-              : Colors.red.withOpacity(.08),
+              ? Colors.green.withValues(alpha: .08)
+              : Colors.red.withValues(alpha: .08),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isSuccess
-                ? Colors.green.withOpacity(.25)
-                : Colors.red.withOpacity(.25),
+                ? Colors.green.withValues(alpha: .25)
+                : Colors.red.withValues(alpha: .25),
           ),
         ),
         child: Text(
@@ -404,7 +403,7 @@ class _AdminEntryManagementScreenState
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.05),
+            color: Colors.black.withValues(alpha: .05),
             blurRadius: 12,
           ),
         ],
@@ -488,7 +487,7 @@ class _AdminEntryManagementScreenState
                   child: Column(
                     children: [
                       DropdownButtonFormField<String>(
-                        value: _selectedSectionId,
+                        initialValue: _selectedSectionId,
                         decoration: const InputDecoration(
                           labelText: 'Show Letter / Section',
                           border: OutlineInputBorder(),
@@ -559,7 +558,7 @@ class _AdminEntryManagementScreenState
                                 borderRadius: BorderRadius.circular(18),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withOpacity(.05),
+                                    color: Colors.black.withValues(alpha: .05),
                                     blurRadius: 12,
                                   ),
                                 ],
@@ -1200,9 +1199,9 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
                 margin: const EdgeInsets.only(bottom: 10),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(.08),
+                  color: Colors.red.withValues(alpha: .08),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.red.withOpacity(.25)),
+                  border: Border.all(color: Colors.red.withValues(alpha: .25)),
                 ),
                 child: Text(
                   _msg!,
@@ -1234,7 +1233,7 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
             const SizedBox(height: 10),
             if (_loadingBreeds) const LinearProgressIndicator(),
             DropdownButtonFormField<String>(
-              value: _breedId,
+              initialValue: _breedId,
               decoration: const InputDecoration(
                 labelText: 'Breed',
                 border: OutlineInputBorder(),
@@ -1271,7 +1270,7 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
             const SizedBox(height: 10),
             if (_breedId != null && _loadingVarieties) const LinearProgressIndicator(),
             DropdownButtonFormField<String>(
-              value: _variety.text.trim().isEmpty ? null : _variety.text.trim(),
+              initialValue: _variety.text.trim().isEmpty ? null : _variety.text.trim(),
               decoration: const InputDecoration(
                 labelText: 'Variety',
                 border: OutlineInputBorder(),
@@ -1295,7 +1294,7 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
             ),
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(
-              value: _classValue,
+              initialValue: _classValue,
               decoration: const InputDecoration(
                 labelText: 'Class',
                 border: OutlineInputBorder(),
@@ -1318,7 +1317,7 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
             ),
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(
-              value: _sexValue,
+              initialValue: _sexValue,
               decoration: const InputDecoration(
                 labelText: 'Sex',
                 border: OutlineInputBorder(),
@@ -1361,7 +1360,7 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
             if (_isFur) ...[
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
-                value: _furVarietyValue,
+                initialValue: _furVarietyValue,
                 decoration: const InputDecoration(
                   labelText: 'Fur / Wool Class',
                   border: OutlineInputBorder(),
@@ -1629,9 +1628,9 @@ class _EditExhibitorSheetState extends State<_EditExhibitorSheet> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(.08),
+                  color: Colors.blue.withValues(alpha: .08),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.blue.withOpacity(.25)),
+                  border: Border.all(color: Colors.blue.withValues(alpha: .25)),
                 ),
                 child: const Text(
                   'This exhibitor has an account. Show secretaries can view the contact information here, but profile changes must be made by the exhibitor from their account.',
@@ -1645,9 +1644,9 @@ class _EditExhibitorSheetState extends State<_EditExhibitorSheet> {
                 margin: const EdgeInsets.only(bottom: 10),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(.08),
+                  color: Colors.red.withValues(alpha: .08),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.red.withOpacity(.25)),
+                  border: Border.all(color: Colors.red.withValues(alpha: .25)),
                 ),
                 child: Text(
                   _msg!,
@@ -1910,9 +1909,9 @@ class _MoveEntrySheetState extends State<_MoveEntrySheet> {
                 margin: const EdgeInsets.only(bottom: 10),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(.08),
+                  color: Colors.red.withValues(alpha: .08),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.red.withOpacity(.25)),
+                  border: Border.all(color: Colors.red.withValues(alpha: .25)),
                 ),
                 child: Text(
                   _msg!,
@@ -1923,7 +1922,7 @@ class _MoveEntrySheetState extends State<_MoveEntrySheet> {
                 ),
               ),
             DropdownButtonFormField<String>(
-              value: _sectionId,
+              initialValue: _sectionId,
               decoration: const InputDecoration(
                 labelText: 'Move to section',
                 border: OutlineInputBorder(),
@@ -2378,7 +2377,7 @@ Future<void> _openSharedAnimalEditorForAdd() async {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.black.withOpacity(.08)),
+        border: Border.all(color: Colors.black.withValues(alpha: .08)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2464,7 +2463,7 @@ Future<void> _openSharedAnimalEditorForAdd() async {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.black.withOpacity(.08)),
+        border: Border.all(color: Colors.black.withValues(alpha: .08)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3072,27 +3071,26 @@ Future<void> _openSharedAnimalEditorForAdd() async {
         animalId = (_animal!['id'] ?? '').toString();
       }
 
-      if (animalId != null) {
-        for (final sectionId in _selectedSectionIds) {
-          final duplicateRows = await supabase
-              .from('entries')
-              .select('id,is_fur')
-              .eq('show_id', widget.showId)
-              .eq('section_id', sectionId)
-              .eq('animal_id', animalId)
-              .limit(1);
+      for (final sectionId in _selectedSectionIds) {
+        final duplicateRows = await supabase
+            .from('entries')
+            .select('id,is_fur')
+            .eq('show_id', widget.showId)
+            .eq('section_id', sectionId)
+            .eq('animal_id', animalId)
+            .limit(1);
 
-          final dup = (duplicateRows as List).isEmpty
-              ? null
-              : Map<String, dynamic>.from(
-                  (duplicateRows as List).first as Map,
-                );
+        final duplicateList = duplicateRows as List;
+        final dup = duplicateList.isEmpty
+            ? null
+            : Map<String, dynamic>.from(
+                duplicateList.first as Map,
+              );
 
-          if (dup != null) {
-            throw Exception(
-              'Animal already entered in ${_sectionDisplayLabelById(sectionId)}',
-            );
-          }
+        if (dup != null) {
+          throw Exception(
+            'Animal already entered in ${_sectionDisplayLabelById(sectionId)}',
+          );
         }
       }
 
@@ -3252,13 +3250,13 @@ Future<void> _openSharedAnimalEditorForAdd() async {
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: isSuccess
-                            ? Colors.green.withOpacity(.08)
-                            : Colors.red.withOpacity(.08),
+                            ? Colors.green.withValues(alpha: .08)
+                            : Colors.red.withValues(alpha: .08),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: isSuccess
-                              ? Colors.green.withOpacity(.25)
-                              : Colors.red.withOpacity(.25),
+                              ? Colors.green.withValues(alpha: .25)
+                              : Colors.red.withValues(alpha: .25),
                         ),
                       ),
                       child: Text(
@@ -3474,7 +3472,7 @@ Future<void> _openSharedAnimalEditorForAdd() async {
                     const SizedBox(height: 10),
                     const SizedBox(height: 10),
                     DropdownButtonFormField<String>(
-                      value: _exhibitorType,
+                      initialValue: _exhibitorType,
                       decoration: const InputDecoration(
                         labelText: 'Exhibitor Type',
                         border: OutlineInputBorder(),
@@ -3564,7 +3562,7 @@ Future<void> _openSharedAnimalEditorForAdd() async {
                                 padding: EdgeInsets.zero,
                                 shrinkWrap: true,
                                 itemCount: optionList.length,
-                                separatorBuilder: (_, __) => const Divider(height: 1),
+                                separatorBuilder: (_, _) => const Divider(height: 1),
                                 itemBuilder: (context, index) {
                                   final option = optionList[index];
                                   final email = (option['email'] ?? '').toString().trim();
@@ -3608,7 +3606,7 @@ Future<void> _openSharedAnimalEditorForAdd() async {
                       )
                     else
                       DropdownButtonFormField<Map<String, dynamic>>(
-                        value: _animal,
+                        initialValue: _animal,
                         isExpanded: true,
                         decoration: const InputDecoration(
                           labelText: 'Saved Animal',
@@ -3676,7 +3674,7 @@ Future<void> _openSharedAnimalEditorForAdd() async {
                   ],
                   if (_useLocalAnimal) ...[
                     DropdownButtonFormField<String>(
-                      value: _species,
+                      initialValue: _species,
                       decoration: const InputDecoration(
                         labelText: 'Species',
                         border: OutlineInputBorder(),
@@ -3727,7 +3725,7 @@ Future<void> _openSharedAnimalEditorForAdd() async {
                     const SizedBox(height: 10),
                     if (_loadingBreeds) const LinearProgressIndicator(),
                     DropdownButtonFormField<String>(
-                      value: _breedId,
+                      initialValue: _breedId,
                       decoration: const InputDecoration(
                         labelText: 'Breed',
                         border: OutlineInputBorder(),
@@ -3764,7 +3762,7 @@ Future<void> _openSharedAnimalEditorForAdd() async {
                     const SizedBox(height: 10),
                     if (_breedId != null && _loadingVarieties) const LinearProgressIndicator(),
                     DropdownButtonFormField<String>(
-                      value: _variety.text.trim().isEmpty ? null : _variety.text.trim(),
+                      initialValue: _variety.text.trim().isEmpty ? null : _variety.text.trim(),
                       decoration: const InputDecoration(
                         labelText: 'Variety',
                         border: OutlineInputBorder(),
@@ -3789,7 +3787,7 @@ Future<void> _openSharedAnimalEditorForAdd() async {
                     const SizedBox(height: 10),
                     const SizedBox(height: 10),
                     DropdownButtonFormField<String>(
-                      value: _sexValue,
+                      initialValue: _sexValue,
                       decoration: const InputDecoration(
                         labelText: 'Sex',
                         border: OutlineInputBorder(),
@@ -3821,7 +3819,7 @@ Future<void> _openSharedAnimalEditorForAdd() async {
 
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value: _classValue,
+                    initialValue: _classValue,
                     decoration: const InputDecoration(
                       labelText: 'Class / Age Override',
                       helperText: 'Use this when DOB is missing or when the show secretary needs to override the calculated class.',
@@ -3874,7 +3872,7 @@ Future<void> _openSharedAnimalEditorForAdd() async {
                     ),
                     const SizedBox(height: 10),
                     DropdownButtonFormField<String>(
-                      value: _furVarietyValue,
+                      initialValue: _furVarietyValue,
                       decoration: const InputDecoration(
                         labelText: 'Fur / Wool Class',
                         border: OutlineInputBorder(),

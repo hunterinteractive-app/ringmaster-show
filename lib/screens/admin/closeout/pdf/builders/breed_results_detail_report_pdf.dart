@@ -645,24 +645,6 @@ class BreedResultsDetailReportPdf {
     return '';
   }
 
-  bool _isFurOrWoolSection(VarietySection variety) {
-    if (_isFurWoolTextMatch([variety.varietyName])) return true;
-
-    for (final sexSection in variety.sexSections) {
-      for (final classGroup in sexSection.classes) {
-        if (_isFurWoolTextMatch([classGroup.className])) return true;
-        for (final row in classGroup.rows) {
-          if (_isFurWoolPlacementRow(row, classGroup, variety)) return true;
-        }
-      }
-    }
-
-    for (final award in variety.awards) {
-      if (_isFurWoolAward(award, variety)) return true;
-    }
-
-    return false;
-  }
 
   pw.Widget _sectionTitle(String title) {
     return pw.Padding(

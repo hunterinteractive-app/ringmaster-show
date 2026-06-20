@@ -17,6 +17,7 @@ class CoopCardsGeneratorSheet extends StatefulWidget {
   final String showName;
 
   const CoopCardsGeneratorSheet({
+    super.key,
     required this.showId,
     required this.showName,
   });
@@ -226,7 +227,7 @@ class _CoopCardsGeneratorSheetState
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(.03),
+                color: Colors.black.withValues(alpha: .03),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: const Text(

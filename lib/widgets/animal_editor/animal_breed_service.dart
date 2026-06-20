@@ -1,6 +1,5 @@
 // lib/widgets/animal_editor/animal_breed_service.dart
 
-import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 final supabase = Supabase.instance.client;

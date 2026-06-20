@@ -546,9 +546,9 @@ class _AdminCoopNumbersScreenState extends State<AdminCoopNumbersScreen> {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: color.withOpacity(.08),
+        color: color.withValues(alpha: .08),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withOpacity(.25)),
+        border: Border.all(color: color.withValues(alpha: .25)),
       ),
       child: Text(
         _message!,
@@ -612,8 +612,8 @@ class _AdminCoopNumbersScreenState extends State<AdminCoopNumbersScreen> {
                         ),
                         decoration: BoxDecoration(
                           color: row.scope == 'youth'
-                              ? Colors.purple.withOpacity(.10)
-                              : Colors.blue.withOpacity(.10),
+                              ? Colors.purple.withValues(alpha: .10)
+                              : Colors.blue.withValues(alpha: .10),
                           borderRadius: BorderRadius.circular(999),
                         ),
                         child: Text(

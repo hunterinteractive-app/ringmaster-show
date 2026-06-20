@@ -393,65 +393,7 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
     }
   }
 
-  Future<void> _setAllBreedsEnabled(bool enabled) async {
-    setState(() {
-      _loading = true;
-      _msg = null;
-    });
 
-    try {
-      final sbid = _singleBreedId;
-
-      for (final breed in _breeds) {
-        final breedId = breed['id'].toString();
-
-        if (_isSingleBreedShow && sbid != null && breedId == sbid) {
-          if (enabled) {
-            await _setBreedEnabled(breedId, true);
-          }
-          continue;
-        }
-
-        await _setBreedEnabled(breedId, enabled);
-      }
-
-      if (!mounted) return;
-      await _refresh();
-
-      if (!mounted) return;
-      setState(() {
-        _msg = enabled
-            ? 'All visible breeds activated for this show'
-            : 'All visible breeds deactivated for this show';
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _msg = 'Activate all update failed: $e';
-      });
-    }
-  }
-
-  bool get _areAllVisibleBreedsEnabled {
-    if (_breeds.isEmpty) return false;
-
-    final sbid = _singleBreedId;
-
-    for (final breed in _breeds) {
-      final breedId = breed['id'].toString();
-
-      if (_isSingleBreedShow && sbid != null && breedId == sbid) {
-        continue;
-      }
-
-      if (!_breedEnabledDefault(breed)) {
-        return false;
-      }
-    }
-
-    return true;
-  }
 
   String _effectiveClassSystem(Map<String, dynamic> breed) {
     final bid = breed['id'].toString();
@@ -783,7 +725,7 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.05),
+            color: Colors.black.withValues(alpha: .05),
             blurRadius: 12,
           ),
         ],
@@ -816,7 +758,7 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
               decoration: BoxDecoration(
                 color: const Color(0xFFF8FAFD),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.black.withOpacity(.06)),
+                border: Border.all(color: Colors.black.withValues(alpha: .06)),
               ),
               child: SwitchListTile(
                 contentPadding: const EdgeInsets.symmetric(
@@ -892,7 +834,7 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(.05),
+              color: Colors.black.withValues(alpha: .05),
               blurRadius: 12,
             ),
           ],
@@ -930,7 +872,7 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
                   if (species == 'rabbit') ...[
                     const SizedBox(height: 6),
                     DropdownButtonFormField<String>(
-                      value: overrideValue,
+                      initialValue: overrideValue,
                       decoration: const InputDecoration(
                         labelText: 'Class system',
                         border: OutlineInputBorder(),
@@ -963,10 +905,10 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF11285A).withOpacity(.04),
+                      color: const Color(0xFF11285A).withValues(alpha: .04),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: const Color(0xFF11285A).withOpacity(.10),
+                        color: const Color(0xFF11285A).withValues(alpha: .10),
                       ),
                     ),
                     child: Row(
@@ -1022,7 +964,7 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
                           decoration: BoxDecoration(
                             color: const Color(0xFFF8F9FC),
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: Colors.black.withOpacity(.05)),
+                            border: Border.all(color: Colors.black.withValues(alpha: .05)),
                           ),
                           child: SwitchListTile(
                             title: Text(varietyName),
@@ -1066,7 +1008,7 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
                         decoration: BoxDecoration(
                           color: const Color(0xFFF8F9FC),
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: Colors.black.withOpacity(.05)),
+                          border: Border.all(color: Colors.black.withValues(alpha: .05)),
                         ),
                         child: SwitchListTile(
                           title: Text(cn),
@@ -1200,7 +1142,7 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
             borderRadius: BorderRadius.circular(18),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(.05),
+                color: Colors.black.withValues(alpha: .05),
                 blurRadius: 12,
               ),
             ],
@@ -1246,7 +1188,7 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
             borderRadius: BorderRadius.circular(18),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(.05),
+                color: Colors.black.withValues(alpha: .05),
                 blurRadius: 12,
               ),
             ],
@@ -1357,10 +1299,10 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
                 margin: const EdgeInsets.only(bottom: 12),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFD4A623).withOpacity(.10),
+                  color: const Color(0xFFD4A623).withValues(alpha: .10),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: const Color(0xFFD4A623).withOpacity(.30),
+                    color: const Color(0xFFD4A623).withValues(alpha: .30),
                   ),
                 ),
                 child: Row(
@@ -1384,10 +1326,10 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
                 margin: const EdgeInsets.only(bottom: 12),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(.08),
+                  color: Colors.green.withValues(alpha: .08),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: Colors.green.withOpacity(.25),
+                    color: Colors.green.withValues(alpha: .25),
                   ),
                 ),
                 child: Text(
@@ -1421,7 +1363,7 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
                 SizedBox(
                   width: 150,
                   child: DropdownButtonFormField<String>(
-                    value: _speciesFilter,
+                    initialValue: _speciesFilter,
                     decoration: const InputDecoration(
                       labelText: 'Species',
                       border: OutlineInputBorder(),

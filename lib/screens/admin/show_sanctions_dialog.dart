@@ -1036,7 +1036,7 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                   children: [
                     TableRow(
                       decoration: BoxDecoration(
-                        color: const Color(0xFF11285A).withOpacity(.08),
+                        color: const Color(0xFF11285A).withValues(alpha: .08),
                       ),
                       children: [
                         _headerCell('Club / Breed / State Club'),
@@ -1438,13 +1438,13 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
                               color: savedMessage
-                                  ? Colors.green.withOpacity(.08)
-                                  : Colors.red.withOpacity(.08),
+                                  ? Colors.green.withValues(alpha: .08)
+                                  : Colors.red.withValues(alpha: .08),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
                                 color: savedMessage
-                                    ? Colors.green.withOpacity(.25)
-                                    : Colors.red.withOpacity(.25),
+                                    ? Colors.green.withValues(alpha: .25)
+                                    : Colors.red.withValues(alpha: .25),
                               ),
                             ),
                             child: Text(
@@ -1466,7 +1466,7 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                                     borderRadius: BorderRadius.circular(16),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.black.withOpacity(.05),
+                                        color: Colors.black.withValues(alpha: .05),
                                         blurRadius: 10,
                                       ),
                                     ],
@@ -1621,7 +1621,7 @@ class _SanctionStatusLegendItem extends StatelessWidget {
           decoration: BoxDecoration(
             color: color,
             borderRadius: BorderRadius.circular(4),
-            border: Border.all(color: Colors.black.withOpacity(.12)),
+            border: Border.all(color: Colors.black.withValues(alpha: .12)),
           ),
         ),
         const SizedBox(width: 6),

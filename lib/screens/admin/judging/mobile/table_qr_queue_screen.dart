@@ -460,7 +460,7 @@ class _TableQrQueueScreenState extends State<TableQrQueueScreen> {
                           margin: const EdgeInsets.only(bottom: 10),
                           child: ListTile(
                             leading: CircleAvatar(
-                              backgroundColor: statusColor.withOpacity(0.12),
+                              backgroundColor: statusColor.withValues(alpha: 0.12),
                               child: Icon(
                                 _statusIcon(row),
                                 color: statusColor,

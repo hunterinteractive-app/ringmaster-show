@@ -15,7 +15,6 @@ import 'show_sanctions_dialog.dart';
 import 'show_fees_dialog.dart';
 import 'payback_settings_dialog.dart';
 import 'show_role_assignments_dialog.dart';
-import 'show_rules_dialog.dart';
 import 'show_sections_dialog.dart';
 import 'show_judges_dialog.dart';
 import '../../widgets/rm_timezone_notice_banner.dart';
@@ -199,10 +198,6 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
     return n.isEmpty ? _showNameForTitle : n;
   }
 
-  bool _entryClosed() {
-    if (_entryCloseAt == null) return false;
-    return DateTime.now().isAfter(_entryCloseAt!.toLocal());
-  }
 
   String _fmtDate(DateTime? d) {
     if (d == null) return '(not set)';
@@ -232,24 +227,6 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
     return DateTime.tryParse(s);
   }
 
-  void _showPostShowPlaceholder({
-    required String title,
-    required String body,
-  }) {
-    showDialog<void>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text(title),
-        content: Text(body),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
 
   String _finalAwardModeLabel(String mode) {
     switch (mode) {
@@ -551,10 +528,10 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                           margin: const EdgeInsets.only(bottom: 12),
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: Colors.red.withOpacity(.08),
+                            color: Colors.red.withValues(alpha: .08),
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(
-                              color: Colors.red.withOpacity(.25),
+                              color: Colors.red.withValues(alpha: .25),
                             ),
                           ),
                           child: Text(
@@ -903,13 +880,6 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
     );
   }
 
-  void _openRules() {
-    ShowRulesDialog.open(
-      context,
-      showId: widget.showId,
-      showName: _effectiveShowName(),
-    );
-  }
 
   void _openEntryManagement() {
     Navigator.push(
@@ -979,21 +949,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
 //    );
 //  }
 
-  void _openPublishResultsFuture() {
-    _showPostShowPlaceholder(
-      title: 'Publish Results',
-      body:
-          'Planned for a future phase.\n\nThis will make finalized results visible to exhibitors and the public.',
-    );
-  }
 
-  void _openFinancialCloseoutLater() {
-    _showPostShowPlaceholder(
-      title: 'Financial Closeout',
-      body:
-          'Planned for a later phase.\n\nThis will finalize balances, reconcile payments, and close the books for the show.',
-    );
-  }
 
   Future<void> _downloadLockedShowData() async {
     setState(() {
@@ -1090,7 +1046,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.05),
+            color: Colors.black.withValues(alpha: .05),
             blurRadius: 12,
           ),
         ],
@@ -1125,7 +1081,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: Colors.black.withOpacity(.05),
+          color: Colors.black.withValues(alpha: .05),
         ),
       ),
       child: ListTile(
@@ -1146,9 +1102,9 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(.10),
+        color: color.withValues(alpha: .10),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withOpacity(.30)),
+        border: Border.all(color: color.withValues(alpha: .30)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1175,7 +1131,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.black.withOpacity(.05)),
+        border: Border.all(color: Colors.black.withValues(alpha: .05)),
       ),
       child: Wrap(
         spacing: 10,
@@ -1234,7 +1190,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.black.withOpacity(.05)),
+          border: Border.all(color: Colors.black.withValues(alpha: .05)),
         ),
         child: const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1312,9 +1268,9 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.orange.withOpacity(.10),
+        color: Colors.orange.withValues(alpha: .10),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.orange.withOpacity(.35)),
+        border: Border.all(color: Colors.orange.withValues(alpha: .35)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1546,15 +1502,15 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                               color: (_msg == 'Saved.' ||
                                       _msg == 'Show locked.' ||
                                       _msg == 'Show unlocked.')
-                                  ? Colors.green.withOpacity(.08)
-                                  : Colors.red.withOpacity(.08),
+                                  ? Colors.green.withValues(alpha: .08)
+                                  : Colors.red.withValues(alpha: .08),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
                                 color: (_msg == 'Saved.' ||
                                         _msg == 'Show locked.' ||
                                         _msg == 'Show unlocked.')
-                                    ? Colors.green.withOpacity(.25)
-                                    : Colors.red.withOpacity(.25),
+                                    ? Colors.green.withValues(alpha: .25)
+                                    : Colors.red.withValues(alpha: .25),
                               ),
                             ),
                             child: Text(
@@ -1583,7 +1539,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                 Container(
                                   padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
-                                    color: Colors.black.withOpacity(.04),
+                                    color: Colors.black.withValues(alpha: .04),
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: Column(
@@ -1664,7 +1620,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                               const SizedBox(height: 12),
                               if (_loadingClubs) const LinearProgressIndicator(),
                               DropdownButtonFormField<String>(
-                                value: _clubs.any((club) => club['id']?.toString() == _selectedClubId)
+                                initialValue: _clubs.any((club) => club['id']?.toString() == _selectedClubId)
                                     ? _selectedClubId
                                     : null,
                                 decoration: InputDecoration(
@@ -1876,7 +1832,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                               ),
                               const SizedBox(height: 12),
                               DropdownButtonFormField<String>(
-                                value: _finalAwardMode,
+                                initialValue: _finalAwardMode,
                                 decoration: const InputDecoration(
                                   labelText: 'Final award format',
                                   border: OutlineInputBorder(),

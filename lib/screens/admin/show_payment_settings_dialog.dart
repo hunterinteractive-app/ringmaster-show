@@ -259,7 +259,7 @@ class _ShowPaymentSettingsDialogState
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.05),
+            color: Colors.black.withValues(alpha: .05),
             blurRadius: 10,
           ),
         ],
@@ -370,13 +370,13 @@ class _ShowPaymentSettingsDialogState
                                   padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
                                     color: savedMessage
-                                        ? Colors.green.withOpacity(.08)
-                                        : Colors.red.withOpacity(.08),
+                                        ? Colors.green.withValues(alpha: .08)
+                                        : Colors.red.withValues(alpha: .08),
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
                                       color: savedMessage
-                                          ? Colors.green.withOpacity(.25)
-                                          : Colors.red.withOpacity(.25),
+                                          ? Colors.green.withValues(alpha: .25)
+                                          : Colors.red.withValues(alpha: .25),
                                     ),
                                   ),
                                   child: Text(
@@ -398,7 +398,7 @@ class _ShowPaymentSettingsDialogState
                                         title: 'Payment Mode',
                                         children: [
                                           DropdownButtonFormField<String>(
-                                            value: _paymentMode,
+                                            initialValue: _paymentMode,
                                             decoration: const InputDecoration(
                                               labelText: 'Payment mode',
                                               border: OutlineInputBorder(),
@@ -471,13 +471,13 @@ class _ShowPaymentSettingsDialogState
                                               padding: const EdgeInsets.all(12),
                                               decoration: BoxDecoration(
                                                 color: _stripeReady
-                                                    ? Colors.green.withOpacity(.08)
-                                                    : Colors.orange.withOpacity(.10),
+                                                    ? Colors.green.withValues(alpha: .08)
+                                                    : Colors.orange.withValues(alpha: .10),
                                                 borderRadius: BorderRadius.circular(12),
                                                 border: Border.all(
                                                   color: _stripeReady
-                                                      ? Colors.green.withOpacity(.25)
-                                                      : Colors.orange.withOpacity(.35),
+                                                      ? Colors.green.withValues(alpha: .25)
+                                                      : Colors.orange.withValues(alpha: .35),
                                                 ),
                                               ),
                                               child: Column(

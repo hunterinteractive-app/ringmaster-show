@@ -141,7 +141,7 @@ class _BreedEditorScreenState extends State<BreedEditorScreen> {
                         ),
                         const SizedBox(height: 14),
                         DropdownButtonFormField<String>(
-                          value: _classSystem,
+                          initialValue: _classSystem,
                           decoration: const InputDecoration(
                             labelText: 'Class system',
                           ),
@@ -189,10 +189,10 @@ class _BreedEditorScreenState extends State<BreedEditorScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.red.withOpacity(.08),
+                      color: Colors.red.withValues(alpha: .08),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: Colors.red.withOpacity(.22),
+                        color: Colors.red.withValues(alpha: .22),
                       ),
                     ),
                     child: Text(

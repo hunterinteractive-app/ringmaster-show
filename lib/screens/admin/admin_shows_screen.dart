@@ -36,7 +36,6 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
   late Future<_AdminShowsPageData> _pageFuture;
   final TextEditingController _searchController = TextEditingController();
 
-  static const String _demoShowId = '0f432fe8-2be2-467a-842f-ff3777436992';
 
   bool get _isDemoMode {
     if (widget.demoMode) return true;
@@ -797,7 +796,7 @@ class _AdminShowsAppBar extends StatelessWidget implements PreferredSizeWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Colors.white.withOpacity(.9),
+                        color: Colors.white.withValues(alpha: .9),
                         fontSize: width < 500 ? 13 : 15,
                         fontWeight: FontWeight.w500,
                       ),

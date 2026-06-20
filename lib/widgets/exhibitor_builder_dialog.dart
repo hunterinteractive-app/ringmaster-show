@@ -268,7 +268,7 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
         .order('created_at', ascending: true)
         .limit(1);
 
-    if (rows is! List || rows.isEmpty) return;
+    if (rows.isEmpty) return;
 
     final primary = Map<String, dynamic>.from(rows.first as Map);
 
@@ -363,7 +363,7 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
       _zip.text = (row['zip'] ?? '').toString();
 
       final bd = row['birth_date']?.toString();
-      _birthDate = bd == null || bd.isEmpty ? null : DateTime.tryParse(bd);
+      _birthDate = bd?.isNotEmpty == true ? DateTime.tryParse(bd!) : null;
       _groupShowsAsYouth = row['group_shows_as_youth'] == true;
 
       _clearGroupMembers();
@@ -379,9 +379,9 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
               member.arbaNumber.text = (item['arba_number'] ?? '').toString();
 
               final memberBirthDate = item['birth_date']?.toString();
-              member.birthDate = memberBirthDate == null || memberBirthDate.isEmpty
-                  ? null
-                  : DateTime.tryParse(memberBirthDate);
+              member.birthDate = memberBirthDate?.isNotEmpty == true
+                  ? DateTime.tryParse(memberBirthDate!)
+                  : null;
 
               member.firstName.addListener(_onGroupMembersChanged);
               member.lastName.addListener(_onGroupMembersChanged);
@@ -553,9 +553,7 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
                     'arba_number': m.arbaNumber.text.trim().isEmpty
                         ? null
                         : m.arbaNumber.text.trim(),
-                    'birth_date': m.birthDate == null
-                        ? null
-                        : m.birthDate!.toIso8601String().substring(0, 10),
+                    'birth_date': m.birthDate?.toIso8601String().substring(0, 10),
                   },
                 )
                 .toList()
@@ -589,9 +587,7 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
         'state': _state.text.trim().isEmpty ? null : _state.text.trim(),
         'zip': _zip.text.trim().isEmpty ? null : _zip.text.trim(),
 
-        'birth_date': _birthDate == null
-            ? null
-            : _birthDate!.toIso8601String().substring(0, 10),
+        'birth_date': _birthDate?.toIso8601String().substring(0, 10),
 
         'group_members': groupMembersPayload,
       };
@@ -636,7 +632,7 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.05),
+            color: Colors.black.withValues(alpha: .05),
             blurRadius: 10,
           ),
         ],
@@ -771,10 +767,10 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
                         margin: const EdgeInsets.only(bottom: 16),
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Colors.red.withOpacity(.08),
+                          color: Colors.red.withValues(alpha: .08),
                           borderRadius: BorderRadius.circular(12),
                           border:
-                              Border.all(color: Colors.red.withOpacity(.25)),
+                              Border.all(color: Colors.red.withValues(alpha: .25)),
                         ),
                         child: Text(
                           _msg!,
@@ -788,7 +784,7 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
                       title: 'Exhibitor Type',
                       children: [
                         DropdownButtonFormField<String>(
-                          value: _type,
+                          initialValue: _type,
                           items: const [
                             DropdownMenuItem(
                               value: 'adult',

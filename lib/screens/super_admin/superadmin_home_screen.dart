@@ -202,13 +202,13 @@ class _SuperadminHomeScreenState extends State<SuperadminHomeScreen> {
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: success
-                      ? Colors.green.withOpacity(.08)
-                      : Colors.red.withOpacity(.08),
+                      ? Colors.green.withValues(alpha: .08)
+                      : Colors.red.withValues(alpha: .08),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: success
-                        ? Colors.green.withOpacity(.25)
-                        : Colors.red.withOpacity(.25),
+                        ? Colors.green.withValues(alpha: .25)
+                        : Colors.red.withValues(alpha: .25),
                   ),
                 ),
                 child: Text(
@@ -301,7 +301,7 @@ class _SuperadminToolCard extends StatelessWidget {
           width: 42,
           height: 42,
           decoration: BoxDecoration(
-            color: const Color(0xFF11285A).withOpacity(.08),
+            color: const Color(0xFF11285A).withValues(alpha: .08),
             borderRadius: BorderRadius.circular(12),
           ),
           child: leadingOverride ??
@@ -625,9 +625,9 @@ class _SupportImpersonationScreenState
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(.08),
+                  color: Colors.red.withValues(alpha: .08),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.red.withOpacity(.25)),
+                  border: Border.all(color: Colors.red.withValues(alpha: .25)),
                 ),
                 child: Text(
                   _error!,
@@ -659,7 +659,7 @@ class _SupportImpersonationScreenState
                         child: ListView.separated(
                           padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                           itemCount: _users.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 10),
+                          separatorBuilder: (context, index) => const SizedBox(height: 10),
                           itemBuilder: (context, index) {
                             final user = _users[index];
 

@@ -489,7 +489,7 @@ class _ShowRoleAssignmentsDialogState
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.05),
+            color: Colors.black.withValues(alpha: .05),
             blurRadius: 10,
           ),
         ],
@@ -509,7 +509,7 @@ class _ShowRoleAssignmentsDialogState
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        border: Border.all(color: Colors.black.withOpacity(.08)),
+        border: Border.all(color: Colors.black.withValues(alpha: .08)),
         borderRadius: BorderRadius.circular(12),
       ),
       child: ListTile(
@@ -530,11 +530,11 @@ class _ShowRoleAssignmentsDialogState
     return Container(
       margin: const EdgeInsets.only(top: 8),
       decoration: BoxDecoration(
-        color: selected ? const Color(0xFFD4A623).withOpacity(.12) : Colors.white,
+        color: selected ? const Color(0xFFD4A623).withValues(alpha: .12) : Colors.white,
         border: Border.all(
           color: selected
               ? const Color(0xFFD4A623)
-              : Colors.black.withOpacity(.08),
+              : Colors.black.withValues(alpha: .08),
         ),
         borderRadius: BorderRadius.circular(12),
       ),
@@ -645,13 +645,13 @@ class _ShowRoleAssignmentsDialogState
                                   padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
                                     color: successMessage
-                                        ? Colors.green.withOpacity(.08)
-                                        : Colors.red.withOpacity(.08),
+                                        ? Colors.green.withValues(alpha: .08)
+                                        : Colors.red.withValues(alpha: .08),
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
                                       color: successMessage
-                                          ? Colors.green.withOpacity(.25)
-                                          : Colors.red.withOpacity(.25),
+                                          ? Colors.green.withValues(alpha: .25)
+                                          : Colors.red.withValues(alpha: .25),
                                     ),
                                   ),
                                   child: Text(
@@ -689,7 +689,7 @@ class _ShowRoleAssignmentsDialogState
                                           ),
                                           const SizedBox(height: 12),
                                           DropdownButtonFormField<String>(
-                                            value: _selectedRole,
+                                            initialValue: _selectedRole,
                                             decoration: const InputDecoration(
                                               labelText: 'Role',
                                               border: OutlineInputBorder(),

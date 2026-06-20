@@ -383,10 +383,10 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
                 margin: const EdgeInsets.only(bottom: 12),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(.10),
+                  color: Colors.orange.withValues(alpha: .10),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: Colors.orange.withOpacity(.35),
+                    color: Colors.orange.withValues(alpha: .35),
                   ),
                 ),
                 child: const Text(
@@ -410,7 +410,7 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(.05),
+                            color: Colors.black.withValues(alpha: .05),
                             blurRadius: 10,
                           ),
                         ],
@@ -449,7 +449,7 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
                             ),
                           ] else ...[
                             DropdownButtonFormField<String>(
-                              value: selectedClubExists ? _selectedClubId : null,
+                              initialValue: selectedClubExists ? _selectedClubId : null,
                               decoration: InputDecoration(
                                 labelText: 'Hosting Club',
                                 border: const OutlineInputBorder(),
@@ -556,7 +556,7 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(.05),
+                            color: Colors.black.withValues(alpha: .05),
                             blurRadius: 10,
                           ),
                         ],
@@ -623,7 +623,7 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(.05),
+                            color: Colors.black.withValues(alpha: .05),
                             blurRadius: 10,
                           ),
                         ],
@@ -637,7 +637,7 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
                           ),
                           const SizedBox(height: 10),
                           DropdownButtonFormField<int>(
-                            value: _openCount,
+                            initialValue: _openCount,
                             decoration: const InputDecoration(
                               labelText: 'Open shows',
                               border: OutlineInputBorder(),
@@ -664,7 +664,7 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
                           ),
                           const SizedBox(height: 12),
                           DropdownButtonFormField<int>(
-                            value: _youthCount,
+                            initialValue: _youthCount,
                             decoration: const InputDecoration(
                               labelText: 'Youth shows',
                               border: OutlineInputBorder(),
@@ -706,7 +706,7 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(.05),
+                            color: Colors.black.withValues(alpha: .05),
                             blurRadius: 10,
                           ),
                         ],
@@ -728,10 +728,10 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
                         width: double.infinity,
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Colors.red.withOpacity(.08),
+                          color: Colors.red.withValues(alpha: .08),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: Colors.red.withOpacity(.25),
+                            color: Colors.red.withValues(alpha: .25),
                           ),
                         ),
                         child: Text(

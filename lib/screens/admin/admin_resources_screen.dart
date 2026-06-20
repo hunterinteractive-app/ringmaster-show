@@ -8,11 +8,6 @@ import 'package:ringmaster_show/services/app_session.dart';
 
 import '../../theme/app_theme.dart';
 import '../../widgets/rm_widgets.dart';
-import '../show_list_screen.dart';
-import '../my_animals_screen.dart';
-import '../my_entries_screen.dart';
-import '../account_settings_screen.dart';
-import '../create_show_screen.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -25,40 +20,6 @@ class AdminResourcesScreen extends StatefulWidget {
 
 class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
   late Future<List<Map<String, dynamic>>> _future;
-
-  void _openShows() {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const ShowListScreen()),
-    );
-  }
-
-  void _openAnimals() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const MyAnimalsScreen()),
-    );
-  }
-
-  void _openEntries() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const MyEntriesScreen()),
-    );
-  }
-
-  void _openAccount() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const AccountSettingsScreen()),
-    );
-  }
-
-  Future<void> _openCreate() async {
-    await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(builder: (_) => const CreateShowScreen()),
-    );
-  }
 
   @override
   void initState() {
@@ -104,10 +65,14 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
 
     final uri = Uri.parse(url);
 
-    if (!await launchUrl(
+    final opened = await launchUrl(
       uri,
       mode: LaunchMode.externalApplication,
-    )) {
+    );
+
+    if (!mounted) return;
+
+    if (!opened) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Could not open download link')),
       );
@@ -125,7 +90,7 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
 
     showDialog(
       context: context,
-      builder: (_) => Dialog(
+      builder: (dialogContext) => Dialog(
         child: InteractiveViewer(
           child: Image.network(imageUrl),
         ),
@@ -196,7 +161,7 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
                 Expanded(
                   child: ListView.separated(
               itemCount: items.length,
-              separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.md),
+              separatorBuilder: (context, index) => const SizedBox(height: AppSpacing.md),
               itemBuilder: (context, i) {
                 final item = items[i];
                 final title = (item['title'] ?? '').toString();
@@ -219,7 +184,7 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
                               imageUrl,
                               height: 180,
                               fit: BoxFit.contain,
-                              errorBuilder: (_, __, ___) => const SizedBox(
+                              errorBuilder: (context, error, stackTrace) => const SizedBox(
                                 height: 180,
                                 child: Center(
                                   child: Icon(Icons.broken_image_outlined),

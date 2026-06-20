@@ -509,22 +509,6 @@ class JudgeReportPdfBuilder {
     return '$formattedStart - $formattedEnd';
   }
 
-  String _notesLabel(JudgeReportRow row) {
-    final pieces = <String>[];
-
-    final awards = row.awardsLabel.trim();
-    if (awards.isNotEmpty) pieces.add(awards);
-
-    final animalName = row.animalName?.trim();
-    if (animalName != null && animalName.isNotEmpty) {
-      pieces.add('Animal: $animalName');
-    }
-
-    final notes = row.notes?.trim();
-    if (notes != null && notes.isNotEmpty) pieces.add(notes);
-
-    return pieces.join(' • ');
-  }
 
   Future<ReportFileResult> buildFile(
     JudgeReportData data,

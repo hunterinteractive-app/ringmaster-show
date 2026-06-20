@@ -133,7 +133,7 @@ class RibbonPayoutReportPdf {
               ],
             ),
             pw.SizedBox(height: 14),
-            pw.Table.fromTextArray(
+            pw.TableHelper.fromTextArray(
               border: pw.TableBorder.all(
                 color: PdfColors.grey500,
                 width: 0.75,

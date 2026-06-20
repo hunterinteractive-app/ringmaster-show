@@ -1,6 +1,5 @@
 // lib/screens/admin/closeout/pdf/builders/exhibitor_report_pdf.dart
 
-import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';

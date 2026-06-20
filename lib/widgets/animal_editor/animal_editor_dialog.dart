@@ -1,7 +1,6 @@
 // lib/widgets/animal_editor/animal_editor_dialog.dart
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'animal_breed_service.dart';
 
@@ -52,9 +51,6 @@ class _AnimalEditorDialogState extends State<AnimalEditorDialog> {
 
   bool get _isEdit => widget.existing != null;
 
-  bool _isLopBreedName(String breedName) {
-    return breedName.trim().toLowerCase().endsWith('lop');
-  }
 
   List<String> get _sexOptions =>
       _species == 'rabbit' ? const ['Buck', 'Doe'] : const ['Boar', 'Sow'];
@@ -439,7 +435,7 @@ class _AnimalEditorDialogState extends State<AnimalEditorDialog> {
           mainAxisSize: MainAxisSize.min,
           children: [
             DropdownButtonFormField<String>(
-              value: _species,
+              initialValue: _species,
               items: const [
                 DropdownMenuItem(value: 'rabbit', child: Text('Rabbit')),
                 DropdownMenuItem(value: 'cavy', child: Text('Cavy')),
@@ -563,7 +559,7 @@ class _AnimalEditorDialogState extends State<AnimalEditorDialog> {
             ],
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              value: _sexValue != null && _sexOptions.contains(_sexValue)
+              initialValue: _sexValue != null && _sexOptions.contains(_sexValue)
                   ? _sexValue
                   : null,
               decoration: const InputDecoration(

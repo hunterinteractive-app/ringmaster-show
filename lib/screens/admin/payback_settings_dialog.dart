@@ -118,7 +118,7 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
           final placement = (rowJson['placement'] as num?)?.toInt() ?? 1;
           final amountCents = (rowJson['amount_cents'] as num?)?.toInt() ?? 0;
 
-          final key = '${appliesToSpecies ?? 'both'}:$minShown:${maxShown ?? 'null'}';
+          final key = '$appliesToSpecies:$minShown:${maxShown ?? 'null'}';
 
           grouped.putIfAbsent(
             key,
@@ -153,8 +153,8 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
         final rule = Map<String, dynamic>.from(rawRule);
         final sectionId = rule['section_id']?.toString();
 
-        specialMap.putIfAbsent(sectionId, () => []);
-        specialMap[sectionId]!.add(_SpecialMoneyRow.fromJson(rule));
+        final sectionSpecialRows = specialMap.putIfAbsent(sectionId, () => []);
+        sectionSpecialRows.add(_SpecialMoneyRow.fromJson(rule));
       }
 
 
@@ -495,7 +495,7 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
       children: [
         Expanded(
           child: DropdownButtonFormField<String>(
-            value: _selectedSectionId ?? '',
+            initialValue: _selectedSectionId ?? '',
             decoration: const InputDecoration(
               labelText: 'Show Letter',
               border: OutlineInputBorder(),
@@ -606,9 +606,7 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
       }
 
       for (final row in _classRows) {
-        if (row.maxShown == null) {
-          row.maxShown = row.minShown;
-        }
+        row.maxShown ??= row.minShown;
       }
 
       for (final species in const ['rabbit', 'cavy']) {
@@ -720,7 +718,7 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
                         SizedBox(
                           width: 112,
                           child: DropdownButtonFormField<String>(
-                            value: row.appliesToSpecies == 'cavy'
+                            initialValue: row.appliesToSpecies == 'cavy'
                                 ? 'cavy'
                                 : 'rabbit',
                             isExpanded: true,
@@ -902,7 +900,7 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
                         SizedBox(
                           width: 130,
                           child: DropdownButtonFormField<String?>(
-                            value: row.appliesToSpecies,
+                            initialValue: row.appliesToSpecies,
                             decoration: const InputDecoration(
                               border: OutlineInputBorder(),
                               isDense: true,
@@ -1003,9 +1001,8 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
   }
 
   void _ensureSpecialRowTracked(_SpecialMoneyRow row) {
-    if (!_specialRows.contains(row)) {
-      _specialRows.add(row);
-    }
+    if (_specialRows.contains(row)) return;
+    _specialRows.add(row);
   }
 
 }
@@ -1082,19 +1079,6 @@ class _ClassPaybackRow {
     );
   }
 
-  factory _ClassPaybackRow.fromJson(Map<String, dynamic> json) {
-    return _ClassPaybackRow(
-      appliesToSpecies: _normalizedClassSpecies(
-        json['applies_to_species']?.toString(),
-      ),
-      minShown: (json['min_shown'] as num?)?.toInt() ?? 1,
-      maxShown: (json['max_shown'] as num?)?.toInt(),
-      amountsByPlacement: {
-        (json['placement'] as num?)?.toInt() ?? 1:
-            (json['amount_cents'] as num?)?.toInt() ?? 0,
-      },
-    );
-  }
 
 
   List<Map<String, dynamic>> toRpcRows() {
@@ -1510,10 +1494,4 @@ int _specialMoneySpeciesSortRank(String? species) {
     default:
       return 2;
   }
-}
-
-String _normalizedClassSpecies(String? value) {
-  final normalized = value?.trim().toLowerCase();
-  if (normalized == 'cavy') return 'cavy';
-  return 'rabbit';
 }

@@ -243,7 +243,7 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.05),
+            color: Colors.black.withValues(alpha: .05),
             blurRadius: 10,
           ),
         ],
@@ -352,13 +352,13 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
                                   padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
                                     color: savedMessage
-                                        ? Colors.green.withOpacity(.08)
-                                        : Colors.red.withOpacity(.08),
+                                        ? Colors.green.withValues(alpha: .08)
+                                        : Colors.red.withValues(alpha: .08),
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
                                       color: savedMessage
-                                          ? Colors.green.withOpacity(.25)
-                                          : Colors.red.withOpacity(.25),
+                                          ? Colors.green.withValues(alpha: .25)
+                                          : Colors.red.withValues(alpha: .25),
                                     ),
                                   ),
                                   child: Text(
@@ -464,7 +464,7 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
                                         title: 'Award Rules',
                                         children: [
                                           DropdownButtonFormField<String>(
-                                            value: _finalAwardMode,
+                                            initialValue: _finalAwardMode,
                                             decoration: const InputDecoration(
                                               labelText: 'Final award format',
                                               helperText:

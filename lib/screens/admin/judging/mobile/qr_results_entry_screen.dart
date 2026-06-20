@@ -55,7 +55,6 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
   String? _writerName;
   String? _writerPhone;
   bool _qrLocked = false;
-  DateTime? _qrLockStartsAt;
 
   @override
   void initState() {
@@ -82,7 +81,6 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
     _writerName = _rememberedWriterName;
     _writerPhone = _rememberedWriterPhone;
     _qrLocked = false;
-    _qrLockStartsAt = null;
     _entries = [];
     _judges = [];
     _breedClassSystems.clear();
@@ -108,7 +106,6 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
 
     if ((rows as List).isEmpty) {
       _qrLocked = false;
-      _qrLockStartsAt = null;
       return;
     }
 
@@ -117,14 +114,12 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
 
     if (raw.isEmpty) {
       _qrLocked = false;
-      _qrLockStartsAt = null;
       return;
     }
 
     final startsAt = DateTime.tryParse(raw)?.toUtc();
     final now = DateTime.now().toUtc();
 
-    _qrLockStartsAt = startsAt;
     _qrLocked = startsAt != null && now.isAfter(startsAt);
   }
 
@@ -1054,7 +1049,7 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
 
     return DropdownButtonFormField<String>(
       key: ValueKey('$keyPrefix-${selectedJudgeId ?? 'mixed'}-${entries.length}'),
-      value: selectedJudgeId,
+      initialValue: selectedJudgeId,
       decoration: InputDecoration(labelText: labelText),
       items: [
         const DropdownMenuItem<String>(
@@ -1089,7 +1084,6 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
     final labels = grouped.keys.toList()
       ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
 
-    final allRows = grouped.values.expand((x) => x).toList();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6FB),
@@ -1109,7 +1103,7 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
 
           return Card(
             elevation: 0,
-            color: statusColor.withOpacity(0.06),
+            color: statusColor.withValues(alpha: 0.06),
             margin: const EdgeInsets.only(bottom: 12),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
@@ -1122,7 +1116,7 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: CircleAvatar(
-                      backgroundColor: statusColor.withOpacity(0.12),
+                      backgroundColor: statusColor.withValues(alpha: 0.12),
                       child: Icon(
                         _statusIcon(rows),
                         color: statusColor,
@@ -1369,14 +1363,14 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
           const SizedBox(height: 12),
           Card(
             elevation: 0,
-            color: breedStatusColor.withOpacity(0.06),
+            color: breedStatusColor.withValues(alpha: 0.06),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
             ),
             child: ListTile(
               contentPadding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
               leading: CircleAvatar(
-                backgroundColor: breedStatusColor.withOpacity(0.12),
+                backgroundColor: breedStatusColor.withValues(alpha: 0.12),
                 child: Icon(
                   _statusIcon(_entries),
                   color: breedStatusColor,
@@ -1405,7 +1399,7 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(.05),
+        color: Colors.black.withValues(alpha: .05),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(

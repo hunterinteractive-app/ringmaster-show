@@ -1,4 +1,4 @@
-import 'dart:typed_data';
+// lib/screens/admin/closeout/pdf/builders/coop_cards_report_pdf.dart
 
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
@@ -13,7 +13,6 @@ class CoopCardsReportPdfBuilder {
   static const PdfColor _navy = PdfColor.fromInt(0xFF11285A);
   static const PdfColor _gold = PdfColor.fromInt(0xFFD4A623);
   static const PdfColor _ink = PdfColor.fromInt(0xFF202124);
-  static const PdfColor _muted = PdfColor.fromInt(0xFF5F6673);
   static const PdfColor _line = PdfColor.fromInt(0xFFB9C2D0);
   static const PdfColor _paleBlue = PdfColor.fromInt(0xFFF1F5FB);
 

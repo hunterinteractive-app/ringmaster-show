@@ -448,7 +448,7 @@ class _LoginScreenState extends State<LoginScreen>
                 scrollbarTheme: ScrollbarThemeData(
                   thumbColor: WidgetStateProperty.all(Colors.white),
                   trackColor:
-                      WidgetStateProperty.all(Colors.white.withOpacity(.18)),
+                      WidgetStateProperty.all(Colors.white.withValues(alpha: .18)),
                   thickness: WidgetStateProperty.all(8),
                   radius: const Radius.circular(8),
                 ),
@@ -471,11 +471,11 @@ class _LoginScreenState extends State<LoginScreen>
                             Container(
                               padding: const EdgeInsets.all(AppSpacing.lg),
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.10),
+                                color: Colors.white.withValues(alpha: 0.10),
                                 borderRadius:
                                     BorderRadius.circular(AppRadius.lg),
                                 border: Border.all(
-                                  color: Colors.white.withOpacity(0.12),
+                                  color: Colors.white.withValues(alpha: 0.12),
                                 ),
                               ),
                               //dev backdoor
@@ -502,7 +502,7 @@ class _LoginScreenState extends State<LoginScreen>
                               'Modern show management for rabbit, cavy, and small livestock events.',
                               textAlign: TextAlign.center,
                               style: TextStyle(
-                                color: Colors.white.withOpacity(0.82),
+                                color: Colors.white.withValues(alpha: 0.82),
                                 fontSize: 14,
                                 height: 1.4,
                               ),
@@ -640,7 +640,7 @@ class _DemoLoginScreenState extends State<DemoLoginScreen> {
                 scrollbarTheme: ScrollbarThemeData(
                   thumbColor: WidgetStateProperty.all(Colors.white),
                   trackColor:
-                      WidgetStateProperty.all(Colors.white.withOpacity(.18)),
+                      WidgetStateProperty.all(Colors.white.withValues(alpha: .18)),
                   thickness: WidgetStateProperty.all(8),
                   radius: const Radius.circular(8),
                 ),
@@ -657,10 +657,10 @@ class _DemoLoginScreenState extends State<DemoLoginScreen> {
                     Container(
                       padding: const EdgeInsets.all(AppSpacing.lg),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.10),
+                        color: Colors.white.withValues(alpha: 0.10),
                         borderRadius: BorderRadius.circular(AppRadius.lg),
                         border: Border.all(
-                          color: Colors.white.withOpacity(0.12),
+                          color: Colors.white.withValues(alpha: 0.12),
                         ),
                       ),
                       child: _LogoBlock(),
@@ -680,7 +680,7 @@ class _DemoLoginScreenState extends State<DemoLoginScreen> {
                       'Try RingMaster Show as an exhibitor entering animals or as a show secretary managing the demo show.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.82),
+                        color: Colors.white.withValues(alpha: 0.82),
                         fontSize: 14,
                         height: 1.4,
                       ),
@@ -1086,7 +1086,7 @@ class _PublicShowsCardState extends State<_PublicShowsCard> {
                       SizedBox(
                         width: 220,
                         child: DropdownButtonFormField<String>(
-                          value: _sortMode,
+                          initialValue: _sortMode,
                           decoration: const InputDecoration(
                             labelText: 'Sort by',
                             border: OutlineInputBorder(),
@@ -1112,7 +1112,7 @@ class _PublicShowsCardState extends State<_PublicShowsCard> {
                       SizedBox(
                         width: 220,
                         child: DropdownButtonFormField<String>(
-                          value: stateOptions.contains(_stateFilter)
+                          initialValue: stateOptions.contains(_stateFilter)
                               ? _stateFilter
                               : 'All',
                           decoration: const InputDecoration(
@@ -1183,7 +1183,7 @@ class _PublicShowsCardState extends State<_PublicShowsCard> {
                             color: AppColors.surface,
                             borderRadius: BorderRadius.circular(AppRadius.sm),
                             border: Border.all(
-                              color: Colors.grey.withOpacity(0.2),
+                              color: Colors.grey.withValues(alpha: 0.2),
                             ),
                           ),
                           child: Row(
@@ -1260,7 +1260,7 @@ class _LogoBlock extends StatelessWidget {
               width: 160,
               height: 160,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.12),
+                color: Colors.white.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(AppRadius.md),
               ),
               alignment: Alignment.center,

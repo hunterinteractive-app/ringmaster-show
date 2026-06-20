@@ -1,7 +1,5 @@
 // lib/screens/admin/closeout/pdf/builders/paid_exhibitor_report_pdf.dart
 
-import 'dart:typed_data';
-
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;

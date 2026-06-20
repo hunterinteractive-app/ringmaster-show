@@ -111,7 +111,7 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
     }
   }
 
-  bool get _showQrPrintFeatures => _isSuperAdmin;
+  bool get showQrPrintFeatures => _isSuperAdmin;
 
   Future<void> _loadSections() async {
     setState(() {
@@ -134,7 +134,7 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
           .eq('show_id', widget.showId)
           .eq('is_enabled', true);
 
-      final show = (showRow as Map<String, dynamic>?) ?? <String, dynamic>{};
+      final show = showRow ?? <String, dynamic>{};
       final rawEntryCloseAt = (show['entry_close_at'] ?? '').toString();
       final rawAutoEmailedAt =
           (show['checkin_sheets_auto_emailed_at'] ?? '').toString();
@@ -451,7 +451,7 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
     );
   }
 
-  void _openControlSheetsGeneratorForSection(Map<String, dynamic> section) {
+  void openControlSheetsGeneratorForSection(Map<String, dynamic> section) {
     _openControlSheetsGeneratorForSections(
       sections: [section],
       sectionLabel: _sectionLabel(section),
@@ -545,13 +545,13 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: isSuccess
-              ? Colors.green.withOpacity(.08)
-              : Colors.red.withOpacity(.08),
+              ? Colors.green.withValues(alpha: .08)
+              : Colors.red.withValues(alpha: .08),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isSuccess
-                ? Colors.green.withOpacity(.25)
-                : Colors.red.withOpacity(.25),
+                ? Colors.green.withValues(alpha: .25)
+                : Colors.red.withValues(alpha: .25),
           ),
         ),
         child: Text(
@@ -576,7 +576,7 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.05),
+            color: Colors.black.withValues(alpha: .05),
             blurRadius: 12,
           ),
         ],
@@ -690,7 +690,7 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.05),
+            color: Colors.black.withValues(alpha: .05),
             blurRadius: 12,
           ),
         ],
@@ -936,7 +936,7 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
                     if (!_combineSections) ...[
                       DropdownButtonFormField<String>(
                         isExpanded: true,
-                        value: (_selectedSectionId != null &&
+                        initialValue: (_selectedSectionId != null &&
                                 _sections.any((s) =>
                                     s['id']?.toString() == _selectedSectionId))
                             ? _selectedSectionId
@@ -964,7 +964,7 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
                         width: double.infinity,
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(.03),
+                          color: Colors.black.withValues(alpha: .03),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(

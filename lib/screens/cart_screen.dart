@@ -957,10 +957,10 @@ class _CartScreenState extends State<CartScreen> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.red.withOpacity(.08),
+                        color: Colors.red.withValues(alpha: .08),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: Colors.red.withOpacity(.25),
+                          color: Colors.red.withValues(alpha: .25),
                         ),
                       ),
                       child: Column(
@@ -1001,7 +1001,7 @@ class _CartScreenState extends State<CartScreen> {
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(.05),
+                          color: Colors.black.withValues(alpha: .05),
                           blurRadius: 10,
                         ),
                       ],
@@ -1109,7 +1109,7 @@ class _CartScreenState extends State<CartScreen> {
                                   borderRadius: BorderRadius.circular(16),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withOpacity(.04),
+                                      color: Colors.black.withValues(alpha: .04),
                                       blurRadius: 8,
                                     ),
                                   ],
@@ -1221,7 +1221,7 @@ class _ExhibitorGroupHeader extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF11285A).withOpacity(.06),
+        color: const Color(0xFF11285A).withValues(alpha: .06),
         borderRadius: const BorderRadius.vertical(
           top: Radius.circular(16),
         ),

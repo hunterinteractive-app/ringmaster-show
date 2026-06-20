@@ -433,7 +433,7 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.05),
+            color: Colors.black.withValues(alpha: .05),
             blurRadius: 10,
           ),
         ],
@@ -455,7 +455,7 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
             children: [
               Expanded(
                 child: DropdownButtonFormField<String>(
-                  value: _judgeTypeFilter,
+                  initialValue: _judgeTypeFilter,
                   decoration: const InputDecoration(
                     labelText: 'Judge Type',
                     border: OutlineInputBorder(),
@@ -485,7 +485,7 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
               const SizedBox(width: 12),
               Expanded(
                 child: DropdownButtonFormField<String>(
-                  value: _stateFilter,
+                  initialValue: _stateFilter,
                   decoration: const InputDecoration(
                     labelText: 'State',
                     border: OutlineInputBorder(),
@@ -515,7 +515,7 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
               const SizedBox(width: 12),
               Expanded(
                 child: DropdownButtonFormField<String>(
-                  value: _sortBy,
+                  initialValue: _sortBy,
                   decoration: const InputDecoration(
                     labelText: 'Sort By',
                     border: OutlineInputBorder(),
@@ -553,7 +553,7 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.05),
+            color: Colors.black.withValues(alpha: .05),
             blurRadius: 10,
           ),
         ],
@@ -673,13 +673,13 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
                                 color: success
-                                    ? Colors.green.withOpacity(.08)
-                                    : Colors.red.withOpacity(.08),
+                                    ? Colors.green.withValues(alpha: .08)
+                                    : Colors.red.withValues(alpha: .08),
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
                                   color: success
-                                      ? Colors.green.withOpacity(.25)
-                                      : Colors.red.withOpacity(.25),
+                                      ? Colors.green.withValues(alpha: .25)
+                                      : Colors.red.withValues(alpha: .25),
                                 ),
                               ),
                               child: Text(
@@ -706,7 +706,7 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
                                           )
                                         : ListView.separated(
                                             itemCount: _assigned.length,
-                                            separatorBuilder: (_, __) =>
+                                            separatorBuilder: (context, index) =>
                                                 const Divider(height: 1),
                                             itemBuilder: (context, i) {
                                               final assignment = _assigned[i];
@@ -762,7 +762,7 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
                                           )
                                         : ListView.separated(
                                             itemCount: _searchResults.length,
-                                            separatorBuilder: (_, __) =>
+                                            separatorBuilder: (context, index) =>
                                                 const Divider(height: 1),
                                             itemBuilder: (context, i) {
                                               final judge = _searchResults[i];

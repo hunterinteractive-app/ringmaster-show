@@ -6,7 +6,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../widgets/ringmaster_page_shell.dart';
 import '../../services/app_session.dart';
-import '../super_admin/superadmin_home_screen.dart';
 
 final _supabase = Supabase.instance.client;
 
@@ -738,7 +737,7 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
               ? const Center(child: Text('No sanction links found.'))
               : ListView.separated(
                   itemCount: rows.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  separatorBuilder: (context, index) => const SizedBox(height: 10),
                   itemBuilder: (context, index) {
                     final row = rows[index];
                     return _SanctionDirectoryCard(
@@ -780,7 +779,7 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
     final primary = Theme.of(context).colorScheme.primary;
 
     return Card(
-      color: primary.withOpacity(.06),
+      color: primary.withValues(alpha: .06),
       child: Padding(
         padding: const EdgeInsets.all(18),
         child: Row(
@@ -844,7 +843,7 @@ class _SanctionDirectoryCard extends StatelessWidget {
             status == _SanctionDirectoryStatus.exhibitorRequested);
 
     return Card(
-      color: statusColor?.withOpacity(.35),
+      color: statusColor?.withValues(alpha: .35),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
@@ -976,7 +975,7 @@ class _DirectoryRequestStatusChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: status.color,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.black.withOpacity(.08)),
+        border: Border.all(color: Colors.black.withValues(alpha: .08)),
       ),
       child: Text(
         status.label,
@@ -1000,9 +999,9 @@ class _StatusChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: primary.withOpacity(.09),
+        color: primary.withValues(alpha: .09),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: primary.withOpacity(.18)),
+        border: Border.all(color: primary.withValues(alpha: .18)),
       ),
       child: Text(
         label,
@@ -1026,7 +1025,7 @@ class _InfoChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(.65),
+        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: .65),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(

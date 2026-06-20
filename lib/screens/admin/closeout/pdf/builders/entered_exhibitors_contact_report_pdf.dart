@@ -36,7 +36,7 @@ class EnteredExhibitorsContactReportPdf {
           pw.SizedBox(height: 6),
           pw.Text(data.showName),
           pw.SizedBox(height: 16),
-          pw.Table.fromTextArray(
+          pw.TableHelper.fromTextArray(
             headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
             headerDecoration: const pw.BoxDecoration(
               color: PdfColors.grey300,

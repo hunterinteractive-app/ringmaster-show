@@ -577,17 +577,6 @@ class LegsReportPdfBuilder {
     return value.isEmpty ? 'Z' : value[0];
   }
 
-  String _buildLegVerificationUrl(LegsCertificateData d) {
-    final existing = d.qrValue.trim();
-    if (existing.isNotEmpty) {
-      return existing;
-    }
-
-    final id = d.barcodeValue.trim();
-    final encodedId = Uri.encodeComponent(id);
-
-    return 'https://show.ringmasterone.com/verify-leg?id=$encodedId';
-  }
 
   String _displayExhibitorNumber(LegsCertificateData d) {
     final showExhibitorNumber = d.exhibitorNumber.trim();

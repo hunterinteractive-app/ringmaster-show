@@ -1981,7 +1981,7 @@ class _TableCard extends StatelessWidget {
                         const SizedBox(height: 10),
                         Divider(
                           height: 1,
-                          color: colorScheme.error.withOpacity(0.35),
+                          color: colorScheme.error.withValues(alpha: 0.35),
                         ),
                         const SizedBox(height: 10),
                         Text(
@@ -2353,7 +2353,7 @@ class _AddJudgeChangeSheetState extends State<_AddJudgeChangeSheet> {
           ),
           const SizedBox(height: 16),
           DropdownButtonFormField<String>(
-            value: _judgeId,
+            initialValue: _judgeId,
             decoration: const InputDecoration(
               labelText: 'Judge',
               border: OutlineInputBorder(),
@@ -3147,7 +3147,7 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
-              value: selectedLetterForDropdown,
+              initialValue: selectedLetterForDropdown,
               decoration: const InputDecoration(
                 labelText: 'Show Letter',
                 border: OutlineInputBorder(),

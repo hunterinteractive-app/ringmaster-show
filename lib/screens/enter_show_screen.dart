@@ -45,11 +45,6 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
 
   final Map<String, Map<String, dynamic>> _rabbitBreedMeta = {};
 
-  bool _sectionAllowsMeatClasses(String? sectionId) {
-    final id = (sectionId ?? '').trim();
-    if (id.isEmpty) return false;
-    return _sectionById[id]?['allow_meat_classes'] == true;
-  }
 
   bool _sectionIsMeatOnly(String? sectionId) {
     final id = (sectionId ?? '').trim();
@@ -992,23 +987,6 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     return days / 30.4375;
   }
 
-  String _sexLabel(String species, String? sexRaw) {
-    final s = (sexRaw ?? '').trim().toLowerCase();
-
-    if (species == 'rabbit') {
-      if (s == 'buck') return 'Buck';
-      if (s == 'doe') return 'Doe';
-      if (s.startsWith('b')) return 'Buck';
-      if (s.startsWith('d')) return 'Doe';
-      return 'Buck/Doe';
-    } else {
-      if (s == 'boar') return 'Boar';
-      if (s == 'sow') return 'Sow';
-      if (s.startsWith('b')) return 'Boar';
-      if (s.startsWith('s')) return 'Sow';
-      return 'Boar/Sow';
-    }
-  }
 
   String _suggestRabbitDivision({
     required String breedName,
@@ -1793,28 +1771,6 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     return list;
   }
 
-  Widget _demoEntryDisclaimer() {
-    if (!isDemo) return const SizedBox.shrink();
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      decoration: BoxDecoration(
-        color: Colors.orange.shade100,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.orange.shade300),
-      ),
-      child: const Text(
-        'Demo Mode — Entries are for testing only. No real submissions, emails, or payments will occur. Data resets automatically every 24 hours.',
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          fontWeight: FontWeight.w700,
-          fontSize: 13,
-        ),
-      ),
-    );
-  }
 
   Widget _buildAnimalTile(Map<String, dynamic> a) {
     final id = a['id'] as String;
@@ -1849,7 +1805,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
           ),
           const SizedBox(height: 10),
           DropdownButtonFormField<String>(
-            value: classOptions.contains(selectedClass) ? selectedClass : null,
+            initialValue: classOptions.contains(selectedClass) ? selectedClass : null,
             decoration: InputDecoration(
               labelText: 'Class',
               helperText: needsValidation
@@ -1929,7 +1885,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                       SizedBox(
                         width: 180,
                         child: DropdownButtonFormField<String>(
-                          value: (selectedFurVariety == 'White' ||
+                          initialValue: (selectedFurVariety == 'White' ||
                                   selectedFurVariety == 'Colored')
                               ? selectedFurVariety
                               : null,
@@ -2417,7 +2373,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.05),
+            color: Colors.black.withValues(alpha: .05),
             blurRadius: 10,
           ),
         ],
@@ -2497,7 +2453,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                     vertical: 14,
                   ),
                   decoration: BoxDecoration(
-                    border: Border.all(color: Colors.black.withOpacity(.12)),
+                    border: Border.all(color: Colors.black.withValues(alpha: .12)),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
@@ -2609,7 +2565,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                                 borderRadius: BorderRadius.circular(16),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withOpacity(.05),
+                                    color: Colors.black.withValues(alpha: .05),
                                     blurRadius: 10,
                                   ),
                                 ],
@@ -2625,7 +2581,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                                   ),
                                   const SizedBox(height: 12),
                                   DropdownButtonFormField<String>(
-                                    value: allowedExhibitors.any(
+                                    initialValue: allowedExhibitors.any(
                                             (e) =>
                                                 e['id'].toString() ==
                                                 _selectedExhibitorId)
@@ -2707,7 +2663,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                                 borderRadius: BorderRadius.circular(16),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withOpacity(.05),
+                                    color: Colors.black.withValues(alpha: .05),
                                     blurRadius: 10,
                                   ),
                                 ],
@@ -2767,10 +2723,10 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                                 width: double.infinity,
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: Colors.red.withOpacity(.08),
+                                  color: Colors.red.withValues(alpha: .08),
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
-                                    color: Colors.red.withOpacity(.25),
+                                    color: Colors.red.withValues(alpha: .25),
                                   ),
                                 ),
                                 child: Text(
@@ -2801,7 +2757,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                                       borderRadius: BorderRadius.circular(14),
                                       boxShadow: [
                                         BoxShadow(
-                                          color: Colors.black.withOpacity(.04),
+                                          color: Colors.black.withValues(alpha: .04),
                                           blurRadius: 8,
                                         ),
                                       ],

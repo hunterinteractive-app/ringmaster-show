@@ -1,10 +1,8 @@
 // lib/screens/admin/print_packs/control_sheets_generator_sheet.dart
 
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:printing/printing.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:pdf/pdf.dart';
@@ -28,6 +26,7 @@ class ControlSheetsGeneratorSheet extends StatefulWidget {
   final bool youthFirst;
 
   const ControlSheetsGeneratorSheet({
+    super.key,
     required this.showId,
     required this.showName,
     required this.sections,
@@ -449,10 +448,7 @@ class _ControlSheetsGeneratorSheetState
         .eq('id', widget.showId)
         .maybeSingle();
 
-    final coopMode = ((showRow as Map<String, dynamic>?)?[
-              'coop_numbering_mode'
-            ] ??
-            'separate')
+    final coopMode = ((showRow?['coop_numbering_mode']) ?? 'separate')
         .toString()
         .trim()
         .toLowerCase();
@@ -937,7 +933,7 @@ class _ControlSheetsGeneratorSheetState
 
         void flushCurrentRun() {
           if (currentTitle == null || currentPages.isEmpty) return;
-          sortedSectionGroups.add(MapEntry(currentTitle!, currentPages));
+          sortedSectionGroups.add(MapEntry(currentTitle, currentPages));
           currentPages = <Map<String, dynamic>>[];
         }
 
@@ -965,7 +961,7 @@ class _ControlSheetsGeneratorSheetState
         sortedSectionGroups.addAll(sectionPageGroups.entries);
       }
 
-      pw.Widget _topHeader({required String showHeader}) {
+      pw.Widget topHeader({required String showHeader}) {
         return pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.stretch,
           children: [
@@ -1053,7 +1049,7 @@ class _ControlSheetsGeneratorSheetState
         );
       }
 
-      pw.Widget _compactClassHeaderBlock({
+      pw.Widget compactClassHeaderBlock({
         required int blockIndex,
         required int totalBlocks,
         required String sectionTitle,
@@ -1142,7 +1138,7 @@ class _ControlSheetsGeneratorSheetState
         );
       }
 
-      pw.Widget _breedHeaderBlock({
+      pw.Widget breedHeaderBlock({
         required String breed,
         required int breedIndex,
         required int totalBreeds,
@@ -1151,7 +1147,7 @@ class _ControlSheetsGeneratorSheetState
         return pw.SizedBox.shrink();
       }
 
-      pw.Widget _compactJudgingTable({
+      pw.Widget compactJudgingTable({
         required List<Map<String, dynamic>> groupEntries,
         required List<String> specialsList,
         required String ageSpecial,
@@ -1337,7 +1333,7 @@ class _ControlSheetsGeneratorSheetState
         );
       }
 
-      double _estimatedClassBlockHeight({
+      double estimatedClassBlockHeight({
         required int rowCount,
         required bool includeQr,
         required bool isFurOrWool,
@@ -1365,7 +1361,7 @@ class _ControlSheetsGeneratorSheetState
             pageFormat: PdfPageFormat.letter,
             margin: const pw.EdgeInsets.fromLTRB(42, 24, 18, 26),
             theme: theme,
-            header: (_) => _topHeader(
+            header: (_) => topHeader(
               showHeader: '${widget.showName}   $sectionTitle',
             ),
             footer: (context) => pw.Row(
@@ -1415,8 +1411,14 @@ class _ControlSheetsGeneratorSheetState
                       : (p['color'] ?? '').toString().trim();
                   final rowsForStats = (p['rows'] as List).cast<Map<String, dynamic>>();
 
-                  groupEntryIdsByLabel.putIfAbsent(groupLabel, () => <String>{});
-                  groupExhibitorIdsByLabel.putIfAbsent(groupLabel, () => <String>{});
+                  final groupEntryIds = groupEntryIdsByLabel.putIfAbsent(
+                    groupLabel,
+                    () => <String>{},
+                  );
+                  final groupExhibitorIds = groupExhibitorIdsByLabel.putIfAbsent(
+                    groupLabel,
+                    () => <String>{},
+                  );
 
                   for (var rowIndex = 0; rowIndex < rowsForStats.length; rowIndex++) {
                     final row = rowsForStats[rowIndex];
@@ -1428,11 +1430,11 @@ class _ControlSheetsGeneratorSheetState
                     final exhibitorId = _safe(row, 'exhibitor_id');
 
                     breedEntryIds.add(entryId);
-                    groupEntryIdsByLabel[groupLabel]!.add(entryId);
+                    groupEntryIds.add(entryId);
 
                     if (exhibitorId.isNotEmpty) {
                       breedExhibitorIds.add(exhibitorId);
-                      groupExhibitorIdsByLabel[groupLabel]!.add(exhibitorId);
+                      groupExhibitorIds.add(exhibitorId);
                     }
                   }
                 }
@@ -1444,7 +1446,7 @@ class _ControlSheetsGeneratorSheetState
 
                 for (final groupLabel in groupEntryIdsByLabel.keys) {
                   groupStats['$breedName|$groupLabel'] = {
-                    'entries': groupEntryIdsByLabel[groupLabel]!.length,
+                    'entries': groupEntryIdsByLabel[groupLabel]?.length ?? 0,
                     'exhibitors': groupExhibitorIdsByLabel[groupLabel]?.length ?? 0,
                   };
                 }
@@ -1466,7 +1468,7 @@ class _ControlSheetsGeneratorSheetState
                   final isFurOrWool = p['isFurOrWool'] == true;
 
                   final classBlockWidgets = <pw.Widget>[
-                    _compactClassHeaderBlock(
+                    compactClassHeaderBlock(
                       blockIndex: i,
                       totalBlocks: breedPages.length,
                       sectionTitle: (p['sectionTitle'] ?? '').toString(),
@@ -1505,7 +1507,7 @@ class _ControlSheetsGeneratorSheetState
                   }
 
                   classBlockWidgets.add(
-                    _compactJudgingTable(
+                    compactJudgingTable(
                       groupEntries: (p['rows'] as List).cast<Map<String, dynamic>>(),
                       specialsList: (p['specials'] as List).map((x) => x.toString()).toList(),
                       ageSpecial: (p['ageSpecial'] ?? '').toString(),
@@ -1516,7 +1518,7 @@ class _ControlSheetsGeneratorSheetState
                   classBlockWidgets.add(pw.SizedBox(height: 10));
 
                   final classRowCount = ((p['rows'] as List?) ?? const []).length;
-                  final estimatedClassHeight = _estimatedClassBlockHeight(
+                  final estimatedClassHeight = estimatedClassBlockHeight(
                     rowCount: classRowCount,
                     includeQr: includeQrCode,
                     isFurOrWool: isFurOrWool,
@@ -1529,7 +1531,7 @@ class _ControlSheetsGeneratorSheetState
                   if (estimatedRemainingHeight < estimatedClassHeight && widgets.isNotEmpty) {
                     widgets.add(pw.NewPage());
                     widgets.add(
-                      _breedHeaderBlock(
+                      breedHeaderBlock(
                         breed: breed,
                         breedIndex: breedIndex,
                         totalBreeds: breedNames.length,
@@ -1654,13 +1656,13 @@ class _ControlSheetsGeneratorSheetState
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: isSuccess
-                      ? Colors.green.withOpacity(.08)
-                      : Colors.red.withOpacity(.08),
+                      ? Colors.green.withValues(alpha: .08)
+                      : Colors.red.withValues(alpha: .08),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: isSuccess
-                        ? Colors.green.withOpacity(.25)
-                        : Colors.red.withOpacity(.25),
+                        ? Colors.green.withValues(alpha: .25)
+                        : Colors.red.withValues(alpha: .25),
                   ),
                 ),
                 child: Text(

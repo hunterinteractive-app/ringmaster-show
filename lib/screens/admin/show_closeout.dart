@@ -181,65 +181,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           (artifact.storagePath?.isNotEmpty == true);
     }
 
-    String _norm(String value) {
-      return value
-          .toLowerCase()
-          .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
-          .trim();
-    }
-
-    String _fileNameOf(ReportArtifactSummary artifact) {
-      return (artifact.fileName ?? '').trim();
-    }
-
-    String _artifactProgressSubtitle(ReportArtifactSummary artifact) {
-      final exhibitorName = _artifactMetaString(artifact, 'exhibitor_name');
-      if (exhibitorName != null) return exhibitorName;
-
-      final breedName = _artifactMetaString(artifact, 'breed_name');
-      final clubName = _artifactMetaString(artifact, 'club_name');
-      final sanctioningBody = _artifactMetaString(artifact, 'sanctioning_body');
-      final scope = _artifactMetaString(artifact, 'scope');
-      final letter = _artifactMetaString(artifact, 'show_letter');
-
-      return [
-        if (breedName != null) breedName,
-        if (breedName == null && clubName != null) clubName,
-        if (breedName == null && clubName == null && sanctioningBody != null)
-          sanctioningBody,
-        if (scope != null || letter != null)
-          [if (scope != null) scope, if (letter != null) letter].join(' '),
-      ].where((x) => x.trim().isNotEmpty).join(' • ');
-    }
-
-    String _artifactMatchText(ReportArtifactSummary artifact) {
-      return _norm([
-        artifact.reportName,
-        artifact.fileName ?? '',
-        artifact.storagePath ?? '',
-      ].join(' '));
-    }
-
-    ReportArtifactSummary? _newestGeneratedArtifactWhere(
-      String reportName,
-      bool Function(ReportArtifactSummary artifact) test,
-    ) {
-      final matches = (_dashboard?.reports ?? const <ReportArtifactSummary>[])
-          .where((r) => r.reportName == reportName)
-          .where(_artifactIsUsableCurrent)
-          .where(test)
-          .toList()
-        ..sort((a, b) {
-          final aDt = DateTime.tryParse(a.generatedAt ?? '') ??
-              DateTime.fromMillisecondsSinceEpoch(0);
-          final bDt = DateTime.tryParse(b.generatedAt ?? '') ??
-              DateTime.fromMillisecondsSinceEpoch(0);
-          return bDt.compareTo(aDt);
-        });
-
-      return matches.isEmpty ? null : matches.first;
-    }
-
     List<ReportArtifactSummary> _currentArtifactsForReportGroup(
       String reportName,
     ) {
@@ -1236,9 +1177,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         width: double.infinity,
         margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
-          color: Colors.orange.withOpacity(.08),
+          color: Colors.orange.withValues(alpha: .08),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.orange.withOpacity(.22)),
+          border: Border.all(color: Colors.orange.withValues(alpha: .22)),
         ),
         child: ExpansionTile(
           tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -1971,7 +1912,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
             allowLegs: true,
           );
           sentCount++;
-        } catch (e, st) {
+        } catch (e) {
           failedCount++;
 
           final errorText = e.toString().trim().isEmpty
@@ -2168,7 +2109,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
             message: message,
           );
           sentCount++;
-        } catch (e, st) {
+        } catch (e) {
           failedCount++;
         }
       }
@@ -2181,7 +2122,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           ),
         ),
       );
-    } catch (e, st) {
+    } catch (e) {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2243,111 +2184,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
       return 'Reports are blocked until results are complete: ${parts.join(', ')}.';
     }
-
-  Future<void> _sendAllLegsReports() async {
-    if (await _blockedBySupportModeForEmailSend('Leg')) return;
-
-    final ready = await _ensureResultsReadyForReports();
-    if (!ready) return;
-
-    setState(() {
-      _generatingReport = true;
-    });
-
-    try {
-      await _loadData();
-
-      final exhibitors = await _loadExhibitorEmailTargets();
-
-      if (exhibitors.isEmpty) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No exhibitor email targets found.')),
-        );
-        return;
-      }
-
-      int sentCount = 0;
-      int skippedCount = 0;
-      int failedCount = 0;
-      final sendErrors = <String>[];
-
-      for (final exhibitor in exhibitors) {
-        final legsReport = _newestGeneratedArtifactWhere(
-          'legs',
-          (a) =>
-              _artifactMatchesExhibitor(a, exhibitor) &&
-              _artifactMatchesSelectedScope(a),
-        );
-
-        if (legsReport == null) {
-          skippedCount++;
-          continue;
-        }
-
-        try {
-          await _sendExhibitorArtifactsEmail(
-            artifacts: [legsReport],
-            to: exhibitor.email,
-            subject: '${widget.showName} - ARBA Legs',
-            message: 'Attached are your earned ARBA legs from ${widget.showName}.',
-            allowLegs: true,
-          );
-          sentCount++;
-        } catch (e) {
-          failedCount++;
-
-          final errorText = e.toString().trim().isEmpty
-              ? 'Unknown email send error. Check Supabase function logs for send-exhibitor-report-email.'
-              : e.toString();
-
-          if (sendErrors.length < 5) {
-            sendErrors.add('${exhibitor.exhibitorName} <${exhibitor.email}>: $errorText');
-          }
-        }
-      }
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          duration: const Duration(seconds: 8),
-          content: Text(
-            'Leg report send complete. Sent: $sentCount, skipped: $skippedCount, failed: $failedCount',
-          ),
-        ),
-      );
-
-      if (failedCount > 0 && sendErrors.isNotEmpty) {
-        await showDialog<void>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Leg email send errors'),
-            content: SingleChildScrollView(
-              child: Text(sendErrors.join('\n\n')),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Close'),
-              ),
-            ],
-          ),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed sending leg reports: $e')),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _generatingReport = false;
-        });
-      }
-    }
-  }
 
     Future<bool> _ensureResultsReadyForReports() async {
       final resp = await supabase.rpc(
@@ -2730,65 +2566,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     return '${parsed.month.toString().padLeft(2, '0')}-${parsed.day.toString().padLeft(2, '0')}-${parsed.year}';
   }
 
-  Future<List<_ScopedReportTarget>> _loadScopedReportTargets() async {
-    final targets = <_ScopedReportTarget>[];
-
-    final enabledSections = await supabase
-        .from('show_sections')
-        .select('id, kind, letter')
-        .eq('show_id', widget.showId)
-        .eq('is_enabled', true);
-
-    final seen = <String>{};
-
-    for (final raw in (enabledSections as List)) {
-      final row = Map<String, dynamic>.from(raw as Map);
-
-      final sectionId = (row['id'] ?? '').toString();
-      final kind = (row['kind'] ?? '').toString().trim().toUpperCase();
-      final sectionLetter = (row['letter'] ?? '').toString().trim().toUpperCase();
-
-      if (sectionId.isEmpty || kind.isEmpty) continue;
-
-      final results = await supabase.rpc(
-        'report_results_entry_rows',
-        params: {
-          'p_show_id': widget.showId,
-          'p_section_id': sectionId,
-          'p_show_letter': sectionLetter.isEmpty ? null : sectionLetter,
-        },
-      );
-
-      for (final rawResult in (results as List)) {
-        final result = Map<String, dynamic>.from(rawResult as Map);
-        final breedName = (result['breed_name'] ?? '').toString().trim();
-        if (breedName.isEmpty) continue;
-
-        final key = '$breedName|$kind|$sectionLetter';
-        if (seen.add(key)) {
-          targets.add(
-            _ScopedReportTarget(
-              breedName: breedName,
-              scope: kind,
-              showLetter: sectionLetter,
-            ),
-          );
-        }
-      }
-    }
-
-    targets.sort((a, b) {
-      final breedCmp = a.breedName.compareTo(b.breedName);
-      if (breedCmp != 0) return breedCmp;
-
-      final scopeCmp = a.scope.compareTo(b.scope);
-      if (scopeCmp != 0) return scopeCmp;
-
-      return a.showLetter.compareTo(b.showLetter);
-    });
-
-    return targets;
-  }
 
   Future<void> _generateCurrentReportGroupByName(String reportName) async {
     if (reportName != 'unpaid_balances_report' &&
@@ -3259,31 +3036,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     return <String, dynamic>{};
   }
 
-  Future<void> _sendReportArtifactEmail({
-    required ReportArtifactSummary artifact,
-    required String mode, // exhibitor, club, single
-  }) async {
-    final response = await supabase.functions.invoke(
-      'send-closeout-report-email',
-      body: {
-        'show_id': widget.showId,
-        'show_name': widget.showName,
-        'artifact_id': artifact.id,
-        'report_name': artifact.reportName,
-        'mode': mode,
-      },
-    );
-
-    final data = _normalizeFunctionData(response.data);
-
-    if (response.status < 200 || response.status >= 300) {
-      throw Exception(
-        data['error']?.toString() ??
-            data['message']?.toString() ??
-            'Email failed.',
-      );
-    }
-  }
 
 
   Future<void> _emailReportByName(
@@ -3734,10 +3486,10 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                 margin: const EdgeInsets.only(bottom: 12),
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: Colors.orange.withOpacity(.10),
+                                  color: Colors.orange.withValues(alpha: .10),
                                   borderRadius: BorderRadius.circular(14),
                                   border: Border.all(
-                                    color: Colors.orange.withOpacity(.22),
+                                    color: Colors.orange.withValues(alpha: .22),
                                   ),
                                 ),
                                 child: Row(
@@ -4140,7 +3892,7 @@ class _CloseoutSectionCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.05),
+            color: Colors.black.withValues(alpha: .05),
             blurRadius: 12,
             offset: const Offset(0, 2),
           ),
@@ -4289,10 +4041,10 @@ class _ArbaCloseoutCard extends StatelessWidget {
           width: double.infinity,
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: const Color(0xFF11285A).withOpacity(.04),
+            color: const Color(0xFF11285A).withValues(alpha: .04),
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: const Color(0xFF11285A).withOpacity(.10),
+              color: const Color(0xFF11285A).withValues(alpha: .10),
             ),
           ),
           child: Column(
@@ -4330,10 +4082,10 @@ class _ArbaCloseoutCard extends StatelessWidget {
           width: double.infinity,
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: const Color(0xFFD4A623).withOpacity(.08),
+            color: const Color(0xFFD4A623).withValues(alpha: .08),
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: const Color(0xFFD4A623).withOpacity(.25),
+              color: const Color(0xFFD4A623).withValues(alpha: .25),
             ),
           ),
           child: Column(
@@ -5384,10 +5136,10 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.orange.withOpacity(.10),
+                      color: Colors.orange.withValues(alpha: .10),
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
-                        color: Colors.orange.withOpacity(.22),
+                        color: Colors.orange.withValues(alpha: .22),
                       ),
                     ),
                     child: Text(
@@ -5547,11 +5299,11 @@ class _ReportInfoTile extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: isGenerated
-            ? Colors.green.withOpacity(.06)
-            : const Color(0xFF11285A).withOpacity(.04),
+            ? Colors.green.withValues(alpha: .06)
+            : const Color(0xFF11285A).withValues(alpha: .04),
         border: Border.all(
           color: isGenerated
-              ? Colors.green.withOpacity(.25)
+              ? Colors.green.withValues(alpha: .25)
               : Theme.of(context).dividerColor,
         ),
         borderRadius: BorderRadius.circular(14),
@@ -5906,18 +5658,6 @@ class _ClubEmailTarget {
   });
 }
 
-class _ScopedReportTarget {
-  final String breedName;
-  final String scope;
-  final String showLetter;
-
-  const _ScopedReportTarget({
-    required this.breedName,
-    required this.scope,
-    required this.showLetter,
-  });
-}
-
 String _fmt(String? value) {
   final formatted = formatLocalDateTime(value);
   return formatted == '(not set)' || formatted == '(invalid date)' ? '-' : formatted;
@@ -6266,10 +6006,10 @@ class _CloseoutScopeCard extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF11285A).withOpacity(.04),
+                color: const Color(0xFF11285A).withValues(alpha: .04),
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: const Color(0xFF11285A).withOpacity(.12),
+                  color: const Color(0xFF11285A).withValues(alpha: .12),
                 ),
               ),
               child: Column(

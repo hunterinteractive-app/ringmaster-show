@@ -3,7 +3,6 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:printing/printing.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:pdf/pdf.dart';
@@ -20,6 +19,7 @@ class RemarkCardsGeneratorSheet extends StatefulWidget {
   final bool includeScratched;
 
   const RemarkCardsGeneratorSheet({
+    super.key,
     required this.showId,
     required this.showName,
     required this.sections,
@@ -614,7 +614,7 @@ class _RemarkCardsGeneratorSheetState extends State<RemarkCardsGeneratorSheet> {
 
             DropdownButtonFormField<String>(
               isExpanded: true,
-              value: (_selectedSectionId != null &&
+              initialValue: (_selectedSectionId != null &&
                       widget.sections.any(
                         (s) => s['id']?.toString() == _selectedSectionId,
                       ))
@@ -668,13 +668,13 @@ class _RemarkCardsGeneratorSheetState extends State<RemarkCardsGeneratorSheet> {
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: isSuccess
-                      ? Colors.green.withOpacity(.08)
-                      : Colors.red.withOpacity(.08),
+                      ? Colors.green.withValues(alpha: .08)
+                      : Colors.red.withValues(alpha: .08),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: isSuccess
-                        ? Colors.green.withOpacity(.25)
-                        : Colors.red.withOpacity(.25),
+                        ? Colors.green.withValues(alpha: .25)
+                        : Colors.red.withValues(alpha: .25),
                   ),
                 ),
                 child: Text(

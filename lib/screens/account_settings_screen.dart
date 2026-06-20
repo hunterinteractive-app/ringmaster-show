@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
-import 'account_profile_setup_screen.dart';
+
 import '../services/app_session.dart';
 import '../widgets/exhibitor_builder_dialog.dart';
 
@@ -127,26 +127,6 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     }
   }
 
-  // ------------------------------
-  // Profile Setup
-  // ------------------------------
-  Future<void> _openProfileSetup() async {
-    if (AppSession.isSupportMode) {
-      setState(() {
-        _msg = 'Profile setup is disabled while viewing in support mode.';
-      });
-      return;
-    }
-
-    final saved = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(builder: (_) => const AccountProfileSetupScreen()),
-    );
-
-    if (saved == true) {
-      if (mounted) setState(() => _msg = 'Profile saved.');
-    }
-  }
 
   // ------------------------------
   // Exhibitor Dialog (NEW)
@@ -300,10 +280,10 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.red.withOpacity(.08),
+                        color: Colors.red.withValues(alpha: .08),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: Colors.red.withOpacity(.25),
+                          color: Colors.red.withValues(alpha: .25),
                         ),
                       ),
                       child: Text(
@@ -344,7 +324,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                                 borderRadius: BorderRadius.circular(16),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withOpacity(.05),
+                                    color: Colors.black.withValues(alpha: .05),
                                     blurRadius: 10,
                                   ),
                                 ],
@@ -371,10 +351,10 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                                           vertical: 4,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: Colors.blue.withOpacity(.10),
+                                          color: Colors.blue.withValues(alpha: .10),
                                           borderRadius: BorderRadius.circular(999),
                                           border: Border.all(
-                                            color: Colors.blue.withOpacity(.30),
+                                            color: Colors.blue.withValues(alpha: .30),
                                           ),
                                         ),
                                         child: const Row(

@@ -1552,7 +1552,7 @@ class _ShowExpansionCard extends StatelessWidget {
                                                                     ),
                                                                     border: Border.all(
                                                                       color: canEdit
-                                                                          ? Theme.of(context).colorScheme.primary.withOpacity(0.35)
+                                                                          ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.35)
                                                                           : Colors.grey.shade200,
                                                                     ),
                                                                   ),
@@ -1801,19 +1801,6 @@ class _EditEntryDialogV2State extends State<_EditEntryDialogV2> {
     return (e['id'] ?? '').toString();
   }
 
-  bool _isYouthSectionId(String sectionId) {
-    final match = widget.sections.where(
-      (s) => (s['id'] ?? '').toString() == sectionId,
-    );
-    if (match.isEmpty) return false;
-    return (match.first['kind'] ?? '').toString().trim().toLowerCase() == 'youth';
-  }
-
-  bool _isYouthExhibitor(Map<String, dynamic> e) {
-    // The exhibitors table currently does not expose an is_youth column here.
-    // Treat exhibitors as selectable and let the save/update rules validate.
-    return true;
-  }
 
   Future<void> _addNewAnimal() async {
     setState(() => _busy = true);
@@ -1859,10 +1846,10 @@ class _EditEntryDialogV2State extends State<_EditEntryDialogV2> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: AppColors.danger.withOpacity(0.08),
+                    color: AppColors.danger.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(AppRadius.sm),
                     border: Border.all(
-                      color: AppColors.danger.withOpacity(0.35),
+                      color: AppColors.danger.withValues(alpha: 0.35),
                     ),
                   ),
                   child: Text(
@@ -1876,7 +1863,7 @@ class _EditEntryDialogV2State extends State<_EditEntryDialogV2> {
                 const SizedBox(height: 10),
               ],
               DropdownButtonFormField<String>(
-                value: hasSelectedSection ? _sectionId : null,
+                initialValue: hasSelectedSection ? _sectionId : null,
                 items: widget.sections.map((s) {
                   final id = (s['id'] ?? '').toString();
                   return DropdownMenuItem<String>(
@@ -1899,7 +1886,7 @@ class _EditEntryDialogV2State extends State<_EditEntryDialogV2> {
               ),
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
-                value: hasSelectedExhibitor ? _exhibitorId : null,
+                initialValue: hasSelectedExhibitor ? _exhibitorId : null,
                 items: widget.exhibitors.map((e) {
                   final id = (e['id'] ?? '').toString();
                   final label = _exhibitorLabel(e);
@@ -1922,7 +1909,7 @@ class _EditEntryDialogV2State extends State<_EditEntryDialogV2> {
               ),
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
-                value: hasSelected ? _animalId : null,
+                initialValue: hasSelected ? _animalId : null,
                 isExpanded: true,
                 items: _animals.map((a) {
                   final id = (a['id'] ?? '').toString();

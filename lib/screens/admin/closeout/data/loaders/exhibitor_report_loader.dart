@@ -56,8 +56,6 @@ class ExhibitorReportLoader {
         final row = Map<String, dynamic>.from(raw as Map);
 
         final scratchedAt = _str(row['scratched_at']);
-        final isShown = row['is_shown'] != false;
-        final isDisqualified = row['is_disqualified'] == true;
 
         // Keep DQ / No Show / Wrong Class / Wrong Sex rows on the exhibitor report.
         // Only omit truly scratched entries.

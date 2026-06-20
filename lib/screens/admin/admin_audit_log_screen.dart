@@ -324,11 +324,11 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
     switch (field) {
       case 'class_name':
       case 'sex':
-        return Colors.orange.withOpacity(.14);
+        return Colors.orange.withValues(alpha: .14);
       case 'tattoo':
-        return Colors.red.withOpacity(.12);
+        return Colors.red.withValues(alpha: .12);
       default:
-        return Colors.blueGrey.withOpacity(.10);
+        return Colors.blueGrey.withValues(alpha: .10);
     }
   }
 
@@ -450,7 +450,7 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
     final bytes = utf8.encode(csv);
     final blob = html.Blob([bytes], 'text/csv;charset=utf-8');
     final url = html.Url.createObjectUrlFromBlob(blob);
-    final anchor = html.AnchorElement(href: url)
+    html.AnchorElement(href: url)
       ..setAttribute('download', filename)
       ..click();
     html.Url.revokeObjectUrl(url);
@@ -507,7 +507,7 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
                   SizedBox(
                     width: 190,
                     child: DropdownButtonFormField<String>(
-                      value: _fieldFilter,
+                      initialValue: _fieldFilter,
                       decoration: const InputDecoration(
                         labelText: 'Field',
                         border: OutlineInputBorder(),
@@ -530,7 +530,7 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
                   SizedBox(
                     width: 220,
                     child: DropdownButtonFormField<String>(
-                      value: _roleFilter,
+                      initialValue: _roleFilter,
                       decoration: const InputDecoration(
                         labelText: 'Approved role',
                         border: OutlineInputBorder(),
@@ -570,7 +570,7 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.black.withOpacity(.08)),
+        border: Border.all(color: Colors.black.withValues(alpha: .08)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -593,7 +593,7 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(.04),
+        color: Colors.black.withValues(alpha: .04),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
@@ -732,7 +732,7 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
                       rows: rows.map((row) {
                         final field = _text(row, 'field_name');
                         return DataRow(
-                          color: MaterialStatePropertyAll(_severityColor(field)),
+                          color: WidgetStatePropertyAll(_severityColor(field)),
                           cells: [
                             DataCell(Icon(_severityIcon(field), size: 18)),
                             DataCell(Text(_fmtDateTime(row['created_at']))),
@@ -823,7 +823,7 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
               : ListView.separated(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                   itemCount: rows.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  separatorBuilder: (context, index) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     final row = rows[index];
                     final name = (row['name'] ?? 'Unknown Writer').toString().trim();
@@ -840,7 +840,7 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
                       elevation: 0,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(18),
-                        side: BorderSide(color: Colors.black.withOpacity(.06)),
+                        side: BorderSide(color: Colors.black.withValues(alpha: .06)),
                       ),
                       child: Theme(
                         data: Theme.of(context).copyWith(

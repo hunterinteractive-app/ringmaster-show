@@ -527,7 +527,7 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
 
     Widget _buildBreedScopeSelector(_EditableSection s) {
       return DropdownButtonFormField<String>(
-        value: s.breedScope,
+        initialValue: s.breedScope,
         decoration: const InputDecoration(
           labelText: 'Breed scope',
           border: OutlineInputBorder(),
@@ -645,7 +645,7 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.05),
+            color: Colors.black.withValues(alpha: .05),
             blurRadius: 10,
           ),
         ],
@@ -854,10 +854,10 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
                             width: double.infinity,
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: Colors.red.withOpacity(.08),
+                              color: Colors.red.withValues(alpha: .08),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                color: Colors.red.withOpacity(.25),
+                                color: Colors.red.withValues(alpha: .25),
                               ),
                             ),
                             child: Text(

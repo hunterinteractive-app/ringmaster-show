@@ -190,7 +190,7 @@ class _SuperintendentShowsScreenState extends State<SuperintendentShowsScreen> {
             child: ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: shows.length + (supportBanner == null ? 0 : 1),
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              separatorBuilder: (context, index) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
                 if (supportBanner != null && index == 0) {
                   return supportBanner;
@@ -250,7 +250,7 @@ class _ShowCard extends StatelessWidget {
                 width: 46,
                 height: 46,
                 decoration: BoxDecoration(
-                  color: colorScheme.primary.withOpacity(0.12),
+                  color: colorScheme.primary.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(

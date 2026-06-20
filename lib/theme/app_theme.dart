@@ -48,7 +48,7 @@ class AppTheme {
       scaffoldBackgroundColor: AppColors.bg,
       scrollbarTheme: ScrollbarThemeData(
         thumbColor: WidgetStateProperty.all(Colors.black),
-        trackColor: WidgetStateProperty.all(Colors.black.withOpacity(.12)),
+        trackColor: WidgetStateProperty.all(Colors.black.withValues(alpha: .12)),
         thickness: WidgetStateProperty.all(8),
         radius: const Radius.circular(8),
       ),
@@ -61,7 +61,7 @@ class AppTheme {
       cardTheme: CardThemeData(
         color: AppColors.surface,
         elevation: 0,
-        shadowColor: Colors.black.withOpacity(.06),
+        shadowColor: Colors.black.withValues(alpha: .06),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadius.md),
         ),

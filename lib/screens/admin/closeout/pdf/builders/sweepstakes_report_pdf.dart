@@ -166,7 +166,7 @@ class SweepstakesReportPdf {
     final safeScope = clean(scope.toUpperCase());
     final safeShowLetter = clean(showLetter.toUpperCase());
 
-    return '${safeShowName}_${safeBreedName}_Sweepstakes_Report_${safeScope}_${safeShowLetter}.pdf';
+    return '${safeShowName}_${safeBreedName}_Sweepstakes_Report_${safeScope}_$safeShowLetter.pdf';
   }
 
   pw.Widget _buildHeader({

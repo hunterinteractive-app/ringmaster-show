@@ -564,10 +564,10 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFF11285A).withOpacity(0.06),
+        color: const Color(0xFF11285A).withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(999),
         border: Border.all(
-          color: const Color(0xFF11285A).withOpacity(0.10),
+          color: const Color(0xFF11285A).withValues(alpha: 0.10),
         ),
       ),
       child: Text(
@@ -596,10 +596,10 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.black.withOpacity(0.06)),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 10,
           ),
         ],
@@ -662,7 +662,7 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
         color: Colors.white,
         borderRadius: BorderRadius.circular(999),
         border: Border.all(
-          color: Colors.black.withOpacity(0.06),
+          color: Colors.black.withValues(alpha: 0.06),
         ),
       ),
       child: Text(
@@ -719,10 +719,10 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
       margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF11285A).withOpacity(0.05),
+        color: const Color(0xFF11285A).withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: const Color(0xFF11285A).withOpacity(0.10),
+          color: const Color(0xFF11285A).withValues(alpha: 0.10),
         ),
       ),
       child: Text(
@@ -740,7 +740,7 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.black.withOpacity(0.06)),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
       ),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
@@ -749,8 +749,8 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
           dataRowMinHeight: 44,
           dataRowMaxHeight: 54,
           columnSpacing: 18,
-          headingRowColor: MaterialStatePropertyAll(
-            const Color(0xFF11285A).withOpacity(0.06),
+          headingRowColor: WidgetStatePropertyAll(
+            const Color(0xFF11285A).withValues(alpha: 0.06),
           ),
           columns: [
             const DataColumn(
@@ -996,7 +996,7 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
                         borderRadius: BorderRadius.circular(18),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
+                            color: Colors.black.withValues(alpha: 0.05),
                             blurRadius: 12,
                           ),
                         ],
@@ -1040,7 +1040,7 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
                                 color: const Color(0xFFF8F9FC),
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(
-                                  color: Colors.black.withOpacity(0.05),
+                                  color: Colors.black.withValues(alpha: 0.05),
                                 ),
                               ),
                               child: ExpansionTile(
@@ -1077,7 +1077,7 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
                                 ],
                               ),
                             );
-                          }).toList(),
+                          }),
                         ],
                       ),
                     );

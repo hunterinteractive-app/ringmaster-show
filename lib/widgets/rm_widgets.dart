@@ -72,7 +72,7 @@ class RMCard extends StatelessWidget {
       color: Colors.white,
       borderRadius: BorderRadius.circular(AppRadius.md),
       elevation: 1,
-      shadowColor: Colors.black.withOpacity(.06),
+      shadowColor: Colors.black.withValues(alpha: .06),
       child: onTap == null
           ? content
           : InkWell(

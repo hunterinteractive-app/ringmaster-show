@@ -1440,7 +1440,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
                                           SizedBox(
                                             width: isMobile ? double.infinity : 220,
                                             child: DropdownButtonFormField<String>(
-                                              value: _sortMode,
+                                              initialValue: _sortMode,
                                               decoration: const InputDecoration(
                                                 labelText: 'Sort by',
                                                 border: OutlineInputBorder(),
@@ -1466,7 +1466,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
                                           SizedBox(
                                             width: isMobile ? double.infinity : 220,
                                             child: DropdownButtonFormField<String>(
-                                              value: stateOptions.contains(_stateFilter)
+                                              initialValue: stateOptions.contains(_stateFilter)
                                                   ? _stateFilter
                                                   : 'All',
                                               decoration: const InputDecoration(
@@ -1792,7 +1792,7 @@ class _ResponsiveShowAppBar extends StatelessWidget
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Colors.white.withOpacity(.9),
+                            color: Colors.white.withValues(alpha: .9),
                             fontSize: subtitleFont,
                             fontWeight: FontWeight.w500,
                           ),

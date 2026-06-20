@@ -76,7 +76,7 @@ class _AdminShowReportsScreenState extends State<AdminShowReportsScreen> {
                 borderRadius: BorderRadius.circular(18),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(.05),
+                    color: Colors.black.withValues(alpha: .05),
                     blurRadius: 12,
                   ),
                 ],
@@ -130,7 +130,7 @@ class _AdminShowReportsScreenState extends State<AdminShowReportsScreen> {
                   borderRadius: BorderRadius.circular(18),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(.05),
+                      color: Colors.black.withValues(alpha: .05),
                       blurRadius: 12,
                     ),
                   ],

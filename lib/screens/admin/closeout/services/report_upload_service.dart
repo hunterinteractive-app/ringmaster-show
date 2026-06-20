@@ -35,8 +35,7 @@ class ReportUploadService {
     // Keep each generation in its own timestamped folder so older reports are preserved.
     // Example:
     // shows/my_show/reports/versions/2026-05-26_19-42-08/my_show_arba_report_open_c.pdf
-    final path =
-        '${baseFolder}${safeShowName}_${file.fileName}';
+    final path = '$baseFolder${safeShowName}_${file.fileName}';
 
     final bytes = Uint8List.fromList(file.bytes);
 
@@ -60,9 +59,9 @@ class ReportUploadService {
     final day = now.day.toString().padLeft(2, '0');
     final hour = now.hour.toString().padLeft(2, '0');
     final minute = now.minute.toString().padLeft(2, '0');
-    final second = now.second.toString().padLeft(2, '0');
+    // final second = now.second.toString().padLeft(2, '0');
 
-    return '${year}-${month}-${day}_${hour}-${minute}';
+    return '$year-$month-${day}_$hour-$minute';
   }
 
     Future<void> markGenerated({
