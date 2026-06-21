@@ -1357,7 +1357,13 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
     Future<void> _finalizeShow() async {
 
-      final ready = await _ensureResultsReadyForReports();
+      final arbaConfirmed = await _ensureArbaFinalCloseoutConfirmedForReports();
+
+      if (!arbaConfirmed) {
+        throw Exception('ARBA Final Closeout Confirmation is required before reports can be generated.');
+      }
+
+    final ready = await _ensureResultsReadyForReports();
 
       if (!ready) {
         throw Exception('Results are not ready for finalize.');
@@ -1436,6 +1442,12 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       required void Function(String artifactKey) onFinished,
       required void Function(String artifactKey, Object error) onFailed,
     }) async {
+      final arbaConfirmed = await _ensureArbaFinalCloseoutConfirmedForReports();
+
+      if (!arbaConfirmed) {
+        throw Exception('ARBA Final Closeout Confirmation is required before reports can be generated.');
+      }
+
       await _saveArbaDetails();
 
       await _ensureLegsBuilder();
@@ -2139,6 +2151,22 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
     bool get _resultsReadyForReports =>
         _dashboard?.resultsReadiness.ready == true;
+
+    Future<bool> _ensureArbaFinalCloseoutConfirmedForReports() async {
+      if (_arbaReportFiled) return true;
+
+      if (!mounted) return false;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Reports are blocked until the ARBA Final Closeout Confirmation is completed.',
+          ),
+        ),
+      );
+
+      return false;
+    }
 
     String _resultsReadinessMessage() {
       final readiness = _dashboard?.resultsReadiness;
