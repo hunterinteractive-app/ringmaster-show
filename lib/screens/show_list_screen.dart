@@ -67,7 +67,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
   // Temporary feature flag. Change to true when superintendent-role access
   // is ready to be released. Super admins always retain access.
   // CHANGE THIS TO TRUE
-  static const bool _enableSuperintendentRoleAccess = false;
+  static const bool _enableSuperintendentRoleAccess = true;
   Future<bool> _ensureExhibitorAccount() async {
     if (widget.demoMode || SupportImpersonationSession.isActive) {
       return true;
