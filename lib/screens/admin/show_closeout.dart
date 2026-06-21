@@ -1442,11 +1442,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       required void Function(String artifactKey) onFinished,
       required void Function(String artifactKey, Object error) onFailed,
     }) async {
-      final arbaConfirmed = await _ensureArbaFinalCloseoutConfirmedForReports();
-
-      if (!arbaConfirmed) {
-        throw Exception('ARBA Final Closeout Confirmation is required before reports can be generated.');
-      }
 
       await _saveArbaDetails();
 
@@ -2153,14 +2148,38 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         _dashboard?.resultsReadiness.ready == true;
 
     Future<bool> _ensureArbaFinalCloseoutConfirmedForReports() async {
-      if (_arbaReportFiled) return true;
+      final missing = <String>[];
+
+      if (_secretaryNameController.text.trim().isEmpty) {
+        missing.add('Show Secretary Name');
+      }
+      if (_secretaryAddressController.text.trim().isEmpty) {
+        missing.add('Secretary Address');
+      }
+      if (_secretaryEmailController.text.trim().isEmpty) {
+        missing.add('Secretary Email');
+      }
+      if (_secretaryPhoneController.text.trim().isEmpty) {
+        missing.add('Secretary Phone');
+      }
+      if (_superintendentController.text.trim().isEmpty) {
+        missing.add('Superintendent Name');
+      }
+      if (_superintendentNumberController.text.trim().isEmpty) {
+        missing.add('Superintendent ARBA Number');
+      }
+      if (_sweepstakesIssue && _sweepstakesClubController.text.trim().isEmpty) {
+        missing.add('Sweepstakes Sanction Issue Club(s)');
+      }
+
+      if (missing.isEmpty) return true;
 
       if (!mounted) return false;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-            'Reports are blocked until the ARBA Final Closeout Confirmation is completed.',
+            'ARBA Final Closeout Confirmation is incomplete: ${missing.join(', ')}.',
           ),
         ),
       );
