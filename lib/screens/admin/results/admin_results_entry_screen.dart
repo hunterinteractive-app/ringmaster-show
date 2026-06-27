@@ -207,6 +207,7 @@ const List<String> kResultStatuses = [
   'Disqualified - Wrong Variety',
   'Disqualified - Wrong Class',
   'Disqualified - Overweight',
+  'Disqualified - Wrong Tattoo',
   'Disqualified - Other',
   'Unworthy of Award',
 ];
