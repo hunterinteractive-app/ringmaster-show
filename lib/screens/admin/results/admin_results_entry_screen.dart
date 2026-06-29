@@ -1917,6 +1917,7 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
         ),
       );
     }
+    
 
     for (final rawAward in entryAwards) {
       final award = _canonicalAwardCode(rawAward);
