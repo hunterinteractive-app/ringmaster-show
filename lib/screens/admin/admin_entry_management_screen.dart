@@ -110,7 +110,6 @@ class _AdminEntryManagementScreenState
   }
 
   Future<void> _openEditExhibitor(Map<String, dynamic> entry) async {
-
     final exhibitorRaw = entry['exhibitors'];
     if (exhibitorRaw is! Map) {
       setState(() => _msg = 'Could not load exhibitor details for editing.');
@@ -189,7 +188,6 @@ class _AdminEntryManagementScreenState
   }
 
   String _exhibitorDisplayName(Map<String, dynamic> e) {
-
     final ex = e['exhibitors'];
     if (ex is Map<String, dynamic>) {
       final dn = (ex['display_name'] ?? '').toString().trim();
@@ -216,7 +214,7 @@ class _AdminEntryManagementScreenState
       (e['tattoo'] ?? '').toString(),
       (e['breed'] ?? '').toString(),
       (e['variety'] ?? '').toString(),
-      (e['fur_variety'] ?? '').toString(), 
+      (e['fur_variety'] ?? '').toString(),
       (e['sex'] ?? '').toString(),
       (e['class_name'] ?? '').toString(),
       (e['notes'] ?? '').toString(),
@@ -235,11 +233,15 @@ class _AdminEntryManagementScreenState
     try {
       await ShowLockService.assertShowUnlocked(widget.showId);
 
-      await supabase.from('entries').update({
-        'scratched_at':
-            willScratch ? DateTime.now().toUtc().toIso8601String() : null,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      }).eq('id', id);
+      await supabase
+          .from('entries')
+          .update({
+            'scratched_at': willScratch
+                ? DateTime.now().toUtc().toIso8601String()
+                : null,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('id', id);
 
       await _loadEntries();
       if (!mounted) return;
@@ -251,7 +253,6 @@ class _AdminEntryManagementScreenState
   }
 
   Future<void> _openEdit(Map<String, dynamic> entry) async {
-
     // Entry Management should edit the show entry snapshot, not the saved
     // animal master profile. Saved animal profiles may belong to an exhibitor
     // account, and RLS correctly prevents show staff from editing those rows.
@@ -283,10 +284,7 @@ class _AdminEntryManagementScreenState
       backgroundColor: Colors.transparent,
       builder: (_) => _themedBottomSheetShell(
         context,
-        child: _MoveEntrySheet(
-          entry: entry,
-          sections: _sections,
-        ),
+        child: _MoveEntrySheet(entry: entry, sections: _sections),
       ),
     );
 
@@ -319,7 +317,8 @@ class _AdminEntryManagementScreenState
   }
 
   Map<String, List<Map<String, dynamic>>> _groupByExhibitor(
-      List<Map<String, dynamic>> items) {
+    List<Map<String, dynamic>> items,
+  ) {
     final map = <String, List<Map<String, dynamic>>>{};
     for (final e in items) {
       final exId = _exhibitorId(e);
@@ -391,10 +390,7 @@ class _AdminEntryManagementScreenState
     );
   }
 
-  Widget _summaryCard({
-    required String title,
-    required Widget child,
-  }) {
+  Widget _summaryCard({required String title, required Widget child}) {
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
       padding: const EdgeInsets.all(16),
@@ -402,10 +398,7 @@ class _AdminEntryManagementScreenState
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: .05),
-            blurRadius: 12,
-          ),
+          BoxShadow(color: Colors.black.withValues(alpha: .05), blurRadius: 12),
         ],
       ),
       child: Column(
@@ -413,10 +406,7 @@ class _AdminEntryManagementScreenState
         children: [
           Text(
             title,
-            style: const TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w600,
-            ),
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 14),
           child,
@@ -429,8 +419,9 @@ class _AdminEntryManagementScreenState
   Widget build(BuildContext context) {
     final searchText = _search.text.trim();
 
-    final filtered =
-        _entries.where((e) => _matchesSearch(e, searchText)).toList();
+    final filtered = _entries
+        .where((e) => _matchesSearch(e, searchText))
+        .toList();
 
     final grouped = _groupByExhibitor(filtered);
     final exhibitorKeys = grouped.keys.toList()
@@ -467,9 +458,7 @@ class _AdminEntryManagementScreenState
               ? 'Add entry while viewing as another user'
               : 'Add Entry',
           icon: const Icon(Icons.add),
-          onPressed: (_loading || _sections.isEmpty)
-            ? null
-            : _openAddEntry,
+          onPressed: (_loading || _sections.isEmpty) ? null : _openAddEntry,
         ),
         IconButton(
           tooltip: 'Reload',
@@ -542,14 +531,21 @@ class _AdminEntryManagementScreenState
                               return const SizedBox.shrink();
                             }
 
-                            final exhibitorName =
-                                _exhibitorDisplayName(exEntries.first);
-                            final firstExhibitor = exEntries.first['exhibitors'];
+                            final exhibitorName = _exhibitorDisplayName(
+                              exEntries.first,
+                            );
+                            final firstExhibitor =
+                                exEntries.first['exhibitors'];
                             final hasExhibitor = firstExhibitor is Map;
-                            final exhibitorHasAccount = hasExhibitor &&
-                                ((firstExhibitor['owner_user_id'] ?? '').toString().trim().isNotEmpty);
-                            final isExpanded =
-                                _expandedExhibitorIds.contains(exKey);
+                            final exhibitorHasAccount =
+                                hasExhibitor &&
+                                ((firstExhibitor['owner_user_id'] ?? '')
+                                    .toString()
+                                    .trim()
+                                    .isNotEmpty);
+                            final isExpanded = _expandedExhibitorIds.contains(
+                              exKey,
+                            );
 
                             return Container(
                               margin: const EdgeInsets.only(bottom: 12),
@@ -586,9 +582,12 @@ class _AdminEntryManagementScreenState
                                     ),
                                     if (hasExhibitor)
                                       TextButton.icon(
-                                        onPressed: () => _openEditExhibitor(exEntries.first),
+                                        onPressed: () =>
+                                            _openEditExhibitor(exEntries.first),
                                         icon: Icon(
-                                          exhibitorHasAccount ? Icons.visibility : Icons.edit,
+                                          exhibitorHasAccount
+                                              ? Icons.visibility
+                                              : Icons.edit,
                                           size: 18,
                                         ),
                                         label: Text(
@@ -609,37 +608,44 @@ class _AdminEntryManagementScreenState
                                         .toString()
                                         .trim()
                                         .toUpperCase();
-                                    final animalName = (e['animal_name'] ?? '').toString().trim();
+                                    final animalName = (e['animal_name'] ?? '')
+                                        .toString()
+                                        .trim();
                                     final breed = (e['breed'] ?? '').toString();
-                                    final variety =
-                                        (e['variety'] ?? '').toString();
-                                    final furVariety =
-                                        (e['fur_variety'] ?? '').toString();
+                                    final variety = (e['variety'] ?? '')
+                                        .toString();
+                                    final furVariety = (e['fur_variety'] ?? '')
+                                        .toString();
                                     final notes = (e['notes'] ?? '').toString();
-                                    final scratchedAt =
-                                        e['scratched_at']?.toString();
-                                    final isScratched = scratchedAt != null &&
+                                    final scratchedAt = e['scratched_at']
+                                        ?.toString();
+                                    final isScratched =
+                                        scratchedAt != null &&
                                         scratchedAt.isNotEmpty;
 
                                     final section = e['show_sections'];
-                                    final letter = (section is Map
-                                            ? (section['letter'] ?? '')
-                                            : '')
-                                        .toString();
+                                    final letter =
+                                        (section is Map
+                                                ? (section['letter'] ?? '')
+                                                : '')
+                                            .toString();
 
-                                    final titleLeft = animalName.isNotEmpty && tattoo.isNotEmpty
+                                    final titleLeft =
+                                        animalName.isNotEmpty &&
+                                            tattoo.isNotEmpty
                                         ? '$animalName • $tattoo'
                                         : animalName.isNotEmpty
-                                            ? animalName
-                                            : tattoo.isEmpty
-                                                ? '(no tattoo)'
-                                                : tattoo;
+                                        ? animalName
+                                        : tattoo.isEmpty
+                                        ? '(no tattoo)'
+                                        : tattoo;
 
                                     final isFur = e['is_fur'] == true;
 
                                     final subtitle = [
                                       if (breed.isNotEmpty) 'Breed: $breed',
-                                      if (variety.isNotEmpty) 'Variety: $variety',
+                                      if (variety.isNotEmpty)
+                                        'Variety: $variety',
                                       if (isFur)
                                         furVariety.isNotEmpty
                                             ? 'Fur/Wool: $furVariety'
@@ -659,8 +665,9 @@ class _AdminEntryManagementScreenState
                                               : null,
                                         ),
                                       ),
-                                      subtitle:
-                                          subtitle.isEmpty ? null : Text(subtitle),
+                                      subtitle: subtitle.isEmpty
+                                          ? null
+                                          : Text(subtitle),
                                       isThreeLine: subtitle.length > 80,
                                       trailing: PopupMenuButton<String>(
                                         tooltip: AppSession.isSupportMode
@@ -711,10 +718,7 @@ Widget _themedBottomSheetShell(BuildContext context, {required Widget child}) {
   return Container(
     decoration: const BoxDecoration(
       gradient: LinearGradient(
-        colors: [
-          Color(0xFF11285A),
-          Color(0xFF0B1C43),
-        ],
+        colors: [Color(0xFF11285A), Color(0xFF0B1C43)],
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
       ),
@@ -788,8 +792,8 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
           .eq('is_active', true)
           .order('name');
 
-      final globalBreeds =
-          (globalBreedsRes as List).cast<Map<String, dynamic>>();
+      final globalBreeds = (globalBreedsRes as List)
+          .cast<Map<String, dynamic>>();
 
       final showId = (widget.entry['show_id'] ?? '').toString();
       final showBreedRes = await supabase
@@ -797,8 +801,7 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
           .select('breed_id,is_enabled')
           .eq('show_id', showId);
 
-      final showBreedRows =
-          (showBreedRes as List).cast<Map<String, dynamic>>();
+      final showBreedRows = (showBreedRes as List).cast<Map<String, dynamic>>();
 
       final showBreedMap = <String, bool>{};
       for (final row in showBreedRows) {
@@ -807,25 +810,28 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
         showBreedMap[breedId] = row['is_enabled'] == true;
       }
 
-      final effective = globalBreeds.where((b) {
-        final id = (b['id'] ?? '').toString();
+      final effective =
+          globalBreeds.where((b) {
+            final id = (b['id'] ?? '').toString();
 
-        if (showBreedMap.containsKey(id)) {
-          return showBreedMap[id] == true;
-        }
+            if (showBreedMap.containsKey(id)) {
+              return showBreedMap[id] == true;
+            }
 
-        return true;
-      }).toList()
-        ..sort(
-          (a, b) => (a['name'] ?? '')
-              .toString()
-              .toLowerCase()
-              .compareTo((b['name'] ?? '').toString().toLowerCase()),
-        );
+            return true;
+          }).toList()..sort(
+            (a, b) => (a['name'] ?? '').toString().toLowerCase().compareTo(
+              (b['name'] ?? '').toString().toLowerCase(),
+            ),
+          );
 
-      final currentBreedName = (initialBreedName ?? _breed.text).trim().toLowerCase();
+      final currentBreedName = (initialBreedName ?? _breed.text)
+          .trim()
+          .toLowerCase();
       final matchedBreed = effective.firstWhere(
-        (b) => (b['name'] ?? '').toString().trim().toLowerCase() == currentBreedName,
+        (b) =>
+            (b['name'] ?? '').toString().trim().toLowerCase() ==
+            currentBreedName,
         orElse: () => <String, dynamic>{},
       );
 
@@ -837,7 +843,10 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
       });
 
       if (_breedId != null && _breedId!.isNotEmpty) {
-        await _loadVarietiesForBreed(_breedId!, initialVarietyName: _variety.text);
+        await _loadVarietiesForBreed(
+          _breedId!,
+          initialVarietyName: _variety.text,
+        );
       }
     } catch (e) {
       if (!mounted) return;
@@ -887,16 +896,16 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
           if (seen.contains(key)) continue;
           seen.add(key);
 
-          effective.add({
-            'id': 'cavy_$key',
-            'name': varietyName,
-          });
+          effective.add({'id': 'cavy_$key', 'name': varietyName});
         }
 
-        final currentVariety =
-            (initialVarietyName ?? _variety.text).trim().toLowerCase();
+        final currentVariety = (initialVarietyName ?? _variety.text)
+            .trim()
+            .toLowerCase();
         final matchedVariety = effective.firstWhere(
-          (v) => (v['name'] ?? '').toString().trim().toLowerCase() == currentVariety,
+          (v) =>
+              (v['name'] ?? '').toString().trim().toLowerCase() ==
+              currentVariety,
           orElse: () => <String, dynamic>{},
         );
 
@@ -922,10 +931,13 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
           {'id': 'lop_solid', 'name': 'Solid'},
         ];
 
-        final currentVariety =
-            (initialVarietyName ?? _variety.text).trim().toLowerCase();
+        final currentVariety = (initialVarietyName ?? _variety.text)
+            .trim()
+            .toLowerCase();
         final matchedVariety = lopOptions.firstWhere(
-          (v) => (v['name'] ?? '').toString().trim().toLowerCase() == currentVariety,
+          (v) =>
+              (v['name'] ?? '').toString().trim().toLowerCase() ==
+              currentVariety,
           orElse: () => <String, String>{},
         );
 
@@ -951,8 +963,8 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
           .eq('is_active', true)
           .order('name');
 
-      final globalVarieties =
-          (globalVarietiesRes as List).cast<Map<String, dynamic>>();
+      final globalVarieties = (globalVarietiesRes as List)
+          .cast<Map<String, dynamic>>();
 
       final showId = (widget.entry['show_id'] ?? '').toString();
       final showVarietiesRes = await supabase
@@ -961,8 +973,8 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
           .eq('show_id', showId)
           .eq('breed_id', breedId);
 
-      final showVarietyRows =
-          (showVarietiesRes as List).cast<Map<String, dynamic>>();
+      final showVarietyRows = (showVarietiesRes as List)
+          .cast<Map<String, dynamic>>();
 
       final showVarietyByGlobalId = <String, Map<String, dynamic>>{};
       final customRows = <Map<String, dynamic>>[];
@@ -1005,25 +1017,23 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
         if (row['is_enabled'] == true) {
           final customName = (row['custom_name'] ?? '').toString().trim();
           if (customName.isNotEmpty) {
-            effective.add({
-              'id': 'custom_$customName',
-              'name': customName,
-            });
+            effective.add({'id': 'custom_$customName', 'name': customName});
           }
         }
       }
 
       effective.sort(
-        (a, b) => (a['name'] ?? '')
-            .toString()
-            .toLowerCase()
-            .compareTo((b['name'] ?? '').toString().toLowerCase()),
+        (a, b) => (a['name'] ?? '').toString().toLowerCase().compareTo(
+          (b['name'] ?? '').toString().toLowerCase(),
+        ),
       );
 
-      final currentVariety =
-          (initialVarietyName ?? _variety.text).trim().toLowerCase();
+      final currentVariety = (initialVarietyName ?? _variety.text)
+          .trim()
+          .toLowerCase();
       final matchedVariety = effective.firstWhere(
-        (v) => (v['name'] ?? '').toString().trim().toLowerCase() == currentVariety,
+        (v) =>
+            (v['name'] ?? '').toString().trim().toLowerCase() == currentVariety,
         orElse: () => <String, dynamic>{},
       );
 
@@ -1053,20 +1063,24 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
   void initState() {
     super.initState();
     _animalName = TextEditingController(
-        text: (widget.entry['animal_name'] ?? '').toString().trim(),
-      );
+      text: (widget.entry['animal_name'] ?? '').toString().trim(),
+    );
     _tattoo = TextEditingController(
-        text: (widget.entry['tattoo'] ?? '').toString().trim().toUpperCase(),
-      );
-    _breed =
-        TextEditingController(text: (widget.entry['breed'] ?? '').toString());
+      text: (widget.entry['tattoo'] ?? '').toString().trim().toUpperCase(),
+    );
+    _breed = TextEditingController(
+      text: (widget.entry['breed'] ?? '').toString(),
+    );
     _variety = TextEditingController(
-        text: (widget.entry['variety'] ?? '').toString());
+      text: (widget.entry['variety'] ?? '').toString(),
+    );
     _sex = TextEditingController(text: (widget.entry['sex'] ?? '').toString());
     _className = TextEditingController(
-        text: (widget.entry['class_name'] ?? '').toString());
-    _notes =
-        TextEditingController(text: (widget.entry['notes'] ?? '').toString());
+      text: (widget.entry['class_name'] ?? '').toString(),
+    );
+    _notes = TextEditingController(
+      text: (widget.entry['notes'] ?? '').toString(),
+    );
     _isFur = widget.entry['is_fur'] == true;
     _furNotes = TextEditingController(
       text: (widget.entry['fur_notes'] ?? '').toString(),
@@ -1075,11 +1089,16 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
       text: (widget.entry['fur_variety'] ?? '').toString(),
     );
 
-    _species = (widget.entry['species'] ?? 'rabbit').toString().trim().toLowerCase();
+    _species = (widget.entry['species'] ?? 'rabbit')
+        .toString()
+        .trim()
+        .toLowerCase();
     if (_species != 'cavy') _species = 'rabbit';
 
     final initialSex = _sex.text.trim();
-    _sexValue = _sexOptions.contains(initialSex) ? initialSex : _sexOptions.first;
+    _sexValue = _sexOptions.contains(initialSex)
+        ? initialSex
+        : _sexOptions.first;
     _sex.text = _sexValue ?? '';
 
     final initialClass = _className.text.trim();
@@ -1128,11 +1147,13 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
       final sectionId = (widget.entry['section_id'] ?? '').toString();
       final animalId = (widget.entry['animal_id'] ?? '').toString();
       final exhibitorId = (widget.entry['exhibitor_id'] ?? '').toString();
-      final exhibitorUserId =
-          (widget.entry['exhibitor_user_id'] ?? '').toString().trim();
+      final exhibitorUserId = (widget.entry['exhibitor_user_id'] ?? '')
+          .toString()
+          .trim();
       final now = DateTime.now().toUtc().toIso8601String();
-      final furVariety =
-          _furVarietyValue?.trim().isNotEmpty == true ? _furVarietyValue!.trim() : null;
+      final furVariety = _furVarietyValue?.trim().isNotEmpty == true
+          ? _furVarietyValue!.trim()
+          : null;
 
       final basePayload = <String, dynamic>{
         'animal_name': _animalName.text.trim().isEmpty
@@ -1168,7 +1189,9 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
           .from('entries')
           .update(updatePayload)
           .eq('id', id)
-          .select('id, animal_name, tattoo, breed, variety, sex, class_name, updated_at');
+          .select(
+            'id, animal_name, tattoo, breed, variety, sex, class_name, updated_at',
+          );
 
       final updatedList = (updatedRows as List).cast<Map<String, dynamic>>();
       if (updatedList.isEmpty) {
@@ -1216,7 +1239,9 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
     required String furNotes,
   }) async {
     if (showId.isEmpty || sectionId.isEmpty || animalId.isEmpty) {
-      throw Exception('Cannot create Fur/Wool companion entry because the entry context is incomplete.');
+      throw Exception(
+        'Cannot create Fur/Wool companion entry because the entry context is incomplete.',
+      );
     }
 
     final existingRows = await supabase
@@ -1248,10 +1273,7 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
 
     if (existingFurRows.isNotEmpty) {
       final furEntryId = (existingFurRows.first['id'] ?? '').toString();
-      await supabase
-          .from('entries')
-          .update(furPayload)
-          .eq('id', furEntryId);
+      await supabase.from('entries').update(furPayload).eq('id', furEntryId);
       return;
     }
 
@@ -1296,15 +1318,15 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
                   ),
                 ),
               ),
-              TextField(
-                controller: _animalName,
-                enabled: !_saving,
-                decoration: const InputDecoration(
-                  labelText: 'Animal Name',
-                  border: OutlineInputBorder(),
-                ),
+            TextField(
+              controller: _animalName,
+              enabled: !_saving,
+              decoration: const InputDecoration(
+                labelText: 'Animal Name',
+                border: OutlineInputBorder(),
               ),
-              const SizedBox(height: 10),
+            ),
+            const SizedBox(height: 10),
             TextField(
               controller: _tattoo,
               enabled: !_saving,
@@ -1353,9 +1375,12 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
                     },
             ),
             const SizedBox(height: 10),
-            if (_breedId != null && _loadingVarieties) const LinearProgressIndicator(),
+            if (_breedId != null && _loadingVarieties)
+              const LinearProgressIndicator(),
             DropdownButtonFormField<String>(
-              initialValue: _variety.text.trim().isEmpty ? null : _variety.text.trim(),
+              initialValue: _variety.text.trim().isEmpty
+                  ? null
+                  : _variety.text.trim(),
               decoration: const InputDecoration(
                 labelText: 'Variety',
                 border: OutlineInputBorder(),
@@ -1386,9 +1411,15 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
               ),
               items: const [
                 DropdownMenuItem(value: 'Senior', child: Text('Senior')),
-                DropdownMenuItem(value: 'Intermediate', child: Text('Intermediate')),
+                DropdownMenuItem(
+                  value: 'Intermediate',
+                  child: Text('Intermediate'),
+                ),
                 DropdownMenuItem(value: 'Junior', child: Text('Junior')),
-                DropdownMenuItem(value: 'Pre-Junior', child: Text('Pre-Junior')),
+                DropdownMenuItem(
+                  value: 'Pre-Junior',
+                  child: Text('Pre-Junior'),
+                ),
               ],
               onChanged: _saving
                   ? null
@@ -1409,10 +1440,8 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
               ),
               items: _sexOptions
                   .map(
-                    (sex) => DropdownMenuItem<String>(
-                      value: sex,
-                      child: Text(sex),
-                    ),
+                    (sex) =>
+                        DropdownMenuItem<String>(value: sex, child: Text(sex)),
                   )
                   .toList(),
               onChanged: _saving
@@ -1433,14 +1462,14 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
               onChanged: _saving
                   ? null
                   : (v) => setState(() {
-                        _isFur = v;
-                        if (!v) {
-                          _furVarietyValue = null;
-                          _furVariety.clear();
-                          _furNotes.clear();
-                        }
-                        _msg = null;
-                      }),
+                      _isFur = v;
+                      if (!v) {
+                        _furVarietyValue = null;
+                        _furVariety.clear();
+                        _furNotes.clear();
+                      }
+                      _msg = null;
+                    }),
             ),
             if (_isFur) ...[
               const SizedBox(height: 10),
@@ -1540,11 +1569,12 @@ class _EditExhibitorSheetState extends State<_EditExhibitorSheet> {
     super.initState();
 
     _showingName = TextEditingController(
-      text: (widget.exhibitor['showing_name'] ??
-              widget.exhibitor['display_name'] ??
-              '')
-          .toString()
-          .trim(),
+      text:
+          (widget.exhibitor['showing_name'] ??
+                  widget.exhibitor['display_name'] ??
+                  '')
+              .toString()
+              .trim(),
     );
     _firstName = TextEditingController(
       text: (widget.exhibitor['first_name'] ?? '').toString().trim(),
@@ -1595,11 +1625,14 @@ class _EditExhibitorSheetState extends State<_EditExhibitorSheet> {
   }
 
   Future<void> _save() async {
-
-    final ownerUserId =
-        (widget.exhibitor['owner_user_id'] ?? '').toString().trim();
+    final ownerUserId = (widget.exhibitor['owner_user_id'] ?? '')
+        .toString()
+        .trim();
     if (ownerUserId.isNotEmpty) {
-      setState(() => _msg = 'This exhibitor already has an account and cannot be edited here.');
+      setState(
+        () => _msg =
+            'This exhibitor already has an account and cannot be edited here.',
+      );
       return;
     }
 
@@ -1622,7 +1655,9 @@ class _EditExhibitorSheetState extends State<_EditExhibitorSheet> {
     final arbaNumber = _arbaNumber.text.trim();
 
     if (showing.isEmpty && first.isEmpty && last.isEmpty) {
-      setState(() => _msg = 'Enter at least a showing name or first/last name.');
+      setState(
+        () => _msg = 'Enter at least a showing name or first/last name.',
+      );
       return;
     }
     if (addressLine1.isEmpty) {
@@ -1671,9 +1706,7 @@ class _EditExhibitorSheetState extends State<_EditExhibitorSheet> {
 
       await supabase
           .from('entries')
-          .update({
-            'updated_at': DateTime.now().toUtc().toIso8601String(),
-          })
+          .update({'updated_at': DateTime.now().toUtc().toIso8601String()})
           .eq('show_id', widget.showId)
           .eq('exhibitor_id', exhibitorId)
           .limit(1);
@@ -1897,10 +1930,7 @@ class _MoveEntrySheet extends StatefulWidget {
   final Map<String, dynamic> entry;
   final List<Map<String, dynamic>> sections;
 
-  const _MoveEntrySheet({
-    required this.entry,
-    required this.sections,
-  });
+  const _MoveEntrySheet({required this.entry, required this.sections});
 
   @override
   State<_MoveEntrySheet> createState() => _MoveEntrySheetState();
@@ -1954,12 +1984,16 @@ class _MoveEntrySheetState extends State<_MoveEntrySheet> {
       await ShowLockService.assertShowUnlocked(
         (widget.entry['show_id'] ?? '').toString(),
       );
-      await supabase.from('entries').update({
-        'section_id': _sectionId,
-        'class_name':
-            _className.text.trim().isEmpty ? null : _className.text.trim(),
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      }).eq('id', entryId);
+      await supabase
+          .from('entries')
+          .update({
+            'section_id': _sectionId,
+            'class_name': _className.text.trim().isEmpty
+                ? null
+                : _className.text.trim(),
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('id', entryId);
 
       if (!mounted) return;
       Navigator.pop(context, true);
@@ -2020,9 +2054,7 @@ class _MoveEntrySheetState extends State<_MoveEntrySheet> {
                     ),
                   )
                   .toList(),
-              onChanged: _saving
-                  ? null
-                  : (v) => setState(() => _sectionId = v),
+              onChanged: _saving ? null : (v) => setState(() => _sectionId = v),
             ),
             const SizedBox(height: 12),
             TextField(
@@ -2040,9 +2072,7 @@ class _MoveEntrySheetState extends State<_MoveEntrySheet> {
                 foregroundColor: Colors.black87,
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
-              onPressed: _saving
-                  ? null
-                  : _save,
+              onPressed: _saving ? null : _save,
               child: Text(_saving ? 'Moving…' : 'Save Move'),
             ),
           ],
@@ -2193,29 +2223,35 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     _furNotes.dispose();
     super.dispose();
   }
+
   List<Map<String, dynamic>> _filteredExhibitors([String? searchText]) {
     final query = (searchText ?? _exhibitorSearch.text).trim().toLowerCase();
     if (query.isEmpty) return _exhibitors;
 
     return _exhibitors.where((e) {
-      final haystack = [
-        _exhibitorName(e),
-        _exhibitorLabel(e),
-        e['first_name'],
-        e['last_name'],
-        e['showing_name'],
-        e['display_name'],
-        e['email'],
-        e['phone'],
-        e['arba_number'],
-        e['city'],
-        e['state'],
-        e['zip'],
-      ].where((v) => v != null).map((v) => v.toString().toLowerCase()).join(' ');
+      final haystack =
+          [
+                _exhibitorName(e),
+                _exhibitorLabel(e),
+                e['first_name'],
+                e['last_name'],
+                e['showing_name'],
+                e['display_name'],
+                e['email'],
+                e['phone'],
+                e['arba_number'],
+                e['city'],
+                e['state'],
+                e['zip'],
+              ]
+              .where((v) => v != null)
+              .map((v) => v.toString().toLowerCase())
+              .join(' ');
 
       return haystack.contains(query);
     }).toList();
   }
+
   void _selectExhibitor(Map<String, dynamic> exhibitor) {
     final id = (exhibitor['id'] ?? '').toString();
     if (id.isEmpty) return;
@@ -2237,78 +2273,238 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     final first = _firstName.text.trim();
     final last = _lastName.text.trim();
 
-    final combined = [
-      first,
-      last,
-    ].where((value) => value.isNotEmpty).join(' ');
+    final combined = [first, last].where((value) => value.isNotEmpty).join(' ');
 
     if (_showingName.text != combined) {
       _showingName.value = TextEditingValue(
         text: combined,
-        selection: TextSelection.collapsed(
-          offset: combined.length,
-        ),
+        selection: TextSelection.collapsed(offset: combined.length),
       );
     }
   }
 
-Future<void> _openSharedAnimalEditorForAdd() async {
-  final exhibitor = _selectedExhibitor();
-  if (exhibitor == null) {
-    setState(() => _msg = 'Select an exhibitor before adding an animal.');
-    return;
-  }
+  Future<void> _openSharedAnimalEditorForAdd() async {
+    final exhibitor = _selectedExhibitor();
+    if (exhibitor == null) {
+      setState(() => _msg = 'Select an exhibitor before adding an animal.');
+      return;
+    }
 
-  // Do not open the shared animal editor here. That editor runs as the
-  // logged-in show secretary, so it saves the animal under the secretary's
-  // account. This admin flow needs to collect the animal details inline and
-  // let _save() attach the animal to the selected exhibitor account.
-  setState(() {
-    _useLocalAnimal = true;
-    _animal = null;
-    _msg = 'Enter the animal details below, then save the entry.';
-  });
-}
+    // Do not open the shared animal editor here. That editor runs as the
+    // logged-in show secretary, so it saves the animal under the secretary's
+    // account. This admin flow needs to collect the animal details inline and
+    // let _save() attach the animal to the selected exhibitor account.
+    setState(() {
+      _useLocalAnimal = true;
+      _animal = null;
+      _msg = 'Enter the animal details below, then save the entry.';
+    });
+  }
 
   Future<Map<String, dynamic>?> _findExistingShowExhibitor() async {
     final showing = _showingName.text.trim();
     final first = _firstName.text.trim();
     final last = _lastName.text.trim();
+    final email = _email.text.trim().toLowerCase();
+    final phone = _phone.text.trim();
+    final phoneDigits = _digitsOnly(phone);
+    final arbaNumber = _arbaNumber.text.trim();
+    final addressLine1 = _addressLine1.text.trim();
+    final zip = _zip.text.trim();
 
-    if (showing.isEmpty && first.isEmpty && last.isEmpty) return null;
+    if (showing.isEmpty &&
+        first.isEmpty &&
+        last.isEmpty &&
+        email.isEmpty &&
+        phoneDigits.isEmpty &&
+        arbaNumber.isEmpty &&
+        addressLine1.isEmpty &&
+        zip.isEmpty) {
+      return null;
+    }
 
-    dynamic existing;
+    const selectColumns =
+        'id,showing_name,display_name,first_name,last_name,email,phone,address_line1,address_line2,city,state,zip,arba_number,type,owner_user_id,is_active,is_local_only,created_for_show_id,is_merged,merged_into_exhibitor_id';
+    final candidatesById = <String, Map<String, dynamic>>{};
+
+    void addCandidateRows(dynamic rows) {
+      if (rows is! List) return;
+      for (final raw in rows) {
+        if (raw is! Map) continue;
+        final candidate = Map<String, dynamic>.from(raw);
+        final id = (candidate['id'] ?? '').toString().trim();
+        if (id.isEmpty) continue;
+        candidatesById[id] = candidate;
+      }
+    }
 
     if (showing.isNotEmpty) {
-      existing = await supabase
+      final rows = await supabase
           .from('exhibitors')
-          .select(
-            'id,showing_name,display_name,first_name,last_name,email,phone,address_line1,address_line2,city,state,zip,arba_number,type,owner_user_id,is_active,is_local_only,created_for_show_id,is_merged,merged_into_exhibitor_id',
-          )
-          .eq('created_for_show_id', widget.showId)
+          .select(selectColumns)
           .or('is_active.is.null,is_active.eq.true')
           .or('is_merged.is.null,is_merged.eq.false')
           .eq('showing_name', showing)
-          .maybeSingle();
+          .limit(25);
+      addCandidateRows(rows);
+
+      final displayNameRows = await supabase
+          .from('exhibitors')
+          .select(selectColumns)
+          .or('is_active.is.null,is_active.eq.true')
+          .or('is_merged.is.null,is_merged.eq.false')
+          .eq('display_name', showing)
+          .limit(25);
+      addCandidateRows(displayNameRows);
     }
 
-    if (existing == null && first.isNotEmpty && last.isNotEmpty) {
-      existing = await supabase
+    if (first.isNotEmpty && last.isNotEmpty) {
+      final rows = await supabase
           .from('exhibitors')
-          .select(
-            'id,showing_name,display_name,first_name,last_name,email,phone,address_line1,address_line2,city,state,zip,arba_number,type,owner_user_id,is_active,is_local_only,created_for_show_id,is_merged,merged_into_exhibitor_id',
-          )
-          .eq('created_for_show_id', widget.showId)
+          .select(selectColumns)
           .or('is_active.is.null,is_active.eq.true')
           .or('is_merged.is.null,is_merged.eq.false')
           .eq('first_name', first)
           .eq('last_name', last)
-          .maybeSingle();
+          .limit(25);
+      addCandidateRows(rows);
     }
 
-    if (existing == null) return null;
-    return Map<String, dynamic>.from(existing as Map);
+    if (email.isNotEmpty) {
+      final rows = await supabase
+          .from('exhibitors')
+          .select(selectColumns)
+          .or('is_active.is.null,is_active.eq.true')
+          .or('is_merged.is.null,is_merged.eq.false')
+          .eq('email', email)
+          .limit(25);
+      addCandidateRows(rows);
+    }
+
+    if (phone.isNotEmpty) {
+      final rows = await supabase
+          .from('exhibitors')
+          .select(selectColumns)
+          .or('is_active.is.null,is_active.eq.true')
+          .or('is_merged.is.null,is_merged.eq.false')
+          .eq('phone', phone)
+          .limit(25);
+      addCandidateRows(rows);
+    }
+
+    if (phoneDigits.isNotEmpty && phoneDigits != phone) {
+      final rows = await supabase
+          .from('exhibitors')
+          .select(selectColumns)
+          .or('is_active.is.null,is_active.eq.true')
+          .or('is_merged.is.null,is_merged.eq.false')
+          .eq('phone', phoneDigits)
+          .limit(25);
+      addCandidateRows(rows);
+    }
+
+    if (arbaNumber.isNotEmpty) {
+      final rows = await supabase
+          .from('exhibitors')
+          .select(selectColumns)
+          .or('is_active.is.null,is_active.eq.true')
+          .or('is_merged.is.null,is_merged.eq.false')
+          .eq('arba_number', arbaNumber)
+          .limit(25);
+      addCandidateRows(rows);
+    }
+
+    if (addressLine1.isNotEmpty && zip.isNotEmpty) {
+      final rows = await supabase
+          .from('exhibitors')
+          .select(selectColumns)
+          .or('is_active.is.null,is_active.eq.true')
+          .or('is_merged.is.null,is_merged.eq.false')
+          .eq('address_line1', addressLine1)
+          .eq('zip', zip)
+          .limit(25);
+      addCandidateRows(rows);
+    }
+
+    final candidates = candidatesById.values.toList();
+    if (candidates.isEmpty) return null;
+
+    final sameShowMatches = candidates
+        .where(
+          (candidate) =>
+              (candidate['created_for_show_id'] ?? '').toString() ==
+              widget.showId,
+        )
+        .toList();
+    if (sameShowMatches.isNotEmpty) {
+      return _bestExistingExhibitorCandidate(sameShowMatches);
+    }
+
+    final identityMatches = candidates
+        .where(_existingExhibitorMatchesEnteredIdentity)
+        .toList();
+    if (identityMatches.isNotEmpty) {
+      return _bestExistingExhibitorCandidate(identityMatches);
+    }
+
+    if (candidates.length == 1) {
+      return candidates.single;
+    }
+
+    return null;
   }
+
+  Map<String, dynamic> _bestExistingExhibitorCandidate(
+    List<Map<String, dynamic>> candidates,
+  ) {
+    final wantedType = _exhibitorType.trim().toLowerCase();
+    for (final candidate in candidates) {
+      final type = (candidate['type'] ?? '').toString().trim().toLowerCase();
+      if (wantedType.isNotEmpty && type == wantedType) {
+        return candidate;
+      }
+    }
+    return candidates.first;
+  }
+
+  bool _existingExhibitorMatchesEnteredIdentity(
+    Map<String, dynamic> candidate,
+  ) {
+    final email = _email.text.trim().toLowerCase();
+    final candidateEmail = (candidate['email'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
+    if (email.isNotEmpty && candidateEmail == email) return true;
+
+    final phone = _digitsOnly(_phone.text);
+    final candidatePhone = _digitsOnly((candidate['phone'] ?? '').toString());
+    if (phone.isNotEmpty && candidatePhone == phone) return true;
+
+    final arbaNumber = _arbaNumber.text.trim().toLowerCase();
+    final candidateArba = (candidate['arba_number'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
+    if (arbaNumber.isNotEmpty && candidateArba == arbaNumber) return true;
+
+    final addressLine1 = _addressLine1.text.trim().toLowerCase();
+    final candidateAddressLine1 = (candidate['address_line1'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
+    final zip = _zip.text.trim().toLowerCase();
+    final candidateZip = (candidate['zip'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
+    return addressLine1.isNotEmpty &&
+        zip.isNotEmpty &&
+        candidateAddressLine1 == addressLine1 &&
+        candidateZip == zip;
+  }
+
+  String _digitsOnly(String value) => value.replaceAll(RegExp(r'\D'), '');
 
   Future<void> _loadExhibitors() async {
     try {
@@ -2344,6 +2540,32 @@ Future<void> _openSharedAnimalEditorForAdd() async {
         exhibitorsById[id] = exhibitor;
       }
 
+      // Include show-local/manual exhibitors even before they have entries.
+      // These rows are created with created_for_show_id and owner_user_id null,
+      // so they will not appear through the entries relationship yet.
+      try {
+        final showLocalRows = await supabase
+            .from('exhibitors')
+            .select(
+              'id,showing_name,display_name,first_name,last_name,email,phone,address_line1,address_line2,city,state,zip,arba_number,type,owner_user_id,is_active,is_local_only,created_for_show_id,is_merged,merged_into_exhibitor_id',
+            )
+            .eq('created_for_show_id', widget.showId)
+            .or('is_active.is.null,is_active.eq.true')
+            .or('is_merged.is.null,is_merged.eq.false')
+            .order('display_name', ascending: true);
+
+        for (final rawExhibitor in (showLocalRows as List)) {
+          if (rawExhibitor is! Map) continue;
+          final exhibitor = Map<String, dynamic>.from(rawExhibitor);
+          final id = (exhibitor['id'] ?? '').toString().trim();
+          if (id.isEmpty) continue;
+          exhibitorsById[id] = exhibitor;
+        }
+      } catch (_) {
+        // Some RLS paths only expose exhibitors through entries. Keep loading
+        // whatever is available rather than failing the whole sheet.
+      }
+
       // Also include any additional exhibitor rows the current user's RLS
       // permissions allow, without losing the entry-linked exhibitors above.
       try {
@@ -2370,9 +2592,9 @@ Future<void> _openSharedAnimalEditorForAdd() async {
 
       _exhibitors = exhibitorsById.values.toList()
         ..sort(
-          (a, b) => _exhibitorName(a)
-              .toLowerCase()
-              .compareTo(_exhibitorName(b).toLowerCase()),
+          (a, b) => _exhibitorName(
+            a,
+          ).toLowerCase().compareTo(_exhibitorName(b).toLowerCase()),
         );
 
       if (!mounted) return;
@@ -2582,16 +2804,15 @@ Future<void> _openSharedAnimalEditorForAdd() async {
           .eq('is_active', true)
           .order('name');
 
-      final globalBreeds =
-          (globalBreedsRes as List).cast<Map<String, dynamic>>();
+      final globalBreeds = (globalBreedsRes as List)
+          .cast<Map<String, dynamic>>();
 
       final showBreedRes = await supabase
           .from('show_breeds')
           .select('breed_id,is_enabled')
           .eq('show_id', widget.showId);
 
-      final showBreedRows =
-          (showBreedRes as List).cast<Map<String, dynamic>>();
+      final showBreedRows = (showBreedRes as List).cast<Map<String, dynamic>>();
 
       final showBreedMap = <String, bool>{};
       for (final row in showBreedRows) {
@@ -2600,28 +2821,28 @@ Future<void> _openSharedAnimalEditorForAdd() async {
         showBreedMap[breedId] = row['is_enabled'] == true;
       }
 
-      final effective = globalBreeds.where((b) {
-        final id = (b['id'] ?? '').toString();
+      final effective =
+          globalBreeds.where((b) {
+            final id = (b['id'] ?? '').toString();
 
-        if (showBreedMap.containsKey(id)) {
-          return showBreedMap[id] == true;
-        }
+            if (showBreedMap.containsKey(id)) {
+              return showBreedMap[id] == true;
+            }
 
-        return true;
-      }).toList()
-        ..sort(
-          (a, b) => (a['name'] ?? '')
-              .toString()
-              .toLowerCase()
-              .compareTo((b['name'] ?? '').toString().toLowerCase()),
-        );
+            return true;
+          }).toList()..sort(
+            (a, b) => (a['name'] ?? '').toString().toLowerCase().compareTo(
+              (b['name'] ?? '').toString().toLowerCase(),
+            ),
+          );
 
       if (!mounted) return;
       setState(() {
         _breedOptions = effective;
         _loadingBreeds = false;
 
-        final stillValidBreed = _breedId != null &&
+        final stillValidBreed =
+            _breedId != null &&
             _breedOptions.any((b) => (b['id'] ?? '').toString() == _breedId);
 
         if (!stillValidBreed) {
@@ -2666,9 +2887,11 @@ Future<void> _openSharedAnimalEditorForAdd() async {
           _varietyOptions = lopOptions;
 
           final currentVariety = _variety.text.trim().toLowerCase();
-          final stillValidVariety = currentVariety.isNotEmpty &&
+          final stillValidVariety =
+              currentVariety.isNotEmpty &&
               _varietyOptions.any(
-                (v) => (v['name'] ?? '').toString().trim().toLowerCase() ==
+                (v) =>
+                    (v['name'] ?? '').toString().trim().toLowerCase() ==
                     currentVariety,
               );
 
@@ -2701,10 +2924,7 @@ Future<void> _openSharedAnimalEditorForAdd() async {
           if (seenNames.contains(key)) continue;
           seenNames.add(key);
 
-          effective.add({
-            'id': 'cavy_$key',
-            'name': name,
-          });
+          effective.add({'id': 'cavy_$key', 'name': name});
         }
 
         if (!mounted) return;
@@ -2716,9 +2936,11 @@ Future<void> _openSharedAnimalEditorForAdd() async {
             _variety.text = (effective.first['name'] ?? '').toString();
           } else {
             final currentVariety = _variety.text.trim().toLowerCase();
-            final stillValidVariety = currentVariety.isNotEmpty &&
+            final stillValidVariety =
+                currentVariety.isNotEmpty &&
                 _varietyOptions.any(
-                  (v) => (v['name'] ?? '').toString().trim().toLowerCase() ==
+                  (v) =>
+                      (v['name'] ?? '').toString().trim().toLowerCase() ==
                       currentVariety,
                 );
 
@@ -2737,8 +2959,8 @@ Future<void> _openSharedAnimalEditorForAdd() async {
           .eq('is_active', true)
           .order('name');
 
-      final globalVarieties =
-          (globalVarietiesRes as List).cast<Map<String, dynamic>>();
+      final globalVarieties = (globalVarietiesRes as List)
+          .cast<Map<String, dynamic>>();
 
       final showVarietiesRes = await supabase
           .from('show_varieties')
@@ -2746,8 +2968,8 @@ Future<void> _openSharedAnimalEditorForAdd() async {
           .eq('show_id', widget.showId)
           .eq('breed_id', breedId);
 
-      final showVarietyRows =
-          (showVarietiesRes as List).cast<Map<String, dynamic>>();
+      final showVarietyRows = (showVarietiesRes as List)
+          .cast<Map<String, dynamic>>();
 
       final showVarietyByGlobalId = <String, Map<String, dynamic>>{};
       final customRows = <Map<String, dynamic>>[];
@@ -2790,19 +3012,15 @@ Future<void> _openSharedAnimalEditorForAdd() async {
         if (row['is_enabled'] == true) {
           final customName = (row['custom_name'] ?? '').toString().trim();
           if (customName.isNotEmpty) {
-            effective.add({
-              'id': 'custom_$customName',
-              'name': customName,
-            });
+            effective.add({'id': 'custom_$customName', 'name': customName});
           }
         }
       }
 
       effective.sort(
-        (a, b) => (a['name'] ?? '')
-            .toString()
-            .toLowerCase()
-            .compareTo((b['name'] ?? '').toString().toLowerCase()),
+        (a, b) => (a['name'] ?? '').toString().toLowerCase().compareTo(
+          (b['name'] ?? '').toString().toLowerCase(),
+        ),
       );
 
       if (!mounted) return;
@@ -2814,9 +3032,11 @@ Future<void> _openSharedAnimalEditorForAdd() async {
           _variety.text = (effective.first['name'] ?? '').toString();
         } else {
           final currentVariety = _variety.text.trim().toLowerCase();
-          final stillValidVariety = currentVariety.isNotEmpty &&
+          final stillValidVariety =
+              currentVariety.isNotEmpty &&
               _varietyOptions.any(
-                (v) => (v['name'] ?? '').toString().trim().toLowerCase() ==
+                (v) =>
+                    (v['name'] ?? '').toString().trim().toLowerCase() ==
                     currentVariety,
               );
 
@@ -2864,7 +3084,9 @@ Future<void> _openSharedAnimalEditorForAdd() async {
     try {
       var query = supabase
           .from('animals')
-          .select('id,owner_user_id,exhibitor_id,name,tattoo,breed,variety,sex,species,birth_date,is_dob_unknown');
+          .select(
+            'id,owner_user_id,exhibitor_id,name,tattoo,breed,variety,sex,species,birth_date,is_dob_unknown',
+          );
 
       if (ownerUserId.isNotEmpty) {
         query = query.eq('owner_user_id', ownerUserId);
@@ -2891,7 +3113,9 @@ Future<void> _openSharedAnimalEditorForAdd() async {
 
   Future<String> _createNewExhibitor() async {
     if (AppSession.isSupportMode) {
-      throw Exception('Creating exhibitors is disabled while viewing in support mode.');
+      throw Exception(
+        'Creating exhibitors is disabled while viewing in support mode.',
+      );
     }
     final showing = _showingName.text.trim();
     final display = showing;
@@ -2906,10 +3130,7 @@ Future<void> _openSharedAnimalEditorForAdd() async {
     final state = _state.text.trim().toUpperCase();
     final zip = _zip.text.trim();
 
-    if (showing.isEmpty &&
-        display.isEmpty &&
-        first.isEmpty &&
-        last.isEmpty) {
+    if (showing.isEmpty && display.isEmpty && first.isEmpty && last.isEmpty) {
       throw Exception(
         'Enter at least a showing name, display name, or first/last name.',
       );
@@ -2938,8 +3159,10 @@ Future<void> _openSharedAnimalEditorForAdd() async {
         .maybeSingle();
 
     if (existing != null) {
-      final existingType =
-          (existing['type'] ?? '').toString().trim().toLowerCase();
+      final existingType = (existing['type'] ?? '')
+          .toString()
+          .trim()
+          .toLowerCase();
       final wantedType = _exhibitorType.trim().toLowerCase();
 
       if (existingType == wantedType) {
@@ -2994,7 +3217,10 @@ Future<void> _openSharedAnimalEditorForAdd() async {
 
   Future<void> _save({bool reset = false}) async {
     if (AppSession.isSupportMode) {
-      setState(() => _msg = 'Adding entries is disabled while viewing in support mode.');
+      setState(
+        () =>
+            _msg = 'Adding entries is disabled while viewing in support mode.',
+      );
       return;
     }
     if (_selectedSectionIds.isEmpty) {
@@ -3008,64 +3234,71 @@ Future<void> _openSharedAnimalEditorForAdd() async {
     });
 
     try {
-    await ShowLockService.assertShowUnlocked(widget.showId);
-    
-    String resolvedExhibitorId;
+      await ShowLockService.assertShowUnlocked(widget.showId);
 
-    if (_addNewExhibitor) {
-      final existing = await _findExistingShowExhibitor();
+      String resolvedExhibitorId;
 
-      if (existing != null) {
-        final existingId = (existing['id'] ?? '').toString();
-        final existingType =
-            (existing['type'] ?? '').toString().trim().toLowerCase();
+      if (_addNewExhibitor) {
+        final existing = await _findExistingShowExhibitor();
 
-        final hasYouthSection = _selectedSectionIds.any(
-          (sectionId) => _sectionKindById(sectionId) == 'youth',
-        );
+        if (existing != null) {
+          final existingId = (existing['id'] ?? '').toString();
+          final existingType = (existing['type'] ?? '')
+              .toString()
+              .trim()
+              .toLowerCase();
 
-        if (hasYouthSection && existingType != 'youth') {
+          final hasYouthSection = _selectedSectionIds.any(
+            (sectionId) => _sectionKindById(sectionId) == 'youth',
+          );
+
+          if (hasYouthSection && existingType != 'youth') {
+            setState(() {
+              _saving = false;
+              _msg =
+                  'This exhibitor already exists as an open exhibitor. Select that exhibitor or create a separate youth exhibitor record.';
+            });
+            return;
+          }
+
+          final alreadyLoaded = _exhibitors.any(
+            (e) => (e['id'] ?? '').toString() == existingId,
+          );
+          if (!alreadyLoaded) {
+            _exhibitors.add(existing);
+          }
+
+          final existingLabel = _exhibitorLabel(existing);
           setState(() {
-            _saving = false;
+            _addNewExhibitor = false;
+            _useLocalAnimal = true;
+            _animal = null;
+            _animals = [];
+            _exhibitorId = existingId;
+            _exhibitorSearch.text = existingLabel;
             _msg =
-                'This exhibitor already exists as an open exhibitor. Select that exhibitor or create a separate youth exhibitor record.';
+                'Existing exhibitor found. Saving this new animal under their exhibitor record.';
           });
-          return;
+
+          resolvedExhibitorId = existingId;
+        } else {
+          resolvedExhibitorId = await _createNewExhibitor();
         }
-
-        final alreadyLoaded = _exhibitors.any(
-          (e) => (e['id'] ?? '').toString() == existingId,
-        );
-        if (!alreadyLoaded) {
-          _exhibitors.add(existing);
+      } else {
+        if (_exhibitorId == null || _exhibitorId!.isEmpty) {
+          throw Exception('Select exhibitor');
         }
-
-        setState(() {
-          _addNewExhibitor = false;
-          _exhibitorId = existingId;
-          _msg =
-              'Existing exhibitor found. Select one of their animals below or turn on "Add New Animal".';
-        });
-
-        await _loadAnimalsForSelectedExhibitor();
-        return;
+        resolvedExhibitorId = _exhibitorId!;
       }
-
-      resolvedExhibitorId = await _createNewExhibitor();
-    } else {
-      if (_exhibitorId == null || _exhibitorId!.isEmpty) {
-        throw Exception('Select exhibitor');
-      }
-      resolvedExhibitorId = _exhibitorId!;
-    }
 
       final exhibitor = _exhibitors.firstWhere(
         (e) => e['id'].toString() == resolvedExhibitorId,
         orElse: () => <String, dynamic>{},
       );
 
-      final exhibitorOwnerUserId =
-          (exhibitor['owner_user_id'] ?? '').toString().trim();
+      final exhibitorOwnerUserId = (exhibitor['owner_user_id'] ?? '')
+          .toString()
+          .trim();
       final type = (exhibitor['type'] ?? '').toString().toLowerCase();
 
       final hasYouthSection = _selectedSectionIds.any(
@@ -3075,7 +3308,8 @@ Future<void> _openSharedAnimalEditorForAdd() async {
       if (hasYouthSection && type != 'youth') {
         setState(() {
           _saving = false;
-          _msg = 'Only youth exhibitors can be used when any youth section is selected.';
+          _msg =
+              'Only youth exhibitors can be used when any youth section is selected.';
         });
         return;
       }
@@ -3118,10 +3352,15 @@ Future<void> _openSharedAnimalEditorForAdd() async {
             .eq('species', _species);
 
         if (exhibitorOwnerUserId.isNotEmpty) {
-          existingAnimalQuery =
-              existingAnimalQuery.eq('owner_user_id', exhibitorOwnerUserId);
+          existingAnimalQuery = existingAnimalQuery.eq(
+            'owner_user_id',
+            exhibitorOwnerUserId,
+          );
         } else {
-          existingAnimalQuery = existingAnimalQuery.eq('exhibitor_id', resolvedExhibitorId);
+          existingAnimalQuery = existingAnimalQuery.eq(
+            'exhibitor_id',
+            resolvedExhibitorId,
+          );
         }
 
         final existingAnimal = await existingAnimalQuery.maybeSingle();
@@ -3132,7 +3371,9 @@ Future<void> _openSharedAnimalEditorForAdd() async {
           final insertedAnimal = await supabase
               .from('animals')
               .insert({
-                'owner_user_id': exhibitorOwnerUserId.isEmpty ? null : exhibitorOwnerUserId,
+                'owner_user_id': exhibitorOwnerUserId.isEmpty
+                    ? null
+                    : exhibitorOwnerUserId,
                 'exhibitor_id': resolvedExhibitorId,
                 'species': _species,
                 'name': _animalName.text.trim().isEmpty
@@ -3156,7 +3397,8 @@ Future<void> _openSharedAnimalEditorForAdd() async {
         animalId = (_animal!['id'] ?? '').toString();
       }
 
-      final existingEntryFlagsBySection = <String, ({bool regular, bool fur})>{};
+      final existingEntryFlagsBySection =
+          <String, ({bool regular, bool fur})>{};
 
       for (final sectionId in _selectedSectionIds) {
         final duplicateRows = await supabase
@@ -3191,26 +3433,32 @@ Future<void> _openSharedAnimalEditorForAdd() async {
       final rows = <Map<String, dynamic>>[];
 
       for (final sectionId in _selectedSectionIds) {
-        final existingFlags = existingEntryFlagsBySection[sectionId] ??
+        final existingFlags =
+            existingEntryFlagsBySection[sectionId] ??
             (regular: false, fur: false);
         final baseRow = {
           'show_id': widget.showId,
           'section_id': sectionId,
           'exhibitor_id': resolvedExhibitorId,
-          'exhibitor_user_id':
-              exhibitorOwnerUserId.isEmpty ? null : exhibitorOwnerUserId,
+          'exhibitor_user_id': exhibitorOwnerUserId.isEmpty
+              ? null
+              : exhibitorOwnerUserId,
           'animal_id': animalId,
           'species': _useLocalAnimal ? _species : _animal!['species'],
           'tattoo': _useLocalAnimal
               ? _tattoo.text.trim().toUpperCase()
               : (_animal!['tattoo'] ?? '').toString().trim().toUpperCase(),
           'animal_name': _useLocalAnimal
-              ? (_animalName.text.trim().isEmpty ? null : _animalName.text.trim())
+              ? (_animalName.text.trim().isEmpty
+                    ? null
+                    : _animalName.text.trim())
               : ((_animal!['name'] ?? '').toString().trim().isEmpty
-                  ? null
-                  : (_animal!['name'] ?? '').toString().trim()),
+                    ? null
+                    : (_animal!['name'] ?? '').toString().trim()),
           'breed': _useLocalAnimal ? _breed.text.trim() : _animal!['breed'],
-          'variety': _useLocalAnimal ? _variety.text.trim() : _animal!['variety'],
+          'variety': _useLocalAnimal
+              ? _variety.text.trim()
+              : _animal!['variety'],
           'sex': _useLocalAnimal ? _sexValue : _animal!['sex'],
           'class_name': selectedClass,
           'notes': _notes.text.trim().isEmpty ? null : _notes.text.trim(),
@@ -3255,11 +3503,11 @@ Future<void> _openSharedAnimalEditorForAdd() async {
           .insert(rows)
           .select('id,section_id,animal_id,is_fur');
 
-      final inserted = (insertedRows as List)
-          .cast<Map<String, dynamic>>();
+      final inserted = (insertedRows as List).cast<Map<String, dynamic>>();
 
       for (final sectionId in _selectedSectionIds) {
-        final existingFlags = existingEntryFlagsBySection[sectionId] ??
+        final existingFlags =
+            existingEntryFlagsBySection[sectionId] ??
             (regular: false, fur: false);
         final sectionRows = inserted.where(
           (row) => (row['section_id'] ?? '').toString() == sectionId,
@@ -3343,16 +3591,22 @@ Future<void> _openSharedAnimalEditorForAdd() async {
     final isSuccess = _msg == 'Saved. Add another.';
 
     return Padding(
-      padding:
-          EdgeInsets.only(bottom: inset + 16, left: 16, right: 16, top: 10),
+      padding: EdgeInsets.only(
+        bottom: inset + 16,
+        left: 16,
+        right: 16,
+        top: 10,
+      ),
       child: _loading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('Add Entry',
-                      style: Theme.of(context).textTheme.titleLarge),
+                  Text(
+                    'Add Entry',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
                   const SizedBox(height: 10),
                   if (_msg != null)
                     Container(
@@ -3372,8 +3626,7 @@ Future<void> _openSharedAnimalEditorForAdd() async {
                       child: Text(
                         _msg!,
                         style: TextStyle(
-                          color:
-                              isSuccess ? Colors.green.shade700 : Colors.red,
+                          color: isSuccess ? Colors.green.shade700 : Colors.red,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -3400,7 +3653,9 @@ Future<void> _openSharedAnimalEditorForAdd() async {
                             contentPadding: EdgeInsets.zero,
                             dense: true,
                             value: checked,
-                            title: Text((s['display_name'] ?? s['letter']).toString()),
+                            title: Text(
+                              (s['display_name'] ?? s['letter']).toString(),
+                            ),
                             onChanged: (_saving || AppSession.isSupportMode)
                                 ? null
                                 : (v) {
@@ -3411,7 +3666,8 @@ Future<void> _openSharedAnimalEditorForAdd() async {
                                       } else {
                                         _selectedSectionIds.remove(id);
                                         if (_sectionId == id) {
-                                          _sectionId = _selectedSectionIds.isEmpty
+                                          _sectionId =
+                                              _selectedSectionIds.isEmpty
                                               ? null
                                               : _selectedSectionIds.first;
                                         }
@@ -3593,7 +3849,8 @@ Future<void> _openSharedAnimalEditorForAdd() async {
                       ],
                       onChanged: (_saving || AppSession.isSupportMode)
                           ? null
-                          : (v) => setState(() => _exhibitorType = v ?? 'adult'),
+                          : (v) =>
+                                setState(() => _exhibitorType = v ?? 'adult'),
                     ),
                   ] else ...[
                     RawAutocomplete<Map<String, dynamic>>(
@@ -3604,58 +3861,65 @@ Future<void> _openSharedAnimalEditorForAdd() async {
                         return _filteredExhibitors(textEditingValue.text);
                       },
                       onSelected: _selectExhibitor,
-                      fieldViewBuilder: (
-                        context,
-                        textEditingController,
-                        focusNode,
-                        onFieldSubmitted,
-                      ) {
-                        return TextField(
-                          controller: textEditingController,
-                          focusNode: focusNode,
-                          enabled: !_saving && !AppSession.isSupportMode,
-                          decoration: InputDecoration(
-                            labelText: 'Exhibitor',
-                            hintText: 'Search by name, city, state, email, phone, or ARBA #',
-                            prefixIcon: const Icon(Icons.search),
-                            suffixIcon: textEditingController.text.trim().isEmpty
-                                ? null
-                                : IconButton(
-                                    tooltip: 'Clear exhibitor',
-                                    icon: const Icon(Icons.clear),
-                                    onPressed: (_saving || AppSession.isSupportMode)
-                                        ? null
-                                        : () {
-                                            setState(() {
-                                              textEditingController.clear();
-                                              _exhibitorId = null;
-                                              _animal = null;
-                                              _animals = [];
-                                              _msg = null;
-                                            });
-                                          },
-                                  ),
-                            helperText: textEditingController.text.trim().isEmpty
-                                ? 'Start typing to search exhibitors'
-                                : '${_filteredExhibitors(textEditingController.text).length} match${_filteredExhibitors(textEditingController.text).length == 1 ? '' : 'es'} found',
-                            border: const OutlineInputBorder(),
-                          ),
-                          onChanged: (value) {
-                            final selected = _selectedExhibitor();
-                            if (selected != null && value != _exhibitorLabel(selected)) {
-                              setState(() {
-                                _exhibitorId = null;
-                                _animal = null;
-                                _animals = [];
-                                _msg = null;
-                              });
-                            } else {
-                              setState(() {});
-                            }
+                      fieldViewBuilder:
+                          (
+                            context,
+                            textEditingController,
+                            focusNode,
+                            onFieldSubmitted,
+                          ) {
+                            return TextField(
+                              controller: textEditingController,
+                              focusNode: focusNode,
+                              enabled: !_saving && !AppSession.isSupportMode,
+                              decoration: InputDecoration(
+                                labelText: 'Exhibitor',
+                                hintText:
+                                    'Search by name, city, state, email, phone, or ARBA #',
+                                prefixIcon: const Icon(Icons.search),
+                                suffixIcon:
+                                    textEditingController.text.trim().isEmpty
+                                    ? null
+                                    : IconButton(
+                                        tooltip: 'Clear exhibitor',
+                                        icon: const Icon(Icons.clear),
+                                        onPressed:
+                                            (_saving ||
+                                                AppSession.isSupportMode)
+                                            ? null
+                                            : () {
+                                                setState(() {
+                                                  textEditingController.clear();
+                                                  _exhibitorId = null;
+                                                  _animal = null;
+                                                  _animals = [];
+                                                  _msg = null;
+                                                });
+                                              },
+                                      ),
+                                helperText:
+                                    textEditingController.text.trim().isEmpty
+                                    ? 'Start typing to search exhibitors'
+                                    : '${_filteredExhibitors(textEditingController.text).length} match${_filteredExhibitors(textEditingController.text).length == 1 ? '' : 'es'} found',
+                                border: const OutlineInputBorder(),
+                              ),
+                              onChanged: (value) {
+                                final selected = _selectedExhibitor();
+                                if (selected != null &&
+                                    value != _exhibitorLabel(selected)) {
+                                  setState(() {
+                                    _exhibitorId = null;
+                                    _animal = null;
+                                    _animals = [];
+                                    _msg = null;
+                                  });
+                                } else {
+                                  setState(() {});
+                                }
+                              },
+                              onSubmitted: (_) => onFieldSubmitted(),
+                            );
                           },
-                          onSubmitted: (_) => onFieldSubmitted(),
-                        );
-                      },
                       optionsViewBuilder: (context, onSelected, options) {
                         final optionList = options.toList();
                         return Align(
@@ -3672,14 +3936,20 @@ Future<void> _openSharedAnimalEditorForAdd() async {
                                 padding: EdgeInsets.zero,
                                 shrinkWrap: true,
                                 itemCount: optionList.length,
-                                separatorBuilder: (_, _) => const Divider(height: 1),
+                                separatorBuilder: (_, _) =>
+                                    const Divider(height: 1),
                                 itemBuilder: (context, index) {
                                   final option = optionList[index];
-                                  final email = (option['email'] ?? '').toString().trim();
-                                  final phone = (option['phone'] ?? '').toString().trim();
-                                  final subtitle = [email, phone]
-                                      .where((s) => s.isNotEmpty)
-                                      .join(' • ');
+                                  final email = (option['email'] ?? '')
+                                      .toString()
+                                      .trim();
+                                  final phone = (option['phone'] ?? '')
+                                      .toString()
+                                      .trim();
+                                  final subtitle = [
+                                    email,
+                                    phone,
+                                  ].where((s) => s.isNotEmpty).join(' • ');
 
                                   return ListTile(
                                     dense: true,
@@ -3736,21 +4006,26 @@ Future<void> _openSharedAnimalEditorForAdd() async {
                         onChanged: (_saving || AppSession.isSupportMode)
                             ? null
                             : (v) => setState(() {
-                                  _animal = v;
-                                  final savedSex = (v?['sex'] ?? '').toString().trim();
-                                  if (savedSex.isNotEmpty) {
-                                    _sexValue = savedSex;
-                                    _sex.text = savedSex;
-                                  }
-                                  _msg = null;
-                                }),
+                                _animal = v;
+                                final savedSex = (v?['sex'] ?? '')
+                                    .toString()
+                                    .trim();
+                                if (savedSex.isNotEmpty) {
+                                  _sexValue = savedSex;
+                                  _sex.text = savedSex;
+                                }
+                                _msg = null;
+                              }),
                       ),
-                      _selectedAnimalSummaryCard(),
+                    _selectedAnimalSummaryCard(),
                     const SizedBox(height: 14),
                   ],
                   if (!_addNewExhibitor) ...[
                     OutlinedButton.icon(
-                      onPressed: (_saving || AppSession.isSupportMode || _exhibitorId == null)
+                      onPressed:
+                          (_saving ||
+                              AppSession.isSupportMode ||
+                              _exhibitorId == null)
                           ? null
                           : _openSharedAnimalEditorForAdd,
                       icon: const Icon(Icons.add),
@@ -3790,7 +4065,10 @@ Future<void> _openSharedAnimalEditorForAdd() async {
                         border: OutlineInputBorder(),
                       ),
                       items: const [
-                        DropdownMenuItem(value: 'rabbit', child: Text('Rabbit')),
+                        DropdownMenuItem(
+                          value: 'rabbit',
+                          child: Text('Rabbit'),
+                        ),
                         DropdownMenuItem(value: 'cavy', child: Text('Cavy')),
                       ],
                       onChanged: (_saving || AppSession.isSupportMode)
@@ -3858,7 +4136,8 @@ Future<void> _openSharedAnimalEditorForAdd() async {
 
                               setState(() {
                                 _breedId = value;
-                                _breed.text = (selected['name'] ?? '').toString();
+                                _breed.text = (selected['name'] ?? '')
+                                    .toString();
                                 _variety.clear();
                                 _varietyOptions = [];
                                 _msg = null;
@@ -3870,9 +4149,12 @@ Future<void> _openSharedAnimalEditorForAdd() async {
                             },
                     ),
                     const SizedBox(height: 10),
-                    if (_breedId != null && _loadingVarieties) const LinearProgressIndicator(),
+                    if (_breedId != null && _loadingVarieties)
+                      const LinearProgressIndicator(),
                     DropdownButtonFormField<String>(
-                      initialValue: _variety.text.trim().isEmpty ? null : _variety.text.trim(),
+                      initialValue: _variety.text.trim().isEmpty
+                          ? null
+                          : _variety.text.trim(),
                       decoration: const InputDecoration(
                         labelText: 'Variety',
                         border: OutlineInputBorder(),
@@ -3885,7 +4167,10 @@ Future<void> _openSharedAnimalEditorForAdd() async {
                             ),
                           )
                           .toList(),
-                      onChanged: (_saving || AppSession.isSupportMode || _breedId == null)
+                      onChanged:
+                          (_saving ||
+                              AppSession.isSupportMode ||
+                              _breedId == null)
                           ? null
                           : (value) {
                               setState(() {
@@ -3920,26 +4205,32 @@ Future<void> _openSharedAnimalEditorForAdd() async {
                               });
                             },
                     ),
-                    ]
-                    else if (_addNewExhibitor) ...[
-                      const Text(
-                        'Select "Add New Animal" for a new walk-in exhibitor, or switch back to an existing exhibitor to load saved animals.',
-                      ),
-                    ],
+                  ] else if (_addNewExhibitor) ...[
+                    const Text(
+                      'Select "Add New Animal" for a new walk-in exhibitor, or switch back to an existing exhibitor to load saved animals.',
+                    ),
+                  ],
 
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     initialValue: _classValue,
                     decoration: const InputDecoration(
                       labelText: 'Class / Age Override',
-                      helperText: 'Use this when DOB is missing or when the show secretary needs to override the calculated class.',
+                      helperText:
+                          'Use this when DOB is missing or when the show secretary needs to override the calculated class.',
                       border: OutlineInputBorder(),
                     ),
                     items: const [
                       DropdownMenuItem(value: 'Senior', child: Text('Senior')),
-                      DropdownMenuItem(value: 'Intermediate', child: Text('Intermediate')),
+                      DropdownMenuItem(
+                        value: 'Intermediate',
+                        child: Text('Intermediate'),
+                      ),
                       DropdownMenuItem(value: 'Junior', child: Text('Junior')),
-                      DropdownMenuItem(value: 'Pre-Junior', child: Text('Pre-Junior')),
+                      DropdownMenuItem(
+                        value: 'Pre-Junior',
+                        child: Text('Pre-Junior'),
+                      ),
                     ],
                     onChanged: (_saving || AppSession.isSupportMode)
                         ? null
@@ -3963,10 +4254,10 @@ Future<void> _openSharedAnimalEditorForAdd() async {
                     onChanged: (_saving || AppSession.isSupportMode)
                         ? null
                         : (v) => setState(() {
-                              _isFur = v;
-                              if (!_isFur) _furVarietyValue = null;
-                              _msg = null;
-                            }),
+                            _isFur = v;
+                            if (!_isFur) _furVarietyValue = null;
+                            _msg = null;
+                          }),
                   ),
                   if (_isFur) ...[
                     const SizedBox(height: 10),
@@ -3989,7 +4280,10 @@ Future<void> _openSharedAnimalEditorForAdd() async {
                       ),
                       items: const [
                         DropdownMenuItem(value: 'White', child: Text('White')),
-                        DropdownMenuItem(value: 'Colored', child: Text('Colored')),
+                        DropdownMenuItem(
+                          value: 'Colored',
+                          child: Text('Colored'),
+                        ),
                       ],
                       onChanged: (_saving || AppSession.isSupportMode)
                           ? null
@@ -4018,7 +4312,9 @@ Future<void> _openSharedAnimalEditorForAdd() async {
                     children: [
                       Expanded(
                         child: OutlinedButton(
-                          onPressed: _saving ? null : () => Navigator.pop(context),
+                          onPressed: _saving
+                              ? null
+                              : () => Navigator.pop(context),
                           child: const Text('Cancel'),
                         ),
                       ),
@@ -4037,13 +4333,14 @@ Future<void> _openSharedAnimalEditorForAdd() async {
                         ),
                       ),
                     ],
-                  )
+                  ),
                 ],
               ),
             ),
     );
   }
 }
+
 class UpperCaseTextFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(
