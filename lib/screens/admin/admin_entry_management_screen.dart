@@ -1123,7 +1123,18 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
         (widget.entry['show_id'] ?? '').toString(),
       );
 
-      final updatePayload = <String, dynamic>{
+      final wasFurEntry = widget.entry['is_fur'] == true;
+      final showId = (widget.entry['show_id'] ?? '').toString();
+      final sectionId = (widget.entry['section_id'] ?? '').toString();
+      final animalId = (widget.entry['animal_id'] ?? '').toString();
+      final exhibitorId = (widget.entry['exhibitor_id'] ?? '').toString();
+      final exhibitorUserId =
+          (widget.entry['exhibitor_user_id'] ?? '').toString().trim();
+      final now = DateTime.now().toUtc().toIso8601String();
+      final furVariety =
+          _furVarietyValue?.trim().isNotEmpty == true ? _furVarietyValue!.trim() : null;
+
+      final basePayload = <String, dynamic>{
         'animal_name': _animalName.text.trim().isEmpty
             ? null
             : _animalName.text.trim(),
@@ -1139,14 +1150,16 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
             ? null
             : _classValue!.trim(),
         'notes': _notes.text.trim().isEmpty ? null : _notes.text.trim(),
-        'is_fur': _isFur,
-        'fur_variety': _isFur && (_furVarietyValue?.trim().isNotEmpty == true)
-            ? _furVarietyValue!.trim()
-            : null,
-        'fur_notes': _isFur && _furNotes.text.trim().isNotEmpty
+        'updated_at': now,
+      };
+
+      final updatePayload = <String, dynamic>{
+        ...basePayload,
+        'is_fur': wasFurEntry ? _isFur : false,
+        'fur_variety': wasFurEntry && _isFur ? furVariety : null,
+        'fur_notes': wasFurEntry && _isFur && _furNotes.text.trim().isNotEmpty
             ? _furNotes.text.trim()
             : null,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
       };
 
       debugPrint('Updating entry $id with: $updatePayload');
@@ -1164,6 +1177,20 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
         );
       }
 
+      if (!wasFurEntry && _isFur) {
+        await _upsertFurCompanionEntry(
+          currentEntryId: id,
+          showId: showId,
+          sectionId: sectionId,
+          animalId: animalId,
+          exhibitorId: exhibitorId,
+          exhibitorUserId: exhibitorUserId,
+          basePayload: basePayload,
+          furVariety: furVariety,
+          furNotes: _furNotes.text.trim(),
+        );
+      }
+
       debugPrint('Entry update succeeded: ${updatedList.first}');
 
       if (!mounted) return;
@@ -1175,6 +1202,64 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
         _msg = 'Save failed: $e';
       });
     }
+  }
+
+  Future<void> _upsertFurCompanionEntry({
+    required String currentEntryId,
+    required String showId,
+    required String sectionId,
+    required String animalId,
+    required String exhibitorId,
+    required String exhibitorUserId,
+    required Map<String, dynamic> basePayload,
+    required String? furVariety,
+    required String furNotes,
+  }) async {
+    if (showId.isEmpty || sectionId.isEmpty || animalId.isEmpty) {
+      throw Exception('Cannot create Fur/Wool companion entry because the entry context is incomplete.');
+    }
+
+    final existingRows = await supabase
+        .from('entries')
+        .select('id')
+        .eq('show_id', showId)
+        .eq('section_id', sectionId)
+        .eq('animal_id', animalId)
+        .eq('is_fur', true);
+
+    final existingFurRows = (existingRows as List)
+        .cast<Map<String, dynamic>>()
+        .where((row) => (row['id'] ?? '').toString() != currentEntryId)
+        .toList();
+
+    final furPayload = <String, dynamic>{
+      ...basePayload,
+      'show_id': showId,
+      'section_id': sectionId,
+      'exhibitor_id': exhibitorId.isEmpty ? null : exhibitorId,
+      'exhibitor_user_id': exhibitorUserId.isEmpty ? null : exhibitorUserId,
+      'animal_id': animalId,
+      'species': _species,
+      'variety': furVariety ?? basePayload['variety'],
+      'is_fur': true,
+      'fur_variety': furVariety,
+      'fur_notes': furNotes.isEmpty ? null : furNotes,
+    };
+
+    if (existingFurRows.isNotEmpty) {
+      final furEntryId = (existingFurRows.first['id'] ?? '').toString();
+      await supabase
+          .from('entries')
+          .update(furPayload)
+          .eq('id', furEntryId);
+      return;
+    }
+
+    await supabase.from('entries').insert({
+      ...furPayload,
+      'status': 'entered',
+      'created_at': DateTime.now().toUtc().toIso8601String(),
+    });
   }
 
   @override
@@ -3071,23 +3156,32 @@ Future<void> _openSharedAnimalEditorForAdd() async {
         animalId = (_animal!['id'] ?? '').toString();
       }
 
+      final existingEntryFlagsBySection = <String, ({bool regular, bool fur})>{};
+
       for (final sectionId in _selectedSectionIds) {
         final duplicateRows = await supabase
             .from('entries')
             .select('id,is_fur')
             .eq('show_id', widget.showId)
             .eq('section_id', sectionId)
-            .eq('animal_id', animalId)
-            .limit(1);
+            .eq('animal_id', animalId);
 
         final duplicateList = duplicateRows as List;
-        final dup = duplicateList.isEmpty
-            ? null
-            : Map<String, dynamic>.from(
-                duplicateList.first as Map,
-              );
+        final hasRegular = duplicateList.any((raw) {
+          final row = Map<String, dynamic>.from(raw as Map);
+          return row['is_fur'] != true;
+        });
+        final hasFur = duplicateList.any((raw) {
+          final row = Map<String, dynamic>.from(raw as Map);
+          return row['is_fur'] == true;
+        });
 
-        if (dup != null) {
+        existingEntryFlagsBySection[sectionId] = (
+          regular: hasRegular,
+          fur: hasFur,
+        );
+
+        if ((!_isFur && hasRegular) || (_isFur && hasRegular && hasFur)) {
           throw Exception(
             'Animal already entered in ${_sectionDisplayLabelById(sectionId)}',
           );
@@ -3097,6 +3191,8 @@ Future<void> _openSharedAnimalEditorForAdd() async {
       final rows = <Map<String, dynamic>>[];
 
       for (final sectionId in _selectedSectionIds) {
+        final existingFlags = existingEntryFlagsBySection[sectionId] ??
+            (regular: false, fur: false);
         final baseRow = {
           'show_id': widget.showId,
           'section_id': sectionId,
@@ -3124,26 +3220,34 @@ Future<void> _openSharedAnimalEditorForAdd() async {
         };
 
         // Main class entry (always non-fur)
-        rows.add({
-          ...baseRow,
-          'is_fur': false,
-          'fur_variety': null,
-          'fur_notes': null,
-        });
-
-        // Separate fur/wool entry
-        if (_isFur) {
+        if (!existingFlags.regular) {
           rows.add({
             ...baseRow,
+            'is_fur': false,
+            'fur_variety': null,
+            'fur_notes': null,
+          });
+        }
+
+        // Separate fur/wool entry
+        if (_isFur && !existingFlags.fur) {
+          final furVariety = _furVarietyValue?.trim().isNotEmpty == true
+              ? _furVarietyValue!.trim()
+              : null;
+          rows.add({
+            ...baseRow,
+            'variety': furVariety ?? baseRow['variety'],
             'is_fur': true,
-            'fur_variety': _furVarietyValue?.trim().isNotEmpty == true
-                ? _furVarietyValue!.trim()
-                : null,
+            'fur_variety': furVariety,
             'fur_notes': _furNotes.text.trim().isNotEmpty
                 ? _furNotes.text.trim()
                 : null,
           });
         }
+      }
+
+      if (rows.isEmpty) {
+        throw Exception('Animal already entered in the selected section.');
       }
 
       final insertedRows = await supabase
@@ -3155,6 +3259,8 @@ Future<void> _openSharedAnimalEditorForAdd() async {
           .cast<Map<String, dynamic>>();
 
       for (final sectionId in _selectedSectionIds) {
+        final existingFlags = existingEntryFlagsBySection[sectionId] ??
+            (regular: false, fur: false);
         final sectionRows = inserted.where(
           (row) => (row['section_id'] ?? '').toString() == sectionId,
         );
@@ -3166,7 +3272,11 @@ Future<void> _openSharedAnimalEditorForAdd() async {
             .where((row) => row['is_fur'] == true)
             .length;
 
-        if (regularCount != 1 || (_isFur && furCount != 1)) {
+        final expectedRegularCount = existingFlags.regular ? 0 : 1;
+        final expectedFurCount = _isFur && !existingFlags.fur ? 1 : 0;
+
+        if (regularCount != expectedRegularCount ||
+            furCount != expectedFurCount) {
           throw Exception(
             'Entry save verification failed for '
             '${_sectionDisplayLabelById(sectionId)}. '
