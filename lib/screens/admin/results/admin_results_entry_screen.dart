@@ -56,6 +56,24 @@ const Map<String, String> cavyAwardLabels = {
   'HM': 'Honorable Mention',
 };
 
+const Map<String, String> awardDisplayLabels = {
+  'BOV': 'Best of Variety',
+  'BOSV': 'Best Opposite Sex of Variety',
+  'BOG': 'Best of Group',
+  'BOSG': 'Best Opposite Sex of Group',
+  'BOB': 'Best of Breed',
+  'BOSB': 'Best Opposite Sex of Breed',
+  'Best 4-Class': 'Best 4-Class',
+  'Best 6-Class': 'Best 6-Class',
+  'Best In Show': 'Best in Show',
+  'Reserve In Show': 'Reserve in Show',
+  'BIS': 'Best in Show',
+  'RIS': 'Reserve in Show',
+  '1RIS': '1st Reserve in Show',
+  '2RIS': '2nd Reserve in Show',
+  'HM': 'Honorable Mention',
+};
+
 
 bool _isFurEntry(Map<String, dynamic> row) {
   final value = row['is_fur'];
@@ -86,11 +104,13 @@ bool _isCavyEntry(Map<String, dynamic> row) {
 }
 
 String _awardDisplayLabel(String award, Map<String, dynamic> entry) {
+  final code = _canonicalAwardCode(award);
+
   if (_isCavyEntry(entry)) {
-    return cavyAwardLabels[award] ?? award;
+    return cavyAwardLabels[code] ?? code;
   }
 
-  return award;
+  return awardDisplayLabels[code] ?? code;
 }
 
 String _canonicalAwardCode(String award) {
@@ -368,7 +388,7 @@ String _specialsSummaryForEntries(
     if (winners.isEmpty) continue;
 
     final labels = winners.map(_entryShortAnimalLabel).toList();
-    parts.add('${_canonicalAwardCode(awardCode)}: ${labels.join(', ')}');
+    parts.add('${_awardDisplayLabel(awardCode, winners.first)}: ${labels.join(', ')}');
   }
 
   if (parts.isEmpty) return '';
@@ -902,7 +922,9 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
       return al.compareTo(bl);
     });
 
-    _selectedSectionId ??= '';
+    _selectedSectionId ??= _sections.isEmpty
+        ? ''
+        : (_sections.first['id'] ?? '').toString();
   }
 
   Future<void> _loadJudges() async {
@@ -992,7 +1014,9 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
         final rowBreed = (e['breed'] ?? '').toString().trim();
         final rowBreedName = (e['breed_name'] ?? '').toString().trim();
         final rowBreedLabel = rowBreed.isNotEmpty ? rowBreed : rowBreedName;
-        return rowBreedLabel.toLowerCase() == issue.breed.toLowerCase();
+        return rowBreedLabel.toLowerCase() == issue.breed.toLowerCase() &&
+            _speciesDisplayNameForEntry(e).toLowerCase() ==
+                issue.species.toLowerCase();
       }).toList();
 
       if (breedEntries.isEmpty) return;
@@ -1563,14 +1587,38 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
   Map<String, List<Map<String, dynamic>>> _groupByBreed(List<Map<String, dynamic>> items) {
     final out = <String, List<Map<String, dynamic>>>{};
     for (final e in items) {
-      final rawBreed = (e['breed'] ?? '').toString().trim();
-      final rawBreedName = (e['breed_name'] ?? '').toString().trim();
-      final breed = rawBreed.isNotEmpty ? rawBreed : rawBreedName;
-      final key = breed.isEmpty ? '(Unknown Breed)' : breed;
+      final breed = _breedDisplayNameForEntry(e);
+      final species = _speciesDisplayNameForEntry(e);
+      final key = '${species.toLowerCase()}|${breed.toLowerCase()}';
       out.putIfAbsent(key, () => <Map<String, dynamic>>[]);
       out[key]!.add(e);
     }
     return out;
+  }
+
+  String _breedDisplayNameForEntry(Map<String, dynamic> entry) {
+    final rawBreed = (entry['breed'] ?? '').toString().trim();
+    if (rawBreed.isNotEmpty) return rawBreed;
+
+    final rawBreedName = (entry['breed_name'] ?? '').toString().trim();
+    return rawBreedName.isEmpty ? '(Unknown Breed)' : rawBreedName;
+  }
+
+  String _breedDisplayNameForEntries(List<Map<String, dynamic>> entries) {
+    if (entries.isEmpty) return '(Unknown Breed)';
+    return _breedDisplayNameForEntry(entries.first);
+  }
+
+  String _speciesDisplayNameForEntry(Map<String, dynamic> entry) {
+    final species = (entry['species'] ?? '').toString().trim().toLowerCase();
+    if (species == 'cavy') return 'Cavy';
+    if (species == 'rabbit') return 'Rabbit';
+    return _isCavyEntry(entry) ? 'Cavy' : 'Rabbit';
+  }
+
+  String _speciesDisplayNameForEntries(List<Map<String, dynamic>> entries) {
+    if (entries.isEmpty) return 'Unknown Species';
+    return _speciesDisplayNameForEntry(entries.first);
   }
 
   bool _showsByGroup(List<Map<String, dynamic>> entries) {
@@ -1716,6 +1764,7 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
           if (rawBreed.isNotEmpty) return rawBreed;
           return (entry['breed_name'] ?? '').toString().trim();
         })(),
+        species: _speciesDisplayNameForEntry(entry),
         groupName: (entry['group_name'] ?? '').toString().trim().isEmpty
             ? null
             : (entry['group_name'] ?? '').toString().trim(),
@@ -1799,6 +1848,8 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
       return (e['variety_name'] ?? '').toString().trim();
     }
     String sectionId(Map<String, dynamic> e) => (e['section_id'] ?? '').toString().trim();
+    String species(Map<String, dynamic> e) =>
+        _speciesDisplayNameForEntry(e).toLowerCase();
     
     String groupName(Map<String, dynamic> e) {
       final explicitGroup = (
@@ -1872,7 +1923,7 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
       switch (award) {
         case 'BOV':
         case 'BOSV':
-          final key = '${sectionId(e)}|$award|${breed(e).toLowerCase()}|${variety(e).toLowerCase()}';
+          final key = '${sectionId(e)}|$award|${species(e)}|${breed(e).toLowerCase()}|${variety(e).toLowerCase()}';
           awardBuckets.putIfAbsent(key, () => <Map<String, dynamic>>[]);
           awardBuckets[key]!.add(e);
           break;
@@ -1892,13 +1943,13 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
             break;
           }
 
-          final key = '${sectionId(e)}|$award|${breed(e).toLowerCase()}|$groupScope';
+          final key = '${sectionId(e)}|$award|${species(e)}|${breed(e).toLowerCase()}|$groupScope';
           awardBuckets.putIfAbsent(key, () => <Map<String, dynamic>>[]);
           awardBuckets[key]!.add(e);
           break;
         case 'BOB':
         case 'BOSB':
-          final key = '${sectionId(e)}|$award|${breed(e).toLowerCase()}';
+          final key = '${sectionId(e)}|$award|${species(e)}|${breed(e).toLowerCase()}';
           awardBuckets.putIfAbsent(key, () => <Map<String, dynamic>>[]);
           awardBuckets[key]!.add(e);
           break;
@@ -1907,8 +1958,8 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
         case 'Best Intermediate':
           final useVarietyScope = showsByVariety(e);
           final key = useVarietyScope
-              ? '${sectionId(e)}|$award|${breed(e).toLowerCase()}|${variety(e).toLowerCase()}'
-              : '${sectionId(e)}|$award|${breed(e).toLowerCase()}';
+              ? '${sectionId(e)}|$award|${species(e)}|${breed(e).toLowerCase()}|${variety(e).toLowerCase()}'
+              : '${sectionId(e)}|$award|${species(e)}|${breed(e).toLowerCase()}';
 
           awardBuckets.putIfAbsent(key, () => <Map<String, dynamic>>[]);
           awardBuckets[key]!.add(e);
@@ -2322,7 +2373,19 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
 
         final bySort = sortFor(a).compareTo(sortFor(b));
         if (bySort != 0) return bySort;
-        return a.toLowerCase().compareTo(b.toLowerCase());
+
+        final aRows = grouped[a] ?? const <Map<String, dynamic>>[];
+        final bRows = grouped[b] ?? const <Map<String, dynamic>>[];
+        final byBreed = _breedDisplayNameForEntries(
+          aRows,
+        ).toLowerCase().compareTo(
+          _breedDisplayNameForEntries(bRows).toLowerCase(),
+        );
+        if (byBreed != 0) return byBreed;
+
+        return _speciesDisplayNameForEntries(aRows).toLowerCase().compareTo(
+          _speciesDisplayNameForEntries(bRows).toLowerCase(),
+        );
       });
 
     final issues = _buildValidationIssues();
@@ -2523,14 +2586,35 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
                           padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                           itemCount: breeds.length,
                           itemBuilder: (context, i) {
-                            final breed = breeds[i];
-                            final breedEntries = grouped[breed]!;
+                            final breedKey = breeds[i];
+                            final breedEntries = grouped[breedKey]!;
+                            final breed = _breedDisplayNameForEntries(breedEntries);
+                            final species = _speciesDisplayNameForEntries(breedEntries);
                             final count = breedEntries.length;
                             final completed = _completedCount(breedEntries);
                             final statusColor = _statusColor(context, breedEntries);
                             final breedSpecials = _specialsSummaryForEntries(
                               breedEntries,
-                              const ['BOB', 'BOSB'],
+                              const [
+                                'BOV',
+                                'BOSV',
+                                'BOG',
+                                'BOSG',
+                                'BOB',
+                                'BOSB',
+                                'Best Junior',
+                                'Best Intermediate',
+                                'Best Senior',
+                                'Best 4-Class',
+                                'Best 6-Class',
+                                'Best In Show',
+                                'Reserve In Show',
+                                'BIS',
+                                'RIS',
+                                '1RIS',
+                                '2RIS',
+                                'HM',
+                              ],
                             );
                             final byGroup = _showsByGroup(breedEntries);
                             final byVariety = _showsByVariety(breedEntries);
@@ -2592,7 +2676,7 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
                                 subtitle: Padding(
                                   padding: const EdgeInsets.only(top: 6),
                                   child: Text(
-                                    '$completed/$count entered • ${_statusLabel(breedEntries)}\n$flowLabel • ${_judgeSummary(breedEntries)}${breedSpecials.isEmpty ? '' : '\n$breedSpecials'}',
+                                    '$completed/$count entered • ${_statusLabel(breedEntries)}\n$species • $flowLabel • ${_judgeSummary(breedEntries)}${breedSpecials.isEmpty ? '' : '\n$breedSpecials'}',
                                   ),
                                 ),
                                 trailing: const Icon(Icons.chevron_right),
@@ -4297,6 +4381,8 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
                     'Reserve In Show',
                     'BIS',
                     'RIS',
+                    '1RIS',
+                    '2RIS',
                     'HM',
                   ],
                 );
@@ -4714,6 +4800,36 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
       if (widget.finalAwardMode != 'bis_ris') return true;
       if (!awards.contains('BOB')) return true;
       if (awards.contains('Best In Show')) return true;
+    }
+
+    if (awards.contains('1RIS')) {
+      if (_otherWinnerInScope(
+            entry: e,
+            award: '1RIS',
+            sameScope: sameSection,
+          ) !=
+          null) {
+        return true;
+      }
+
+      if (widget.finalAwardMode != 'bis_1ris_2ris') return true;
+      if (!awards.contains('BOB')) return true;
+      if (awards.contains('Best In Show') || awards.contains('BIS')) return true;
+    }
+
+    if (awards.contains('2RIS')) {
+      if (_otherWinnerInScope(
+            entry: e,
+            award: '2RIS',
+            sameScope: sameSection,
+          ) !=
+          null) {
+        return true;
+      }
+
+      if (widget.finalAwardMode != 'bis_1ris_2ris') return true;
+      if (!awards.contains('BOB')) return true;
+      if (awards.contains('Best In Show') || awards.contains('BIS')) return true;
     }
 
     return false;
@@ -5508,7 +5624,7 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
                 final exhibitor = _exhibitorName(e);
                 final placement = (e['placement'] ?? '').toString().trim();
                 final awards = ((e['_awards'] as List?) ?? const [])
-                    .map((x) => x.toString())
+                    .map((x) => _awardDisplayLabel(x.toString(), e))
                     .toList();
                 final awardsText = awards.join(', ');
                 final isShown = e['is_shown'] != false;
@@ -5866,21 +5982,20 @@ if (storedJudgeId.isEmpty) {
 
       case 'Best In Show':
       case 'Reserve In Show':
-      case '1RIS':
-      case '2RIS':
-        return const [
-          'Best In Show',
-          'Reserve In Show',
-          '1RIS',
-          '2RIS',
-        ];
-
       case 'BIS':
       case 'RIS':
       case '1RIS':
       case '2RIS':
       case 'HM':
-        return const ['BIS', 'RIS', '1RIS', '2RIS', 'HM'];
+        return const [
+          'Best In Show',
+          'Reserve In Show',
+          'BIS',
+          'RIS',
+          '1RIS',
+          '2RIS',
+          'HM',
+        ];
 
       default:
         return const [];
@@ -7059,6 +7174,7 @@ class _ValidationIssue {
   final Map<String, dynamic>? conflictsWith;
 
   final String breed;
+  final String species;
   final String? groupName;
   final String? variety;
   final String classSexLabel;
@@ -7070,6 +7186,7 @@ class _ValidationIssue {
     required this.entry,
     required this.conflictsWith,
     required this.breed,
+    required this.species,
     required this.groupName,
     required this.variety,
     required this.classSexLabel,
