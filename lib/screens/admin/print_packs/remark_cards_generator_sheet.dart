@@ -110,11 +110,62 @@ class _RemarkCardsGeneratorSheetState extends State<RemarkCardsGeneratorSheet> {
     return exhibitor;
   }
 
+  String _entryNumber(Map<String, dynamic> row) {
+    for (final key in const [
+      'entry_number',
+      'entry_no',
+      'catalog_number',
+      'show_entry_number',
+      'entry_index',
+      'exhibitor_number',
+    ]) {
+      final value = _safe(row, key);
+      if (value.isNotEmpty) return value;
+    }
+    return '';
+  }
+
+  Future<String> _loadShowDateLabel() async {
+    final row = await supabase
+        .from('shows')
+        .select('start_date,end_date')
+        .eq('id', widget.showId)
+        .maybeSingle();
+
+    if (row == null) return '';
+    return _dateRangeLabel(row['start_date'], row['end_date']);
+  }
+
+  String _dateRangeLabel(dynamic startValue, dynamic endValue) {
+    final start = DateTime.tryParse(startValue?.toString() ?? '');
+    final end = DateTime.tryParse(endValue?.toString() ?? '');
+
+    if (start == null && end == null) return '';
+    if (start != null && end == null) return _formatDate(start);
+    if (start == null && end != null) return _formatDate(end);
+
+    final startDate = start!;
+    final endDate = end!;
+    if (startDate.year == endDate.year &&
+        startDate.month == endDate.month &&
+        startDate.day == endDate.day) {
+      return _formatDate(startDate);
+    }
+
+    return '${_formatDate(startDate)} - ${_formatDate(endDate)}';
+  }
+
+  String _formatDate(DateTime date) {
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+    return '$month/$day/${date.year}';
+  }
+
   Future<List<Map<String, dynamic>>> _fetchEntries() async {
     const pageSize = 1000;
     final out = <Map<String, dynamic>>[];
 
-    for (var from = 0;; from += pageSize) {
+    for (var from = 0; ; from += pageSize) {
       final to = from + pageSize - 1;
       final rows = await supabase
           .rpc(
@@ -133,6 +184,9 @@ class _RemarkCardsGeneratorSheetState extends State<RemarkCardsGeneratorSheet> {
       if (page.length < pageSize) break;
     }
 
+    await _attachExhibitorNumbers(out);
+    await _attachCoopNumbers(out);
+
     int toInt(dynamic value, [int fallback = 9999]) {
       if (value == null) return fallback;
       if (value is int) return value;
@@ -143,8 +197,9 @@ class _RemarkCardsGeneratorSheetState extends State<RemarkCardsGeneratorSheet> {
         ak.toLowerCase().compareTo(bk.toLowerCase());
 
     out.sort((a, b) {
-      final sectionSortCmp = toInt(a['section_sort_order'])
-          .compareTo(toInt(b['section_sort_order']));
+      final sectionSortCmp = toInt(
+        a['section_sort_order'],
+      ).compareTo(toInt(b['section_sort_order']));
       if (sectionSortCmp != 0) return sectionSortCmp;
 
       final sectionLetterCmp = cmpText(
@@ -153,33 +208,38 @@ class _RemarkCardsGeneratorSheetState extends State<RemarkCardsGeneratorSheet> {
       );
       if (sectionLetterCmp != 0) return sectionLetterCmp;
 
-      final breedSortCmp = toInt(a['breed_sort_order'])
-          .compareTo(toInt(b['breed_sort_order']));
+      final breedSortCmp = toInt(
+        a['breed_sort_order'],
+      ).compareTo(toInt(b['breed_sort_order']));
       if (breedSortCmp != 0) return breedSortCmp;
 
       final breedCmp = cmpText(_safe(a, 'breed'), _safe(b, 'breed'));
       if (breedCmp != 0) return breedCmp;
 
-      final groupSortCmp = toInt(a['group_sort_order'])
-          .compareTo(toInt(b['group_sort_order']));
+      final groupSortCmp = toInt(
+        a['group_sort_order'],
+      ).compareTo(toInt(b['group_sort_order']));
       if (groupSortCmp != 0) return groupSortCmp;
 
-      final varietySortCmp = toInt(a['variety_sort_order'])
-          .compareTo(toInt(b['variety_sort_order']));
+      final varietySortCmp = toInt(
+        a['variety_sort_order'],
+      ).compareTo(toInt(b['variety_sort_order']));
       if (varietySortCmp != 0) return varietySortCmp;
 
       final varietyCmp = cmpText(_groupVarietyLabel(a), _groupVarietyLabel(b));
       if (varietyCmp != 0) return varietyCmp;
 
-      final classSortCmp = toInt(a['class_sort_order'])
-          .compareTo(toInt(b['class_sort_order']));
+      final classSortCmp = toInt(
+        a['class_sort_order'],
+      ).compareTo(toInt(b['class_sort_order']));
       if (classSortCmp != 0) return classSortCmp;
 
       final classCmp = cmpText(_safe(a, 'class_name'), _safe(b, 'class_name'));
       if (classCmp != 0) return classCmp;
 
-      final sexSortCmp = toInt(a['sex_sort_order'])
-          .compareTo(toInt(b['sex_sort_order']));
+      final sexSortCmp = toInt(
+        a['sex_sort_order'],
+      ).compareTo(toInt(b['sex_sort_order']));
       if (sexSortCmp != 0) return sexSortCmp;
 
       final sexCmp = cmpText(_safe(a, 'sex'), _safe(b, 'sex'));
@@ -191,7 +251,143 @@ class _RemarkCardsGeneratorSheetState extends State<RemarkCardsGeneratorSheet> {
       return cmpText(_safe(a, 'tattoo'), _safe(b, 'tattoo'));
     });
 
+    for (var i = 0; i < out.length; i++) {
+      if (_entryNumber(out[i]).isEmpty) {
+        out[i]['entry_number'] = '${i + 1}';
+      }
+    }
+
     return out;
+  }
+
+  Future<void> _attachExhibitorNumbers(
+    List<Map<String, dynamic>> entries,
+  ) async {
+    final exhibitorIds = entries
+        .map((entry) => _safe(entry, 'exhibitor_id'))
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+
+    final exhibitorNumberById = <String, String>{};
+    const exhibitorPageSize = 500;
+
+    for (var i = 0; i < exhibitorIds.length; i += exhibitorPageSize) {
+      final chunk = exhibitorIds.skip(i).take(exhibitorPageSize).toList();
+      if (chunk.isEmpty) continue;
+
+      final rows = await supabase
+          .from('exhibitors')
+          .select('id, exhibitor_number')
+          .inFilter('id', chunk);
+
+      for (final raw in (rows as List).cast<Map<String, dynamic>>()) {
+        final exhibitorId = _safe(raw, 'id');
+        final exhibitorNumber = _safe(raw, 'exhibitor_number');
+        if (exhibitorId.isNotEmpty && exhibitorNumber.isNotEmpty) {
+          exhibitorNumberById[exhibitorId] = exhibitorNumber;
+        }
+      }
+    }
+
+    for (final entry in entries) {
+      final exhibitorId = _safe(entry, 'exhibitor_id');
+      final exhibitorNumber = exhibitorNumberById[exhibitorId];
+      if (exhibitorNumber != null && exhibitorNumber.isNotEmpty) {
+        entry['exhibitor_number'] = exhibitorNumber;
+      }
+    }
+  }
+
+  Future<void> _attachCoopNumbers(List<Map<String, dynamic>> entries) async {
+    final entryIds = entries
+        .map((entry) {
+          final entryId = _safe(entry, 'entry_id');
+          if (entryId.isNotEmpty) return entryId;
+          return _safe(entry, 'id');
+        })
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+
+    final animalIdByEntryId = <String, String>{};
+    const entryPageSize = 500;
+
+    for (var i = 0; i < entryIds.length; i += entryPageSize) {
+      final chunk = entryIds.skip(i).take(entryPageSize).toList();
+      if (chunk.isEmpty) continue;
+
+      final rows = await supabase
+          .from('entries')
+          .select('id, animal_id')
+          .inFilter('id', chunk);
+
+      for (final raw in (rows as List).cast<Map<String, dynamic>>()) {
+        final entryId = _safe(raw, 'id');
+        final animalId = _safe(raw, 'animal_id');
+        if (entryId.isNotEmpty && animalId.isNotEmpty) {
+          animalIdByEntryId[entryId] = animalId;
+        }
+      }
+    }
+
+    for (final entry in entries) {
+      final entryId = _safe(entry, 'entry_id').isNotEmpty
+          ? _safe(entry, 'entry_id')
+          : _safe(entry, 'id');
+      entry['animal_id'] =
+          animalIdByEntryId[entryId] ?? _safe(entry, 'animal_id');
+    }
+
+    final showModeRow = await supabase
+        .from('shows')
+        .select('coop_numbering_mode')
+        .eq('id', widget.showId)
+        .maybeSingle();
+
+    final coopNumberingMode =
+        (showModeRow?['coop_numbering_mode'] ?? 'separate')
+            .toString()
+            .trim()
+            .toLowerCase();
+
+    final animalIds = entries
+        .map((entry) => _safe(entry, 'animal_id'))
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+
+    final coopNumberByAnimalAndScope = <String, String>{};
+    const coopPageSize = 500;
+
+    for (var i = 0; i < animalIds.length; i += coopPageSize) {
+      final chunk = animalIds.skip(i).take(coopPageSize).toList();
+      if (chunk.isEmpty) continue;
+
+      final rows = await supabase
+          .from('show_animal_coop_numbers')
+          .select('animal_id, scope, coop_number')
+          .eq('show_id', widget.showId)
+          .inFilter('animal_id', chunk);
+
+      for (final raw in (rows as List).cast<Map<String, dynamic>>()) {
+        final animalId = _safe(raw, 'animal_id');
+        final scope = _safe(raw, 'scope').toLowerCase();
+        final coopNumber = _safe(raw, 'coop_number');
+        if (animalId.isEmpty || scope.isEmpty) continue;
+        coopNumberByAnimalAndScope['$animalId|$scope'] = coopNumber;
+      }
+    }
+
+    for (final entry in entries) {
+      final animalId = _safe(entry, 'animal_id');
+      final sectionKind = _safe(entry, 'section_kind').toLowerCase();
+      final scope = coopNumberingMode == 'combined' ? 'all' : sectionKind;
+
+      entry['coop_number'] = animalId.isEmpty || scope.isEmpty
+          ? ''
+          : (coopNumberByAnimalAndScope['$animalId|$scope'] ?? '');
+    }
   }
 
   pw.Widget _lineField({
@@ -220,9 +416,7 @@ class _RemarkCardsGeneratorSheetState extends State<RemarkCardsGeneratorSheet> {
             child: pw.Container(
               padding: const pw.EdgeInsets.only(left: 2, bottom: 2),
               decoration: const pw.BoxDecoration(
-                border: pw.Border(
-                  bottom: pw.BorderSide(width: .7),
-                ),
+                border: pw.Border(bottom: pw.BorderSide(width: .7)),
               ),
               child: pw.Text(
                 value,
@@ -236,11 +430,13 @@ class _RemarkCardsGeneratorSheetState extends State<RemarkCardsGeneratorSheet> {
     );
   }
 
-  pw.Widget _checkRow(List<String> labels, String selected) {
+  pw.Widget _checkRow(List<String> labels, Set<String> selectedLabels) {
     return pw.Row(
       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
       children: labels.map((label) {
-        final isSelected = selected.toLowerCase() == label.toLowerCase();
+        final isSelected = selectedLabels
+            .map((value) => value.toLowerCase())
+            .contains(label.toLowerCase());
         return pw.Text(
           isSelected ? '[$label]' : label,
           style: pw.TextStyle(
@@ -300,14 +496,20 @@ class _RemarkCardsGeneratorSheetState extends State<RemarkCardsGeneratorSheet> {
                     )
                     .toList(),
               ),
-              pw.Table(
-                border: pw.TableBorder.all(width: .55),
+              pw.Column(
                 children: rows
                     .map(
-                      (_) => pw.TableRow(
+                      (_) => pw.Row(
                         children: headers
                             .map(
-                              (_) => pw.Container(height: 15),
+                              (_) => pw.Expanded(
+                                child: pw.Container(
+                                  height: 15,
+                                  decoration: pw.BoxDecoration(
+                                    border: pw.Border.all(width: .55),
+                                  ),
+                                ),
+                              ),
                             )
                             .toList(),
                       ),
@@ -321,7 +523,10 @@ class _RemarkCardsGeneratorSheetState extends State<RemarkCardsGeneratorSheet> {
     );
   }
 
-  pw.Widget _remarkCard(Map<String, dynamic> row) {
+  pw.Widget _remarkCard(
+    Map<String, dynamic> row, {
+    required String showDateLabel,
+  }) {
     final sex = _displaySex(row);
     final cls = _displayClass(row);
 
@@ -359,34 +564,29 @@ class _RemarkCardsGeneratorSheetState extends State<RemarkCardsGeneratorSheet> {
 
     return pw.Container(
       padding: const pw.EdgeInsets.fromLTRB(14, 10, 14, 8),
-      decoration: pw.BoxDecoration(
-        border: pw.Border.all(width: .8),
-      ),
+      decoration: pw.BoxDecoration(border: pw.Border.all(width: .8)),
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.stretch,
         children: [
           pw.Text(
             'RABBIT SHOW REMARK CARD',
             textAlign: pw.TextAlign.center,
-            style: pw.TextStyle(
-              fontSize: 13,
-              fontWeight: pw.FontWeight.bold,
-            ),
+            style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold),
           ),
           pw.Text(
             'American Rabbit Breeders Association, Inc.',
             textAlign: pw.TextAlign.center,
-            style: pw.TextStyle(
-              fontSize: 10.5,
-              fontWeight: pw.FontWeight.bold,
-            ),
+            style: pw.TextStyle(fontSize: 10.5, fontWeight: pw.FontWeight.bold),
           ),
           pw.SizedBox(height: 7),
 
           pw.Row(
             children: [
               pw.Expanded(
-                child: _lineField(label: 'Ear No.', value: _safe(row, 'tattoo')),
+                child: _lineField(
+                  label: 'Ear No.',
+                  value: _safe(row, 'tattoo'),
+                ),
               ),
               pw.SizedBox(width: 8),
               pw.Expanded(
@@ -397,16 +597,12 @@ class _RemarkCardsGeneratorSheetState extends State<RemarkCardsGeneratorSheet> {
               ),
               pw.SizedBox(width: 8),
               pw.Expanded(
-                child: _lineField(
-                  label: 'Entry No.',
-                  value: _safe(row, 'entry_number'),
-                ),
+                child: _lineField(label: 'Entry No.', value: _entryNumber(row)),
               ),
             ],
           ),
 
           _lineField(label: 'Exhibitor', value: _exhibitorDisplay(row)),
-          _lineField(label: 'Address', value: _safe(row, 'exhibitor_address_line1')),
 
           pw.Row(
             children: [
@@ -417,7 +613,7 @@ class _RemarkCardsGeneratorSheetState extends State<RemarkCardsGeneratorSheet> {
               pw.SizedBox(width: 8),
               pw.Expanded(
                 flex: 2,
-                child: _lineField(label: 'Date', value: ''),
+                child: _lineField(label: 'Date', value: showDateLabel),
               ),
             ],
           ),
@@ -439,8 +635,18 @@ class _RemarkCardsGeneratorSheetState extends State<RemarkCardsGeneratorSheet> {
 
           pw.SizedBox(height: 5),
           _checkRow(
-            ['Buck', 'Doe', 'Sr.', '6/8', 'Jr.', 'Pre Jr.', 'Fryer', 'Meat Pen', 'Fur'],
-            sex.isNotEmpty ? sex : cls,
+            [
+              'Buck',
+              'Doe',
+              'Sr.',
+              '6/8',
+              'Jr.',
+              'Pre Jr.',
+              'Fryer',
+              'Meat Pen',
+              'Fur',
+            ],
+            {if (sex.isNotEmpty) sex, if (cls.isNotEmpty) cls},
           ),
           pw.Container(
             margin: const pw.EdgeInsets.only(top: 3, bottom: 5),
@@ -465,9 +671,16 @@ class _RemarkCardsGeneratorSheetState extends State<RemarkCardsGeneratorSheet> {
           ),
 
           pw.SizedBox(height: 4),
-          _checkRow(['B.O.B.', 'B.O.S.', 'B.O.G.', 'B.O.S.G.', 'B.O.V.', 'B.O.S.V.'], ''),
+          _checkRow([
+            'B.O.B.',
+            'B.O.S.',
+            'B.O.G.',
+            'B.O.S.G.',
+            'B.O.V.',
+            'B.O.S.V.',
+          ], {}),
           pw.SizedBox(height: 4),
-          _checkRow(['Best Sr.', 'Best 6/8', 'Best Jr.', 'Best Pre-Jr.'], ''),
+          _checkRow(['Best Sr.', 'Best 6/8', 'Best Jr.', 'Best Pre-Jr.'], {}),
 
           pw.SizedBox(height: 4),
           pw.Row(
@@ -491,33 +704,45 @@ class _RemarkCardsGeneratorSheetState extends State<RemarkCardsGeneratorSheet> {
   pw.Document _buildPdf({
     required List<Map<String, dynamic>> entries,
     required pw.ThemeData theme,
+    required String showDateLabel,
   }) {
     final doc = pw.Document(theme: theme);
+    final pageFormat = PdfPageFormat(
+      11 * PdfPageFormat.inch,
+      8.5 * PdfPageFormat.inch,
+    );
+    const pageMargin = 20.0;
+    const cardGap = 14.0;
+    final cardWidth = (pageFormat.width - (pageMargin * 2) - cardGap) / 2;
+    final cardHeight = pageFormat.height - (pageMargin * 2);
 
     for (var i = 0; i < entries.length; i += 2) {
       final first = entries[i];
       final second = i + 1 < entries.length ? entries[i + 1] : null;
 
       doc.addPage(
-        pw.MultiPage(
-          pageFormat: PdfPageFormat.letter,
-          margin: const pw.EdgeInsets.fromLTRB(20, 20, 20, 20),
-          build: (_) {
-            return [
-              pw.Column(
-              children: [
-                pw.Expanded(child: _remarkCard(first)),
-                pw.SizedBox(height: 14),
-                pw.Expanded(
-                  child: second == null
-                      ? pw.Container()
-                      : _remarkCard(second),
-                ),
-              ],
-            ),
-            ];
-          },
-        )
+        pw.Page(
+          pageFormat: pageFormat,
+          margin: pw.EdgeInsets.all(pageMargin),
+          build: (_) => pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.SizedBox(
+                width: cardWidth,
+                height: cardHeight,
+                child: _remarkCard(first, showDateLabel: showDateLabel),
+              ),
+              pw.SizedBox(width: cardGap),
+              pw.SizedBox(
+                width: cardWidth,
+                height: cardHeight,
+                child: second == null
+                    ? pw.Container()
+                    : _remarkCard(second, showDateLabel: showDateLabel),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
@@ -549,8 +774,13 @@ class _RemarkCardsGeneratorSheetState extends State<RemarkCardsGeneratorSheet> {
         return;
       }
 
+      final showDateLabel = await _loadShowDateLabel();
       final theme = await buildPrintPackPdfTheme();
-      final doc = _buildPdf(entries: entries, theme: theme);
+      final doc = _buildPdf(
+        entries: entries,
+        theme: theme,
+        showDateLabel: showDateLabel,
+      );
       final bytes = await doc.save();
 
       final section = widget.sections.firstWhere(
@@ -558,8 +788,7 @@ class _RemarkCardsGeneratorSheetState extends State<RemarkCardsGeneratorSheet> {
         orElse: () => <String, dynamic>{},
       );
 
-      final sectionName =
-          section.isEmpty ? 'SECTION' : _sectionLabel(section);
+      final sectionName = section.isEmpty ? 'SECTION' : _sectionLabel(section);
 
       final name = 'remark_cards_${widget.showName}_$sectionName.pdf';
 
@@ -587,7 +816,8 @@ class _RemarkCardsGeneratorSheetState extends State<RemarkCardsGeneratorSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    final isSuccess = _msg != null &&
+    final isSuccess =
+        _msg != null &&
         (_msg == 'Save canceled.' || _msg!.startsWith('PDF saved to:'));
 
     return Padding(
@@ -607,14 +837,15 @@ class _RemarkCardsGeneratorSheetState extends State<RemarkCardsGeneratorSheet> {
             ),
             const SizedBox(height: 10),
             Text(
-              '${widget.showName} • 2 cards per letter-size sheet',
+              '${widget.showName} • 2 vertical cards per landscape sheet',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 12),
 
             DropdownButtonFormField<String>(
               isExpanded: true,
-              initialValue: (_selectedSectionId != null &&
+              initialValue:
+                  (_selectedSectionId != null &&
                       widget.sections.any(
                         (s) => s['id']?.toString() == _selectedSectionId,
                       ))
@@ -643,8 +874,7 @@ class _RemarkCardsGeneratorSheetState extends State<RemarkCardsGeneratorSheet> {
             SwitchListTile(
               value: _useCoopNumberInsteadOfName,
               contentPadding: EdgeInsets.zero,
-              onChanged: (v) =>
-                  setState(() => _useCoopNumberInsteadOfName = v),
+              onChanged: (v) => setState(() => _useCoopNumberInsteadOfName = v),
               title: const Text('Use coop numbers instead of exhibitor names'),
               subtitle: const Text(
                 'Keeps exhibitor data saved, but hides names on printed cards.',

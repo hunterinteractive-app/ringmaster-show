@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 
+import '../coop_numbers_screen.dart';
 import '../closeout/data/loaders/coop_cards_report_loader.dart';
 import '../closeout/pdf/builders/coop_cards_report_pdf.dart';
 import 'print_pack_pdf_helpers.dart';
@@ -27,8 +28,7 @@ class CoopCardsGeneratorSheet extends StatefulWidget {
       _CoopCardsGeneratorSheetState();
 }
 
-class _CoopCardsGeneratorSheetState
-    extends State<CoopCardsGeneratorSheet> {
+class _CoopCardsGeneratorSheetState extends State<CoopCardsGeneratorSheet> {
   bool _building = false;
   String? _msg;
   String _buildStatus = '';
@@ -55,6 +55,17 @@ class _CoopCardsGeneratorSheetState
     }
   }
 
+  Future<void> _openCoopNumbers() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => AdminCoopNumbersScreen(
+          showId: widget.showId,
+          showName: widget.showName,
+        ),
+      ),
+    );
+  }
+
   Future<Uint8List> _buildPdfBytes() async {
     if (mounted) {
       setState(() {
@@ -66,10 +77,7 @@ class _CoopCardsGeneratorSheetState
 
     final loader = CoopCardsReportLoader();
     final data = await loader
-        .load(
-          showId: widget.showId,
-          scope: _loaderScope,
-        )
+        .load(showId: widget.showId, scope: _loaderScope)
         .timeout(
           const Duration(seconds: 90),
           onTimeout: () => throw TimeoutException(
@@ -95,7 +103,9 @@ class _CoopCardsGeneratorSheetState
     await Future<void>.delayed(const Duration(milliseconds: 50));
 
     final builder = await CoopCardsReportPdfBuilder.fromAssets();
-    return builder.build(data).timeout(
+    return builder
+        .build(data)
+        .timeout(
           const Duration(seconds: 120),
           onTimeout: () => throw TimeoutException(
             'Building the coop card PDF took longer than 2 minutes.',
@@ -164,9 +174,7 @@ class _CoopCardsGeneratorSheetState
       setState(() {
         _building = false;
         _buildStatus = '';
-        _msg = path == null
-            ? 'Save cancelled.'
-            : 'Coop cards saved to $path';
+        _msg = path == null ? 'Save cancelled.' : 'Coop cards saved to $path';
       });
     } catch (e) {
       if (!mounted) return;
@@ -193,9 +201,9 @@ class _CoopCardsGeneratorSheetState
           children: [
             Text(
               'Generate Coop Cards',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 6),
             Text(
@@ -205,18 +213,9 @@ class _CoopCardsGeneratorSheetState
             const SizedBox(height: 16),
             SegmentedButton<String>(
               segments: const [
-                ButtonSegment<String>(
-                  value: 'all',
-                  label: Text('All'),
-                ),
-                ButtonSegment<String>(
-                  value: 'open',
-                  label: Text('Open'),
-                ),
-                ButtonSegment<String>(
-                  value: 'youth',
-                  label: Text('Youth'),
-                ),
+                ButtonSegment<String>(value: 'all', label: Text('All')),
+                ButtonSegment<String>(value: 'open', label: Text('Open')),
+                ButtonSegment<String>(value: 'youth', label: Text('Youth')),
               ],
               selected: {_scope},
               onSelectionChanged: _building
@@ -268,6 +267,12 @@ class _CoopCardsGeneratorSheetState
               onPressed: _building ? null : _savePdf,
               icon: const Icon(Icons.download_outlined),
               label: const Text('Save PDF'),
+            ),
+            const SizedBox(height: 10),
+            TextButton.icon(
+              onPressed: _building ? null : _openCoopNumbers,
+              icon: const Icon(Icons.sell_outlined),
+              label: const Text('Manage Coop Numbers'),
             ),
           ],
         ),

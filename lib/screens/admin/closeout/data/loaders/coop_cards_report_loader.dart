@@ -8,7 +8,7 @@ class CoopCardsReportLoader {
   final SupabaseClient supabase;
 
   CoopCardsReportLoader({SupabaseClient? supabase})
-      : supabase = supabase ?? Supabase.instance.client;
+    : supabase = supabase ?? Supabase.instance.client;
 
   static const int _rpcPageSize = 1000;
   static const int _queryChunkSize = 500;
@@ -24,9 +24,7 @@ class CoopCardsReportLoader {
 
     final show = await supabase
         .from('shows')
-        .select(
-          'id,name,start_date,end_date,location_name,coop_numbering_mode',
-        )
+        .select('id,name,start_date,end_date,location_name,coop_numbering_mode')
         .eq('id', normalizedShowId)
         .maybeSingle();
 
@@ -34,16 +32,20 @@ class CoopCardsReportLoader {
       throw StateError('The selected show could not be found.');
     }
 
-    final numberingMode =
-        (show['coop_numbering_mode'] ?? 'separate')
-            .toString()
-            .trim()
-            .toLowerCase();
+    final numberingMode = (show['coop_numbering_mode'] ?? 'separate')
+        .toString()
+        .trim()
+        .toLowerCase();
+    final requestedScope = scope?.trim().toLowerCase() ?? '';
+    final assignmentScopeFilter =
+        numberingMode == 'combined' &&
+            (requestedScope == 'open' || requestedScope == 'youth')
+        ? 'all'
+        : requestedScope;
 
     final sections = await _loadSections(normalizedShowId);
     final sectionById = <String, Map<String, dynamic>>{
-      for (final section in sections)
-        _safe(section, 'id'): section,
+      for (final section in sections) _safe(section, 'id'): section,
     };
 
     final reportRows = await _loadCheckInRows(normalizedShowId);
@@ -52,7 +54,7 @@ class CoopCardsReportLoader {
 
     final assignments = await _loadAssignments(
       normalizedShowId,
-      scope: scope,
+      scope: assignmentScopeFilter,
     );
 
     final activeRows = reportRows.where((row) {
@@ -69,27 +71,32 @@ class CoopCardsReportLoader {
       activeRows,
       sectionById,
       numberingMode,
+      requestedScope,
     );
 
     final cards = <CoopCardRow>[];
 
     for (final assignment in assignments) {
       final animalId = _safe(assignment, 'animal_id');
-      final assignmentScope =
-          _safe(assignment, 'scope').toLowerCase();
+      final assignmentScope = _safe(assignment, 'scope').toLowerCase();
       final coopNumber = _safe(assignment, 'coop_number');
 
       if (animalId.isEmpty || coopNumber.isEmpty) continue;
 
       final animalRows = rowsByAnimalId[animalId] ?? const [];
       final scopedRows = animalRows.where((row) {
-        if (assignmentScope == 'all') return true;
-
         final sectionId = _safe(row, 'section_id');
         final section = sectionById[sectionId];
         final sectionKind = section == null
             ? _safe(row, 'section_kind').toLowerCase()
             : _safe(section, 'kind').toLowerCase();
+
+        if (assignmentScope == 'all') {
+          if (requestedScope == 'open' || requestedScope == 'youth') {
+            return sectionKind == requestedScope;
+          }
+          return true;
+        }
 
         return sectionKind == assignmentScope;
       }).toList();
@@ -100,15 +107,18 @@ class CoopCardsReportLoader {
         final aSection = sectionById[_safe(a, 'section_id')];
         final bSection = sectionById[_safe(b, 'section_id')];
 
-        final sortCmp = _asInt(aSection?['sort_order'])
-            .compareTo(_asInt(bSection?['sort_order']));
+        final sortCmp = _asInt(
+          aSection?['sort_order'],
+        ).compareTo(_asInt(bSection?['sort_order']));
         if (sortCmp != 0) return sortCmp;
 
-        return _safe(aSection ?? const {}, 'letter')
-            .compareTo(_safe(bSection ?? const {}, 'letter'));
+        return _safe(
+          aSection ?? const {},
+          'letter',
+        ).compareTo(_safe(bSection ?? const {}, 'letter'));
       });
 
-      final first = scopedRows.first;
+      final first = _representativeRow(scopedRows);
       final showLetters = <String>[];
       final sectionLabels = <String>[];
 
@@ -145,7 +155,10 @@ class CoopCardsReportLoader {
       cards.add(
         CoopCardRow(
           coopNumber: coopNumber,
-          scope: assignmentScope,
+          entryNumber: _entryNumberForRow(first),
+          scope: requestedScope == 'open' || requestedScope == 'youth'
+              ? requestedScope
+              : assignmentScope,
           species: _safe(first, 'species'),
           animalId: animalId,
           animalName: _safe(first, 'animal_name'),
@@ -173,11 +186,13 @@ class CoopCardsReportLoader {
     }
 
     cards.sort((a, b) {
+      final scopeCmp = _scopeRank(a.scope).compareTo(_scopeRank(b.scope));
+      if (scopeCmp != 0) return scopeCmp;
+
       final prefixCmp = a.coopPrefix.compareTo(b.coopPrefix);
       if (prefixCmp != 0) return prefixCmp;
 
-      final sequenceCmp =
-          a.coopSequenceValue.compareTo(b.coopSequenceValue);
+      final sequenceCmp = a.coopSequenceValue.compareTo(b.coopSequenceValue);
       if (sequenceCmp != 0) return sequenceCmp;
 
       return a.coopNumber.compareTo(b.coopNumber);
@@ -188,10 +203,7 @@ class CoopCardsReportLoader {
       showName: _safe(show, 'name').isEmpty
           ? 'RingMaster Show'
           : _safe(show, 'name'),
-      showDateLabel: _dateRangeLabel(
-        show['start_date'],
-        show['end_date'],
-      ),
+      showDateLabel: _dateRangeLabel(show['start_date'], show['end_date']),
       showLocationLabel: _safe(show, 'location_name'),
       coopNumberingMode: numberingMode,
       generatedAt: DateTime.now(),
@@ -210,12 +222,10 @@ class CoopCardsReportLoader {
     return List<Map<String, dynamic>>.from(rows);
   }
 
-  Future<List<Map<String, dynamic>>> _loadCheckInRows(
-    String showId,
-  ) async {
+  Future<List<Map<String, dynamic>>> _loadCheckInRows(String showId) async {
     final rows = <Map<String, dynamic>>[];
 
-    for (var from = 0;; from += _rpcPageSize) {
+    for (var from = 0; ; from += _rpcPageSize) {
       final to = from + _rpcPageSize - 1;
       final result = await supabase
           .rpc(
@@ -237,9 +247,7 @@ class CoopCardsReportLoader {
     return rows;
   }
 
-  Future<void> _attachAnimalIds(
-    List<Map<String, dynamic>> rows,
-  ) async {
+  Future<void> _attachAnimalIds(List<Map<String, dynamic>> rows) async {
     final entryIds = rows
         .map((row) {
           final entryId = _safe(row, 'entry_id');
@@ -278,9 +286,7 @@ class CoopCardsReportLoader {
     }
   }
 
-  Future<void> _attachExhibitorDetails(
-    List<Map<String, dynamic>> rows,
-  ) async {
+  Future<void> _attachExhibitorDetails(List<Map<String, dynamic>> rows) async {
     final exhibitorIds = rows
         .map((row) => _safe(row, 'exhibitor_id'))
         .where((id) => id.isNotEmpty)
@@ -332,7 +338,7 @@ class CoopCardsReportLoader {
     final rows = <Map<String, dynamic>>[];
     final normalizedScope = scope?.trim().toLowerCase() ?? '';
 
-    for (var from = 0;; from += _rpcPageSize) {
+    for (var from = 0; ; from += _rpcPageSize) {
       final to = from + _rpcPageSize - 1;
 
       var query = supabase
@@ -358,6 +364,7 @@ class CoopCardsReportLoader {
     List<Map<String, dynamic>> rows,
     Map<String, Map<String, dynamic>> sectionById,
     String numberingMode,
+    String requestedScope,
   ) {
     final stats = <String, _ClassStats>{};
 
@@ -367,13 +374,17 @@ class CoopCardsReportLoader {
       final sectionKind = section == null
           ? _safe(row, 'section_kind').toLowerCase()
           : _safe(section, 'kind').toLowerCase();
-      final scope = numberingMode == 'combined' ? 'all' : sectionKind;
-      final key = _classKeyForRow(
-        row,
-        scope,
-        sectionById,
-        numberingMode,
-      );
+      if ((requestedScope == 'open' || requestedScope == 'youth') &&
+          sectionKind != requestedScope) {
+        continue;
+      }
+
+      final scope = numberingMode == 'combined'
+          ? (requestedScope == 'open' || requestedScope == 'youth'
+                ? requestedScope
+                : 'all')
+          : sectionKind;
+      final key = _classKeyForRow(row, scope, sectionById, numberingMode);
 
       final stat = stats.putIfAbsent(key, _ClassStats.new);
       final animalId = _safe(row, 'animal_id');
@@ -398,10 +409,12 @@ class CoopCardsReportLoader {
         ? _safe(row, 'section_kind').toLowerCase()
         : _safe(section, 'kind').toLowerCase();
     final scope = numberingMode == 'combined'
-        ? 'all'
+        ? (requestedScope == 'open' || requestedScope == 'youth'
+              ? requestedScope
+              : 'all')
         : requestedScope.isNotEmpty
-            ? requestedScope
-            : sectionKind;
+        ? requestedScope
+        : sectionKind;
 
     final breed = _safe(row, 'breed').isNotEmpty
         ? _safe(row, 'breed')
@@ -424,13 +437,71 @@ class CoopCardsReportLoader {
     return (row[key] ?? '').toString().trim();
   }
 
+  static String _entryNumberForRow(Map<String, dynamic> row) {
+    for (final key in const [
+      'entry_number',
+      'entry_no',
+      'catalog_number',
+      'show_entry_number',
+      'entry_index',
+      'exhibitor_number',
+    ]) {
+      final value = _safe(row, key);
+      if (value.isNotEmpty) return value;
+    }
+    return '';
+  }
+
   static int _asInt(dynamic value, [int fallback = 999999]) {
     if (value is int) return value;
     return int.tryParse(value?.toString() ?? '') ?? fallback;
   }
 
+  static Map<String, dynamic> _representativeRow(
+    List<Map<String, dynamic>> rows,
+  ) {
+    for (final row in rows) {
+      if (!_isFurOrWoolRow(row)) return row;
+    }
+    return rows.first;
+  }
+
+  static bool _isFurOrWoolRow(Map<String, dynamic> row) {
+    if (_bool(row['is_fur']) || _bool(row['is_wool'])) return true;
+
+    final className = _safe(row, 'class_name').toLowerCase();
+    return className.contains('fur') || className.contains('wool');
+  }
+
+  static bool _bool(dynamic value, {bool fallback = false}) {
+    if (value is bool) return value;
+    final text = (value ?? '').toString().trim().toLowerCase();
+    if (text == 'true' || text == 't' || text == '1' || text == 'yes') {
+      return true;
+    }
+    if (text == 'false' || text == 'f' || text == '0' || text == 'no') {
+      return false;
+    }
+    return fallback;
+  }
+
+  static int _scopeRank(String scope) {
+    switch (scope.trim().toLowerCase()) {
+      case 'open':
+        return 0;
+      case 'youth':
+        return 1;
+      case 'all':
+        return 2;
+      default:
+        return 3;
+    }
+  }
+
   static String _displayAgeClassOnly(String raw) {
     final lower = raw.toLowerCase();
+    if (lower.contains('meat')) return 'Meat Pen';
+    if (lower.contains('fryer')) return 'Fryer';
     if (lower.contains('pre junior') || lower.contains('pre-junior')) {
       return 'Pre-Junior';
     }

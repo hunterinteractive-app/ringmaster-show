@@ -1,4 +1,3 @@
-
 // lib/screens/admin/closeout/models/coop_cards/coop_cards_report_data.dart
 
 class CoopCardsReportData {
@@ -30,6 +29,7 @@ class CoopCardsReportData {
 
 class CoopCardRow {
   final String coopNumber;
+  final String entryNumber;
   final String scope;
   final String species;
 
@@ -57,6 +57,7 @@ class CoopCardRow {
 
   const CoopCardRow({
     required this.coopNumber,
+    required this.entryNumber,
     required this.scope,
     required this.species,
     required this.animalId,
@@ -177,4 +178,3 @@ class CoopCardRow {
     return int.tryParse(coopSequence) ?? 999999;
   }
 }
-
