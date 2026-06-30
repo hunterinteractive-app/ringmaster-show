@@ -19,12 +19,13 @@ class ExhibitorByBreedReportLoader {
     }
 
     final header = await _loadHeader(request.showId);
+    final sectionId = await _loadSectionId(request.showId, scope, showLetter);
 
     final resultsResponse = await repo.supabase.rpc(
       'report_results_entry_rows',
       params: {
         'p_show_id': request.showId,
-        'p_section_id': null,
+        'p_section_id': sectionId,
         'p_show_letter': showLetter,
       },
     );
@@ -32,10 +33,13 @@ class ExhibitorByBreedReportLoader {
     final resultRows = (resultsResponse as List)
         .map((e) => Map<String, dynamic>.from(e as Map))
         .where((row) {
-          final rowScope = _text(row, ['scope', 'section_kind', 'kind'])
-              .trim()
-              .toUpperCase();
-          return (rowScope.isEmpty || rowScope == scope) && _isActuallyShown(row);
+          final rowScope = _text(row, [
+            'scope',
+            'section_kind',
+            'kind',
+          ]).trim().toUpperCase();
+          return (rowScope.isEmpty || rowScope == scope) &&
+              _isActuallyShown(row);
         })
         .toList();
 
@@ -158,22 +162,21 @@ class ExhibitorByBreedReportLoader {
       );
     }
 
-    final sections = sectionMap.values
-        .map((section) {
+    final sections =
+        sectionMap.values.map((section) {
           section.rows.sort(
             (a, b) => a.exhibitorName.toLowerCase().compareTo(
-                  b.exhibitorName.toLowerCase(),
-                ),
+              b.exhibitorName.toLowerCase(),
+            ),
           );
           return ExhibitorByBreedSection(
             breedName: section.breedName,
             rows: section.rows,
           );
-        })
-        .toList()
-      ..sort((a, b) => a.breedName.toLowerCase().compareTo(
-            b.breedName.toLowerCase(),
-          ));
+        }).toList()..sort(
+          (a, b) =>
+              a.breedName.toLowerCase().compareTo(b.breedName.toLowerCase()),
+        );
 
     return ExhibitorByBreedReportData(
       showId: request.showId,
@@ -189,6 +192,38 @@ class ExhibitorByBreedReportLoader {
       secretaryPhone: header.secretaryPhone,
       sections: sections,
     );
+  }
+
+  Future<String> _loadSectionId(
+    String showId,
+    String scope,
+    String showLetter,
+  ) async {
+    final response = await repo.supabase
+        .from('show_sections')
+        .select('id')
+        .eq('show_id', showId)
+        .eq('kind', scope.toLowerCase())
+        .eq('letter', showLetter)
+        .eq('is_enabled', true)
+        .maybeSingle();
+
+    if (response == null) {
+      throw Exception(
+        'Could not find enabled $scope $showLetter section for Exhibitor by Breed.',
+      );
+    }
+
+    final sectionId = (Map<String, dynamic>.from(response)['id'] ?? '')
+        .toString()
+        .trim();
+    if (sectionId.isEmpty) {
+      throw Exception(
+        'Enabled $scope $showLetter section is missing an ID for Exhibitor by Breed.',
+      );
+    }
+
+    return sectionId;
   }
 
   Future<_Header> _loadHeader(String showId) async {
@@ -211,8 +246,8 @@ class ExhibitorByBreedReportLoader {
           .eq('id', clubId)
           .maybeSingle();
       if (clubResponse != null) {
-        hostClubName =
-            (Map<String, dynamic>.from(clubResponse)['name'] ?? '').toString();
+        hostClubName = (Map<String, dynamic>.from(clubResponse)['name'] ?? '')
+            .toString();
       }
     }
 
@@ -256,7 +291,6 @@ class ExhibitorByBreedReportLoader {
     if (value is num) return value.toDouble();
     return double.tryParse((value ?? '').toString()) ?? 0;
   }
-
 
   static String _text(Map<String, dynamic> row, List<String> keys) {
     for (final key in keys) {
@@ -309,11 +343,11 @@ class ExhibitorByBreedReportLoader {
   }
 
   static String _exhibitorName(Map<String, dynamic> row) => _text(row, [
-        'exhibitor_name',
-        'exhibitor_label',
-        'showing_name',
-        'owner_name',
-      ]);
+    'exhibitor_name',
+    'exhibitor_label',
+    'showing_name',
+    'owner_name',
+  ]);
 
   static String _exhibitorAddress(Map<String, dynamic> row) {
     final direct = _text(row, ['exhibitor_address', 'address']);
@@ -329,7 +363,6 @@ class ExhibitorByBreedReportLoader {
 
     return parts.join(', ');
   }
-
 }
 
 class _SectionAccumulator {

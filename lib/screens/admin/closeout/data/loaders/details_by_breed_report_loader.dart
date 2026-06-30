@@ -21,12 +21,13 @@ class DetailsByBreedReportLoader {
     }
 
     final header = await _loadHeader(request.showId, scope, showLetter);
+    final sectionId = await _loadSectionId(request.showId, scope, showLetter);
 
     final response = await repo.supabase.rpc(
       'report_results_entry_rows',
       params: {
         'p_show_id': request.showId,
-        'p_section_id': null,
+        'p_section_id': sectionId,
         'p_show_letter': showLetter,
       },
     );
@@ -34,9 +35,11 @@ class DetailsByBreedReportLoader {
     final rows = (response as List)
         .map((e) => Map<String, dynamic>.from(e as Map))
         .where((row) {
-          final rowScope = _text(row, ['scope', 'section_kind', 'kind'])
-              .trim()
-              .toUpperCase();
+          final rowScope = _text(row, [
+            'scope',
+            'section_kind',
+            'kind',
+          ]).trim().toUpperCase();
           return (rowScope.isEmpty || rowScope == scope) &&
               _isActuallyShown(row);
         })
@@ -66,10 +69,12 @@ class DetailsByBreedReportLoader {
       final breed = _text(row, ['breed_name', 'breed']).trim();
       if (breed.isEmpty) continue;
 
-      final variety = _text(
-        row,
-        ['variety_name', 'variety', 'group_name', 'group'],
-      ).trim();
+      final variety = _text(row, [
+        'variety_name',
+        'variety',
+        'group_name',
+        'group',
+      ]).trim();
       final className = _cleanClassName(
         _text(row, ['class_name', 'age_class', 'class']),
       );
@@ -84,17 +89,21 @@ class DetailsByBreedReportLoader {
       final earNumber = _text(row, ['tattoo', 'ear_number', 'ear_no', 'ear']);
       final animalName = _text(row, ['animal_name', 'registered_name', 'name']);
       final placement = _placement(row['placement']);
-      final judgeId = (judgeIdsByEntryId[entryId] ??
-              _text(row, ['judged_by_show_judge_id', 'show_judge_id']))
-          .trim();
-      final judgeName = _text(
-        row,
-        ['judge_name', 'show_judge_name', 'judged_by_name'],
-      ).trim().isNotEmpty
-          ? _text(
-              row,
-              ['judge_name', 'show_judge_name', 'judged_by_name'],
-            ).trim()
+      final judgeId =
+          (judgeIdsByEntryId[entryId] ??
+                  _text(row, ['judged_by_show_judge_id', 'show_judge_id']))
+              .trim();
+      final judgeName =
+          _text(row, [
+            'judge_name',
+            'show_judge_name',
+            'judged_by_name',
+          ]).trim().isNotEmpty
+          ? _text(row, [
+              'judge_name',
+              'show_judge_name',
+              'judged_by_name',
+            ]).trim()
           : (judgeNamesById[judgeId] ?? '');
 
       final breedAcc = grouped.putIfAbsent(
@@ -135,7 +144,11 @@ class DetailsByBreedReportLoader {
         );
       }
 
-      DetailsByBreedAwardRow awardRow(String award, int animals, int exhibitors) {
+      DetailsByBreedAwardRow awardRow(
+        String award,
+        int animals,
+        int exhibitors,
+      ) {
         return DetailsByBreedAwardRow(
           award: award,
           earNumber: earNumber,
@@ -150,21 +163,39 @@ class DetailsByBreedReportLoader {
       }
 
       if (awards.contains('BOB')) {
-        breedAcc.bob = awardRow('BOB', breedAcc.animalsShown, breedAcc.exhibitors.length);
+        breedAcc.bob = awardRow(
+          'BOB',
+          breedAcc.animalsShown,
+          breedAcc.exhibitors.length,
+        );
       }
       if (awards.contains('BOSB') || awards.contains('BOS')) {
-        breedAcc.bosb = awardRow('BOSB', breedAcc.animalsShown, breedAcc.exhibitors.length);
+        breedAcc.bosb = awardRow(
+          'BOSB',
+          breedAcc.animalsShown,
+          breedAcc.exhibitors.length,
+        );
       }
       if (awards.contains('BOV')) {
-        varietyAcc.bov = awardRow('BOV', varietyAcc.animalsShown, varietyAcc.exhibitors.length);
+        varietyAcc.bov = awardRow(
+          'BOV',
+          varietyAcc.animalsShown,
+          varietyAcc.exhibitors.length,
+        );
       }
       if (awards.contains('BOSV')) {
-        varietyAcc.bosv = awardRow('BOSV', varietyAcc.animalsShown, varietyAcc.exhibitors.length);
+        varietyAcc.bosv = awardRow(
+          'BOSV',
+          varietyAcc.animalsShown,
+          varietyAcc.exhibitors.length,
+        );
       }
 
       if (awards.isNotEmpty) {
         final sortedAwards = awards.toList()
-          ..sort((a, b) => _specialAwardRank(a).compareTo(_specialAwardRank(b)));
+          ..sort(
+            (a, b) => _specialAwardRank(a).compareTo(_specialAwardRank(b)),
+          );
         breedAcc.specialAwards.add(
           DetailsByBreedAwardRow(
             award: sortedAwards.join(', '),
@@ -198,47 +229,61 @@ class DetailsByBreedReportLoader {
       }
     }
 
-    final breeds = grouped.values.map((breed) {
-      final varieties = breed.varieties.values.map((variety) {
-        final classes = variety.classes.values.map((clazz) {
-          clazz.placements.sort((a, b) => a.placement.compareTo(b.placement));
-          return DetailsByBreedClassSection(
-            className: clazz.className,
-            sex: clazz.sex,
-            animalsShown: clazz.animalsShown,
-            exhibitorCount: clazz.exhibitors.length,
-            placements: clazz.placements,
+    final breeds =
+        grouped.values.map((breed) {
+          final varieties =
+              breed.varieties.values.map((variety) {
+                final classes = variety.classes.values.map((clazz) {
+                  clazz.placements.sort(
+                    (a, b) => a.placement.compareTo(b.placement),
+                  );
+                  return DetailsByBreedClassSection(
+                    className: clazz.className,
+                    sex: clazz.sex,
+                    animalsShown: clazz.animalsShown,
+                    exhibitorCount: clazz.exhibitors.length,
+                    placements: clazz.placements,
+                  );
+                }).toList()..sort(_compareClasses);
+
+                return DetailsByBreedVarietySection(
+                  varietyName: variety.varietyName,
+                  animalsShown: variety.animalsShown,
+                  exhibitorCount: variety.exhibitors.length,
+                  bov: variety.bov,
+                  bosv: variety.bosv,
+                  classes: classes,
+                );
+              }).toList()..sort(
+                (a, b) => a.varietyName.toLowerCase().compareTo(
+                  b.varietyName.toLowerCase(),
+                ),
+              );
+
+          return DetailsByBreedBreedSection(
+            breedName: breed.breedName,
+            judgeName: breed.judgeName,
+            animalsShown: breed.animalsShown,
+            exhibitorCount: breed.exhibitors.length,
+            bob: breed.bob,
+            bosb: breed.bosb,
+            specialAwards: breed.specialAwards
+              ..sort(
+                (a, b) => _specialAwardRank(
+                  a.award.split(',').first.trim(),
+                ).compareTo(_specialAwardRank(b.award.split(',').first.trim())),
+              ),
+            varieties: varieties,
           );
-        }).toList()
-          ..sort(_compareClasses);
-
-        return DetailsByBreedVarietySection(
-          varietyName: variety.varietyName,
-          animalsShown: variety.animalsShown,
-          exhibitorCount: variety.exhibitors.length,
-          bov: variety.bov,
-          bosv: variety.bosv,
-          classes: classes,
+        }).toList()..sort(
+          (a, b) =>
+              a.breedName.toLowerCase().compareTo(b.breedName.toLowerCase()),
         );
-      }).toList()
-        ..sort((a, b) => a.varietyName.toLowerCase().compareTo(b.varietyName.toLowerCase()));
 
-      return DetailsByBreedBreedSection(
-        breedName: breed.breedName,
-        judgeName: breed.judgeName,
-        animalsShown: breed.animalsShown,
-        exhibitorCount: breed.exhibitors.length,
-        bob: breed.bob,
-        bosb: breed.bosb,
-        specialAwards: breed.specialAwards
-          ..sort((a, b) => _specialAwardRank(a.award.split(',').first.trim())
-              .compareTo(_specialAwardRank(b.award.split(',').first.trim()))),
-        varieties: varieties,
-      );
-    }).toList()
-      ..sort((a, b) => a.breedName.toLowerCase().compareTo(b.breedName.toLowerCase()));
-
-    overallWinners.sort((a, b) => _overallAwardRank(a.award).compareTo(_overallAwardRank(b.award)));
+    overallWinners.sort(
+      (a, b) =>
+          _overallAwardRank(a.award).compareTo(_overallAwardRank(b.award)),
+    );
 
     return DetailsByBreedReportData(
       showId: request.showId,
@@ -264,7 +309,43 @@ class DetailsByBreedReportLoader {
     );
   }
 
-  Future<_Header> _loadHeader(String showId, String scope, String showLetter) async {
+  Future<String> _loadSectionId(
+    String showId,
+    String scope,
+    String showLetter,
+  ) async {
+    final response = await repo.supabase
+        .from('show_sections')
+        .select('id')
+        .eq('show_id', showId)
+        .eq('kind', scope.toLowerCase())
+        .eq('letter', showLetter)
+        .eq('is_enabled', true)
+        .maybeSingle();
+
+    if (response == null) {
+      throw Exception(
+        'Could not find enabled $scope $showLetter section for Details by Breed.',
+      );
+    }
+
+    final sectionId = (Map<String, dynamic>.from(response)['id'] ?? '')
+        .toString()
+        .trim();
+    if (sectionId.isEmpty) {
+      throw Exception(
+        'Enabled $scope $showLetter section is missing an ID for Details by Breed.',
+      );
+    }
+
+    return sectionId;
+  }
+
+  Future<_Header> _loadHeader(
+    String showId,
+    String scope,
+    String showLetter,
+  ) async {
     final showResponse = await repo.supabase
         .from('shows')
         .select()
@@ -284,8 +365,8 @@ class DetailsByBreedReportLoader {
           .eq('id', clubId)
           .maybeSingle();
       if (clubResponse != null) {
-        hostClubName =
-            (Map<String, dynamic>.from(clubResponse)['name'] ?? '').toString();
+        hostClubName = (Map<String, dynamic>.from(clubResponse)['name'] ?? '')
+            .toString();
       }
     }
 
@@ -364,7 +445,6 @@ class DetailsByBreedReportLoader {
     );
   }
 
-
   Future<Map<String, String>> _loadJudgeIdsByEntryId(
     String showId,
     List<Map<String, dynamic>> rows,
@@ -395,8 +475,9 @@ class DetailsByBreedReportLoader {
       for (final raw in (response as List)) {
         final row = Map<String, dynamic>.from(raw as Map);
         final entryId = (row['id'] ?? '').toString().trim();
-        final showJudgeId =
-            (row['judged_by_show_judge_id'] ?? '').toString().trim();
+        final showJudgeId = (row['judged_by_show_judge_id'] ?? '')
+            .toString()
+            .trim();
 
         if (entryId.isNotEmpty && showJudgeId.isNotEmpty) {
           result[entryId] = showJudgeId;
@@ -447,10 +528,11 @@ class DetailsByBreedReportLoader {
 
         for (final raw in (response as List)) {
           final row = Map<String, dynamic>.from(raw as Map);
-          final judgeId = _text(
-            row,
-            ['id', 'judge_id', 'arba_judge_id'],
-          ).trim();
+          final judgeId = _text(row, [
+            'id',
+            'judge_id',
+            'arba_judge_id',
+          ]).trim();
           if (judgeId.isEmpty) continue;
 
           final name = _judgeNameFromRow(row);
@@ -470,31 +552,27 @@ class DetailsByBreedReportLoader {
   }
 
   static String _judgeNameFromRow(Map<String, dynamic> row) {
-    final direct = _text(
-      row,
-      [
-        'display_name',
-        'judge_name',
-        'full_name',
-        'name',
-        'formatted_name',
-      ],
-    ).trim();
+    final direct = _text(row, [
+      'display_name',
+      'judge_name',
+      'full_name',
+      'name',
+      'formatted_name',
+    ]).trim();
     if (direct.isNotEmpty) return direct;
 
-    final first = _text(
-      row,
-      ['first_name', 'judge_first_name', 'firstname'],
-    ).trim();
-    final last = _text(
-      row,
-      ['last_name', 'judge_last_name', 'lastname'],
-    ).trim();
+    final first = _text(row, [
+      'first_name',
+      'judge_first_name',
+      'firstname',
+    ]).trim();
+    final last = _text(row, [
+      'last_name',
+      'judge_last_name',
+      'lastname',
+    ]).trim();
 
-    return [first, last]
-        .where((part) => part.isNotEmpty)
-        .join(' ')
-        .trim();
+    return [first, last].where((part) => part.isNotEmpty).join(' ').trim();
   }
 
   Future<Map<String, Set<String>>> _loadEntryAwards(
@@ -527,10 +605,12 @@ class DetailsByBreedReportLoader {
         final entryId = (row['entry_id'] ?? '').toString().trim();
         if (entryId.isEmpty) continue;
 
-        final award = _text(
-          row,
-          ['award_code', 'award', 'code', 'special_award'],
-        ).trim().toUpperCase();
+        final award = _text(row, [
+          'award_code',
+          'award',
+          'code',
+          'special_award',
+        ]).trim().toUpperCase();
 
         if (award.isNotEmpty) {
           result.putIfAbsent(entryId, () => <String>{}).add(award);
@@ -568,7 +648,10 @@ class DetailsByBreedReportLoader {
     return ranks[code] ?? 50;
   }
 
-  static int _compareClasses(DetailsByBreedClassSection a, DetailsByBreedClassSection b) {
+  static int _compareClasses(
+    DetailsByBreedClassSection a,
+    DetailsByBreedClassSection b,
+  ) {
     final age = _classRank(a.className).compareTo(_classRank(b.className));
     if (age != 0) return age;
     return _sexRank(a.sex).compareTo(_sexRank(b.sex));
@@ -591,7 +674,10 @@ class DetailsByBreedReportLoader {
 
   static String _cleanClassName(String value) {
     final cleaned = value
-        .replaceAll(RegExp(r'\b(buck|doe|boar|sow)\b', caseSensitive: false), '')
+        .replaceAll(
+          RegExp(r'\b(buck|doe|boar|sow)\b', caseSensitive: false),
+          '',
+        )
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
     return cleaned.isEmpty ? 'Class' : cleaned;
@@ -612,8 +698,14 @@ class DetailsByBreedReportLoader {
   }
 
   static bool _isOverallAward(String code) {
-    return const {'BIS', 'RIS', 'BRIS', 'BIS-CAVY', 'BIS_CAVY', 'BISCAVY'}
-        .contains(code);
+    return const {
+      'BIS',
+      'RIS',
+      'BRIS',
+      'BIS-CAVY',
+      'BIS_CAVY',
+      'BISCAVY',
+    }.contains(code);
   }
 
   static String _displayOverallAward(String code) {
@@ -710,11 +802,11 @@ class DetailsByBreedReportLoader {
   }
 
   static String _exhibitorName(Map<String, dynamic> row) => _text(row, [
-        'exhibitor_name',
-        'exhibitor_label',
-        'showing_name',
-        'owner_name',
-      ]);
+    'exhibitor_name',
+    'exhibitor_label',
+    'showing_name',
+    'owner_name',
+  ]);
 
   static String _exhibitorKey(Map<String, dynamic> row) {
     final id = _text(row, ['exhibitor_id', 'exhibitor_user_id']);
