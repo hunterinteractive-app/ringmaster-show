@@ -2,6 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
+const double _runnerCardHeight = 2 * PdfPageFormat.inch;
+
 pw.Widget _lineField({
   required String label,
   required String value,
@@ -128,6 +130,74 @@ pw.Widget _scoreGrid(List<String> rows, {bool fourCols = true}) {
   );
 }
 
+pw.Widget _runnerCard() {
+  return pw.Column(
+    crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+    children: [
+      pw.Row(
+        children: [
+          pw.Expanded(
+            child: pw.Container(height: .7, color: PdfColors.grey700),
+          ),
+          pw.Padding(
+            padding: const pw.EdgeInsets.symmetric(horizontal: 6),
+            child: pw.Text(
+              'DETACHABLE RUNNER CARD',
+              style: pw.TextStyle(
+                fontSize: 6.5,
+                fontWeight: pw.FontWeight.bold,
+              ),
+            ),
+          ),
+          pw.Expanded(
+            child: pw.Container(height: .7, color: PdfColors.grey700),
+          ),
+        ],
+      ),
+      pw.SizedBox(height: 5),
+      pw.Text(
+        'RUNNER CARD',
+        textAlign: pw.TextAlign.center,
+        style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+      ),
+      pw.SizedBox(height: 4),
+      pw.Row(
+        children: [
+          pw.Expanded(
+            child: _lineField(label: 'Ear No.', value: 'ABC'),
+          ),
+          pw.SizedBox(width: 8),
+          pw.Expanded(
+            child: _lineField(label: 'Coop No.', value: '12'),
+          ),
+        ],
+      ),
+      pw.Row(
+        children: [
+          pw.Expanded(
+            child: _lineField(label: 'Breed', value: 'American'),
+          ),
+          pw.SizedBox(width: 8),
+          pw.Expanded(
+            child: _lineField(label: 'Variety', value: 'Blue'),
+          ),
+        ],
+      ),
+      pw.Row(
+        children: [
+          pw.Expanded(
+            child: _lineField(label: 'Class', value: 'Sr.'),
+          ),
+          pw.SizedBox(width: 8),
+          pw.Expanded(
+            child: _lineField(label: 'Sex', value: 'Buck'),
+          ),
+        ],
+      ),
+    ],
+  );
+}
+
 pw.Widget _remarkCard() {
   const leftRows = [
     'Head',
@@ -162,7 +232,7 @@ pw.Widget _remarkCard() {
   ];
 
   return pw.Container(
-    padding: const pw.EdgeInsets.fromLTRB(14, 10, 14, 8),
+    padding: const pw.EdgeInsets.fromLTRB(14, 10, 14, 0),
     decoration: pw.BoxDecoration(border: pw.Border.all(width: .8)),
     child: pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.stretch,
@@ -277,6 +347,8 @@ pw.Widget _remarkCard() {
         _lineField(label: 'Remarks', value: '', height: 15),
         _lineField(label: '', value: '', height: 13),
         _lineField(label: 'Judge', value: '', height: 15),
+        pw.Spacer(),
+        pw.SizedBox(height: _runnerCardHeight, child: _runnerCard()),
       ],
     ),
   );

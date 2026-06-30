@@ -32,11 +32,14 @@ class RemarkCardsGeneratorSheet extends StatefulWidget {
 }
 
 class _RemarkCardsGeneratorSheetState extends State<RemarkCardsGeneratorSheet> {
+  static const double _runnerCardHeight = 2 * PdfPageFormat.inch;
+
   bool _building = false;
   String? _msg;
 
   String? _selectedSectionId;
   bool _useCoopNumberInsteadOfName = false;
+  bool _includeRunnerCards = true;
 
   @override
   void initState() {
@@ -523,9 +526,118 @@ class _RemarkCardsGeneratorSheetState extends State<RemarkCardsGeneratorSheet> {
     );
   }
 
+  pw.Widget _runnerCard(
+    Map<String, dynamic> row, {
+    required String sex,
+    required String cls,
+  }) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+      children: [
+        pw.Row(
+          children: [
+            pw.Expanded(
+              child: pw.Container(height: .7, color: PdfColors.grey700),
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 6),
+              child: pw.Text(
+                'DETACHABLE RUNNER CARD',
+                style: pw.TextStyle(
+                  fontSize: 6.5,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+            ),
+            pw.Expanded(
+              child: pw.Container(height: .7, color: PdfColors.grey700),
+            ),
+          ],
+        ),
+        pw.SizedBox(height: 5),
+        pw.Text(
+          'RUNNER CARD',
+          textAlign: pw.TextAlign.center,
+          style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+        ),
+        pw.SizedBox(height: 4),
+        pw.Row(
+          children: [
+            pw.Expanded(
+              child: _lineField(
+                label: 'Ear No.',
+                value: _safe(row, 'tattoo'),
+                height: 13,
+                labelSize: 6.5,
+                valueSize: 7,
+              ),
+            ),
+            pw.SizedBox(width: 8),
+            pw.Expanded(
+              child: _lineField(
+                label: 'Coop No.',
+                value: _safe(row, 'coop_number'),
+                height: 13,
+                labelSize: 6.5,
+                valueSize: 7,
+              ),
+            ),
+          ],
+        ),
+        pw.Row(
+          children: [
+            pw.Expanded(
+              child: _lineField(
+                label: 'Breed',
+                value: _safe(row, 'breed'),
+                height: 13,
+                labelSize: 6.5,
+                valueSize: 7,
+              ),
+            ),
+            pw.SizedBox(width: 8),
+            pw.Expanded(
+              child: _lineField(
+                label: 'Variety',
+                value: _groupVarietyLabel(row),
+                height: 13,
+                labelSize: 6.5,
+                valueSize: 7,
+              ),
+            ),
+          ],
+        ),
+        pw.Row(
+          children: [
+            pw.Expanded(
+              child: _lineField(
+                label: 'Class',
+                value: cls,
+                height: 13,
+                labelSize: 6.5,
+                valueSize: 7,
+              ),
+            ),
+            pw.SizedBox(width: 8),
+            pw.Expanded(
+              child: _lineField(
+                label: 'Sex',
+                value: sex,
+                height: 13,
+                labelSize: 6.5,
+                valueSize: 7,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
   pw.Widget _remarkCard(
     Map<String, dynamic> row, {
     required String showDateLabel,
+    required bool includeRunnerCard,
   }) {
     final sex = _displaySex(row);
     final cls = _displayClass(row);
@@ -563,7 +675,7 @@ class _RemarkCardsGeneratorSheetState extends State<RemarkCardsGeneratorSheet> {
     ];
 
     return pw.Container(
-      padding: const pw.EdgeInsets.fromLTRB(14, 10, 14, 8),
+      padding: pw.EdgeInsets.fromLTRB(14, 10, 14, includeRunnerCard ? 0 : 8),
       decoration: pw.BoxDecoration(border: pw.Border.all(width: .8)),
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.stretch,
@@ -696,6 +808,13 @@ class _RemarkCardsGeneratorSheetState extends State<RemarkCardsGeneratorSheet> {
           _lineField(label: 'Remarks', value: '', height: 15),
           _lineField(label: '', value: '', height: 13),
           _lineField(label: 'Judge', value: '', height: 15),
+          if (includeRunnerCard) ...[
+            pw.Spacer(),
+            pw.SizedBox(
+              height: _runnerCardHeight,
+              child: _runnerCard(row, sex: sex, cls: cls),
+            ),
+          ],
         ],
       ),
     );
@@ -730,7 +849,11 @@ class _RemarkCardsGeneratorSheetState extends State<RemarkCardsGeneratorSheet> {
               pw.SizedBox(
                 width: cardWidth,
                 height: cardHeight,
-                child: _remarkCard(first, showDateLabel: showDateLabel),
+                child: _remarkCard(
+                  first,
+                  showDateLabel: showDateLabel,
+                  includeRunnerCard: _includeRunnerCards,
+                ),
               ),
               pw.SizedBox(width: cardGap),
               pw.SizedBox(
@@ -738,7 +861,11 @@ class _RemarkCardsGeneratorSheetState extends State<RemarkCardsGeneratorSheet> {
                 height: cardHeight,
                 child: second == null
                     ? pw.Container()
-                    : _remarkCard(second, showDateLabel: showDateLabel),
+                    : _remarkCard(
+                        second,
+                        showDateLabel: showDateLabel,
+                        includeRunnerCard: _includeRunnerCards,
+                      ),
               ),
             ],
           ),
@@ -878,6 +1005,16 @@ class _RemarkCardsGeneratorSheetState extends State<RemarkCardsGeneratorSheet> {
               title: const Text('Use coop numbers instead of exhibitor names'),
               subtitle: const Text(
                 'Keeps exhibitor data saved, but hides names on printed cards.',
+              ),
+            ),
+
+            SwitchListTile(
+              value: _includeRunnerCards,
+              contentPadding: EdgeInsets.zero,
+              onChanged: (v) => setState(() => _includeRunnerCards = v),
+              title: const Text('Include detachable runner cards'),
+              subtitle: const Text(
+                'Adds a small tear-off card below the judge line.',
               ),
             ),
 

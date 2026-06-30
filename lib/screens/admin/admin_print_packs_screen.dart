@@ -1030,7 +1030,7 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
                 ),
                       _buildSectionCard(
                         icon: Icons.rate_review_outlined,
-                        title: 'Remark Cards - 🧪 IN DEVELOPMENT',
+                        title: 'Remark Cards',
                         subtitle:
                             'Generate traditional rabbit show remark cards. Prints 2 cards per 8.5 x 11 sheet.',
                         children: [
