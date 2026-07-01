@@ -27,6 +27,7 @@ class SweepstakesReportLoader {
   Future<SweepstakesReportData> load(ReportRequest request) async {
     final showId = request.showId;
     final breedName = (request.breedName ?? '').trim();
+    final clubName = (request.clubName ?? '').trim();
     final scope = (request.scope ?? '').trim().toUpperCase();
     final showLetter = (request.showLetter ?? '').trim().toUpperCase();
     final isNationalShow = request.isNationalShow;
@@ -54,6 +55,7 @@ class SweepstakesReportLoader {
         : await _loadBreedSanctionNumber(
             showId: showId,
             breedName: breedName,
+            clubName: clubName,
             scope: scope,
             showLetter: showLetter,
           );
@@ -75,12 +77,13 @@ class SweepstakesReportLoader {
           .eq('kind', scope.toLowerCase())
           .order('letter');
 
-      final letters = (lettersResponse as List)
-          .map((e) => (e['letter'] ?? '').toString().trim().toUpperCase())
-          .where((e) => e.isNotEmpty)
-          .toSet()
-          .toList()
-        ..sort();
+      final letters =
+          (lettersResponse as List)
+              .map((e) => (e['letter'] ?? '').toString().trim().toUpperCase())
+              .where((e) => e.isNotEmpty)
+              .toSet()
+              .toList()
+            ..sort();
 
       final sections = <SweepstakesReportSection>[];
       Map<String, dynamic>? firstHeader;
@@ -134,8 +137,8 @@ class SweepstakesReportLoader {
           SweepstakesReportSection(
             showLetter: (header['show_letter'] ?? letter).toString(),
             ruleSource: (header['rule_source'] ?? 'NO_RESULTS').toString(),
-            verificationStatus:
-                (header['verification_status'] ?? 'VERIFIED').toString(),
+            verificationStatus: (header['verification_status'] ?? 'VERIFIED')
+                .toString(),
             engineType: (header['engine_type'] ?? 'NO_RESULTS').toString(),
             rows: rows,
             noResultsFound: rows.isEmpty,
@@ -152,14 +155,20 @@ class SweepstakesReportLoader {
         showLetter: 'ALL',
         isNationalShow: isNationalShow,
         topBreedRows: topBreedRows,
-        ruleSource: sections.isNotEmpty ? sections.first.ruleSource : 'NO_RESULTS',
-        verificationStatus:
-            sections.isNotEmpty ? sections.first.verificationStatus : 'VERIFIED',
-        engineType: sections.isNotEmpty ? sections.first.engineType : 'NO_RESULTS',
+        ruleSource: sections.isNotEmpty
+            ? sections.first.ruleSource
+            : 'NO_RESULTS',
+        verificationStatus: sections.isNotEmpty
+            ? sections.first.verificationStatus
+            : 'VERIFIED',
+        engineType: sections.isNotEmpty
+            ? sections.first.engineType
+            : 'NO_RESULTS',
         arbaSanction: (header['arba_sanction_number'] ?? '').toString(),
-        nationalClubSanction:
-            (header['national_club_sanction_number'] ?? '').toString(),
+        nationalClubSanction: (header['national_club_sanction_number'] ?? '')
+            .toString(),
         breedSanctionNumber: breedSanctionNumber,
+        breedClubName: clubName,
         hostClubName: _firstNotEmpty(
           (header['host_club_name'] ?? '').toString(),
           showHeader.hostClubName,
@@ -169,17 +178,17 @@ class SweepstakesReportLoader {
           showHeader.showLocation,
         ),
         secretaryName: _firstNotEmpty(
-        showHeader.secretaryName,
-        (header['secretary_name'] ?? '').toString(),
-      ),
-      secretaryEmail: _firstNotEmpty(
-        showHeader.secretaryEmail,
-        (header['secretary_email'] ?? '').toString(),
-      ),
-      secretaryPhone: _firstNotEmpty(
-        showHeader.secretaryPhone,
-        (header['secretary_phone'] ?? '').toString(),
-      ),
+          showHeader.secretaryName,
+          (header['secretary_name'] ?? '').toString(),
+        ),
+        secretaryEmail: _firstNotEmpty(
+          showHeader.secretaryEmail,
+          (header['secretary_email'] ?? '').toString(),
+        ),
+        secretaryPhone: _firstNotEmpty(
+          showHeader.secretaryPhone,
+          (header['secretary_phone'] ?? '').toString(),
+        ),
         rows: const [],
         sections: sections,
         noResultsFound: sections.every((s) => s.noResultsFound),
@@ -238,12 +247,14 @@ class SweepstakesReportLoader {
       isNationalShow: isNationalShow,
       topBreedRows: topBreedRows,
       ruleSource: (header['rule_source'] ?? 'NO_RESULTS').toString(),
-      verificationStatus: (header['verification_status'] ?? 'VERIFIED').toString(),
+      verificationStatus: (header['verification_status'] ?? 'VERIFIED')
+          .toString(),
       engineType: (header['engine_type'] ?? 'NO_RESULTS').toString(),
       arbaSanction: (header['arba_sanction_number'] ?? '').toString(),
-      nationalClubSanction:
-          (header['national_club_sanction_number'] ?? '').toString(),
+      nationalClubSanction: (header['national_club_sanction_number'] ?? '')
+          .toString(),
       breedSanctionNumber: breedSanctionNumber,
+      breedClubName: clubName,
       hostClubName: _firstNotEmpty(
         (header['host_club_name'] ?? '').toString(),
         showHeader.hostClubName,
@@ -253,17 +264,17 @@ class SweepstakesReportLoader {
         showHeader.showLocation,
       ),
       secretaryName: _firstNotEmpty(
-      showHeader.secretaryName,
-      (header['secretary_name'] ?? '').toString(),
-    ),
-    secretaryEmail: _firstNotEmpty(
-      showHeader.secretaryEmail,
-      (header['secretary_email'] ?? '').toString(),
-    ),
-    secretaryPhone: _firstNotEmpty(
-      showHeader.secretaryPhone,
-      (header['secretary_phone'] ?? '').toString(),
-    ),
+        showHeader.secretaryName,
+        (header['secretary_name'] ?? '').toString(),
+      ),
+      secretaryEmail: _firstNotEmpty(
+        showHeader.secretaryEmail,
+        (header['secretary_email'] ?? '').toString(),
+      ),
+      secretaryPhone: _firstNotEmpty(
+        showHeader.secretaryPhone,
+        (header['secretary_phone'] ?? '').toString(),
+      ),
       rows: rows,
       sections: const [],
       noResultsFound: rows.isEmpty,
@@ -285,12 +296,13 @@ class SweepstakesReportLoader {
           .eq('kind', scope.toLowerCase())
           .order('letter');
 
-      final letters = (lettersResponse as List)
-          .map((e) => (e['letter'] ?? '').toString().trim().toUpperCase())
-          .where((e) => e.isNotEmpty)
-          .toSet()
-          .toList()
-        ..sort();
+      final letters =
+          (lettersResponse as List)
+              .map((e) => (e['letter'] ?? '').toString().trim().toUpperCase())
+              .where((e) => e.isNotEmpty)
+              .toSet()
+              .toList()
+            ..sort();
 
       for (final letter in letters) {
         await repo.supabase.rpc(
@@ -344,6 +356,7 @@ class SweepstakesReportLoader {
   Future<String> _loadBreedSanctionNumber({
     required String showId,
     required String breedName,
+    required String clubName,
     required String scope,
     required String showLetter,
   }) async {
@@ -367,6 +380,10 @@ class SweepstakesReportLoader {
         .eq('show_id', showId)
         .ilike('breed_name', breedName)
         .neq('sanctioning_body', 'ARBA');
+
+    if (clubName.isNotEmpty) {
+      query = query.ilike('club_name', clubName);
+    }
 
     if (sectionId.isNotEmpty) {
       query = query.eq('section_id', sectionId);

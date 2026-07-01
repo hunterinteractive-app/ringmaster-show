@@ -5,10 +5,7 @@ import 'report_engine.dart';
 import 'report_upload_service.dart';
 
 class CloseoutRunner {
-  CloseoutRunner({
-    required this.engine,
-    required this.uploadService,
-  });
+  CloseoutRunner({required this.engine, required this.uploadService});
 
   final ReportEngine engine;
   final ReportUploadService uploadService;
@@ -19,6 +16,7 @@ class CloseoutRunner {
     required String reportName,
     required String artifactId,
     String? breedName,
+    String? clubName,
     String? scope,
     String? showLetter,
     String? showName,
@@ -35,6 +33,7 @@ class CloseoutRunner {
       finalizeRunId: finalizeRunId,
       artifactId: artifactId,
       breedName: breedName,
+      clubName: clubName,
       scope: scope,
       showLetter: showLetter,
       showName: showName,
@@ -62,10 +61,7 @@ class CloseoutRunner {
         file: file,
       );
     } catch (e) {
-      await uploadService.markFailed(
-        artifactId: artifactId,
-        error: e,
-      );
+      await uploadService.markFailed(artifactId: artifactId, error: e);
       rethrow;
     }
   }

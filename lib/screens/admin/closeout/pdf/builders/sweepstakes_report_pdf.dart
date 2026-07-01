@@ -81,6 +81,7 @@ class SweepstakesReportPdf {
               showName: showName,
               showDate: showDate,
               breedSanctionNumber: data.breedSanctionNumber,
+              breedClubName: data.breedClubName,
               hostClubName: data.hostClubName,
               showLocation: data.showLocation,
               secretaryName: data.secretaryName,
@@ -176,58 +177,56 @@ class SweepstakesReportPdf {
     required String showName,
     required String showDate,
     required String breedSanctionNumber,
+    required String breedClubName,
     required String hostClubName,
     required String showLocation,
     required String secretaryName,
     required String secretaryEmail,
     required String secretaryPhone,
   }) {
-  pw.Widget infoCell(String label, String value) {
-    if (label.trim().isEmpty && value.trim().isEmpty) {
-      return pw.SizedBox();
-    }
+    pw.Widget infoCell(String label, String value) {
+      if (label.trim().isEmpty && value.trim().isEmpty) {
+        return pw.SizedBox();
+      }
 
-    return pw.Padding(
-      padding: const pw.EdgeInsets.only(bottom: 4),
-      child: pw.Row(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          pw.Container(
-            width: 78,
-            child: pw.Text(
-              label,
-              style: pw.TextStyle(
-                fontSize: 8.5,
-                fontWeight: pw.FontWeight.bold,
+      return pw.Padding(
+        padding: const pw.EdgeInsets.only(bottom: 4),
+        child: pw.Row(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Container(
+              width: 78,
+              child: pw.Text(
+                label,
+                style: pw.TextStyle(
+                  fontSize: 8.5,
+                  fontWeight: pw.FontWeight.bold,
+                ),
               ),
             ),
-          ),
-          pw.Expanded(
-            child: pw.Text(
-              value,
-              style: const pw.TextStyle(fontSize: 8.5),
+            pw.Expanded(
+              child: pw.Text(value, style: const pw.TextStyle(fontSize: 8.5)),
             ),
-          ),
-        ],
-      ),
-    );
-  }
+          ],
+        ),
+      );
+    }
 
-  pw.Widget infoRow2(
-    String leftLabel,
-    String leftValue,
-    String rightLabel,
-    String rightValue,
-  ) {
-    return pw.Row(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.Expanded(child: infoCell(leftLabel, leftValue)),
-        pw.SizedBox(width: 12),
-        pw.Expanded(child: infoCell(rightLabel, rightValue)),
-      ],
-    );
-  }
+    pw.Widget infoRow2(
+      String leftLabel,
+      String leftValue,
+      String rightLabel,
+      String rightValue,
+    ) {
+      return pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Expanded(child: infoCell(leftLabel, leftValue)),
+          pw.SizedBox(width: 12),
+          pw.Expanded(child: infoCell(rightLabel, rightValue)),
+        ],
+      );
+    }
 
     return pw.Row(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -237,10 +236,7 @@ class SweepstakesReportPdf {
             width: 100,
             height: 80,
             margin: const pw.EdgeInsets.only(right: 12),
-            child: pw.Image(
-              pw.MemoryImage(logoBytes!),
-              fit: pw.BoxFit.contain,
-            ),
+            child: pw.Image(pw.MemoryImage(logoBytes!), fit: pw.BoxFit.contain),
           ),
         pw.Expanded(
           child: pw.Column(
@@ -264,16 +260,30 @@ class SweepstakesReportPdf {
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
                     infoRow2('Show Name', showName, 'Show Date', showDate),
-                    infoRow2('Host Club', hostClubName, 'Location', showLocation),
-                    infoRow2('Breed', breedName, 'Show', '$scope - $showLetter'),
+                    infoRow2(
+                      'Host Club',
+                      hostClubName,
+                      'Location',
+                      showLocation,
+                    ),
+                    infoRow2(
+                      'Breed',
+                      breedName,
+                      'Show',
+                      '$scope - $showLetter',
+                    ),
+                    if (breedClubName.trim().isNotEmpty)
+                      infoRow2('Breed Club', breedClubName, '', ''),
                     infoRow2('Breed Sanction', breedSanctionNumber, '', ''),
                     infoRow2(
                       'Secretary',
                       secretaryName,
                       'Contact',
                       [
-                        if (secretaryEmail.trim().isNotEmpty) secretaryEmail.trim(),
-                        if (secretaryPhone.trim().isNotEmpty) secretaryPhone.trim(),
+                        if (secretaryEmail.trim().isNotEmpty)
+                          secretaryEmail.trim(),
+                        if (secretaryPhone.trim().isNotEmpty)
+                          secretaryPhone.trim(),
                       ].join(' / '),
                     ),
                   ],
@@ -300,16 +310,10 @@ class SweepstakesReportPdf {
         children: [
           pw.Text(
             'No Results Reported',
-            style: pw.TextStyle(
-              fontSize: 14,
-              fontWeight: pw.FontWeight.bold,
-            ),
+            style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
           ),
           pw.SizedBox(height: 8),
-          pw.Text(
-            message,
-            style: const pw.TextStyle(fontSize: 11),
-          ),
+          pw.Text(message, style: const pw.TextStyle(fontSize: 11)),
         ],
       ),
     );
@@ -328,18 +332,11 @@ class SweepstakesReportPdf {
         children: [
           pw.Text(
             'Top 10 Breeds',
-            style: pw.TextStyle(
-              fontSize: 12,
-              fontWeight: pw.FontWeight.bold,
-            ),
+            style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
           ),
           pw.SizedBox(height: 6),
           pw.TableHelper.fromTextArray(
-            headers: const [
-              'Rank',
-              'Breed',
-              'Entries',
-            ],
+            headers: const ['Rank', 'Breed', 'Entries'],
             data: rows
                 .map(
                   (row) => [
@@ -362,7 +359,10 @@ class SweepstakesReportPdf {
             oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
             cellAlignment: pw.Alignment.centerLeft,
             headerAlignment: pw.Alignment.centerLeft,
-            cellPadding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+            cellPadding: const pw.EdgeInsets.symmetric(
+              horizontal: 4,
+              vertical: 4,
+            ),
             columnWidths: {
               0: const pw.FixedColumnWidth(34),
               1: const pw.FlexColumnWidth(3),
@@ -382,7 +382,8 @@ class SweepstakesReportPdf {
     required bool showBisPoints,
     required bool showFurPoints,
   }) {
-    final showOtherPoints = showVarietyPoints || showGroupPoints || showBisPoints;
+    final showOtherPoints =
+        showVarietyPoints || showGroupPoints || showBisPoints;
 
     final headers = <String>[
       'Rank',
@@ -393,7 +394,8 @@ class SweepstakesReportPdf {
       if (showGroupPoints) 'Group',
       if (showBobPoints) 'BOB/BOS',
       if (showBisPoints) 'BIS/RIS',
-      if (showOtherPoints && !(showVarietyPoints || showGroupPoints || showBisPoints))
+      if (showOtherPoints &&
+          !(showVarietyPoints || showGroupPoints || showBisPoints))
         'Other',
       'Total',
       if (showFurPoints) 'Fur/Wool',
@@ -409,7 +411,8 @@ class SweepstakesReportPdf {
         if (showGroupPoints) _fmt(row.groupPoints),
         if (showBobPoints) _fmt(row.bobPoints),
         if (showBisPoints) _fmt(row.bisPoints),
-        if (showOtherPoints && !(showVarietyPoints || showGroupPoints || showBisPoints))
+        if (showOtherPoints &&
+            !(showVarietyPoints || showGroupPoints || showBisPoints))
           _fmt(row.otherPoints),
         _fmt(row.totalPoints),
         if (showFurPoints) _fmt(row.furPoints),
@@ -429,9 +432,7 @@ class SweepstakesReportPdf {
     return pw.TableHelper.fromTextArray(
       headers: headers,
       data: tableData,
-      headerDecoration: const pw.BoxDecoration(
-        color: PdfColors.blueGrey700,
-      ),
+      headerDecoration: const pw.BoxDecoration(color: PdfColors.blueGrey700),
       headerStyle: pw.TextStyle(
         color: PdfColors.white,
         fontSize: 7,
@@ -487,19 +488,13 @@ class SweepstakesReportPdf {
         children: [
           pw.Text(
             'Points Calculation',
-            style: pw.TextStyle(
-              fontSize: 12,
-              fontWeight: pw.FontWeight.bold,
-            ),
+            style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
           ),
           pw.SizedBox(height: 6),
           ...lines.map(
             (line) => pw.Padding(
               padding: const pw.EdgeInsets.only(bottom: 3),
-              child: pw.Text(
-                line,
-                style: const pw.TextStyle(fontSize: 9),
-              ),
+              child: pw.Text(line, style: const pw.TextStyle(fontSize: 9)),
             ),
           ),
         ],

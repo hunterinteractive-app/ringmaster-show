@@ -7,6 +7,7 @@ class ReportRequest {
     required this.finalizeRunId,
     this.artifactId,
     this.breedName,
+    this.clubName,
     this.scope,
     this.showLetter,
     this.showName,
@@ -24,6 +25,7 @@ class ReportRequest {
   final String? artifactId;
 
   final String? breedName;
+  final String? clubName;
   final String? scope;
   final String? showLetter;
   final String? showName;
@@ -43,6 +45,7 @@ class ReportRequest {
       'finalizeRunId': finalizeRunId,
       'artifactId': artifactId,
       'breedName': breedName,
+      'clubName': clubName,
       'scope': scope,
       'showLetter': showLetter,
       'showName': showName,
@@ -61,6 +64,7 @@ class ReportRequest {
     String? finalizeRunId,
     String? artifactId,
     String? breedName,
+    String? clubName,
     String? scope,
     String? showLetter,
     String? showName,
@@ -77,6 +81,7 @@ class ReportRequest {
       finalizeRunId: finalizeRunId ?? this.finalizeRunId,
       artifactId: artifactId ?? this.artifactId,
       breedName: breedName ?? this.breedName,
+      clubName: clubName ?? this.clubName,
       scope: scope ?? this.scope,
       showLetter: showLetter ?? this.showLetter,
       showName: showName ?? this.showName,

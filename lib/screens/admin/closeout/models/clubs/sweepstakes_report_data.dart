@@ -12,6 +12,7 @@ class SweepstakesReportData {
   final String arbaSanction;
   final String nationalClubSanction;
   final String breedSanctionNumber;
+  final String breedClubName;
   final String hostClubName;
   final String showLocation;
   final String secretaryName;
@@ -36,6 +37,7 @@ class SweepstakesReportData {
     this.arbaSanction = '',
     this.nationalClubSanction = '',
     this.breedSanctionNumber = '',
+    this.breedClubName = '',
     this.hostClubName = '',
     this.showLocation = '',
     this.secretaryName = '',

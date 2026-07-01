@@ -15,12 +15,13 @@ class SweepstakesReportService {
     CloseoutRepository? repo,
     SweepstakesReportLoader? loader,
     SweepstakesReportPdf? pdfBuilder,
-  })  : _repo = repo ?? CloseoutRepository(Supabase.instance.client),
-        _loader = loader ??
-            SweepstakesReportLoader(
-              repo ?? CloseoutRepository(Supabase.instance.client),
-            ),
-        _pdfBuilder = pdfBuilder ?? SweepstakesReportPdf();
+  }) : _repo = repo ?? CloseoutRepository(Supabase.instance.client),
+       _loader =
+           loader ??
+           SweepstakesReportLoader(
+             repo ?? CloseoutRepository(Supabase.instance.client),
+           ),
+       _pdfBuilder = pdfBuilder ?? SweepstakesReportPdf();
 
   final CloseoutRepository _repo;
   final SweepstakesReportLoader _loader;
@@ -29,6 +30,7 @@ class SweepstakesReportService {
   Future<SweepstakesReportResult> generate({
     required String showId,
     required String breedName,
+    String? clubName,
     required String scope,
     required String showLetter,
     String? showName,
@@ -42,6 +44,7 @@ class SweepstakesReportService {
       finalizeRunId: 'manual-sweepstakes',
       reportName: 'Sweepstakes Report',
       breedName: breedName,
+      clubName: clubName,
       scope: scope,
       showLetter: showLetter,
     );

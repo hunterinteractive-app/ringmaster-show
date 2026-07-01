@@ -10,6 +10,7 @@ class BreedResultsDetailReportData {
   final String arbaSanction;
   final String nationalClubSanction;
   final String breedSanctionNumber;
+  final String breedClubName;
   final String hostClubName;
   final String showLocation;
   final String secretaryName;
@@ -30,6 +31,7 @@ class BreedResultsDetailReportData {
     this.arbaSanction = '',
     this.nationalClubSanction = '',
     this.breedSanctionNumber = '',
+    this.breedClubName = '',
     this.hostClubName = '',
     this.showLocation = '',
     this.secretaryName = '',
@@ -69,6 +71,7 @@ class BreedAward {
   final String pointsCategory;
   final int animalsJudged;
   final int exhibitorsJudged;
+  final double pointsEarned;
 
   const BreedAward({
     required this.award,
@@ -81,6 +84,7 @@ class BreedAward {
     this.pointsCategory = '',
     this.animalsJudged = 0,
     this.exhibitorsJudged = 0,
+    this.pointsEarned = 0,
   });
 }
 
@@ -100,10 +104,7 @@ class SexSection {
   final String sexLabel;
   final List<ClassSection> classes;
 
-  const SexSection({
-    required this.sexLabel,
-    required this.classes,
-  });
+  const SexSection({required this.sexLabel, required this.classes});
 }
 
 class ClassSection {
@@ -131,6 +132,7 @@ class ClassEntry {
   final String sex;
   final String variety;
   final String pointsCategory;
+  final double pointsEarned;
 
   const ClassEntry({
     required this.place,
@@ -139,5 +141,6 @@ class ClassEntry {
     this.sex = '',
     this.variety = '',
     this.pointsCategory = '',
+    this.pointsEarned = 0,
   });
 }

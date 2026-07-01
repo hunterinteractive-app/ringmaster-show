@@ -16,10 +16,18 @@ class BreedResultsDetailReportPdf {
   BreedResultsDetailReportPdf({this.logoBytes});
 
   Future<pw.ThemeData> _buildTheme() async {
-    final regular = pw.Font.ttf(await rootBundle.load('assets/fonts/NotoSans-Regular.ttf'));
-    final bold = pw.Font.ttf(await rootBundle.load('assets/fonts/NotoSans-Bold.ttf'));
-    final italic = pw.Font.ttf(await rootBundle.load('assets/fonts/NotoSans-Italic.ttf'));
-    final boldItalic = pw.Font.ttf(await rootBundle.load('assets/fonts/NotoSans-BoldItalic.ttf'));
+    final regular = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSans-Regular.ttf'),
+    );
+    final bold = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSans-Bold.ttf'),
+    );
+    final italic = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSans-Italic.ttf'),
+    );
+    final boldItalic = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSans-BoldItalic.ttf'),
+    );
 
     return pw.ThemeData.withFont(
       base: regular,
@@ -57,7 +65,8 @@ class BreedResultsDetailReportPdf {
           ];
 
     for (final section in sections) {
-      final isNoResults = section.noResultsFound ||
+      final isNoResults =
+          section.noResultsFound ||
           (section.breedAwards.isEmpty && section.varieties.isEmpty);
 
       pdf.addPage(
@@ -76,6 +85,7 @@ class BreedResultsDetailReportPdf {
               showDate: showDate,
               arbaSanctionNumber: data.arbaSanction,
               breedSanctionNumber: data.breedSanctionNumber,
+              breedClubName: data.breedClubName,
               hostClubName: data.hostClubName,
               showLocation: data.showLocation,
               secretaryName: data.secretaryName,
@@ -84,7 +94,9 @@ class BreedResultsDetailReportPdf {
             ),
             pw.SizedBox(height: 12),
             if (isNoResults)
-              _buildNoResultsBox('No breed result details were found for this breed/show section.')
+              _buildNoResultsBox(
+                'No breed result details were found for this breed/show section.',
+              )
             else
               ..._buildSections(
                 breedAwards: section.breedAwards,
@@ -142,58 +154,56 @@ class BreedResultsDetailReportPdf {
     required String showDate,
     required String arbaSanctionNumber,
     required String breedSanctionNumber,
+    required String breedClubName,
     required String hostClubName,
     required String showLocation,
     required String secretaryName,
     required String secretaryEmail,
     required String secretaryPhone,
   }) {
-  pw.Widget infoCell(String label, String value) {
-    if (label.trim().isEmpty && value.trim().isEmpty) {
-      return pw.SizedBox();
-    }
+    pw.Widget infoCell(String label, String value) {
+      if (label.trim().isEmpty && value.trim().isEmpty) {
+        return pw.SizedBox();
+      }
 
-    return pw.Padding(
-      padding: const pw.EdgeInsets.only(bottom: 4),
-      child: pw.Row(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          pw.Container(
-            width: 78,
-            child: pw.Text(
-              label,
-              style: pw.TextStyle(
-                fontSize: 8.5,
-                fontWeight: pw.FontWeight.bold,
+      return pw.Padding(
+        padding: const pw.EdgeInsets.only(bottom: 4),
+        child: pw.Row(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Container(
+              width: 78,
+              child: pw.Text(
+                label,
+                style: pw.TextStyle(
+                  fontSize: 8.5,
+                  fontWeight: pw.FontWeight.bold,
+                ),
               ),
             ),
-          ),
-          pw.Expanded(
-            child: pw.Text(
-              value,
-              style: const pw.TextStyle(fontSize: 8.5),
+            pw.Expanded(
+              child: pw.Text(value, style: const pw.TextStyle(fontSize: 8.5)),
             ),
-          ),
-        ],
-      ),
-    );
-  }
+          ],
+        ),
+      );
+    }
 
-  pw.Widget infoRow2(
-    String leftLabel,
-    String leftValue,
-    String rightLabel,
-    String rightValue,
-  ) {
-    return pw.Row(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.Expanded(child: infoCell(leftLabel, leftValue)),
-        pw.SizedBox(width: 12),
-        pw.Expanded(child: infoCell(rightLabel, rightValue)),
-      ],
-    );
-  }
+    pw.Widget infoRow2(
+      String leftLabel,
+      String leftValue,
+      String rightLabel,
+      String rightValue,
+    ) {
+      return pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Expanded(child: infoCell(leftLabel, leftValue)),
+          pw.SizedBox(width: 12),
+          pw.Expanded(child: infoCell(rightLabel, rightValue)),
+        ],
+      );
+    }
 
     return pw.Row(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -211,7 +221,10 @@ class BreedResultsDetailReportPdf {
             children: [
               pw.Text(
                 'Breed Results Detail Report',
-                style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
+                style: pw.TextStyle(
+                  fontSize: 18,
+                  fontWeight: pw.FontWeight.bold,
+                ),
               ),
               pw.SizedBox(height: 8),
               pw.Container(
@@ -225,26 +238,40 @@ class BreedResultsDetailReportPdf {
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
                     infoRow2('Show Name', showName, 'Show Date', showDate),
-                    infoRow2('Host Club', hostClubName, 'Location', showLocation),
-                    infoRow2('Breed', breedName, 'Show', '$scope - $showLetter'),
-                    infoRow2('Judge', judgeName.isEmpty ? 'Judge Not Listed' : judgeName, '', ''),
+                    infoRow2(
+                      'Host Club',
+                      hostClubName,
+                      'Location',
+                      showLocation,
+                    ),
+                    infoRow2(
+                      'Breed',
+                      breedName,
+                      'Show',
+                      '$scope - $showLetter',
+                    ),
+                    if (breedClubName.trim().isNotEmpty)
+                      infoRow2('Breed Club', breedClubName, '', ''),
+                    infoRow2(
+                      'Judge',
+                      judgeName.isEmpty ? 'Judge Not Listed' : judgeName,
+                      '',
+                      '',
+                    ),
                     infoRow2(
                       'ARBA Sanction',
                       arbaSanctionNumber,
                       'Breed Sanction',
                       breedSanctionNumber,
                     ),
-                    infoRow2(
-                      'Secretary',
-                      secretaryName,
-                      '',
-                      '',
-                    ),
+                    infoRow2('Secretary', secretaryName, '', ''),
                     infoRow2(
                       'Contact',
                       [
-                        if (secretaryEmail.trim().isNotEmpty) secretaryEmail.trim(),
-                        if (secretaryPhone.trim().isNotEmpty) secretaryPhone.trim(),
+                        if (secretaryEmail.trim().isNotEmpty)
+                          secretaryEmail.trim(),
+                        if (secretaryPhone.trim().isNotEmpty)
+                          secretaryPhone.trim(),
                       ].join(' / '),
                       '',
                       '',
@@ -278,8 +305,12 @@ class BreedResultsDetailReportPdf {
   }) {
     final widgets = <pw.Widget>[];
 
-    final overallAwards = breedAwards.where((a) => _isOverallAward(a.award)).toList();
-    final breedOnlyAwards = breedAwards.where((a) => !_isOverallAward(a.award)).toList();
+    final overallAwards = breedAwards
+        .where((a) => _isOverallAward(a.award))
+        .toList();
+    final breedOnlyAwards = breedAwards
+        .where((a) => !_isOverallAward(a.award))
+        .toList();
 
     if (overallAwards.isNotEmpty) {
       widgets.add(_sectionTitle('Overall Show Awards'));
@@ -361,13 +392,18 @@ class BreedResultsDetailReportPdf {
   VarietySection _regularOnlyVarietySection(VarietySection variety) {
     return VarietySection(
       varietyName: variety.varietyName,
-      awards: variety.awards.where((award) => !_isFurWoolAward(award, variety)).toList(),
+      awards: variety.awards
+          .where((award) => !_isFurWoolAward(award, variety))
+          .toList(),
       sexSections: variety.sexSections
           .map((sexSection) {
             final classes = sexSection.classes
                 .map((classGroup) {
                   final rows = classGroup.rows
-                      .where((row) => !_isFurWoolPlacementRow(row, classGroup, variety))
+                      .where(
+                        (row) =>
+                            !_isFurWoolPlacementRow(row, classGroup, variety),
+                      )
                       .toList();
 
                   return ClassSection(
@@ -395,13 +431,18 @@ class BreedResultsDetailReportPdf {
   VarietySection _furWoolOnlyVarietySection(VarietySection variety) {
     return VarietySection(
       varietyName: variety.varietyName,
-      awards: variety.awards.where((award) => _isFurWoolAward(award, variety)).toList(),
+      awards: variety.awards
+          .where((award) => _isFurWoolAward(award, variety))
+          .toList(),
       sexSections: variety.sexSections
           .map((sexSection) {
             final classes = sexSection.classes
                 .map((classGroup) {
                   final rows = classGroup.rows
-                      .where((row) => _isFurWoolPlacementRow(row, classGroup, variety))
+                      .where(
+                        (row) =>
+                            _isFurWoolPlacementRow(row, classGroup, variety),
+                      )
                       .toList();
 
                   return ClassSection(
@@ -461,7 +502,8 @@ class BreedResultsDetailReportPdf {
   bool _isFurWoolTextMatch(List<String> values) {
     for (final value in values) {
       final normalized = value.toLowerCase().trim();
-      if (normalized.contains('fur') || normalized.contains('wool')) return true;
+      if (normalized.contains('fur') || normalized.contains('wool'))
+        return true;
     }
     return false;
   }
@@ -553,7 +595,8 @@ class BreedResultsDetailReportPdf {
       // Display the full judged class size supplied by the loader, not merely
       // the number of top-five placement rows printed in the table.
       final animalsJudged = animalsJudgedByCategory[category] ?? rows.length;
-      final exhibitorsJudged = exhibitorsJudgedByCategory[category] ??
+      final exhibitorsJudged =
+          exhibitorsJudgedByCategory[category] ??
           rows
               .map((row) => row.exhibitorName.trim().toLowerCase())
               .where((name) => name.isNotEmpty)
@@ -564,10 +607,7 @@ class BreedResultsDetailReportPdf {
         pw.Text(
           '$animalsJudged ${animalsJudged == 1 ? 'animal' : 'animals'} / '
           '$exhibitorsJudged ${exhibitorsJudged == 1 ? 'exhibitor' : 'exhibitors'} judged',
-          style: pw.TextStyle(
-            fontSize: 10,
-            fontWeight: pw.FontWeight.bold,
-          ),
+          style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
         ),
       );
       widgets.add(pw.SizedBox(height: 4));
@@ -593,9 +633,10 @@ class BreedResultsDetailReportPdf {
 
     return widgets;
   }
+
   pw.Widget _buildFurWoolPlacementTable(List<ClassEntry> rows) {
     return pw.TableHelper.fromTextArray(
-      headers: const ['Place', 'Animal', 'Category', 'Exhibitor'],
+      headers: const ['Place', 'Animal', 'Category', 'Exhibitor', 'Points'],
       data: rows
           .map(
             (row) => [
@@ -605,14 +646,12 @@ class BreedResultsDetailReportPdf {
                   ? row.pointsCategory
                   : row.variety,
               row.exhibitorName,
+              _points(row.pointsEarned),
             ],
           )
           .toList(),
       headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
-      headerStyle: pw.TextStyle(
-        fontSize: 7.5,
-        fontWeight: pw.FontWeight.bold,
-      ),
+      headerStyle: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold),
       cellStyle: const pw.TextStyle(fontSize: 7.5),
       border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
       cellPadding: const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 4),
@@ -644,7 +683,6 @@ class BreedResultsDetailReportPdf {
 
     return '';
   }
-
 
   pw.Widget _sectionTitle(String title) {
     return pw.Padding(
@@ -738,7 +776,10 @@ class BreedResultsDetailReportPdf {
     }
   }
 
-  pw.Widget _buildAwardTable(List<BreedAward> rows, {bool includeBreed = false}) {
+  pw.Widget _buildAwardTable(
+    List<BreedAward> rows, {
+    bool includeBreed = false,
+  }) {
     return pw.TableHelper.fromTextArray(
       headers: includeBreed
           ? const [
@@ -749,6 +790,7 @@ class BreedResultsDetailReportPdf {
               'Class',
               'Sex',
               'Judged',
+              'Points',
             ]
           : const [
               'Award',
@@ -757,6 +799,7 @@ class BreedResultsDetailReportPdf {
               'Class',
               'Sex',
               'Judged',
+              'Points',
             ],
       data: rows
           .map(
@@ -771,6 +814,7 @@ class BreedResultsDetailReportPdf {
                     r.animalsJudged > 0
                         ? '${r.animalsJudged}/${r.exhibitorsJudged}'
                         : '',
+                    _points(r.pointsEarned),
                   ]
                 : [
                     _awardLabel(r.award),
@@ -781,6 +825,7 @@ class BreedResultsDetailReportPdf {
                     r.animalsJudged > 0
                         ? '${r.animalsJudged}/${r.exhibitorsJudged}'
                         : '',
+                    _points(r.pointsEarned),
                   ],
           )
           .toList(),
@@ -803,6 +848,7 @@ class BreedResultsDetailReportPdf {
               4: const pw.FlexColumnWidth(0.9),
               5: const pw.FixedColumnWidth(30),
               6: const pw.FixedColumnWidth(40),
+              7: const pw.FixedColumnWidth(36),
             }
           : {
               0: const pw.FixedColumnWidth(86),
@@ -811,6 +857,7 @@ class BreedResultsDetailReportPdf {
               3: const pw.FlexColumnWidth(0.9),
               4: const pw.FixedColumnWidth(30),
               5: const pw.FixedColumnWidth(40),
+              6: const pw.FixedColumnWidth(36),
             },
     );
   }
@@ -820,25 +867,37 @@ class BreedResultsDetailReportPdf {
 
     return pw.TableHelper.fromTextArray(
       headers: includeCategory
-          ? const ['Place', 'Animal', 'Sex', 'Variety', 'Category', 'Exhibitor']
-          : const ['Place', 'Animal', 'Sex', 'Variety', 'Exhibitor'],
+          ? const [
+              'Place',
+              'Animal',
+              'Sex',
+              'Variety',
+              'Category',
+              'Exhibitor',
+              'Points',
+            ]
+          : const ['Place', 'Animal', 'Sex', 'Variety', 'Exhibitor', 'Points'],
       data: rows
-          .map((r) => includeCategory
-              ? [
-                  r.place,
-                  r.animal,
-                  r.sex,
-                  r.variety,
-                  r.pointsCategory,
-                  r.exhibitorName,
-                ]
-              : [
-                  r.place,
-                  r.animal,
-                  r.sex,
-                  r.variety,
-                  r.exhibitorName,
-                ])
+          .map(
+            (r) => includeCategory
+                ? [
+                    r.place,
+                    r.animal,
+                    r.sex,
+                    r.variety,
+                    r.pointsCategory,
+                    r.exhibitorName,
+                    _points(r.pointsEarned),
+                  ]
+                : [
+                    r.place,
+                    r.animal,
+                    r.sex,
+                    r.variety,
+                    r.exhibitorName,
+                    _points(r.pointsEarned),
+                  ],
+          )
           .toList(),
       headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
       headerStyle: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold),
@@ -853,6 +912,7 @@ class BreedResultsDetailReportPdf {
               3: const pw.FlexColumnWidth(1.05),
               4: const pw.FixedColumnWidth(48),
               5: const pw.FlexColumnWidth(1.5),
+              6: const pw.FixedColumnWidth(36),
             }
           : {
               0: const pw.FixedColumnWidth(32),
@@ -860,8 +920,16 @@ class BreedResultsDetailReportPdf {
               2: const pw.FixedColumnWidth(30),
               3: const pw.FlexColumnWidth(1.2),
               4: const pw.FlexColumnWidth(1.6),
+              5: const pw.FixedColumnWidth(36),
             },
     );
+  }
+
+  String _points(double value) {
+    if (value == value.roundToDouble()) {
+      return value.toStringAsFixed(0);
+    }
+    return value.toStringAsFixed(2);
   }
 
   pw.Widget _footer(pw.Context context) {
@@ -884,7 +952,10 @@ class BreedResultsDetailReportPdf {
               ),
               pw.Text(
                 'Page ${context.pageNumber} of ${context.pagesCount}',
-                style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey700),
+                style: const pw.TextStyle(
+                  fontSize: 7,
+                  color: PdfColors.grey700,
+                ),
               ),
             ],
           ),

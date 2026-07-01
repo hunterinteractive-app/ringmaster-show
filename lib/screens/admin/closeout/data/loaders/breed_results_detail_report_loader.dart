@@ -14,6 +14,7 @@ class BreedResultsDetailReportLoader {
   Future<BreedResultsDetailReportData> load(ReportRequest request) async {
     final showId = request.showId;
     final breedName = (request.breedName ?? '').trim();
+    final clubName = (request.clubName ?? '').trim();
     final scope = (request.scope ?? '').trim().toUpperCase();
     final showLetter = (request.showLetter ?? '').trim().toUpperCase();
     final showHeader = await _loadShowHeader(showId);
@@ -22,6 +23,7 @@ class BreedResultsDetailReportLoader {
         : await _loadBreedSanctionNumber(
             showId: showId,
             breedName: breedName,
+            clubName: clubName,
             scope: scope,
             showLetter: showLetter,
           );
@@ -38,6 +40,15 @@ class BreedResultsDetailReportLoader {
       throw Exception('Breed Results Detail Report requires showLetter.');
     }
 
+    if (breedName.isNotEmpty) {
+      await _recalculateSweepstakes(
+        showId: showId,
+        breedName: breedName,
+        scope: scope,
+        showLetter: showLetter,
+      );
+    }
+
     if (showLetter == 'ALL') {
       final lettersResponse = await repo.supabase
           .from('show_sections')
@@ -47,12 +58,13 @@ class BreedResultsDetailReportLoader {
           .eq('kind', scope.toLowerCase())
           .order('letter');
 
-      final letters = (lettersResponse as List)
-          .map((e) => (e['letter'] ?? '').toString().trim().toUpperCase())
-          .where((e) => e.isNotEmpty)
-          .toSet()
-          .toList()
-        ..sort();
+      final letters =
+          (lettersResponse as List)
+              .map((e) => (e['letter'] ?? '').toString().trim().toUpperCase())
+              .where((e) => e.isNotEmpty)
+              .toSet()
+              .toList()
+            ..sort();
 
       final sections = <BreedResultsDetailSection>[];
 
@@ -75,6 +87,7 @@ class BreedResultsDetailReportLoader {
         arbaSanction: arbaSanctionNumber,
         nationalClubSanction: '',
         breedSanctionNumber: breedSanctionNumber,
+        breedClubName: clubName,
         hostClubName: showHeader.hostClubName,
         showLocation: showHeader.showLocation,
         secretaryName: showHeader.secretaryName,
@@ -103,6 +116,7 @@ class BreedResultsDetailReportLoader {
       arbaSanction: arbaSanctionNumber,
       nationalClubSanction: '',
       breedSanctionNumber: breedSanctionNumber,
+      breedClubName: clubName,
       hostClubName: showHeader.hostClubName,
       showLocation: showHeader.showLocation,
       secretaryName: showHeader.secretaryName,
@@ -112,6 +126,55 @@ class BreedResultsDetailReportLoader {
       sections: const [],
       noResultsFound: section.noResultsFound,
       secretaryPhone: showHeader.secretaryPhone,
+    );
+  }
+
+  Future<void> _recalculateSweepstakes({
+    required String showId,
+    required String breedName,
+    required String scope,
+    required String showLetter,
+  }) async {
+    if (showLetter == 'ALL') {
+      final lettersResponse = await repo.supabase
+          .from('show_sections')
+          .select('letter')
+          .eq('show_id', showId)
+          .eq('is_enabled', true)
+          .eq('kind', scope.toLowerCase())
+          .order('letter');
+
+      final letters =
+          (lettersResponse as List)
+              .map((e) => (e['letter'] ?? '').toString().trim().toUpperCase())
+              .where((e) => e.isNotEmpty)
+              .toSet()
+              .toList()
+            ..sort();
+
+      for (final letter in letters) {
+        await repo.supabase.rpc(
+          'calculate_sweepstakes_for_breed',
+          params: {
+            'p_show_id': showId,
+            'p_breed_name': breedName,
+            'p_scope': scope,
+            'p_show_letter': letter,
+          },
+        );
+      }
+
+      return;
+    }
+
+    await repo.supabase.rpc(
+      'calculate_sweepstakes_for_breed',
+      params: {
+        'p_show_id': showId,
+        'p_breed_name': breedName,
+        'p_scope': scope,
+        'p_show_letter': showLetter,
+      },
     );
   }
 
@@ -190,27 +253,51 @@ class BreedResultsDetailReportLoader {
     final judgeName = _deriveJudgeName(reportRows);
     final counts = _buildAwardCounts(reportRows, overallRows: overallRows);
     final resultRowsForAwardLookup = _mergeResultRows(reportRows, overallRows);
+    final sweepstakesPoints = await _loadSweepstakesPointsLookup(
+      showId,
+      resultRowsForAwardLookup
+          .map((row) => _safe(row['entry_id']))
+          .where((id) => id.isNotEmpty)
+          .toSet()
+          .toList(),
+    );
 
     final breedAwards = awardRows
         .where((a) => _isBreedAward(a['award_code']))
-        .map((r) => _mapAwardRow(r, counts, resultRowsForAwardLookup))
+        .map(
+          (r) => _mapAwardRow(
+            r,
+            counts,
+            resultRowsForAwardLookup,
+            sweepstakesPoints,
+          ),
+        )
         .toList();
 
     final varietyAwardMap = <String, List<BreedAward>>{};
-    for (final row in awardRows.where((a) => _isVarietyAward(a['award_code']))) {
-      final varietyName =
-          _safe(row['variety_name'], fallback: 'Unspecified Variety');
+    for (final row in awardRows.where(
+      (a) => _isVarietyAward(a['award_code']),
+    )) {
+      final varietyName = _safe(
+        row['variety_name'],
+        fallback: 'Unspecified Variety',
+      );
       varietyAwardMap.putIfAbsent(varietyName, () => []);
       varietyAwardMap[varietyName]!.add(
-        _mapAwardRow(row, counts, resultRowsForAwardLookup),
+        _mapAwardRow(row, counts, resultRowsForAwardLookup, sweepstakesPoints),
       );
     }
+
 
     return BreedResultsDetailSection(
       showLetter: showLetter,
       judgeName: judgeName,
       breedAwards: breedAwards,
-      varieties: _buildVarieties(rows: reportRows, varietyAwardMap: varietyAwardMap),
+      varieties: _buildVarieties(
+        rows: reportRows,
+        varietyAwardMap: varietyAwardMap,
+        sweepstakesPoints: sweepstakesPoints,
+      ),
       noResultsFound: false,
     );
   }
@@ -218,6 +305,7 @@ class BreedResultsDetailReportLoader {
   List<VarietySection> _buildVarieties({
     required List<Map<String, dynamic>> rows,
     required Map<String, List<BreedAward>> varietyAwardMap,
+    required _SweepstakesPointsLookup sweepstakesPoints,
   }) {
     final regularByVariety = <String, List<Map<String, dynamic>>>{};
     final furByCategory = <String, List<Map<String, dynamic>>>{};
@@ -232,8 +320,10 @@ class BreedResultsDetailReportLoader {
         continue;
       }
 
-      final varietyName =
-          _safe(row['variety_name'], fallback: 'Unspecified Variety');
+      final varietyName = _safe(
+        row['variety_name'],
+        fallback: 'Unspecified Variety',
+      );
       regularByVariety.putIfAbsent(varietyName, () => []);
       regularByVariety[varietyName]!.add(row);
     }
@@ -246,7 +336,10 @@ class BreedResultsDetailReportLoader {
         VarietySection(
           varietyName: varietyName,
           awards: varietyAwardMap[varietyName] ?? const [],
-          sexSections: _buildSexSections(regularByVariety[varietyName]!),
+          sexSections: _buildSexSections(
+            regularByVariety[varietyName]!,
+            sweepstakesPoints,
+          ),
         ),
       );
     }
@@ -267,7 +360,10 @@ class BreedResultsDetailReportLoader {
         VarietySection(
           varietyName: category,
           awards: const [],
-          sexSections: _buildSexSections(furByCategory[category]!),
+          sexSections: _buildSexSections(
+            furByCategory[category]!,
+            sweepstakesPoints,
+          ),
         ),
       );
     }
@@ -275,7 +371,10 @@ class BreedResultsDetailReportLoader {
     return sections;
   }
 
-  List<SexSection> _buildSexSections(List<Map<String, dynamic>> rows) {
+  List<SexSection> _buildSexSections(
+    List<Map<String, dynamic>> rows,
+    _SweepstakesPointsLookup sweepstakesPoints,
+  ) {
     final furRows = rows.where(_isFurOrWoolRow).toList();
     final regularRows = rows.where((row) => !_isFurOrWoolRow(row)).toList();
     final sections = <SexSection>[];
@@ -299,7 +398,10 @@ class BreedResultsDetailReportLoader {
         sexLabels.map((sexLabel) {
           return SexSection(
             sexLabel: sexLabel,
-            classes: _buildClasses(bySex[sexLabel]!),
+            classes: _buildClasses(
+              bySex[sexLabel]!,
+              sweepstakesPoints,
+            ),
           );
         }),
       );
@@ -309,7 +411,12 @@ class BreedResultsDetailReportLoader {
       sections.add(
         SexSection(
           sexLabel: '',
-          classes: [_buildFlatFurClass(furRows)],
+          classes: [
+            _buildFlatFurClass(
+              furRows,
+              sweepstakesPoints,
+            ),
+          ],
         ),
       );
     }
@@ -317,15 +424,19 @@ class BreedResultsDetailReportLoader {
     return sections;
   }
 
-  ClassSection _buildFlatFurClass(List<Map<String, dynamic>> rows) {
+  ClassSection _buildFlatFurClass(
+    List<Map<String, dynamic>> rows,
+    _SweepstakesPointsLookup sweepstakesPoints,
+  ) {
     final sortedRows = [...rows]
       ..sort((a, b) {
         final aPlace = _furPlacementNumber(a);
         final bPlace = _furPlacementNumber(b);
         final cmp = aPlace.compareTo(bPlace);
         if (cmp != 0) return cmp;
-        return _safe(a['exhibitor_label'])
-            .compareTo(_safe(b['exhibitor_label']));
+        return _safe(
+          a['exhibitor_label'],
+        ).compareTo(_safe(b['exhibitor_label']));
       });
 
     final rowsOut = sortedRows
@@ -342,6 +453,11 @@ class BreedResultsDetailReportLoader {
             sex: '',
             variety: _pointsCategoryLabel(row),
             pointsCategory: _pointsCategoryLabel(row),
+            pointsEarned: _pointsForRow(
+              row,
+              sweepstakesPoints,
+              placement: placeNum.toString(),
+            ),
           );
         })
         .toList();
@@ -362,7 +478,10 @@ class BreedResultsDetailReportLoader {
     );
   }
 
-  List<ClassSection> _buildClasses(List<Map<String, dynamic>> rows) {
+  List<ClassSection> _buildClasses(
+    List<Map<String, dynamic>> rows,
+    _SweepstakesPointsLookup sweepstakesPoints,
+  ) {
     final byClass = <String, List<Map<String, dynamic>>>{};
 
     for (final row in rows) {
@@ -389,7 +508,9 @@ class BreedResultsDetailReportLoader {
           final bPlace = _placementNumber(b['placement']);
           final cmp = aPlace.compareTo(bPlace);
           if (cmp != 0) return cmp;
-          return _safe(a['exhibitor_label']).compareTo(_safe(b['exhibitor_label']));
+          return _safe(
+            a['exhibitor_label'],
+          ).compareTo(_safe(b['exhibitor_label']));
         });
 
       final rowsOut = sortedRows
@@ -407,6 +528,11 @@ class BreedResultsDetailReportLoader {
               sex: _safe(r['sex']),
               variety: _displayVarietyName(r),
               pointsCategory: _pointsCategoryLabel(r),
+              pointsEarned: _pointsForRow(
+                r,
+                sweepstakesPoints,
+                placement: placeNum.toString(),
+              ),
             );
           })
           .toList();
@@ -430,10 +556,12 @@ class BreedResultsDetailReportLoader {
     }).toList();
   }
 
+
   BreedAward _mapAwardRow(
     Map<String, dynamic> row,
     Map<String, _JudgedCount> counts,
     List<Map<String, dynamic>> resultRows,
+    _SweepstakesPointsLookup sweepstakesPoints,
   ) {
     final rawAwardCode = _safe(row['award_code']);
     final award = _normalizeAwardLabel(rawAwardCode);
@@ -465,10 +593,7 @@ class BreedResultsDetailReportLoader {
       _safe(winnerRow?['breed']),
     ]);
 
-    final sex = _firstNonEmpty([
-      _safe(row['sex']),
-      _safe(winnerRow?['sex']),
-    ]);
+    final sex = _firstNonEmpty([_safe(row['sex']), _safe(winnerRow?['sex'])]);
 
     final pointsCategory = _firstNonEmpty([
       _pointsCategoryLabel(row),
@@ -500,6 +625,12 @@ class BreedResultsDetailReportLoader {
       pointsCategory: pointsCategory,
       animalsJudged: count.animals,
       exhibitorsJudged: count.exhibitors,
+      pointsEarned: _pointsForRow(
+        row,
+        sweepstakesPoints,
+        fallback: winnerRow,
+        awardCode: rawAwardCode,
+      ),
     );
   }
 
@@ -543,7 +674,9 @@ class BreedResultsDetailReportLoader {
         .toSet();
 
     for (final variety in varieties) {
-      final varietyRows = rows.where((r) => _safe(r['variety_name']) == variety);
+      final varietyRows = rows.where(
+        (r) => _safe(r['variety_name']) == variety,
+      );
       counts['VARIETY::$variety'] = countFor(varietyRows);
 
       final varietySexes = varietyRows
@@ -595,7 +728,11 @@ class BreedResultsDetailReportLoader {
     final upper = _awardCodeKey(award);
     final sexKey = _sexKey(sex);
 
-    if (upper == 'BIS' || upper == 'RIS' || upper == 'RBIS' || upper == 'B4C' || upper == 'B6C') {
+    if (upper == 'BIS' ||
+        upper == 'RIS' ||
+        upper == 'RBIS' ||
+        upper == 'B4C' ||
+        upper == 'B6C') {
       return counts['OVERALL'] ?? counts['BREED'] ?? const _JudgedCount();
     }
 
@@ -690,6 +827,7 @@ class BreedResultsDetailReportLoader {
   Future<String> _loadBreedSanctionNumber({
     required String showId,
     required String breedName,
+    required String clubName,
     required String scope,
     required String showLetter,
   }) async {
@@ -713,6 +851,10 @@ class BreedResultsDetailReportLoader {
         .eq('show_id', showId)
         .ilike('breed_name', breedName)
         .neq('sanctioning_body', 'ARBA');
+
+    if (clubName.isNotEmpty) {
+      query = query.ilike('club_name', clubName);
+    }
 
     if (sectionId.isNotEmpty) {
       query = query.eq('section_id', sectionId);
@@ -802,13 +944,7 @@ class BreedResultsDetailReportLoader {
 
   bool _isVarietyAward(Object? code) {
     final c = _awardCodeKey(_safe(code));
-    return const {
-      'BOV',
-      'BOSV',
-      'BJV',
-      'BIV',
-      'BSV',
-    }.contains(c);
+    return const {'BOV', 'BOSV', 'BJV', 'BIV', 'BSV'}.contains(c);
   }
 
   String _normalizeAwardLabel(String code) {
@@ -998,46 +1134,46 @@ class BreedResultsDetailReportLoader {
     return '';
   }
 
-    String _awardCodeKey(String award) {
-      final c = award.toUpperCase().trim();
+  String _awardCodeKey(String award) {
+    final c = award.toUpperCase().trim();
 
-      if (c == 'BEST IN SHOW') return 'BIS';
+    if (c == 'BEST IN SHOW') return 'BIS';
 
-      if (c == 'RESERVE IN SHOW') return 'RIS';
+    if (c == 'RESERVE IN SHOW') return 'RIS';
 
-      if (c == '1RIS') return 'RIS';
-      if (c == '1ST RIS') return 'RIS';
-      if (c == 'FIRST RIS') return 'RIS';
-      if (c == '1ST RESERVE IN SHOW') return 'RIS';
-      if (c == 'FIRST RESERVE IN SHOW') return 'RIS';
+    if (c == '1RIS') return 'RIS';
+    if (c == '1ST RIS') return 'RIS';
+    if (c == 'FIRST RIS') return 'RIS';
+    if (c == '1ST RESERVE IN SHOW') return 'RIS';
+    if (c == 'FIRST RESERVE IN SHOW') return 'RIS';
 
-      if (c == '2RIS') return '2RIS';
-      if (c == '2ND RIS') return '2RIS';
-      if (c == 'SECOND RIS') return '2RIS';
-      if (c == '2ND RESERVE IN SHOW') return '2RIS';
-      if (c == 'SECOND RESERVE IN SHOW') return '2RIS';
+    if (c == '2RIS') return '2RIS';
+    if (c == '2ND RIS') return '2RIS';
+    if (c == 'SECOND RIS') return '2RIS';
+    if (c == '2ND RESERVE IN SHOW') return '2RIS';
+    if (c == 'SECOND RESERVE IN SHOW') return '2RIS';
 
-      if (c == 'RESERVE BEST IN SHOW') return 'RBIS';
-      if (c == 'RESERVE OF SHOW') return 'RIS';
-      if (c == 'BEST 4 CLASS') return 'B4C';
-      if (c == 'BEST 4-CLASS') return 'B4C';
-      if (c == 'BEST FOUR CLASS') return 'B4C';
-      if (c == 'BEST 6 CLASS') return 'B6C';
-      if (c == 'BEST 6-CLASS') return 'B6C';
-      if (c == 'BEST SIX CLASS') return 'B6C';
-      if (c == 'HONORABLE MENTION') return 'HM';
-      if (c == 'BEST OF BREED') return 'BOB';
-      if (c == 'BEST OPPOSITE SEX OF BREED') return 'BOSB';
-      if (c == 'BEST OPPOSITE OF BREED') return 'BOSB';
-      if (c == 'BEST OF GROUP') return 'BOG';
-      if (c == 'BEST OPPOSITE SEX OF GROUP') return 'BOSG';
-      if (c == 'BEST OPPOSITE OF GROUP') return 'BOSG';
-      if (c == 'BEST OF VARIETY') return 'BOV';
-      if (c == 'BEST OPPOSITE SEX OF VARIETY') return 'BOSV';
-      if (c == 'BEST OPPOSITE OF VARIETY') return 'BOSV';
+    if (c == 'RESERVE BEST IN SHOW') return 'RBIS';
+    if (c == 'RESERVE OF SHOW') return 'RIS';
+    if (c == 'BEST 4 CLASS') return 'B4C';
+    if (c == 'BEST 4-CLASS') return 'B4C';
+    if (c == 'BEST FOUR CLASS') return 'B4C';
+    if (c == 'BEST 6 CLASS') return 'B6C';
+    if (c == 'BEST 6-CLASS') return 'B6C';
+    if (c == 'BEST SIX CLASS') return 'B6C';
+    if (c == 'HONORABLE MENTION') return 'HM';
+    if (c == 'BEST OF BREED') return 'BOB';
+    if (c == 'BEST OPPOSITE SEX OF BREED') return 'BOSB';
+    if (c == 'BEST OPPOSITE OF BREED') return 'BOSB';
+    if (c == 'BEST OF GROUP') return 'BOG';
+    if (c == 'BEST OPPOSITE SEX OF GROUP') return 'BOSG';
+    if (c == 'BEST OPPOSITE OF GROUP') return 'BOSG';
+    if (c == 'BEST OF VARIETY') return 'BOV';
+    if (c == 'BEST OPPOSITE SEX OF VARIETY') return 'BOSV';
+    if (c == 'BEST OPPOSITE OF VARIETY') return 'BOSV';
 
-      return c;
-    }
+    return c;
+  }
 
   Future<List<Map<String, dynamic>>> _loadOverallAwardRows({
     required String showId,
@@ -1092,7 +1228,9 @@ class BreedResultsDetailReportLoader {
       for (final raw in response as List) {
         final award = Map<String, dynamic>.from(raw as Map);
         final entryRaw = award['entries'];
-        final entry = entryRaw is Map ? Map<String, dynamic>.from(entryRaw) : <String, dynamic>{};
+        final entry = entryRaw is Map
+            ? Map<String, dynamic>.from(entryRaw)
+            : <String, dynamic>{};
         final exhibitorRaw = entry['exhibitors'];
         final exhibitor = exhibitorRaw is Map
             ? Map<String, dynamic>.from(exhibitorRaw)
@@ -1244,6 +1382,85 @@ class BreedResultsDetailReportLoader {
     return merged;
   }
 
+  Future<_SweepstakesPointsLookup> _loadSweepstakesPointsLookup(
+    String showId,
+    List<String> entryIds,
+  ) async {
+    final uniqueEntryIds = entryIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+
+    if (uniqueEntryIds.isEmpty) return const _SweepstakesPointsLookup();
+
+    final rowsOut = <Map<String, dynamic>>[];
+
+    for (var i = 0; i < uniqueEntryIds.length; i += 100) {
+      final chunk = uniqueEntryIds.skip(i).take(100).toList();
+      final rows = await repo.supabase
+          .from('sweepstakes_entry_results')
+          .select()
+          .eq('show_id', showId)
+          .inFilter('entry_id', chunk);
+
+      rowsOut.addAll(
+        (rows as List).map((e) => Map<String, dynamic>.from(e as Map)),
+      );
+    }
+
+    return _SweepstakesPointsLookup(rowsOut);
+  }
+
+  double _pointsForRow(
+    Map<String, dynamic> row,
+    _SweepstakesPointsLookup sweepstakesPoints, {
+    Map<String, dynamic>? fallback,
+    String awardCode = '',
+    String placement = '',
+    String? preferredAwardCode,
+  }) {
+    final direct = _firstNonEmpty([
+      _safe(row['points']),
+      _safe(row['sweepstakes_points']),
+      _safe(row['points_earned']),
+      _safe(row['total_points']),
+    ]);
+    if (direct.isNotEmpty) {
+      final directPoints = _toDouble(direct);
+      if (directPoints != 0) return directPoints;
+    }
+
+    final preferredPoints = preferredAwardCode == null ||
+            preferredAwardCode.trim().isEmpty
+        ? null
+        : sweepstakesPoints.pointsFor(row, awardCode: preferredAwardCode);
+    if (preferredPoints != null) return preferredPoints;
+
+    final points = sweepstakesPoints.pointsFor(
+      row,
+      awardCode: awardCode,
+      placement: placement,
+    );
+    if (points != null) return points;
+
+    if (fallback != null) {
+      final fallbackPoints = sweepstakesPoints.pointsFor(
+        fallback,
+        awardCode: awardCode,
+        placement: placement,
+      );
+      if (fallbackPoints != null) return fallbackPoints;
+    }
+
+    return 0;
+  }
+
+  double _toDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse((value ?? '').toString().trim()) ?? 0;
+  }
+
   String _resultRowKey(Map<String, dynamic> row) {
     final entryId = _safe(row['entry_id']);
     final lineType = _firstNonEmpty([
@@ -1264,7 +1481,10 @@ class BreedResultsDetailReportLoader {
       'fallback',
       _safe(row['animal_id']).toLowerCase(),
       _safe(row['tattoo']).toLowerCase(),
-      _firstNonEmpty([_safe(row['breed_name']), _safe(row['breed'])]).toLowerCase(),
+      _firstNonEmpty([
+        _safe(row['breed_name']),
+        _safe(row['breed']),
+      ]).toLowerCase(),
       _displayVarietyName(row).toLowerCase(),
       _safe(row['class_name']).toLowerCase(),
       _safe(row['sex']).toLowerCase(),
@@ -1276,10 +1496,7 @@ class BreedResultsDetailReportLoader {
     final furVariety = _safe(row['fur_variety']);
     if (furVariety.isNotEmpty) return furVariety;
 
-    return _firstNonEmpty([
-      _safe(row['variety_name']),
-      _safe(row['variety']),
-    ]);
+    return _firstNonEmpty([_safe(row['variety_name']), _safe(row['variety'])]);
   }
 
   String _pointsCategoryLabel(Map<String, dynamic> row) {
@@ -1328,14 +1545,355 @@ class BreedResultsDetailReportLoader {
   }
 }
 
+class _SweepstakesPointsLookup {
+  final List<Map<String, dynamic>> rows;
+
+  const _SweepstakesPointsLookup([this.rows = const []]);
+
+  double? pointsFor(
+    Map<String, dynamic> resultRow, {
+    String awardCode = '',
+    String placement = '',
+  }) {
+    final entryId = _safeStatic(resultRow['entry_id']);
+    if (entryId.isEmpty) return null;
+
+    final candidates = rows.where((row) {
+      return _safeStatic(row['entry_id']) == entryId;
+    }).toList();
+
+    if (candidates.isEmpty) return null;
+
+    final normalizedAwardCode = _awardCodeKeyStatic(awardCode);
+    final normalizedPlacement = _safeStatic(placement);
+
+    final exact = candidates.where((row) {
+      if (normalizedAwardCode.isNotEmpty) {
+        return _rowAwardCode(row) == normalizedAwardCode;
+      }
+
+      if (normalizedPlacement.isNotEmpty) {
+        return _rowPlacement(row) == normalizedPlacement &&
+            _rowAwardCode(row).isEmpty &&
+            _sameClassContext(row, resultRow) &&
+            _samePointsCategory(row, resultRow);
+      }
+
+      return false;
+    }).toList();
+
+    if (exact.isNotEmpty) return _sumPoints(exact);
+
+        if (normalizedAwardCode.isNotEmpty) {
+          final awardMatches = candidates.where((row) {
+            return _rowAwardCode(row) == normalizedAwardCode;
+          }).toList();
+          if (awardMatches.isNotEmpty) return _sumPoints(awardMatches);
+
+          final inferredAwardMatches = candidates.where((row) {
+            return _awardTextLooksLike(row, normalizedAwardCode);
+          }).toList();
+          if (inferredAwardMatches.isNotEmpty) {
+            return _sumPoints(inferredAwardMatches);
+          }
+
+          return null;
+        }
+
+    if (normalizedPlacement.isNotEmpty) {
+      final placementMatches = candidates.where((row) {
+        return _rowPlacement(row) == normalizedPlacement &&
+            _sameClassContext(row, resultRow) &&
+            _samePointsCategory(row, resultRow);
+      }).toList();
+      if (placementMatches.isNotEmpty) return _sumPoints(placementMatches);
+
+      final noAwardPlacementMatches = candidates.where((row) {
+        return _rowPlacement(row) == normalizedPlacement &&
+            _rowAwardCode(row).isEmpty &&
+            !_hasAwardLikeText(row);
+      }).toList();
+      if (noAwardPlacementMatches.isNotEmpty) {
+        return _sumPoints(noAwardPlacementMatches);
+      }
+    }
+
+    if (candidates.length == 1) return _points(candidates.first);
+
+    final noAwardRows = candidates.where((row) => _rowAwardCode(row).isEmpty);
+    if (noAwardRows.length == 1) return _points(noAwardRows.first);
+
+    return null;
+  }
+
+  static bool _awardTextLooksLike(Map<String, dynamic> row, String awardCode) {
+    final combined = [
+      _safeStatic(row['award_code']),
+      _safeStatic(row['points_source']),
+      _safeStatic(row['award']),
+      _safeStatic(row['award_type']),
+      _safeStatic(row['result_award_code']),
+      _safeStatic(row['sweepstakes_award_code']),
+      _safeStatic(row['sweepstakes_code']),
+      _safeStatic(row['points_code']),
+      _safeStatic(row['points_type']),
+      _safeStatic(row['category_code']),
+      _safeStatic(row['award_name']),
+      _safeStatic(row['points_reason']),
+      _safeStatic(row['reason']),
+      _safeStatic(row['description']),
+      _safeStatic(row['notes']),
+    ].join(' ').toUpperCase();
+
+    if (combined.isEmpty) return false;
+
+    switch (awardCode) {
+      case 'BOB':
+        return combined.contains('BOB') || combined.contains('BEST OF BREED');
+      case 'BOSB':
+      case 'BOS':
+        return combined.contains('BOSB') ||
+            combined.contains('BEST OPPOSITE SEX OF BREED') ||
+            combined.contains('BEST OPPOSITE OF BREED');
+      case 'BOV':
+        return combined.contains('BOV') || combined.contains('BEST OF VARIETY');
+      case 'BOSV':
+        return combined.contains('BOSV') ||
+            combined.contains('BEST OPPOSITE SEX OF VARIETY') ||
+            combined.contains('BEST OPPOSITE OF VARIETY');
+      case 'BIS':
+        return combined.contains('BIS') || combined.contains('BEST IN SHOW');
+      case 'RIS':
+      case 'RBIS':
+        return combined.contains('RIS') ||
+            combined.contains('RESERVE IN SHOW') ||
+            combined.contains('RESERVE BEST IN SHOW');
+      default:
+        return combined.contains(awardCode);
+    }
+  }
+
+  static bool _hasAwardLikeText(Map<String, dynamic> row) {
+    return _awardTextLooksLike(row, 'BOB') ||
+        _awardTextLooksLike(row, 'BOSB') ||
+        _awardTextLooksLike(row, 'BOV') ||
+        _awardTextLooksLike(row, 'BOSV') ||
+        _awardTextLooksLike(row, 'BIS') ||
+        _awardTextLooksLike(row, 'RIS');
+  }
+
+  static double _sumPoints(List<Map<String, dynamic>> rows) {
+    return rows.fold<double>(0, (sum, row) => sum + _points(row));
+  }
+
+  static double _points(Map<String, dynamic> row) {
+    return _toDoubleStatic(_firstNonEmptyStatic([
+      _safeStatic(row['points']),
+      _safeStatic(row['sweepstakes_points']),
+      _safeStatic(row['points_earned']),
+      _safeStatic(row['total_points']),
+    ]));
+  }
+
+  static bool _sameClassContext(
+    Map<String, dynamic> sweepstakesRow,
+    Map<String, dynamic> resultRow,
+  ) {
+    final rowClass = _normalizeClassNameStatic(_firstNonEmptyStatic([
+      _safeStatic(sweepstakesRow['class_name']),
+      _safeStatic(sweepstakesRow['class']),
+      _safeStatic(sweepstakesRow['class_label']),
+    ]));
+    final resultClass = _normalizeClassNameStatic(
+      _safeStatic(resultRow['class_name']),
+    );
+
+    if (rowClass.isNotEmpty &&
+        resultClass.isNotEmpty &&
+        rowClass != resultClass) {
+      return false;
+    }
+
+    final rowSex = _sexKeyStatic(_firstNonEmptyStatic([
+      _safeStatic(sweepstakesRow['sex']),
+      _safeStatic(sweepstakesRow['sex_label']),
+    ]));
+    final resultSex = _sexKeyStatic(_safeStatic(resultRow['sex']));
+
+    if (rowSex.isNotEmpty && resultSex.isNotEmpty && rowSex != resultSex) {
+      return false;
+    }
+
+    return true;
+  }
+
+  static bool _samePointsCategory(
+    Map<String, dynamic> sweepstakesRow,
+    Map<String, dynamic> resultRow,
+  ) {
+    final rowCategory = _normalizePointsCategoryStatic(_firstNonEmptyStatic([
+      _safeStatic(sweepstakesRow['points_category']),
+      _safeStatic(sweepstakesRow['pointsCategory']),
+      _safeStatic(sweepstakesRow['points_category_name']),
+      _safeStatic(sweepstakesRow['sweepstakes_category']),
+      _safeStatic(sweepstakesRow['variety_name']),
+      _safeStatic(sweepstakesRow['variety']),
+      _safeStatic(sweepstakesRow['fur_variety']),
+    ]));
+    final resultCategory = _normalizePointsCategoryStatic(_firstNonEmptyStatic([
+      _safeStatic(resultRow['points_category']),
+      _safeStatic(resultRow['pointsCategory']),
+      _safeStatic(resultRow['points_category_name']),
+      _safeStatic(resultRow['sweepstakes_category']),
+      _safeStatic(resultRow['fur_variety']),
+      _safeStatic(resultRow['variety_name']),
+      _safeStatic(resultRow['variety']),
+    ]));
+
+    if (rowCategory.isNotEmpty &&
+        resultCategory.isNotEmpty &&
+        rowCategory != resultCategory) {
+      return false;
+    }
+
+    return true;
+  }
+
+  static String _rowAwardCode(Map<String, dynamic> row) {
+    return _awardCodeKeyStatic(_firstNonEmptyStatic([
+      _safeStatic(row['award_code']),
+      _safeStatic(row['points_source']),
+      _safeStatic(row['award']),
+      _safeStatic(row['award_type']),
+      _safeStatic(row['result_award_code']),
+      _safeStatic(row['sweepstakes_award_code']),
+      _safeStatic(row['sweepstakes_code']),
+      _safeStatic(row['points_code']),
+      _safeStatic(row['points_type']),
+      _safeStatic(row['category_code']),
+      _safeStatic(row['award_name']),
+      _safeStatic(row['points_reason']),
+      _safeStatic(row['reason']),
+    ]));
+  }
+
+  static String _rowPlacement(Map<String, dynamic> row) {
+    final explicitPlacement = _firstNonEmptyStatic([
+      _safeStatic(row['placement']),
+      _safeStatic(row['place']),
+      _safeStatic(row['class_placement']),
+      _safeStatic(row['fur_placement']),
+    ]);
+    if (explicitPlacement.isNotEmpty) return explicitPlacement;
+
+    final source = _safeStatic(row['points_source']).toUpperCase();
+    if (source == 'CLASS') return '1';
+
+    return '';
+  }
+
+  static String _normalizeClassNameStatic(String raw) {
+    final r = raw.toLowerCase();
+    if (r.contains('senior') && r.contains('buck')) return 'Sr Bucks';
+    if (r.contains('senior') && r.contains('doe')) return 'Sr Does';
+    if (r.contains('intermediate') && r.contains('buck')) return 'Int Bucks';
+    if (r.contains('intermediate') && r.contains('doe')) return 'Int Does';
+    if (r.contains('junior') && r.contains('buck')) return 'Jr Bucks';
+    if (r.contains('junior') && r.contains('doe')) return 'Jr Does';
+    return raw.trim();
+  }
+
+  static String _sexKeyStatic(String sex) {
+    final s = sex.toLowerCase().trim();
+    if (s.contains('buck') || s == 'b') return 'buck';
+    if (s.contains('doe') || s == 'd') return 'doe';
+    if (s.contains('boar') || s == 'male' || s == 'm') return 'boar';
+    if (s.contains('sow') || s == 'female' || s == 'f') return 'sow';
+    return s;
+  }
+
+  static String _normalizePointsCategoryStatic(String raw) {
+    final value = raw.trim();
+    if (value.isEmpty) return '';
+
+    final normalized = value
+        .toLowerCase()
+        .replaceAll('-', ' ')
+        .replaceAll('_', ' ')
+        .trim();
+
+    if (normalized.contains('white')) return 'White';
+    if (normalized.contains('colored') || normalized.contains('colour')) {
+      return 'Colored';
+    }
+    if (normalized.contains('color') && !normalized.contains('white')) {
+      return 'Colored';
+    }
+
+    return value;
+  }
+
+  static String _awardCodeKeyStatic(String award) {
+    final c = award.toUpperCase().trim();
+
+    if (c == 'BEST IN SHOW') return 'BIS';
+    if (c == 'RESERVE IN SHOW') return 'RIS';
+    if (c == '1RIS') return 'RIS';
+    if (c == '1ST RIS') return 'RIS';
+    if (c == 'FIRST RIS') return 'RIS';
+    if (c == '1ST RESERVE IN SHOW') return 'RIS';
+    if (c == 'FIRST RESERVE IN SHOW') return 'RIS';
+    if (c == '2RIS') return '2RIS';
+    if (c == '2ND RIS') return '2RIS';
+    if (c == 'SECOND RIS') return '2RIS';
+    if (c == '2ND RESERVE IN SHOW') return '2RIS';
+    if (c == 'SECOND RESERVE IN SHOW') return '2RIS';
+    if (c == 'RESERVE BEST IN SHOW') return 'RBIS';
+    if (c == 'RESERVE OF SHOW') return 'RIS';
+    if (c == 'BEST 4 CLASS') return 'B4C';
+    if (c == 'BEST 4-CLASS') return 'B4C';
+    if (c == 'BEST FOUR CLASS') return 'B4C';
+    if (c == 'BEST 6 CLASS') return 'B6C';
+    if (c == 'BEST 6-CLASS') return 'B6C';
+    if (c == 'BEST SIX CLASS') return 'B6C';
+    if (c == 'HONORABLE MENTION') return 'HM';
+    if (c == 'BEST OF BREED') return 'BOB';
+    if (c == 'BEST OPPOSITE SEX OF BREED') return 'BOSB';
+    if (c == 'BEST OPPOSITE OF BREED') return 'BOSB';
+    if (c == 'BEST OF GROUP') return 'BOG';
+    if (c == 'BEST OPPOSITE SEX OF GROUP') return 'BOSG';
+    if (c == 'BEST OPPOSITE OF GROUP') return 'BOSG';
+    if (c == 'BEST OF VARIETY') return 'BOV';
+    if (c == 'BEST OPPOSITE SEX OF VARIETY') return 'BOSV';
+    if (c == 'BEST OPPOSITE OF VARIETY') return 'BOSV';
+
+    return c;
+  }
+
+  static String _firstNonEmptyStatic(List<String> values) {
+    for (final value in values) {
+      final trimmed = value.trim();
+      if (trimmed.isNotEmpty) return trimmed;
+    }
+    return '';
+  }
+
+  static String _safeStatic(Object? value, {String fallback = ''}) {
+    final text = (value ?? '').toString().trim();
+    return text.isEmpty ? fallback : text;
+  }
+
+  static double _toDoubleStatic(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse((value ?? '').toString().trim()) ?? 0;
+  }
+}
+
 class _JudgedCount {
   final int animals;
   final int exhibitors;
 
-  const _JudgedCount({
-    this.animals = 0,
-    this.exhibitors = 0,
-  });
+  const _JudgedCount({this.animals = 0, this.exhibitors = 0});
 }
 
 class _ShowHeader {
