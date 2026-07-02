@@ -203,12 +203,25 @@ class ArbaReportPdfBuilder {
         .replaceAll(RegExp(r'_+'), '_')
         .replaceAll(RegExp(r'^_|_$'), '');
 
+    final scope = (request.scope ?? '').trim();
+    final showLetter = (request.showLetter ?? '').trim().toUpperCase();
+
+    if (scope.isEmpty || showLetter.isEmpty) {
+      throw Exception(
+        'ARBA Report requires metadata.scope and metadata.show_letter.',
+      );
+    }
+
     return ReportFileResult(
       fileName: cleanedSection.isNotEmpty
           ? 'arba_report_$cleanedSection.pdf'
-          : 'arba_report.pdf',
+          : 'arba_report_${scope.toLowerCase()}_${showLetter.toLowerCase()}.pdf',
       mimeType: 'application/pdf',
       bytes: bytes,
+      metadata: {
+        'scope': scope,
+        'show_letter': showLetter,
+      },
     );
   }
 
