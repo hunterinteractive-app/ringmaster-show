@@ -616,6 +616,167 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     );
   }
 
+  String _cleanResultValue(dynamic value) => (value ?? '').toString().trim();
+
+  String _combinedResultStatus(Map<String, dynamic> row) {
+    return [
+      row['result_status'],
+      row['status'],
+      row['entry_status'],
+      row['disqualified_reason'],
+    ].map(_cleanResultValue).join(' ').toLowerCase();
+  }
+
+  bool _isResultEntryEligibleForCompletion(Map<String, dynamic> row) {
+    final scratchedAt = _cleanResultValue(row['scratched_at']);
+    final combinedStatus = _combinedResultStatus(row);
+
+    if (scratchedAt.isNotEmpty) return false;
+    if (row['is_shown'] == false) return false;
+    if (row['is_disqualified'] == true) return false;
+    if (combinedStatus.contains('no show')) return false;
+    if (combinedStatus.contains('scratch')) return false;
+    if (combinedStatus.contains('disqual')) return false;
+    if (combinedStatus.contains('wrong sex')) return false;
+    if (combinedStatus.contains('wrong variety')) return false;
+    if (combinedStatus.contains('wrong class')) return false;
+    if (combinedStatus.contains('overweight')) return false;
+    if (combinedStatus.contains('unworthy')) return false;
+
+    return true;
+  }
+
+  String _titleCaseResultValue(dynamic value) {
+    final text = _cleanResultValue(value).toLowerCase();
+    if (text.isEmpty) return '';
+
+    return text
+        .split(RegExp(r'\s+'))
+        .where((word) => word.isNotEmpty)
+        .map((word) => word[0].toUpperCase() + word.substring(1))
+        .join(' ');
+  }
+
+  String _resultSectionLabel(Map<String, dynamic> row) {
+    final rawLabel = _cleanResultValue(row['section_label']);
+    var kind = _titleCaseResultValue(
+      row['section_kind'] ?? row['kind'] ?? row['scope'],
+    );
+    var letter = _cleanResultValue(
+      row['show_letter'] ?? row['section_letter'] ?? row['letter'],
+    ).toUpperCase();
+    final sectionId = _cleanResultValue(row['section_id']);
+    final section = sectionId.isEmpty
+        ? null
+        : _closeoutSections.cast<_CloseoutSectionSummary?>().firstWhere(
+            (section) => section?.sectionId == sectionId,
+            orElse: () => null,
+          );
+
+    if (kind.isEmpty && section != null) {
+      kind = _titleCaseResultValue(section.kind);
+    }
+    if (letter.isEmpty && section != null) {
+      letter = section.letter.trim().toUpperCase();
+    }
+
+    if (rawLabel.isNotEmpty && rawLabel.toLowerCase() != 'section') {
+      if (letter.isEmpty || rawLabel.toUpperCase().contains(letter)) {
+        return rawLabel;
+      }
+
+      return '$rawLabel $letter';
+    }
+
+    final parts = <String>[
+      if (kind.isNotEmpty) kind,
+      if (letter.isNotEmpty) letter,
+    ];
+
+    if (parts.isNotEmpty) return parts.join(' ');
+    return section?.displayLabel ?? 'Section';
+  }
+
+  Future<List<Map<String, dynamic>>> _loadResultEntryRows() async {
+    const pageSize = 1000;
+    final rows = <Map<String, dynamic>>[];
+    var from = 0;
+
+    while (true) {
+      final batch = await supabase
+          .rpc(
+            'report_results_entry_rows',
+            params: {
+              'p_show_id': widget.showId,
+              'p_section_id': null,
+              'p_show_letter': null,
+            },
+          )
+          .range(from, from + pageSize - 1);
+
+      final page = (batch as List)
+          .map((raw) => Map<String, dynamic>.from(raw as Map))
+          .toList();
+
+      rows.addAll(page);
+
+      if (page.length < pageSize) break;
+      from += pageSize;
+    }
+
+    return rows;
+  }
+
+  Future<int> _loadMissingJudgeCount() async {
+    return (await _buildMissingJudgeItems()).length;
+  }
+
+  Future<List<_MissingJudgeItem>> _buildMissingJudgeItems() async {
+    final rows = await _loadResultEntryRows();
+    final items = <_MissingJudgeItem>[];
+
+    for (final row in rows) {
+      final judgeId = _cleanResultValue(row['judged_by_show_judge_id']);
+      if (!_isResultEntryEligibleForCompletion(row)) continue;
+      if (judgeId.isNotEmpty) continue;
+
+      items.add(
+        _MissingJudgeItem(
+          entryId: (row['entry_id'] ?? '').toString(),
+          sectionLabel: _resultSectionLabel(row),
+          breedName: (row['breed_name'] ?? '').toString(),
+          groupName: null,
+          varietyName: (row['variety_name'] ?? '').toString(),
+          className: (row['class_name'] ?? '').toString(),
+          sex: (row['sex'] ?? '').toString(),
+          tattoo: (row['tattoo'] ?? '').toString(),
+          exhibitorLabel: (row['exhibitor_label'] ?? '').toString(),
+        ),
+      );
+    }
+
+    return items;
+  }
+
+  Future<ResultsReadinessDto> _loadResultsReadiness() async {
+    final resp = await supabase.rpc(
+      'show_results_readiness',
+      params: {'p_show_id': widget.showId},
+    );
+
+    var readiness = ResultsReadinessDto.fromJson(
+      Map<String, dynamic>.from(resp as Map),
+    );
+
+    if (readiness.missingJudgeCount > 0) {
+      readiness = readiness.copyWith(
+        missingJudgeCount: await _loadMissingJudgeCount(),
+      );
+    }
+
+    return readiness;
+  }
+
   Future<void> _loadMissingPlacements() async {
     if (_loadingMissingPlacements) return;
 
@@ -624,56 +785,19 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     });
 
     try {
-      final rows = await supabase.rpc(
-        'report_results_entry_rows',
-        params: {
-          'p_show_id': widget.showId,
-          'p_section_id': null,
-          'p_show_letter': null,
-        },
-      );
-
+      final rows = await _loadResultEntryRows();
       final items = <_MissingPlacementItem>[];
 
-      for (final raw in (rows as List)) {
-        final row = Map<String, dynamic>.from(raw as Map);
-
-        final scratchedAt = (row['scratched_at'] ?? '').toString().trim();
-        final isShown = row['is_shown'] != false;
-        final isDisqualified = row['is_disqualified'] == true;
-        final status = (row['result_status'] ?? row['status'] ?? '')
-            .toString()
-            .trim()
-            .toLowerCase();
-        final dqReason = (row['disqualified_reason'] ?? '')
-            .toString()
-            .trim()
-            .toLowerCase();
-        final combinedStatus = '$status $dqReason';
-        final excludedStatus =
-            combinedStatus.contains('no show') ||
-            combinedStatus.contains('scratch') ||
-            combinedStatus.contains('disqual') ||
-            combinedStatus.contains('wrong sex') ||
-            combinedStatus.contains('wrong variety') ||
-            combinedStatus.contains('wrong class') ||
-            combinedStatus.contains('overweight') ||
-            combinedStatus.contains('unworthy');
+      for (final row in rows) {
         final placement = (row['placement'] ?? '').toString().trim();
 
-        final isEligibleForPlacement =
-            scratchedAt.isEmpty &&
-            isShown &&
-            !isDisqualified &&
-            !excludedStatus;
-
-        if (!isEligibleForPlacement) continue;
+        if (!_isResultEntryEligibleForCompletion(row)) continue;
         if (placement.isNotEmpty) continue;
 
         items.add(
           _MissingPlacementItem(
             entryId: (row['entry_id'] ?? '').toString(),
-            sectionLabel: (row['section_label'] ?? 'Section').toString().trim(),
+            sectionLabel: _resultSectionLabel(row),
             breedName: (row['breed_name'] ?? '').toString().trim(),
             groupName: (row['group_name'] ?? '').toString().trim().isEmpty
                 ? null
@@ -730,77 +854,25 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     });
 
     try {
-      final rows = await supabase.rpc(
-        'report_results_entry_rows',
-        params: {
-          'p_show_id': widget.showId,
-          'p_section_id': null,
-          'p_show_letter': null,
-        },
-      );
+      final items = await _buildMissingJudgeItems();
 
-      final items = <_MissingJudgeItem>[];
-
-      for (final raw in (rows as List)) {
-        final row = Map<String, dynamic>.from(raw as Map);
-
-        final scratchedAt = (row['scratched_at'] ?? '').toString().trim();
-        final isShown = row['is_shown'] != false;
-        final isDisqualified = row['is_disqualified'] == true;
-        final status = (row['result_status'] ?? row['status'] ?? '')
-            .toString()
-            .trim()
-            .toLowerCase();
-        final dqReason = (row['disqualified_reason'] ?? '')
-            .toString()
-            .trim()
-            .toLowerCase();
-        final combinedStatus = '$status $dqReason';
-        final excludedStatus =
-            combinedStatus.contains('no show') ||
-            combinedStatus.contains('scratch') ||
-            combinedStatus.contains('disqual') ||
-            combinedStatus.contains('wrong sex') ||
-            combinedStatus.contains('wrong variety') ||
-            combinedStatus.contains('wrong class') ||
-            combinedStatus.contains('overweight') ||
-            combinedStatus.contains('unworthy');
-        final judgeId = (row['judged_by_show_judge_id'] ?? '')
-            .toString()
-            .trim();
-
-        final isEligible =
-            scratchedAt.isEmpty &&
-            isShown &&
-            !isDisqualified &&
-            !excludedStatus;
-
-        if (!isEligible) continue;
-        if (judgeId.isNotEmpty) continue;
-
-        items.add(
-          _MissingJudgeItem(
-            entryId: (row['entry_id'] ?? '').toString(),
-            sectionLabel: (row['section_label'] ?? 'Section').toString(),
-            breedName: (row['breed_name'] ?? '').toString(),
-            groupName: null,
-            varietyName: (row['variety_name'] ?? '').toString(),
-            className: (row['class_name'] ?? '').toString(),
-            sex: (row['sex'] ?? '').toString(),
-            tattoo: (row['tattoo'] ?? '').toString(),
-            exhibitorLabel: (row['exhibitor_label'] ?? '').toString(),
-          ),
-        );
-      }
-
+      if (!mounted) return;
       setState(() {
         _missingJudgeItems = items;
         _missingJudgesLoaded = true;
+        final dashboard = _dashboard;
+        _dashboard = dashboard?.copyWith(
+          resultsReadiness: dashboard.resultsReadiness.copyWith(
+            missingJudgeCount: items.length,
+          ),
+        );
       });
     } finally {
-      setState(() {
-        _loadingMissingJudges = false;
-      });
+      if (mounted) {
+        setState(() {
+          _loadingMissingJudges = false;
+        });
+      }
     }
   }
 
@@ -857,40 +929,11 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       }
 
       String resolvedSectionLabel(Map<String, dynamic> row) {
-        final label = clean(row['section_label']);
-        if (label.isNotEmpty) return label;
-
-        final kind = clean(row['section_kind']);
-        final letter = clean(row['show_letter']);
-        final parts = <String>[
-          if (kind.isNotEmpty) kind[0].toUpperCase() + kind.substring(1),
-          if (letter.isNotEmpty) letter.toUpperCase(),
-        ];
-
-        return parts.isEmpty ? 'Section' : parts.join(' ');
+        return _resultSectionLabel(row);
       }
 
       bool isEligibleForPlacement(Map<String, dynamic> row) {
-        final scratchedAt = clean(row['scratched_at']);
-        final isShown = row['is_shown'] != false;
-        final isDisqualified = row['is_disqualified'] == true;
-        final status = clean(row['result_status']).toLowerCase();
-        final dqReason = clean(row['disqualified_reason']).toLowerCase();
-        final combinedStatus = '$status $dqReason';
-
-        if (scratchedAt.isNotEmpty) return false;
-        if (!isShown) return false;
-        if (isDisqualified) return false;
-        if (combinedStatus.contains('no show')) return false;
-        if (combinedStatus.contains('scratch')) return false;
-        if (combinedStatus.contains('disqual')) return false;
-        if (combinedStatus.contains('wrong sex')) return false;
-        if (combinedStatus.contains('wrong variety')) return false;
-        if (combinedStatus.contains('wrong class')) return false;
-        if (combinedStatus.contains('overweight')) return false;
-        if (combinedStatus.contains('unworthy')) return false;
-
-        return true;
+        return _isResultEntryEligibleForCompletion(row);
       }
 
       for (final row in rows) {
@@ -1100,11 +1143,13 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   }
 
   Widget _buildMissingJudgesPanel() {
-    final count = _dashboard?.resultsReadiness.missingJudgeCount ?? 0;
+    final count = _missingJudgesLoaded
+        ? _missingJudgeItems.length
+        : _dashboard?.resultsReadiness.missingJudgeCount ?? 0;
     if (count <= 0) return const SizedBox.shrink();
 
     return ExpansionTile(
-      title: Text('$count missing judges'),
+      title: Text('$count missing judge${count == 1 ? '' : 's'}'),
       onExpansionChanged: (expanded) async {
         if (expanded && !_missingJudgesLoaded) {
           await _loadMissingJudges();
@@ -1322,14 +1367,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       final dashboardJson = Map<String, dynamic>.from(dashboardResp as Map);
       final dashboard = CloseoutDashboard.fromJson(dashboardJson);
 
-      final readinessResp = await supabase.rpc(
-        'show_results_readiness',
-        params: {'p_show_id': widget.showId},
-      );
-
-      final freshReadiness = ResultsReadinessDto.fromJson(
-        Map<String, dynamic>.from(readinessResp as Map),
-      );
+      final freshReadiness = await _loadResultsReadiness();
 
       final dashboardWithFreshReadiness = CloseoutDashboard(
         dashboard: dashboard.dashboard,
@@ -2294,14 +2332,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   }
 
   Future<bool> _ensureResultsReadyForReports() async {
-    final resp = await supabase.rpc(
-      'show_results_readiness',
-      params: {'p_show_id': widget.showId},
-    );
-
-    final readiness = ResultsReadinessDto.fromJson(
-      Map<String, dynamic>.from(resp as Map),
-    );
+    final readiness = await _loadResultsReadiness();
 
     if (!mounted) return false;
 
@@ -2515,14 +2546,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       final dashboardJson = Map<String, dynamic>.from(dashboardResp as Map);
       final dashboard = CloseoutDashboard.fromJson(dashboardJson);
 
-      final readinessResp = await supabase.rpc(
-        'show_results_readiness',
-        params: {'p_show_id': widget.showId},
-      );
-
-      final freshReadiness = ResultsReadinessDto.fromJson(
-        Map<String, dynamic>.from(readinessResp as Map),
-      );
+      final freshReadiness = await _loadResultsReadiness();
 
       final dashboardWithFreshReadiness = CloseoutDashboard(
         dashboard: dashboard.dashboard,
@@ -5571,6 +5595,38 @@ class ResultsReadinessDto {
           (json['duplicate_final_award_count'] as num?)?.toInt() ?? 0,
     );
   }
+
+  ResultsReadinessDto copyWith({
+    int? missingPlacementCount,
+    int? missingJudgeCount,
+    int? duplicatePlacementGroupCount,
+    int? missingFinalAwardCount,
+    int? duplicateFinalAwardCount,
+  }) {
+    final nextMissingPlacementCount =
+        missingPlacementCount ?? this.missingPlacementCount;
+    final nextMissingJudgeCount = missingJudgeCount ?? this.missingJudgeCount;
+    final nextDuplicatePlacementGroupCount =
+        duplicatePlacementGroupCount ?? this.duplicatePlacementGroupCount;
+    final nextMissingFinalAwardCount =
+        missingFinalAwardCount ?? this.missingFinalAwardCount;
+    final nextDuplicateFinalAwardCount =
+        duplicateFinalAwardCount ?? this.duplicateFinalAwardCount;
+
+    return ResultsReadinessDto(
+      ready:
+          nextMissingPlacementCount == 0 &&
+          nextMissingJudgeCount == 0 &&
+          nextDuplicatePlacementGroupCount == 0 &&
+          nextMissingFinalAwardCount == 0 &&
+          nextDuplicateFinalAwardCount == 0,
+      missingPlacementCount: nextMissingPlacementCount,
+      missingJudgeCount: nextMissingJudgeCount,
+      duplicatePlacementGroupCount: nextDuplicatePlacementGroupCount,
+      missingFinalAwardCount: nextMissingFinalAwardCount,
+      duplicateFinalAwardCount: nextDuplicateFinalAwardCount,
+    );
+  }
 }
 
 class _ErrorView extends StatelessWidget {
@@ -6007,6 +6063,24 @@ class CloseoutDashboard {
           : ArchiveSummary.fromJson(
               Map<String, dynamic>.from(json['latest_archive'] as Map),
             ),
+    );
+  }
+
+  CloseoutDashboard copyWith({
+    DashboardEnvelope? dashboard,
+    ResultsReadinessDto? resultsReadiness,
+    LatestFinalize? latestFinalize,
+    List<ReportArtifactSummary>? reports,
+    List<DeliveryRunSummary>? deliveries,
+    ArchiveSummary? latestArchive,
+  }) {
+    return CloseoutDashboard(
+      dashboard: dashboard ?? this.dashboard,
+      resultsReadiness: resultsReadiness ?? this.resultsReadiness,
+      latestFinalize: latestFinalize ?? this.latestFinalize,
+      reports: reports ?? this.reports,
+      deliveries: deliveries ?? this.deliveries,
+      latestArchive: latestArchive ?? this.latestArchive,
     );
   }
 }
