@@ -321,6 +321,67 @@ class _AdminEntryManagementScreenState
     }
   }
 
+  Future<void> _deleteEntry(Map<String, dynamic> entry) async {
+    final id = entry['id']?.toString();
+    if (id == null || id.isEmpty) return;
+
+    final animalName = (entry['animal_name'] ?? '').toString().trim();
+    final tattoo = (entry['tattoo'] ?? '').toString().trim().toUpperCase();
+    final label = animalName.isNotEmpty && tattoo.isNotEmpty
+        ? '$animalName • $tattoo'
+        : animalName.isNotEmpty
+        ? animalName
+        : tattoo.isNotEmpty
+        ? tattoo
+        : 'this entry';
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Remove Entry?'),
+        content: Text(
+          'Remove $label from this show? This does not delete the saved animal profile.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await ShowLockService.assertShowUnlocked(widget.showId);
+
+      final deletedRows = await supabase
+          .from('entries')
+          .delete()
+          .eq('id', id)
+          .eq('show_id', widget.showId)
+          .select('id');
+
+      if ((deletedRows as List).isEmpty) {
+        throw Exception(
+          'No entry row was removed. It may already be gone or blocked by permissions.',
+        );
+      }
+
+      await _loadEntries();
+      if (!mounted) return;
+      setState(() => _msg = 'Entry removed.');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _msg = 'Remove failed: $e');
+    }
+  }
+
   Future<void> _openEdit(Map<String, dynamic> entry) async {
     // Entry Management should edit the show entry snapshot, not the saved
     // animal master profile. Saved animal profiles may belong to an exhibitor
@@ -428,6 +489,7 @@ class _AdminEntryManagementScreenState
       'Unscratched.',
       'Animal moved.',
       'Entry added.',
+      'Entry removed.',
     };
 
     final isSuccess = successMessages.contains(_msg);
@@ -784,6 +846,7 @@ class _AdminEntryManagementScreenState
                                   if (v == 'scratch') {
                                     _toggleScratch(e);
                                   }
+                                  if (v == 'delete') _deleteEntry(e);
                                 },
                                 itemBuilder: (_) => [
                                   const PopupMenuItem(
@@ -799,6 +862,10 @@ class _AdminEntryManagementScreenState
                                     child: Text(
                                       isScratched ? 'Un-scratch' : 'Scratch',
                                     ),
+                                  ),
+                                  const PopupMenuItem(
+                                    value: 'delete',
+                                    child: Text('Remove Entry'),
                                   ),
                                 ],
                               ),
@@ -2516,18 +2583,6 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
       addCandidateRows(rows);
     }
 
-    if (addressLine1.isNotEmpty && zip.isNotEmpty) {
-      final rows = await supabase
-          .from('exhibitors')
-          .select(selectColumns)
-          .or('is_active.is.null,is_active.eq.true')
-          .or('is_merged.is.null,is_merged.eq.false')
-          .eq('address_line1', addressLine1)
-          .eq('zip', zip)
-          .limit(25);
-      addCandidateRows(rows);
-    }
-
     final candidates = candidatesById.values.toList();
     if (candidates.isEmpty) return null;
 
@@ -2535,7 +2590,8 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
         .where(
           (candidate) =>
               (candidate['created_for_show_id'] ?? '').toString() ==
-              widget.showId,
+                  widget.showId &&
+              _existingExhibitorMatchesEnteredIdentity(candidate),
         )
         .toList();
     if (sameShowMatches.isNotEmpty) {
@@ -2547,10 +2603,6 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
         .toList();
     if (identityMatches.isNotEmpty) {
       return _bestExistingExhibitorCandidate(identityMatches);
-    }
-
-    if (candidates.length == 1) {
-      return candidates.single;
     }
 
     return null;
@@ -2572,17 +2624,10 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
   bool _existingExhibitorMatchesEnteredIdentity(
     Map<String, dynamic> candidate,
   ) {
-    final email = _email.text.trim().toLowerCase();
-    final candidateEmail = (candidate['email'] ?? '')
-        .toString()
-        .trim()
-        .toLowerCase();
-    if (email.isNotEmpty && candidateEmail == email) return true;
+    if (_candidateNameMatchesEnteredName(candidate)) return true;
 
-    final phone = _digitsOnly(_phone.text);
-    final candidatePhone = _digitsOnly((candidate['phone'] ?? '').toString());
-    if (phone.isNotEmpty && candidatePhone == phone) return true;
-
+    // ARBA numbers identify the exhibitor. Family contact/address fields do
+    // not: siblings often share phone, email, and address.
     final arbaNumber = _arbaNumber.text.trim().toLowerCase();
     final candidateArba = (candidate['arba_number'] ?? '')
         .toString()
@@ -2590,20 +2635,37 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
         .toLowerCase();
     if (arbaNumber.isNotEmpty && candidateArba == arbaNumber) return true;
 
-    final addressLine1 = _addressLine1.text.trim().toLowerCase();
-    final candidateAddressLine1 = (candidate['address_line1'] ?? '')
-        .toString()
-        .trim()
-        .toLowerCase();
-    final zip = _zip.text.trim().toLowerCase();
-    final candidateZip = (candidate['zip'] ?? '')
-        .toString()
-        .trim()
-        .toLowerCase();
-    return addressLine1.isNotEmpty &&
-        zip.isNotEmpty &&
-        candidateAddressLine1 == addressLine1 &&
-        candidateZip == zip;
+    return false;
+  }
+
+  bool _candidateNameMatchesEnteredName(Map<String, dynamic> candidate) {
+    String normalize(String value) =>
+        value.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
+
+    final showing = normalize(_showingName.text);
+    final first = normalize(_firstName.text);
+    final last = normalize(_lastName.text);
+
+    final candidateShowing = normalize(
+      (candidate['showing_name'] ?? '').toString(),
+    );
+    final candidateDisplay = normalize(
+      (candidate['display_name'] ?? '').toString(),
+    );
+    final candidateFirst = normalize(
+      (candidate['first_name'] ?? '').toString(),
+    );
+    final candidateLast = normalize((candidate['last_name'] ?? '').toString());
+
+    if (showing.isNotEmpty &&
+        (candidateShowing == showing || candidateDisplay == showing)) {
+      return true;
+    }
+
+    return first.isNotEmpty &&
+        last.isNotEmpty &&
+        candidateFirst == first &&
+        candidateLast == last;
   }
 
   String _digitsOnly(String value) => value.replaceAll(RegExp(r'\D'), '');
