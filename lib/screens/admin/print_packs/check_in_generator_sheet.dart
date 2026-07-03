@@ -39,12 +39,12 @@ class CheckInGeneratorSheet extends StatefulWidget {
   });
 
   @override
-  State<CheckInGeneratorSheet> createState() =>
-      _CheckInGeneratorSheetState();
+  State<CheckInGeneratorSheet> createState() => _CheckInGeneratorSheetState();
 }
 
 class _CheckInGeneratorSheetState extends State<CheckInGeneratorSheet> {
   bool _building = false;
+  bool _sortExhibitorsByLastName = false;
   String? _msg;
   Map<String, dynamic>? _showRow;
 
@@ -58,27 +58,27 @@ class _CheckInGeneratorSheetState extends State<CheckInGeneratorSheet> {
     _showRow = row ?? <String, dynamic>{};
   }
 
-Future<List<Map<String, dynamic>>> _fetchEntries() async {
+  Future<List<Map<String, dynamic>>> _fetchEntries() async {
     const pageSize = 1000;
     final list = <Map<String, dynamic>>[];
 
-    for (var from = 0;; from += pageSize) {
-    final to = from + pageSize - 1;
-    final rows = await supabase
-        .rpc(
+    for (var from = 0; ; from += pageSize) {
+      final to = from + pageSize - 1;
+      final rows = await supabase
+          .rpc(
             'report_checkin_entries',
             params: {
-            'p_show_id': widget.showId,
-            'p_section_id': widget.combineSections ? null : widget.sectionId,
-            'p_include_scratched': widget.includeScratched,
+              'p_show_id': widget.showId,
+              'p_section_id': widget.combineSections ? null : widget.sectionId,
+              'p_include_scratched': widget.includeScratched,
             },
-        )
-        .range(from, to);
+          )
+          .range(from, to);
 
-    final page = (rows as List).cast<Map<String, dynamic>>();
-    list.addAll(page);
+      final page = (rows as List).cast<Map<String, dynamic>>();
+      list.addAll(page);
 
-    if (page.length < pageSize) break;
+      if (page.length < pageSize) break;
     }
 
     final exhibitorIds = list
@@ -88,32 +88,55 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
         .toList();
 
     if (exhibitorIds.isNotEmpty) {
-    final exhibitorNumberById = <String, String>{};
-    const exhibitorPageSize = 500;
+      final exhibitorById = <String, Map<String, dynamic>>{};
+      const exhibitorPageSize = 500;
 
-    for (var i = 0; i < exhibitorIds.length; i += exhibitorPageSize) {
+      for (var i = 0; i < exhibitorIds.length; i += exhibitorPageSize) {
         final chunk = exhibitorIds.skip(i).take(exhibitorPageSize).toList();
         final exhibitorRows = await supabase
             .from('exhibitors')
-            .select('id, exhibitor_number')
+            .select(
+              'id, exhibitor_number, first_name, last_name, display_name, showing_name',
+            )
             .inFilter('id', chunk);
 
-        for (final row in (exhibitorRows as List).cast<Map<String, dynamic>>()) {
-        final id = (row['id'] ?? '').toString().trim();
-        final number = (row['exhibitor_number'] ?? '').toString().trim();
-        if (id.isNotEmpty && number.isNotEmpty) {
-            exhibitorNumberById[id] = number;
+        for (final row
+            in (exhibitorRows as List).cast<Map<String, dynamic>>()) {
+          final id = (row['id'] ?? '').toString().trim();
+          if (id.isNotEmpty) {
+            exhibitorById[id] = row;
+          }
         }
-        }
-    }
+      }
 
-    for (final entry in list) {
+      for (final entry in list) {
         final exhibitorId = (entry['exhibitor_id'] ?? '').toString().trim();
-        final exhibitorNumber = exhibitorNumberById[exhibitorId];
-        if (exhibitorNumber != null && exhibitorNumber.isNotEmpty) {
-        entry['exhibitor_number'] = exhibitorNumber;
+        final exhibitor = exhibitorById[exhibitorId];
+        if (exhibitor == null) continue;
+
+        final exhibitorNumber = (exhibitor['exhibitor_number'] ?? '')
+            .toString()
+            .trim();
+        if (exhibitorNumber.isNotEmpty) {
+          entry['exhibitor_number'] = exhibitorNumber;
         }
-    }
+
+        entry['exhibitor_first_name'] = (exhibitor['first_name'] ?? '')
+            .toString()
+            .trim();
+        entry['exhibitor_last_name'] = (exhibitor['last_name'] ?? '')
+            .toString()
+            .trim();
+
+        final displayName = (exhibitor['display_name'] ?? '').toString().trim();
+        final showingName = (exhibitor['showing_name'] ?? '').toString().trim();
+        if (displayName.isNotEmpty) {
+          entry['exhibitor_display_name'] = displayName;
+        }
+        if (showingName.isNotEmpty) {
+          entry['exhibitor_showing_name'] = showingName;
+        }
+      }
     }
 
     // report_checkin_entries does not currently expose every canonical entry
@@ -121,9 +144,9 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
     // before looking up animal-level coop assignments and fur/wool markers.
     final entryIds = list
         .map((entry) {
-        final entryId = (entry['entry_id'] ?? '').toString().trim();
-        if (entryId.isNotEmpty) return entryId;
-        return (entry['id'] ?? '').toString().trim();
+          final entryId = (entry['entry_id'] ?? '').toString().trim();
+          if (entryId.isNotEmpty) return entryId;
+          return (entry['id'] ?? '').toString().trim();
         })
         .where((id) => id.isNotEmpty)
         .toSet()
@@ -134,37 +157,42 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
     const entryPageSize = 500;
 
     for (var i = 0; i < entryIds.length; i += entryPageSize) {
-    final chunk = entryIds.skip(i).take(entryPageSize).toList();
-    if (chunk.isEmpty) continue;
+      final chunk = entryIds.skip(i).take(entryPageSize).toList();
+      if (chunk.isEmpty) continue;
 
-    final entryRows = await supabase
-        .from('entries')
-        .select('id, animal_id, is_fur, class_name')
-        .inFilter('id', chunk);
+      final entryRows = await supabase
+          .from('entries')
+          .select('id, animal_id, is_fur, class_name')
+          .inFilter('id', chunk);
 
-    for (final raw in (entryRows as List).cast<Map<String, dynamic>>()) {
+      for (final raw in (entryRows as List).cast<Map<String, dynamic>>()) {
         final entryId = (raw['id'] ?? '').toString().trim();
         final animalId = (raw['animal_id'] ?? '').toString().trim();
         if (entryId.isEmpty) continue;
 
         if (animalId.isNotEmpty) {
-        animalIdByEntryId[entryId] = animalId;
+          animalIdByEntryId[entryId] = animalId;
         }
 
-        final className = (raw['class_name'] ?? '').toString().trim().toLowerCase();
-        furByEntryId[entryId] = _truthy(raw['is_fur']) || className.contains('fur');
-    }
+        final className = (raw['class_name'] ?? '')
+            .toString()
+            .trim()
+            .toLowerCase();
+        furByEntryId[entryId] =
+            _truthy(raw['is_fur']) || className.contains('fur');
+      }
     }
 
     for (final entry in list) {
-    final entryId = (entry['entry_id'] ?? '').toString().trim().isNotEmpty
-        ? (entry['entry_id'] ?? '').toString().trim()
-        : (entry['id'] ?? '').toString().trim();
-    entry['animal_id'] = animalIdByEntryId[entryId] ?? '';
+      final entryId = (entry['entry_id'] ?? '').toString().trim().isNotEmpty
+          ? (entry['entry_id'] ?? '').toString().trim()
+          : (entry['id'] ?? '').toString().trim();
+      entry['animal_id'] = animalIdByEntryId[entryId] ?? '';
 
-    if (entryId.isNotEmpty) {
-        entry['is_fur'] = _truthy(entry['is_fur']) || (furByEntryId[entryId] ?? false);
-    }
+      if (entryId.isNotEmpty) {
+        entry['is_fur'] =
+            _truthy(entry['is_fur']) || (furByEntryId[entryId] ?? false);
+      }
     }
 
     final showModeRow = await supabase
@@ -189,105 +217,112 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
     const coopPageSize = 500;
 
     for (var i = 0; i < animalIds.length; i += coopPageSize) {
-    final chunk = animalIds.skip(i).take(coopPageSize).toList();
-    if (chunk.isEmpty) continue;
+      final chunk = animalIds.skip(i).take(coopPageSize).toList();
+      if (chunk.isEmpty) continue;
 
-    final coopRows = await supabase
-        .from('show_animal_coop_numbers')
-        .select('animal_id, scope, coop_number')
-        .eq('show_id', widget.showId)
-        .inFilter('animal_id', chunk);
+      final coopRows = await supabase
+          .from('show_animal_coop_numbers')
+          .select('animal_id, scope, coop_number')
+          .eq('show_id', widget.showId)
+          .inFilter('animal_id', chunk);
 
-    for (final raw in (coopRows as List).cast<Map<String, dynamic>>()) {
+      for (final raw in (coopRows as List).cast<Map<String, dynamic>>()) {
         final animalId = (raw['animal_id'] ?? '').toString().trim();
         final scope = (raw['scope'] ?? '').toString().trim().toLowerCase();
         final coopNumber = (raw['coop_number'] ?? '').toString().trim();
         if (animalId.isEmpty || scope.isEmpty) continue;
         coopNumberByAnimalAndScope['$animalId|$scope'] = coopNumber;
-    }
+      }
     }
 
     for (final entry in list) {
-    final animalId = (entry['animal_id'] ?? '').toString().trim();
-    final sectionKind =
-        (entry['section_kind'] ?? '').toString().trim().toLowerCase();
-    final scope = coopNumberingMode == 'combined' ? 'all' : sectionKind;
+      final animalId = (entry['animal_id'] ?? '').toString().trim();
+      final sectionKind = (entry['section_kind'] ?? '')
+          .toString()
+          .trim()
+          .toLowerCase();
+      final scope = coopNumberingMode == 'combined' ? 'all' : sectionKind;
 
-    entry['coop_number'] = animalId.isEmpty || scope.isEmpty
-        ? ''
-        : (coopNumberByAnimalAndScope['$animalId|$scope'] ?? '');
+      entry['coop_number'] = animalId.isEmpty || scope.isEmpty
+          ? ''
+          : (coopNumberByAnimalAndScope['$animalId|$scope'] ?? '');
     }
 
     int toInt(dynamic value, [int fallback = 9999]) {
-    if (value == null) return fallback;
-    if (value is int) return value;
-    return int.tryParse(value.toString()) ?? fallback;
+      if (value == null) return fallback;
+      if (value is int) return value;
+      return int.tryParse(value.toString()) ?? fallback;
     }
 
     int kindRank(String k) {
-    switch (k.toLowerCase()) {
+      switch (k.toLowerCase()) {
         case 'open':
-        return widget.youthFirst ? 1 : 0;
+          return widget.youthFirst ? 1 : 0;
         case 'youth':
-        return widget.youthFirst ? 0 : 1;
+          return widget.youthFirst ? 0 : 1;
         default:
-        return 99;
-    }
+          return 99;
+      }
     }
 
     list.sort((a, b) {
-    final showCmp = _safe(a, 'show_id').compareTo(_safe(b, 'show_id'));
-    if (showCmp != 0) return showCmp;
+      final showCmp = _safe(a, 'show_id').compareTo(_safe(b, 'show_id'));
+      if (showCmp != 0) return showCmp;
 
-    final sectionKindCmp = kindRank(_safe(a, 'section_kind'))
-        .compareTo(kindRank(_safe(b, 'section_kind')));
-    final sectionSortCmp = toInt(a['section_sort_order'])
-        .compareTo(toInt(b['section_sort_order']));
-    final sectionLetterCmp = _safe(a, 'section_letter')
-        .toUpperCase()
-        .compareTo(_safe(b, 'section_letter').toUpperCase());
+      final sectionKindCmp = kindRank(
+        _safe(a, 'section_kind'),
+      ).compareTo(kindRank(_safe(b, 'section_kind')));
+      final sectionSortCmp = toInt(
+        a['section_sort_order'],
+      ).compareTo(toInt(b['section_sort_order']));
+      final sectionLetterCmp = _safe(
+        a,
+        'section_letter',
+      ).toUpperCase().compareTo(_safe(b, 'section_letter').toUpperCase());
 
-    if (widget.pairOpenYouthByLetter) {
+      if (widget.pairOpenYouthByLetter) {
         if (sectionSortCmp != 0) return sectionSortCmp;
         if (sectionLetterCmp != 0) return sectionLetterCmp;
         if (sectionKindCmp != 0) return sectionKindCmp;
-    } else {
+      } else {
         if (sectionKindCmp != 0) return sectionKindCmp;
         if (sectionSortCmp != 0) return sectionSortCmp;
         if (sectionLetterCmp != 0) return sectionLetterCmp;
-    }
+      }
 
-    final exhibitorCmp = _safe(a, 'exhibitor_label')
-        .toLowerCase()
-        .compareTo(_safe(b, 'exhibitor_label').toLowerCase());
-    if (exhibitorCmp != 0) return exhibitorCmp;
+      final exhibitorCmp = _compareExhibitors(a, b);
+      if (exhibitorCmp != 0) return exhibitorCmp;
 
-    final breedCmp = _safe(a, 'breed')
-        .toLowerCase()
-        .compareTo(_safe(b, 'breed').toLowerCase());
-    if (breedCmp != 0) return breedCmp;
+      final breedCmp = _safe(
+        a,
+        'breed',
+      ).toLowerCase().compareTo(_safe(b, 'breed').toLowerCase());
+      if (breedCmp != 0) return breedCmp;
 
-    final varietyCmp = _groupVarietyLabel(a)
-        .toLowerCase()
-        .compareTo(_groupVarietyLabel(b).toLowerCase());
-    if (varietyCmp != 0) return varietyCmp;
+      final varietyCmp = _groupVarietyLabel(
+        a,
+      ).toLowerCase().compareTo(_groupVarietyLabel(b).toLowerCase());
+      if (varietyCmp != 0) return varietyCmp;
 
-    final classSortCmp = toInt(a['class_sort_order'])
-        .compareTo(toInt(b['class_sort_order']));
-    if (classSortCmp != 0) return classSortCmp;
+      final classSortCmp = toInt(
+        a['class_sort_order'],
+      ).compareTo(toInt(b['class_sort_order']));
+      if (classSortCmp != 0) return classSortCmp;
 
-    final sexCmp = _safe(a, 'sex')
-        .toLowerCase()
-        .compareTo(_safe(b, 'sex').toLowerCase());
-    if (sexCmp != 0) return sexCmp;
+      final sexCmp = _safe(
+        a,
+        'sex',
+      ).toLowerCase().compareTo(_safe(b, 'sex').toLowerCase());
+      if (sexCmp != 0) return sexCmp;
 
-    return _safe(a, 'tattoo')
-        .toLowerCase()
-        .compareTo(_safe(b, 'tattoo').toLowerCase());
+      return _safe(
+        a,
+        'tattoo',
+      ).toLowerCase().compareTo(_safe(b, 'tattoo').toLowerCase());
     });
 
     return list;
-}
+  }
 
   bool _emailing = false;
 
@@ -395,7 +430,7 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
 
     return r'$—';
   }
-    
+
   String _emailForExhibitor(List<Map<String, dynamic>> entries) {
     for (final e in entries) {
       final exhibitorEmail = _safe(e, 'exhibitor_email');
@@ -457,10 +492,7 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
     await _loadShowContact();
 
     final theme = await buildPrintPackPdfTheme();
-    final doc = _buildPdf(
-      entries: entries,
-      theme: theme,
-    );
+    final doc = _buildPdf(entries: entries, theme: theme);
 
     return Uint8List.fromList(await doc.save());
   }
@@ -530,7 +562,9 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
         final responseDetails = _formatFunctionResponse(response.data);
         final functionReportedFailure = _functionReportedFailure(response.data);
 
-        if (response.status < 200 || response.status >= 300 || functionReportedFailure) {
+        if (response.status < 200 ||
+            response.status >= 300 ||
+            functionReportedFailure) {
           final detailText = responseDetails.trim().isEmpty
               ? 'Status ${response.status}'
               : 'Status ${response.status}: $responseDetails';
@@ -547,7 +581,8 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
         final failedSummary = failed.isEmpty
             ? ''
             : ' Failed: ${failed.length}. ${failed.take(10).join(' | ')}${failed.length > 10 ? ' | Plus ${failed.length - 10} more.' : ''}';
-        _msg = 'Email complete. Sent: $sent. Skipped with no email: $skipped.$failedSummary';
+        _msg =
+            'Email complete. Sent: $sent. Skipped with no email: $skipped.$failedSummary';
       });
     } catch (e) {
       if (!mounted) return;
@@ -560,6 +595,10 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
 
   String _safe(Map<String, dynamic> e, String k) =>
       (e[k] ?? '').toString().trim();
+
+  String _normalizeSortText(String value) {
+    return value.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
 
   String _displayAgeClassOnly(String raw) {
     final s = raw.trim();
@@ -574,6 +613,51 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
   String _exhibitorNameFromEntry(Map<String, dynamic> entry) {
     final dn = _safe(entry, 'exhibitor_label');
     return dn.isEmpty ? '(Unknown Exhibitor)' : dn;
+  }
+
+  String _exhibitorFirstNameFromEntry(Map<String, dynamic> entry) {
+    final firstName = _safe(entry, 'exhibitor_first_name');
+    if (firstName.isNotEmpty) return firstName;
+    return _safe(entry, 'first_name');
+  }
+
+  String _exhibitorLastNameFromEntry(Map<String, dynamic> entry) {
+    final lastName = _safe(entry, 'exhibitor_last_name');
+    if (lastName.isNotEmpty) return lastName;
+    return _safe(entry, 'last_name');
+  }
+
+  String _exhibitorSortKey(Map<String, dynamic> entry) {
+    final label = _exhibitorNameFromEntry(entry);
+    final firstName = _exhibitorFirstNameFromEntry(entry);
+    final lastName = _exhibitorLastNameFromEntry(entry);
+
+    if (_sortExhibitorsByLastName && lastName.isNotEmpty) {
+      return _normalizeSortText(
+        [lastName, firstName, label].where((part) => part.isNotEmpty).join(' '),
+      );
+    }
+
+    if (!_sortExhibitorsByLastName &&
+        (firstName.isNotEmpty || lastName.isNotEmpty)) {
+      return _normalizeSortText(
+        [firstName, lastName, label].where((part) => part.isNotEmpty).join(' '),
+      );
+    }
+
+    return _normalizeSortText(label);
+  }
+
+  int _compareExhibitors(Map<String, dynamic> a, Map<String, dynamic> b) {
+    final keyCmp = _exhibitorSortKey(a).compareTo(_exhibitorSortKey(b));
+    if (keyCmp != 0) return keyCmp;
+
+    final labelCmp = _normalizeSortText(
+      _exhibitorNameFromEntry(a),
+    ).compareTo(_normalizeSortText(_exhibitorNameFromEntry(b)));
+    if (labelCmp != 0) return labelCmp;
+
+    return _exhibitorNumberFromEntry(a).compareTo(_exhibitorNumberFromEntry(b));
   }
 
   String _exhibitorNumberFromEntry(Map<String, dynamic> entry) {
@@ -605,7 +689,8 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
   }
 
   Map<String, List<Map<String, dynamic>>> _groupByExhibitor(
-      List<Map<String, dynamic>> entries) {
+    List<Map<String, dynamic>> entries,
+  ) {
     final map = <String, List<Map<String, dynamic>>>{};
 
     for (var i = 0; i < entries.length; i++) {
@@ -641,60 +726,71 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
         int kindRank(String k) {
           switch (k.toLowerCase()) {
             case 'open':
-              return 0;
+              return widget.youthFirst ? 1 : 0;
             case 'youth':
-              return 1;
+              return widget.youthFirst ? 0 : 1;
             default:
               return 99;
           }
         }
 
-        final sectionKindCmp = kindRank(_safe(a, 'section_kind'))
-            .compareTo(kindRank(_safe(b, 'section_kind')));
+        final sectionKindCmp = kindRank(
+          _safe(a, 'section_kind'),
+        ).compareTo(kindRank(_safe(b, 'section_kind')));
         if (sectionKindCmp != 0) return sectionKindCmp;
 
-        final sectionSortCmp = toInt(a['section_sort_order'])
-            .compareTo(toInt(b['section_sort_order']));
+        final sectionSortCmp = toInt(
+          a['section_sort_order'],
+        ).compareTo(toInt(b['section_sort_order']));
         if (sectionSortCmp != 0) return sectionSortCmp;
 
-        final sectionLetterCmp = _safe(a, 'section_letter')
-            .toUpperCase()
-            .compareTo(_safe(b, 'section_letter').toUpperCase());
+        final sectionLetterCmp = _safe(
+          a,
+          'section_letter',
+        ).toUpperCase().compareTo(_safe(b, 'section_letter').toUpperCase());
         if (sectionLetterCmp != 0) return sectionLetterCmp;
 
-        final breedSortCmp =
-            toInt(a['breed_sort_order']).compareTo(toInt(b['breed_sort_order']));
+        final breedSortCmp = toInt(
+          a['breed_sort_order'],
+        ).compareTo(toInt(b['breed_sort_order']));
         if (breedSortCmp != 0) return breedSortCmp;
 
-        final breedCmp = _safe(a, 'breed')
-            .toLowerCase()
-            .compareTo(_safe(b, 'breed').toLowerCase());
+        final breedCmp = _safe(
+          a,
+          'breed',
+        ).toLowerCase().compareTo(_safe(b, 'breed').toLowerCase());
         if (breedCmp != 0) return breedCmp;
 
-        final groupSortCmp =
-            toInt(a['group_sort_order']).compareTo(toInt(b['group_sort_order']));
+        final groupSortCmp = toInt(
+          a['group_sort_order'],
+        ).compareTo(toInt(b['group_sort_order']));
         if (groupSortCmp != 0) return groupSortCmp;
 
-        final varietySortCmp = toInt(a['variety_sort_order'])
-            .compareTo(toInt(b['variety_sort_order']));
+        final varietySortCmp = toInt(
+          a['variety_sort_order'],
+        ).compareTo(toInt(b['variety_sort_order']));
         if (varietySortCmp != 0) return varietySortCmp;
 
-        final varietyCmp = _groupVarietyLabel(a)
-            .toLowerCase()
-            .compareTo(_groupVarietyLabel(b).toLowerCase());
+        final varietyCmp = _groupVarietyLabel(
+          a,
+        ).toLowerCase().compareTo(_groupVarietyLabel(b).toLowerCase());
         if (varietyCmp != 0) return varietyCmp;
 
-        final classSortCmp =
-            toInt(a['class_sort_order']).compareTo(toInt(b['class_sort_order']));
+        final classSortCmp = toInt(
+          a['class_sort_order'],
+        ).compareTo(toInt(b['class_sort_order']));
         if (classSortCmp != 0) return classSortCmp;
 
-        final sexCmp =
-            _safe(a, 'sex').toLowerCase().compareTo(_safe(b, 'sex').toLowerCase());
+        final sexCmp = _safe(
+          a,
+          'sex',
+        ).toLowerCase().compareTo(_safe(b, 'sex').toLowerCase());
         if (sexCmp != 0) return sexCmp;
 
-        return _safe(a, 'tattoo')
-            .toLowerCase()
-            .compareTo(_safe(b, 'tattoo').toLowerCase());
+        return _safe(
+          a,
+          'tattoo',
+        ).toLowerCase().compareTo(_safe(b, 'tattoo').toLowerCase());
       });
     }
 
@@ -710,7 +806,8 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
   }
 
   Map<String, List<Map<String, dynamic>>> _groupEntriesBySection(
-      List<Map<String, dynamic>> exEntries) {
+    List<Map<String, dynamic>> exEntries,
+  ) {
     final map = <String, List<Map<String, dynamic>>>{};
     for (final e in exEntries) {
       final sid = (e['section_id'] ?? '').toString();
@@ -721,7 +818,8 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
   }
 
   List<Map<String, dynamic>> _sortedSectionsForExhibitor(
-      List<Map<String, dynamic>> exEntries) {
+    List<Map<String, dynamic>> exEntries,
+  ) {
     final map = <String, Map<String, dynamic>>{};
     for (final e in exEntries) {
       final sid = (e['section_id'] ?? '').toString();
@@ -740,9 +838,9 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
       int kindRank(String k) {
         switch (k) {
           case 'open':
-            return 0;
+            return widget.youthFirst ? 1 : 0;
           case 'youth':
-            return 1;
+            return widget.youthFirst ? 0 : 1;
           default:
             return 99;
         }
@@ -756,10 +854,12 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
 
       final aso = a['sort_order'];
       final bso = b['sort_order'];
-      final asoI =
-          (aso is int) ? aso : int.tryParse(aso?.toString() ?? '') ?? 9999;
-      final bsoI =
-          (bso is int) ? bso : int.tryParse(bso?.toString() ?? '') ?? 9999;
+      final asoI = (aso is int)
+          ? aso
+          : int.tryParse(aso?.toString() ?? '') ?? 9999;
+      final bsoI = (bso is int)
+          ? bso
+          : int.tryParse(bso?.toString() ?? '') ?? 9999;
       final soCmp = asoI.compareTo(bsoI);
       if (soCmp != 0) return soCmp;
 
@@ -787,8 +887,9 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
         kindLabel = 'Youth';
         break;
       default:
-        kindLabel =
-            kind.isEmpty ? 'Section' : kind[0].toUpperCase() + kind.substring(1);
+        kindLabel = kind.isEmpty
+            ? 'Section'
+            : kind[0].toUpperCase() + kind.substring(1);
     }
 
     return letter.isEmpty ? kindLabel : '$kindLabel $letter';
@@ -805,11 +906,10 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
       ..sort((a, b) {
         final aList = grouped[a]!;
         final bList = grouped[b]!;
-        final aName =
-            aList.isEmpty ? '' : _exhibitorNameFromEntry(aList.first).toLowerCase();
-        final bName =
-            bList.isEmpty ? '' : _exhibitorNameFromEntry(bList.first).toLowerCase();
-        return aName.compareTo(bName);
+        if (aList.isEmpty && bList.isEmpty) return 0;
+        if (aList.isEmpty) return -1;
+        if (bList.isEmpty) return 1;
+        return _compareExhibitors(aList.first, bList.first);
       });
 
     final totalPages = exhibitorKeys.length;
@@ -841,10 +941,7 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
             pw.Expanded(
               child: pw.Align(
                 alignment: pw.Alignment.centerRight,
-                child: pw.Text(
-                  right,
-                  style: pw.TextStyle(fontSize: 11),
-                ),
+                child: pw.Text(right, style: pw.TextStyle(fontSize: 11)),
               ),
             ),
             if (trailing != null && trailing.trim().isNotEmpty) ...[
@@ -892,8 +989,9 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
 
       return pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children:
-            lines.map((x) => pw.Text(x, style: pw.TextStyle(fontSize: 9))).toList(),
+        children: lines
+            .map((x) => pw.Text(x, style: pw.TextStyle(fontSize: 9)))
+            .toList(),
       );
     }
 
@@ -1029,7 +1127,8 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
 
               final ageClass = _displayAgeClassOnly(_safe(e, 'class_name'));
               final classNameLower = _safe(e, 'class_name').toLowerCase();
-              final furMark = _truthy(e['is_fur']) ||
+              final furMark =
+                  _truthy(e['is_fur']) ||
                       classNameLower.contains('fur') ||
                       classNameLower.contains('wool')
                   ? 'X'
@@ -1039,11 +1138,7 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
                 children: [
                   pw.Padding(
                     padding: const pw.EdgeInsets.all(6),
-                    child: 
-                    pw.Text(
-                      _safe(e, 'tattoo'),
-                      style: style,
-                    ),
+                    child: pw.Text(_safe(e, 'tattoo'), style: style),
                   ),
                   pw.Padding(
                     padding: const pw.EdgeInsets.all(6),
@@ -1067,10 +1162,7 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
                   ),
                   pw.Padding(
                     padding: const pw.EdgeInsets.all(6),
-                    child: pw.Text(
-                      furMark,
-                      style: style,
-                    ),
+                    child: pw.Text(furMark, style: style),
                   ),
                 ],
               );
@@ -1251,10 +1343,7 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
       }
 
       final theme = await buildPrintPackPdfTheme();
-      final doc = _buildPdf(
-        entries: entries,
-        theme: theme,
-      );
+      final doc = _buildPdf(entries: entries, theme: theme);
       final bytes = await doc.save();
 
       final name = widget.combineSections
@@ -1289,7 +1378,8 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
     final isFullEmailSuccess =
         isEmailComplete && _msg!.contains('Skipped with no email: 0.');
 
-    final isSuccess = _msg != null &&
+    final isSuccess =
+        _msg != null &&
         (_msg == 'Save canceled.' ||
             _msg!.startsWith('PDF saved to:') ||
             isFullEmailSuccess);
@@ -1329,6 +1419,40 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 12),
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                const Text(
+                  'Sort exhibitors by:',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                SegmentedButton<bool>(
+                  segments: const [
+                    ButtonSegment<bool>(
+                      value: false,
+                      label: Text('First name'),
+                      icon: Icon(Icons.sort_by_alpha),
+                    ),
+                    ButtonSegment<bool>(
+                      value: true,
+                      label: Text('Last name'),
+                      icon: Icon(Icons.badge_outlined),
+                    ),
+                  ],
+                  selected: {_sortExhibitorsByLastName},
+                  onSelectionChanged: (_building || _emailing)
+                      ? null
+                      : (values) {
+                          setState(() {
+                            _sortExhibitorsByLastName = values.first;
+                          });
+                        },
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
             if (_msg != null) ...[
               Container(
                 width: double.infinity,
@@ -1360,7 +1484,7 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
                 foregroundColor: Colors.black87,
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
-              onPressed: _building ? null : _generatePdf,
+              onPressed: (_building || _emailing) ? null : _generatePdf,
               icon: const Icon(Icons.picture_as_pdf),
               label: Text(_building ? 'Building PDF…' : 'Generate PDF'),
             ),
@@ -1379,7 +1503,9 @@ Future<List<Map<String, dynamic>>> _fetchEntries() async {
 
             const SizedBox(height: 8),
             OutlinedButton(
-              onPressed: (_building || _emailing) ? null : () => Navigator.pop(context),
+              onPressed: (_building || _emailing)
+                  ? null
+                  : () => Navigator.pop(context),
               child: const Text('Close'),
             ),
           ],
