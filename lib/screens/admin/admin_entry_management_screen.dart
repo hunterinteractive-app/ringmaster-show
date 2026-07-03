@@ -88,7 +88,7 @@ class _AdminEntryManagementScreenState
   }
 
   Future<void> _openAddEntry() async {
-    final saved = await showModalBottomSheet<bool>(
+    final savedSectionIds = await showModalBottomSheet<List<String>>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -103,7 +103,13 @@ class _AdminEntryManagementScreenState
       ),
     );
 
-    if (saved == true) {
+    if (savedSectionIds != null) {
+      if (savedSectionIds.isNotEmpty &&
+          (_selectedSectionId == null ||
+              !savedSectionIds.contains(_selectedSectionId))) {
+        _selectedSectionId = savedSectionIds.first;
+      }
+
       await _loadEntries();
       if (!mounted) return;
       setState(() => _msg = 'Entry added.');
@@ -2199,6 +2205,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
 
   List<Map<String, dynamic>> _exhibitors = [];
   List<Map<String, dynamic>> _animals = [];
+  final Set<String> _savedSectionIdsDuringSession = <String>{};
 
   String? _exhibitorId;
   String? _sectionId;
@@ -3244,14 +3251,17 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
       throw Exception('Enter ZIP code.');
     }
 
-    final existing = await supabase
-        .from('exhibitors')
-        .select(
-          'id,showing_name,display_name,first_name,last_name,email,phone,address_line1,address_line2,city,state,zip,arba_number,type,owner_user_id,is_active,is_local_only,created_for_show_id',
-        )
-        .eq('showing_name', showing)
-        .eq('created_for_show_id', widget.showId)
-        .maybeSingle();
+    Map<String, dynamic>? existing;
+    if (showing.isNotEmpty) {
+      existing = await supabase
+          .from('exhibitors')
+          .select(
+            'id,showing_name,display_name,first_name,last_name,email,phone,address_line1,address_line2,city,state,zip,arba_number,type,owner_user_id,is_active,is_local_only,created_for_show_id',
+          )
+          .eq('showing_name', showing)
+          .eq('created_for_show_id', widget.showId)
+          .maybeSingle();
+    }
 
     if (existing != null) {
       final existingType = (existing['type'] ?? '')
@@ -3599,6 +3609,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
           .select('id,section_id,animal_id,is_fur');
 
       final inserted = (insertedRows as List).cast<Map<String, dynamic>>();
+      _savedSectionIdsDuringSession.addAll(_selectedSectionIds);
 
       for (final sectionId in _selectedSectionIds) {
         final existingFlags =
@@ -3631,7 +3642,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
       if (!mounted) return;
 
       if (!reset) {
-        Navigator.pop(context, true);
+        Navigator.pop(context, _savedSectionIdsDuringSession.toList());
         return;
       }
 
@@ -3658,6 +3669,12 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
         _notes.clear();
         _furNotes.clear();
         if (_addNewExhibitor) {
+          _showingName.clear();
+          _showingNameWasManuallyEdited = false;
+          _firstName.clear();
+          _lastName.clear();
+          _email.clear();
+          _phone.clear();
           _arbaNumber.clear();
           _addressLine1.clear();
           _addressLine2.clear();
@@ -3799,6 +3816,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                         : (v) {
                             setState(() {
                               _addNewExhibitor = v;
+                              _useLocalAnimal = v;
                               _exhibitorId = null;
                               _animal = null;
                               _animals = [];
@@ -4133,24 +4151,6 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                           : 'Use this to add a new animal for the selected exhibitor. Account exhibitors will have it saved to their account.',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
-                  ] else ...[
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Add New Animal'),
-                      subtitle: const Text(
-                        'Enter animal details for this new walk-in/local exhibitor',
-                      ),
-                      value: _useLocalAnimal,
-                      onChanged: (_saving || AppSession.isSupportMode)
-                          ? null
-                          : (v) {
-                              setState(() {
-                                _useLocalAnimal = v;
-                                _animal = null;
-                                _msg = null;
-                              });
-                            },
-                    ),
                   ],
                   if (_useLocalAnimal) ...[
                     DropdownButtonFormField<String>(
@@ -4409,7 +4409,12 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                         child: OutlinedButton(
                           onPressed: _saving
                               ? null
-                              : () => Navigator.pop(context),
+                              : () => Navigator.pop(
+                                    context,
+                                    _savedSectionIdsDuringSession.isEmpty
+                                        ? null
+                                        : _savedSectionIdsDuringSession.toList(),
+                                  ),
                           child: const Text('Cancel'),
                         ),
                       ),
