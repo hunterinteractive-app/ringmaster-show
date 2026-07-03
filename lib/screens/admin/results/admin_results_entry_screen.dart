@@ -166,6 +166,21 @@ String _canonicalAwardCode(String award) {
     return 'BOSB';
   }
 
+  if (value == 'b4c' ||
+      value == 'best 4 class' ||
+      value == 'best 4-class' ||
+      value == 'best four class' ||
+      value == 'best four-class') {
+    return 'Best 4-Class';
+  }
+  if (value == 'b6c' ||
+      value == 'best 6 class' ||
+      value == 'best 6-class' ||
+      value == 'best six class' ||
+      value == 'best six-class') {
+    return 'Best 6-Class';
+  }
+
   return raw;
 }
 
@@ -4541,7 +4556,7 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
 
   List<String> _awardsForEntry(Map<String, dynamic> e) {
     return ((e['_awards'] as List?) ?? const [])
-        .map((x) => x.toString().trim())
+        .map((x) => _canonicalAwardCode(x.toString()))
         .where((x) => x.isNotEmpty)
         .toList();
   }
@@ -5931,7 +5946,9 @@ if (storedJudgeId.isEmpty) {
   String _sectionId(Map<String, dynamic> e) => (e['section_id'] ?? '').toString().trim();
 
   List<String> _entryAwards(Map<String, dynamic> e) =>
-      (((e['_awards'] as List?) ?? const []).map((x) => x.toString().trim()).where((x) => x.isNotEmpty))
+      (((e['_awards'] as List?) ?? const [])
+              .map((x) => _canonicalAwardCode(x.toString()))
+              .where((x) => x.isNotEmpty))
           .toList();
 
   String _effectiveStatusFor(Map<String, dynamic> e) {

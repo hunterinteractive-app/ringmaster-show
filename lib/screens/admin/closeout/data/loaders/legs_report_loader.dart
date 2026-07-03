@@ -1023,6 +1023,14 @@ class LegsReportLoader {
       case 'BESTOPPOSITESEXBREED':
       case 'BESTOPPOSITEBREED':
         return 'BOSB';
+      case 'B4C':
+      case 'BEST4CLASS':
+      case 'BESTFOURCLASS':
+        return 'B4C';
+      case 'B6C':
+      case 'BEST6CLASS':
+      case 'BESTSIXCLASS':
+        return 'B6C';
       default:
         return value.trim().toUpperCase();
     }
