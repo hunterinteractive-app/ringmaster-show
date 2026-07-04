@@ -600,6 +600,85 @@ class _CheckInGeneratorSheetState extends State<CheckInGeneratorSheet> {
     return value.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 
+  bool _hasMultiNameSeparator(String label) {
+    return RegExp(r'[/&+,]|\band\b', caseSensitive: false).hasMatch(label);
+  }
+
+  String _displayNameSortKey(String label, {required bool byLastName}) {
+    final normalizedLabel = _normalizeSortText(label);
+    if (!byLastName) return normalizedLabel;
+
+    final trimmedLabel = label.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final commaParts = trimmedLabel
+        .split(',')
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .toList();
+    final firstCommaTokens = commaParts.isEmpty
+        ? const <String>[]
+        : commaParts.first
+              .split(RegExp(r'\s+'))
+              .where((part) => part.isNotEmpty)
+              .toList();
+
+    if (commaParts.length == 2 && firstCommaTokens.length == 1) {
+      return _normalizeSortText('${commaParts.first} ${commaParts.last}');
+    }
+
+    final separatorPattern = RegExp(
+      r'\s*(?:/|&|\+|\band\b)\s*',
+      caseSensitive: false,
+    );
+    final names = (commaParts.length > 1 ? commaParts : <String>[trimmedLabel])
+        .expand((part) => part.split(separatorPattern))
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .toList();
+
+    if (names.isEmpty) return normalizedLabel;
+
+    String? sharedLastNameFor(int index) {
+      for (var i = index + 1; i < names.length; i++) {
+        final tokens = names[i]
+            .split(RegExp(r'\s+'))
+            .where((part) => part.isNotEmpty)
+            .toList();
+        if (tokens.length >= 2) return tokens.last;
+      }
+      for (var i = index - 1; i >= 0; i--) {
+        final tokens = names[i]
+            .split(RegExp(r'\s+'))
+            .where((part) => part.isNotEmpty)
+            .toList();
+        if (tokens.length >= 2) return tokens.last;
+      }
+      return null;
+    }
+
+    final nameKeys = names.asMap().entries.map((entry) {
+      final name = entry.value;
+      final normalizedName = name.replaceAll(RegExp(r'\s+'), ' ').trim();
+      final tokens = normalizedName
+          .split(RegExp(r'\s+'))
+          .where((part) => part.isNotEmpty)
+          .toList();
+      if (tokens.length < 2) {
+        final sharedLastName = sharedLastNameFor(entry.key);
+        return _normalizeSortText(
+          sharedLastName == null
+              ? normalizedName
+              : '$sharedLastName $normalizedName',
+        );
+      }
+
+      final lastName = tokens.last;
+      final firstNames = tokens.take(tokens.length - 1).join(' ');
+      return _normalizeSortText('$lastName $firstNames');
+    });
+
+    return nameKeys.join(' ');
+  }
+
   String _displayAgeClassOnly(String raw) {
     final s = raw.trim();
     if (s.isEmpty) return '';
@@ -632,6 +711,10 @@ class _CheckInGeneratorSheetState extends State<CheckInGeneratorSheet> {
     final firstName = _exhibitorFirstNameFromEntry(entry);
     final lastName = _exhibitorLastNameFromEntry(entry);
 
+    if (_sortExhibitorsByLastName && _hasMultiNameSeparator(label)) {
+      return _displayNameSortKey(label, byLastName: true);
+    }
+
     if (_sortExhibitorsByLastName && lastName.isNotEmpty) {
       return _normalizeSortText(
         [lastName, firstName, label].where((part) => part.isNotEmpty).join(' '),
@@ -645,7 +728,7 @@ class _CheckInGeneratorSheetState extends State<CheckInGeneratorSheet> {
       );
     }
 
-    return _normalizeSortText(label);
+    return _displayNameSortKey(label, byLastName: _sortExhibitorsByLastName);
   }
 
   int _compareExhibitors(Map<String, dynamic> a, Map<String, dynamic> b) {
