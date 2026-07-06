@@ -289,8 +289,38 @@ class LegsReportLoader {
         return a.earNumber.compareTo(b.earNumber);
       });
 
+      final missingSanctionContexts = _missingArbaSanctionContexts(output);
+      if (missingSanctionContexts.isNotEmpty) {
+        throw Exception(
+          'Leg certificates are blocked until each section has an ARBA sanction number: '
+          '${missingSanctionContexts.join('; ')}.',
+        );
+      }
+
       return output;
     }
+
+  List<String> _missingArbaSanctionContexts(
+    List<LegsCertificateData> certificates,
+  ) {
+    final contexts = <String>{};
+
+    for (final certificate in certificates) {
+      if (certificate.sanctionNumber.trim().isNotEmpty) continue;
+
+      final exhibitorName = certificate.exhibitorName.trim().isEmpty
+          ? 'Unknown exhibitor'
+          : certificate.exhibitorName.trim();
+      final earNumber = certificate.earNumber.trim().isEmpty
+          ? 'unknown ear'
+          : certificate.earNumber.trim();
+      final section = _sectionFromCertificateId(certificate.certificateId);
+      final sectionLabel = section.isEmpty ? 'unknown section' : 'Show $section';
+      contexts.add('$sectionLabel ($exhibitorName, $earNumber)');
+    }
+
+    return contexts.toList()..sort();
+  }
 
   Future<Map<String, dynamic>?> _loadArbaDetails(String showId) async {
     try {

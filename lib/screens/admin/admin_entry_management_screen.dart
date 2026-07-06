@@ -9,6 +9,139 @@ import 'package:ringmaster_show/services/app_session.dart';
 
 final supabase = Supabase.instance.client;
 
+String _entryLookupKey(String value) {
+  return value.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
+}
+
+String? _canonicalNameFromOptions(
+  Iterable<Map<String, dynamic>> options,
+  String rawName,
+) {
+  final key = _entryLookupKey(rawName);
+  if (key.isEmpty) return null;
+
+  for (final option in options) {
+    final name = (option['name'] ?? '').toString().trim();
+    if (name.isNotEmpty && _entryLookupKey(name) == key) {
+      return name;
+    }
+  }
+
+  return null;
+}
+
+Future<String> _canonicalEntryVarietyName({
+  required String species,
+  required String breedName,
+  required String varietyName,
+  required List<Map<String, dynamic>> breedOptions,
+  required List<Map<String, dynamic>> varietyOptions,
+  String? showId,
+  String? breedId,
+}) async {
+  final trimmedVariety = varietyName.trim();
+  if (trimmedVariety.isEmpty) return trimmedVariety;
+
+  final loadedMatch = _canonicalNameFromOptions(varietyOptions, trimmedVariety);
+  if (loadedMatch != null) return loadedMatch;
+
+  final trimmedBreed = breedName.trim();
+  if (trimmedBreed.isEmpty) return trimmedVariety;
+
+  try {
+    final normalizedSpecies = species.trim().toLowerCase();
+
+    if (normalizedSpecies == 'cavy') {
+      final cavyRows = await supabase
+          .from('cavy_sop_variety_order')
+          .select('variety_name')
+          .eq('breed_name', trimmedBreed);
+
+      final cavyOptions = (cavyRows as List).cast<Map<String, dynamic>>().map(
+        (row) => {'name': (row['variety_name'] ?? '').toString()},
+      );
+
+      return _canonicalNameFromOptions(cavyOptions, trimmedVariety) ??
+          trimmedVariety;
+    }
+
+    var resolvedBreedId = breedId?.trim() ?? '';
+    if (resolvedBreedId.isEmpty) {
+      final breedMatch = breedOptions.firstWhere(
+        (breed) =>
+            _entryLookupKey((breed['name'] ?? '').toString()) ==
+            _entryLookupKey(trimmedBreed),
+        orElse: () => <String, dynamic>{},
+      );
+      resolvedBreedId = (breedMatch['id'] ?? '').toString().trim();
+    }
+
+    if (resolvedBreedId.isEmpty) {
+      final breedRows = await supabase
+          .from('breeds')
+          .select('id,name')
+          .eq('species', normalizedSpecies)
+          .eq('is_active', true);
+
+      for (final row in (breedRows as List).cast<Map<String, dynamic>>()) {
+        if (_entryLookupKey((row['name'] ?? '').toString()) ==
+            _entryLookupKey(trimmedBreed)) {
+          resolvedBreedId = (row['id'] ?? '').toString().trim();
+          break;
+        }
+      }
+    }
+
+    if (resolvedBreedId.isEmpty) return trimmedVariety;
+
+    final globalRows = await supabase
+        .from('varieties')
+        .select('id,name')
+        .eq('breed_id', resolvedBreedId)
+        .eq('is_active', true);
+
+    final effective = (globalRows as List)
+        .cast<Map<String, dynamic>>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+
+    final trimmedShowId = showId?.trim();
+    if (trimmedShowId != null && trimmedShowId.isNotEmpty) {
+      final showRows = await supabase
+          .from('show_varieties')
+          .select('id,variety_id,custom_name,is_enabled')
+          .eq('show_id', trimmedShowId)
+          .eq('breed_id', resolvedBreedId);
+
+      final disabledGlobalIds = <String>{};
+      for (final row in (showRows as List).cast<Map<String, dynamic>>()) {
+        final varietyId = (row['variety_id'] ?? '').toString().trim();
+        if (varietyId.isNotEmpty && row['is_enabled'] == false) {
+          disabledGlobalIds.add(varietyId);
+        }
+
+        final customName = (row['custom_name'] ?? '').toString().trim();
+        if (customName.isNotEmpty && row['is_enabled'] == true) {
+          effective.add({
+            'id': (row['id'] ?? customName).toString(),
+            'name': customName,
+          });
+        }
+      }
+
+      effective.removeWhere(
+        (row) => disabledGlobalIds.contains((row['id'] ?? '').toString()),
+      );
+    }
+
+    return _canonicalNameFromOptions(effective, trimmedVariety) ??
+        trimmedVariety;
+  } catch (e) {
+    debugPrint('Variety canonicalization failed: $e');
+    return trimmedVariety;
+  }
+}
+
 class AdminEntryManagementScreen extends StatefulWidget {
   final String showId;
   final String showName;
@@ -1405,6 +1538,15 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
       final furVariety = _furVarietyValue?.trim().isNotEmpty == true
           ? _furVarietyValue!.trim()
           : null;
+      final canonicalVariety = await _canonicalEntryVarietyName(
+        species: _species,
+        breedName: _breed.text,
+        varietyName: _variety.text,
+        breedOptions: _breedOptions,
+        varietyOptions: _varietyOptions,
+        showId: showId,
+        breedId: _breedId,
+      );
 
       final basePayload = <String, dynamic>{
         'animal_name': _animalName.text.trim().isEmpty
@@ -1414,7 +1556,7 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
             ? null
             : _tattoo.text.trim().toUpperCase(),
         'breed': _breed.text.trim().isEmpty ? null : _breed.text.trim(),
-        'variety': _variety.text.trim().isEmpty ? null : _variety.text.trim(),
+        'variety': canonicalVariety.isEmpty ? null : canonicalVariety,
         'sex': _sexValue == null || _sexValue!.trim().isEmpty
             ? null
             : _sexValue!.trim(),
@@ -3588,6 +3730,24 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
         throw Exception('Select class');
       }
 
+      final entrySpecies = _useLocalAnimal
+          ? _species
+          : (_animal!['species'] ?? '').toString().trim();
+      final entryBreed = _useLocalAnimal
+          ? _breed.text.trim()
+          : (_animal!['breed'] ?? '').toString().trim();
+      final entryVariety = await _canonicalEntryVarietyName(
+        species: entrySpecies,
+        breedName: entryBreed,
+        varietyName: _useLocalAnimal
+            ? _variety.text
+            : (_animal!['variety'] ?? '').toString(),
+        breedOptions: _breedOptions,
+        varietyOptions: _useLocalAnimal ? _varietyOptions : const [],
+        showId: widget.showId,
+        breedId: _useLocalAnimal ? _breedId : null,
+      );
+
       String? animalId;
 
       if (_useLocalAnimal) {
@@ -3598,8 +3758,8 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
             .from('animals')
             .select('id')
             .eq('tattoo', normalizedTattoo)
-            .eq('breed', _breed.text.trim())
-            .eq('species', _species);
+            .eq('breed', entryBreed)
+            .eq('species', entrySpecies);
 
         if (exhibitorOwnerUserId.isNotEmpty) {
           existingAnimalQuery = existingAnimalQuery.eq(
@@ -3625,15 +3785,13 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                     ? null
                     : exhibitorOwnerUserId,
                 'exhibitor_id': resolvedExhibitorId,
-                'species': _species,
+                'species': entrySpecies,
                 'name': _animalName.text.trim().isEmpty
                     ? null
                     : _animalName.text.trim(),
                 'tattoo': normalizedTattoo,
-                'breed': _breed.text.trim(),
-                'variety': _variety.text.trim().isEmpty
-                    ? null
-                    : _variety.text.trim(),
+                'breed': entryBreed,
+                'variety': entryVariety.isEmpty ? null : entryVariety,
                 'sex': _sexValue,
                 'created_at': now,
                 'updated_at': now,
@@ -3705,10 +3863,8 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
               : ((_animal!['name'] ?? '').toString().trim().isEmpty
                     ? null
                     : (_animal!['name'] ?? '').toString().trim()),
-          'breed': _useLocalAnimal ? _breed.text.trim() : _animal!['breed'],
-          'variety': _useLocalAnimal
-              ? _variety.text.trim()
-              : _animal!['variety'],
+          'breed': entryBreed,
+          'variety': entryVariety.isEmpty ? null : entryVariety,
           'sex': _useLocalAnimal ? _sexValue : _animal!['sex'],
           'class_name': selectedClass,
           'notes': _notes.text.trim().isEmpty ? null : _notes.text.trim(),

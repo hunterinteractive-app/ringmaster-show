@@ -56,8 +56,9 @@ class ArbaReportLoader {
     ]);
 
     final superintendentName = await _loadSuperintendentName(request.showId);
-    final superintendentArbaNumber =
-        await _loadSuperintendentArbaNumber(request.showId);
+    final superintendentArbaNumber = await _loadSuperintendentArbaNumber(
+      request.showId,
+    );
 
     final sweepstakesIssue = arbaDetails?['sweepstakes_issue'] == true;
     final sweepstakesClub = _str(arbaDetails?['sweepstakes_club']);
@@ -73,10 +74,7 @@ class ArbaReportLoader {
 
     final clubName = _firstNonEmpty([
       _str(show['club_name']),
-      await _loadClubName(
-        request.showId,
-        sectionId: sectionId,
-      ),
+      await _loadClubName(request.showId, sectionId: sectionId),
     ]);
 
     final rabbitsShown = await _countShownSpecies(
@@ -114,8 +112,9 @@ class ArbaReportLoader {
       sectionId: sectionId,
     );
 
-    final signedBy =
-        secretaryName.isNotEmpty ? secretaryName : await _loadSignedByName();
+    final signedBy = secretaryName.isNotEmpty
+        ? secretaryName
+        : await _loadSignedByName();
 
     final filedDate = DateTime.now();
 
@@ -163,6 +162,28 @@ class ArbaReportLoader {
             sectionId: sectionId,
           );
 
+    final validationIssues = _validateRequiredArbaReportData(
+      sanctionNumber: sanctionNumber,
+      secretaryName: secretaryName,
+      secretaryEmail: secretaryEmail,
+      secretaryPhone: secretaryPhone,
+      secretaryAddress: secretaryAddress,
+      superintendentName: superintendentName,
+      superintendentArbaNumber: superintendentArbaNumber,
+      judges: judges,
+      rabbitsShown: rabbitsShown,
+      caviesShown: caviesShown,
+      bisRabbit: bisRabbit,
+      bisCavy: bisCavy,
+    );
+
+    if (validationIssues.isNotEmpty) {
+      throw Exception(
+        'ARBA report is blocked until required closeout data is complete: '
+        '${validationIssues.join('; ')}.',
+      );
+    }
+
     return ArbaReportData(
       showName: showName,
       sectionId: sectionId,
@@ -186,8 +207,9 @@ class ArbaReportLoader {
       sweepstakesReportsFiledAt: sweepstakesReportsFiledAt,
       judges: judges,
       troubleReceivingSanctions: _yesNo(sweepstakesIssue),
-      troubleReceivingSanctionClubs:
-          sweepstakesIssue ? _naIfEmpty(sweepstakesClub) : 'N/A',
+      troubleReceivingSanctionClubs: sweepstakesIssue
+          ? _naIfEmpty(sweepstakesClub)
+          : 'N/A',
       filedDate: filedDate,
       signedBy: signedBy,
       protestFiled: _yesNo(officialProtest),
@@ -201,6 +223,66 @@ class ArbaReportLoader {
       bisCavyBreed: bisCavy.breed,
       bisCavyEarNumber: bisCavy.earNumber,
     );
+  }
+
+  List<String> _validateRequiredArbaReportData({
+    required String sanctionNumber,
+    required String secretaryName,
+    required String secretaryEmail,
+    required String secretaryPhone,
+    required String secretaryAddress,
+    required String superintendentName,
+    required String superintendentArbaNumber,
+    required List<String> judges,
+    required int rabbitsShown,
+    required int caviesShown,
+    required _ArbaBestAwardInfo bisRabbit,
+    required _ArbaBestAwardInfo bisCavy,
+  }) {
+    final issues = <String>[];
+
+    void requireText(String value, String label) {
+      if (value.trim().isEmpty) issues.add(label);
+    }
+
+    requireText(sanctionNumber, 'ARBA sanction number');
+    requireText(secretaryName, 'show secretary name');
+    requireText(secretaryAddress, 'show secretary address');
+    requireText(secretaryEmail, 'show secretary email');
+    requireText(secretaryPhone, 'show secretary phone');
+    requireText(superintendentName, 'show superintendent name');
+    requireText(superintendentArbaNumber, 'show superintendent ARBA number');
+
+    if (judges.where((judge) => judge.trim().isNotEmpty).isEmpty) {
+      issues.add('at least one assigned judge');
+    }
+
+    if (rabbitsShown > 0) {
+      _requireBestAwardInfo(issues, 'Best In Show Rabbit', bisRabbit);
+    }
+
+    if (caviesShown > 0) {
+      _requireBestAwardInfo(issues, 'Best In Show Cavy', bisCavy);
+    }
+
+    return issues;
+  }
+
+  void _requireBestAwardInfo(
+    List<String> issues,
+    String label,
+    _ArbaBestAwardInfo award,
+  ) {
+    final missing = <String>[];
+
+    if (award.owner.trim().isEmpty) missing.add('owner');
+    if (award.cityState.trim().isEmpty) missing.add('owner city/state');
+    if (award.breed.trim().isEmpty) missing.add('breed');
+    if (award.earNumber.trim().isEmpty) missing.add('ear number');
+
+    if (missing.isNotEmpty) {
+      issues.add('$label ${missing.join(', ')}');
+    }
   }
 
   Future<List<String>> _loadJudgeNamesFromEntries(
@@ -230,32 +312,37 @@ class ArbaReportLoader {
 
       final judgeRows = await repo.supabase
           .from('judges')
-          .select('id, name, display_name, first_name, last_name, arba_judge_number')
+          .select(
+            'id, name, display_name, first_name, last_name, arba_judge_number',
+          )
           .inFilter('id', judgeIds);
 
-      return List<Map<String, dynamic>>.from(judgeRows).map((j) {
-        final name = _firstNonEmpty([
-          _str(j['display_name']),
-          _str(j['name']),
-          [
-            _str(j['first_name']),
-            _str(j['last_name']),
-          ].where((e) => e.isNotEmpty).join(' '),
-        ]);
+      return List<Map<String, dynamic>>.from(judgeRows)
+          .map((j) {
+            final name = _firstNonEmpty([
+              _str(j['display_name']),
+              _str(j['name']),
+              [
+                _str(j['first_name']),
+                _str(j['last_name']),
+              ].where((e) => e.isNotEmpty).join(' '),
+            ]);
 
-        final number = _str(j['arba_judge_number']);
-        if (number.isEmpty) return name;
+            final number = _str(j['arba_judge_number']);
+            if (number.isEmpty) return name;
 
-        final normalizedName = name.toLowerCase();
-        final normalizedNumber = number.toLowerCase();
-        if (normalizedName.contains('#$normalizedNumber') ||
-            normalizedName.contains('($normalizedNumber)') ||
-            normalizedName.contains(normalizedNumber)) {
-          return name;
-        }
+            final normalizedName = name.toLowerCase();
+            final normalizedNumber = number.toLowerCase();
+            if (normalizedName.contains('#$normalizedNumber') ||
+                normalizedName.contains('($normalizedNumber)') ||
+                normalizedName.contains(normalizedNumber)) {
+              return name;
+            }
 
-        return '$name - $number';
-      }).where((e) => e.trim().isNotEmpty).toList();
+            return '$name - $number';
+          })
+          .where((e) => e.trim().isNotEmpty)
+          .toList();
     } catch (_) {
       return const [];
     }
@@ -424,27 +511,24 @@ class ArbaReportLoader {
     }
   }
 
-  Future<String> _loadSanctionNumber(
-    String showId, {
-    String? sectionId,
-  }) async {
+  Future<String> _loadSanctionNumber(String showId, {String? sectionId}) async {
     try {
       final row = (sectionId != null && sectionId.trim().isNotEmpty)
           ? await repo.supabase
-              .from('show_sanctions')
-              .select('sanction_number')
-              .eq('show_id', showId)
-              .eq('sanctioning_body', 'ARBA')
-              .eq('section_id', sectionId.trim())
-              .limit(1)
-              .maybeSingle()
+                .from('show_sanctions')
+                .select('sanction_number')
+                .eq('show_id', showId)
+                .eq('sanctioning_body', 'ARBA')
+                .eq('section_id', sectionId.trim())
+                .limit(1)
+                .maybeSingle()
           : await repo.supabase
-              .from('show_sanctions')
-              .select('sanction_number')
-              .eq('show_id', showId)
-              .eq('sanctioning_body', 'ARBA')
-              .limit(1)
-              .maybeSingle();
+                .from('show_sanctions')
+                .select('sanction_number')
+                .eq('show_id', showId)
+                .eq('sanctioning_body', 'ARBA')
+                .limit(1)
+                .maybeSingle();
 
       if (row == null) return '';
       return _str(row['sanction_number']);
@@ -453,10 +537,7 @@ class ArbaReportLoader {
     }
   }
 
-  Future<String> _loadClubName(
-    String showId, {
-    String? sectionId,
-  }) async {
+  Future<String> _loadClubName(String showId, {String? sectionId}) async {
     try {
       final showRow = await repo.supabase
           .from('shows')
@@ -476,20 +557,20 @@ class ArbaReportLoader {
     try {
       final row = (sectionId != null && sectionId.trim().isNotEmpty)
           ? await repo.supabase
-              .from('show_sanctions')
-              .select('club_name')
-              .eq('show_id', showId)
-              .neq('club_name', 'ARBA')
-              .eq('section_id', sectionId.trim())
-              .limit(1)
-              .maybeSingle()
+                .from('show_sanctions')
+                .select('club_name')
+                .eq('show_id', showId)
+                .neq('club_name', 'ARBA')
+                .eq('section_id', sectionId.trim())
+                .limit(1)
+                .maybeSingle()
           : await repo.supabase
-              .from('show_sanctions')
-              .select('club_name')
-              .eq('show_id', showId)
-              .neq('club_name', 'ARBA')
-              .limit(1)
-              .maybeSingle();
+                .from('show_sanctions')
+                .select('club_name')
+                .eq('show_id', showId)
+                .neq('club_name', 'ARBA')
+                .limit(1)
+                .maybeSingle();
 
       if (row == null) return '';
       return _str(row['club_name']);
@@ -506,18 +587,18 @@ class ArbaReportLoader {
     try {
       final rows = (sectionId != null && sectionId.trim().isNotEmpty)
           ? await repo.supabase
-              .from('entries')
-              .select('id')
-              .eq('show_id', showId)
-              .eq('is_shown', true)
-              .eq('species', species)
-              .eq('section_id', sectionId.trim())
+                .from('entries')
+                .select('id')
+                .eq('show_id', showId)
+                .eq('is_shown', true)
+                .eq('species', species)
+                .eq('section_id', sectionId.trim())
           : await repo.supabase
-              .from('entries')
-              .select('id')
-              .eq('show_id', showId)
-              .eq('is_shown', true)
-              .eq('species', species);
+                .from('entries')
+                .select('id')
+                .eq('show_id', showId)
+                .eq('is_shown', true)
+                .eq('species', species);
 
       return (rows as List).length;
     } catch (_) {
@@ -608,7 +689,6 @@ class ArbaReportLoader {
     }
   }
 
-
   Future<String> _loadSignedByName() async {
     try {
       final user = repo.supabase.auth.currentUser;
@@ -628,7 +708,9 @@ class ArbaReportLoader {
       ].where((e) => e.isNotEmpty).join(' ');
 
       if (fullName.isNotEmpty) return fullName;
-      if (_str(row['showing_name']).isNotEmpty) return _str(row['showing_name']);
+      if (_str(row['showing_name']).isNotEmpty) {
+        return _str(row['showing_name']);
+      }
       return _str(row['email']);
     } catch (_) {
       return '';
@@ -704,13 +786,11 @@ class ArbaReportLoader {
       }
 
       final normalizedAwardCodes = awardCodes.map(_normalizeAwardCode).toSet();
-      final normalizedFallbackAwardCodes =
-          fallbackAwardCodes.map(_normalizeAwardCode).toSet();
+      final normalizedFallbackAwardCodes = fallbackAwardCodes
+          .map(_normalizeAwardCode)
+          .toSet();
 
-      String? awardEntryId = _findAwardEntryId(
-        awardRows,
-        normalizedAwardCodes,
-      );
+      String? awardEntryId = _findAwardEntryId(awardRows, normalizedAwardCodes);
 
       if (awardEntryId == null || awardEntryId.isEmpty) {
         awardEntryId = _findAwardEntryId(
@@ -739,10 +819,7 @@ class ArbaReportLoader {
         ].where((e) => e.isNotEmpty).join(' '),
       ]);
 
-      final cityState = await _loadEntryCityState(
-        entry,
-        entryId: awardEntryId,
-      );
+      final cityState = await _loadEntryCityState(entry, entryId: awardEntryId);
 
       return _ArbaBestAwardInfo(
         owner: owner,
@@ -760,7 +837,9 @@ class ArbaReportLoader {
     }
   }
 
-  Future<Map<String, String>> _loadEntrySpeciesById(List<String> entryIds) async {
+  Future<Map<String, String>> _loadEntrySpeciesById(
+    List<String> entryIds,
+  ) async {
     final ids = entryIds.where((e) => e.trim().isNotEmpty).toSet().toList();
     if (ids.isEmpty) return const {};
 
@@ -991,11 +1070,11 @@ class _ArbaArtifactContext {
   });
 
   const _ArbaArtifactContext.empty()
-      : artifactId = '',
-        sectionId = '',
-        showLetter = '',
-        sectionLabel = '',
-        scope = '';
+    : artifactId = '',
+      sectionId = '',
+      showLetter = '',
+      sectionLabel = '',
+      scope = '';
 }
 
 class _ArbaBestAwardInfo {
@@ -1012,8 +1091,8 @@ class _ArbaBestAwardInfo {
   });
 
   const _ArbaBestAwardInfo.empty()
-      : owner = '',
-        cityState = '',
-        breed = '',
-        earNumber = '';
+    : owner = '',
+      cityState = '',
+      breed = '',
+      earNumber = '';
 }
