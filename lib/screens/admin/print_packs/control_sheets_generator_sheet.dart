@@ -3,6 +3,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:pdf/pdf.dart';
@@ -1919,8 +1920,8 @@ class _ControlSheetsGeneratorSheetState
             ),
             FilledButton.icon(
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFFD4A623),
-                foregroundColor: Colors.black87,
+                backgroundColor: AppColors.primaryButton,
+                foregroundColor: AppColors.primaryButtonText,
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
               onPressed: _building
@@ -1938,7 +1939,7 @@ class _ControlSheetsGeneratorSheetState
               decoration: BoxDecoration(
                 color: const Color(0xFFFFF7E0),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFD4A623)),
+                border: Border.all(color: AppColors.gold),
               ),
               child: const Text(
                 'QR Code Option: adds a secure results-entry QR code to each judging sheet so writers can enter results directly into the system.',
@@ -1951,8 +1952,8 @@ class _ControlSheetsGeneratorSheetState
             const SizedBox(height: 8),
             FilledButton.icon(
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF11285A),
-                foregroundColor: Colors.white,
+                backgroundColor: AppColors.header,
+                foregroundColor: AppColors.headerForeground,
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
               onPressed: _building

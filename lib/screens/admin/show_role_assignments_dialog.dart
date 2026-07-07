@@ -3,6 +3,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 final supabase = Supabase.instance.client;
@@ -16,10 +17,8 @@ class ShowRoleAssignmentsDialog {
     await showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => _ShowRoleAssignmentsDialog(
-        showId: showId,
-        showName: showName,
-      ),
+      builder: (_) =>
+          _ShowRoleAssignmentsDialog(showId: showId, showName: showName),
     );
   }
 }
@@ -51,7 +50,8 @@ class _UserSearchResult {
     this.exhibitorId,
   });
 
-  String get selectionKey => '${id}_${exhibitorId ?? displayName.trim().toLowerCase()}';
+  String get selectionKey =>
+      '${id}_${exhibitorId ?? displayName.trim().toLowerCase()}';
 
   String get label {
     final name = displayName.trim();
@@ -198,10 +198,7 @@ class _ShowRoleAssignmentsDialogState
 
     final response = await supabase.rpc(
       'search_show_staff_users',
-      params: {
-        'p_query': null,
-        'p_user_ids': userIds,
-      },
+      params: {'p_query': null, 'p_user_ids': userIds},
     );
 
     final users = <String, _UserSearchResult>{};
@@ -221,18 +218,18 @@ class _ShowRoleAssignmentsDialogState
     final email = row['email']?.toString() ?? '';
     final firstName = row['first_name']?.toString().trim() ?? '';
     final lastName = row['last_name']?.toString().trim() ?? '';
-    final combinedName = [firstName, lastName]
-        .where((part) => part.isNotEmpty)
-        .join(' ')
-        .trim();
+    final combinedName = [
+      firstName,
+      lastName,
+    ].where((part) => part.isNotEmpty).join(' ').trim();
 
-    final displayName = (
-      row['display_name'] ??
-      row['full_name'] ??
-      row['name'] ??
-      (combinedName.isNotEmpty ? combinedName : null) ??
-      ''
-    ).toString();
+    final displayName =
+        (row['display_name'] ??
+                row['full_name'] ??
+                row['name'] ??
+                (combinedName.isNotEmpty ? combinedName : null) ??
+                '')
+            .toString();
 
     return _UserSearchResult(
       id: id,
@@ -281,10 +278,7 @@ class _ShowRoleAssignmentsDialogState
     try {
       final response = await supabase.rpc(
         'search_show_staff_users',
-        params: {
-          'p_query': query,
-          'p_user_ids': null,
-        },
+        params: {'p_query': query, 'p_user_ids': null},
       );
 
       final resultsByKey = <String, _UserSearchResult>{};
@@ -336,7 +330,10 @@ class _ShowRoleAssignmentsDialogState
     }
 
     if (!_allowedRoles.contains(_selectedRole)) {
-      setState(() => _msg = 'Only Show Secretary/Admin, Superintendent, and Reporting Clerk can be assigned here.');
+      setState(
+        () => _msg =
+            'Only Show Secretary/Admin, Superintendent, and Reporting Clerk can be assigned here.',
+      );
       return;
     }
 
@@ -361,22 +358,23 @@ class _ShowRoleAssignmentsDialogState
           if (!mounted) return;
           setState(() {
             _saving = false;
-            _msg = '${user.label} already has ${_roleLabel(existingRole)} access. '
+            _msg =
+                '${user.label} already has ${_roleLabel(existingRole)} access. '
                 'That role cannot be changed from this dialog.';
           });
           return;
         }
       }
 
-      final assignmentId = (await supabase.rpc(
+      final assignmentId =
+          (await supabase.rpc(
             'assign_show_staff_role',
             params: {
               'p_show_id': widget.showId,
               'p_user_id': user.id,
               'p_role': _selectedRole,
             },
-          ))
-              ?.toString() ??
+          ))?.toString() ??
           '';
 
       final updatedAssignment = _RoleAssignmentRow(
@@ -401,7 +399,9 @@ class _ShowRoleAssignmentsDialogState
       nextAssignments.sort((a, b) {
         final roleCompare = _roleLabel(a.role).compareTo(_roleLabel(b.role));
         if (roleCompare != 0) return roleCompare;
-        return a.personLabel.toLowerCase().compareTo(b.personLabel.toLowerCase());
+        return a.personLabel.toLowerCase().compareTo(
+          b.personLabel.toLowerCase(),
+        );
       });
 
       if (!mounted) return;
@@ -411,7 +411,9 @@ class _ShowRoleAssignmentsDialogState
         _selectedUser = null;
         _searchResults = [];
         _saving = false;
-        _msg = wasUpdate ? 'Role assignment updated.' : 'Role assignment added.';
+        _msg = wasUpdate
+            ? 'Role assignment updated.'
+            : 'Role assignment added.';
       });
     } catch (e) {
       if (!mounted) return;
@@ -453,9 +455,7 @@ class _ShowRoleAssignmentsDialogState
     try {
       await supabase.rpc(
         'remove_show_staff_role',
-        params: {
-          'p_assignment_id': assignment.id,
-        },
+        params: {'p_assignment_id': assignment.id},
       );
 
       if (!mounted) return;
@@ -488,10 +488,7 @@ class _ShowRoleAssignmentsDialogState
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: .05),
-            blurRadius: 10,
-          ),
+          BoxShadow(color: Colors.black.withValues(alpha: .05), blurRadius: 10),
         ],
       ),
       child: Column(
@@ -530,17 +527,19 @@ class _ShowRoleAssignmentsDialogState
     return Container(
       margin: const EdgeInsets.only(top: 8),
       decoration: BoxDecoration(
-        color: selected ? const Color(0xFFD4A623).withValues(alpha: .12) : Colors.white,
+        color: selected ? AppColors.gold.withValues(alpha: .12) : Colors.white,
         border: Border.all(
           color: selected
-              ? const Color(0xFFD4A623)
+              ? AppColors.gold
               : Colors.black.withValues(alpha: .08),
         ),
         borderRadius: BorderRadius.circular(12),
       ),
       child: ListTile(
         leading: Icon(selected ? Icons.check_circle : Icons.person_search),
-        title: Text(user.displayName.trim().isEmpty ? user.email : user.displayName),
+        title: Text(
+          user.displayName.trim().isEmpty ? user.email : user.displayName,
+        ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -570,8 +569,11 @@ class _ShowRoleAssignmentsDialogState
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context).size;
-    final successMessage = _msg != null &&
-        (_msg!.contains('added') || _msg!.contains('updated') || _msg!.contains('removed'));
+    final successMessage =
+        _msg != null &&
+        (_msg!.contains('added') ||
+            _msg!.contains('updated') ||
+            _msg!.contains('removed'));
 
     return Dialog(
       insetPadding: const EdgeInsets.all(16),
@@ -584,10 +586,7 @@ class _ShowRoleAssignmentsDialogState
         child: Container(
           decoration: BoxDecoration(
             gradient: const LinearGradient(
-              colors: [
-                Color(0xFF11285A),
-                Color(0xFF0B1C43),
-              ],
+              colors: [AppColors.navy, AppColors.navyDark],
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
             ),
@@ -627,7 +626,7 @@ class _ShowRoleAssignmentsDialogState
                 child: Container(
                   margin: const EdgeInsets.only(top: 4),
                   decoration: const BoxDecoration(
-                    color: Color(0xFFF4F6FB),
+                    color: AppColors.bg,
                     borderRadius: BorderRadius.vertical(
                       top: Radius.circular(24),
                     ),
@@ -677,7 +676,9 @@ class _ShowRoleAssignmentsDialogState
                                               'No staff roles have been assigned yet.',
                                             )
                                           else
-                                            ..._assignments.map(_buildAssignmentTile),
+                                            ..._assignments.map(
+                                              _buildAssignmentTile,
+                                            ),
                                         ],
                                       ),
                                       _buildSectionCard(
@@ -698,31 +699,41 @@ class _ShowRoleAssignmentsDialogState
                                                 .map(
                                                   (role) => DropdownMenuItem(
                                                     value: role,
-                                                    child: Text(_roleLabel(role)),
+                                                    child: Text(
+                                                      _roleLabel(role),
+                                                    ),
                                                   ),
                                                 )
                                                 .toList(),
                                             onChanged: _saving
                                                 ? null
                                                 : (value) => setState(
-                                                      () => _selectedRole =
-                                                          value ?? 'superintendent',
-                                                    ),
+                                                    () => _selectedRole =
+                                                        value ??
+                                                        'superintendent',
+                                                  ),
                                           ),
                                           const SizedBox(height: 12),
                                           TextField(
                                             controller: _searchController,
                                             enabled: !_saving,
                                             decoration: InputDecoration(
-                                              labelText: 'Search current users by name or email',
-                                              border: const OutlineInputBorder(),
+                                              labelText:
+                                                  'Search current users by name or email',
+                                              border:
+                                                  const OutlineInputBorder(),
                                               suffixIcon: _searching
                                                   ? const Padding(
-                                                      padding: EdgeInsets.all(12),
+                                                      padding: EdgeInsets.all(
+                                                        12,
+                                                      ),
                                                       child: SizedBox(
                                                         width: 20,
                                                         height: 20,
-                                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                                        child:
+                                                            CircularProgressIndicator(
+                                                              strokeWidth: 2,
+                                                            ),
                                                       ),
                                                     )
                                                   : IconButton(
@@ -730,30 +741,45 @@ class _ShowRoleAssignmentsDialogState
                                                       onPressed: _saving
                                                           ? null
                                                           : () => _searchUsers(
-                                                                _searchController.text,
-                                                              ),
-                                                      icon: const Icon(Icons.search),
+                                                              _searchController
+                                                                  .text,
+                                                            ),
+                                                      icon: const Icon(
+                                                        Icons.search,
+                                                      ),
                                                     ),
                                             ),
-                                            onChanged: _saving ? null : _queueUserSearch,
-                                            onSubmitted: _saving ? null : _searchUsers,
+                                            onChanged: _saving
+                                                ? null
+                                                : _queueUserSearch,
+                                            onSubmitted: _saving
+                                                ? null
+                                                : _searchUsers,
                                           ),
                                           if (_searchResults.isNotEmpty)
-                                            ..._searchResults.map(_buildSearchResultTile),
+                                            ..._searchResults.map(
+                                              _buildSearchResultTile,
+                                            ),
                                           const SizedBox(height: 12),
                                           SizedBox(
                                             width: double.infinity,
                                             child: FilledButton.icon(
                                               style: FilledButton.styleFrom(
                                                 backgroundColor:
-                                                    const Color(0xFFD4A623),
-                                                padding: const EdgeInsets.symmetric(
-                                                  vertical: 16,
-                                                ),
+                                                    AppColors.primaryButton,
+                                                foregroundColor:
+                                                    AppColors.primaryButtonText,
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      vertical: 16,
+                                                    ),
                                               ),
-                                              onPressed:
-                                                  _saving ? null : _addAssignment,
-                                              icon: const Icon(Icons.person_add),
+                                              onPressed: _saving
+                                                  ? null
+                                                  : _addAssignment,
+                                              icon: const Icon(
+                                                Icons.person_add,
+                                              ),
                                               label: Text(
                                                 _saving
                                                     ? 'Saving…'

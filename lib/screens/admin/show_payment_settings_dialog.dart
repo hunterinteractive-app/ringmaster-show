@@ -1,6 +1,7 @@
 // lib/screens/admin/show_payment_settings_dialog.dart
 
 import 'package:flutter/material.dart';
+import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/services/show_lock_service.dart';
 
@@ -15,10 +16,8 @@ class ShowPaymentSettingsDialog {
     await showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => _ShowPaymentSettingsDialog(
-        showId: showId,
-        showName: showName,
-      ),
+      builder: (_) =>
+          _ShowPaymentSettingsDialog(showId: showId, showName: showName),
     );
   }
 }
@@ -120,8 +119,8 @@ class _ShowPaymentSettingsDialogState
         _allowRefunds = data['allow_refunds'] != false;
 
         _stripeEnabled = data['stripe_enabled'] == true;
-        _stripePublishableKey.text =
-            (data['stripe_publishable_key'] ?? '').toString();
+        _stripePublishableKey.text = (data['stripe_publishable_key'] ?? '')
+            .toString();
         _stripeAccountId.text = (data['stripe_account_id'] ?? '').toString();
 
         _squareEnabled = data['square_enabled'] == true;
@@ -143,8 +142,9 @@ class _ShowPaymentSettingsDialogState
       final stripeLinks = List<Map<String, dynamic>>.from(stripeLinkRows);
       if (stripeLinks.isNotEmpty) {
         final stripeLink = stripeLinks.first;
-        final connectedAccountId =
-            (stripeLink['stripe_account_id'] ?? '').toString().trim();
+        final connectedAccountId = (stripeLink['stripe_account_id'] ?? '')
+            .toString()
+            .trim();
         if (connectedAccountId.isNotEmpty) {
           _stripeAccountId.text = connectedAccountId;
         }
@@ -172,9 +172,11 @@ class _ShowPaymentSettingsDialogState
 
   bool _validate() {
     if (_isReadOnly) {
-      setState(() => _msg = _isFinalized
-          ? 'This show has been finalized. Payment settings can no longer be changed.'
-          : 'This show is locked. Payment settings can no longer be changed.');
+      setState(
+        () => _msg = _isFinalized
+            ? 'This show has been finalized. Payment settings can no longer be changed.'
+            : 'This show is locked. Payment settings can no longer be changed.',
+      );
       return false;
     }
     if ((_paymentMode == 'stripe' || _paymentMode == 'hybrid') &&
@@ -258,10 +260,7 @@ class _ShowPaymentSettingsDialogState
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: .05),
-            blurRadius: 10,
-          ),
+          BoxShadow(color: Colors.black.withValues(alpha: .05), blurRadius: 10),
         ],
       ),
       child: Column(
@@ -291,10 +290,7 @@ class _ShowPaymentSettingsDialogState
         child: Container(
           decoration: BoxDecoration(
             gradient: const LinearGradient(
-              colors: [
-                Color(0xFF11285A),
-                Color(0xFF0B1C43),
-              ],
+              colors: [AppColors.navy, AppColors.navyDark],
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
             ),
@@ -334,7 +330,7 @@ class _ShowPaymentSettingsDialogState
                 child: Container(
                   margin: const EdgeInsets.only(top: 4),
                   decoration: const BoxDecoration(
-                    color: Color(0xFFF4F6FB),
+                    color: AppColors.bg,
                     borderRadius: BorderRadius.vertical(
                       top: Radius.circular(24),
                     ),
@@ -353,13 +349,17 @@ class _ShowPaymentSettingsDialogState
                                   decoration: BoxDecoration(
                                     color: Colors.amber.shade100,
                                     borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: Colors.amber.shade300),
+                                    border: Border.all(
+                                      color: Colors.amber.shade300,
+                                    ),
                                   ),
                                   child: Text(
                                     _isFinalized
                                         ? 'This show has been finalized. Payment settings are view-only.'
                                         : 'This show is locked. Payment settings are view-only.',
-                                    style: const TextStyle(fontWeight: FontWeight.w700),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -426,10 +426,9 @@ class _ShowPaymentSettingsDialogState
                                             onChanged: (_saving || _isReadOnly)
                                                 ? null
                                                 : (v) => setState(
-                                                      () => _paymentMode =
-                                                          v ??
-                                                              'pay_day_of_show',
-                                                    ),
+                                                    () => _paymentMode =
+                                                        v ?? 'pay_day_of_show',
+                                                  ),
                                           ),
                                           const SizedBox(height: 12),
                                           SwitchListTile(
@@ -444,9 +443,10 @@ class _ShowPaymentSettingsDialogState
                                             onChanged: (_saving || _isReadOnly)
                                                 ? null
                                                 : (v) => setState(
-                                                      () => _requirePaymentToSubmit =
-                                                          v,
-                                                    ),
+                                                    () =>
+                                                        _requirePaymentToSubmit =
+                                                            v,
+                                                  ),
                                           ),
                                           SwitchListTile(
                                             contentPadding: EdgeInsets.zero,
@@ -455,8 +455,8 @@ class _ShowPaymentSettingsDialogState
                                             onChanged: (_saving || _isReadOnly)
                                                 ? null
                                                 : (v) => setState(
-                                                      () => _allowRefunds = v,
-                                                    ),
+                                                    () => _allowRefunds = v,
+                                                  ),
                                           ),
                                         ],
                                       ),
@@ -471,13 +471,23 @@ class _ShowPaymentSettingsDialogState
                                               padding: const EdgeInsets.all(12),
                                               decoration: BoxDecoration(
                                                 color: _stripeReady
-                                                    ? Colors.green.withValues(alpha: .08)
-                                                    : Colors.orange.withValues(alpha: .10),
-                                                borderRadius: BorderRadius.circular(12),
+                                                    ? Colors.green.withValues(
+                                                        alpha: .08,
+                                                      )
+                                                    : Colors.orange.withValues(
+                                                        alpha: .10,
+                                                      ),
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
                                                 border: Border.all(
                                                   color: _stripeReady
-                                                      ? Colors.green.withValues(alpha: .25)
-                                                      : Colors.orange.withValues(alpha: .35),
+                                                      ? Colors.green.withValues(
+                                                          alpha: .25,
+                                                        )
+                                                      : Colors.orange
+                                                            .withValues(
+                                                              alpha: .35,
+                                                            ),
                                                 ),
                                               ),
                                               child: Column(
@@ -488,13 +498,18 @@ class _ShowPaymentSettingsDialogState
                                                     _stripeReady
                                                         ? 'Ready to accept online payments'
                                                         : (_stripeHasAccount
-                                                            ? 'Stripe setup incomplete'
-                                                            : 'Stripe not connected'),
+                                                              ? 'Stripe setup incomplete'
+                                                              : 'Stripe not connected'),
                                                     style: TextStyle(
                                                       color: _stripeReady
-                                                          ? Colors.green.shade700
-                                                          : Colors.orange.shade900,
-                                                      fontWeight: FontWeight.w700,
+                                                          ? Colors
+                                                                .green
+                                                                .shade700
+                                                          : Colors
+                                                                .orange
+                                                                .shade900,
+                                                      fontWeight:
+                                                          FontWeight.w700,
                                                     ),
                                                   ),
                                                   const SizedBox(height: 8),
@@ -528,24 +543,29 @@ class _ShowPaymentSettingsDialogState
                                             const SizedBox(height: 12),
                                             SwitchListTile(
                                               contentPadding: EdgeInsets.zero,
-                                              title: const Text('Enable Stripe'),
+                                              title: const Text(
+                                                'Enable Stripe',
+                                              ),
                                               subtitle: const Text(
                                                 'Only enable this after Stripe shows ready to accept online payments.',
                                               ),
                                               value: _stripeEnabled,
-                                              onChanged: (_saving ||
+                                              onChanged:
+                                                  (_saving ||
                                                       _isReadOnly ||
                                                       !_stripeReady)
                                                   ? null
                                                   : (v) => setState(
-                                                        () => _stripeEnabled =
-                                                            v,
-                                                      ),
+                                                      () => _stripeEnabled = v,
+                                                    ),
                                             ),
                                             const SizedBox(height: 8),
                                             TextField(
                                               controller: _stripePublishableKey,
-                                              enabled: !_saving && !_isReadOnly && _stripeEnabled,
+                                              enabled:
+                                                  !_saving &&
+                                                  !_isReadOnly &&
+                                                  _stripeEnabled,
                                               decoration: const InputDecoration(
                                                 labelText:
                                                     'Stripe publishable key',
@@ -572,19 +592,24 @@ class _ShowPaymentSettingsDialogState
                                           children: [
                                             SwitchListTile(
                                               contentPadding: EdgeInsets.zero,
-                                              title: const Text('Enable Square'),
+                                              title: const Text(
+                                                'Enable Square',
+                                              ),
                                               value: _squareEnabled,
-                                              onChanged: (_saving || _isReadOnly)
+                                              onChanged:
+                                                  (_saving || _isReadOnly)
                                                   ? null
                                                   : (v) => setState(
-                                                        () => _squareEnabled =
-                                                            v,
-                                                      ),
+                                                      () => _squareEnabled = v,
+                                                    ),
                                             ),
                                             const SizedBox(height: 8),
                                             TextField(
                                               controller: _squareAppId,
-                                              enabled: !_saving && !_isReadOnly && _squareEnabled,
+                                              enabled:
+                                                  !_saving &&
+                                                  !_isReadOnly &&
+                                                  _squareEnabled,
                                               decoration: const InputDecoration(
                                                 labelText:
                                                     'Square application id',
@@ -594,7 +619,10 @@ class _ShowPaymentSettingsDialogState
                                             const SizedBox(height: 12),
                                             TextField(
                                               controller: _squareLocationId,
-                                              enabled: !_saving && !_isReadOnly && _squareEnabled,
+                                              enabled:
+                                                  !_saving &&
+                                                  !_isReadOnly &&
+                                                  _squareEnabled,
                                               decoration: const InputDecoration(
                                                 labelText:
                                                     'Square location id (optional)',
@@ -612,8 +640,9 @@ class _ShowPaymentSettingsDialogState
                                 children: [
                                   Expanded(
                                     child: OutlinedButton(
-                                      onPressed:
-                                          _saving ? null : () => Navigator.pop(context),
+                                      onPressed: _saving
+                                          ? null
+                                          : () => Navigator.pop(context),
                                       child: const Text('Close'),
                                     ),
                                   ),
@@ -621,18 +650,23 @@ class _ShowPaymentSettingsDialogState
                                   Expanded(
                                     child: FilledButton(
                                       style: FilledButton.styleFrom(
-                                        backgroundColor: const Color(0xFFD4A623),
+                                        backgroundColor:
+                                            AppColors.primaryButton,
+                                        foregroundColor:
+                                            AppColors.primaryButtonText,
                                         padding: const EdgeInsets.symmetric(
                                           vertical: 16,
                                         ),
                                       ),
-                                      onPressed: (_saving || _isReadOnly) ? null : _save,
+                                      onPressed: (_saving || _isReadOnly)
+                                          ? null
+                                          : _save,
                                       child: Text(
                                         _saving
                                             ? 'Saving…'
                                             : _isReadOnly
-                                                ? 'View Only'
-                                                : 'Save',
+                                            ? 'View Only'
+                                            : 'Save',
                                       ),
                                     ),
                                   ),

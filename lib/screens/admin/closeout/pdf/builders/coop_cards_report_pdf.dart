@@ -10,8 +10,8 @@ class CoopCardsReportPdfBuilder {
   static const double _cardWidth = 4.0 * PdfPageFormat.inch;
   static const double _cardHeight = 4.5 * PdfPageFormat.inch;
 
-  static const PdfColor _navy = PdfColor.fromInt(0xFF11285A);
-  static const PdfColor _gold = PdfColor.fromInt(0xFFD4A623);
+  static const PdfColor _navy = PdfColor.fromInt(0xFF1E2849);
+  static const PdfColor _gold = PdfColor.fromInt(0xFFF6C834);
   static const PdfColor _ink = PdfColor.fromInt(0xFF202124);
   static const PdfColor _line = PdfColor.fromInt(0xFFB9C2D0);
   static const PdfColor _paleBlue = PdfColor.fromInt(0xFFF1F5FB);

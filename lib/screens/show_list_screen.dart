@@ -7,16 +7,13 @@ import 'package:ringmaster_show/screens/admin/admin_shows_screen.dart';
 import 'package:ringmaster_show/screens/admin/edit_show_settings_screen.dart';
 import 'package:ringmaster_show/screens/admin/entries_by_breed_section_table.dart';
 
-
 import 'package:ringmaster_show/widgets/help_report_dialog.dart';
-import 'package:ringmaster_show/widgets/my_help_requests_button.dart';
-
-
 import 'login_screen.dart';
 import 'my_animals_screen.dart';
 import 'enter_show_screen.dart';
 import 'account_settings_screen.dart';
 import 'my_entries_screen.dart';
+import 'my_help_requests_screen.dart';
 import 'package:ringmaster_show/screens/exhibitor_past_reports_screen.dart'
     as past_reports;
 import 'legal/terms_screen.dart';
@@ -119,9 +116,9 @@ class _ShowListScreenState extends State<ShowListScreen> {
           final rawMatches = data['matches'];
           final matches = rawMatches is List
               ? rawMatches
-                  .whereType<Map>()
-                  .map((row) => Map<String, dynamic>.from(row))
-                  .toList()
+                    .whereType<Map>()
+                    .map((row) => Map<String, dynamic>.from(row))
+                    .toList()
               : <Map<String, dynamic>>[];
 
           final selectedId = await _showMultipleClaimDialog(matches);
@@ -175,10 +172,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
   Future<bool> _claimExhibitor(String exhibitorId) async {
     final response = await supabase.functions.invoke(
       'claim-or-import-exhibitor',
-      body: {
-        'action': 'claim',
-        'exhibitor_id': exhibitorId,
-      },
+      body: {'action': 'claim', 'exhibitor_id': exhibitorId},
     );
 
     final data = response.data is Map
@@ -215,25 +209,22 @@ class _ShowListScreenState extends State<ShowListScreen> {
     if (!mounted) return false;
 
     final saved = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => const AccountProfileSetupScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const AccountProfileSetupScreen()),
     );
 
     return saved == true;
   }
 
-  Future<bool> _showClaimConfirmationDialog(
-    Map<String, dynamic> match,
-  ) async {
+  Future<bool> _showClaimConfirmationDialog(Map<String, dynamic> match) async {
     final displayName = (match['display_name'] ?? 'this exhibitor').toString();
     final city = (match['city'] ?? '').toString().trim();
     final state = (match['state'] ?? '').toString().trim();
     final phoneLastFour = (match['phone_last_four'] ?? '').toString().trim();
 
-    final location = [city, state]
-        .where((value) => value.isNotEmpty)
-        .join(', ');
+    final location = [
+      city,
+      state,
+    ].where((value) => value.isNotEmpty).join(', ');
 
     return await showDialog<bool>(
           context: context,
@@ -304,14 +295,16 @@ class _ShowListScreenState extends State<ShowListScreen> {
                               .toString();
                       final city = (match['city'] ?? '').toString().trim();
                       final state = (match['state'] ?? '').toString().trim();
-                      final phone =
-                          (match['phone_last_four'] ?? '').toString().trim();
+                      final phone = (match['phone_last_four'] ?? '')
+                          .toString()
+                          .trim();
 
                       final details = <String>[
                         if (city.isNotEmpty || state.isNotEmpty)
-                          [city, state]
-                              .where((value) => value.isNotEmpty)
-                              .join(', '),
+                          [
+                            city,
+                            state,
+                          ].where((value) => value.isNotEmpty).join(', '),
                         if (phone.isNotEmpty) 'Phone ending in $phone',
                       ].join(' • ');
 
@@ -421,15 +414,10 @@ class _ShowListScreenState extends State<ShowListScreen> {
           .from('role_assignments')
           .select('role')
           .eq('user_id', userId)
-          .inFilter('role', const [
-            'superintendent',
-            'super_admin',
-          ])
+          .inFilter('role', const ['superintendent', 'super_admin'])
           .limit(1);
 
-      return (roleRows as List)
-          .cast<Map<String, dynamic>>()
-          .any((row) {
+      return (roleRows as List).cast<Map<String, dynamic>>().any((row) {
         final role = (row['role'] ?? '').toString();
         return role == 'super_admin' ||
             (_enableSuperintendentRoleAccess && role == 'superintendent');
@@ -484,12 +472,12 @@ class _ShowListScreenState extends State<ShowListScreen> {
           .eq('user_id', effectiveUserId)
           .limit(1);
 
-      canAdmin = (roleRows as List).isNotEmpty ||
-          (showAdminRows as List).isNotEmpty;
+      canAdmin =
+          (roleRows as List).isNotEmpty || (showAdminRows as List).isNotEmpty;
 
-      canSuperintendent = (roleRows as List)
-          .cast<Map<String, dynamic>>()
-          .any((row) {
+      canSuperintendent = (roleRows as List).cast<Map<String, dynamic>>().any((
+        row,
+      ) {
         final role = (row['role'] ?? '').toString();
         return role == 'super_admin' ||
             (_enableSuperintendentRoleAccess && role == 'superintendent');
@@ -545,7 +533,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
     _searchController.dispose();
     super.dispose();
   }
-  
+
   void _handleSupportModeChanged() {
     if (!mounted) return;
     _loadAdminAccess();
@@ -557,7 +545,9 @@ class _ShowListScreenState extends State<ShowListScreen> {
   Future<List<Map<String, dynamic>>> _loadShows() async {
     final query = supabase
         .from('shows')
-        .select('id,name,start_date,location_name,entry_close_at,is_demo,demo_resets_at');
+        .select(
+          'id,name,start_date,location_name,entry_close_at,is_demo,demo_resets_at',
+        );
 
     if (widget.demoMode) {
       final res = await query
@@ -796,8 +786,9 @@ class _ShowListScreenState extends State<ShowListScreen> {
     for (final part in parts) {
       final partUpper = part.toUpperCase();
 
-      final firstTokenMatch =
-          RegExp(r'^([A-Z]{2})(?:\s|$)').firstMatch(partUpper);
+      final firstTokenMatch = RegExp(
+        r'^([A-Z]{2})(?:\s|$)',
+      ).firstMatch(partUpper);
       if (firstTokenMatch != null) {
         final abbr = firstTokenMatch.group(1)!;
         if (_stateAbbreviationToName.containsKey(abbr)) {
@@ -819,12 +810,13 @@ class _ShowListScreenState extends State<ShowListScreen> {
   }
 
   List<String> _availableStates(List<Map<String, dynamic>> shows) {
-    final values = shows
-        .map((s) => _extractState((s['location_name'] ?? '').toString()))
-        .where((s) => s.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort();
+    final values =
+        shows
+            .map((s) => _extractState((s['location_name'] ?? '').toString()))
+            .where((s) => s.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
 
     return ['All', ...values];
   }
@@ -941,7 +933,8 @@ class _ShowListScreenState extends State<ShowListScreen> {
     final termsOk =
         profile?['accepted_terms_version'] == LegalConfig.currentTermsVersion;
     final privacyOk =
-        profile?['accepted_privacy_version'] == LegalConfig.currentPrivacyVersion;
+        profile?['accepted_privacy_version'] ==
+        LegalConfig.currentPrivacyVersion;
 
     if (termsOk && privacyOk) {
       final accountReady = await _ensureExhibitorAccount();
@@ -1046,8 +1039,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) =>
-                                        const PrivacyPolicyScreen(),
+                                    builder: (_) => const PrivacyPolicyScreen(),
                                   ),
                                 );
                               },
@@ -1102,9 +1094,9 @@ class _ShowListScreenState extends State<ShowListScreen> {
   void _exitSupportMode() {
     SupportImpersonationSession.stop();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Support mode ended.')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Support mode ended.')));
     _loadAdminAccess();
     setState(() {
       _bundleFuture = _loadBundle();
@@ -1112,19 +1104,18 @@ class _ShowListScreenState extends State<ShowListScreen> {
   }
 
   void _openAdmin(BuildContext context, _ShowListBundle bundle) {
-    final allowedShowIds = SupportImpersonationSession.isActive &&
+    final allowedShowIds =
+        SupportImpersonationSession.isActive &&
             bundle.superAdminShowIds.isNotEmpty
         ? bundle.superAdminShowIds.toList()
         : bundle.isSuperAdmin
-            ? bundle.superAdminShowIds.toList()
-            : bundle.adminShowIds.toList();
+        ? bundle.superAdminShowIds.toList()
+        : bundle.adminShowIds.toList();
 
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => AdminShowsScreen(
-          allowedShowIds: allowedShowIds,
-        ),
+        builder: (_) => AdminShowsScreen(allowedShowIds: allowedShowIds),
       ),
     );
   }
@@ -1132,9 +1123,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
   void _openEditShow(BuildContext context, String showId) {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => EditShowSettingsScreen(showId: showId),
-      ),
+      MaterialPageRoute(builder: (_) => EditShowSettingsScreen(showId: showId)),
     );
   }
 
@@ -1150,10 +1139,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => EnterShowScreen(
-          showId: showId,
-          showName: showName,
-        ),
+        builder: (_) => EnterShowScreen(showId: showId, showName: showName),
       ),
     ).then((_) {
       if (!mounted) return;
@@ -1170,9 +1156,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
       context,
       MaterialPageRoute(
         builder: (_) => Scaffold(
-          appBar: AppBar(
-            title: Text('Breed Counts - $showName'),
-          ),
+          appBar: AppBar(title: Text('Breed Counts - $showName')),
           body: EntriesByBreedSectionTable(
             showId: showId,
             showName: showName,
@@ -1223,7 +1207,8 @@ class _ShowListScreenState extends State<ShowListScreen> {
 
     try {
       final status = await StripeConnectService.getAccountStatus(showId);
-      payOnline = status['charges_enabled'] == true &&
+      payOnline =
+          status['charges_enabled'] == true &&
           status['payouts_enabled'] == true &&
           status['details_submitted'] == true;
     } catch (e) {
@@ -1246,7 +1231,9 @@ class _ShowListScreenState extends State<ShowListScreen> {
               children: [
                 Icon(
                   payOnline ? Icons.credit_card : Icons.payments_outlined,
-                  color: payOnline ? Colors.green : Theme.of(context).colorScheme.primary,
+                  color: payOnline
+                      ? Colors.green
+                      : Theme.of(context).colorScheme.primary,
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -1261,9 +1248,9 @@ class _ShowListScreenState extends State<ShowListScreen> {
               const SizedBox(height: AppSpacing.sm),
               Text(
                 'Online payment not setup, so this show is paid at show.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.muted,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: AppColors.muted),
               ),
             ],
           ],
@@ -1281,11 +1268,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
   @override
   Widget build(BuildContext context) {
     if (_checkingLegal) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return FutureBuilder<_ShowListBundle>(
@@ -1296,13 +1279,15 @@ class _ShowListScreenState extends State<ShowListScreen> {
         return Scaffold(
           appBar: _ResponsiveShowAppBar(
             bundle: bundle,
-            showAdmin: !_loadingAdminAccess &&
+            showAdmin:
+                !_loadingAdminAccess &&
                 (_canAccessAdmin ||
                     (bundle?.canSeeAdminButton ?? false) ||
                     (SupportImpersonationSession.isActive &&
                         (bundle?.superAdminShowIds.isNotEmpty ?? false))),
             onAdmin: bundle == null ? null : () => _openAdmin(context, bundle),
-            showSuperintendent: !_loadingAdminAccess &&
+            showSuperintendent:
+                !_loadingAdminAccess &&
                 !SupportImpersonationSession.isActive &&
                 (bundle?.isSuperAdmin == true || _canAccessSuperintendent),
             onSuperintendent: bundle == null
@@ -1359,363 +1344,475 @@ class _ShowListScreenState extends State<ShowListScreen> {
             onLogout: () => _logout(context),
             demoMode: widget.demoMode,
           ),
-          body: Builder(
-            builder: (_) {
-              Widget content;
+          body: Container(
+            decoration: const BoxDecoration(gradient: AppGradients.page),
+            child: Builder(
+              builder: (_) {
+                Widget content;
 
-              if (snap.connectionState != ConnectionState.done) {
-                content = const Center(child: CircularProgressIndicator());
-              } else if (snap.hasError) {
-                content = Center(child: Text('Error: ${snap.error}'));
-              } else {
-                final bundle = snap.data!;
-                final allShows = bundle.shows;
-                final stateOptions = _availableStates(allShows);
-                final shows = _applyFiltersAndSort(allShows);
-
-                if (allShows.isEmpty) {
-                  content = _UpcomingShowsEmptyState(
-                    showAdminButton: !_loadingAdminAccess &&
-                        (_canAccessAdmin ||
-                            bundle.canSeeAdminButton ||
-                            (SupportImpersonationSession.isActive &&
-                                bundle.superAdminShowIds.isNotEmpty)),
-                    onAdmin: () => _openAdmin(context, bundle),
-                  );
+                if (snap.connectionState != ConnectionState.done) {
+                  content = const Center(child: CircularProgressIndicator());
+                } else if (snap.hasError) {
+                  content = Center(child: Text('Error: ${snap.error}'));
                 } else {
-                  content = LayoutBuilder(
-                    builder: (context, constraints) {
-                      final isMobile = constraints.maxWidth < 700;
-                      final horizontalPadding =
-                          isMobile ? AppSpacing.md : AppSpacing.lg;
+                  final bundle = snap.data!;
+                  final allShows = bundle.shows;
+                  final stateOptions = _availableStates(allShows);
+                  final shows = _applyFiltersAndSort(allShows);
 
-                      return SingleChildScrollView(
-                        child: Column(
-                          children: [
-                            Padding(
-                              padding: EdgeInsets.fromLTRB(
-                                horizontalPadding,
-                                0,
-                                horizontalPadding,
-                                AppSpacing.md,
-                              ),
-                              child: RMCard(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            'Search Shows',
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .titleSmall
-                                                ?.copyWith(fontWeight: FontWeight.w700),
-                                          ),
-                                        ),
-                                        TextButton.icon(
-                                          onPressed: () {
-                                            setState(() {
-                                              _showSearchFilters = !_showSearchFilters;
-                                            });
-                                          },
-                                          icon: Icon(
-                                            _showSearchFilters
-                                                ? Icons.expand_less
-                                                : Icons.expand_more,
-                                          ),
-                                          label: Text(_showSearchFilters ? 'Hide' : 'Show'),
-                                        ),
-                                      ],
-                                    ),
-                                    if (_showSearchFilters) ...[
-                                      const SizedBox(height: AppSpacing.sm),
-                                      TextField(
-                                        controller: _searchController,
-                                        decoration: InputDecoration(
-                                          labelText: 'Search shows',
-                                          prefixIcon: const Icon(Icons.search),
-                                          border: const OutlineInputBorder(),
-                                        ),
-                                        onChanged: (value) {
-                                          setState(() {
-                                            _searchQuery = value;
-                                          });
-                                        },
-                                      ),
-                                      const SizedBox(height: AppSpacing.md),
-                                      Wrap(
-                                        spacing: AppSpacing.md,
-                                        runSpacing: AppSpacing.md,
+                  if (allShows.isEmpty) {
+                    content = _UpcomingShowsEmptyState(
+                      showAdminButton:
+                          !_loadingAdminAccess &&
+                          (_canAccessAdmin ||
+                              bundle.canSeeAdminButton ||
+                              (SupportImpersonationSession.isActive &&
+                                  bundle.superAdminShowIds.isNotEmpty)),
+                      onAdmin: () => _openAdmin(context, bundle),
+                    );
+                  } else {
+                    content = LayoutBuilder(
+                      builder: (context, constraints) {
+                        final isMobile = constraints.maxWidth < 700;
+                        final horizontalPadding = isMobile
+                            ? AppSpacing.md
+                            : AppSpacing.lg;
+
+                        return SingleChildScrollView(
+                          child: Column(
+                            children: [
+                              Padding(
+                                padding: EdgeInsets.fromLTRB(
+                                  horizontalPadding,
+                                  0,
+                                  horizontalPadding,
+                                  AppSpacing.md,
+                                ),
+                                child: RMCard(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
                                         children: [
-                                          SizedBox(
-                                            width: isMobile ? double.infinity : 220,
-                                            child: DropdownButtonFormField<String>(
-                                              initialValue: _sortMode,
-                                              decoration: const InputDecoration(
-                                                labelText: 'Sort by',
-                                                border: OutlineInputBorder(),
-                                              ),
-                                              items: const [
-                                                DropdownMenuItem(
-                                                  value: 'date',
-                                                  child: Text('Show Date'),
-                                                ),
-                                                DropdownMenuItem(
-                                                  value: 'state',
-                                                  child: Text('State'),
-                                                ),
-                                              ],
-                                              onChanged: (value) {
-                                                if (value == null) return;
-                                                setState(() {
-                                                  _sortMode = value;
-                                                });
-                                              },
+                                          Expanded(
+                                            child: Text(
+                                              'Search Shows',
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .titleSmall
+                                                  ?.copyWith(
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
                                             ),
                                           ),
-                                          SizedBox(
-                                            width: isMobile ? double.infinity : 220,
-                                            child: DropdownButtonFormField<String>(
-                                              initialValue: stateOptions.contains(_stateFilter)
-                                                  ? _stateFilter
-                                                  : 'All',
-                                              decoration: const InputDecoration(
-                                                labelText: 'Filter by State',
-                                                border: OutlineInputBorder(),
-                                              ),
-                                              items: stateOptions
-                                                  .map(
-                                                    (state) => DropdownMenuItem<String>(
-                                                      value: state,
-                                                      child: Text(state),
-                                                    ),
-                                                  )
-                                                  .toList(),
-                                              onChanged: (value) {
-                                                if (value == null) return;
-                                                setState(() {
-                                                  _stateFilter = value;
-                                                });
-                                              },
+                                          TextButton.icon(
+                                            onPressed: () {
+                                              setState(() {
+                                                _showSearchFilters =
+                                                    !_showSearchFilters;
+                                              });
+                                            },
+                                            icon: Icon(
+                                              _showSearchFilters
+                                                  ? Icons.expand_less
+                                                  : Icons.expand_more,
+                                            ),
+                                            label: Text(
+                                              _showSearchFilters
+                                                  ? 'Hide'
+                                                  : 'Show',
                                             ),
                                           ),
                                         ],
                                       ),
+                                      if (_showSearchFilters) ...[
+                                        const SizedBox(height: AppSpacing.sm),
+                                        TextField(
+                                          controller: _searchController,
+                                          decoration: InputDecoration(
+                                            labelText: 'Search shows',
+                                            prefixIcon: const Icon(
+                                              Icons.search,
+                                            ),
+                                            border: const OutlineInputBorder(),
+                                          ),
+                                          onChanged: (value) {
+                                            setState(() {
+                                              _searchQuery = value;
+                                            });
+                                          },
+                                        ),
+                                        const SizedBox(height: AppSpacing.md),
+                                        Wrap(
+                                          spacing: AppSpacing.md,
+                                          runSpacing: AppSpacing.md,
+                                          children: [
+                                            SizedBox(
+                                              width: isMobile
+                                                  ? double.infinity
+                                                  : 220,
+                                              child:
+                                                  DropdownButtonFormField<
+                                                    String
+                                                  >(
+                                                    initialValue: _sortMode,
+                                                    decoration:
+                                                        const InputDecoration(
+                                                          labelText: 'Sort by',
+                                                          border:
+                                                              OutlineInputBorder(),
+                                                        ),
+                                                    items: const [
+                                                      DropdownMenuItem(
+                                                        value: 'date',
+                                                        child: Text(
+                                                          'Show Date',
+                                                        ),
+                                                      ),
+                                                      DropdownMenuItem(
+                                                        value: 'state',
+                                                        child: Text('State'),
+                                                      ),
+                                                    ],
+                                                    onChanged: (value) {
+                                                      if (value == null) return;
+                                                      setState(() {
+                                                        _sortMode = value;
+                                                      });
+                                                    },
+                                                  ),
+                                            ),
+                                            SizedBox(
+                                              width: isMobile
+                                                  ? double.infinity
+                                                  : 220,
+                                              child:
+                                                  DropdownButtonFormField<
+                                                    String
+                                                  >(
+                                                    initialValue:
+                                                        stateOptions.contains(
+                                                          _stateFilter,
+                                                        )
+                                                        ? _stateFilter
+                                                        : 'All',
+                                                    decoration:
+                                                        const InputDecoration(
+                                                          labelText:
+                                                              'Filter by State',
+                                                          border:
+                                                              OutlineInputBorder(),
+                                                        ),
+                                                    items: stateOptions
+                                                        .map(
+                                                          (state) =>
+                                                              DropdownMenuItem<
+                                                                String
+                                                              >(
+                                                                value: state,
+                                                                child: Text(
+                                                                  state,
+                                                                ),
+                                                              ),
+                                                        )
+                                                        .toList(),
+                                                    onChanged: (value) {
+                                                      if (value == null) return;
+                                                      setState(() {
+                                                        _stateFilter = value;
+                                                      });
+                                                    },
+                                                  ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                      const SizedBox(height: AppSpacing.sm),
+                                      Text(
+                                        '${shows.length} show${shows.length == 1 ? '' : 's'} found',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(color: AppColors.muted),
+                                      ),
                                     ],
-                                    const SizedBox(height: AppSpacing.sm),
-                                    Text(
-                                      '${shows.length} show${shows.length == 1 ? '' : 's'} found',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodySmall
-                                          ?.copyWith(color: AppColors.muted),
-                                    ),
-                                  ],
+                                  ),
                                 ),
                               ),
-                            ),
-                            ListView.builder(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              padding: EdgeInsets.fromLTRB(
-                                horizontalPadding,
-                                0,
-                                horizontalPadding,
-                                AppSpacing.xl,
-                              ),
-                              itemCount: shows.length,
-                              itemBuilder: (context, i) {
-                                final s = shows[i];
-                                final showId = s['id'].toString();
-                                final showName = (s['name'] ?? '').toString();
-                                final location = (s['location_name'] ?? '').toString();
+                              ListView.builder(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                padding: EdgeInsets.fromLTRB(
+                                  horizontalPadding,
+                                  0,
+                                  horizontalPadding,
+                                  AppSpacing.xl,
+                                ),
+                                itemCount: shows.length,
+                                itemBuilder: (context, i) {
+                                  final s = shows[i];
+                                  final showId = s['id'].toString();
+                                  final showName = (s['name'] ?? '').toString();
+                                  final location = (s['location_name'] ?? '')
+                                      .toString();
 
-                                final formattedStartDate =
-                                    formatLocalDateTime(s['start_date']?.toString());
+                                  final formattedStartDate =
+                                      formatLocalDateTime(
+                                        s['start_date']?.toString(),
+                                      );
 
-                                final entryDeadlineText =
-                                    formatLocalDateTime(s['entry_close_at']?.toString());
+                                  final entryDeadlineText = formatLocalDateTime(
+                                    s['entry_close_at']?.toString(),
+                                  );
 
-                                final deadlinePassed = s['entry_close_at'] != null &&
-                                    DateTime.parse(s['entry_close_at'].toString())
-                                        .toLocal()
-                                        .isBefore(DateTime.now());
+                                  final deadlinePassed =
+                                      s['entry_close_at'] != null &&
+                                      DateTime.parse(
+                                        s['entry_close_at'].toString(),
+                                      ).toLocal().isBefore(DateTime.now());
 
-                                final isAdminForShow = !widget.demoMode &&
-                                    (bundle.isSuperAdmin ||
-                                        bundle.adminShowIds.contains(showId));
+                                  final isAdminForShow =
+                                      !widget.demoMode &&
+                                      (bundle.isSuperAdmin ||
+                                          bundle.adminShowIds.contains(showId));
 
-                                return Padding(
-                                  padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                                  child: RMCard(
-                                    onTap: () => _openEnterShow(context, showId, showName),
-                                    child: LayoutBuilder(
-                                      builder: (context, cardConstraints) {
-                                        final compactCard = cardConstraints.maxWidth < 640;
+                                  return Padding(
+                                    padding: const EdgeInsets.only(
+                                      bottom: AppSpacing.md,
+                                    ),
+                                    child: RMCard(
+                                      onTap: () => _openEnterShow(
+                                        context,
+                                        showId,
+                                        showName,
+                                      ),
+                                      child: LayoutBuilder(
+                                        builder: (context, cardConstraints) {
+                                          final compactCard =
+                                              cardConstraints.maxWidth < 640;
 
-                                        final showInfo = Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              showName,
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .titleMedium
-                                                  ?.copyWith(fontWeight: FontWeight.w700),
-                                            ),
-                                            const SizedBox(height: AppSpacing.sm),
-                                            Text('$formattedStartDate • $location'),
-                                            if (entryDeadlineText.isNotEmpty) ...[
-                                              const SizedBox(height: AppSpacing.xs),
+                                          final showInfo = Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
                                               Text(
-                                                deadlinePassed
-                                                    ? 'Entries closed: $entryDeadlineText'
-                                                    : 'Entries close: $entryDeadlineText',
-                                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                                      color: deadlinePassed ? AppColors.danger : AppColors.muted,
-                                                      fontWeight: FontWeight.w600,
+                                                showName,
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .titleMedium
+                                                    ?.copyWith(
+                                                      fontWeight:
+                                                          FontWeight.w700,
                                                     ),
                                               ),
-                                            ],
-                                          ],
-                                        );
-
-                                        final actions = Wrap(
-                                          spacing: AppSpacing.sm,
-                                          runSpacing: AppSpacing.sm,
-                                          alignment: compactCard ? WrapAlignment.start : WrapAlignment.end,
-                                          children: [
-                                            OutlinedButton.icon(
-                                              onPressed: () => _openBreedCounts(context, showId, showName),
-                                              icon: const Icon(Icons.bar_chart, size: 18),
-                                              label: const Text('Breed Counts'),
-                                            ),
-                                            OutlinedButton.icon(
-                                              onPressed: () => _showPaymentInfo(context, showId, showName),
-                                              icon: const Icon(Icons.payments_outlined, size: 18),
-                                              label: const Text('Payment'),
-                                            ),
-                                            if (isAdminForShow)
-                                              OutlinedButton.icon(
-                                                onPressed: () => _openEditShow(context, showId),
-                                                icon: const Icon(Icons.settings, size: 18),
-                                                label: const Text('Manage'),
+                                              const SizedBox(
+                                                height: AppSpacing.sm,
                                               ),
-                                            FilledButton.icon(
-                                              onPressed: () => _openEnterShow(context, showId, showName),
-                                              icon: const Icon(Icons.login, size: 18),
-                                              label: const Text('Enter Show'),
-                                            ),
-                                          ],
-                                        );
+                                              Text(
+                                                '$formattedStartDate • $location',
+                                              ),
+                                              if (entryDeadlineText
+                                                  .isNotEmpty) ...[
+                                                const SizedBox(
+                                                  height: AppSpacing.xs,
+                                                ),
+                                                Text(
+                                                  deadlinePassed
+                                                      ? 'Entries closed: $entryDeadlineText'
+                                                      : 'Entries close: $entryDeadlineText',
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .bodySmall
+                                                      ?.copyWith(
+                                                        color: deadlinePassed
+                                                            ? AppColors.danger
+                                                            : AppColors.muted,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
+                                                ),
+                                              ],
+                                            ],
+                                          );
 
-                                        if (compactCard) {
-                                          return Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                          final actions = Wrap(
+                                            spacing: AppSpacing.sm,
+                                            runSpacing: AppSpacing.sm,
+                                            alignment: compactCard
+                                                ? WrapAlignment.start
+                                                : WrapAlignment.end,
                                             children: [
-                                              showInfo,
-                                              const SizedBox(height: AppSpacing.md),
+                                              OutlinedButton.icon(
+                                                onPressed: () =>
+                                                    _openBreedCounts(
+                                                      context,
+                                                      showId,
+                                                      showName,
+                                                    ),
+                                                icon: const Icon(
+                                                  Icons.bar_chart,
+                                                  size: 18,
+                                                ),
+                                                label: const Text(
+                                                  'Breed Counts',
+                                                ),
+                                              ),
+                                              OutlinedButton.icon(
+                                                onPressed: () =>
+                                                    _showPaymentInfo(
+                                                      context,
+                                                      showId,
+                                                      showName,
+                                                    ),
+                                                icon: const Icon(
+                                                  Icons.payments_outlined,
+                                                  size: 18,
+                                                ),
+                                                label: const Text('Payment'),
+                                              ),
+                                              if (isAdminForShow)
+                                                OutlinedButton.icon(
+                                                  onPressed: () =>
+                                                      _openEditShow(
+                                                        context,
+                                                        showId,
+                                                      ),
+                                                  icon: const Icon(
+                                                    Icons.settings,
+                                                    size: 18,
+                                                  ),
+                                                  label: const Text('Manage'),
+                                                ),
+                                              FilledButton.icon(
+                                                onPressed: () => _openEnterShow(
+                                                  context,
+                                                  showId,
+                                                  showName,
+                                                ),
+                                                icon: const Icon(
+                                                  Icons.login,
+                                                  size: 18,
+                                                ),
+                                                label: const Text('Enter Show'),
+                                              ),
+                                            ],
+                                          );
+
+                                          if (compactCard) {
+                                            return Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                showInfo,
+                                                const SizedBox(
+                                                  height: AppSpacing.md,
+                                                ),
+                                                actions,
+                                              ],
+                                            );
+                                          }
+
+                                          return Row(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.center,
+                                            children: [
+                                              Expanded(child: showInfo),
+                                              const SizedBox(
+                                                width: AppSpacing.lg,
+                                              ),
                                               actions,
                                             ],
                                           );
-                                        }
-
-                                        return Row(
-                                          crossAxisAlignment: CrossAxisAlignment.center,
-                                          children: [
-                                            Expanded(child: showInfo),
-                                            const SizedBox(width: AppSpacing.lg),
-                                            actions,
-                                          ],
-                                        );
-                                      },
+                                        },
+                                      ),
                                     ),
-                                  ),
-                                );
-                              },
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    );
+                  }
+                }
+
+                final impersonatedUser = _impersonatedUser;
+                final demoResetText = widget.demoMode
+                    ? _formatDemoResetText(bundle?.shows ?? const [])
+                    : null;
+
+                final demoBanner = widget.demoMode
+                    ? Container(
+                        width: double.infinity,
+                        color: Colors.blue.shade50,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.lg,
+                          vertical: AppSpacing.sm,
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.science_outlined, size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Demo Mode — this is a shared demo account. No login required. Entries are temporary and reset every 24 hours. Emails and real payments are disabled.${demoResetText == null ? '' : ' Resets in: $demoResetText'}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
                             ),
                           ],
                         ),
-                      );
-                    },
-                  );
-                }
-              }
+                      )
+                    : null;
 
-              final impersonatedUser = _impersonatedUser;
-              final demoResetText = widget.demoMode
-                  ? _formatDemoResetText(bundle?.shows ?? const [])
-                  : null;
-
-              final demoBanner = widget.demoMode
-                  ? Container(
-                      width: double.infinity,
-                      color: Colors.blue.shade50,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.lg,
-                        vertical: AppSpacing.sm,
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.science_outlined, size: 18),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Demo Mode — this is a shared demo account. No login required. Entries are temporary and reset every 24 hours. Emails and real payments are disabled.${demoResetText == null ? '' : ' Resets in: $demoResetText'}',
-                              style: const TextStyle(fontWeight: FontWeight.w700),
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  : null;
-
-              return Column(
-                children: [
-                  if (demoBanner != null) demoBanner,
-                  if (impersonatedUser != null)
-                    Container(
-                      width: double.infinity,
-                      color: Colors.amber.shade100,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.lg,
-                        vertical: AppSpacing.sm,
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.support_agent, size: 18),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Support Mode — ${impersonatedUser.label} (${impersonatedUser.email})',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
+                return Column(
+                  children: [
+                    if (demoBanner != null) demoBanner,
+                    if (impersonatedUser != null)
+                      Container(
+                        width: double.infinity,
+                        color: Colors.amber.shade100,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.lg,
+                          vertical: AppSpacing.sm,
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.support_agent, size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Support Mode — ${impersonatedUser.label} (${impersonatedUser.email})',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ),
-                          ),
-                          TextButton.icon(
-                            onPressed: _exitSupportMode,
-                            icon: const Icon(Icons.close),
-                            label: const Text('Exit'),
-                          ),
-                        ],
+                            TextButton.icon(
+                              onPressed: _exitSupportMode,
+                              icon: const Icon(Icons.close),
+                              label: const Text('Exit'),
+                            ),
+                          ],
+                        ),
                       ),
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        AppSpacing.lg,
+                        AppSpacing.lg,
+                        AppSpacing.lg,
+                        12,
+                      ),
+                      child: RMTimezoneNoticeBanner(),
                     ),
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      AppSpacing.lg,
-                      AppSpacing.lg,
-                      AppSpacing.lg,
-                      12,
-                    ),
-                    child: RMTimezoneNoticeBanner(),
-                  ),
-                  Expanded(child: content),
-                ],
-              );
-            },
+                    Expanded(child: content),
+                  ],
+                );
+              },
+            ),
           ),
         );
       },
@@ -1760,10 +1857,70 @@ class _ResponsiveShowAppBar extends StatelessWidget
 
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
-    final showLabels = width >= 1180;
-    final medium = width >= 900;
-    final showSuperAdminInline = width >= 1280;
+    final actionItems = <_TopBarActionData>[
+      if (!demoMode && showAdmin && onAdmin != null)
+        _TopBarActionData(
+          icon: Icons.admin_panel_settings,
+          label: 'Show Secretary',
+          onTap: onAdmin!,
+        ),
+      if (!demoMode && showSuperintendent && onSuperintendent != null)
+        _TopBarActionData(
+          icon: Icons.fact_check,
+          label: 'Superintendent',
+          onTap: onSuperintendent!,
+        ),
+      if (!demoMode)
+        _TopBarActionData(icon: Icons.pets, label: 'Animals', onTap: onAnimals),
+      if (!demoMode)
+        _TopBarActionData(
+          icon: Icons.receipt_long,
+          label: 'Entries',
+          onTap: onEntries,
+        ),
+      if (!demoMode)
+        _TopBarActionData(
+          icon: Icons.description_outlined,
+          label: 'Past Show Reports',
+          onTap: onPastShowReports,
+        ),
+      if (!demoMode &&
+          !SupportImpersonationSession.isActive &&
+          bundle?.isSuperAdmin == true)
+        _TopBarActionData(
+          icon: Icons.library_books,
+          label: 'Super Admin',
+          onTap: onSuperAdmin,
+        ),
+      if (!demoMode)
+        _TopBarActionData(
+          icon: Icons.manage_accounts,
+          label: 'Account',
+          onTap: onAccount,
+        ),
+      _TopBarActionData(icon: Icons.help_outline, label: 'Help', onTap: onHelp),
+      if (!demoMode)
+        _TopBarActionData(
+          icon: Icons.support_agent,
+          label: 'My Help Requests',
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const MyHelpRequestsScreen()),
+            );
+          },
+        ),
+      if (!demoMode)
+        _TopBarActionData(icon: Icons.logout, label: 'Logout', onTap: onLogout),
+    ];
+    final hasOverflow = actionItems.length > _TopBarActionData.maxVisibleIcons;
+    final directCount = hasOverflow
+        ? _TopBarActionData.maxVisibleIcons - 1
+        : actionItems.length;
+    final directActions = actionItems.take(directCount).toList();
+    final overflowActions = hasOverflow
+        ? actionItems.skip(directCount).toList()
+        : const <_TopBarActionData>[];
 
     return AppBar(
       toolbarHeight: 92,
@@ -1795,21 +1952,23 @@ class _ResponsiveShowAppBar extends StatelessWidget
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            color: Colors.white,
-                            fontSize: titleFont,
-                            fontWeight: FontWeight.w800,
-                          ),
+                        color: AppColors.text,
+                        fontSize: titleFont,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      demoMode ? 'Demo Mode — RingMaster Show' : 'Upcoming Shows',
+                      demoMode
+                          ? 'Demo Mode — RingMaster Show'
+                          : 'Upcoming Shows',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Colors.white.withValues(alpha: .9),
-                            fontSize: subtitleFont,
-                            fontWeight: FontWeight.w500,
-                          ),
+                        color: AppColors.muted,
+                        fontSize: subtitleFont,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ],
                 ),
@@ -1819,143 +1978,56 @@ class _ResponsiveShowAppBar extends StatelessWidget
         },
       ),
       actions: [
-        if (!demoMode && showAdmin && onAdmin != null)
+        for (final action in directActions)
           _TopBarAction(
-            icon: Icons.admin_panel_settings,
-            label: 'Show Secretary',
-            showLabel: showLabels,
-            onTap: onAdmin!,
+            icon: action.icon,
+            label: action.label,
+            showLabel: false,
+            onTap: action.onTap,
           ),
-        if (!demoMode && showSuperintendent && onSuperintendent != null)
-          _TopBarAction(
-            icon: Icons.fact_check,
-            label: 'Superintendent',
-            showLabel: showLabels,
-            onTap: onSuperintendent!,
-          ),
-        if (!demoMode)
-          _TopBarAction(
-            icon: Icons.pets,
-            label: 'Animals',
-            showLabel: showLabels,
-            onTap: onAnimals,
-          ),
-        if (!demoMode)
-          _TopBarAction(
-            icon: Icons.receipt_long,
-            label: 'Entries',
-            showLabel: showLabels,
-            onTap: onEntries,
-          ),
-        if (!demoMode)
-          _TopBarAction(
-            icon: Icons.description_outlined,
-            label: 'Past Show Reports',
-            showLabel: showLabels,
-            onTap: onPastShowReports,
-          ),
-        if (showSuperAdminInline)
-          FutureBuilder<bool>(
-            future: Future.value(
-              !SupportImpersonationSession.isActive &&
-                  (bundle?.isSuperAdmin ?? false),
-            ),
-            builder: (context, snap) {
-              if (snap.data != true) return const SizedBox.shrink();
-              return _TopBarAction(
-                icon: Icons.library_books,
-                label: 'Super Admin',
-                showLabel: showLabels,
-                onTap: onSuperAdmin,
-              );
-            },
-          ),
-        if (!demoMode)
-          _TopBarAction(
-            icon: Icons.manage_accounts,
-            label: 'Account',
-            showLabel: showLabels || medium,
-            onTap: onAccount,
-          ),
-        _TopBarAction(
-          icon: Icons.help_outline,
-          label: 'Help',
-          showLabel: showLabels || medium,
-          onTap: onHelp,
-        ),
-        if (!demoMode)
-          MyHelpRequestsButton(
-            showLabel: showLabels || medium,
-            iconColor: Colors.white,
-            textColor: Colors.white,
-          ),
-        if (!showLabels)
-          PopupMenuButton<String>(
-            tooltip: 'More',
-            icon: const Icon(Icons.more_vert, color: Colors.white),
-            onSelected: (value) async {
-              if (value == 'superintendent' && onSuperintendent != null) {
-                onSuperintendent!();
-              }
-              if (value == 'past_show_reports') onPastShowReports();
-              if (value == 'super_admin') onSuperAdmin();
-              if (value == 'help') onHelp();
-              if (value == 'logout') onLogout();
-            },
-            itemBuilder: (context) => [
-              if (!demoMode && showSuperintendent && onSuperintendent != null)
-                const PopupMenuItem<String>(
-                  value: 'superintendent',
-                  child: Text('Superintendent'),
-                ),
-              if (!demoMode)
-                const PopupMenuItem<String>(
-                  value: 'past_show_reports',
-                  child: Text('Past Show Reports'),
-                ),
-              if (!demoMode &&
-                  !SupportImpersonationSession.isActive &&
-                  bundle?.isSuperAdmin == true)
-                const PopupMenuItem<String>(
-                  value: 'super_admin',
-                  child: Text('Super Admin'),
-                ),
-              const PopupMenuItem<String>(
-                value: 'help',
-                child: Text('Help'),
-              ),
-              const PopupMenuItem<String>(
-                value: 'logout',
-                child: Text('Logout'),
-              ),
-            ],
-          )
-        else ...[
-          FutureBuilder<bool>(
-            future: Future.value(
-              !SupportImpersonationSession.isActive &&
-                  (bundle?.isSuperAdmin ?? false),
-            ),
-            builder: (context, snap) {
-              if (snap.data != true || showSuperAdminInline) {
-                return const SizedBox.shrink();
-              }
-              return _TopBarAction(
-                icon: Icons.library_books,
-                label: 'Super Admin',
-                showLabel: true,
-                onTap: onSuperAdmin,
-              );
-            },
-          ),
-          _TopBarAction(
-            icon: Icons.logout,
-            label: 'Logout',
-            showLabel: true,
-            onTap: onLogout,
-          ),
-        ],
+        if (overflowActions.isNotEmpty)
+          _TopBarOverflowMenu(actions: overflowActions),
         const SizedBox(width: 10),
+      ],
+    );
+  }
+}
+
+class _TopBarActionData {
+  static const maxVisibleIcons = 3;
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _TopBarActionData({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+}
+
+class _TopBarOverflowMenu extends StatelessWidget {
+  final List<_TopBarActionData> actions;
+
+  const _TopBarOverflowMenu({required this.actions});
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<int>(
+      tooltip: 'More',
+      icon: const Icon(Icons.more_vert, color: AppColors.text),
+      onSelected: (index) => actions[index].onTap(),
+      itemBuilder: (context) => [
+        for (var index = 0; index < actions.length; index++)
+          PopupMenuItem<int>(
+            value: index,
+            child: ListTile(
+              dense: true,
+              leading: Icon(actions[index].icon),
+              title: Text(actions[index].label),
+            ),
+          ),
       ],
     );
   }
@@ -1979,7 +2051,7 @@ class _TopBarAction extends StatelessWidget {
     if (!showLabel) {
       return IconButton(
         tooltip: label,
-        icon: Icon(icon, color: Colors.white),
+        icon: Icon(icon, color: AppColors.text),
         onPressed: onTap,
       );
     }
@@ -1989,17 +2061,17 @@ class _TopBarAction extends StatelessWidget {
       child: TextButton.icon(
         onPressed: onTap,
         style: TextButton.styleFrom(
-          foregroundColor: Colors.white,
+          foregroundColor: AppColors.text,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
         ),
-        icon: Icon(icon, size: 18, color: Colors.white),
+        icon: Icon(icon, size: 18, color: AppColors.text),
         label: Text(
           label,
           style: const TextStyle(
-            color: Colors.white,
+            color: AppColors.text,
             fontWeight: FontWeight.w600,
           ),
         ),

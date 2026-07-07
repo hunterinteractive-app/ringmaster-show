@@ -1,6 +1,7 @@
 // lib/screens/admin/show_breed_settings_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:ringmaster_show/services/show_lock_service.dart';
@@ -21,7 +22,8 @@ class ShowBreedSettingsScreen extends StatefulWidget {
   });
 
   @override
-  State<ShowBreedSettingsScreen> createState() => _ShowBreedSettingsScreenState();
+  State<ShowBreedSettingsScreen> createState() =>
+      _ShowBreedSettingsScreenState();
 }
 
 class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
@@ -65,21 +67,9 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
       'display_name': 'Single Fryers',
       'sort_order': 10,
     },
-    {
-      'class_code': 'roaster',
-      'display_name': 'Roasters',
-      'sort_order': 20,
-    },
-    {
-      'class_code': 'stewer',
-      'display_name': 'Stewers',
-      'sort_order': 30,
-    },
-    {
-      'class_code': 'meat_pen',
-      'display_name': 'Meat Pens',
-      'sort_order': 40,
-    },
+    {'class_code': 'roaster', 'display_name': 'Roasters', 'sort_order': 20},
+    {'class_code': 'stewer', 'display_name': 'Stewers', 'sort_order': 30},
+    {'class_code': 'meat_pen', 'display_name': 'Meat Pens', 'sort_order': 40},
   ];
 
   final Map<String, Map<String, dynamic>> _showCommercialByCode = {};
@@ -170,7 +160,8 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
       final key = _normalizeLookup(breedName);
       _cavySopVarsByBreedName.putIfAbsent(key, () => <Map<String, dynamic>>[]);
       _cavySopVarsByBreedName[key]!.add({
-        'id': 'cavy_sop:${_normalizeLookup(breedName)}:${_normalizeLookup(varietyName)}',
+        'id':
+            'cavy_sop:${_normalizeLookup(breedName)}:${_normalizeLookup(varietyName)}',
         'breed_id': null,
         'name': varietyName,
         'is_active': true,
@@ -234,7 +225,9 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
         final aSpecies = (a['species'] ?? '').toString();
         final bSpecies = (b['species'] ?? '').toString();
 
-        final speciesCmp = speciesRank(aSpecies).compareTo(speciesRank(bSpecies));
+        final speciesCmp = speciesRank(
+          aSpecies,
+        ).compareTo(speciesRank(bSpecies));
         if (speciesCmp != 0) return speciesCmp;
 
         final aName = (a['name'] ?? '').toString().toLowerCase();
@@ -268,7 +261,8 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
           continue;
         }
 
-        final sopRows = _cavySopVarsByBreedName[_normalizeLookup(breedName)] ??
+        final sopRows =
+            _cavySopVarsByBreedName[_normalizeLookup(breedName)] ??
             const <Map<String, dynamic>>[];
         if (sopRows.isEmpty) continue;
 
@@ -283,10 +277,7 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
         for (final sopRow in sopRows) {
           final sopName = (sopRow['name'] ?? '').toString();
           if (existingNames.contains(_normalizeLookup(sopName))) continue;
-          current.add({
-            ...sopRow,
-            'breed_id': breedId,
-          });
+          current.add({...sopRow, 'breed_id': breedId});
         }
 
         current.sort((a, b) {
@@ -356,7 +347,10 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
   Future<void> _setBreedEnabled(String breedId, bool enabled) async {
     final sbid = _singleBreedId;
     if (_isSingleBreedShow && sbid != null && breedId == sbid) {
-      setState(() => _msg = 'This is a single-breed show. The allowed breed cannot be disabled.');
+      setState(
+        () => _msg =
+            'This is a single-breed show. The allowed breed cannot be disabled.',
+      );
       return;
     }
 
@@ -381,19 +375,22 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
       _showBreedByBreedId[breedId] = {
         'breed_id': breedId,
         'is_enabled': enabled,
-        'class_system_override': _showBreedByBreedId[breedId]?['class_system_override'],
+        'class_system_override':
+            _showBreedByBreedId[breedId]?['class_system_override'],
       };
       if (!_showHasBreedRows) _showHasBreedRows = true;
 
       if (!mounted) return;
-      setState(() => _msg = enabled ? 'Breed enabled for this show' : 'Breed disabled for this show');
+      setState(
+        () => _msg = enabled
+            ? 'Breed enabled for this show'
+            : 'Breed disabled for this show',
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _msg = 'Breed update failed: $e');
     }
   }
-
-
 
   String _effectiveClassSystem(Map<String, dynamic> breed) {
     final bid = breed['id'].toString();
@@ -456,13 +453,15 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
   }
 
   Future<void> _ensureVarietyOverridesInitialized(String breedId) async {
-    final globals = _globalVarsByBreedId[breedId] ?? const <Map<String, dynamic>>[];
+    final globals =
+        _globalVarsByBreedId[breedId] ?? const <Map<String, dynamic>>[];
     if (globals.isEmpty) {
       _showVarsByBreedId.putIfAbsent(breedId, () => <Map<String, dynamic>>[]);
       return;
     }
 
-    final existingRows = _showVarsByBreedId[breedId] ?? const <Map<String, dynamic>>[];
+    final existingRows =
+        _showVarsByBreedId[breedId] ?? const <Map<String, dynamic>>[];
     final existingGlobalVarietyIds = existingRows
         .where((r) => r['variety_id'] != null)
         .map((r) => r['variety_id'].toString())
@@ -562,7 +561,6 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
     required bool enabled,
     String? customName,
   }) async {
-
     try {
       await ShowLockService.assertShowUnlocked(widget.showId);
       await _ensureVarietyOverridesInitialized(breedId);
@@ -594,7 +592,11 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
       _showVarsByBreedId[breedId] = rows.cast<Map<String, dynamic>>();
 
       if (!mounted) return;
-      setState(() => _msg = enabled ? 'Variety enabled for show' : 'Variety disabled for show');
+      setState(
+        () => _msg = enabled
+            ? 'Variety enabled for show'
+            : 'Variety disabled for show',
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _msg = 'Variety update failed: $e');
@@ -605,7 +607,6 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
     required String breedId,
     required String breedName,
   }) async {
-
     final controller = TextEditingController();
     final ok = await showDialog<bool>(
       context: context,
@@ -620,8 +621,14 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Add')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Add'),
+          ),
         ],
       ),
     );
@@ -685,7 +692,6 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
     required int sortOrder,
     required bool enabled,
   }) async {
-
     try {
       await ShowLockService.assertShowUnlocked(widget.showId);
       await supabase.from('show_commercial_classes').upsert({
@@ -724,17 +730,11 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: .05),
-            blurRadius: 12,
-          ),
+          BoxShadow(color: Colors.black.withValues(alpha: .05), blurRadius: 12),
         ],
       ),
       child: ExpansionTile(
-        tilePadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 4,
-        ),
+        tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         title: const Text(
           'Commercial Classes',
@@ -778,11 +778,11 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
                 onChanged: (_loading || _isReadOnly)
                     ? null
                     : (v) => _setCommercialEnabled(
-                          classCode: code,
-                          displayName: name,
-                          sortOrder: sortOrder,
-                          enabled: v,
-                        ),
+                        classCode: code,
+                        displayName: name,
+                        sortOrder: sortOrder,
+                        enabled: v,
+                      ),
               ),
             );
           }),
@@ -811,21 +811,21 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
       final overrideValue = _overrideValueOrNull(b);
 
       final hasVarOverrides = _breedHasVarietyOverrides(breedId);
-      final globals = _globalVarsByBreedId[breedId] ?? const <Map<String, dynamic>>[];
-      final showVarRows = _showVarsByBreedId[breedId] ?? const <Map<String, dynamic>>[];
+      final globals =
+          _globalVarsByBreedId[breedId] ?? const <Map<String, dynamic>>[];
+      final showVarRows =
+          _showVarsByBreedId[breedId] ?? const <Map<String, dynamic>>[];
 
       final cavySopNames = globals
           .where((v) => v['is_cavy_sop'] == true)
           .map((v) => _normalizeLookup((v['name'] ?? '').toString()))
           .toSet();
 
-      final customRows = showVarRows
-          .where((r) {
-            final customName = (r['custom_name'] ?? '').toString().trim();
-            if (r['variety_id'] != null || customName.isEmpty) return false;
-            return !cavySopNames.contains(_normalizeLookup(customName));
-          })
-          .toList();
+      final customRows = showVarRows.where((r) {
+        final customName = (r['custom_name'] ?? '').toString().trim();
+        if (r['variety_id'] != null || customName.isEmpty) return false;
+        return !cavySopNames.contains(_normalizeLookup(customName));
+      }).toList();
 
       return Container(
         margin: const EdgeInsets.only(bottom: 12),
@@ -840,10 +840,7 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
           ],
         ),
         child: ExpansionTile(
-          tilePadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 4,
-          ),
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           childrenPadding: EdgeInsets.zero,
           title: Text(
             breedName,
@@ -905,10 +902,10 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF11285A).withValues(alpha: .04),
+                      color: AppColors.navy.withValues(alpha: .04),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: const Color(0xFF11285A).withValues(alpha: .10),
+                        color: AppColors.navy.withValues(alpha: .10),
                       ),
                     ),
                     child: Row(
@@ -952,7 +949,8 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
                         final varietyName = (v['name'] ?? '').toString();
                         final isCavySop = v['is_cavy_sop'] == true;
 
-                        final vEnabled = enabled &&
+                        final vEnabled =
+                            enabled &&
                             _isVarietyEnabledForShow(
                               breedId: breedId,
                               varietyId: varietyId,
@@ -964,17 +962,21 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
                           decoration: BoxDecoration(
                             color: const Color(0xFFF8F9FC),
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: Colors.black.withValues(alpha: .05)),
+                            border: Border.all(
+                              color: Colors.black.withValues(alpha: .05),
+                            ),
                           ),
                           child: SwitchListTile(
                             title: Text(varietyName),
                             subtitle: !enabled
                                 ? const Text('Breed disabled for show')
                                 : isCavySop
-                                    ? const Text('Cavy SOP variety')
-                                    : (!hasVarOverrides
-                                        ? const Text('Default allowed (no overrides yet)')
-                                        : null),
+                                ? const Text('Cavy SOP variety')
+                                : (!hasVarOverrides
+                                      ? const Text(
+                                          'Default allowed (no overrides yet)',
+                                        )
+                                      : null),
                             value: vEnabled,
                             onChanged: (!enabled || _isReadOnly)
                                 ? null
@@ -983,7 +985,9 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
                                       breedId: breedId,
                                       varietyId: varietyId,
                                       enabled: val,
-                                      customName: isCavySop ? varietyName : null,
+                                      customName: isCavySop
+                                          ? varietyName
+                                          : null,
                                     );
                                     if (!mounted) return;
                                     setState(() {});
@@ -1008,7 +1012,9 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
                         decoration: BoxDecoration(
                           color: const Color(0xFFF8F9FC),
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: Colors.black.withValues(alpha: .05)),
+                          border: Border.all(
+                            color: Colors.black.withValues(alpha: .05),
+                          ),
                         ),
                         child: SwitchListTile(
                           title: Text(cn),
@@ -1020,7 +1026,9 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
                               ? null
                               : (val) async {
                                   try {
-                                    await ShowLockService.assertShowUnlocked(widget.showId);
+                                    await ShowLockService.assertShowUnlocked(
+                                      widget.showId,
+                                    );
 
                                     await supabase
                                         .from('show_varieties')
@@ -1032,12 +1040,14 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
 
                                     final List rows = await supabase
                                         .from('show_varieties')
-                                        .select('breed_id,variety_id,custom_name,is_enabled')
+                                        .select(
+                                          'breed_id,variety_id,custom_name,is_enabled',
+                                        )
                                         .eq('show_id', widget.showId)
                                         .eq('breed_id', breedId);
 
-                                    _showVarsByBreedId[breedId] =
-                                        rows.cast<Map<String, dynamic>>();
+                                    _showVarsByBreedId[breedId] = rows
+                                        .cast<Map<String, dynamic>>();
 
                                     if (!mounted) return;
                                     setState(
@@ -1048,7 +1058,8 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
                                   } catch (e) {
                                     if (!mounted) return;
                                     setState(
-                                      () => _msg = 'Custom variety update failed: $e',
+                                      () => _msg =
+                                          'Custom variety update failed: $e',
                                     );
                                   }
                                 },
@@ -1070,18 +1081,18 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
     final cavyBreeds = _breeds
         .where((b) => (b['species'] ?? '').toString().toLowerCase() == 'cavy')
         .toList();
-    final otherBreeds = _breeds
-        .where((b) {
-          final species = (b['species'] ?? '').toString().toLowerCase();
-          return species != 'rabbit' && species != 'cavy';
-        })
-        .toList();
+    final otherBreeds = _breeds.where((b) {
+      final species = (b['species'] ?? '').toString().toLowerCase();
+      return species != 'rabbit' && species != 'cavy';
+    }).toList();
 
     final shouldGroupCavyBreeds =
         !_isSingleBreedShow && _speciesFilter == 'all' && cavyBreeds.isNotEmpty;
 
     final shouldGroupRabbitBreeds =
-        !_isSingleBreedShow && _speciesFilter == 'all' && rabbitBreeds.isNotEmpty;
+        !_isSingleBreedShow &&
+        _speciesFilter == 'all' &&
+        rabbitBreeds.isNotEmpty;
 
     bool areAllBreedsEnabledFor(List<Map<String, dynamic>> breeds) {
       if (breeds.isEmpty) return false;
@@ -1093,7 +1104,6 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
       bool enabled,
       String label,
     ) async {
-
       setState(() {
         _loading = true;
         _msg = null;
@@ -1163,10 +1173,10 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
               onChanged: (_loading || _isReadOnly)
                   ? null
                   : (v) => setAllBreedsEnabledFor(
-                        rabbitBreeds,
-                        v,
-                        'Rabbit breeds',
-                      ),
+                      rabbitBreeds,
+                      v,
+                      'Rabbit breeds',
+                    ),
             ),
             subtitle: Padding(
               padding: const EdgeInsets.only(top: 4),
@@ -1207,11 +1217,7 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
               value: areAllBreedsEnabledFor(cavyBreeds),
               onChanged: (_loading || _isReadOnly)
                   ? null
-                  : (v) => setAllBreedsEnabledFor(
-                        cavyBreeds,
-                        v,
-                        'Cavy breeds',
-                      ),
+                  : (v) => setAllBreedsEnabledFor(cavyBreeds, v, 'Cavy breeds'),
             ),
             subtitle: Padding(
               padding: const EdgeInsets.only(top: 4),
@@ -1299,10 +1305,10 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
                 margin: const EdgeInsets.only(bottom: 12),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFD4A623).withValues(alpha: .10),
+                  color: AppColors.gold.withValues(alpha: .10),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: const Color(0xFFD4A623).withValues(alpha: .30),
+                    color: AppColors.gold.withValues(alpha: .30),
                   ),
                 ),
                 child: Row(
@@ -1392,25 +1398,25 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
               child: _loading
                   ? const Center(child: CircularProgressIndicator())
                   : _breeds.isEmpty
-                      ? const Center(
-                          child: Text(
-                            'No breeds found.',
-                            style: TextStyle(fontWeight: FontWeight.w500),
-                          ),
-                        )
-                      : Scrollbar(
-                          controller: _breedScrollController,
-                          thumbVisibility: true,
-                          child: ListView(
-                            controller: _breedScrollController,
-                            primary: false,
-                            physics: const AlwaysScrollableScrollPhysics(),
-                            keyboardDismissBehavior:
-                                ScrollViewKeyboardDismissBehavior.onDrag,
-                            padding: const EdgeInsets.fromLTRB(0, 4, 0, 16),
-                            children: breedListChildren,
-                          ),
-                        ),
+                  ? const Center(
+                      child: Text(
+                        'No breeds found.',
+                        style: TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                    )
+                  : Scrollbar(
+                      controller: _breedScrollController,
+                      thumbVisibility: true,
+                      child: ListView(
+                        controller: _breedScrollController,
+                        primary: false,
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
+                        padding: const EdgeInsets.fromLTRB(0, 4, 0, 16),
+                        children: breedListChildren,
+                      ),
+                    ),
             ),
           ],
         ),

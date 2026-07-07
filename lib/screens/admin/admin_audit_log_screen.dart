@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:html' as html;
 
 import 'package:flutter/material.dart';
+import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/services/app_session.dart';
 
@@ -51,10 +52,7 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
   }
 
   Future<void> _loadAll() async {
-    await Future.wait([
-      _loadCorrections(),
-      _loadWriters(),
-    ]);
+    await Future.wait([_loadCorrections(), _loadWriters()]);
   }
 
   Future<void> _loadCorrections() async {
@@ -66,9 +64,7 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
     try {
       final rows = await supabase.rpc(
         'get_show_qr_correction_audit_log',
-        params: {
-          'p_show_id': widget.showId,
-        },
+        params: {'p_show_id': widget.showId},
       );
 
       if (!mounted) return;
@@ -96,9 +92,7 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
     try {
       final rows = await supabase.rpc(
         'get_show_qr_writer_activity',
-        params: {
-          'p_show_id': widget.showId,
-        },
+        params: {'p_show_id': widget.showId},
       );
 
       if (!mounted) return;
@@ -132,7 +126,11 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
     final day = parsed.day.toString().padLeft(2, '0');
     final year = parsed.year.toString();
     final hourRaw = parsed.hour;
-    final hour = hourRaw == 0 ? 12 : hourRaw > 12 ? hourRaw - 12 : hourRaw;
+    final hour = hourRaw == 0
+        ? 12
+        : hourRaw > 12
+        ? hourRaw - 12
+        : hourRaw;
     final minute = parsed.minute.toString().padLeft(2, '0');
     final ampm = hourRaw >= 12 ? 'PM' : 'AM';
     return '$month/$day/$year $hour:$minute $ampm';
@@ -143,12 +141,23 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
     if (parsed == null) return true;
 
     if (_startDate != null) {
-      final start = DateTime(_startDate!.year, _startDate!.month, _startDate!.day);
+      final start = DateTime(
+        _startDate!.year,
+        _startDate!.month,
+        _startDate!.day,
+      );
       if (parsed.isBefore(start)) return false;
     }
 
     if (_endDate != null) {
-      final end = DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59);
+      final end = DateTime(
+        _endDate!.year,
+        _endDate!.month,
+        _endDate!.day,
+        23,
+        59,
+        59,
+      );
       if (parsed.isAfter(end)) return false;
     }
 
@@ -172,7 +181,8 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
         return false;
       }
 
-      if (_roleFilter != 'all' && _text(row, 'approved_by_role') != _roleFilter) {
+      if (_roleFilter != 'all' &&
+          _text(row, 'approved_by_role') != _roleFilter) {
         return false;
       }
 
@@ -266,17 +276,17 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
 
       final existingLast = _date(item['last_at']);
       final rowLast = _date(row['result_entered_at']);
-      if (existingLast == null || (rowLast != null && rowLast.isAfter(existingLast))) {
+      if (existingLast == null ||
+          (rowLast != null && rowLast.isAfter(existingLast))) {
         item['last_at'] = row['result_entered_at'];
       }
     }
 
-    return grouped.values.toList()
-      ..sort((a, b) {
-        final ad = _date(a['last_at']) ?? DateTime.fromMillisecondsSinceEpoch(0);
-        final bd = _date(b['last_at']) ?? DateTime.fromMillisecondsSinceEpoch(0);
-        return bd.compareTo(ad);
-      });
+    return grouped.values.toList()..sort((a, b) {
+      final ad = _date(a['last_at']) ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final bd = _date(b['last_at']) ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return bd.compareTo(ad);
+    });
   }
 
   Set<String> get _fieldOptions {
@@ -425,8 +435,12 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
         ];
       }
 
-      final classes = ((row['classes'] as Set<String>).toList()..sort()).join('; ');
-      final tattoos = ((row['tattoos'] as Set<String>).toList()..sort()).join('; ');
+      final classes = ((row['classes'] as Set<String>).toList()..sort()).join(
+        '; ',
+      );
+      final tattoos = ((row['tattoos'] as Set<String>).toList()..sort()).join(
+        '; ',
+      );
       return [
         (row['name'] ?? '').toString(),
         (row['phone'] ?? '').toString(),
@@ -496,12 +510,20 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
                 OutlinedButton.icon(
                   onPressed: () => _pickDate(isStart: true),
                   icon: const Icon(Icons.calendar_today_outlined),
-                  label: Text(_startDate == null ? 'Start date' : 'From ${_fmtDateTime(_startDate).split(' ').first}'),
+                  label: Text(
+                    _startDate == null
+                        ? 'Start date'
+                        : 'From ${_fmtDateTime(_startDate).split(' ').first}',
+                  ),
                 ),
                 OutlinedButton.icon(
                   onPressed: () => _pickDate(isStart: false),
                   icon: const Icon(Icons.event_outlined),
-                  label: Text(_endDate == null ? 'End date' : 'To ${_fmtDateTime(_endDate).split(' ').first}'),
+                  label: Text(
+                    _endDate == null
+                        ? 'End date'
+                        : 'To ${_fmtDateTime(_endDate).split(' ').first}',
+                  ),
                 ),
                 if (showCorrectionFilters) ...[
                   SizedBox(
@@ -513,7 +535,10 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
                         border: OutlineInputBorder(),
                       ),
                       items: [
-                        const DropdownMenuItem(value: 'all', child: Text('All fields')),
+                        const DropdownMenuItem(
+                          value: 'all',
+                          child: Text('All fields'),
+                        ),
                         ...(_fieldOptions.toList()..sort()).map(
                           (field) => DropdownMenuItem(
                             value: field,
@@ -536,7 +561,10 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
                         border: OutlineInputBorder(),
                       ),
                       items: [
-                        const DropdownMenuItem(value: 'all', child: Text('All roles')),
+                        const DropdownMenuItem(
+                          value: 'all',
+                          child: Text('All roles'),
+                        ),
                         ...(_roleOptions.toList()..sort()).map(
                           (role) => DropdownMenuItem(
                             value: role,
@@ -575,13 +603,13 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: const Color(0xFF11285A)),
+          Icon(icon, size: 16, color: AppColors.navy),
           const SizedBox(width: 6),
           Text(
             label,
             style: const TextStyle(
               fontWeight: FontWeight.w700,
-              color: Color(0xFF11285A),
+              color: AppColors.navy,
             ),
           ),
         ],
@@ -614,7 +642,12 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
     );
   }
 
-  Widget _statusCard(String text, {bool loading = false, String? error, VoidCallback? onRetry}) {
+  Widget _statusCard(
+    String text, {
+    bool loading = false,
+    String? error,
+    VoidCallback? onRetry,
+  }) {
     return Center(
       child: Card(
         elevation: 0,
@@ -698,7 +731,9 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
               Text('${rows.length} override${rows.length == 1 ? '' : 's'}'),
               const Spacer(),
               OutlinedButton.icon(
-                onPressed: rows.isEmpty ? null : () => _downloadCsv(corrections: true),
+                onPressed: rows.isEmpty
+                    ? null
+                    : () => _downloadCsv(corrections: true),
                 icon: const Icon(Icons.download_outlined),
                 label: const Text('Download CSV'),
               ),
@@ -707,7 +742,9 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
         ),
         Expanded(
           child: rows.isEmpty
-              ? _statusCard('No QR correction overrides match the current filters.')
+              ? _statusCard(
+                  'No QR correction overrides match the current filters.',
+                )
               : SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                   child: SingleChildScrollView(
@@ -736,26 +773,54 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
                           cells: [
                             DataCell(Icon(_severityIcon(field), size: 18)),
                             DataCell(Text(_fmtDateTime(row['created_at']))),
-                            DataCell(Text(_text(row, 'animal_name').isEmpty ? '(Unnamed)' : _text(row, 'animal_name'))),
+                            DataCell(
+                              Text(
+                                _text(row, 'animal_name').isEmpty
+                                    ? '(Unnamed)'
+                                    : _text(row, 'animal_name'),
+                              ),
+                            ),
                             DataCell(Text(_text(row, 'tattoo'))),
-                            DataCell(SizedBox(width: 180, child: Text(_text(row, 'exhibitor_label')))),
-                            DataCell(SizedBox(
-                              width: 260,
-                              child: Text([
-                                _text(row, 'breed'),
-                                _text(row, 'variety'),
-                                [_text(row, 'class_name'), _text(row, 'sex')]
-                                    .where((x) => x.isNotEmpty)
-                                    .join(' '),
-                              ].where((x) => x.isNotEmpty).join(' • ')),
-                            )),
+                            DataCell(
+                              SizedBox(
+                                width: 180,
+                                child: Text(_text(row, 'exhibitor_label')),
+                              ),
+                            ),
+                            DataCell(
+                              SizedBox(
+                                width: 260,
+                                child: Text(
+                                  [
+                                    _text(row, 'breed'),
+                                    _text(row, 'variety'),
+                                    [
+                                      _text(row, 'class_name'),
+                                      _text(row, 'sex'),
+                                    ].where((x) => x.isNotEmpty).join(' '),
+                                  ].where((x) => x.isNotEmpty).join(' • '),
+                                ),
+                              ),
+                            ),
                             DataCell(Text(_fieldLabel(field))),
                             DataCell(Text(_text(row, 'old_value'))),
                             DataCell(Text(_text(row, 'new_value'))),
-                            DataCell(SizedBox(width: 260, child: Text(_text(row, 'reason')))),
+                            DataCell(
+                              SizedBox(
+                                width: 260,
+                                child: Text(_text(row, 'reason')),
+                              ),
+                            ),
                             DataCell(Text(_text(row, 'writer_name'))),
                             DataCell(Text(_text(row, 'writer_phone'))),
-                            DataCell(Text(_text(row, 'approved_by_role').replaceAll('_', ' '))),
+                            DataCell(
+                              Text(
+                                _text(
+                                  row,
+                                  'approved_by_role',
+                                ).replaceAll('_', ' '),
+                              ),
+                            ),
                             DataCell(Text(_text(row, 'approved_by_pin'))),
                           ],
                         );
@@ -810,7 +875,9 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
               ),
               const Spacer(),
               OutlinedButton.icon(
-                onPressed: rows.isEmpty ? null : () => _downloadCsv(corrections: false),
+                onPressed: rows.isEmpty
+                    ? null
+                    : () => _downloadCsv(corrections: false),
                 icon: const Icon(Icons.download_outlined),
                 label: const Text('Download CSV'),
               ),
@@ -819,36 +886,52 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
         ),
         Expanded(
           child: rows.isEmpty
-              ? _statusCard('No QR writer activity matches the current filters.')
+              ? _statusCard(
+                  'No QR writer activity matches the current filters.',
+                )
               : ListView.separated(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                   itemCount: rows.length,
-                  separatorBuilder: (context, index) => const SizedBox(height: 12),
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     final row = rows[index];
-                    final name = (row['name'] ?? 'Unknown Writer').toString().trim();
+                    final name = (row['name'] ?? 'Unknown Writer')
+                        .toString()
+                        .trim();
                     final phone = (row['phone'] ?? '').toString().trim();
                     final count = ((row['count'] as int?) ?? 0);
-                    final classes = ((row['classes'] as Set<String>).toList()..sort());
-                    final tattoos = ((row['tattoos'] as Set<String>).toList()..sort());
+                    final classes = ((row['classes'] as Set<String>).toList()
+                      ..sort());
+                    final tattoos = ((row['tattoos'] as Set<String>).toList()
+                      ..sort());
                     final previewClasses = classes.take(6).toList();
-                    final extraClassCount = classes.length - previewClasses.length;
+                    final extraClassCount =
+                        classes.length - previewClasses.length;
                     final previewTattoos = tattoos.take(20).join(', ');
-                    final extraTattooCount = tattoos.length - tattoos.take(20).length;
+                    final extraTattooCount =
+                        tattoos.length - tattoos.take(20).length;
 
                     return Card(
                       elevation: 0,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(18),
-                        side: BorderSide(color: Colors.black.withValues(alpha: .06)),
+                        side: BorderSide(
+                          color: Colors.black.withValues(alpha: .06),
+                        ),
                       ),
                       child: Theme(
-                        data: Theme.of(context).copyWith(
-                          dividerColor: Colors.transparent,
-                        ),
+                        data: Theme.of(
+                          context,
+                        ).copyWith(dividerColor: Colors.transparent),
                         child: ExpansionTile(
                           tilePadding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                          childrenPadding: const EdgeInsets.fromLTRB(
+                            16,
+                            0,
+                            16,
+                            16,
+                          ),
                           leading: CircleAvatar(
                             child: Text(
                               name.isNotEmpty
@@ -871,8 +954,14 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
                               children: [
                                 if (phone.isNotEmpty)
                                   _smallInfoChip(Icons.phone_outlined, phone),
-                                _smallInfoChip(Icons.check_circle_outline, '$count entries'),
-                                _smallInfoChip(Icons.schedule_outlined, _fmtDateTime(row['last_at'])),
+                                _smallInfoChip(
+                                  Icons.check_circle_outline,
+                                  '$count entries',
+                                ),
+                                _smallInfoChip(
+                                  Icons.schedule_outlined,
+                                  _fmtDateTime(row['last_at']),
+                                ),
                               ],
                             ),
                           ),
@@ -881,9 +970,8 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
                               alignment: Alignment.centerLeft,
                               child: Text(
                                 'Wrote for',
-                                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                      fontWeight: FontWeight.w800,
-                                    ),
+                                style: Theme.of(context).textTheme.titleSmall
+                                    ?.copyWith(fontWeight: FontWeight.w800),
                               ),
                             ),
                             const SizedBox(height: 8),
@@ -918,9 +1006,8 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
                               alignment: Alignment.centerLeft,
                               child: Text(
                                 'Ear numbers',
-                                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                      fontWeight: FontWeight.w800,
-                                    ),
+                                style: Theme.of(context).textTheme.titleSmall
+                                    ?.copyWith(fontWeight: FontWeight.w800),
                               ),
                             ),
                             const SizedBox(height: 6),
@@ -949,7 +1036,7 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
     return DefaultTabController(
       length: 2,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF4F6FB),
+        backgroundColor: AppColors.bg,
         appBar: AppBar(
           title: Text('Audit Log — ${widget.showName}'),
           actions: [
@@ -963,10 +1050,7 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
             labelColor: Colors.white,
             unselectedLabelColor: Colors.white70,
             indicatorColor: Colors.white,
-            labelStyle: TextStyle(
-              fontWeight: FontWeight.w700,
-              fontSize: 14,
-            ),
+            labelStyle: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
             unselectedLabelStyle: TextStyle(
               fontWeight: FontWeight.w600,
               fontSize: 14,
@@ -977,12 +1061,7 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
             ],
           ),
         ),
-        body: TabBarView(
-          children: [
-            _correctionsTab(),
-            _writersTab(),
-          ],
-        ),
+        body: TabBarView(children: [_correctionsTab(), _writersTab()]),
       ),
     );
   }

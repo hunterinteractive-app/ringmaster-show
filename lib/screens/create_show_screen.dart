@@ -1,6 +1,7 @@
 // lib/screens/create_show_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
@@ -157,7 +158,10 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
 
   bool _validate() {
     if (AppSession.isSupportMode) {
-      setState(() => _msg = 'Creating shows is disabled while viewing in support mode.');
+      setState(
+        () =>
+            _msg = 'Creating shows is disabled while viewing in support mode.',
+      );
       return false;
     }
 
@@ -195,7 +199,9 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
     }
 
     if (_openCount == 0 && _youthCount == 0) {
-      setState(() => _msg = 'Select at least one show type (Open and/or Youth).');
+      setState(
+        () => _msg = 'Select at least one show type (Open and/or Youth).',
+      );
       return false;
     }
 
@@ -235,7 +241,12 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
     }
 
     addSections(kind: 'open', count: _openCount, baseSort: 10, label: 'Open');
-    addSections(kind: 'youth', count: _youthCount, baseSort: 100, label: 'Youth');
+    addSections(
+      kind: 'youth',
+      count: _youthCount,
+      baseSort: 100,
+      label: 'Youth',
+    );
 
     return rows;
   }
@@ -331,15 +342,18 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
 
       final showId = rpcResult.toString();
 
-      await supabase.from('shows').update({
-        'timezone': 'America/Indiana/Indianapolis',
-        'is_published': _published,
-        'is_national_show': _isNationalShow,
-        'entry_close_at': _entryCloseAt?.toUtc().toIso8601String(),
-        'auto_email_checkin_sheets': _autoEmailCheckInSheets,
-        'club_id': clubId,
-        'club_name': clubName,
-      }).eq('id', showId);
+      await supabase
+          .from('shows')
+          .update({
+            'timezone': 'America/Indiana/Indianapolis',
+            'is_published': _published,
+            'is_national_show': _isNationalShow,
+            'entry_close_at': _entryCloseAt?.toUtc().toIso8601String(),
+            'auto_email_checkin_sheets': _autoEmailCheckInSheets,
+            'club_id': clubId,
+            'club_name': clubName,
+          })
+          .eq('id', showId);
 
       final sectionRows = _buildSectionRows(showId);
       if (sectionRows.isNotEmpty) {
@@ -383,17 +397,15 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
                 margin: const EdgeInsets.only(bottom: 12),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: .10),
+                  color: AppColors.warningBg,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Colors.orange.withValues(alpha: .35),
-                  ),
+                  border: Border.all(color: AppColors.warningBorder),
                 ),
                 child: const Text(
                   'Creating shows is disabled while viewing as another user. '
                   'Exit impersonation to create a show from your account.',
                   style: TextStyle(
-                    color: Color(0xFF7A4F00),
+                    color: AppColors.warning,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -449,7 +461,9 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
                             ),
                           ] else ...[
                             DropdownButtonFormField<String>(
-                              initialValue: selectedClubExists ? _selectedClubId : null,
+                              initialValue: selectedClubExists
+                                  ? _selectedClubId
+                                  : null,
                               decoration: InputDecoration(
                                 labelText: 'Hosting Club',
                                 border: const OutlineInputBorder(),
@@ -467,26 +481,22 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
                               }).toList(),
                               onChanged:
                                   (_saving ||
-                                          _loadingClubs ||
-                                          !_canSwitchHostingClub)
-                                      ? null
-                                      : (value) {
-                                          setState(() {
-                                            _selectedClubId = value;
+                                      _loadingClubs ||
+                                      !_canSwitchHostingClub)
+                                  ? null
+                                  : (value) {
+                                      setState(() {
+                                        _selectedClubId = value;
 
-                                            final selected =
-                                                _clubs.firstWhere(
-                                              (c) =>
-                                                  c['id'].toString() ==
-                                                  value,
-                                              orElse: () => <String, dynamic>{},
-                                            );
+                                        final selected = _clubs.firstWhere(
+                                          (c) => c['id'].toString() == value,
+                                          orElse: () => <String, dynamic>{},
+                                        );
 
-                                            _selectedClubName =
-                                                (selected['name'] ?? '')
-                                                    .toString();
-                                          });
-                                        },
+                                        _selectedClubName =
+                                            (selected['name'] ?? '').toString();
+                                      });
+                                    },
                             ),
                           ],
                           const SizedBox(height: 16),
@@ -501,8 +511,9 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
                                 ),
                               ),
                               TextButton(
-                                onPressed:
-                                    _saving ? null : () => _pickDate(true),
+                                onPressed: _saving
+                                    ? null
+                                    : () => _pickDate(true),
                                 child: const Text('Pick'),
                               ),
                             ],
@@ -518,8 +529,9 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
                                 ),
                               ),
                               TextButton(
-                                onPressed:
-                                    _saving ? null : () => _pickDate(false),
+                                onPressed: _saving
+                                    ? null
+                                    : () => _pickDate(false),
                                 child: const Text('Pick'),
                               ),
                             ],
@@ -580,17 +592,16 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
                                 ),
                               ),
                               TextButton(
-                                onPressed:
-                                    _saving ? null : _pickEntryCloseAt,
+                                onPressed: _saving ? null : _pickEntryCloseAt,
                                 child: const Text('Pick'),
                               ),
                               TextButton(
                                 onPressed: _saving
                                     ? null
                                     : () => setState(() {
-                                          _entryCloseAt = null;
-                                          _autoEmailCheckInSheets = false;
-                                        }),
+                                        _entryCloseAt = null;
+                                        _autoEmailCheckInSheets = false;
+                                      }),
                                 child: const Text('Clear'),
                               ),
                             ],
@@ -608,8 +619,8 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
                             onChanged: (_saving || _entryCloseAt == null)
                                 ? null
                                 : (v) => setState(
-                                      () => _autoEmailCheckInSheets = v,
-                                    ),
+                                    () => _autoEmailCheckInSheets = v,
+                                  ),
                           ),
                         ],
                       ),
@@ -756,10 +767,13 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
                     : 'Create show',
                 child: FilledButton(
                   style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFFD4A623),
+                    backgroundColor: AppColors.primaryButton,
+                    foregroundColor: AppColors.primaryButtonText,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
-                  onPressed: (_saving || AppSession.isSupportMode) ? null : _create,
+                  onPressed: (_saving || AppSession.isSupportMode)
+                      ? null
+                      : _create,
                   child: Text(_saving ? 'Creating…' : 'Create'),
                 ),
               ),

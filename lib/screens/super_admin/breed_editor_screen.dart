@@ -1,6 +1,7 @@
 // lib/screens/super_admin/breed_editor_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
@@ -10,11 +11,7 @@ class BreedEditorScreen extends StatefulWidget {
   final String species;
   final Map<String, dynamic>? existing;
 
-  const BreedEditorScreen({
-    super.key,
-    required this.species,
-    this.existing,
-  });
+  const BreedEditorScreen({super.key, required this.species, this.existing});
 
   @override
   State<BreedEditorScreen> createState() => _BreedEditorScreenState();
@@ -104,9 +101,9 @@ class _BreedEditorScreenState extends State<BreedEditorScreen> {
               width: double.infinity,
               child: Text(
                 _isEdit ? 'Update Breed Details' : 'Create New Breed',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
               ),
             ),
           ),
@@ -223,8 +220,8 @@ class _BreedEditorScreenState extends State<BreedEditorScreen> {
                   Expanded(
                     child: FilledButton(
                       style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFFD4A623),
-                        foregroundColor: Colors.black,
+                        backgroundColor: AppColors.primaryButton,
+                        foregroundColor: AppColors.primaryButtonText,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                       ),
                       onPressed: _saving ? null : _save,

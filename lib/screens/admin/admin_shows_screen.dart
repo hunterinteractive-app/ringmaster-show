@@ -36,7 +36,6 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
   late Future<_AdminShowsPageData> _pageFuture;
   final TextEditingController _searchController = TextEditingController();
 
-
   bool get _isDemoMode {
     if (widget.demoMode) return true;
 
@@ -94,10 +93,12 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
 
     final isSuperAdmin = superAdminRes != null || roleSuperAdminRes != null;
 
-    final query = supabase.from('shows').select(
-      'id,name,start_date,end_date,location_name,is_published,entry_open_at,entry_close_at,created_at,'
-      'is_locked,locked_at,finalized_at,owner_user_id',
-    );
+    final query = supabase
+        .from('shows')
+        .select(
+          'id,name,start_date,end_date,location_name,is_published,entry_open_at,entry_close_at,created_at,'
+          'is_locked,locked_at,finalized_at,owner_user_id',
+        );
 
     // If the previous screen already calculated allowed shows, trust that list.
     // This avoids losing secretary access if this screen's fallback role query is
@@ -296,9 +297,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
       }
 
       if (result is Map) {
-        return _ShowCreationStatus.fromMap(
-          Map<String, dynamic>.from(result),
-        );
+        return _ShowCreationStatus.fromMap(Map<String, dynamic>.from(result));
       }
 
       return const _ShowCreationStatus(
@@ -399,9 +398,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
   Future<void> _openEditShow(String showId) async {
     await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => EditShowSettingsScreen(showId: showId),
-      ),
+      MaterialPageRoute(builder: (_) => EditShowSettingsScreen(showId: showId)),
     );
     if (mounted) {
       await _reload();
@@ -411,10 +408,8 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
   void _openShows() {
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => ShowListScreen(
-          demoMode: _isDemoMode,
-          demoSecretaryMode: false,
-        ),
+        builder: (_) =>
+            ShowListScreen(demoMode: _isDemoMode, demoSecretaryMode: false),
       ),
     );
   }
@@ -512,7 +507,8 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
         final page = snap.data;
         final shows = _filteredAndSortedShows(page?.shows ?? const []);
 
-        final license = page?.license ??
+        final license =
+            page?.license ??
             const _ShowCreationStatus(
               canCreate: false,
               remainingShowDays: 0,
@@ -521,211 +517,226 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
               message: 'Loading license…',
             );
 
-    return Scaffold(
-      appBar: _AdminShowsAppBar(
-        canCreate: !AppSession.isSupportMode &&
-            license.canCreate &&
-            snap.connectionState != ConnectionState.waiting,
-        demoMode: _isDemoMode,
-        onShows: _openShows,
-        onAnimals: _openAnimals,
-        onEntries: _openEntries,
-        onResources: _openResources,
-        onAccount: _openAccount,
-        onReload:
-            snap.connectionState == ConnectionState.waiting ? null : _reload,
-        onCreate: (AppSession.isSupportMode ||
-                snap.connectionState == ConnectionState.waiting ||
-                !license.canCreate)
-            ? null
-            : _openCreate,
-      ),
-          body: snap.connectionState != ConnectionState.done
-              ? const Center(child: CircularProgressIndicator())
-              : snap.hasError
-                  ? Center(child: Text('Error: ${snap.error}'))
-                  : Padding(
-                      padding: const EdgeInsets.all(AppSpacing.lg),
-                      child: Column(
-                        children: [
-                          _buildLicenseBanner(license),
-                          if (AppSession.isSupportMode) ...[
-                            const SizedBox(height: AppSpacing.md),
-                            RMCard(
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: const [
-                                  Icon(Icons.support_agent, color: Colors.orange),
-                                  SizedBox(width: AppSpacing.md),
-                                  Expanded(
-                                    child: Text(
-                                      'Support Mode — You are managing shows as an admin while viewing another user. Creating shows is disabled.',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
+        return Scaffold(
+          appBar: _AdminShowsAppBar(
+            canCreate:
+                !AppSession.isSupportMode &&
+                license.canCreate &&
+                snap.connectionState != ConnectionState.waiting,
+            demoMode: _isDemoMode,
+            onShows: _openShows,
+            onAnimals: _openAnimals,
+            onEntries: _openEntries,
+            onResources: _openResources,
+            onAccount: _openAccount,
+            onReload: snap.connectionState == ConnectionState.waiting
+                ? null
+                : _reload,
+            onCreate:
+                (AppSession.isSupportMode ||
+                    snap.connectionState == ConnectionState.waiting ||
+                    !license.canCreate)
+                ? null
+                : _openCreate,
+          ),
+          body: Container(
+            decoration: const BoxDecoration(gradient: AppGradients.page),
+            child: snap.connectionState != ConnectionState.done
+                ? const Center(child: CircularProgressIndicator())
+                : snap.hasError
+                ? Center(child: Text('Error: ${snap.error}'))
+                : Padding(
+                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    child: Column(
+                      children: [
+                        _buildLicenseBanner(license),
+                        if (AppSession.isSupportMode) ...[
                           const SizedBox(height: AppSpacing.md),
                           RMCard(
-                            child: TextField(
-                              controller: _searchController,
-                              decoration: const InputDecoration(
-                                labelText: 'Search shows',
-                                hintText:
-                                    'Show name, location, date, published, draft...',
-                                prefixIcon: Icon(Icons.search),
-                                border: OutlineInputBorder(),
-                              ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: const [
+                                Icon(Icons.support_agent, color: Colors.orange),
+                                SizedBox(width: AppSpacing.md),
+                                Expanded(
+                                  child: Text(
+                                    'Support Mode — You are managing shows as an admin while viewing another user. Creating shows is disabled.',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(height: AppSpacing.md),
-                          if (page?.hasAdminAccess != true)
-                            const Expanded(
-                              child: RMEmptyState(
-                                title: 'No show secretary access yet',
-                                subtitle: 'You do not currently have access to manage any shows.',
-                                icon: Icons.assignment_ind_outlined,
-                              ),
-                            )
-                          else if ((page?.shows ?? []).isEmpty)
-                            const Expanded(
-                              child: RMEmptyState(
-                                title: 'No shows available',
-                                subtitle:
-                                    'No shows were found for your current admin access.',
-                                icon: Icons.event_busy_outlined,
-                              ),
-                            )
-                          else if (shows.isEmpty)
-                            const Expanded(
-                              child: RMEmptyState(
-                                title: 'No matching shows',
-                                subtitle: 'Try a different search term.',
-                                icon: Icons.search_off,
-                              ),
-                            )
-                          else
-                            Expanded(
-                              child: ListView.builder(
-                                itemCount: shows.length,
-                                itemBuilder: (context, i) {
-                                  final s = shows[i];
-
-                                  final showId = s['id'].toString();
-                                  final counts = page!.entryCounts[showId] ??
-                                      _ShowEntryCounts();
-
-                                  final name = (s['name'] ?? '').toString();
-                                  final start = _fmtDate(
-                                    (s['start_date'] ?? '').toString(),
-                                  );
-                                  final end = _fmtDate(
-                                    (s['end_date'] ?? '').toString(),
-                                  );
-                                  final loc =
-                                      (s['location_name'] ?? '').toString();
-                                  final published = s['is_published'] == true;
-                                  final isLocked = s['is_locked'] == true;
-                                  final finalizedAt = (s['finalized_at'] ?? '').toString();
-                                  final isFinalized = finalizedAt.isNotEmpty;
-
-                                  final openAt =
-                                      _fmtTs(s['entry_open_at']?.toString());
-                                  final closeAt =
-                                      _fmtTs(s['entry_close_at']?.toString());
-
-                                  return Padding(
-                                    padding: const EdgeInsets.only(
-                                      bottom: AppSpacing.md,
-                                    ),
-                                    child: RMCard(
-                                      onTap: () => _openEditShow(showId),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Expanded(
-                                                child: Text(
-                                                  name,
-                                                  style: Theme.of(context)
-                                                      .textTheme
-                                                      .titleMedium
-                                                      ?.copyWith(
-                                                        fontWeight:
-                                                            FontWeight.w700,
-                                                      ),
-                                                ),
-                                              ),
-                                              Wrap(
-                                                spacing: 8,
-                                                runSpacing: 8,
-                                                alignment: WrapAlignment.end,
-                                                children: [
-                                                  RMBadge(
-                                                    text: published ? 'Published' : 'Draft',
-                                                    icon: published ? Icons.public : Icons.edit_note,
-                                                    success: published,
-                                                  ),
-                                                  if (isFinalized)
-                                                    const RMBadge(
-                                                      text: 'Finalized',
-                                                      icon: Icons.verified,
-                                                      success: true,
-                                                    )
-                                                  else if (isLocked)
-                                                    const RMBadge(
-                                                      text: 'Locked',
-                                                      icon: Icons.lock,
-                                                    ),
-                                                ],
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: AppSpacing.sm),
-                                          Text(
-                                            '$start${end != '—' ? ' → $end' : ''} • $loc',
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .bodySmall
-                                                ?.copyWith(
-                                                  color: AppColors.muted,
-                                                ),
-                                          ),
-                                          const SizedBox(height: AppSpacing.md),
-                                          Wrap(
-                                            spacing: AppSpacing.sm,
-                                            runSpacing: AppSpacing.sm,
-                                            children: [
-                                              RMBadge(
-                                                text: 'Open: $openAt',
-                                                icon: Icons.lock_open,
-                                              ),
-                                              RMBadge(
-                                                text: 'Deadline: $closeAt',
-                                                icon: Icons.event_available,
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: AppSpacing.md),
-                                          _buildShowCounts(counts),
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
                         ],
-                      ),
+                        const SizedBox(height: AppSpacing.md),
+                        RMCard(
+                          child: TextField(
+                            controller: _searchController,
+                            decoration: const InputDecoration(
+                              labelText: 'Search shows',
+                              hintText:
+                                  'Show name, location, date, published, draft...',
+                              prefixIcon: Icon(Icons.search),
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        if (page?.hasAdminAccess != true)
+                          const Expanded(
+                            child: RMEmptyState(
+                              title: 'No show secretary access yet',
+                              subtitle:
+                                  'You do not currently have access to manage any shows.',
+                              icon: Icons.assignment_ind_outlined,
+                            ),
+                          )
+                        else if ((page?.shows ?? []).isEmpty)
+                          const Expanded(
+                            child: RMEmptyState(
+                              title: 'No shows available',
+                              subtitle:
+                                  'No shows were found for your current admin access.',
+                              icon: Icons.event_busy_outlined,
+                            ),
+                          )
+                        else if (shows.isEmpty)
+                          const Expanded(
+                            child: RMEmptyState(
+                              title: 'No matching shows',
+                              subtitle: 'Try a different search term.',
+                              icon: Icons.search_off,
+                            ),
+                          )
+                        else
+                          Expanded(
+                            child: ListView.builder(
+                              itemCount: shows.length,
+                              itemBuilder: (context, i) {
+                                final s = shows[i];
+
+                                final showId = s['id'].toString();
+                                final counts =
+                                    page!.entryCounts[showId] ??
+                                    _ShowEntryCounts();
+
+                                final name = (s['name'] ?? '').toString();
+                                final start = _fmtDate(
+                                  (s['start_date'] ?? '').toString(),
+                                );
+                                final end = _fmtDate(
+                                  (s['end_date'] ?? '').toString(),
+                                );
+                                final loc = (s['location_name'] ?? '')
+                                    .toString();
+                                final published = s['is_published'] == true;
+                                final isLocked = s['is_locked'] == true;
+                                final finalizedAt = (s['finalized_at'] ?? '')
+                                    .toString();
+                                final isFinalized = finalizedAt.isNotEmpty;
+
+                                final openAt = _fmtTs(
+                                  s['entry_open_at']?.toString(),
+                                );
+                                final closeAt = _fmtTs(
+                                  s['entry_close_at']?.toString(),
+                                );
+
+                                return Padding(
+                                  padding: const EdgeInsets.only(
+                                    bottom: AppSpacing.md,
+                                  ),
+                                  child: RMCard(
+                                    onTap: () => _openEditShow(showId),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                name,
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .titleMedium
+                                                    ?.copyWith(
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                    ),
+                                              ),
+                                            ),
+                                            Wrap(
+                                              spacing: 8,
+                                              runSpacing: 8,
+                                              alignment: WrapAlignment.end,
+                                              children: [
+                                                RMBadge(
+                                                  text: published
+                                                      ? 'Published'
+                                                      : 'Draft',
+                                                  icon: published
+                                                      ? Icons.public
+                                                      : Icons.edit_note,
+                                                  success: published,
+                                                ),
+                                                if (isFinalized)
+                                                  const RMBadge(
+                                                    text: 'Finalized',
+                                                    icon: Icons.verified,
+                                                    success: true,
+                                                  )
+                                                else if (isLocked)
+                                                  const RMBadge(
+                                                    text: 'Locked',
+                                                    icon: Icons.lock,
+                                                  ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: AppSpacing.sm),
+                                        Text(
+                                          '$start${end != '—' ? ' → $end' : ''} • $loc',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall
+                                              ?.copyWith(
+                                                color: AppColors.muted,
+                                              ),
+                                        ),
+                                        const SizedBox(height: AppSpacing.md),
+                                        Wrap(
+                                          spacing: AppSpacing.sm,
+                                          runSpacing: AppSpacing.sm,
+                                          children: [
+                                            RMBadge(
+                                              text: 'Open: $openAt',
+                                              icon: Icons.lock_open,
+                                            ),
+                                            RMBadge(
+                                              text: 'Deadline: $closeAt',
+                                              icon: Icons.event_available,
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: AppSpacing.md),
+                                        _buildShowCounts(counts),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                      ],
                     ),
+                  ),
+          ),
         );
       },
     );
@@ -761,7 +772,92 @@ class _AdminShowsAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
-    final showFullNav = width >= 900;
+    final actionItems = demoMode
+        ? [
+            _TopBarActionData(
+              icon: Icons.refresh,
+              label: 'Reload',
+              onTap: onReload,
+            ),
+            _TopBarActionData(
+              icon: Icons.science_outlined,
+              label: 'Demo Show',
+              onTap: onShows,
+            ),
+            _TopBarActionData(
+              icon: Icons.rocket_launch,
+              label: 'Run Your Show',
+              onTap: () async {
+                final subject = Uri.encodeComponent(
+                  'Ready to run my show with RingMaster Show',
+                );
+                final body = Uri.encodeComponent(
+                  'Hi, I tried the RingMaster Show demo and would like help getting my show set up.',
+                );
+
+                final uri = Uri.parse(
+                  'mailto:support@ringmasterone.com?subject=$subject&body=$body',
+                );
+
+                final opened = await launchUrl(uri);
+
+                if (!opened && context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Ready to run your own show? Email support@ringmasterone.com and I’ll help you get set up.',
+                      ),
+                    ),
+                  );
+                }
+              },
+            ),
+          ]
+        : [
+            _TopBarActionData(
+              icon: Icons.refresh,
+              label: 'Reload',
+              onTap: onReload,
+            ),
+            _TopBarActionData(
+              icon: Icons.add,
+              label: 'Create Show',
+              onTap: onCreate,
+            ),
+            _TopBarActionData(
+              icon: Icons.event,
+              label: 'Shows',
+              onTap: onShows,
+            ),
+            _TopBarActionData(
+              icon: Icons.pets,
+              label: 'Animals',
+              onTap: onAnimals,
+            ),
+            _TopBarActionData(
+              icon: Icons.receipt_long,
+              label: 'Entries',
+              onTap: onEntries,
+            ),
+            _TopBarActionData(
+              icon: Icons.perm_media_outlined,
+              label: 'Resources',
+              onTap: onResources,
+            ),
+            _TopBarActionData(
+              icon: Icons.manage_accounts,
+              label: 'Account',
+              onTap: onAccount,
+            ),
+          ];
+    final hasOverflow = actionItems.length > _TopBarActionData.maxVisibleIcons;
+    final directCount = hasOverflow
+        ? _TopBarActionData.maxVisibleIcons - 1
+        : actionItems.length;
+    final directActions = actionItems.take(directCount).toList();
+    final overflowActions = hasOverflow
+        ? actionItems.skip(directCount).toList()
+        : const <_TopBarActionData>[];
 
     return AppBar(
       toolbarHeight: 92,
@@ -785,10 +881,10 @@ class _AdminShowsAppBar extends StatelessWidget implements PreferredSizeWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: Colors.white,
-                        fontSize: width < 500 ? 20 : 28,
-                        fontWeight: FontWeight.w800,
-                      ),
+                    color: AppColors.text,
+                    fontSize: width < 500 ? 20 : 28,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -796,180 +892,69 @@ class _AdminShowsAppBar extends StatelessWidget implements PreferredSizeWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Colors.white.withValues(alpha: .9),
-                        fontSize: width < 500 ? 13 : 15,
-                        fontWeight: FontWeight.w500,
-                      ),
+                    color: AppColors.muted,
+                    fontSize: width < 500 ? 13 : 15,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ],
             ),
           ),
         ],
       ),
-      actions: demoMode
-          ? [
-              _TopBarAction(
-                icon: Icons.refresh,
-                label: 'Reload',
-                showLabel: showFullNav,
-                onTap: onReload,
-              ),
-              _TopBarAction(
-                icon: Icons.science_outlined,
-                label: 'Demo Show',
-                showLabel: showFullNav,
-                onTap: onShows,
-              ),
-              _TopBarAction(
-                icon: Icons.rocket_launch,
-                label: 'Run Your Show',
-                showLabel: showFullNav,
-                onTap: () async {
-                  final subject = Uri.encodeComponent(
-                    'Ready to run my show with RingMaster Show',
-                  );
-                  final body = Uri.encodeComponent(
-                    'Hi, I tried the RingMaster Show demo and would like help getting my show set up.',
-                  );
+      actions: [
+        for (final action in directActions)
+          _TopBarAction(
+            icon: action.icon,
+            label: action.label,
+            showLabel: false,
+            onTap: action.onTap,
+          ),
+        if (overflowActions.isNotEmpty)
+          _TopBarOverflowMenu(actions: overflowActions),
+        const SizedBox(width: 10),
+      ],
+    );
+  }
+}
 
-                  final uri = Uri.parse(
-                    'mailto:support@ringmasterone.com?subject=$subject&body=$body',
-                  );
+class _TopBarActionData {
+  static const maxVisibleIcons = 3;
 
-                  final opened = await launchUrl(uri);
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
 
-                  if (!opened && context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Ready to run your own show? Email support@ringmasterone.com and I’ll help you get set up.',
-                        ),
-                      ),
-                    );
-                  }
-                },
-              ),
-              const SizedBox(width: 10),
-            ]
-          : showFullNav
-              ? [
-                  _TopBarAction(
-                    icon: Icons.refresh,
-                    label: 'Reload',
-                    showLabel: true,
-                    onTap: onReload,
-                  ),
-                  _TopBarAction(
-                    icon: Icons.add,
-                    label: 'Create Show',
-                    showLabel: true,
-                    onTap: onCreate,
-                  ),
-                  _TopBarAction(
-                    icon: Icons.event,
-                    label: 'Shows',
-                    showLabel: true,
-                    onTap: onShows,
-                  ),
-                  _TopBarAction(
-                    icon: Icons.pets,
-                    label: 'Animals',
-                    showLabel: true,
-                    onTap: onAnimals,
-                  ),
-                  _TopBarAction(
-                    icon: Icons.receipt_long,
-                    label: 'Entries',
-                    showLabel: true,
-                    onTap: onEntries,
-                  ),
-                  _TopBarAction(
-                    icon: Icons.perm_media_outlined,
-                    label: 'Resources',
-                    showLabel: true,
-                    onTap: onResources,
-                  ),
-                  _TopBarAction(
-                    icon: Icons.manage_accounts,
-                    label: 'Account',
-                    showLabel: true,
-                    onTap: onAccount,
-                  ),
-                  const SizedBox(width: 10),
-                ]
-              : [
-                  IconButton(
-                    tooltip: 'Reload',
-                    icon: const Icon(Icons.refresh, color: Colors.white),
-                    onPressed: onReload,
-                  ),
-                  IconButton(
-                    tooltip: 'Create Show',
-                    icon: const Icon(Icons.add, color: Colors.white),
-                    onPressed: onCreate,
-                  ),
-                  PopupMenuButton<String>(
-                    tooltip: 'Menu',
-                    icon: const Icon(Icons.more_vert, color: Colors.white),
-                    onSelected: (value) {
-                      switch (value) {
-                        case 'shows':
-                          onShows();
-                          break;
-                        case 'animals':
-                          onAnimals();
-                          break;
-                        case 'entries':
-                          onEntries();
-                          break;
-                        case 'resources':
-                          onResources();
-                          break;
-                        case 'account':
-                          onAccount();
-                          break;
-                      }
-                    },
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(
-                        value: 'shows',
-                        child: ListTile(
-                          leading: Icon(Icons.event),
-                          title: Text('Shows'),
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: 'animals',
-                        child: ListTile(
-                          leading: Icon(Icons.pets),
-                          title: Text('Animals'),
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: 'entries',
-                        child: ListTile(
-                          leading: Icon(Icons.receipt_long),
-                          title: Text('Entries'),
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: 'resources',
-                        child: ListTile(
-                          leading: Icon(Icons.perm_media_outlined),
-                          title: Text('Resources'),
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: 'account',
-                        child: ListTile(
-                          leading: Icon(Icons.manage_accounts),
-                          title: Text('Account'),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(width: 6),
-                ],
+  const _TopBarActionData({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+}
+
+class _TopBarOverflowMenu extends StatelessWidget {
+  final List<_TopBarActionData> actions;
+
+  const _TopBarOverflowMenu({required this.actions});
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<int>(
+      tooltip: 'More',
+      icon: const Icon(Icons.more_vert, color: AppColors.text),
+      onSelected: (index) => actions[index].onTap?.call(),
+      itemBuilder: (context) => [
+        for (var index = 0; index < actions.length; index++)
+          PopupMenuItem<int>(
+            value: index,
+            enabled: actions[index].onTap != null,
+            child: ListTile(
+              dense: true,
+              leading: Icon(actions[index].icon),
+              title: Text(actions[index].label),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -992,7 +977,7 @@ class _TopBarAction extends StatelessWidget {
     if (!showLabel) {
       return IconButton(
         tooltip: label,
-        icon: Icon(icon, color: Colors.white),
+        icon: Icon(icon, color: AppColors.text),
         onPressed: onTap,
       );
     }
@@ -1002,17 +987,17 @@ class _TopBarAction extends StatelessWidget {
       child: TextButton.icon(
         onPressed: onTap,
         style: TextButton.styleFrom(
-          foregroundColor: Colors.white,
+          foregroundColor: AppColors.text,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
         ),
-        icon: Icon(icon, size: 18, color: Colors.white),
+        icon: Icon(icon, size: 18, color: AppColors.text),
         label: Text(
           label,
           style: const TextStyle(
-            color: Colors.white,
+            color: AppColors.text,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -1068,11 +1053,10 @@ class _ShowEntryCounts {
   _ShowEntryCounts({
     Map<String, int>? bySection,
     Map<String, _SectionMeta>? metaBySection,
-  })  : bySection = bySection ?? <String, int>{},
-        metaBySection = metaBySection ?? <String, _SectionMeta>{};
+  }) : bySection = bySection ?? <String, int>{},
+       metaBySection = metaBySection ?? <String, _SectionMeta>{};
 
-  int get grandTotal =>
-      bySection.values.fold(0, (sum, value) => sum + value);
+  int get grandTotal => bySection.values.fold(0, (sum, value) => sum + value);
 
   void addCount(
     String sectionName,

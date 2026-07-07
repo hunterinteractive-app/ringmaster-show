@@ -14,7 +14,6 @@ import 'admin/admin_shows_screen.dart';
 import 'legal/terms_screen.dart';
 import 'legal/privacy_policy_screen.dart';
 
-
 //dev backdoor
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -54,7 +53,7 @@ class _LoginScreenState extends State<LoginScreen>
   late final Animation<double> _cardFade;
   late final Animation<Offset> _cardSlide;
 
-//dev backdoor
+  //dev backdoor
 
   int _logoTapCount = 0;
   DateTime? _lastLogoTapAt;
@@ -103,7 +102,7 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
-//dev backdoor
+  //dev backdoor
 
   @override
   void initState() {
@@ -116,45 +115,31 @@ class _LoginScreenState extends State<LoginScreen>
       duration: const Duration(milliseconds: 1400),
     );
 
-    _logoScale = Tween<double>(
-      begin: 0.88,
-      end: 1.0,
-    ).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: Curves.easeOutCubic,
-      ),
+    _logoScale = Tween<double>(begin: 0.88, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
     );
 
-    _logoFade = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(
+    _logoFade = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _animationController,
         curve: const Interval(0.0, 0.45, curve: Curves.easeOut),
       ),
     );
 
-    _cardFade = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(
+    _cardFade = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _animationController,
         curve: const Interval(0.45, 1.0, curve: Curves.easeOut),
       ),
     );
 
-    _cardSlide = Tween<Offset>(
-      begin: const Offset(0, 0.08),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: const Interval(0.45, 1.0, curve: Curves.easeOutCubic),
-      ),
-    );
+    _cardSlide = Tween<Offset>(begin: const Offset(0, 0.08), end: Offset.zero)
+        .animate(
+          CurvedAnimation(
+            parent: _animationController,
+            curve: const Interval(0.45, 1.0, curve: Curves.easeOutCubic),
+          ),
+        );
 
     _animationController.forward();
 
@@ -315,10 +300,7 @@ class _LoginScreenState extends State<LoginScreen>
     });
 
     try {
-      await supabase.auth.signInWithOtp(
-        email: email,
-        shouldCreateUser: true,
-      );
+      await supabase.auth.signInWithOtp(email: email, shouldCreateUser: true);
 
       if (!mounted) return;
 
@@ -430,25 +412,18 @@ class _LoginScreenState extends State<LoginScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              AppColors.navyDark,
-              AppColors.navy,
-              Color(0xFF1B3D82),
-            ],
-          ),
-        ),
+        decoration: const BoxDecoration(gradient: AppGradients.page),
         child: SafeArea(
           child: Center(
             child: Theme(
               data: Theme.of(context).copyWith(
                 scrollbarTheme: ScrollbarThemeData(
-                  thumbColor: WidgetStateProperty.all(Colors.white),
-                  trackColor:
-                      WidgetStateProperty.all(Colors.white.withValues(alpha: .18)),
+                  thumbColor: WidgetStateProperty.all(
+                    AppColors.headerForeground,
+                  ),
+                  trackColor: WidgetStateProperty.all(
+                    AppColors.headerForeground.withValues(alpha: .18),
+                  ),
                   thickness: WidgetStateProperty.all(8),
                   radius: const Radius.circular(8),
                 ),
@@ -460,96 +435,85 @@ class _LoginScreenState extends State<LoginScreen>
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 560),
                     child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    FadeTransition(
-                      opacity: _logoFade,
-                      child: ScaleTransition(
-                        scale: _logoScale,
-                        child: Column(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(AppSpacing.lg),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.10),
-                                borderRadius:
-                                    BorderRadius.circular(AppRadius.lg),
-                                border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.12),
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        FadeTransition(
+                          opacity: _logoFade,
+                          child: ScaleTransition(
+                            scale: _logoScale,
+                            child: Column(
+                              children: [
+                                //dev backdoor
+                                GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: _handleLogoTap,
+                                  child: const _LogoBlock(),
                                 ),
-                              ),
-                              //dev backdoor
-                              child: GestureDetector(
-                                behavior: HitTestBehavior.opaque,
-                                onTap: _handleLogoTap,
-                                child: _LogoBlock(),
-                              ),
-                              //dev backdoor
+                                //dev backdoor
+                                const SizedBox(height: AppSpacing.lg),
+                                const Text(
+                                  'RingMaster Show',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: AppColors.headerForeground,
+                                    fontSize: 26,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.2,
+                                  ),
+                                ),
+                                const SizedBox(height: AppSpacing.sm),
+                                Text(
+                                  'Modern show management for rabbit, cavy, and small livestock events.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: AppColors.headerForeground,
+                                    fontSize: 14,
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: AppSpacing.lg),
-                            const Text(
-                              'RingMaster Show',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 26,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.2,
-                              ),
-                            ),
-                            const SizedBox(height: AppSpacing.sm),
-                            Text(
-                              'Modern show management for rabbit, cavy, and small livestock events.',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.82),
-                                fontSize: 14,
-                                height: 1.4,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    if (_showLogin)
-                      FadeTransition(
-                        opacity: _cardFade,
-                        child: SlideTransition(
-                          position: _cardSlide,
-                          child: _LoginCard(
-                            formKey: _formKey,
-                            emailController: _email,
-                            otpController: _otp,
-                            pendingEmail: _pendingEmail,
-                            awaitingCode: _awaitingCode,
-                            resendSeconds: _resendSeconds,
-                            busy: _busy,
-                            message: _msg,
-                            validateEmail: _validateEmail,
-                            onSendCode: () => _sendCode(),
-                            onVerifyCode: _verifyCode,
-                            onResendCode: () => _sendCode(isResend: true),
-                            onChangeEmail: _changeEmail,
-                            onOtpChanged: (value) {
-                              if (value.length == 6 && !_busy) {
-                                _verifyCode();
-                              }
-                            },
                           ),
                         ),
-                      ),
-                    const SizedBox(height: AppSpacing.lg),
-                    FadeTransition(
-                      opacity: _cardFade,
-                      child: SlideTransition(
-                        position: _cardSlide,
-                        child: _PublicShowsCard(
-                          showsFuture: _publicShowsFuture,
+                        const SizedBox(height: AppSpacing.lg),
+                        if (_showLogin)
+                          FadeTransition(
+                            opacity: _cardFade,
+                            child: SlideTransition(
+                              position: _cardSlide,
+                              child: _LoginCard(
+                                formKey: _formKey,
+                                emailController: _email,
+                                otpController: _otp,
+                                pendingEmail: _pendingEmail,
+                                awaitingCode: _awaitingCode,
+                                resendSeconds: _resendSeconds,
+                                busy: _busy,
+                                message: _msg,
+                                validateEmail: _validateEmail,
+                                onSendCode: () => _sendCode(),
+                                onVerifyCode: _verifyCode,
+                                onResendCode: () => _sendCode(isResend: true),
+                                onChangeEmail: _changeEmail,
+                                onOtpChanged: (value) {
+                                  if (value.length == 6 && !_busy) {
+                                    _verifyCode();
+                                  }
+                                },
+                              ),
+                            ),
+                          ),
+                        const SizedBox(height: AppSpacing.lg),
+                        FadeTransition(
+                          opacity: _cardFade,
+                          child: SlideTransition(
+                            position: _cardSlide,
+                            child: _PublicShowsCard(
+                              showsFuture: _publicShowsFuture,
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                    ],
+                      ],
                     ),
                   ),
                 ),
@@ -599,10 +563,7 @@ class _DemoLoginScreenState extends State<DemoLoginScreen> {
                   allowedShowIds: [_demoShowId],
                   demoMode: true,
                 )
-              : const ShowListScreen(
-                  demoMode: true,
-                  demoSecretaryMode: false,
-                ),
+              : const ShowListScreen(demoMode: true, demoSecretaryMode: false),
         ),
       );
     } catch (e) {
@@ -622,25 +583,18 @@ class _DemoLoginScreenState extends State<DemoLoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              AppColors.navyDark,
-              AppColors.navy,
-              Color(0xFF1B3D82),
-            ],
-          ),
-        ),
+        decoration: const BoxDecoration(gradient: AppGradients.page),
         child: SafeArea(
           child: Center(
             child: Theme(
               data: Theme.of(context).copyWith(
                 scrollbarTheme: ScrollbarThemeData(
-                  thumbColor: WidgetStateProperty.all(Colors.white),
-                  trackColor:
-                      WidgetStateProperty.all(Colors.white.withValues(alpha: .18)),
+                  thumbColor: WidgetStateProperty.all(
+                    AppColors.headerForeground,
+                  ),
+                  trackColor: WidgetStateProperty.all(
+                    AppColors.headerForeground.withValues(alpha: .18),
+                  ),
                   thickness: WidgetStateProperty.all(8),
                   radius: const Radius.circular(8),
                 ),
@@ -652,117 +606,112 @@ class _DemoLoginScreenState extends State<DemoLoginScreen> {
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 560),
                     child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(AppSpacing.lg),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.10),
-                        borderRadius: BorderRadius.circular(AppRadius.lg),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.12),
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const _LogoBlock(),
+                        const SizedBox(height: AppSpacing.lg),
+                        const Text(
+                          'RingMaster Show Demo',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: AppColors.headerForeground,
+                            fontSize: 28,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
-                      ),
-                      child: _LogoBlock(),
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    const Text(
-                      'RingMaster Show Demo',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 28,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      'Try RingMaster Show as an exhibitor entering animals or as a show secretary managing the demo show.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.82),
-                        fontSize: 14,
-                        height: 1.4,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    RMCard(
-                      padding: const EdgeInsets.all(AppSpacing.xl),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text(
-                            'Enter the Demo',
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                  fontWeight: FontWeight.w800,
-                                ),
+                        const SizedBox(height: AppSpacing.sm),
+                        Text(
+                          'Try RingMaster Show as an exhibitor entering animals or as a show secretary managing the demo show.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: AppColors.headerForeground,
+                            fontSize: 14,
+                            height: 1.4,
                           ),
-                          const SizedBox(height: AppSpacing.sm),
-                          const Text(
-                            'Choose how you want to explore the shared demo. It resets every 24 hours, and emails, real payments, and official report delivery are disabled.',
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: AppSpacing.lg),
-                          SizedBox(
-                            height: 52,
-                            child: FilledButton.icon(
-                              onPressed: _busy
-                                  ? null
-                                  : () => _enterDemo(asSecretary: false),
-                              icon: _busy
-                                  ? const SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white,
-                                      ),
-                                    )
-                                  : const Icon(Icons.person_outline),
-                              label: Text(
-                                _busy ? 'Opening Demo…' : 'View as Exhibitor',
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                        RMCard(
+                          padding: const EdgeInsets.all(AppSpacing.xl),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text(
+                                'Enter the Demo',
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context).textTheme.titleLarge
+                                    ?.copyWith(fontWeight: FontWeight.w800),
                               ),
-                            ),
-                          ),
-                          const SizedBox(height: AppSpacing.md),
-                          SizedBox(
-                            height: 52,
-                            child: OutlinedButton.icon(
-                              onPressed: _busy
-                                  ? null
-                                  : () => _enterDemo(asSecretary: true),
-                              icon: const Icon(Icons.admin_panel_settings_outlined),
-                              label: const Text('View as Show Secretary'),
-                            ),
-                          ),
-                          if (_msg != null) ...[
-                            const SizedBox(height: AppSpacing.lg),
-                            Container(
-                              padding: const EdgeInsets.all(AppSpacing.md),
-                              decoration: BoxDecoration(
-                                color: AppColors.dangerBg,
-                                borderRadius: BorderRadius.circular(AppRadius.sm),
+                              const SizedBox(height: AppSpacing.sm),
+                              const Text(
+                                'Choose how you want to explore the shared demo. It resets every 24 hours, and emails, real payments, and official report delivery are disabled.',
+                                textAlign: TextAlign.center,
                               ),
-                              child: Text(
-                                _msg!,
-                                style: const TextStyle(
-                                  color: AppColors.danger,
-                                  fontWeight: FontWeight.w600,
+                              const SizedBox(height: AppSpacing.lg),
+                              SizedBox(
+                                height: 52,
+                                child: FilledButton.icon(
+                                  onPressed: _busy
+                                      ? null
+                                      : () => _enterDemo(asSecretary: false),
+                                  icon: _busy
+                                      ? const SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.white,
+                                          ),
+                                        )
+                                      : const Icon(Icons.person_outline),
+                                  label: Text(
+                                    _busy
+                                        ? 'Opening Demo…'
+                                        : 'View as Exhibitor',
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
-                          const SizedBox(height: AppSpacing.lg),
-                          Text(
-                            'Use this link for hands-on testing only. Demo changes are temporary.',
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.bodySmall,
+                              const SizedBox(height: AppSpacing.md),
+                              SizedBox(
+                                height: 52,
+                                child: OutlinedButton.icon(
+                                  onPressed: _busy
+                                      ? null
+                                      : () => _enterDemo(asSecretary: true),
+                                  icon: const Icon(
+                                    Icons.admin_panel_settings_outlined,
+                                  ),
+                                  label: const Text('View as Show Secretary'),
+                                ),
+                              ),
+                              if (_msg != null) ...[
+                                const SizedBox(height: AppSpacing.lg),
+                                Container(
+                                  padding: const EdgeInsets.all(AppSpacing.md),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.dangerBg,
+                                    borderRadius: BorderRadius.circular(
+                                      AppRadius.sm,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    _msg!,
+                                    style: const TextStyle(
+                                      color: AppColors.danger,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: AppSpacing.lg),
+                              Text(
+                                'Use this link for hands-on testing only. Demo changes are temporary.',
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                    ),
-                    ],
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -778,9 +727,7 @@ class _DemoLoginScreenState extends State<DemoLoginScreen> {
 class _PublicShowsCard extends StatefulWidget {
   final Future<List<Map<String, dynamic>>> showsFuture;
 
-  const _PublicShowsCard({
-    required this.showsFuture,
-  });
+  const _PublicShowsCard({required this.showsFuture});
 
   @override
   State<_PublicShowsCard> createState() => _PublicShowsCardState();
@@ -897,8 +844,9 @@ class _PublicShowsCardState extends State<_PublicShowsCard> {
     for (final part in parts) {
       final partUpper = part.toUpperCase();
 
-      final firstTokenMatch =
-          RegExp(r'^([A-Z]{2})(?:\s|$)').firstMatch(partUpper);
+      final firstTokenMatch = RegExp(
+        r'^([A-Z]{2})(?:\s|$)',
+      ).firstMatch(partUpper);
 
       if (firstTokenMatch != null) {
         final abbr = firstTokenMatch.group(1)!;
@@ -921,12 +869,13 @@ class _PublicShowsCardState extends State<_PublicShowsCard> {
   }
 
   List<String> _availableStates(List<Map<String, dynamic>> shows) {
-    final values = shows
-        .map((s) => _extractState((s['location_name'] ?? '').toString()))
-        .where((s) => s.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort();
+    final values =
+        shows
+            .map((s) => _extractState((s['location_name'] ?? '').toString()))
+            .where((s) => s.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
 
     return ['All', ...values];
   }
@@ -1031,9 +980,9 @@ class _PublicShowsCardState extends State<_PublicShowsCard> {
                 return Text(
                   'Unable to load available shows right now.',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.danger,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    color: AppColors.danger,
+                    fontWeight: FontWeight.w600,
+                  ),
                 );
               }
 
@@ -1044,9 +993,9 @@ class _PublicShowsCardState extends State<_PublicShowsCard> {
               if (allShows.isEmpty) {
                 return Text(
                   'No published upcoming shows are available yet.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.muted,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: AppColors.muted),
                 );
               }
 
@@ -1140,25 +1089,24 @@ class _PublicShowsCardState extends State<_PublicShowsCard> {
                   const SizedBox(height: AppSpacing.sm),
                   Text(
                     '${shows.length} show${shows.length == 1 ? '' : 's'} found',
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: AppColors.muted),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: AppColors.muted),
                   ),
                   const SizedBox(height: AppSpacing.lg),
                   if (shows.isEmpty)
                     Text(
                       'No shows match your current search or filters.',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppColors.muted,
-                          ),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: AppColors.muted),
                     )
                   else
                     Column(
                       children: shows.map((show) {
                         final name = (show['name'] ?? '').toString();
-                        final location =
-                            (show['location_name'] ?? '').toString();
+                        final location = (show['location_name'] ?? '')
+                            .toString();
                         final date = formatLocalDateTime(
                           show['start_date']?.toString(),
                         );
@@ -1167,14 +1115,15 @@ class _PublicShowsCardState extends State<_PublicShowsCard> {
                           show['entry_close_at']?.toString(),
                         );
 
-                        final entryCloseRaw =
-                            show['entry_close_at']?.toString();
+                        final entryCloseRaw = show['entry_close_at']
+                            ?.toString();
 
-                        final deadlinePassed = entryCloseRaw != null &&
+                        final deadlinePassed =
+                            entryCloseRaw != null &&
                             entryCloseRaw.trim().isNotEmpty &&
-                            DateTime.parse(entryCloseRaw)
-                                .toLocal()
-                                .isBefore(DateTime.now());
+                            DateTime.parse(
+                              entryCloseRaw,
+                            ).toLocal().isBefore(DateTime.now());
 
                         return Container(
                           margin: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -1183,7 +1132,8 @@ class _PublicShowsCardState extends State<_PublicShowsCard> {
                             color: AppColors.surface,
                             borderRadius: BorderRadius.circular(AppRadius.sm),
                             border: Border.all(
-                              color: Colors.grey.withValues(alpha: 0.2),
+                              color: AppColors.headerForeground,
+                              width: 1.4,
                             ),
                           ),
                           child: Row(
@@ -1246,27 +1196,25 @@ class _PublicShowsCardState extends State<_PublicShowsCard> {
 }
 
 class _LogoBlock extends StatelessWidget {
+  const _LogoBlock();
+
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
         Image.asset(
-          'assets/images/ringmaster_show_logo.png',
-          height: 160,
+          'assets/images/RingMaster_One_Show_Transparent.png',
+          height: 280,
+          width: 480,
           fit: BoxFit.contain,
           filterQuality: FilterQuality.high,
           errorBuilder: (context, error, stackTrace) {
-            return Container(
-              width: 160,
+            return const SizedBox(
+              width: 240,
               height: 160,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(AppRadius.md),
-              ),
-              alignment: Alignment.center,
-              child: const Icon(
+              child: Icon(
                 Icons.emoji_events_outlined,
-                size: 42,
+                size: 52,
                 color: Colors.white,
               ),
             );
@@ -1324,9 +1272,9 @@ class _LoginCard extends StatelessWidget {
                   ? 'Enter your login code'
                   : 'Log in or create your account',
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
@@ -1370,9 +1318,7 @@ class _LoginCard extends StatelessWidget {
                           ),
                         )
                       : const Icon(Icons.mark_email_read_outlined),
-                  label: Text(
-                    busy ? 'Sending code…' : 'Send login code',
-                  ),
+                  label: Text(busy ? 'Sending code…' : 'Send login code'),
                 ),
               ),
             ] else ...[
@@ -1433,9 +1379,7 @@ class _LoginCard extends StatelessWidget {
                 spacing: AppSpacing.xs,
                 children: [
                   TextButton(
-                    onPressed: busy || resendSeconds > 0
-                        ? null
-                        : onResendCode,
+                    onPressed: busy || resendSeconds > 0 ? null : onResendCode,
                     child: Text(
                       resendSeconds > 0
                           ? 'Resend code in ${resendSeconds}s'

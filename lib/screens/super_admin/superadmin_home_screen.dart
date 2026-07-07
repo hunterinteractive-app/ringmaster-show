@@ -1,6 +1,7 @@
 // lib/screens/superadmin/super_admin_home_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:ringmaster_show/screens/super_admin/help_reports_screen.dart';
@@ -65,9 +66,7 @@ class SupportImpersonatedUser {
           .toList();
 
       if (parts.isNotEmpty) {
-        return parts
-            .map((p) => p[0].toUpperCase() + p.substring(1))
-            .join(' ');
+        return parts.map((p) => p[0].toUpperCase() + p.substring(1)).join(' ');
       }
 
       return email.trim();
@@ -91,27 +90,21 @@ class _SuperadminHomeScreenState extends State<SuperadminHomeScreen> {
   Future<void> _openBreedCatalog() async {
     await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => const BreedCatalogScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const BreedCatalogScreen()),
     );
   }
 
   Future<void> _openHelpReports() async {
     await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => const HelpReportsScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const HelpReportsScreen()),
     );
   }
 
   Future<void> _openImpersonateUser() async {
     await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => const _SupportImpersonationScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const _SupportImpersonationScreen()),
     );
   }
 
@@ -155,9 +148,9 @@ class _SuperadminHomeScreenState extends State<SuperadminHomeScreen> {
         _msg = successMsg;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(successMsg)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(successMsg)));
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -183,9 +176,9 @@ class _SuperadminHomeScreenState extends State<SuperadminHomeScreen> {
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: Text(
               'Global Admin Tools',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
             ),
           ),
           const Padding(
@@ -289,9 +282,7 @@ class _SuperadminToolCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
@@ -301,19 +292,12 @@ class _SuperadminToolCard extends StatelessWidget {
           width: 42,
           height: 42,
           decoration: BoxDecoration(
-            color: const Color(0xFF11285A).withValues(alpha: .08),
+            color: AppColors.navy.withValues(alpha: .08),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: leadingOverride ??
-              Icon(
-                icon,
-                color: const Color(0xFF11285A),
-              ),
+          child: leadingOverride ?? Icon(icon, color: AppColors.navy),
         ),
-        title: Text(
-          title,
-          style: const TextStyle(fontWeight: FontWeight.w700),
-        ),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 6),
           child: Text(subtitle),
@@ -387,7 +371,9 @@ class _SupportImpersonationScreenState
 
       final rows = await supabase
           .from('exhibitors')
-          .select('owner_user_id,display_name,showing_name,first_name,last_name')
+          .select(
+            'owner_user_id,display_name,showing_name,first_name,last_name',
+          )
           .inFilter('owner_user_id', chunk)
           .order('created_at');
 
@@ -426,17 +412,15 @@ class _SupportImpersonationScreenState
       );
 
       final users = profileRows
-          .map(
-            (row) {
-              final userId = (row['user_id'] ?? '').toString();
-              return SupportImpersonatedUser(
-                userId: userId,
-                email: (row['email'] ?? '').toString(),
-                displayName: (row['display_name'] ?? '').toString(),
-                exhibitorName: exhibitorNamesByUserId[userId] ?? '',
-              );
-            },
-          )
+          .map((row) {
+            final userId = (row['user_id'] ?? '').toString();
+            return SupportImpersonatedUser(
+              userId: userId,
+              email: (row['email'] ?? '').toString(),
+              displayName: (row['display_name'] ?? '').toString(),
+              exhibitorName: exhibitorNamesByUserId[userId] ?? '',
+            );
+          })
           .where((user) => user.userId.isNotEmpty)
           .toList();
 
@@ -467,7 +451,8 @@ class _SupportImpersonationScreenState
 
     if (query.length < 2) {
       setState(() {
-        _error = 'Enter at least 2 characters to search, or clear the search to show users.';
+        _error =
+            'Enter at least 2 characters to search, or clear the search to show users.';
       });
       return;
     }
@@ -488,9 +473,7 @@ class _SupportImpersonationScreenState
       final rows = await supabase
           .from('profiles')
           .select('user_id,email,display_name')
-          .or(
-            'email.ilike.*$safeQuery*,display_name.ilike.*$safeQuery*',
-          )
+          .or('email.ilike.*$safeQuery*,display_name.ilike.*$safeQuery*')
           .limit(200);
 
       final profileRows = (rows as List).cast<Map<String, dynamic>>();
@@ -499,17 +482,15 @@ class _SupportImpersonationScreenState
       );
 
       final users = profileRows
-          .map(
-            (row) {
-              final userId = (row['user_id'] ?? '').toString();
-              return SupportImpersonatedUser(
-                userId: userId,
-                email: (row['email'] ?? '').toString(),
-                displayName: (row['display_name'] ?? '').toString(),
-                exhibitorName: exhibitorNamesByUserId[userId] ?? '',
-              );
-            },
-          )
+          .map((row) {
+            final userId = (row['user_id'] ?? '').toString();
+            return SupportImpersonatedUser(
+              userId: userId,
+              email: (row['email'] ?? '').toString(),
+              displayName: (row['display_name'] ?? '').toString(),
+              exhibitorName: exhibitorNamesByUserId[userId] ?? '',
+            );
+          })
           .where((user) => user.userId.isNotEmpty)
           .toList();
 
@@ -559,9 +540,9 @@ class _SupportImpersonationScreenState
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Text(
               'Support Impersonation',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
             ),
           ),
           const Padding(
@@ -650,16 +631,16 @@ class _SupportImpersonationScreenState
                           _showingInitialUsers
                               ? 'Showing up to 100 users'
                               : 'Search results',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                       ),
                       Expanded(
                         child: ListView.separated(
                           padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                           itemCount: _users.length,
-                          separatorBuilder: (context, index) => const SizedBox(height: 10),
+                          separatorBuilder: (context, index) =>
+                              const SizedBox(height: 10),
                           itemBuilder: (context, index) {
                             final user = _users[index];
 
@@ -677,27 +658,37 @@ class _SupportImpersonationScreenState
                                   child: Text(
                                     user.label.isEmpty
                                         ? '?'
-                                        : user.label.characters.first.toUpperCase(),
+                                        : user.label.characters.first
+                                              .toUpperCase(),
                                   ),
                                 ),
                                 title: Text(
                                   user.label,
-                                  style: const TextStyle(fontWeight: FontWeight.w700),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                 ),
                                 subtitle: Padding(
                                   padding: const EdgeInsets.only(top: 6),
                                   child: Text(
                                     [
-                                      if (user.email.isNotEmpty) user.email,
-                                      if (user.displayName.trim().isNotEmpty &&
-                                          user.displayName.trim() != user.label)
-                                        'Profile: ${user.displayName.trim()}',
-                                    ].join(' • ').isEmpty
+                                          if (user.email.isNotEmpty) user.email,
+                                          if (user.displayName
+                                                  .trim()
+                                                  .isNotEmpty &&
+                                              user.displayName.trim() !=
+                                                  user.label)
+                                            'Profile: ${user.displayName.trim()}',
+                                        ].join(' • ').isEmpty
                                         ? user.userId
                                         : [
-                                            if (user.email.isNotEmpty) user.email,
-                                            if (user.displayName.trim().isNotEmpty &&
-                                                user.displayName.trim() != user.label)
+                                            if (user.email.isNotEmpty)
+                                              user.email,
+                                            if (user.displayName
+                                                    .trim()
+                                                    .isNotEmpty &&
+                                                user.displayName.trim() !=
+                                                    user.label)
                                               'Profile: ${user.displayName.trim()}',
                                           ].join(' • '),
                                   ),

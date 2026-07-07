@@ -1,6 +1,7 @@
 //lib/screens/admin/results/admin_results_entry_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:ringmaster_show/services/show_lock_service.dart';
@@ -73,7 +74,6 @@ const Map<String, String> awardDisplayLabels = {
   '2RIS': '2nd Reserve in Show',
   'HM': 'Honorable Mention',
 };
-
 
 bool _isFurEntry(Map<String, dynamic> row) {
   final value = row['is_fur'];
@@ -189,10 +189,7 @@ bool _awardListContains(List<String> awards, String award) {
   return awards.any((a) => _canonicalAwardCode(a).toLowerCase() == target);
 }
 
-bool _supportsBestAgeAwards({
-  required String breedName,
-  required bool isCavy,
-}) {
+bool _supportsBestAgeAwards({required String breedName, required bool isCavy}) {
   // Every cavy breed requires Best Junior, Best Intermediate,
   // and Best Senior awards.
   if (isCavy) return true;
@@ -247,19 +244,13 @@ const List<String> kResultStatuses = [
   'Unworthy of Award',
 ];
 
-
 bool _isDisqualifiedStatus(String status) {
   return status.trim().toLowerCase().startsWith('disqualified');
 }
 
 // --- Shared Smart Completion/Status Helpers for Results Entry Highlighting ---
 
-enum _ResultScopeStatus {
-  notStarted,
-  inProgress,
-  needsAttention,
-  complete,
-}
+enum _ResultScopeStatus { notStarted, inProgress, needsAttention, complete }
 
 class _ResultScopeCompletion {
   final _ResultScopeStatus status;
@@ -324,14 +315,15 @@ String _entryScopeVariety(Map<String, dynamic> entry) {
 }
 
 String _entryScopeGroup(Map<String, dynamic> entry) {
-  return (
-    entry['group_name'] ??
-    entry['group_display_name'] ??
-    entry['group_label'] ??
-    entry['group'] ??
-    entry['group_code'] ??
-    ''
-  ).toString().trim().toLowerCase();
+  return (entry['group_name'] ??
+          entry['group_display_name'] ??
+          entry['group_label'] ??
+          entry['group'] ??
+          entry['group_code'] ??
+          '')
+      .toString()
+      .trim()
+      .toLowerCase();
 }
 
 bool _entryUsesVarietyAwards(Map<String, dynamic> entry) {
@@ -360,9 +352,9 @@ List<String> _entryAwardCodes(Map<String, dynamic> entry) {
 int _awardCount(List<Map<String, dynamic>> entries, String awardCode) {
   final target = _canonicalAwardCode(awardCode).toLowerCase();
   return entries.where((entry) {
-    return _entryAwardCodes(entry).any(
-      (award) => _canonicalAwardCode(award).toLowerCase() == target,
-    );
+    return _entryAwardCodes(
+      entry,
+    ).any((award) => _canonicalAwardCode(award).toLowerCase() == target);
   }).length;
 }
 
@@ -395,15 +387,17 @@ String _specialsSummaryForEntries(
   for (final awardCode in awardCodes) {
     final target = _canonicalAwardCode(awardCode).toLowerCase();
     final winners = entries.where((entry) {
-      return _entryAwardCodes(entry).any(
-        (award) => _canonicalAwardCode(award).toLowerCase() == target,
-      );
+      return _entryAwardCodes(
+        entry,
+      ).any((award) => _canonicalAwardCode(award).toLowerCase() == target);
     }).toList();
 
     if (winners.isEmpty) continue;
 
     final labels = winners.map(_entryShortAnimalLabel).toList();
-    parts.add('${_awardDisplayLabel(awardCode, winners.first)}: ${labels.join(', ')}');
+    parts.add(
+      '${_awardDisplayLabel(awardCode, winners.first)}: ${labels.join(', ')}',
+    );
   }
 
   if (parts.isEmpty) return '';
@@ -461,9 +455,9 @@ Map<String, dynamic>? _singleAwardWinner(
 ) {
   final target = _canonicalAwardCode(awardCode).toLowerCase();
   for (final entry in entries) {
-    final hasAward = _entryAwardCodes(entry).any(
-      (award) => _canonicalAwardCode(award).toLowerCase() == target,
-    );
+    final hasAward = _entryAwardCodes(
+      entry,
+    ).any((award) => _canonicalAwardCode(award).toLowerCase() == target);
     if (hasAward) return entry;
   }
   return null;
@@ -506,7 +500,9 @@ bool _requiredAwardCountsAreValid({
 
     if (!enforceMissing) continue;
 
-    final eligibleCandidates = bucket.where(_entryIsEligibleForSpecialAward).toList();
+    final eligibleCandidates = bucket
+        .where(_entryIsEligibleForSpecialAward)
+        .toList();
 
     // If every animal in the scope is DQ, No Show, Unworthy, scratched, or otherwise
     // has no first-place animal, there is no special award to require.
@@ -588,7 +584,8 @@ _ResultScopeCompletion _resultCompletionForEntries(
       return '$sectionId|$breed|$variety';
     });
 
-    awardCountsValid = awardCountsValid &&
+    awardCountsValid =
+        awardCountsValid &&
         _requiredAwardCountsAreValid(
           buckets: varietyBuckets.values,
           awardCodes: const ['BOV', 'BOSV'],
@@ -605,7 +602,8 @@ _ResultScopeCompletion _resultCompletionForEntries(
       return '$sectionId|$breed|$group';
     });
 
-    awardCountsValid = awardCountsValid &&
+    awardCountsValid =
+        awardCountsValid &&
         _requiredAwardCountsAreValid(
           buckets: groupBuckets.values,
           awardCodes: const ['BOG', 'BOSG'],
@@ -621,7 +619,8 @@ _ResultScopeCompletion _resultCompletionForEntries(
       return '$sectionId|$breed';
     });
 
-    awardCountsValid = awardCountsValid &&
+    awardCountsValid =
+        awardCountsValid &&
         _requiredAwardCountsAreValid(
           buckets: breedBuckets.values,
           awardCodes: const ['BOB', 'BOSB'],
@@ -735,10 +734,7 @@ List<Map<String, dynamic>> _mergeRefreshedEntriesWithoutDroppingCurrentRows({
     final refreshed = refreshedById[id];
     if (refreshed == null) return current;
 
-    return <String, dynamic>{
-      ...current,
-      ...refreshed,
-    };
+    return <String, dynamic>{...current, ...refreshed};
   }).toList();
 }
 
@@ -752,7 +748,10 @@ List<Map<String, dynamic>> _dedupeResultsEntryRows(
     final entryId = (row['entry_id'] ?? row['id'] ?? '').toString().trim();
     final isFurEntry = _isFurEntry(row);
     final isFur = isFurEntry ? 'fur' : 'normal';
-    final furVariety = (row['fur_variety'] ?? '').toString().trim().toLowerCase();
+    final furVariety = (row['fur_variety'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
 
     // Keep true fur/wool rows separate only when the actual row is marked as fur.
     // Normal entry duplicates should collapse by entry_id even if a bad SQL join
@@ -762,8 +761,14 @@ List<Map<String, dynamic>> _dedupeResultsEntryRows(
         : [
             (row['section_id'] ?? '').toString().trim().toLowerCase(),
             (row['exhibitor_id'] ?? '').toString().trim().toLowerCase(),
-            (row['breed'] ?? row['breed_name'] ?? '').toString().trim().toLowerCase(),
-            (row['variety'] ?? row['variety_name'] ?? '').toString().trim().toLowerCase(),
+            (row['breed'] ?? row['breed_name'] ?? '')
+                .toString()
+                .trim()
+                .toLowerCase(),
+            (row['variety'] ?? row['variety_name'] ?? '')
+                .toString()
+                .trim()
+                .toLowerCase(),
             (row['class_name'] ?? '').toString().trim().toLowerCase(),
             (row['sex'] ?? '').toString().trim().toLowerCase(),
             isFur,
@@ -778,7 +783,8 @@ List<Map<String, dynamic>> _dedupeResultsEntryRows(
 
     // Prefer the row that has the clearest breed award settings populated.
     final existingHasAwardSettings =
-        existing['uses_group_awards'] == true || existing['uses_variety_awards'] == true;
+        existing['uses_group_awards'] == true ||
+        existing['uses_variety_awards'] == true;
     final rowHasAwardSettings =
         row['uses_group_awards'] == true || row['uses_variety_awards'] == true;
 
@@ -814,9 +820,7 @@ Future<Map<String, List<String>>> _loadAwardsByEntryId({
     for (final raw in awardRows as List) {
       final row = Map<String, dynamic>.from(raw as Map);
       final entryId = (row['entry_id'] ?? '').toString().trim();
-      final award = _canonicalAwardCode(
-        (row['award_code'] ?? '').toString(),
-      );
+      final award = _canonicalAwardCode((row['award_code'] ?? '').toString());
 
       if (entryId.isEmpty || award.isEmpty) continue;
 
@@ -833,7 +837,6 @@ class AdminResultsEntryScreen extends StatefulWidget {
   final String showName;
   final String? initialEntryId;
   final bool isQrEntryMode;
-  
 
   const AdminResultsEntryScreen({
     super.key,
@@ -844,7 +847,8 @@ class AdminResultsEntryScreen extends StatefulWidget {
   });
 
   @override
-  State<AdminResultsEntryScreen> createState() => _AdminResultsEntryScreenState();
+  State<AdminResultsEntryScreen> createState() =>
+      _AdminResultsEntryScreenState();
 }
 
 class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
@@ -869,34 +873,34 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     _loadAll();
   }
 
-    Future<void> _loadAll() async {
-      setState(() {
-        _loading = true;
-        _msg = null;
+  Future<void> _loadAll() async {
+    setState(() {
+      _loading = true;
+      _msg = null;
+    });
+
+    try {
+      await _loadSections();
+      await _loadJudges();
+      await _loadBreedClassSystems();
+      await _loadShowSettings();
+      await _loadEntries();
+
+      if (!mounted) return;
+
+      setState(() => _loading = false);
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _openInitialEntryFromRootIfNeeded();
       });
-
-      try {
-        await _loadSections();
-        await _loadJudges();
-        await _loadBreedClassSystems();
-        await _loadShowSettings();
-        await _loadEntries();
-
-        if (!mounted) return;
-
-        setState(() => _loading = false);
-
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _openInitialEntryFromRootIfNeeded();
-        });
-      } catch (e) {
-        if (!mounted) return;
-        setState(() {
-          _loading = false;
-          _msg = 'Load failed: $e';
-        });
-      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _msg = 'Load failed: $e';
+      });
     }
+  }
 
   Future<void> _loadSections() async {
     final rows = await supabase
@@ -927,8 +931,12 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
 
       final aso = a['sort_order'];
       final bso = b['sort_order'];
-      final asoI = (aso is int) ? aso : int.tryParse(aso?.toString() ?? '') ?? 9999;
-      final bsoI = (bso is int) ? bso : int.tryParse(bso?.toString() ?? '') ?? 9999;
+      final asoI = (aso is int)
+          ? aso
+          : int.tryParse(aso?.toString() ?? '') ?? 9999;
+      final bsoI = (bso is int)
+          ? bso
+          : int.tryParse(bso?.toString() ?? '') ?? 9999;
       final soCmp = asoI.compareTo(bsoI);
       if (soCmp != 0) return soCmp;
 
@@ -971,14 +979,15 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
         final name = (judgeMap['name'] ?? '').toString().trim();
         final first = (judgeMap['first_name'] ?? '').toString().trim();
         final last = (judgeMap['last_name'] ?? '').toString().trim();
-        final arbaNumber =
-            (judgeMap['arba_judge_number'] ?? '').toString().trim();
+        final arbaNumber = (judgeMap['arba_judge_number'] ?? '')
+            .toString()
+            .trim();
 
         final baseName = displayName.isNotEmpty
             ? displayName
             : name.isNotEmpty
-                ? name
-                : [first, last].where((x) => x.isNotEmpty).join(' ').trim();
+            ? name
+            : [first, last].where((x) => x.isNotEmpty).join(' ').trim();
 
         label = baseName.isNotEmpty ? baseName : masterJudgeId;
 
@@ -990,8 +999,9 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
         if (label.isEmpty) label = masterJudgeId;
       }
 
-      if (!result.any((j) =>
-          (j['id'] ?? '').toString().trim() == masterJudgeId)) {
+      if (!result.any(
+        (j) => (j['id'] ?? '').toString().trim() == masterJudgeId,
+      )) {
         result.add({
           'id': masterJudgeId,
           'judge_id': masterJudgeId,
@@ -1010,129 +1020,132 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     _judges = result;
   }
 
-    Future<void> _jumpToIssue(_ValidationIssue issue) async {
-      final allEntries = await _fetchHydratedEntries(sectionId: null);
+  Future<void> _jumpToIssue(_ValidationIssue issue) async {
+    final allEntries = await _fetchHydratedEntries(sectionId: null);
 
-      final targetEntryId =
-          (issue.entry['entry_id'] ?? issue.entry['id'] ?? '').toString().trim();
+    final targetEntryId = (issue.entry['entry_id'] ?? issue.entry['id'] ?? '')
+        .toString()
+        .trim();
 
-      Map<String, dynamic> targetEntry;
-      try {
-        targetEntry = allEntries.firstWhere((e) {
-          return (e['entry_id'] ?? e['id'] ?? '').toString().trim() == targetEntryId;
-        });
-      } catch (_) {
-        targetEntry = Map<String, dynamic>.from(issue.entry);
-      }
-
-      final breedEntries = allEntries.where((e) {
-        final rowBreed = (e['breed'] ?? '').toString().trim();
-        final rowBreedName = (e['breed_name'] ?? '').toString().trim();
-        final rowBreedLabel = rowBreed.isNotEmpty ? rowBreed : rowBreedName;
-        return rowBreedLabel.toLowerCase() == issue.breed.toLowerCase() &&
-            _speciesDisplayNameForEntry(e).toLowerCase() ==
-                issue.species.toLowerCase();
-      }).toList();
-
-      if (breedEntries.isEmpty) return;
-
-      final byGroup = _showsByGroup(breedEntries);
-      final byVariety = _showsByVariety(breedEntries);
-
-      List<Map<String, dynamic>> working = [...breedEntries];
-
-      if (byGroup && (issue.groupName ?? '').trim().isNotEmpty) {
-        working = working.where((e) {
-          return (e['group_name'] ?? '').toString().trim().toLowerCase() ==
-              issue.groupName!.toLowerCase();
-        }).toList();
-      }
-
-      if (byVariety && (issue.variety ?? '').trim().isNotEmpty) {
-        working = working.where((e) {
-          return (e['variety'] ?? '').toString().trim().toLowerCase() ==
-              issue.variety!.toLowerCase();
-        }).toList();
-      }
-
-      final targetIsFur = _isFurEntry(targetEntry);
-
-      working = working.where((e) {
-        return _classSexLabelFromEntry(e).toLowerCase() ==
-                issue.classSexLabel.toLowerCase() &&
-            _isFurEntry(e) == targetIsFur;
-      }).toList();
-
-      if (working.isEmpty) {
-        working = breedEntries.where((e) => _isFurEntry(e) == targetIsFur).toList();
-      }
-
-      final targetSectionId =
-          (targetEntry['section_id'] ?? '').toString().trim();
-      if (targetSectionId.isNotEmpty) {
-        _selectedSectionId = targetSectionId;
-      }
-
-      final sectionName = _sectionNameForEntry(targetEntry);
-
-      try {
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ResultsAnimalsScreen(
-              showId: widget.showId,
-              showName: widget.showName,
-              sectionLabel: sectionName,
-              breed: issue.breed,
-              variety: issue.variety ?? '',
-              classSexLabel: issue.classSexLabel,
-              isFurOrWoolClass: working.any(_isFurEntry),
-              entries: working,
-              judges: _judges,
-              onBulkJudgeApply: (entries, judgeId) async {
-
-                final ids = entries
-                    .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
-                    .where((x) => x.isNotEmpty)
-                    .toList();
-
-                if (ids.isEmpty) return;
-
-                if (!widget.isQrEntryMode) {
-                  await ShowLockService.assertShowUnlocked(widget.showId);
-                }
-
-                await supabase
-                    .from('entries')
-                    .update({
-                      'judged_by_show_judge_id':
-                          (judgeId == null || judgeId.isEmpty) ? null : judgeId,
-                      'updated_at': DateTime.now().toUtc().toIso8601String(),
-                    })
-                    .inFilter('id', ids);
-              },
-              initialJudgeId: _singleJudgeIdFromEntries(working),
-              breedClassSystems: _breedClassSystems,
-              finalAwardMode: _finalAwardMode,
-              showsByGroup: byGroup,
-              showsByVariety: byVariety,
-              isQrEntryMode: widget.isQrEntryMode,
-              initialEntryIdToOpen:
-                  (targetEntry['entry_id'] ?? targetEntry['id'] ?? '')
-                      .toString(),
-            ),
-          ),
-        );
-      } catch (e) {
-        if (!mounted) return;
-        setState(() {
-          _msg = 'Error: $e';
-        });
-      }
-
-      await _loadEntries();
-      if (mounted) setState(() {});
+    Map<String, dynamic> targetEntry;
+    try {
+      targetEntry = allEntries.firstWhere((e) {
+        return (e['entry_id'] ?? e['id'] ?? '').toString().trim() ==
+            targetEntryId;
+      });
+    } catch (_) {
+      targetEntry = Map<String, dynamic>.from(issue.entry);
     }
+
+    final breedEntries = allEntries.where((e) {
+      final rowBreed = (e['breed'] ?? '').toString().trim();
+      final rowBreedName = (e['breed_name'] ?? '').toString().trim();
+      final rowBreedLabel = rowBreed.isNotEmpty ? rowBreed : rowBreedName;
+      return rowBreedLabel.toLowerCase() == issue.breed.toLowerCase() &&
+          _speciesDisplayNameForEntry(e).toLowerCase() ==
+              issue.species.toLowerCase();
+    }).toList();
+
+    if (breedEntries.isEmpty) return;
+
+    final byGroup = _showsByGroup(breedEntries);
+    final byVariety = _showsByVariety(breedEntries);
+
+    List<Map<String, dynamic>> working = [...breedEntries];
+
+    if (byGroup && (issue.groupName ?? '').trim().isNotEmpty) {
+      working = working.where((e) {
+        return (e['group_name'] ?? '').toString().trim().toLowerCase() ==
+            issue.groupName!.toLowerCase();
+      }).toList();
+    }
+
+    if (byVariety && (issue.variety ?? '').trim().isNotEmpty) {
+      working = working.where((e) {
+        return (e['variety'] ?? '').toString().trim().toLowerCase() ==
+            issue.variety!.toLowerCase();
+      }).toList();
+    }
+
+    final targetIsFur = _isFurEntry(targetEntry);
+
+    working = working.where((e) {
+      return _classSexLabelFromEntry(e).toLowerCase() ==
+              issue.classSexLabel.toLowerCase() &&
+          _isFurEntry(e) == targetIsFur;
+    }).toList();
+
+    if (working.isEmpty) {
+      working = breedEntries
+          .where((e) => _isFurEntry(e) == targetIsFur)
+          .toList();
+    }
+
+    final targetSectionId = (targetEntry['section_id'] ?? '').toString().trim();
+    if (targetSectionId.isNotEmpty) {
+      _selectedSectionId = targetSectionId;
+    }
+
+    final sectionName = _sectionNameForEntry(targetEntry);
+
+    try {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ResultsAnimalsScreen(
+            showId: widget.showId,
+            showName: widget.showName,
+            sectionLabel: sectionName,
+            breed: issue.breed,
+            variety: issue.variety ?? '',
+            classSexLabel: issue.classSexLabel,
+            isFurOrWoolClass: working.any(_isFurEntry),
+            entries: working,
+            judges: _judges,
+            onBulkJudgeApply: (entries, judgeId) async {
+              final ids = entries
+                  .map(
+                    (e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim(),
+                  )
+                  .where((x) => x.isNotEmpty)
+                  .toList();
+
+              if (ids.isEmpty) return;
+
+              if (!widget.isQrEntryMode) {
+                await ShowLockService.assertShowUnlocked(widget.showId);
+              }
+
+              await supabase
+                  .from('entries')
+                  .update({
+                    'judged_by_show_judge_id':
+                        (judgeId == null || judgeId.isEmpty) ? null : judgeId,
+                    'updated_at': DateTime.now().toUtc().toIso8601String(),
+                  })
+                  .inFilter('id', ids);
+            },
+            initialJudgeId: _singleJudgeIdFromEntries(working),
+            breedClassSystems: _breedClassSystems,
+            finalAwardMode: _finalAwardMode,
+            showsByGroup: byGroup,
+            showsByVariety: byVariety,
+            isQrEntryMode: widget.isQrEntryMode,
+            initialEntryIdToOpen:
+                (targetEntry['entry_id'] ?? targetEntry['id'] ?? '').toString(),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _msg = 'Error: $e';
+      });
+    }
+
+    await _loadEntries();
+    if (mounted) setState(() {});
+  }
 
   Future<void> _loadBreedClassSystems() async {
     final rows = await supabase
@@ -1146,8 +1159,10 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
 
     for (final row in (rows as List).cast<Map<String, dynamic>>()) {
       final name = (row['name'] ?? '').toString().trim().toLowerCase();
-      final classSystem =
-          (row['class_system'] ?? 'four').toString().trim().toLowerCase();
+      final classSystem = (row['class_system'] ?? 'four')
+          .toString()
+          .trim()
+          .toLowerCase();
 
       if (name.isNotEmpty) {
         _breedClassSystems[name] = classSystem;
@@ -1176,350 +1191,356 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     };
   }
 
-    Future<List<Map<String, dynamic>>> _fetchHydratedEntries({
-      String? sectionId,
-    }) async {
-      final params = <String, dynamic>{
-        'p_show_id': widget.showId,
-        'p_section_id': (sectionId == null || sectionId.isEmpty) ? null : sectionId,
-        'p_show_letter': null,
-      };
+  Future<List<Map<String, dynamic>>> _fetchHydratedEntries({
+    String? sectionId,
+  }) async {
+    final params = <String, dynamic>{
+      'p_show_id': widget.showId,
+      'p_section_id': (sectionId == null || sectionId.isEmpty)
+          ? null
+          : sectionId,
+      'p_show_letter': null,
+    };
 
-      final rows = await supabase.rpc(
-        'report_results_entry_rows',
-        params: params,
+    final rows = await supabase.rpc(
+      'report_results_entry_rows',
+      params: params,
+    );
+
+    final entries = _dedupeResultsEntryRows(
+      (rows as List).map((e) => Map<String, dynamic>.from(e as Map)).toList(),
+    );
+
+    final entryIds = entries
+        .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
+        .where((x) => x.isNotEmpty)
+        .toSet()
+        .toList();
+
+    final showModeRow = await supabase
+        .from('shows')
+        .select('coop_numbering_mode')
+        .eq('id', widget.showId)
+        .maybeSingle();
+
+    final coopNumberingMode =
+        (showModeRow?['coop_numbering_mode'] ?? 'separate')
+            .toString()
+            .trim()
+            .toLowerCase();
+
+    final animalIdByEntryId = <String, String>{};
+    for (var i = 0; i < entryIds.length; i += 100) {
+      final chunk = entryIds.skip(i).take(100).toList();
+      if (chunk.isEmpty) continue;
+
+      final sourceRows = await supabase
+          .from('entries')
+          .select('id,animal_id')
+          .inFilter('id', chunk);
+
+      for (final raw in sourceRows as List) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        final entryId = (row['id'] ?? '').toString().trim();
+        final animalId = (row['animal_id'] ?? '').toString().trim();
+        if (entryId.isNotEmpty && animalId.isNotEmpty) {
+          animalIdByEntryId[entryId] = animalId;
+        }
+      }
+    }
+
+    final animalIds = animalIdByEntryId.values.toSet().toList();
+    final coopNumberByAnimalAndScope = <String, String>{};
+
+    for (var i = 0; i < animalIds.length; i += 100) {
+      final chunk = animalIds.skip(i).take(100).toList();
+      if (chunk.isEmpty) continue;
+
+      final coopRows = await supabase
+          .from('show_animal_coop_numbers')
+          .select('animal_id,scope,coop_number')
+          .eq('show_id', widget.showId)
+          .inFilter('animal_id', chunk);
+
+      for (final raw in coopRows as List) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        final animalId = (row['animal_id'] ?? '').toString().trim();
+        final scope = (row['scope'] ?? '').toString().trim().toLowerCase();
+        final coopNumber = (row['coop_number'] ?? '').toString().trim();
+        if (animalId.isEmpty || scope.isEmpty) continue;
+        coopNumberByAnimalAndScope['$animalId|$scope'] = coopNumber;
+      }
+    }
+
+    for (final entry in entries) {
+      final entryId = (entry['entry_id'] ?? entry['id'] ?? '')
+          .toString()
+          .trim();
+      final animalId = animalIdByEntryId[entryId] ?? '';
+      entry['animal_id'] = animalId;
+
+      final sectionId = (entry['section_id'] ?? '').toString().trim();
+      final section = _sections.firstWhere(
+        (row) => (row['id'] ?? '').toString().trim() == sectionId,
+        orElse: () => <String, dynamic>{},
       );
+      final sectionKind = (section['kind'] ?? '')
+          .toString()
+          .trim()
+          .toLowerCase();
+      final scope = coopNumberingMode == 'combined' ? 'all' : sectionKind;
 
-      final entries = _dedupeResultsEntryRows(
-        (rows as List)
-            .map((e) => Map<String, dynamic>.from(e as Map))
-            .toList(),
-      );
+      entry['coop_number'] = animalId.isEmpty || scope.isEmpty
+          ? ''
+          : (coopNumberByAnimalAndScope['$animalId|$scope'] ?? '');
+    }
 
-      final entryIds = entries
-          .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
-          .where((x) => x.isNotEmpty)
-          .toSet()
-          .toList();
+    final awardsByEntryId = <String, List<String>>{};
 
-      final showModeRow = await supabase
-          .from('shows')
-          .select('coop_numbering_mode')
-          .eq('id', widget.showId)
-          .maybeSingle();
+    if (entryIds.isNotEmpty) {
+      final allAwardRows = <Map<String, dynamic>>[];
 
-      final coopNumberingMode =
-          (showModeRow?['coop_numbering_mode'] ?? 'separate')
-              .toString()
-              .trim()
-              .toLowerCase();
-
-      final animalIdByEntryId = <String, String>{};
       for (var i = 0; i < entryIds.length; i += 100) {
         final chunk = entryIds.skip(i).take(100).toList();
-        if (chunk.isEmpty) continue;
 
-        final sourceRows = await supabase
-            .from('entries')
-            .select('id,animal_id')
-            .inFilter('id', chunk);
-
-        for (final raw in sourceRows as List) {
-          final row = Map<String, dynamic>.from(raw as Map);
-          final entryId = (row['id'] ?? '').toString().trim();
-          final animalId = (row['animal_id'] ?? '').toString().trim();
-          if (entryId.isNotEmpty && animalId.isNotEmpty) {
-            animalIdByEntryId[entryId] = animalId;
-          }
-        }
-      }
-
-      final animalIds = animalIdByEntryId.values.toSet().toList();
-      final coopNumberByAnimalAndScope = <String, String>{};
-
-      for (var i = 0; i < animalIds.length; i += 100) {
-        final chunk = animalIds.skip(i).take(100).toList();
-        if (chunk.isEmpty) continue;
-
-        final coopRows = await supabase
-            .from('show_animal_coop_numbers')
-            .select('animal_id,scope,coop_number')
+        final rows = await supabase
+            .from('entry_awards')
+            .select('entry_id,award_code')
             .eq('show_id', widget.showId)
-            .inFilter('animal_id', chunk);
+            .inFilter('entry_id', chunk);
 
-        for (final raw in coopRows as List) {
-          final row = Map<String, dynamic>.from(raw as Map);
-          final animalId = (row['animal_id'] ?? '').toString().trim();
-          final scope = (row['scope'] ?? '').toString().trim().toLowerCase();
-          final coopNumber = (row['coop_number'] ?? '').toString().trim();
-          if (animalId.isEmpty || scope.isEmpty) continue;
-          coopNumberByAnimalAndScope['$animalId|$scope'] = coopNumber;
+        allAwardRows.addAll(
+          (rows as List).map((e) => Map<String, dynamic>.from(e as Map)),
+        );
+      }
+
+      for (final row in allAwardRows) {
+        final entryId = (row['entry_id'] ?? '').toString().trim();
+        final award = _canonicalAwardCode((row['award_code'] ?? '').toString());
+        if (entryId.isEmpty || award.isEmpty) continue;
+        awardsByEntryId.putIfAbsent(entryId, () => <String>[]);
+        awardsByEntryId[entryId]!.add(award);
+      }
+    }
+
+    for (final e in entries) {
+      final id = (e['entry_id'] ?? e['id'] ?? '').toString().trim();
+      e['_awards'] = awardsByEntryId[id] ?? <String>[];
+
+      e['id'] ??= e['entry_id'];
+
+      final rawBreed = (e['breed'] ?? '').toString().trim();
+      final rawBreedName = (e['breed_name'] ?? '').toString().trim();
+      e['breed'] = rawBreed.isNotEmpty ? rawBreed : rawBreedName;
+
+      final rawVariety = (e['variety'] ?? '').toString().trim();
+      final rawVarietyName = (e['variety_name'] ?? '').toString().trim();
+      e['variety'] = rawVariety.isNotEmpty ? rawVariety : rawVarietyName;
+
+      e['animal_name'] ??= '';
+
+      final breedKey = (e['breed'] ?? '').toString().trim().toLowerCase();
+
+      // Species is the source of truth for award flow. Some breed names overlap
+      // between rabbits and cavies, such as American. Do not let cavy breed
+      // settings force rabbit entries into group awards.
+      if (breedKey.isNotEmpty) {
+        if (_isCavyEntry(e)) {
+          e['uses_group_awards'] = _breedUsesGroupAwards.containsKey(breedKey)
+              ? _breedUsesGroupAwards[breedKey]
+              : e['uses_group_awards'] == true;
+
+          e['uses_variety_awards'] =
+              _breedUsesVarietyAwards.containsKey(breedKey)
+              ? _breedUsesVarietyAwards[breedKey]
+              : e['uses_variety_awards'] == true;
+        } else {
+          // For rabbits, trust the hydrated row/RPC value. Do not use the
+          // global breed-name map because names like American overlap with
+          // cavies, but do keep rabbit breed group settings such as
+          // Harlequin and Jersey Wooly.
+          e['uses_group_awards'] = _entryUsesGroupAwards(e);
+          e['uses_variety_awards'] = _entryUsesVarietyAwards(e);
         }
       }
 
-      for (final entry in entries) {
-        final entryId =
-            (entry['entry_id'] ?? entry['id'] ?? '').toString().trim();
-        final animalId = animalIdByEntryId[entryId] ?? '';
-        entry['animal_id'] = animalId;
+      final normalizedGroup =
+          (e['group_name'] ??
+                  e['group_display_name'] ??
+                  e['group_label'] ??
+                  e['group'] ??
+                  e['group_code'])
+              ?.toString()
+              .trim();
 
-        final sectionId = (entry['section_id'] ?? '').toString().trim();
-        final section = _sections.firstWhere(
-          (row) => (row['id'] ?? '').toString().trim() == sectionId,
+      e['group_name'] = (normalizedGroup == null || normalizedGroup.isEmpty)
+          ? null
+          : normalizedGroup;
+    }
+
+    return entries;
+  }
+
+  String? _singleJudgeIdFromEntries(List<Map<String, dynamic>> entries) {
+    final ids = entries
+        .map((e) => (e['judged_by_show_judge_id'] ?? '').toString().trim())
+        .where((x) => x.isNotEmpty)
+        .toSet();
+
+    if (ids.length == 1) return ids.first;
+    return null;
+  }
+
+  Future<void> _openInitialEntryFromRootIfNeeded() async {
+    if (_didAutoOpenInitialEntryFromRoot) return;
+    if (widget.initialEntryId == null ||
+        widget.initialEntryId!.trim().isEmpty) {
+      return;
+    }
+
+    final targetId = widget.initialEntryId!.trim();
+
+    List<Map<String, dynamic>> allEntries = _entries;
+    Map<String, dynamic> target = allEntries
+        .cast<Map<String, dynamic>>()
+        .firstWhere(
+          (e) =>
+              ((e['entry_id'] ?? e['id'] ?? '').toString().trim() == targetId),
           orElse: () => <String, dynamic>{},
         );
-        final sectionKind =
-            (section['kind'] ?? '').toString().trim().toLowerCase();
-        final scope = coopNumberingMode == 'combined' ? 'all' : sectionKind;
 
-        entry['coop_number'] = animalId.isEmpty || scope.isEmpty
-            ? ''
-            : (coopNumberByAnimalAndScope['$animalId|$scope'] ?? '');
-      }
-
-      final awardsByEntryId = <String, List<String>>{};
-
-      if (entryIds.isNotEmpty) {
-        final allAwardRows = <Map<String, dynamic>>[];
-
-        for (var i = 0; i < entryIds.length; i += 100) {
-          final chunk = entryIds.skip(i).take(100).toList();
-
-          final rows = await supabase
-              .from('entry_awards')
-              .select('entry_id,award_code')
-              .eq('show_id', widget.showId)
-              .inFilter('entry_id', chunk);
-
-          allAwardRows.addAll(
-            (rows as List).map((e) => Map<String, dynamic>.from(e as Map)),
-          );
-        }
-
-        for (final row in allAwardRows) {
-          final entryId = (row['entry_id'] ?? '').toString().trim();
-          final award = _canonicalAwardCode(
-            (row['award_code'] ?? '').toString(),
-          );
-          if (entryId.isEmpty || award.isEmpty) continue;
-          awardsByEntryId.putIfAbsent(entryId, () => <String>[]);
-          awardsByEntryId[entryId]!.add(award);
-        }
-      }
-
-      for (final e in entries) {
-        final id = (e['entry_id'] ?? e['id'] ?? '').toString().trim();
-        e['_awards'] = awardsByEntryId[id] ?? <String>[];
-
-        e['id'] ??= e['entry_id'];
-
-        final rawBreed = (e['breed'] ?? '').toString().trim();
-        final rawBreedName = (e['breed_name'] ?? '').toString().trim();
-        e['breed'] = rawBreed.isNotEmpty ? rawBreed : rawBreedName;
-
-        final rawVariety = (e['variety'] ?? '').toString().trim();
-        final rawVarietyName = (e['variety_name'] ?? '').toString().trim();
-        e['variety'] = rawVariety.isNotEmpty ? rawVariety : rawVarietyName;
-
-        e['animal_name'] ??= '';
-
-              final breedKey = (e['breed'] ?? '')
-                  .toString()
-                  .trim()
-                  .toLowerCase();
-
-              // Species is the source of truth for award flow. Some breed names overlap
-              // between rabbits and cavies, such as American. Do not let cavy breed
-              // settings force rabbit entries into group awards.
-              if (breedKey.isNotEmpty) {
-                if (_isCavyEntry(e)) {
-                  e['uses_group_awards'] = _breedUsesGroupAwards.containsKey(breedKey)
-                      ? _breedUsesGroupAwards[breedKey]
-                      : e['uses_group_awards'] == true;
-
-                  e['uses_variety_awards'] = _breedUsesVarietyAwards.containsKey(breedKey)
-                      ? _breedUsesVarietyAwards[breedKey]
-                      : e['uses_variety_awards'] == true;
-                } else {
-                  // For rabbits, trust the hydrated row/RPC value. Do not use the
-                  // global breed-name map because names like American overlap with
-                  // cavies, but do keep rabbit breed group settings such as
-                  // Harlequin and Jersey Wooly.
-                  e['uses_group_awards'] = _entryUsesGroupAwards(e);
-                  e['uses_variety_awards'] = _entryUsesVarietyAwards(e);
-                }
-              }
-
-        final normalizedGroup = (
-          e['group_name'] ??
-          e['group_display_name'] ??
-          e['group_label'] ??
-          e['group'] ??
-          e['group_code']
-        )?.toString().trim();
-
-        e['group_name'] =
-            (normalizedGroup == null || normalizedGroup.isEmpty)
-                ? null
-                : normalizedGroup;
-      }
-
-      return entries;
-    }
-
-    String? _singleJudgeIdFromEntries(List<Map<String, dynamic>> entries) {
-      final ids = entries
-          .map((e) => (e['judged_by_show_judge_id'] ?? '').toString().trim())
-          .where((x) => x.isNotEmpty)
-          .toSet();
-
-      if (ids.length == 1) return ids.first;
-      return null;
-    }
-
-    Future<void> _openInitialEntryFromRootIfNeeded() async {
-      if (_didAutoOpenInitialEntryFromRoot) return;
-      if (widget.initialEntryId == null || widget.initialEntryId!.trim().isEmpty) {
-        return;
-      }
-
-      final targetId = widget.initialEntryId!.trim();
-
-      List<Map<String, dynamic>> allEntries = _entries;
-      Map<String, dynamic> target = allEntries.cast<Map<String, dynamic>>().firstWhere(
+    if (target.isEmpty) {
+      allEntries = await _fetchHydratedEntries(sectionId: null);
+      target = allEntries.firstWhere(
         (e) => ((e['entry_id'] ?? e['id'] ?? '').toString().trim() == targetId),
         orElse: () => <String, dynamic>{},
       );
+    }
 
-      if (target.isEmpty) {
-        allEntries = await _fetchHydratedEntries(sectionId: null);
-        target = allEntries.firstWhere(
-          (e) => ((e['entry_id'] ?? e['id'] ?? '').toString().trim() == targetId),
-          orElse: () => <String, dynamic>{},
-        );
-      }
+    if (target.isEmpty || !mounted) return;
 
-      if (target.isEmpty || !mounted) return;
+    _didAutoOpenInitialEntryFromRoot = true;
 
-      _didAutoOpenInitialEntryFromRoot = true;
+    final targetBreed = (target['breed'] ?? '').toString().trim();
+    final targetBreedName = (target['breed_name'] ?? '').toString().trim();
+    final breed = targetBreed.isNotEmpty ? targetBreed : targetBreedName;
+    final breedEntries = allEntries.where((e) {
+      final rowBreed = (e['breed'] ?? '').toString().trim();
+      final rowBreedName = (e['breed_name'] ?? '').toString().trim();
+      final rowBreedLabel = rowBreed.isNotEmpty ? rowBreed : rowBreedName;
+      return rowBreedLabel.toLowerCase() == breed.toLowerCase();
+    }).toList();
 
-      final targetBreed = (target['breed'] ?? '').toString().trim();
-      final targetBreedName = (target['breed_name'] ?? '').toString().trim();
-      final breed = targetBreed.isNotEmpty ? targetBreed : targetBreedName;
-      final breedEntries = allEntries.where((e) {
-        final rowBreed = (e['breed'] ?? '').toString().trim();
-        final rowBreedName = (e['breed_name'] ?? '').toString().trim();
-        final rowBreedLabel = rowBreed.isNotEmpty ? rowBreed : rowBreedName;
-        return rowBreedLabel.toLowerCase() == breed.toLowerCase();
-      }).toList();
+    if (breedEntries.isEmpty) return;
 
-      if (breedEntries.isEmpty) return;
+    final byGroup = _showsByGroup(breedEntries);
+    final byVariety = _showsByVariety(breedEntries);
 
-      final byGroup = _showsByGroup(breedEntries);
-      final byVariety = _showsByVariety(breedEntries);
+    List<Map<String, dynamic>> working = [...breedEntries];
 
-      List<Map<String, dynamic>> working = [...breedEntries];
+    final issueGroup = (target['group_name'] ?? '').toString().trim();
+    final issueVariety = (target['variety'] ?? '').toString().trim();
+    final classSexLabel = _classSexLabelFromEntry(target);
 
-      final issueGroup = (target['group_name'] ?? '').toString().trim();
-      final issueVariety = (target['variety'] ?? '').toString().trim();
-      final classSexLabel = _classSexLabelFromEntry(target);
-
-      if (byGroup && issueGroup.isNotEmpty) {
-        working = working.where((e) {
-          return (e['group_name'] ?? '').toString().trim().toLowerCase() ==
-              issueGroup.toLowerCase();
-        }).toList();
-      }
-
-      if (byVariety && issueVariety.isNotEmpty) {
-        working = working.where((e) {
-          return (e['variety'] ?? '').toString().trim().toLowerCase() ==
-              issueVariety.toLowerCase();
-        }).toList();
-      }
-
-      final targetIsFur = _isFurEntry(target);
-
+    if (byGroup && issueGroup.isNotEmpty) {
       working = working.where((e) {
-        return _classSexLabelFromEntry(e).toLowerCase() ==
-                classSexLabel.toLowerCase() &&
-            _isFurEntry(e) == targetIsFur;
+        return (e['group_name'] ?? '').toString().trim().toLowerCase() ==
+            issueGroup.toLowerCase();
       }).toList();
+    }
 
-      if (working.isEmpty) {
-        working = breedEntries.where((e) => _isFurEntry(e) == targetIsFur).toList();
-      }
+    if (byVariety && issueVariety.isNotEmpty) {
+      working = working.where((e) {
+        return (e['variety'] ?? '').toString().trim().toLowerCase() ==
+            issueVariety.toLowerCase();
+      }).toList();
+    }
 
-      final targetSectionId = (target['section_id'] ?? '').toString().trim();
-      if (targetSectionId.isNotEmpty) {
-        _selectedSectionId = targetSectionId;
-      }
+    final targetIsFur = _isFurEntry(target);
 
-      final sectionName = _sectionNameForEntry(target);
+    working = working.where((e) {
+      return _classSexLabelFromEntry(e).toLowerCase() ==
+              classSexLabel.toLowerCase() &&
+          _isFurEntry(e) == targetIsFur;
+    }).toList();
 
-      try {
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ResultsAnimalsScreen(
-              showId: widget.showId,
-              showName: widget.showName,
-              sectionLabel: sectionName,
-              breed: breed,
-              variety: issueVariety,
-              classSexLabel: classSexLabel,
-              isFurOrWoolClass: working.any(_isFurEntry),
-              entries: working,
-              judges: _judges,
-              onBulkJudgeApply: (entries, judgeId) async {
-                final ids = entries
-                    .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
-                    .where((x) => x.isNotEmpty)
-                    .toList();
-                if (ids.isEmpty) return;
+    if (working.isEmpty) {
+      working = breedEntries
+          .where((e) => _isFurEntry(e) == targetIsFur)
+          .toList();
+    }
 
-                if (!widget.isQrEntryMode) {
-                  await ShowLockService.assertShowUnlocked(widget.showId);
-                }
+    final targetSectionId = (target['section_id'] ?? '').toString().trim();
+    if (targetSectionId.isNotEmpty) {
+      _selectedSectionId = targetSectionId;
+    }
 
-                await supabase
-                    .from('entries')
-                    .update({
-                      'judged_by_show_judge_id':
-                          (judgeId == null || judgeId.isEmpty) ? null : judgeId,
-                      'updated_at': DateTime.now().toUtc().toIso8601String(),
-                    })
-                    .inFilter('id', ids);
-              },
-              initialJudgeId: _singleJudgeIdFromEntries(working),
-              breedClassSystems: _breedClassSystems,
-              finalAwardMode: _finalAwardMode,
-              showsByGroup: byGroup,
-              showsByVariety: byVariety,
-              isQrEntryMode: widget.isQrEntryMode,
-              initialEntryIdToOpen: targetId,
-            ),
+    final sectionName = _sectionNameForEntry(target);
+
+    try {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ResultsAnimalsScreen(
+            showId: widget.showId,
+            showName: widget.showName,
+            sectionLabel: sectionName,
+            breed: breed,
+            variety: issueVariety,
+            classSexLabel: classSexLabel,
+            isFurOrWoolClass: working.any(_isFurEntry),
+            entries: working,
+            judges: _judges,
+            onBulkJudgeApply: (entries, judgeId) async {
+              final ids = entries
+                  .map(
+                    (e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim(),
+                  )
+                  .where((x) => x.isNotEmpty)
+                  .toList();
+              if (ids.isEmpty) return;
+
+              if (!widget.isQrEntryMode) {
+                await ShowLockService.assertShowUnlocked(widget.showId);
+              }
+
+              await supabase
+                  .from('entries')
+                  .update({
+                    'judged_by_show_judge_id':
+                        (judgeId == null || judgeId.isEmpty) ? null : judgeId,
+                    'updated_at': DateTime.now().toUtc().toIso8601String(),
+                  })
+                  .inFilter('id', ids);
+            },
+            initialJudgeId: _singleJudgeIdFromEntries(working),
+            breedClassSystems: _breedClassSystems,
+            finalAwardMode: _finalAwardMode,
+            showsByGroup: byGroup,
+            showsByVariety: byVariety,
+            isQrEntryMode: widget.isQrEntryMode,
+            initialEntryIdToOpen: targetId,
           ),
-        );
-      } catch (e) {
-        if (!mounted) return;
-        setState(() {
-          _msg = 'Error: $e';
-        });
-      }
-
-      await _loadEntries();
-      if (mounted) setState(() {});
-    }
-
-    Future<void> _loadEntries() async {
-      _entries = await _fetchHydratedEntries(
-        sectionId: (_selectedSectionId == null || _selectedSectionId!.isEmpty)
-            ? null
-            : _selectedSectionId,
+        ),
       );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _msg = 'Error: $e';
+      });
     }
 
+    await _loadEntries();
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _loadEntries() async {
+    _entries = await _fetchHydratedEntries(
+      sectionId: (_selectedSectionId == null || _selectedSectionId!.isEmpty)
+          ? null
+          : _selectedSectionId,
+    );
+  }
 
   String _classSexLabelFromEntry(Map<String, dynamic> e) {
     final rawClass = (e['class_name'] ?? '').toString().trim();
@@ -1538,7 +1559,8 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
       }
 
       if (lower.contains('senior') || lower.startsWith('sr')) return 'Senior';
-      if (lower.contains('intermediate') || lower.startsWith('int')) return 'Intermediate';
+      if (lower.contains('intermediate') || lower.startsWith('int'))
+        return 'Intermediate';
       if (lower.contains('junior') || lower.startsWith('jr')) return 'Junior';
       if (lower.contains('open')) return 'Open';
       return s;
@@ -1546,10 +1568,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
 
     final cls = ageClassOnly(rawClass);
 
-    return [
-      if (cls.isNotEmpty) cls,
-      if (sex.isNotEmpty) sex,
-    ].join(' ');
+    return [if (cls.isNotEmpty) cls, if (sex.isNotEmpty) sex].join(' ');
   }
 
   String _sectionNameForEntry(Map<String, dynamic> e) {
@@ -1599,7 +1618,9 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     setState(() => _loading = false);
   }
 
-  Map<String, List<Map<String, dynamic>>> _groupByBreed(List<Map<String, dynamic>> items) {
+  Map<String, List<Map<String, dynamic>>> _groupByBreed(
+    List<Map<String, dynamic>> items,
+  ) {
     final out = <String, List<Map<String, dynamic>>>{};
     for (final e in items) {
       final breed = _breedDisplayNameForEntry(e);
@@ -1646,47 +1667,55 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     // breed-name map because names like American overlap with cavies, but do
     // allow true rabbit group-award breeds like Harlequin and Jersey Wooly.
     if (anyRabbitEntry) {
-      return normalEntries.any((e) => !_isCavyEntry(e) && _entryUsesGroupAwards(e));
+      return normalEntries.any(
+        (e) => !_isCavyEntry(e) && _entryUsesGroupAwards(e),
+      );
     }
 
     final firstBreed = (normalEntries.first['breed'] ?? '').toString().trim();
-    final firstBreedName =
-        (normalEntries.first['breed_name'] ?? '').toString().trim();
+    final firstBreedName = (normalEntries.first['breed_name'] ?? '')
+        .toString()
+        .trim();
 
-    final breedName =
-        (firstBreed.isNotEmpty ? firstBreed : firstBreedName).toLowerCase();
+    final breedName = (firstBreed.isNotEmpty ? firstBreed : firstBreedName)
+        .toLowerCase();
 
-    final breedSettingUsesGroups = breedName.isNotEmpty &&
-        (_breedUsesGroupAwards[breedName] == true);
+    final breedSettingUsesGroups =
+        breedName.isNotEmpty && (_breedUsesGroupAwards[breedName] == true);
 
     final rowUsesGroups = normalEntries.any(_entryUsesGroupAwards);
 
     return breedSettingUsesGroups || rowUsesGroups;
   }
 
-bool _showsByVariety(List<Map<String, dynamic>> entries) {
-  final normalEntries = entries.where((e) => !_isFurEntry(e)).toList();
-  if (normalEntries.isEmpty) return false;
+  bool _showsByVariety(List<Map<String, dynamic>> entries) {
+    final normalEntries = entries.where((e) => !_isFurEntry(e)).toList();
+    if (normalEntries.isEmpty) return false;
 
-  final anyRabbitEntry = normalEntries.any((e) => !_isCavyEntry(e));
+    final anyRabbitEntry = normalEntries.any((e) => !_isCavyEntry(e));
 
-  // For rabbits, trust the hydrated row/RPC value. Do not use the global
-  // breed-name map because names like American overlap with cavies.
-  if (anyRabbitEntry) {
-    return normalEntries.any((e) => !_isCavyEntry(e) && _entryUsesVarietyAwards(e));
+    // For rabbits, trust the hydrated row/RPC value. Do not use the global
+    // breed-name map because names like American overlap with cavies.
+    if (anyRabbitEntry) {
+      return normalEntries.any(
+        (e) => !_isCavyEntry(e) && _entryUsesVarietyAwards(e),
+      );
+    }
+
+    final firstBreed = (normalEntries.first['breed'] ?? '').toString().trim();
+    final firstBreedName = (normalEntries.first['breed_name'] ?? '')
+        .toString()
+        .trim();
+    final breedName = (firstBreed.isNotEmpty ? firstBreed : firstBreedName)
+        .toLowerCase();
+
+    if (breedName.isNotEmpty &&
+        _breedUsesVarietyAwards.containsKey(breedName)) {
+      return _breedUsesVarietyAwards[breedName] == true;
+    }
+
+    return normalEntries.any(_entryUsesVarietyAwards);
   }
-
-  final firstBreed = (normalEntries.first['breed'] ?? '').toString().trim();
-  final firstBreedName = (normalEntries.first['breed_name'] ?? '').toString().trim();
-  final breedName = (firstBreed.isNotEmpty ? firstBreed : firstBreedName)
-      .toLowerCase();
-
-  if (breedName.isNotEmpty && _breedUsesVarietyAwards.containsKey(breedName)) {
-    return _breedUsesVarietyAwards[breedName] == true;
-  }
-
-  return normalEntries.any(_entryUsesVarietyAwards);
-}
 
   String _judgeNameById(String? judgeId) {
     if (judgeId == null || judgeId.isEmpty) return '';
@@ -1786,35 +1815,37 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
         variety: (() {
           final rawVariety = (entry['variety'] ?? '').toString().trim();
           if (rawVariety.isNotEmpty) return rawVariety;
-          final rawVarietyName = (entry['variety_name'] ?? '').toString().trim();
+          final rawVarietyName = (entry['variety_name'] ?? '')
+              .toString()
+              .trim();
           return rawVarietyName.isEmpty ? null : rawVarietyName;
         })(),
         classSexLabel: _classSexLabelFromEntry(entry),
       );
     }
 
-  bool isEligibleForAwards(Map<String, dynamic> e) {
-    final scratched = (e['scratched_at'] ?? '').toString().trim().isNotEmpty;
-    if (scratched) return false;
+    bool isEligibleForAwards(Map<String, dynamic> e) {
+      final scratched = (e['scratched_at'] ?? '').toString().trim().isNotEmpty;
+      if (scratched) return false;
 
-    final className = (e['class_name'] ?? '').toString().trim();
-    if (_isPreJuniorClassName(className)) return false;
+      final className = (e['class_name'] ?? '').toString().trim();
+      if (_isPreJuniorClassName(className)) return false;
 
-    final status = (e['result_status'] ?? '').toString().trim();
-    final isShown = e['is_shown'] != false;
-    final isDisqualified = e['is_disqualified'] == true;
+      final status = (e['result_status'] ?? '').toString().trim();
+      final isShown = e['is_shown'] != false;
+      final isDisqualified = e['is_disqualified'] == true;
 
-    if (!isShown) return false;
-    if (isDisqualified) return false;
+      if (!isShown) return false;
+      if (isDisqualified) return false;
 
-    if (status == 'No Show' ||
-        _isDisqualifiedStatus(status) ||
-        status == 'Unworthy of Award') {
-      return false;
+      if (status == 'No Show' ||
+          _isDisqualifiedStatus(status) ||
+          status == 'Unworthy of Award') {
+        return false;
+      }
+
+      return true;
     }
-
-    return true;
-  }
 
     bool showsByGroup(Map<String, dynamic> e) {
       if (!_isCavyEntry(e)) {
@@ -1823,8 +1854,8 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
 
       final thisBreedRaw = (e['breed'] ?? '').toString().trim();
       final thisBreedName = (e['breed_name'] ?? '').toString().trim();
-      final thisBreed =
-          (thisBreedRaw.isNotEmpty ? thisBreedRaw : thisBreedName).toLowerCase();
+      final thisBreed = (thisBreedRaw.isNotEmpty ? thisBreedRaw : thisBreedName)
+          .toLowerCase();
 
       if (thisBreed.isEmpty) return false;
       if (_entryUsesGroupAwards(e)) return true;
@@ -1840,8 +1871,8 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
 
       final thisBreedRaw = (e['breed'] ?? '').toString().trim();
       final thisBreedName = (e['breed_name'] ?? '').toString().trim();
-      final thisBreed =
-          (thisBreedRaw.isNotEmpty ? thisBreedRaw : thisBreedName).toLowerCase();
+      final thisBreed = (thisBreedRaw.isNotEmpty ? thisBreedRaw : thisBreedName)
+          .toLowerCase();
 
       if (thisBreed.isNotEmpty &&
           _breedUsesVarietyAwards.containsKey(thisBreed)) {
@@ -1851,39 +1882,46 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
       return _entryUsesVarietyAwards(e);
     }
 
-    String sex(Map<String, dynamic> e) => (e['sex'] ?? '').toString().trim().toLowerCase();
+    String sex(Map<String, dynamic> e) =>
+        (e['sex'] ?? '').toString().trim().toLowerCase();
     String breed(Map<String, dynamic> e) {
       final rawBreed = (e['breed'] ?? '').toString().trim();
       if (rawBreed.isNotEmpty) return rawBreed;
       return (e['breed_name'] ?? '').toString().trim();
     }
+
     String variety(Map<String, dynamic> e) {
       final rawVariety = (e['variety'] ?? '').toString().trim();
       if (rawVariety.isNotEmpty) return rawVariety;
       return (e['variety_name'] ?? '').toString().trim();
     }
-    String sectionId(Map<String, dynamic> e) => (e['section_id'] ?? '').toString().trim();
+
+    String sectionId(Map<String, dynamic> e) =>
+        (e['section_id'] ?? '').toString().trim();
     String species(Map<String, dynamic> e) =>
         _speciesDisplayNameForEntry(e).toLowerCase();
-    
+
     String groupName(Map<String, dynamic> e) {
-      final explicitGroup = (
-        e['group_name'] ??
-        e['group_display_name'] ??
-        e['group_label'] ??
-        e['group'] ??
-        e['group_code'] ??
-        ''
-      ).toString().trim();
+      final explicitGroup =
+          (e['group_name'] ??
+                  e['group_display_name'] ??
+                  e['group_label'] ??
+                  e['group'] ??
+                  e['group_code'] ??
+                  '')
+              .toString()
+              .trim();
 
       if (explicitGroup.isNotEmpty) return explicitGroup;
 
       final breedKey = breed(e).toLowerCase();
       final usesGroups = _isCavyEntry(e)
-          ? (_entryUsesGroupAwards(e) || _breedUsesGroupAwards[breedKey] == true)
+          ? (_entryUsesGroupAwards(e) ||
+                _breedUsesGroupAwards[breedKey] == true)
           : _entryUsesGroupAwards(e);
       final usesVarieties = _isCavyEntry(e)
-          ? (_entryUsesVarietyAwards(e) || _breedUsesVarietyAwards[breedKey] == true)
+          ? (_entryUsesVarietyAwards(e) ||
+                _breedUsesVarietyAwards[breedKey] == true)
           : _entryUsesVarietyAwards(e);
 
       if (usesGroups && !usesVarieties) {
@@ -1896,231 +1934,377 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
     List<String> awards(Map<String, dynamic> e) =>
         ((e['_awards'] as List?) ?? const []).map((x) => x.toString()).toList();
 
-  final awardBuckets = <String, List<Map<String, dynamic>>>{};
+    final awardBuckets = <String, List<Map<String, dynamic>>>{};
 
-  for (final e in _entries) {
-    if (_isFurEntry(e)) continue;
+    for (final e in _entries) {
+      if (_isFurEntry(e)) continue;
 
-    final entryAwards = awards(e);
+      final entryAwards = awards(e);
 
-    final placement = (e['placement'] ?? '').toString().trim();
-    if (entryAwards.isNotEmpty && placement != '1') {
-      issues.add(
-        makeIssue(
-          code: 'award_requires_first',
-          title: 'Awards require first place',
-          message: '${_entryLabel(e)} has awards assigned but is not placed 1st.',
-          entry: e,
-        ),
-      );
-    }
+      final placement = (e['placement'] ?? '').toString().trim();
+      if (entryAwards.isNotEmpty && placement != '1') {
+        issues.add(
+          makeIssue(
+            code: 'award_requires_first',
+            title: 'Awards require first place',
+            message:
+                '${_entryLabel(e)} has awards assigned but is not placed 1st.',
+            entry: e,
+          ),
+        );
+      }
 
-    if (!isEligibleForAwards(e) && entryAwards.isNotEmpty) {
-      final className = (e['class_name'] ?? '').toString().trim();
-      final isPreJunior = _isPreJuniorClassName(className);
+      if (!isEligibleForAwards(e) && entryAwards.isNotEmpty) {
+        final className = (e['class_name'] ?? '').toString().trim();
+        final isPreJunior = _isPreJuniorClassName(className);
 
-      issues.add(
-        makeIssue(
-          code: 'ineligible_award',
-          title: isPreJunior
-              ? 'Pre-Junior cannot receive specials'
-              : 'Ineligible animal has awards',
-          message: isPreJunior
-              ? '${_entryLabel(e)} is Pre-Junior and cannot receive specials like BOV, BOSV, BOG, BOSG, BOB, or BOSB.'
-              : '${_entryLabel(e)} has awards assigned but is scratched, disqualified, or not shown.',
-          entry: e,
-        ),
-      );
-    }
-    
+        issues.add(
+          makeIssue(
+            code: 'ineligible_award',
+            title: isPreJunior
+                ? 'Pre-Junior cannot receive specials'
+                : 'Ineligible animal has awards',
+            message: isPreJunior
+                ? '${_entryLabel(e)} is Pre-Junior and cannot receive specials like BOV, BOSV, BOG, BOSG, BOB, or BOSB.'
+                : '${_entryLabel(e)} has awards assigned but is scratched, disqualified, or not shown.',
+            entry: e,
+          ),
+        );
+      }
 
-    for (final rawAward in entryAwards) {
-      final award = _canonicalAwardCode(rawAward);
-      switch (award) {
-        case 'BOV':
-        case 'BOSV':
-          final key = '${sectionId(e)}|$award|${species(e)}|${breed(e).toLowerCase()}|${variety(e).toLowerCase()}';
-          awardBuckets.putIfAbsent(key, () => <Map<String, dynamic>>[]);
-          awardBuckets[key]!.add(e);
-          break;
-        case 'BOG':
-        case 'BOSG':
-          final groupScope = groupName(e).toLowerCase();
-          if (groupScope.isEmpty) {
-            issues.add(
-              makeIssue(
-                code: 'missing_group_for_group_award',
-                title: 'Group award missing group',
-                message:
-                    '${_entryLabel(e)} has $award assigned but no group could be determined.',
-                entry: e,
-              ),
-            );
+      for (final rawAward in entryAwards) {
+        final award = _canonicalAwardCode(rawAward);
+        switch (award) {
+          case 'BOV':
+          case 'BOSV':
+            final key =
+                '${sectionId(e)}|$award|${species(e)}|${breed(e).toLowerCase()}|${variety(e).toLowerCase()}';
+            awardBuckets.putIfAbsent(key, () => <Map<String, dynamic>>[]);
+            awardBuckets[key]!.add(e);
             break;
-          }
+          case 'BOG':
+          case 'BOSG':
+            final groupScope = groupName(e).toLowerCase();
+            if (groupScope.isEmpty) {
+              issues.add(
+                makeIssue(
+                  code: 'missing_group_for_group_award',
+                  title: 'Group award missing group',
+                  message:
+                      '${_entryLabel(e)} has $award assigned but no group could be determined.',
+                  entry: e,
+                ),
+              );
+              break;
+            }
 
-          final key = '${sectionId(e)}|$award|${species(e)}|${breed(e).toLowerCase()}|$groupScope';
-          awardBuckets.putIfAbsent(key, () => <Map<String, dynamic>>[]);
-          awardBuckets[key]!.add(e);
-          break;
-        case 'BOB':
-        case 'BOSB':
-          final key = '${sectionId(e)}|$award|${species(e)}|${breed(e).toLowerCase()}';
-          awardBuckets.putIfAbsent(key, () => <Map<String, dynamic>>[]);
-          awardBuckets[key]!.add(e);
-          break;
-        case 'Best Junior':
-        case 'Best Senior':
-        case 'Best Intermediate':
-          final useVarietyScope = showsByVariety(e);
-          final key = useVarietyScope
-              ? '${sectionId(e)}|$award|${species(e)}|${breed(e).toLowerCase()}|${variety(e).toLowerCase()}'
-              : '${sectionId(e)}|$award|${species(e)}|${breed(e).toLowerCase()}';
+            final key =
+                '${sectionId(e)}|$award|${species(e)}|${breed(e).toLowerCase()}|$groupScope';
+            awardBuckets.putIfAbsent(key, () => <Map<String, dynamic>>[]);
+            awardBuckets[key]!.add(e);
+            break;
+          case 'BOB':
+          case 'BOSB':
+            final key =
+                '${sectionId(e)}|$award|${species(e)}|${breed(e).toLowerCase()}';
+            awardBuckets.putIfAbsent(key, () => <Map<String, dynamic>>[]);
+            awardBuckets[key]!.add(e);
+            break;
+          case 'Best Junior':
+          case 'Best Senior':
+          case 'Best Intermediate':
+            final useVarietyScope = showsByVariety(e);
+            final key = useVarietyScope
+                ? '${sectionId(e)}|$award|${species(e)}|${breed(e).toLowerCase()}|${variety(e).toLowerCase()}'
+                : '${sectionId(e)}|$award|${species(e)}|${breed(e).toLowerCase()}';
 
-          awardBuckets.putIfAbsent(key, () => <Map<String, dynamic>>[]);
-          awardBuckets[key]!.add(e);
-          break;
-        case 'Best 4-Class':
-        case 'Best 6-Class':
-        case 'BIS':
-        case 'Reserve In Show':
-        case '1RIS':
-        case '2RIS':
-          final key = '${sectionId(e)}|$award';
-          awardBuckets.putIfAbsent(key, () => <Map<String, dynamic>>[]);
-          awardBuckets[key]!.add(e);
-          break;
+            awardBuckets.putIfAbsent(key, () => <Map<String, dynamic>>[]);
+            awardBuckets[key]!.add(e);
+            break;
+          case 'Best 4-Class':
+          case 'Best 6-Class':
+          case 'BIS':
+          case 'Reserve In Show':
+          case '1RIS':
+          case '2RIS':
+            final key = '${sectionId(e)}|$award';
+            awardBuckets.putIfAbsent(key, () => <Map<String, dynamic>>[]);
+            awardBuckets[key]!.add(e);
+            break;
+        }
       }
     }
-  }
 
-  for (final bucket in awardBuckets.entries) {
-    if (bucket.value.length > 1) {
-      final first = bucket.value.first;
-      final second = bucket.value.length > 1 ? bucket.value[1] : null;
-      final awardCode = bucket.key.split('|')[1];
+    for (final bucket in awardBuckets.entries) {
+      if (bucket.value.length > 1) {
+        final first = bucket.value.first;
+        final second = bucket.value.length > 1 ? bucket.value[1] : null;
+        final awardCode = bucket.key.split('|')[1];
 
-      issues.add(
-        makeIssue(
-          code: 'duplicate_award',
-          title: 'Duplicate award winner',
-          message:
-              '$awardCode is assigned to more than one animal: '
-              '${_entryLabel(first)}'
-              '${second != null ? ' and ${_entryLabel(second)}' : ''}.',
-          entry: first,
-          conflictsWith: second,
-        ),
-      );
+        issues.add(
+          makeIssue(
+            code: 'duplicate_award',
+            title: 'Duplicate award winner',
+            message:
+                '$awardCode is assigned to more than one animal: '
+                '${_entryLabel(first)}'
+                '${second != null ? ' and ${_entryLabel(second)}' : ''}.',
+            entry: first,
+            conflictsWith: second,
+          ),
+        );
+      }
     }
-  }
 
-  void checkOpposite({
-    required String winCode,
-    required String oppCode,
-    required String scopeLabel,
-    required String Function(Map<String, dynamic>) scopeKey,
-  }) {
-    final winByScope = <String, Map<String, dynamic>>{};
-    final oppByScope = <String, Map<String, dynamic>>{};
+    void checkOpposite({
+      required String winCode,
+      required String oppCode,
+      required String scopeLabel,
+      required String Function(Map<String, dynamic>) scopeKey,
+    }) {
+      final winByScope = <String, Map<String, dynamic>>{};
+      final oppByScope = <String, Map<String, dynamic>>{};
+
+      for (final e in _entries) {
+        if (_isFurEntry(e)) continue;
+
+        final a = awards(e);
+        final scope = scopeKey(e).trim();
+        if (scope.isEmpty) continue;
+        if (a.contains(winCode)) winByScope[scope] = e;
+        if (a.contains(oppCode)) oppByScope[scope] = e;
+      }
+
+      for (final scope in {...winByScope.keys, ...oppByScope.keys}) {
+        final w = winByScope[scope];
+        final o = oppByScope[scope];
+        if (w == null || o == null) continue;
+
+        if (sex(w).isNotEmpty && sex(w) == sex(o)) {
+          issues.add(
+            makeIssue(
+              code: 'opposite_sex',
+              title: '$winCode / $oppCode sex conflict',
+              message:
+                  '${_entryLabel(w)} and ${_entryLabel(o)} are both marked for $winCode / $oppCode in the same $scopeLabel, but are not opposite sex.',
+              entry: w,
+              conflictsWith: o,
+            ),
+          );
+        }
+      }
+    }
+
+    checkOpposite(
+      winCode: 'BOV',
+      oppCode: 'BOSV',
+      scopeLabel: 'variety',
+      scopeKey: (e) {
+        final entryBreed = breed(e).toLowerCase();
+        final entryVariety = variety(e).toLowerCase();
+        if (entryBreed.isEmpty || entryVariety.isEmpty) return '';
+
+        // Cavies always validate BOV/BOSV within breed + variety. Some cavy rows
+        // may not have uses_variety_awards hydrated correctly, but BOV/BOSV should
+        // never be compared across different cavy breeds.
+        if (_isCavyEntry(e)) {
+          return '${sectionId(e)}|$entryBreed|$entryVariety';
+        }
+
+        if (!showsByVariety(e)) return '';
+        return '${sectionId(e)}|$entryBreed|$entryVariety';
+      },
+    );
+
+    checkOpposite(
+      winCode: 'BOG',
+      oppCode: 'BOSG',
+      scopeLabel: 'group',
+      scopeKey: (e) {
+        if (!showsByGroup(e)) return '';
+        return '${sectionId(e)}|${breed(e).toLowerCase()}|${groupName(e).toLowerCase()}';
+      },
+    );
+
+    checkOpposite(
+      winCode: 'BOB',
+      oppCode: 'BOSB',
+      scopeLabel: 'breed',
+      scopeKey: (e) => '${sectionId(e)}|${breed(e).toLowerCase()}',
+    );
 
     for (final e in _entries) {
       if (_isFurEntry(e)) continue;
 
       final a = awards(e);
-      final scope = scopeKey(e).trim();
-      if (scope.isEmpty) continue;
-      if (a.contains(winCode)) winByScope[scope] = e;
-      if (a.contains(oppCode)) oppByScope[scope] = e;
-    }
+      final breedLower = breed(e).toLowerCase();
+      final byGroup = showsByGroup(e);
+      final byVariety = showsByVariety(e);
+      final supportsBestAgeAwards = _supportsBestAgeAwards(
+        breedName: breed(e),
+        isCavy: _isCavyEntry(e),
+      );
+      if (supportsBestAgeAwards) {
+        final classSystem = _breedClassSystems[breedLower] ?? 'four';
+        final className = (e['class_name'] ?? '').toString().trim();
 
-    for (final scope in {...winByScope.keys, ...oppByScope.keys}) {
-      final w = winByScope[scope];
-      final o = oppByScope[scope];
-      if (w == null || o == null) continue;
+        for (final award in kBestAgeAwardCodes) {
+          if (!a.contains(award)) continue;
 
-      if (sex(w).isNotEmpty && sex(w) == sex(o)) {
+          if (!_bestAgeAwardMatchesClass(
+            award: award,
+            className: className,
+            classSystem: classSystem,
+          )) {
+            issues.add(
+              makeIssue(
+                code: 'best_age_wrong_class',
+                title: '$award assigned to wrong class',
+                message:
+                    '${_entryLabel(e)} has $award but is not in the matching age class.',
+                entry: e,
+              ),
+            );
+          }
+        }
+      }
+
+      if (a.contains('BOB') || a.contains('BOSB')) {
+        final isCavy = _isCavyEntry(e);
+
+        // Cavies do not use the rabbit BOG/BOSG step. Even when a cavy row has a
+        // group/display bucket such as Marked, BOB/BOSB should validate from
+        // BOV/BOSV. Rabbits that truly use group awards still validate from
+        // BOG/BOSG.
+        final eligible = isCavy
+            ? (a.contains('BOV') || a.contains('BOSV'))
+            : byGroup
+            ? (a.contains('BOG') || a.contains('BOSG'))
+            : byVariety
+            ? (a.contains('BOV') || a.contains('BOSV'))
+            : true;
+
+        if (!eligible) {
+          final requiredSource = isCavy
+              ? 'BOV/BOSV'
+              : byGroup
+              ? 'BOG/BOSG'
+              : byVariety
+              ? 'BOV/BOSV'
+              : 'as eligible for direct breed awards';
+
+          issues.add(
+            makeIssue(
+              code: 'bob_source',
+              title: 'Invalid breed award source',
+              message:
+                  '${_entryLabel(e)} has BOB/BOSB but is not marked $requiredSource.',
+              entry: e,
+            ),
+          );
+        }
+      }
+
+      // final classSystem is now declared above if needed.
+      final classSystem = _breedClassSystems[breedLower] ?? 'four';
+
+      if (a.contains('Best 4-Class')) {
+        if (!a.contains('BOB')) {
+          issues.add(
+            makeIssue(
+              code: 'best4_requires_bob',
+              title: 'Best 4-Class requires BOB',
+              message:
+                  '${_entryLabel(e)} has Best 4-Class but is not marked BOB.',
+              entry: e,
+            ),
+          );
+        }
+        if (classSystem != 'four') {
+          issues.add(
+            makeIssue(
+              code: 'best4_wrong_breed',
+              title: 'Best 4-Class on wrong breed type',
+              message:
+                  '${_entryLabel(e)} has Best 4-Class but breed is not 4-class.',
+              entry: e,
+            ),
+          );
+        }
+      }
+
+      if (a.contains('Best 6-Class')) {
+        if (!a.contains('BOB')) {
+          issues.add(
+            makeIssue(
+              code: 'best6_requires_bob',
+              title: 'Best 6-Class requires BOB',
+              message:
+                  '${_entryLabel(e)} has Best 6-Class but is not marked BOB.',
+              entry: e,
+            ),
+          );
+        }
+        if (classSystem != 'six') {
+          issues.add(
+            makeIssue(
+              code: 'best6_wrong_breed',
+              title: 'Best 6-Class on wrong breed type',
+              message:
+                  '${_entryLabel(e)} has Best 6-Class but breed is not 6-class.',
+              entry: e,
+            ),
+          );
+        }
+      }
+
+      if (_finalAwardMode == 'four_six_bis' &&
+          _awardListContains(a, 'Best In Show')) {
+        if (!(_awardListContains(a, 'Best 4-Class') ||
+            _awardListContains(a, 'Best 6-Class'))) {
+          issues.add(
+            makeIssue(
+              code: 'bis_requires_best_class',
+              title: 'Best In Show requires Best 4-Class or Best 6-Class',
+              message:
+                  '${_entryLabel(e)} has Best In Show but is not Best 4-Class or Best 6-Class.',
+              entry: e,
+            ),
+          );
+        }
+      }
+
+      if (_finalAwardMode == 'bis_ris' &&
+          _awardListContains(a, 'Reserve In Show') &&
+          _awardListContains(a, 'Best In Show')) {
         issues.add(
           makeIssue(
-            code: 'opposite_sex',
-            title: '$winCode / $oppCode sex conflict',
+            code: 'bis_ris_same_entry',
+            title: 'Rabbit cannot be BIS and RIS',
             message:
-                '${_entryLabel(w)} and ${_entryLabel(o)} are both marked for $winCode / $oppCode in the same $scopeLabel, but are not opposite sex.',
-            entry: w,
-            conflictsWith: o,
+                '${_entryLabel(e)} cannot be both Best In Show and Reserve In Show.',
+            entry: e,
           ),
         );
       }
-    }
-  }
 
-  checkOpposite(
-    winCode: 'BOV',
-    oppCode: 'BOSV',
-    scopeLabel: 'variety',
-    scopeKey: (e) {
-      final entryBreed = breed(e).toLowerCase();
-      final entryVariety = variety(e).toLowerCase();
-      if (entryBreed.isEmpty || entryVariety.isEmpty) return '';
+      if (_finalAwardMode == 'bis_1ris_2ris') {
+        final hasBis = _awardListContains(a, 'Best In Show');
+        final hasFirstRis = _awardListContains(a, '1RIS');
+        final hasSecondRis = _awardListContains(a, '2RIS');
+        final finalAwardCount = [
+          hasBis,
+          hasFirstRis,
+          hasSecondRis,
+        ].where((selected) => selected).length;
 
-      // Cavies always validate BOV/BOSV within breed + variety. Some cavy rows
-      // may not have uses_variety_awards hydrated correctly, but BOV/BOSV should
-      // never be compared across different cavy breeds.
-      if (_isCavyEntry(e)) {
-        return '${sectionId(e)}|$entryBreed|$entryVariety';
-      }
-
-      if (!showsByVariety(e)) return '';
-      return '${sectionId(e)}|$entryBreed|$entryVariety';
-    },
-  );
-
-  checkOpposite(
-    winCode: 'BOG',
-    oppCode: 'BOSG',
-    scopeLabel: 'group',
-    scopeKey: (e) {
-      if (!showsByGroup(e)) return '';
-      return '${sectionId(e)}|${breed(e).toLowerCase()}|${groupName(e).toLowerCase()}';
-    },
-  );
-
-  checkOpposite(
-    winCode: 'BOB',
-    oppCode: 'BOSB',
-    scopeLabel: 'breed',
-    scopeKey: (e) => '${sectionId(e)}|${breed(e).toLowerCase()}',
-  );
-
-  for (final e in _entries) {
-    if (_isFurEntry(e)) continue;
-
-    final a = awards(e);
-    final breedLower = breed(e).toLowerCase();
-    final byGroup = showsByGroup(e);
-    final byVariety = showsByVariety(e);
-    final supportsBestAgeAwards = _supportsBestAgeAwards(
-      breedName: breed(e),
-      isCavy: _isCavyEntry(e),
-    );
-    if (supportsBestAgeAwards) {
-      final classSystem = _breedClassSystems[breedLower] ?? 'four';
-      final className = (e['class_name'] ?? '').toString().trim();
-
-      for (final award in kBestAgeAwardCodes) {
-        if (!a.contains(award)) continue;
-
-        if (!_bestAgeAwardMatchesClass(
-          award: award,
-          className: className,
-          classSystem: classSystem,
-        )) {
+        if (finalAwardCount > 1) {
           issues.add(
             makeIssue(
-              code: 'best_age_wrong_class',
-              title: '$award assigned to wrong class',
+              code: 'bis_1ris_2ris_same_entry',
+              title: 'Animal has multiple final awards',
               message:
-                  '${_entryLabel(e)} has $award but is not in the matching age class.',
+                  '${_entryLabel(e)} cannot receive more than one of Best In Show, 1st Reserve in Show, or 2nd Reserve in Show.',
               entry: e,
             ),
           );
@@ -2128,140 +2312,7 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
       }
     }
 
-    if (a.contains('BOB') || a.contains('BOSB')) {
-      final isCavy = _isCavyEntry(e);
-
-      // Cavies do not use the rabbit BOG/BOSG step. Even when a cavy row has a
-      // group/display bucket such as Marked, BOB/BOSB should validate from
-      // BOV/BOSV. Rabbits that truly use group awards still validate from
-      // BOG/BOSG.
-      final eligible = isCavy
-          ? (a.contains('BOV') || a.contains('BOSV'))
-          : byGroup
-              ? (a.contains('BOG') || a.contains('BOSG'))
-              : byVariety
-                  ? (a.contains('BOV') || a.contains('BOSV'))
-                  : true;
-
-      if (!eligible) {
-        final requiredSource = isCavy
-            ? 'BOV/BOSV'
-            : byGroup
-                ? 'BOG/BOSG'
-                : byVariety
-                    ? 'BOV/BOSV'
-                    : 'as eligible for direct breed awards';
-
-        issues.add(
-          makeIssue(
-            code: 'bob_source',
-            title: 'Invalid breed award source',
-            message:
-                '${_entryLabel(e)} has BOB/BOSB but is not marked $requiredSource.',
-            entry: e,
-          ),
-        );
-      }
-    }
-
-    // final classSystem is now declared above if needed.
-    final classSystem = _breedClassSystems[breedLower] ?? 'four';
-
-    if (a.contains('Best 4-Class')) {
-      if (!a.contains('BOB')) {
-        issues.add(
-          makeIssue(
-            code: 'best4_requires_bob',
-            title: 'Best 4-Class requires BOB',
-            message: '${_entryLabel(e)} has Best 4-Class but is not marked BOB.',
-            entry: e,
-          ),
-        );
-      }
-      if (classSystem != 'four') {
-        issues.add(
-          makeIssue(
-            code: 'best4_wrong_breed',
-            title: 'Best 4-Class on wrong breed type',
-            message: '${_entryLabel(e)} has Best 4-Class but breed is not 4-class.',
-            entry: e,
-          ),
-        );
-      }
-    }
-
-    if (a.contains('Best 6-Class')) {
-      if (!a.contains('BOB')) {
-        issues.add(
-          makeIssue(
-            code: 'best6_requires_bob',
-            title: 'Best 6-Class requires BOB',
-            message: '${_entryLabel(e)} has Best 6-Class but is not marked BOB.',
-            entry: e,
-          ),
-        );
-      }
-      if (classSystem != 'six') {
-        issues.add(
-          makeIssue(
-            code: 'best6_wrong_breed',
-            title: 'Best 6-Class on wrong breed type',
-            message: '${_entryLabel(e)} has Best 6-Class but breed is not 6-class.',
-            entry: e,
-          ),
-        );
-      }
-    }
-
-    if (_finalAwardMode == 'four_six_bis' && _awardListContains(a, 'Best In Show')) {
-      if (!(_awardListContains(a, 'Best 4-Class') || _awardListContains(a, 'Best 6-Class'))) {
-        issues.add(
-          makeIssue(
-            code: 'bis_requires_best_class',
-            title: 'Best In Show requires Best 4-Class or Best 6-Class',
-            message: '${_entryLabel(e)} has Best In Show but is not Best 4-Class or Best 6-Class.',
-            entry: e,
-          ),
-        );
-      }
-    }
-
-    if (_finalAwardMode == 'bis_ris' &&
-        _awardListContains(a, 'Reserve In Show') &&
-        _awardListContains(a, 'Best In Show')) {
-      issues.add(
-        makeIssue(
-          code: 'bis_ris_same_entry',
-          title: 'Rabbit cannot be BIS and RIS',
-          message: '${_entryLabel(e)} cannot be both Best In Show and Reserve In Show.',
-          entry: e,
-        ),
-      );
-    }
-
-    if (_finalAwardMode == 'bis_1ris_2ris') {
-      final hasBis = _awardListContains(a, 'Best In Show');
-      final hasFirstRis = _awardListContains(a, '1RIS');
-      final hasSecondRis = _awardListContains(a, '2RIS');
-      final finalAwardCount = [hasBis, hasFirstRis, hasSecondRis]
-          .where((selected) => selected)
-          .length;
-
-      if (finalAwardCount > 1) {
-        issues.add(
-          makeIssue(
-            code: 'bis_1ris_2ris_same_entry',
-            title: 'Animal has multiple final awards',
-            message:
-                '${_entryLabel(e)} cannot receive more than one of Best In Show, 1st Reserve in Show, or 2nd Reserve in Show.',
-            entry: e,
-          ),
-        );
-      }
-    }
-  }
-
-  return issues;
+    return issues;
   }
 
   String _entryLabel(Map<String, dynamic> e) {
@@ -2280,10 +2331,10 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
     final animalLabel = animalName.isNotEmpty && tattoo.isNotEmpty
         ? '$animalName • $tattoo'
         : animalName.isNotEmpty
-            ? animalName
-            : tattoo.isNotEmpty
-                ? tattoo
-                : '(No ear #)';
+        ? animalName
+        : tattoo.isNotEmpty
+        ? tattoo
+        : '(No ear #)';
 
     final coopNumber = (e['coop_number'] ?? '').toString().trim();
 
@@ -2296,83 +2347,86 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
     ].join(' • ');
   }
 
-    void _openValidationSheet() {
-      final issues = _buildValidationIssues();
+  void _openValidationSheet() {
+    final issues = _buildValidationIssues();
 
-      showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        showDragHandle: true,
-        builder: (_) => DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 0.8,
-          minChildSize: 0.45,
-          maxChildSize: 0.95,
-          builder: (context, scrollController) {
-            return SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                child: Column(
-                  children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Results Validation',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.8,
+        minChildSize: 0.45,
+        maxChildSize: 0.95,
+        builder: (context, scrollController) {
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: Column(
+                children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Results Validation',
+                      style: Theme.of(context).textTheme.titleLarge,
                     ),
-                    const SizedBox(height: 8),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        issues.isEmpty
-                            ? 'No validation issues found.'
-                            : '${issues.length} validation issue${issues.length == 1 ? '' : 's'} found.',
-                      ),
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      issues.isEmpty
+                          ? 'No validation issues found.'
+                          : '${issues.length} validation issue${issues.length == 1 ? '' : 's'} found.',
                     ),
-                    const SizedBox(height: 12),
-                    Expanded(
-                      child: issues.isEmpty
-                          ? const Align(
-                              alignment: Alignment.topLeft,
-                              child: Text('Everything looks good so far.'),
-                            )
-                          : ListView.separated(
-                              controller: scrollController,
-                              itemCount: issues.length,
-                              separatorBuilder: (_, _) => const Divider(height: 1),
-                              itemBuilder: (context, i) {
-                                final issue = issues[i];
-                                return ListTile(
-                                  leading: const Icon(Icons.warning_amber_rounded),
-                                  title: Text(issue.title),
-                                  subtitle: Text(
-                                    '${issue.message}\n${_issueSubtitle(issue)}',
-                                  ),
-                                  isThreeLine: true,
-                                  trailing: TextButton(
-                                    onPressed: () async {
-                                      Navigator.pop(context);
-                                      await _jumpToIssue(issue);
-                                    },
-                                    child: const Text('Fix'),
-                                  ),
-                                  onTap: () async {
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: issues.isEmpty
+                        ? const Align(
+                            alignment: Alignment.topLeft,
+                            child: Text('Everything looks good so far.'),
+                          )
+                        : ListView.separated(
+                            controller: scrollController,
+                            itemCount: issues.length,
+                            separatorBuilder: (_, _) =>
+                                const Divider(height: 1),
+                            itemBuilder: (context, i) {
+                              final issue = issues[i];
+                              return ListTile(
+                                leading: const Icon(
+                                  Icons.warning_amber_rounded,
+                                ),
+                                title: Text(issue.title),
+                                subtitle: Text(
+                                  '${issue.message}\n${_issueSubtitle(issue)}',
+                                ),
+                                isThreeLine: true,
+                                trailing: TextButton(
+                                  onPressed: () async {
                                     Navigator.pop(context);
                                     await _jumpToIssue(issue);
                                   },
-                                );
-                              },
-                            ),
-                    ),
-                  ],
-                ),
+                                  child: const Text('Fix'),
+                                ),
+                                onTap: () async {
+                                  Navigator.pop(context);
+                                  await _jumpToIssue(issue);
+                                },
+                              );
+                            },
+                          ),
+                  ),
+                ],
               ),
-            );
-          },
-        ),
-      );
-    }
+            ),
+          );
+        },
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2392,11 +2446,9 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
 
         final aRows = grouped[a] ?? const <Map<String, dynamic>>[];
         final bRows = grouped[b] ?? const <Map<String, dynamic>>[];
-        final byBreed = _breedDisplayNameForEntries(
-          aRows,
-        ).toLowerCase().compareTo(
-          _breedDisplayNameForEntries(bRows).toLowerCase(),
-        );
+        final byBreed = _breedDisplayNameForEntries(aRows)
+            .toLowerCase()
+            .compareTo(_breedDisplayNameForEntries(bRows).toLowerCase());
         if (byBreed != 0) return byBreed;
 
         return _speciesDisplayNameForEntries(aRows).toLowerCase().compareTo(
@@ -2435,10 +2487,7 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
                     width: double.infinity,
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
-                        colors: [
-                          Color(0xFF11285A),
-                          Color(0xFF0B1C43),
-                        ],
+                        colors: [AppColors.navy, AppColors.navyDark],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
@@ -2471,8 +2520,8 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
                             _finalAwardMode == 'bis_ris'
                                 ? 'Final awards: Best in Show / Reserve in Show'
                                 : _finalAwardMode == 'bis_1ris_2ris'
-                                    ? 'Final awards: Best in Show / 1st Reserve in Show / 2nd Reserve in Show'
-                                    : 'Final awards: Best 4-Class / Best 6-Class / Best in Show',
+                                ? 'Final awards: Best in Show / 1st Reserve in Show / 2nd Reserve in Show'
+                                : 'Final awards: Best 4-Class / Best 6-Class / Best in Show',
                             style: const TextStyle(
                               color: Colors.white70,
                               fontSize: 14,
@@ -2509,7 +2558,9 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
                       decoration: BoxDecoration(
                         color: Colors.red.withValues(alpha: .08),
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.red.withValues(alpha: .20)),
+                        border: Border.all(
+                          color: Colors.red.withValues(alpha: .20),
+                        ),
                       ),
                       child: Text(
                         _msg!,
@@ -2568,15 +2619,17 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
                                 issues.isEmpty
                                     ? Icons.check_circle_outline
                                     : Icons.warning_amber_rounded,
-                                color:
-                                    issues.isEmpty ? Colors.green : Colors.orange,
+                                color: issues.isEmpty
+                                    ? Colors.green
+                                    : Colors.orange,
                               ),
                               title: Text(
                                 issues.isEmpty
                                     ? 'Validation looks good'
                                     : 'Validation issues found',
-                                style:
-                                    const TextStyle(fontWeight: FontWeight.w700),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                               subtitle: Text(
                                 issues.isEmpty
@@ -2604,52 +2657,57 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
                           itemBuilder: (context, i) {
                             final breedKey = breeds[i];
                             final breedEntries = grouped[breedKey]!;
-                            final breed = _breedDisplayNameForEntries(breedEntries);
-                            final species = _speciesDisplayNameForEntries(breedEntries);
+                            final breed = _breedDisplayNameForEntries(
+                              breedEntries,
+                            );
+                            final species = _speciesDisplayNameForEntries(
+                              breedEntries,
+                            );
                             final count = breedEntries.length;
                             final completed = _completedCount(breedEntries);
-                            final statusColor = _statusColor(context, breedEntries);
-                            final breedSpecials = _specialsSummaryForEntries(
+                            final statusColor = _statusColor(
+                              context,
                               breedEntries,
-                              const [
-                                'BOV',
-                                'BOSV',
-                                'BOG',
-                                'BOSG',
-                                'BOB',
-                                'BOSB',
-                                'Best Junior',
-                                'Best Intermediate',
-                                'Best Senior',
-                                'Best 4-Class',
-                                'Best 6-Class',
-                                'Best In Show',
-                                'Reserve In Show',
-                                'BIS',
-                                'RIS',
-                                '1RIS',
-                                '2RIS',
-                                'HM',
-                              ],
                             );
+                            final breedSpecials =
+                                _specialsSummaryForEntries(breedEntries, const [
+                                  'BOV',
+                                  'BOSV',
+                                  'BOG',
+                                  'BOSG',
+                                  'BOB',
+                                  'BOSB',
+                                  'Best Junior',
+                                  'Best Intermediate',
+                                  'Best Senior',
+                                  'Best 4-Class',
+                                  'Best 6-Class',
+                                  'Best In Show',
+                                  'Reserve In Show',
+                                  'BIS',
+                                  'RIS',
+                                  '1RIS',
+                                  '2RIS',
+                                  'HM',
+                                ]);
                             final byGroup = _showsByGroup(breedEntries);
                             final byVariety = _showsByVariety(breedEntries);
 
                             final sectionName =
                                 (_selectedSectionId == null ||
-                                        _selectedSectionId!.isEmpty)
-                                    ? 'All Sections'
-                                    : (() {
-                                        final section = _sections.firstWhere(
-                                          (s) =>
-                                              s['id']?.toString() ==
-                                              _selectedSectionId,
-                                          orElse: () => <String, dynamic>{},
-                                        );
-                                        return section.isEmpty
-                                            ? 'Section'
-                                            : _sectionLabel(section);
-                                      })();
+                                    _selectedSectionId!.isEmpty)
+                                ? 'All Sections'
+                                : (() {
+                                    final section = _sections.firstWhere(
+                                      (s) =>
+                                          s['id']?.toString() ==
+                                          _selectedSectionId,
+                                      orElse: () => <String, dynamic>{},
+                                    );
+                                    return section.isEmpty
+                                        ? 'Section'
+                                        : _sectionLabel(section);
+                                  })();
 
                             String flowLabel;
                             if (byGroup && byVariety) {
@@ -2677,7 +2735,9 @@ bool _showsByVariety(List<Map<String, dynamic>> entries) {
                                   14,
                                 ),
                                 leading: CircleAvatar(
-                                  backgroundColor: statusColor.withValues(alpha: 0.12),
+                                  backgroundColor: statusColor.withValues(
+                                    alpha: 0.12,
+                                  ),
                                   child: Icon(
                                     _statusIcon(breedEntries),
                                     color: statusColor,
@@ -2821,17 +2881,20 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
       if (isFur) {
         groupName = 'Fur / Wool';
       } else {
-        groupName = (
-          e['group_name'] ??
-          e['group_display_name'] ??
-          e['group_label'] ??
-          e['group'] ??
-          e['group_code'] ??
-          ''
-        ).toString().trim();
+        groupName =
+            (e['group_name'] ??
+                    e['group_display_name'] ??
+                    e['group_label'] ??
+                    e['group'] ??
+                    e['group_code'] ??
+                    '')
+                .toString()
+                .trim();
 
         if (groupName.isEmpty && widget.showsByVariety == false) {
-          groupName = (e['variety'] ?? e['variety_name'] ?? '').toString().trim();
+          groupName = (e['variety'] ?? e['variety_name'] ?? '')
+              .toString()
+              .trim();
         }
 
         if (groupName.isEmpty) {
@@ -2916,7 +2979,6 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
     return _resultScopeStatusColor(context, _completionFor(entries).status);
   }
 
-
   String? _singleJudgeId(List<Map<String, dynamic>> entries) {
     final ids = entries
         .map((e) => (e['judged_by_show_judge_id'] ?? '').toString().trim())
@@ -2977,18 +3039,18 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
 
       e['animal_name'] ??= '';
 
-      final normalizedGroup = (
-        e['group_name'] ??
-        e['group_display_name'] ??
-        e['group_label'] ??
-        e['group'] ??
-        e['group_code']
-      )?.toString().trim();
+      final normalizedGroup =
+          (e['group_name'] ??
+                  e['group_display_name'] ??
+                  e['group_label'] ??
+                  e['group'] ??
+                  e['group_code'])
+              ?.toString()
+              .trim();
 
-      e['group_name'] =
-          (normalizedGroup == null || normalizedGroup.isEmpty)
-              ? null
-              : normalizedGroup;
+      e['group_name'] = (normalizedGroup == null || normalizedGroup.isEmpty)
+          ? null
+          : normalizedGroup;
 
       e['_awards'] = awardsByEntryId[id] ?? <String>[];
     }
@@ -3037,8 +3099,9 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
         await ShowLockService.assertShowUnlocked(widget.showId);
       }
 
-      final normalizedJudgeId =
-          (judgeId == null || judgeId.trim().isEmpty) ? null : judgeId.trim();
+      final normalizedJudgeId = (judgeId == null || judgeId.trim().isEmpty)
+          ? null
+          : judgeId.trim();
 
       for (var i = 0; i < ids.length; i += 100) {
         final chunk = ids.skip(i).take(100).toList();
@@ -3089,11 +3152,11 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
       }));
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6FB),
+      backgroundColor: AppColors.bg,
       appBar: AppBar(
         elevation: 0,
-        backgroundColor: const Color(0xFF11285A),
-        foregroundColor: Colors.white,
+        backgroundColor: AppColors.header,
+        foregroundColor: AppColors.headerForeground,
         title: Text(widget.breed),
       ),
       body: Column(
@@ -3331,26 +3394,26 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
     _entries = [...widget.entries];
   }
 
-    Map<String, List<Map<String, dynamic>>> _groupByVariety() {
-      final out = <String, List<Map<String, dynamic>>>{};
+  Map<String, List<Map<String, dynamic>>> _groupByVariety() {
+    final out = <String, List<Map<String, dynamic>>>{};
 
-      for (final e in _entries) {
-        String key;
+    for (final e in _entries) {
+      String key;
 
-        if (_isFurEntry(e)) {
-          key = 'Fur / Wool';
-        } else {
-          key = (e['variety'] ?? '').toString().trim();
-        }
-
-        if (key.isEmpty) key = '(No Variety)';
-
-        out.putIfAbsent(key, () => <Map<String, dynamic>>[]);
-        out[key]!.add(e);
+      if (_isFurEntry(e)) {
+        key = 'Fur / Wool';
+      } else {
+        key = (e['variety'] ?? '').toString().trim();
       }
 
-      return out;
+      if (key.isEmpty) key = '(No Variety)';
+
+      out.putIfAbsent(key, () => <Map<String, dynamic>>[]);
+      out[key]!.add(e);
     }
+
+    return out;
+  }
 
   String _judgeNameById(String? judgeId) {
     if (judgeId == null || judgeId.isEmpty) return '';
@@ -3475,18 +3538,18 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
       e['variety'] ??= e['variety_name'];
       e['animal_name'] ??= '';
 
-      final normalizedGroup = (
-        e['group_name'] ??
-        e['group_display_name'] ??
-        e['group_label'] ??
-        e['group'] ??
-        e['group_code']
-      )?.toString().trim();
+      final normalizedGroup =
+          (e['group_name'] ??
+                  e['group_display_name'] ??
+                  e['group_label'] ??
+                  e['group'] ??
+                  e['group_code'])
+              ?.toString()
+              .trim();
 
-      e['group_name'] =
-          (normalizedGroup == null || normalizedGroup.isEmpty)
-              ? null
-              : normalizedGroup;
+      e['group_name'] = (normalizedGroup == null || normalizedGroup.isEmpty)
+          ? null
+          : normalizedGroup;
 
       e['_awards'] = awardsByEntryId[id] ?? <String>[];
     }
@@ -3535,8 +3598,9 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
         await ShowLockService.assertShowUnlocked(widget.showId);
       }
 
-      final normalizedJudgeId =
-          (judgeId == null || judgeId.trim().isEmpty) ? null : judgeId.trim();
+      final normalizedJudgeId = (judgeId == null || judgeId.trim().isEmpty)
+          ? null
+          : judgeId.trim();
 
       for (var i = 0; i < ids.length; i += 100) {
         final chunk = ids.skip(i).take(100).toList();
@@ -3606,11 +3670,11 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
       });
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6FB),
+      backgroundColor: AppColors.bg,
       appBar: AppBar(
         elevation: 0,
-        backgroundColor: const Color(0xFF11285A),
-        foregroundColor: Colors.white,
+        backgroundColor: AppColors.header,
+        foregroundColor: AppColors.headerForeground,
         title: Text(widget.parentGroupLabel ?? widget.breed),
       ),
       body: Column(
@@ -3686,7 +3750,9 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
                         ListTile(
                           contentPadding: EdgeInsets.zero,
                           leading: CircleAvatar(
-                            backgroundColor: statusColor.withValues(alpha: 0.12),
+                            backgroundColor: statusColor.withValues(
+                              alpha: 0.12,
+                            ),
                             child: Icon(
                               _statusIcon(varietyEntries),
                               color: statusColor,
@@ -3713,33 +3779,54 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
                                   sectionLabel: widget.sectionLabel,
                                   breed: widget.breed,
                                   variety: variety,
-                                  contextLabel: _isFurEntry(varietyEntries.first)
+                                  contextLabel:
+                                      _isFurEntry(varietyEntries.first)
                                       ? 'Fur / Wool'
                                       : (widget.parentGroupLabel ?? variety),
                                   entries: varietyEntries,
                                   judges: widget.judges,
                                   breedClassSystems: widget.breedClassSystems,
                                   finalAwardMode: widget.finalAwardMode,
-                                  showsByGroup: !_isFurEntry(varietyEntries.first) &&
-                                      ((widget.parentGroupLabel ?? '').trim().isNotEmpty ||
+                                  showsByGroup:
+                                      !_isFurEntry(varietyEntries.first) &&
+                                      ((widget.parentGroupLabel ?? '')
+                                              .trim()
+                                              .isNotEmpty ||
                                           varietyEntries.any((e) {
-                                            final usesGroupsRaw = e['uses_group_awards'];
-                                            final usesGroups = usesGroupsRaw == true ||
-                                                usesGroupsRaw.toString().trim().toLowerCase() == 'true' ||
-                                                usesGroupsRaw.toString().trim().toLowerCase() == 't' ||
-                                                usesGroupsRaw.toString().trim() == '1';
-                                            final groupName = (
-                                              e['group_name'] ??
-                                              e['group_display_name'] ??
-                                              e['group_label'] ??
-                                              e['group'] ??
-                                              e['group_code'] ??
-                                              ''
-                                            ).toString().trim();
+                                            final usesGroupsRaw =
+                                                e['uses_group_awards'];
+                                            final usesGroups =
+                                                usesGroupsRaw == true ||
+                                                usesGroupsRaw
+                                                        .toString()
+                                                        .trim()
+                                                        .toLowerCase() ==
+                                                    'true' ||
+                                                usesGroupsRaw
+                                                        .toString()
+                                                        .trim()
+                                                        .toLowerCase() ==
+                                                    't' ||
+                                                usesGroupsRaw
+                                                        .toString()
+                                                        .trim() ==
+                                                    '1';
+                                            final groupName =
+                                                (e['group_name'] ??
+                                                        e['group_display_name'] ??
+                                                        e['group_label'] ??
+                                                        e['group'] ??
+                                                        e['group_code'] ??
+                                                        '')
+                                                    .toString()
+                                                    .trim();
 
-                                            return usesGroups && groupName.isNotEmpty;
+                                            return usesGroups &&
+                                                groupName.isNotEmpty;
                                           })),
-                                  showsByVariety: !_isFurEntry(varietyEntries.first),
+                                  showsByVariety: !_isFurEntry(
+                                    varietyEntries.first,
+                                  ),
                                   isQrEntryMode: widget.isQrEntryMode,
                                 ),
                               ),
@@ -3750,7 +3837,9 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
                         ),
                         const SizedBox(height: 10),
                         DropdownButtonFormField<String>(
-                          key: ValueKey('variety-judge-$variety-${_singleJudgeId(varietyEntries) ?? 'mixed'}'),
+                          key: ValueKey(
+                            'variety-judge-$variety-${_singleJudgeId(varietyEntries) ?? 'mixed'}',
+                          ),
                           initialValue: _singleJudgeId(varietyEntries),
                           decoration: const InputDecoration(
                             labelText: 'Judge for this variety',
@@ -3835,30 +3924,31 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
     _entries = [...widget.entries];
   }
 
+  String _furWoolBucketLabel(Map<String, dynamic> e) {
+    final rawClass = (e['class_name'] ?? '').toString().trim();
+    final lowerClass = rawClass.toLowerCase();
 
-    String _furWoolBucketLabel(Map<String, dynamic> e) {
-      final rawClass = (e['class_name'] ?? '').toString().trim();
-      final lowerClass = rawClass.toLowerCase();
-
-      if (lowerClass.startsWith('fur - ') ||
-          lowerClass.startsWith('commercial fur - ') ||
-          lowerClass.startsWith('wool - ')) {
-        return rawClass;
-      }
-
-      final rawVariety = (e['fur_variety'] ?? e['variety'] ?? '').toString().trim();
-
-      if (lowerClass.contains('wool')) {
-        return rawVariety.isNotEmpty ? 'Wool - $rawVariety' : 'Wool';
-      }
-
-      if (lowerClass.contains('fur')) {
-        return rawVariety.isNotEmpty ? 'Fur - $rawVariety' : 'Fur';
-      }
-
-      return rawVariety.isNotEmpty ? 'Fur/Wool - $rawVariety' : 'Fur/Wool';
+    if (lowerClass.startsWith('fur - ') ||
+        lowerClass.startsWith('commercial fur - ') ||
+        lowerClass.startsWith('wool - ')) {
+      return rawClass;
     }
-  
+
+    final rawVariety = (e['fur_variety'] ?? e['variety'] ?? '')
+        .toString()
+        .trim();
+
+    if (lowerClass.contains('wool')) {
+      return rawVariety.isNotEmpty ? 'Wool - $rawVariety' : 'Wool';
+    }
+
+    if (lowerClass.contains('fur')) {
+      return rawVariety.isNotEmpty ? 'Fur - $rawVariety' : 'Fur';
+    }
+
+    return rawVariety.isNotEmpty ? 'Fur/Wool - $rawVariety' : 'Fur/Wool';
+  }
+
   bool _isFurOrWoolEntry(Map<String, dynamic> row) {
     final value = row['is_fur'];
     if (value is bool) return value;
@@ -3872,16 +3962,17 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
     if (s.isEmpty) return '';
     final lower = s.toLowerCase();
 
-      if (lower.contains('pre-junior') ||
-          lower.contains('pre junior') ||
-          lower.contains('prejunior') ||
-          lower.startsWith('pre jr') ||
-          lower.startsWith('pre-jr')) {
-        return 'Pre-Junior';
-      }
+    if (lower.contains('pre-junior') ||
+        lower.contains('pre junior') ||
+        lower.contains('prejunior') ||
+        lower.startsWith('pre jr') ||
+        lower.startsWith('pre-jr')) {
+      return 'Pre-Junior';
+    }
 
     if (lower.contains('senior') || lower.startsWith('sr')) return 'Senior';
-    if (lower.contains('intermediate') || lower.startsWith('int')) return 'Intermediate';
+    if (lower.contains('intermediate') || lower.startsWith('int'))
+      return 'Intermediate';
     if (lower.contains('junior') || lower.startsWith('jr')) return 'Junior';
     if (lower.contains('open')) return 'Open';
     return s;
@@ -3931,8 +4022,8 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
     final sexPart = lower.contains('buck') || lower.contains('boar')
         ? 'buck'
         : lower.contains('doe') || lower.contains('sow')
-            ? 'doe'
-            : '';
+        ? 'doe'
+        : '';
 
     final classRank = _classRank(cls);
     final sexRank = _sexRank(sexPart);
@@ -4005,12 +4096,16 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
           if (furCmp != 0) return furCmp;
         }
 
-        final classCmp = _resultSortValue(aFirst, 'class_sort_order')
-            .compareTo(_resultSortValue(bFirst, 'class_sort_order'));
+        final classCmp = _resultSortValue(
+          aFirst,
+          'class_sort_order',
+        ).compareTo(_resultSortValue(bFirst, 'class_sort_order'));
         if (classCmp != 0) return classCmp;
 
-        final sexCmp = _resultSortValue(aFirst, 'sex_sort_order')
-            .compareTo(_resultSortValue(bFirst, 'sex_sort_order'));
+        final sexCmp = _resultSortValue(
+          aFirst,
+          'sex_sort_order',
+        ).compareTo(_resultSortValue(bFirst, 'sex_sort_order'));
         if (sexCmp != 0) return sexCmp;
 
         return _resultSortText(a).compareTo(_resultSortText(b));
@@ -4018,42 +4113,43 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
 
     return labels;
   }
-    Map<String, List<Map<String, dynamic>>> _groupByClassSex() {
-      final out = <String, List<Map<String, dynamic>>>{};
 
-      for (final e in _entries) {
-        String key;
+  Map<String, List<Map<String, dynamic>>> _groupByClassSex() {
+    final out = <String, List<Map<String, dynamic>>>{};
 
-        if (_isFurOrWoolEntry(e)) {
-          final furVariety = (e['fur_variety'] ?? e['variety'] ?? '')
-              .toString()
-              .trim()
-              .toLowerCase();
+    for (final e in _entries) {
+      String key;
 
-          if (furVariety == 'white' ||
-              furVariety.contains('white') ||
-              furVariety == 'rew' ||
-              furVariety == 'bew') {
-            key = 'White';
-          } else {
-            key = 'Colored';
-          }
+      if (_isFurOrWoolEntry(e)) {
+        final furVariety = (e['fur_variety'] ?? e['variety'] ?? '')
+            .toString()
+            .trim()
+            .toLowerCase();
+
+        if (furVariety == 'white' ||
+            furVariety.contains('white') ||
+            furVariety == 'rew' ||
+            furVariety == 'bew') {
+          key = 'White';
         } else {
-          final cls = _ageClassOnly((e['class_name'] ?? '').toString());
-          final sex = (e['sex'] ?? '').toString().trim();
-          final label = [
-            if (cls.isNotEmpty) cls,
-            if (sex.isNotEmpty) sex,
-          ].join(' ');
-          key = label.isEmpty ? '(Unknown Class)' : label;
+          key = 'Colored';
         }
-
-        out.putIfAbsent(key, () => <Map<String, dynamic>>[]);
-        out[key]!.add(e);
+      } else {
+        final cls = _ageClassOnly((e['class_name'] ?? '').toString());
+        final sex = (e['sex'] ?? '').toString().trim();
+        final label = [
+          if (cls.isNotEmpty) cls,
+          if (sex.isNotEmpty) sex,
+        ].join(' ');
+        key = label.isEmpty ? '(Unknown Class)' : label;
       }
 
-      return out;
+      out.putIfAbsent(key, () => <Map<String, dynamic>>[]);
+      out[key]!.add(e);
     }
+
+    return out;
+  }
 
   String _judgeNameById(String? judgeId) {
     if (judgeId == null || judgeId.isEmpty) return '';
@@ -4178,18 +4274,18 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
       e['variety'] ??= e['variety_name'];
       e['animal_name'] ??= '';
 
-      final normalizedGroup = (
-        e['group_name'] ??
-        e['group_display_name'] ??
-        e['group_label'] ??
-        e['group'] ??
-        e['group_code']
-      )?.toString().trim();
+      final normalizedGroup =
+          (e['group_name'] ??
+                  e['group_display_name'] ??
+                  e['group_label'] ??
+                  e['group'] ??
+                  e['group_code'])
+              ?.toString()
+              .trim();
 
-      e['group_name'] =
-          (normalizedGroup == null || normalizedGroup.isEmpty)
-              ? null
-              : normalizedGroup;
+      e['group_name'] = (normalizedGroup == null || normalizedGroup.isEmpty)
+          ? null
+          : normalizedGroup;
 
       e['_awards'] = awardsByEntryId[id] ?? <String>[];
     }
@@ -4238,8 +4334,9 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
         await ShowLockService.assertShowUnlocked(widget.showId);
       }
 
-      final normalizedJudgeId =
-          (judgeId == null || judgeId.trim().isEmpty) ? null : judgeId.trim();
+      final normalizedJudgeId = (judgeId == null || judgeId.trim().isEmpty)
+          ? null
+          : judgeId.trim();
 
       for (var i = 0; i < ids.length; i += 100) {
         final chunk = ids.skip(i).take(100).toList();
@@ -4285,11 +4382,11 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
     final labels = _sortedLabels(grouped);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6FB),
+      backgroundColor: AppColors.bg,
       appBar: AppBar(
         elevation: 0,
-        backgroundColor: const Color(0xFF11285A),
-        foregroundColor: Colors.white,
+        backgroundColor: AppColors.header,
+        foregroundColor: AppColors.headerForeground,
         title: Text(widget.contextLabel),
       ),
       body: Column(
@@ -4379,29 +4476,27 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
                 final count = classEntries.length;
                 final completed = _completedCount(classEntries);
                 final statusColor = _statusColor(context, classEntries);
-                final classSpecials = _specialsSummaryForEntries(
-                  classEntries,
-                  const [
-                    'BOV',
-                    'BOSV',
-                    'BOG',
-                    'BOSG',
-                    'BOB',
-                    'BOSB',
-                    'Best Junior',
-                    'Best Intermediate',
-                    'Best Senior',
-                    'Best 4-Class',
-                    'Best 6-Class',
-                    'Best In Show',
-                    'Reserve In Show',
-                    'BIS',
-                    'RIS',
-                    '1RIS',
-                    '2RIS',
-                    'HM',
-                  ],
-                );
+                final classSpecials =
+                    _specialsSummaryForEntries(classEntries, const [
+                      'BOV',
+                      'BOSV',
+                      'BOG',
+                      'BOSG',
+                      'BOB',
+                      'BOSB',
+                      'Best Junior',
+                      'Best Intermediate',
+                      'Best Senior',
+                      'Best 4-Class',
+                      'Best 6-Class',
+                      'Best In Show',
+                      'Reserve In Show',
+                      'BIS',
+                      'RIS',
+                      '1RIS',
+                      '2RIS',
+                      'HM',
+                    ]);
 
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
@@ -4456,7 +4551,11 @@ class ResultsAnimalsScreen extends StatefulWidget {
   final String? initialEntryIdToOpen;
   final List<Map<String, dynamic>> entries;
   final List<Map<String, dynamic>> judges;
-  final Future<void> Function(List<Map<String, dynamic>> entries, String? judgeId) onBulkJudgeApply;
+  final Future<void> Function(
+    List<Map<String, dynamic>> entries,
+    String? judgeId,
+  )
+  onBulkJudgeApply;
   final Map<String, String> breedClassSystems;
   final String finalAwardMode;
   final bool showsByGroup;
@@ -4470,8 +4569,8 @@ class ResultsAnimalsScreen extends StatefulWidget {
     required String newValue,
     required String reason,
     required String pinCode,
-  })? onQrCorrectionApply;
-
+  })?
+  onQrCorrectionApply;
 
   const ResultsAnimalsScreen({
     super.key,
@@ -4571,14 +4670,14 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
       (e['variety'] ?? '').toString().trim();
 
   String _entryGroupName(Map<String, dynamic> e) {
-    return (
-      e['group_name'] ??
-      e['group_display_name'] ??
-      e['group_label'] ??
-      e['group'] ??
-      e['group_code'] ??
-      ''
-    ).toString().trim();
+    return (e['group_name'] ??
+            e['group_display_name'] ??
+            e['group_label'] ??
+            e['group'] ??
+            e['group_code'] ??
+            '')
+        .toString()
+        .trim();
   }
 
   String _entrySectionId(Map<String, dynamic> e) =>
@@ -4594,7 +4693,8 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
   bool _sameRabbitHasPairedConflict(Map<String, dynamic> e) {
     final awards = _awardsForEntry(e).toSet();
 
-    bool hasBoth(String a, String b) => awards.contains(a) && awards.contains(b);
+    bool hasBoth(String a, String b) =>
+        awards.contains(a) && awards.contains(b);
 
     final finalAwardCount = const [
       'Best In Show',
@@ -4663,47 +4763,71 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
         _entrySectionId(row) == _entrySectionId(e);
 
     if (awards.contains('BOV')) {
-      if (_otherWinnerInScope(entry: e, award: 'BOV', sameScope: sameVariety) != null) {
+      if (_otherWinnerInScope(entry: e, award: 'BOV', sameScope: sameVariety) !=
+          null) {
         return true;
       }
-      final bosv =
-          _otherWinnerInScope(entry: e, award: 'BOSV', sameScope: sameVariety);
+      final bosv = _otherWinnerInScope(
+        entry: e,
+        award: 'BOSV',
+        sameScope: sameVariety,
+      );
       if (!_oppositeSex(e, bosv)) return true;
     }
 
     if (awards.contains('BOSV')) {
-      if (_otherWinnerInScope(entry: e, award: 'BOSV', sameScope: sameVariety) != null) {
+      if (_otherWinnerInScope(
+            entry: e,
+            award: 'BOSV',
+            sameScope: sameVariety,
+          ) !=
+          null) {
         return true;
       }
-      final bov =
-          _otherWinnerInScope(entry: e, award: 'BOV', sameScope: sameVariety);
+      final bov = _otherWinnerInScope(
+        entry: e,
+        award: 'BOV',
+        sameScope: sameVariety,
+      );
       if (!_oppositeSex(e, bov)) return true;
     }
 
     if (awards.contains('BOG')) {
-      if (_otherWinnerInScope(entry: e, award: 'BOG', sameScope: sameGroup) != null) {
+      if (_otherWinnerInScope(entry: e, award: 'BOG', sameScope: sameGroup) !=
+          null) {
         return true;
       }
-      final bosg =
-          _otherWinnerInScope(entry: e, award: 'BOSG', sameScope: sameGroup);
+      final bosg = _otherWinnerInScope(
+        entry: e,
+        award: 'BOSG',
+        sameScope: sameGroup,
+      );
       if (!_oppositeSex(e, bosg)) return true;
     }
 
     if (awards.contains('BOSG')) {
-      if (_otherWinnerInScope(entry: e, award: 'BOSG', sameScope: sameGroup) != null) {
+      if (_otherWinnerInScope(entry: e, award: 'BOSG', sameScope: sameGroup) !=
+          null) {
         return true;
       }
-      final bog =
-          _otherWinnerInScope(entry: e, award: 'BOG', sameScope: sameGroup);
+      final bog = _otherWinnerInScope(
+        entry: e,
+        award: 'BOG',
+        sameScope: sameGroup,
+      );
       if (!_oppositeSex(e, bog)) return true;
     }
 
     if (awards.contains('BOB')) {
-      if (_otherWinnerInScope(entry: e, award: 'BOB', sameScope: sameBreed) != null) {
+      if (_otherWinnerInScope(entry: e, award: 'BOB', sameScope: sameBreed) !=
+          null) {
         return true;
       }
-      final bosb =
-          _otherWinnerInScope(entry: e, award: 'BOSB', sameScope: sameBreed);
+      final bosb = _otherWinnerInScope(
+        entry: e,
+        award: 'BOSB',
+        sameScope: sameBreed,
+      );
       if (!_oppositeSex(e, bosb)) return true;
 
       if (widget.showsByGroup) {
@@ -4714,11 +4838,15 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
     }
 
     if (awards.contains('BOSB')) {
-      if (_otherWinnerInScope(entry: e, award: 'BOSB', sameScope: sameBreed) != null) {
+      if (_otherWinnerInScope(entry: e, award: 'BOSB', sameScope: sameBreed) !=
+          null) {
         return true;
       }
-      final bob =
-          _otherWinnerInScope(entry: e, award: 'BOB', sameScope: sameBreed);
+      final bob = _otherWinnerInScope(
+        entry: e,
+        award: 'BOB',
+        sameScope: sameBreed,
+      );
       if (!_oppositeSex(e, bob)) return true;
 
       if (widget.showsByGroup) {
@@ -4733,11 +4861,7 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
 
       final sameScope = widget.showsByVariety ? sameVariety : sameBreed;
 
-      if (_otherWinnerInScope(
-            entry: e,
-            award: award,
-            sameScope: sameScope,
-          ) !=
+      if (_otherWinnerInScope(entry: e, award: award, sameScope: sameScope) !=
           null) {
         return true;
       }
@@ -4795,7 +4919,8 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
       }
 
       if (widget.finalAwardMode == 'four_six_bis') {
-        if (!(awards.contains('Best 4-Class') || awards.contains('Best 6-Class'))) {
+        if (!(awards.contains('Best 4-Class') ||
+            awards.contains('Best 6-Class'))) {
           return true;
         }
       } else {
@@ -4830,7 +4955,8 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
 
       if (widget.finalAwardMode != 'bis_1ris_2ris') return true;
       if (!awards.contains('BOB')) return true;
-      if (awards.contains('Best In Show') || awards.contains('BIS')) return true;
+      if (awards.contains('Best In Show') || awards.contains('BIS'))
+        return true;
     }
 
     if (awards.contains('2RIS')) {
@@ -4845,38 +4971,39 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
 
       if (widget.finalAwardMode != 'bis_1ris_2ris') return true;
       if (!awards.contains('BOB')) return true;
-      if (awards.contains('Best In Show') || awards.contains('BIS')) return true;
+      if (awards.contains('Best In Show') || awards.contains('BIS'))
+        return true;
     }
 
     return false;
   }
 
-    bool _awardDecisionComplete(Map<String, dynamic> e) {
-      final awards = _awardsForEntry(e);
+  bool _awardDecisionComplete(Map<String, dynamic> e) {
+    final awards = _awardsForEntry(e);
 
-      // No award selected is not automatically an error.
-      // The higher-level cards handle required BOV/BOSV, BOG/BOSG, BOB/BOSB.
-      if (awards.isEmpty) return true;
+    // No award selected is not automatically an error.
+    // The higher-level cards handle required BOV/BOSV, BOG/BOSG, BOB/BOSB.
+    if (awards.isEmpty) return true;
 
-      return !_entryHasValidationProblem(e);
-    }
+    return !_entryHasValidationProblem(e);
+  }
 
-    bool _isEntryComplete(Map<String, dynamic> e) {
-      if (_isScratched(e)) return true;
+  bool _isEntryComplete(Map<String, dynamic> e) {
+    if (_isScratched(e)) return true;
 
-      final judgeId = (e['judged_by_show_judge_id'] ?? '').toString().trim();
-      if (judgeId.isEmpty) return false;
+    final judgeId = (e['judged_by_show_judge_id'] ?? '').toString().trim();
+    if (judgeId.isEmpty) return false;
 
-      // Basic animal outcome is required:
-      // placement, DQ, No Show, or Unworthy.
-      if (!_entryHasBasicOutcome(e)) return false;
+    // Basic animal outcome is required:
+    // placement, DQ, No Show, or Unworthy.
+    if (!_entryHasBasicOutcome(e)) return false;
 
-      if (!_awardDecisionComplete(e)) return false;
+    if (!_awardDecisionComplete(e)) return false;
 
-      if (_entryHasValidationProblem(e)) return false;
+    if (_entryHasValidationProblem(e)) return false;
 
-      return true;
-    }
+    return true;
+  }
 
   Color _rowTint(Map<String, dynamic> e) {
     if (_isEntryComplete(e)) {
@@ -4896,9 +5023,13 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
       widget.isQrEntryMode == true && widget.onQrCorrectionApply != null;
 
   String _entryCorrectionLabel(Map<String, dynamic> entry) {
-    final tattoo = (entry['tattoo'] ?? entry['ear_number'] ?? '').toString().trim();
+    final tattoo = (entry['tattoo'] ?? entry['ear_number'] ?? '')
+        .toString()
+        .trim();
     final animalName = (entry['animal_name'] ?? '').toString().trim();
-    final variety = (entry['variety'] ?? entry['variety_name'] ?? '').toString().trim();
+    final variety = (entry['variety'] ?? entry['variety_name'] ?? '')
+        .toString()
+        .trim();
     final className = (entry['class_name'] ?? '').toString().trim();
     final sex = (entry['sex'] ?? '').toString().trim();
     final classSex = [className, sex].where((x) => x.isNotEmpty).join(' ');
@@ -4955,7 +5086,9 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
     final entryId = (entry['entry_id'] ?? entry['id'] ?? '').toString().trim();
     if (entryId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unable to request correction: missing entry id.')),
+        const SnackBar(
+          content: Text('Unable to request correction: missing entry id.'),
+        ),
       );
       return;
     }
@@ -4977,8 +5110,10 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
               Future<void> submit() async {
                 if (!formKey.currentState!.validate()) return;
 
-                final digitsOnlyPin =
-                    pinController.text.trim().replaceAll(RegExp(r'[^0-9]'), '');
+                final digitsOnlyPin = pinController.text.trim().replaceAll(
+                  RegExp(r'[^0-9]'),
+                  '',
+                );
 
                 setDialogState(() => saving = true);
 
@@ -4999,7 +5134,9 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
                     _msg = 'Correction saved and logged.';
                   });
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Correction saved and logged.')),
+                    const SnackBar(
+                      content: Text('Correction saved and logged.'),
+                    ),
                   );
                 } catch (e) {
                   setDialogState(() => saving = false);
@@ -5032,10 +5169,19 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
                             labelText: 'Correction needed',
                           ),
                           items: const [
-                            DropdownMenuItem(value: 'tattoo', child: Text('Ear number')),
-                            DropdownMenuItem(value: 'class_name', child: Text('Class')),
+                            DropdownMenuItem(
+                              value: 'tattoo',
+                              child: Text('Ear number'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'class_name',
+                              child: Text('Class'),
+                            ),
                             DropdownMenuItem(value: 'sex', child: Text('Sex')),
-                            DropdownMenuItem(value: 'variety', child: Text('Variety')),
+                            DropdownMenuItem(
+                              value: 'variety',
+                              child: Text('Variety'),
+                            ),
                           ],
                           onChanged: saving
                               ? null
@@ -5083,8 +5229,10 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
                             labelText: 'Staff approval PIN',
                           ),
                           validator: (value) {
-                            final digits =
-                                (value ?? '').replaceAll(RegExp(r'[^0-9]'), '');
+                            final digits = (value ?? '').replaceAll(
+                              RegExp(r'[^0-9]'),
+                              '',
+                            );
                             if (digits.length < 4 || digits.length > 6) {
                               return 'Enter a 4–6 digit approval PIN.';
                             }
@@ -5097,7 +5245,9 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
                 ),
                 actions: [
                   TextButton(
-                    onPressed: saving ? null : () => Navigator.of(dialogContext).pop(),
+                    onPressed: saving
+                        ? null
+                        : () => Navigator.of(dialogContext).pop(),
                     child: const Text('Cancel'),
                   ),
                   FilledButton.icon(
@@ -5163,7 +5313,9 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
         classRank = 1;
       } else if (cls.contains('junior') || cls.startsWith('jr')) {
         classRank = 2;
-      } else if (cls.contains('pre') || cls.contains('pre-jr') || cls.contains('pre jr')) {
+      } else if (cls.contains('pre') ||
+          cls.contains('pre-jr') ||
+          cls.contains('pre jr')) {
         classRank = 3;
       } else {
         classRank = 99;
@@ -5182,23 +5334,31 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
     }
 
     _entries.sort((a, b) {
-      final byBreedSort =
-          intVal(a, 'breed_sort_order').compareTo(intVal(b, 'breed_sort_order'));
+      final byBreedSort = intVal(
+        a,
+        'breed_sort_order',
+      ).compareTo(intVal(b, 'breed_sort_order'));
       if (byBreedSort != 0) return byBreedSort;
 
-      final byGroupSort =
-          intVal(a, 'group_sort_order').compareTo(intVal(b, 'group_sort_order'));
+      final byGroupSort = intVal(
+        a,
+        'group_sort_order',
+      ).compareTo(intVal(b, 'group_sort_order'));
       if (byGroupSort != 0) return byGroupSort;
 
-      final byVarietySort =
-          intVal(a, 'variety_sort_order').compareTo(intVal(b, 'variety_sort_order'));
+      final byVarietySort = intVal(
+        a,
+        'variety_sort_order',
+      ).compareTo(intVal(b, 'variety_sort_order'));
       if (byVarietySort != 0) return byVarietySort;
 
       final byClassSex = classSexRank(a).compareTo(classSexRank(b));
       if (byClassSex != 0) return byClassSex;
 
-      final byClassSort =
-          intVal(a, 'class_sort_order').compareTo(intVal(b, 'class_sort_order'));
+      final byClassSort = intVal(
+        a,
+        'class_sort_order',
+      ).compareTo(intVal(b, 'class_sort_order'));
       if (byClassSort != 0) return byClassSort;
 
       final byTattoo = strVal(a, 'tattoo').compareTo(strVal(b, 'tattoo'));
@@ -5210,7 +5370,9 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
 
   void _openInitialEntryIfNeeded() {
     if (_didAutoOpenInitialEntry) return;
-    if (widget.initialEntryIdToOpen == null || widget.initialEntryIdToOpen!.trim().isEmpty) return;
+    if (widget.initialEntryIdToOpen == null ||
+        widget.initialEntryIdToOpen!.trim().isEmpty)
+      return;
 
     final index = _entries.indexWhere((e) {
       final id = (e['entry_id'] ?? e['id'] ?? '').toString().trim();
@@ -5233,9 +5395,7 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
       final masterJudgeId = (j['judge_id'] ?? '').toString().trim();
       final assignmentId = (j['assignment_id'] ?? '').toString().trim();
 
-      if (raw == savedJudgeId ||
-          raw == masterJudgeId ||
-          raw == assignmentId) {
+      if (raw == savedJudgeId || raw == masterJudgeId || raw == assignmentId) {
         return savedJudgeId;
       }
     }
@@ -5289,34 +5449,37 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
           .map((e) => Map<String, dynamic>.from(e as Map))
           .toList();
 
-      final refreshed = allRows.where((row) {
-        final id = (row['entry_id'] ?? row['id'] ?? '').toString().trim();
-        return currentIds.contains(id);
-      }).map((e) {
-        final copy = Map<String, dynamic>.from(e);
-        copy['id'] ??= copy['entry_id'];
-        copy['breed'] ??= copy['breed_name'];
-        copy['variety'] ??= copy['variety_name'];
-        copy['animal_name'] ??= '';
+      final refreshed = allRows
+          .where((row) {
+            final id = (row['entry_id'] ?? row['id'] ?? '').toString().trim();
+            return currentIds.contains(id);
+          })
+          .map((e) {
+            final copy = Map<String, dynamic>.from(e);
+            copy['id'] ??= copy['entry_id'];
+            copy['breed'] ??= copy['breed_name'];
+            copy['variety'] ??= copy['variety_name'];
+            copy['animal_name'] ??= '';
 
-        final normalizedGroup = (
-          copy['group_name'] ??
-          copy['group_display_name'] ??
-          copy['group_label'] ??
-          copy['group'] ??
-          copy['group_code']
-        )?.toString().trim();
+            final normalizedGroup =
+                (copy['group_name'] ??
+                        copy['group_display_name'] ??
+                        copy['group_label'] ??
+                        copy['group'] ??
+                        copy['group_code'])
+                    ?.toString()
+                    .trim();
 
-        copy['group_name'] =
-            (normalizedGroup == null || normalizedGroup.isEmpty)
+            copy['group_name'] =
+                (normalizedGroup == null || normalizedGroup.isEmpty)
                 ? null
                 : normalizedGroup;
 
-        return copy;
-      }).toList();
+            return copy;
+          })
+          .toList();
 
       if (refreshed.isEmpty) {
-
         if (mounted) setState(() {});
         return;
       }
@@ -5372,7 +5535,6 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
       _currentJudgeId = judgeIds.length == 1 ? judgeIds.first : null;
 
       if (mounted) setState(() {});
-
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -5382,26 +5544,26 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
     }
   }
 
-    int _shownCount() {
-      return _entries.where((e) {
-        final scratched = (e['scratched_at'] ?? '').toString().trim().isNotEmpty;
-        final isShown = e['is_shown'] != false;
-        final isDisqualified = e['is_disqualified'] == true;
-        final status = (e['result_status'] ?? '').toString().trim();
+  int _shownCount() {
+    return _entries.where((e) {
+      final scratched = (e['scratched_at'] ?? '').toString().trim().isNotEmpty;
+      final isShown = e['is_shown'] != false;
+      final isDisqualified = e['is_disqualified'] == true;
+      final status = (e['result_status'] ?? '').toString().trim();
 
-        if (scratched) return false;
-        if (!isShown) return false;
-        if (isDisqualified) return false;
+      if (scratched) return false;
+      if (!isShown) return false;
+      if (isDisqualified) return false;
 
-        if (status == 'No Show' ||
-            _isDisqualifiedStatus(status) ||
-            status == 'Unworthy of Award') {
-          return false;
-        }
+      if (status == 'No Show' ||
+          _isDisqualifiedStatus(status) ||
+          status == 'Unworthy of Award') {
+        return false;
+      }
 
-        return true;
-      }).length;
-    }
+      return true;
+    }).length;
+  }
 
   List<String> _availablePlacements({String? excludingEntryId}) {
     final shownCount = _shownCount();
@@ -5411,7 +5573,8 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
     final used = <String>{};
     for (final e in _entries) {
       if (excludingEntryId != null &&
-          (e['entry_id'] ?? e['id'] ?? '').toString().trim() == excludingEntryId) {
+          (e['entry_id'] ?? e['id'] ?? '').toString().trim() ==
+              excludingEntryId) {
         continue;
       }
 
@@ -5460,7 +5623,9 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
     if (index < 0 || index >= _entries.length) return;
 
     final entry = _entries[index];
-    final openedEntryId = (entry['entry_id'] ?? entry['id'] ?? '').toString().trim();
+    final openedEntryId = (entry['entry_id'] ?? entry['id'] ?? '')
+        .toString()
+        .trim();
 
     final result = await showModalBottomSheet<ResultsEntryOutcome>(
       context: context,
@@ -5472,8 +5637,9 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
         classEntries: _entries,
         judges: widget.judges,
         availablePlacements: _availablePlacements(
-          excludingEntryId:
-              (entry['entry_id'] ?? entry['id'] ?? '').toString().trim(),
+          excludingEntryId: (entry['entry_id'] ?? entry['id'] ?? '')
+              .toString()
+              .trim(),
         ),
         shownCount: _shownCount(),
         currentIndex: index,
@@ -5506,8 +5672,8 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
 
     final nextEntryId =
         openedNavIndex >= 0 && openedNavIndex + 1 < _entryNavigationOrder.length
-            ? _entryNavigationOrder[openedNavIndex + 1]
-            : '';
+        ? _entryNavigationOrder[openedNavIndex + 1]
+        : '';
 
     if (nextEntryId.isNotEmpty) {
       final nextIndex = _entries.indexWhere((e) => _entryId(e) == nextEntryId);
@@ -5536,11 +5702,11 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
         .length;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6FB),
+      backgroundColor: AppColors.bg,
       appBar: AppBar(
         elevation: 0,
-        backgroundColor: const Color(0xFF11285A),
-        foregroundColor: Colors.white,
+        backgroundColor: AppColors.header,
+        foregroundColor: AppColors.headerForeground,
         title: Text(widget.classSexLabel),
       ),
       body: Column(
@@ -5614,7 +5780,9 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
                         child: Text(
                           _msg!,
                           style: TextStyle(
-                            color: _msg == 'Judge updated.' || _msg == 'Results updated.'
+                            color:
+                                _msg == 'Judge updated.' ||
+                                    _msg == 'Results updated.'
                                 ? Colors.green
                                 : Colors.red,
                             fontWeight: FontWeight.w600,
@@ -5645,9 +5813,16 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
                 final awardsText = awards.join(', ');
                 final isShown = e['is_shown'] != false;
                 final isDisqualified = e['is_disqualified'] == true;
-                final scratched = (e['scratched_at'] ?? '').toString().trim().isNotEmpty;
-                final resultStatus = (e['result_status'] ?? '').toString().trim();
-                final judgeId = (e['judged_by_show_judge_id'] ?? '').toString().trim();
+                final scratched = (e['scratched_at'] ?? '')
+                    .toString()
+                    .trim()
+                    .isNotEmpty;
+                final resultStatus = (e['result_status'] ?? '')
+                    .toString()
+                    .trim();
+                final judgeId = (e['judged_by_show_judge_id'] ?? '')
+                    .toString()
+                    .trim();
                 final judgeName = _judgeNameById(judgeId);
 
                 final subtitleParts = <String>[
@@ -5655,7 +5830,8 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
                   if (resultStatus.isNotEmpty) 'Status: $resultStatus',
                   if (placement.isNotEmpty) 'Place: $placement',
                   if (awardsText.isNotEmpty) 'Awards: $awardsText',
-                  if (judgeId.isNotEmpty) 'Judge: ${judgeName.isEmpty ? judgeId : judgeName}',
+                  if (judgeId.isNotEmpty)
+                    'Judge: ${judgeName.isEmpty ? judgeId : judgeName}',
                   if (!isShown && resultStatus.isEmpty) 'Not shown',
                   if (isDisqualified && resultStatus.isEmpty) 'Disqualified',
                   if (scratched) 'Scratched',
@@ -5695,8 +5871,8 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
                                       animalName.isNotEmpty && tattoo.isNotEmpty
                                           ? '$animalName • Ear #: $tattoo'
                                           : animalName.isNotEmpty
-                                              ? animalName
-                                              : 'Ear #: ${tattoo.isEmpty ? '(No ear #)' : tattoo}',
+                                          ? animalName
+                                          : 'Ear #: ${tattoo.isEmpty ? '(No ear #)' : tattoo}',
                                       style: const TextStyle(
                                         fontWeight: FontWeight.w700,
                                       ),
@@ -5742,10 +5918,7 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
       ),
       child: Text(
         text,
-        style: const TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-        ),
+        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
       ),
     );
   }
@@ -5824,7 +5997,9 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
   void initState() {
     super.initState();
 
-    final storedStatus = (widget.entry['result_status'] ?? '').toString().trim();
+    final storedStatus = (widget.entry['result_status'] ?? '')
+        .toString()
+        .trim();
 
     if (storedStatus.isNotEmpty && kResultStatuses.contains(storedStatus)) {
       _resultStatus = storedStatus;
@@ -5835,11 +6010,14 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
           widget.entry['is_disqualified'] == true ||
           widget.entry['disqualified_reason'] != null;
 
-      final isShown = hasStoredResult ? widget.entry['is_shown'] != false : true;
+      final isShown = hasStoredResult
+          ? widget.entry['is_shown'] != false
+          : true;
 
       final isDisqualified = widget.entry['is_disqualified'] == true;
-      final dqReason =
-          (widget.entry['disqualified_reason'] ?? '').toString().trim();
+      final dqReason = (widget.entry['disqualified_reason'] ?? '')
+          .toString()
+          .trim();
 
       if (!isShown) {
         _resultStatus = 'No Show';
@@ -5860,58 +6038,61 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
       }
     }
 
-String storedJudgeId =
-    (widget.entry['judged_by_show_judge_id'] ?? '').toString().trim();
+    String storedJudgeId = (widget.entry['judged_by_show_judge_id'] ?? '')
+        .toString()
+        .trim();
 
-if (storedJudgeId.isEmpty) {
-  storedJudgeId = (widget.initialJudgeId ?? '').toString().trim();
+    if (storedJudgeId.isEmpty) {
+      storedJudgeId = (widget.initialJudgeId ?? '').toString().trim();
 
-  if (storedJudgeId.isNotEmpty) {
-    widget.entry['judged_by_show_judge_id'] = storedJudgeId;
-  }
-}
-
-if (storedJudgeId.isEmpty) {
-  final classJudgeIds = widget.classEntries
-      .map((e) => (e['judged_by_show_judge_id'] ?? '').toString().trim())
-      .where((x) => x.isNotEmpty)
-      .toSet();
-
-  if (classJudgeIds.length == 1) {
-    storedJudgeId = classJudgeIds.first;
-    widget.entry['judged_by_show_judge_id'] = storedJudgeId;
-  }
-}
-
-if (storedJudgeId.isEmpty) {
-  _judgeId = null;
-} else {
-  String? matched;
-
-  for (final j in widget.judges) {
-    final savedJudgeId = (j['id'] ?? '').toString().trim();
-    final masterJudgeId = (j['judge_id'] ?? '').toString().trim();
-    final assignmentId = (j['assignment_id'] ?? '').toString().trim();
-
-    if (storedJudgeId == savedJudgeId ||
-        storedJudgeId == masterJudgeId ||
-        storedJudgeId == assignmentId) {
-      matched = savedJudgeId;
-      break;
+      if (storedJudgeId.isNotEmpty) {
+        widget.entry['judged_by_show_judge_id'] = storedJudgeId;
+      }
     }
-  }
 
-  _judgeId = matched ?? storedJudgeId;
-}
+    if (storedJudgeId.isEmpty) {
+      final classJudgeIds = widget.classEntries
+          .map((e) => (e['judged_by_show_judge_id'] ?? '').toString().trim())
+          .where((x) => x.isNotEmpty)
+          .toSet();
 
-    final currentPlacement = (widget.entry['placement'] ?? '').toString().trim();
+      if (classJudgeIds.length == 1) {
+        storedJudgeId = classJudgeIds.first;
+        widget.entry['judged_by_show_judge_id'] = storedJudgeId;
+      }
+    }
+
+    if (storedJudgeId.isEmpty) {
+      _judgeId = null;
+    } else {
+      String? matched;
+
+      for (final j in widget.judges) {
+        final savedJudgeId = (j['id'] ?? '').toString().trim();
+        final masterJudgeId = (j['judge_id'] ?? '').toString().trim();
+        final assignmentId = (j['assignment_id'] ?? '').toString().trim();
+
+        if (storedJudgeId == savedJudgeId ||
+            storedJudgeId == masterJudgeId ||
+            storedJudgeId == assignmentId) {
+          matched = savedJudgeId;
+          break;
+        }
+      }
+
+      _judgeId = matched ?? storedJudgeId;
+    }
+
+    final currentPlacement = (widget.entry['placement'] ?? '')
+        .toString()
+        .trim();
     _placement = currentPlacement.isEmpty ? null : currentPlacement;
 
-    _selectedAwards = (((widget.entry['_awards'] as List?) ?? const [])
-            .map((x) => _canonicalAwardCode(x.toString()))
-            .where((x) => x.isNotEmpty))
-        .toSet();
-
+    _selectedAwards =
+        (((widget.entry['_awards'] as List?) ?? const [])
+                .map((x) => _canonicalAwardCode(x.toString()))
+                .where((x) => x.isNotEmpty))
+            .toSet();
   }
 
   @override
@@ -5923,27 +6104,30 @@ if (storedJudgeId.isEmpty) {
     return (e['scratched_at'] ?? '').toString().trim().isNotEmpty;
   }
 
-  String _sex(Map<String, dynamic> e) => (e['sex'] ?? '').toString().trim().toLowerCase();
+  String _sex(Map<String, dynamic> e) =>
+      (e['sex'] ?? '').toString().trim().toLowerCase();
 
   String _breed(Map<String, dynamic> e) => (e['breed'] ?? '').toString().trim();
 
-  String _variety(Map<String, dynamic> e) => (e['variety'] ?? '').toString().trim();
+  String _variety(Map<String, dynamic> e) =>
+      (e['variety'] ?? '').toString().trim();
 
   String _groupName(Map<String, dynamic> e) {
-    return (
-      e['group_name'] ??
-      e['group_display_name'] ??
-      e['group_label'] ??
-      e['group'] ??
-      e['group_code'] ??
-      ''
-    ).toString().trim();
+    return (e['group_name'] ??
+            e['group_display_name'] ??
+            e['group_label'] ??
+            e['group'] ??
+            e['group_code'] ??
+            '')
+        .toString()
+        .trim();
   }
 
   String _entryId(Map<String, dynamic> e) =>
-    (e['entry_id'] ?? e['id'] ?? '').toString().trim();
+      (e['entry_id'] ?? e['id'] ?? '').toString().trim();
 
-  String _sectionId(Map<String, dynamic> e) => (e['section_id'] ?? '').toString().trim();
+  String _sectionId(Map<String, dynamic> e) =>
+      (e['section_id'] ?? '').toString().trim();
 
   List<String> _entryAwards(Map<String, dynamic> e) =>
       (((e['_awards'] as List?) ?? const [])
@@ -5972,8 +6156,10 @@ if (storedJudgeId.isEmpty) {
   bool _isFurOrWoolResultRow() {
     if (widget.isFurOrWoolClass) return true;
 
-    final className =
-        (widget.entry['class_name'] ?? '').toString().trim().toLowerCase();
+    final className = (widget.entry['class_name'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
 
     return className.startsWith('fur') ||
         className.startsWith('commercial fur') ||
@@ -6060,7 +6246,8 @@ if (storedJudgeId.isEmpty) {
       if (_isFurOrWoolEntry(e)) return false;
 
       final usesGroupsRaw = e['uses_group_awards'];
-      final usesGroups = usesGroupsRaw == true ||
+      final usesGroups =
+          usesGroupsRaw == true ||
           usesGroupsRaw.toString().trim().toLowerCase() == 'true' ||
           usesGroupsRaw.toString().trim().toLowerCase() == 't' ||
           usesGroupsRaw.toString().trim() == '1';
@@ -6068,6 +6255,7 @@ if (storedJudgeId.isEmpty) {
       return usesGroups;
     });
   }
+
   bool get _showsByVariety => widget.showsByVariety;
 
   List<String> get _visibleAwardCodes {
@@ -6114,13 +6302,15 @@ if (storedJudgeId.isEmpty) {
       breedName: _breed(widget.entry),
       isCavy: _isCavyEntry(widget.entry),
     )) {
-      awards.addAll(kBestAgeAwardCodes.where((award) {
-        return _bestAgeAwardMatchesClass(
-          award: award,
-          className: (widget.entry['class_name'] ?? '').toString(),
-          classSystem: _classSystemForEntry(widget.entry),
-        );
-      }));
+      awards.addAll(
+        kBestAgeAwardCodes.where((award) {
+          return _bestAgeAwardMatchesClass(
+            award: award,
+            className: (widget.entry['class_name'] ?? '').toString(),
+            classSystem: _classSystemForEntry(widget.entry),
+          );
+        }),
+      );
     }
 
     if (widget.finalAwardMode == 'bis_ris') {
@@ -6148,7 +6338,8 @@ if (storedJudgeId.isEmpty) {
     return options;
   }
 
-  bool _hasAward(String award) => _selectedAwards.contains(_canonicalAwardCode(award));
+  bool _hasAward(String award) =>
+      _selectedAwards.contains(_canonicalAwardCode(award));
 
   Map<String, dynamic>? _winnerForAwardInScope({
     required String award,
@@ -6261,17 +6452,20 @@ if (storedJudgeId.isEmpty) {
         // If this breed also uses variety awards, group awards should only
         // become available after the rabbit has already won at variety level.
         if (_showsByVariety) {
-          return currentAwards.contains('BOV') || currentAwards.contains('BOSV');
+          return currentAwards.contains('BOV') ||
+              currentAwards.contains('BOSV');
         }
         return true;
 
       case 'BOB':
       case 'BOSB':
         if (_breedUsesGroups()) {
-          return currentAwards.contains('BOG') || currentAwards.contains('BOSG');
+          return currentAwards.contains('BOG') ||
+              currentAwards.contains('BOSG');
         }
         if (_showsByVariety) {
-          return currentAwards.contains('BOV') || currentAwards.contains('BOSV');
+          return currentAwards.contains('BOV') ||
+              currentAwards.contains('BOSV');
         }
         return true;
 
@@ -6362,7 +6556,10 @@ if (storedJudgeId.isEmpty) {
       bool sameClassAge(Map<String, dynamic> e) =>
           sameVariety(e) &&
           (e['class_name'] ?? '').toString().trim().toLowerCase() ==
-              (widget.entry['class_name'] ?? '').toString().trim().toLowerCase();
+              (widget.entry['class_name'] ?? '')
+                  .toString()
+                  .trim()
+                  .toLowerCase();
 
       for (final award in _selectedAwards) {
         final sameScope = switch (award) {
@@ -6419,10 +6616,7 @@ if (storedJudgeId.isEmpty) {
       }
 
       if (_hasAward('BOSB')) {
-        final bob = _winnerForAwardInScope(
-          award: 'BOB',
-          sameScope: sameBreed,
-        );
+        final bob = _winnerForAwardInScope(award: 'BOB', sameScope: sameBreed);
         if (!_isOppositeSexOf(bob)) {
           return 'BOB and BOSB must be opposite sex.';
         }
@@ -6465,10 +6659,7 @@ if (storedJudgeId.isEmpty) {
         sameScope: sameVariety,
       );
       if (existing != null) return 'BOSV is already assigned for this variety.';
-      final bov = _winnerForAwardInScope(
-        award: 'BOV',
-        sameScope: sameVariety,
-      );
+      final bov = _winnerForAwardInScope(award: 'BOV', sameScope: sameVariety);
       if (!_isOppositeSexOf(bov)) return 'BOV and BOSV must be opposite sex.';
     }
 
@@ -6478,10 +6669,7 @@ if (storedJudgeId.isEmpty) {
         sameScope: sameGroup,
       );
       if (existing != null) return 'BOG is already assigned for this group.';
-      final bosg = _winnerForAwardInScope(
-        award: 'BOSG',
-        sameScope: sameGroup,
-      );
+      final bosg = _winnerForAwardInScope(award: 'BOSG', sameScope: sameGroup);
       if (!_isOppositeSexOf(bosg)) return 'BOG and BOSG must be opposite sex.';
     }
 
@@ -6491,10 +6679,7 @@ if (storedJudgeId.isEmpty) {
         sameScope: sameGroup,
       );
       if (existing != null) return 'BOSG is already assigned for this group.';
-      final bog = _winnerForAwardInScope(
-        award: 'BOG',
-        sameScope: sameGroup,
-      );
+      final bog = _winnerForAwardInScope(award: 'BOG', sameScope: sameGroup);
       if (!_isOppositeSexOf(bog)) return 'BOG and BOSG must be opposite sex.';
     }
 
@@ -6504,10 +6689,7 @@ if (storedJudgeId.isEmpty) {
         sameScope: sameBreed,
       );
       if (existing != null) return 'BOB is already assigned for this breed.';
-      final bosb = _winnerForAwardInScope(
-        award: 'BOSB',
-        sameScope: sameBreed,
-      );
+      final bosb = _winnerForAwardInScope(award: 'BOSB', sameScope: sameBreed);
       if (!_isOppositeSexOf(bosb)) return 'BOB and BOSB must be opposite sex.';
 
       if (_breedUsesGroups()) {
@@ -6527,10 +6709,7 @@ if (storedJudgeId.isEmpty) {
         sameScope: sameBreed,
       );
       if (existing != null) return 'BOSB is already assigned for this breed.';
-      final bob = _winnerForAwardInScope(
-        award: 'BOB',
-        sameScope: sameBreed,
-      );
+      final bob = _winnerForAwardInScope(award: 'BOB', sameScope: sameBreed);
       if (!_isOppositeSexOf(bob)) return 'BOB and BOSB must be opposite sex.';
 
       if (_breedUsesGroups()) {
@@ -6594,7 +6773,8 @@ if (storedJudgeId.isEmpty) {
         award: 'Best In Show',
         sameScope: sameSection,
       );
-      if (existing != null) return 'Best In Show is already assigned in this section.';
+      if (existing != null)
+        return 'Best In Show is already assigned in this section.';
       if (!_canUseAward('Best In Show')) {
         return widget.finalAwardMode == 'four_six_bis'
             ? 'Best In Show must come from Best 4-Class or Best 6-Class.'
@@ -6694,16 +6874,16 @@ if (storedJudgeId.isEmpty) {
     final normalizedJudgeId = (judgeId ?? '').trim();
     if (normalizedJudgeId.isEmpty) return;
 
-      await supabase.rpc(
-        'record_judging_session_entry',
-        params: {
-          'p_show_id': widget.showId,
-          'p_judge_id': normalizedJudgeId,
-          'p_entry_id': entryId,
-          'p_table_number': null,
-        },
-      );
-    }
+    await supabase.rpc(
+      'record_judging_session_entry',
+      params: {
+        'p_show_id': widget.showId,
+        'p_judge_id': normalizedJudgeId,
+        'p_entry_id': entryId,
+        'p_table_number': null,
+      },
+    );
+  }
 
   Future<void> _save({required bool goNext}) async {
     setState(() {
@@ -6729,7 +6909,6 @@ if (storedJudgeId.isEmpty) {
           : (user == null ? '' : _writerNameFromUser(user));
 
       final writerPhone = (widget.writerPhone ?? '').trim();
-
 
       if (widget.isQrEntryMode) {
         if (writerName.isEmpty || writerPhone.isEmpty) {
@@ -6788,11 +6967,11 @@ if (storedJudgeId.isEmpty) {
       final awardsToSave = isFurOrWoolResult
           ? <String>[]
           : (_selectedAwards
-              .map((award) => _canonicalAwardCode(award))
-              .where((award) => award.trim().isNotEmpty)
-              .toSet()
-              .toList()
-            ..sort());
+                .map((award) => _canonicalAwardCode(award))
+                .where((award) => award.trim().isNotEmpty)
+                .toSet()
+                .toList()
+              ..sort());
 
       if (isFurOrWoolResult) {
         final updated = await supabase.rpc(
@@ -6806,10 +6985,12 @@ if (storedJudgeId.isEmpty) {
             'p_is_shown': effectiveStatus != 'No Show',
             'p_is_disqualified': _isDisqualifiedStatus(effectiveStatus),
             'p_judged_by_show_judge_id': normalizedJudgeId,
-            'p_result_entered_by_name':
-                writerName.isEmpty ? 'Signed-in Writer' : writerName,
-            'p_result_entered_by_phone':
-                widget.isQrEntryMode ? writerPhone : null,
+            'p_result_entered_by_name': writerName.isEmpty
+                ? 'Signed-in Writer'
+                : writerName,
+            'p_result_entered_by_phone': widget.isQrEntryMode
+                ? writerPhone
+                : null,
             'p_awards': awardsToSave,
             'p_is_qr_entry_mode': widget.isQrEntryMode,
           },
@@ -6824,74 +7005,84 @@ if (storedJudgeId.isEmpty) {
           judgeId: normalizedJudgeId,
         );
 
-        widget.entry['placement'] = normalizedPlacement.isEmpty ? null : normalizedPlacement;
+        widget.entry['placement'] = normalizedPlacement.isEmpty
+            ? null
+            : normalizedPlacement;
         widget.entry['result_status'] = effectiveStatus;
         widget.entry['disqualified_reason'] = normalizedDqReason;
         widget.entry['is_shown'] = effectiveStatus != 'No Show';
-        widget.entry['is_disqualified'] = _isDisqualifiedStatus(effectiveStatus);
+        widget.entry['is_disqualified'] = _isDisqualifiedStatus(
+          effectiveStatus,
+        );
         widget.entry['judged_by_show_judge_id'] = normalizedJudgeId;
-        widget.entry['result_entered_by_name'] =
-            writerName.isEmpty ? 'Signed-in Writer' : writerName;
-        widget.entry['result_entered_by_phone'] =
-            widget.isQrEntryMode ? writerPhone : null;
+        widget.entry['result_entered_by_name'] = writerName.isEmpty
+            ? 'Signed-in Writer'
+            : writerName;
+        widget.entry['result_entered_by_phone'] = widget.isQrEntryMode
+            ? writerPhone
+            : null;
         widget.entry['result_entered_at'] = now;
         widget.entry['updated_at'] = now;
         widget.entry['_awards'] = awardsToSave;
       } else {
-        
+        final updated = await supabase.rpc(
+          'save_results_entry',
+          params: {
+            'p_show_id': widget.showId,
+            'p_entry_id': entryId,
+            'p_placement': normalizedPlacement,
+            'p_result_status': effectiveStatus,
+            'p_disqualified_reason': normalizedDqReason,
+            'p_is_shown': effectiveStatus != 'No Show',
+            'p_is_disqualified': _isDisqualifiedStatus(effectiveStatus),
+            'p_judged_by_show_judge_id': normalizedJudgeId,
+            'p_result_entered_by_name': writerName.isEmpty
+                ? 'Signed-in Writer'
+                : writerName,
+            'p_result_entered_by_phone': widget.isQrEntryMode
+                ? writerPhone
+                : null,
+            'p_awards': widget.isFurOrWoolClass ? <String>[] : awardsToSave,
+            'p_is_qr_entry_mode': widget.isQrEntryMode,
+          },
+        );
 
-      final updated = await supabase.rpc(
-        'save_results_entry',
-        params: {
-          'p_show_id': widget.showId,
-          'p_entry_id': entryId,
-          'p_placement': normalizedPlacement,
-          'p_result_status': effectiveStatus,
-          'p_disqualified_reason': normalizedDqReason,
-          'p_is_shown': effectiveStatus != 'No Show',
-          'p_is_disqualified': _isDisqualifiedStatus(effectiveStatus),
-          'p_judged_by_show_judge_id': normalizedJudgeId,
-          'p_result_entered_by_name':
-              writerName.isEmpty ? 'Signed-in Writer' : writerName,
-          'p_result_entered_by_phone':
-              widget.isQrEntryMode ? writerPhone : null,
-          'p_awards': widget.isFurOrWoolClass ? <String>[] : awardsToSave,
-          'p_is_qr_entry_mode': widget.isQrEntryMode,
-        },
-      );
+        if (updated == null) {
+          throw Exception('Save returned no result.');
+        }
 
-      if (updated == null) {
-        throw Exception('Save returned no result.');
-      }
+        await _recordJudgingSessionEntry(
+          entryId: entryId,
+          judgeId: normalizedJudgeId,
+        );
 
-      await _recordJudgingSessionEntry(
-        entryId: entryId,
-        judgeId: normalizedJudgeId,
-      );
-
-      // Local update (same for all entries)
-      widget.entry['placement'] = normalizedPlacement.isEmpty ? null : normalizedPlacement;
-      widget.entry['result_status'] = effectiveStatus;
-      widget.entry['disqualified_reason'] = normalizedDqReason;
-      widget.entry['is_shown'] = effectiveStatus != 'No Show';
-      widget.entry['is_disqualified'] = _isDisqualifiedStatus(effectiveStatus);
-      widget.entry['judged_by_show_judge_id'] = normalizedJudgeId;
-      widget.entry['result_entered_by_name'] =
-          writerName.isEmpty ? 'Signed-in Writer' : writerName;
-      widget.entry['result_entered_by_phone'] =
-          widget.isQrEntryMode ? writerPhone : null;
-      widget.entry['result_entered_at'] = now;
-      widget.entry['updated_at'] = now;
-      widget.entry['_awards'] =
-          widget.isFurOrWoolClass ? <String>[] : awardsToSave;
+        // Local update (same for all entries)
+        widget.entry['placement'] = normalizedPlacement.isEmpty
+            ? null
+            : normalizedPlacement;
+        widget.entry['result_status'] = effectiveStatus;
+        widget.entry['disqualified_reason'] = normalizedDqReason;
+        widget.entry['is_shown'] = effectiveStatus != 'No Show';
+        widget.entry['is_disqualified'] = _isDisqualifiedStatus(
+          effectiveStatus,
+        );
+        widget.entry['judged_by_show_judge_id'] = normalizedJudgeId;
+        widget.entry['result_entered_by_name'] = writerName.isEmpty
+            ? 'Signed-in Writer'
+            : writerName;
+        widget.entry['result_entered_by_phone'] = widget.isQrEntryMode
+            ? writerPhone
+            : null;
+        widget.entry['result_entered_at'] = now;
+        widget.entry['updated_at'] = now;
+        widget.entry['_awards'] = widget.isFurOrWoolClass
+            ? <String>[]
+            : awardsToSave;
       }
 
       Navigator.pop(
         context,
-        ResultsEntryOutcome(
-          goNext: goNext,
-          classComplete: goNext,
-        ),
+        ResultsEntryOutcome(goNext: goNext, classComplete: goNext),
       );
     } catch (e) {
       if (!mounted) return;
@@ -6904,8 +7095,7 @@ if (storedJudgeId.isEmpty) {
 
   @override
   Widget build(BuildContext context) {
-    final coopNumber =
-        (widget.entry['coop_number'] ?? '').toString().trim();
+    final coopNumber = (widget.entry['coop_number'] ?? '').toString().trim();
     final animalName = (widget.entry['animal_name'] ?? '').toString().trim();
     final tattoo = (widget.entry['tattoo'] ?? '').toString().trim();
     final breed = (widget.entry['breed'] ?? '').toString();
@@ -6922,12 +7112,16 @@ if (storedJudgeId.isEmpty) {
     final canPlace = !scratched && effectiveResultStatus == 'Shown';
 
     if (placementOptions.isEmpty && canPlace) {
-      final count = widget.shownCount <= 0 ? widget.totalCount : widget.shownCount;
+      final count = widget.shownCount <= 0
+          ? widget.totalCount
+          : widget.shownCount;
       placementOptions = List<String>.generate(count, (i) => '${i + 1}');
     }
 
     final canAward =
-        !scratched && effectiveResultStatus == 'Shown' && (_placement ?? '').trim() == '1';
+        !scratched &&
+        effectiveResultStatus == 'Shown' &&
+        (_placement ?? '').trim() == '1';
 
     return Padding(
       padding: EdgeInsets.only(
@@ -6948,9 +7142,9 @@ if (storedJudgeId.isEmpty) {
             children: [
               Text(
                 'Record Results (${widget.currentIndex + 1} of ${widget.totalCount})',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 8),
               if (_msg != null)
@@ -6960,7 +7154,9 @@ if (storedJudgeId.isEmpty) {
                   decoration: BoxDecoration(
                     color: Colors.red.withValues(alpha: .08),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.red.withValues(alpha: .20)),
+                    border: Border.all(
+                      color: Colors.red.withValues(alpha: .20),
+                    ),
                   ),
                   child: Text(
                     _msg!,
@@ -6989,8 +7185,8 @@ if (storedJudgeId.isEmpty) {
                 animalName.isNotEmpty && tattoo.isNotEmpty
                     ? '$animalName • Ear #: $tattoo'
                     : animalName.isNotEmpty
-                        ? animalName
-                        : 'Ear #: ${tattoo.isEmpty ? '(No ear #)' : tattoo}',
+                    ? animalName
+                    : 'Ear #: ${tattoo.isEmpty ? '(No ear #)' : tattoo}',
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
               if (scratched) ...[
@@ -7000,7 +7196,9 @@ if (storedJudgeId.isEmpty) {
                   decoration: BoxDecoration(
                     color: Colors.orange.withValues(alpha: .10),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.orange.withValues(alpha: .22)),
+                    border: Border.all(
+                      color: Colors.orange.withValues(alpha: .22),
+                    ),
                   ),
                   child: const Text(
                     'This animal is scratched. Placement and awards will be cleared.',
@@ -7014,9 +7212,7 @@ if (storedJudgeId.isEmpty) {
               const SizedBox(height: 14),
               DropdownButtonFormField<String>(
                 initialValue: _judgeId,
-                decoration: const InputDecoration(
-                  labelText: 'Judge',
-                ),
+                decoration: const InputDecoration(labelText: 'Judge'),
                 items: [
                   const DropdownMenuItem<String>(
                     value: '',
@@ -7040,9 +7236,7 @@ if (storedJudgeId.isEmpty) {
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
                 initialValue: _resultStatus,
-                decoration: const InputDecoration(
-                  labelText: 'Result Status',
-                ),
+                decoration: const InputDecoration(labelText: 'Result Status'),
                 items: kResultStatuses
                     .map(
                       (status) => DropdownMenuItem<String>(
@@ -7071,22 +7265,19 @@ if (storedJudgeId.isEmpty) {
               const SizedBox(height: 10),
               if (canPlace)
                 DropdownButtonFormField<String>(
-                  initialValue: (_placement != null && placementOptions.contains(_placement))
+                  initialValue:
+                      (_placement != null &&
+                          placementOptions.contains(_placement))
                       ? _placement
                       : '',
-                  decoration: const InputDecoration(
-                    labelText: 'Placement',
-                  ),
+                  decoration: const InputDecoration(labelText: 'Placement'),
                   items: [
                     const DropdownMenuItem<String>(
                       value: '',
                       child: Text('(No placing)'),
                     ),
                     ...placementOptions.map(
-                      (p) => DropdownMenuItem<String>(
-                        value: p,
-                        child: Text(p),
-                      ),
+                      (p) => DropdownMenuItem<String>(value: p, child: Text(p)),
                     ),
                   ],
                   onChanged: _saving
@@ -7106,9 +7297,9 @@ if (storedJudgeId.isEmpty) {
               if (canPlace) const SizedBox(height: 16),
               Text(
                 'Awards',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 8),
               ..._visibleAwardCodes.map((award) {
@@ -7124,7 +7315,11 @@ if (storedJudgeId.isEmpty) {
                   subtitle: !allowed && canAward
                       ? Text(_awardDisabledReason(award))
                       : null,
-                  onChanged: (!canAward || _saving || AppSession.isSupportMode || !allowed)
+                  onChanged:
+                      (!canAward ||
+                          _saving ||
+                          AppSession.isSupportMode ||
+                          !allowed)
                       ? null
                       : (v) {
                           setState(() {
@@ -7150,9 +7345,7 @@ if (storedJudgeId.isEmpty) {
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: _saving
-                          ? null
-                          : () => Navigator.pop(context),
+                      onPressed: _saving ? null : () => Navigator.pop(context),
                       child: const Text('Close'),
                     ),
                   ),
@@ -7167,7 +7360,8 @@ if (storedJudgeId.isEmpty) {
                   Expanded(
                     child: FilledButton(
                       style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFFD4A623),
+                        backgroundColor: AppColors.primaryButton,
+                        foregroundColor: AppColors.primaryButtonText,
                       ),
                       onPressed: _saving ? null : () => _save(goNext: true),
                       child: const Text('Save & Next'),

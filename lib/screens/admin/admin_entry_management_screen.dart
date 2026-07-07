@@ -1,6 +1,7 @@
 // lib/screens/admin/admin_entry_management_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:flutter/services.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -1102,7 +1103,7 @@ Widget _themedBottomSheetShell(BuildContext context, {required Widget child}) {
   return Container(
     decoration: const BoxDecoration(
       gradient: LinearGradient(
-        colors: [Color(0xFF11285A), Color(0xFF0B1C43)],
+        colors: [AppColors.navy, AppColors.navyDark],
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
       ),
@@ -1113,7 +1114,7 @@ Widget _themedBottomSheetShell(BuildContext context, {required Widget child}) {
       child: Container(
         margin: const EdgeInsets.only(top: 8),
         decoration: const BoxDecoration(
-          color: Color(0xFFF4F6FB),
+          color: AppColors.bg,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: child,
@@ -1912,8 +1913,8 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
             const SizedBox(height: 14),
             FilledButton(
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFFD4A623),
-                foregroundColor: Colors.black87,
+                backgroundColor: AppColors.primaryButton,
+                foregroundColor: AppColors.primaryButtonText,
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
               onPressed: _saving ? null : _save,
@@ -2305,8 +2306,8 @@ class _EditExhibitorSheetState extends State<_EditExhibitorSheet> {
             else
               FilledButton(
                 style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFFD4A623),
-                  foregroundColor: Colors.black87,
+                  backgroundColor: AppColors.primaryButton,
+                  foregroundColor: AppColors.primaryButtonText,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
                 onPressed: _saving ? null : _save,
@@ -2461,8 +2462,8 @@ class _MoveEntrySheetState extends State<_MoveEntrySheet> {
             const SizedBox(height: 12),
             FilledButton(
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFFD4A623),
-                foregroundColor: Colors.black87,
+                backgroundColor: AppColors.primaryButton,
+                foregroundColor: AppColors.primaryButtonText,
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
               onPressed: _saving ? null : _save,

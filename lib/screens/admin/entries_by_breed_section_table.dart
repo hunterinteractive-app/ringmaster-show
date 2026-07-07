@@ -3,6 +3,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/utils/csv_exporter.dart';
 import 'package:ringmaster_show/services/app_session.dart';
@@ -39,10 +40,12 @@ class EntriesByBreedSectionTable extends StatefulWidget {
   });
 
   @override
-  State<EntriesByBreedSectionTable> createState() => _EntriesByBreedSectionTableState();
+  State<EntriesByBreedSectionTable> createState() =>
+      _EntriesByBreedSectionTableState();
 }
 
-class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable> {
+class _EntriesByBreedSectionTableState
+    extends State<EntriesByBreedSectionTable> {
   bool _loading = true;
   String? _msg;
 
@@ -111,8 +114,12 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
 
         final aso = a['sort_order'];
         final bso = b['sort_order'];
-        final asoI = (aso is int) ? aso : int.tryParse(aso?.toString() ?? '') ?? 9999;
-        final bsoI = (bso is int) ? bso : int.tryParse(bso?.toString() ?? '') ?? 9999;
+        final asoI = (aso is int)
+            ? aso
+            : int.tryParse(aso?.toString() ?? '') ?? 9999;
+        final bsoI = (bso is int)
+            ? bso
+            : int.tryParse(bso?.toString() ?? '') ?? 9999;
         final soCmp = asoI.compareTo(bsoI);
         if (soCmp != 0) return soCmp;
 
@@ -189,7 +196,8 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
     final l = s.toLowerCase();
 
     if (l.contains('senior') || l.startsWith('sr')) return 'Senior';
-    if (l.contains('intermediate') || l.startsWith('int')) return 'Intermediate';
+    if (l.contains('intermediate') || l.startsWith('int'))
+      return 'Intermediate';
     if (l.contains('junior') || l.startsWith('jr')) return 'Junior';
     if (l.contains('open')) return 'Open';
 
@@ -225,7 +233,9 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
         kindLabel = 'Youth';
         break;
       default:
-        kindLabel = kind.isEmpty ? 'Section' : kind[0].toUpperCase() + kind.substring(1);
+        kindLabel = kind.isEmpty
+            ? 'Section'
+            : kind[0].toUpperCase() + kind.substring(1);
     }
 
     return letter.isEmpty ? kindLabel : '$kindLabel $letter';
@@ -235,7 +245,9 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
     final breedBuckets = <String, List<Map<String, dynamic>>>{};
 
     for (final row in rows) {
-      final breed = _safe(row, 'breed').isEmpty ? '(Unknown Breed)' : _safe(row, 'breed');
+      final breed = _safe(row, 'breed').isEmpty
+          ? '(Unknown Breed)'
+          : _safe(row, 'breed');
       breedBuckets.putIfAbsent(breed, () => <Map<String, dynamic>>[]);
       breedBuckets[breed]!.add(row);
     }
@@ -243,7 +255,9 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
     final groups = breedBuckets.entries.map((breedEntry) {
       final breed = breedEntry.key;
       final breedRows = breedEntry.value;
-      final species = breedRows.isEmpty ? '' : _safe(breedRows.first, 'species');
+      final species = breedRows.isEmpty
+          ? ''
+          : _safe(breedRows.first, 'species');
 
       final breedCounts = <String, int>{};
       final breedExhibitorsBySection = <String, Set<String>>{};
@@ -266,7 +280,9 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
 
       final varietyBuckets = <String, List<Map<String, dynamic>>>{};
       for (final row in breedRows) {
-        final variety = _safe(row, 'variety').isEmpty ? '(No Variety)' : _safe(row, 'variety');
+        final variety = _safe(row, 'variety').isEmpty
+            ? '(No Variety)'
+            : _safe(row, 'variety');
         varietyBuckets.putIfAbsent(variety, () => <Map<String, dynamic>>[]);
         varietyBuckets[variety]!.add(row);
       }
@@ -371,7 +387,9 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
     }).toList();
 
     groups.sort((a, b) {
-      final speciesCmp = _speciesRank(a.species).compareTo(_speciesRank(b.species));
+      final speciesCmp = _speciesRank(
+        a.species,
+      ).compareTo(_speciesRank(b.species));
       if (speciesCmp != 0) return speciesCmp;
       return a.breed.toLowerCase().compareTo(b.breed.toLowerCase());
     });
@@ -383,12 +401,18 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
     return countsBySection[sectionId] ?? 0;
   }
 
-  int _exhibitorsForSection(Map<String, Set<String>> exhibitorsBySection, String sectionId) {
+  int _exhibitorsForSection(
+    Map<String, Set<String>> exhibitorsBySection,
+    String sectionId,
+  ) {
     return exhibitorsBySection[sectionId]?.length ?? 0;
   }
 
   String _csvEscape(String v) {
-    if (v.contains(',') || v.contains('"') || v.contains('\n') || v.contains('\r')) {
+    if (v.contains(',') ||
+        v.contains('"') ||
+        v.contains('\n') ||
+        v.contains('\r')) {
       return '"${v.replaceAll('"', '""')}"';
     }
     return v;
@@ -484,7 +508,10 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
             children: [
               pw.Text(
                 widget.title,
-                style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+                style: pw.TextStyle(
+                  fontSize: 16,
+                  fontWeight: pw.FontWeight.bold,
+                ),
               ),
               pw.Text(widget.showName),
               pw.SizedBox(height: 8),
@@ -514,8 +541,12 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
               ),
               cellStyle: const pw.TextStyle(fontSize: 7),
               border: pw.TableBorder.all(color: PdfColors.grey400, width: .4),
-              headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
-              oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
+              headerDecoration: const pw.BoxDecoration(
+                color: PdfColors.grey300,
+              ),
+              oddRowDecoration: const pw.BoxDecoration(
+                color: PdfColors.grey100,
+              ),
               cellPadding: const pw.EdgeInsets.all(3),
             ),
           ],
@@ -528,9 +559,9 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('PDF export failed: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('PDF export failed: $e')));
     }
   }
 
@@ -549,14 +580,12 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
       if (!mounted) return;
       if (msg == null) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(msg)),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('CSV export failed: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('CSV export failed: $e')));
     }
   }
 
@@ -564,11 +593,9 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFF11285A).withValues(alpha: 0.06),
+        color: AppColors.navy.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: const Color(0xFF11285A).withValues(alpha: 0.10),
-        ),
+        border: Border.all(color: AppColors.navy.withValues(alpha: 0.10)),
       ),
       child: Text(
         '$label: $value',
@@ -609,10 +636,7 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
         children: [
           const Text(
             'Entry Totals',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-            ),
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 10),
           SingleChildScrollView(
@@ -626,7 +650,9 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
 
                   for (final breed in _breedGroups) {
                     showing += _countForSection(breed.countsBySection, sid);
-                    exhibitors.addAll(breed.exhibitorsBySection[sid] ?? const <String>{});
+                    exhibitors.addAll(
+                      breed.exhibitorsBySection[sid] ?? const <String>{},
+                    );
                   }
 
                   return Padding(
@@ -661,14 +687,9 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: Colors.black.withValues(alpha: 0.06),
-        ),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
       ),
-      child: Text(
-        text,
-        style: const TextStyle(fontWeight: FontWeight.w500),
-      ),
+      child: Text(text, style: const TextStyle(fontWeight: FontWeight.w500)),
     );
   }
 
@@ -681,7 +702,10 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
           ..._sections.map((s) {
             final sid = s['id'].toString();
             final rabbits = _countForSection(breed.countsBySection, sid);
-            final exhibitors = _exhibitorsForSection(breed.exhibitorsBySection, sid);
+            final exhibitors = _exhibitorsForSection(
+              breed.exhibitorsBySection,
+              sid,
+            );
             return _summaryChip(
               widget.showExhibitorCounts
                   ? '${_sectionHeader(s)}: ${rabbits == 0 && exhibitors == 0 ? '-' : '$rabbits/$exhibitors'}'
@@ -702,7 +726,10 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
           ..._sections.map((s) {
             final sid = s['id'].toString();
             final rabbits = _countForSection(variety.countsBySection, sid);
-            final exhibitors = _exhibitorsForSection(variety.exhibitorsBySection, sid);
+            final exhibitors = _exhibitorsForSection(
+              variety.exhibitorsBySection,
+              sid,
+            );
             return _summaryChip(
               widget.showExhibitorCounts
                   ? '${_sectionHeader(s)}: ${rabbits == 0 && exhibitors == 0 ? '-' : '$rabbits/$exhibitors'}'
@@ -719,11 +746,9 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
       margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF11285A).withValues(alpha: 0.05),
+        color: AppColors.navy.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: const Color(0xFF11285A).withValues(alpha: 0.10),
-        ),
+        border: Border.all(color: AppColors.navy.withValues(alpha: 0.10)),
       ),
       child: Text(
         widget.showExhibitorCounts
@@ -750,7 +775,7 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
           dataRowMaxHeight: 54,
           columnSpacing: 18,
           headingRowColor: WidgetStatePropertyAll(
-            const Color(0xFF11285A).withValues(alpha: 0.06),
+            AppColors.navy.withValues(alpha: 0.06),
           ),
           columns: [
             const DataColumn(
@@ -790,9 +815,14 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
                 ..._sections.map((s) {
                   final sid = s['id'].toString();
                   final rabbits = _countForSection(c.countsBySection, sid);
-                  final exhibitors = _exhibitorsForSection(c.exhibitorsBySection, sid);
+                  final exhibitors = _exhibitorsForSection(
+                    c.exhibitorsBySection,
+                    sid,
+                  );
                   final text = widget.showExhibitorCounts
-                      ? ((rabbits == 0 && exhibitors == 0) ? '-' : '$rabbits/$exhibitors')
+                      ? ((rabbits == 0 && exhibitors == 0)
+                            ? '-'
+                            : '$rabbits/$exhibitors')
                       : (rabbits == 0 ? '-' : rabbits.toString());
                   return DataCell(Text(text));
                 }),
@@ -813,10 +843,7 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
       return Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [
-              Color(0xFF11285A),
-              Color(0xFF0B1C43),
-            ],
+            colors: [AppColors.navy, AppColors.navyDark],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
           ),
@@ -831,10 +858,7 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
       return Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [
-              Color(0xFF11285A),
-              Color(0xFF0B1C43),
-            ],
+            colors: [AppColors.navy, AppColors.navyDark],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
           ),
@@ -864,10 +888,7 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
       return Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [
-              Color(0xFF11285A),
-              Color(0xFF0B1C43),
-            ],
+            colors: [AppColors.navy, AppColors.navyDark],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
           ),
@@ -885,10 +906,7 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
       return Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [
-              Color(0xFF11285A),
-              Color(0xFF0B1C43),
-            ],
+            colors: [AppColors.navy, AppColors.navyDark],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
           ),
@@ -905,10 +923,7 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            Color(0xFF11285A),
-            Color(0xFF0B1C43),
-          ],
+          colors: [AppColors.navy, AppColors.navyDark],
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
         ),
@@ -917,7 +932,7 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
         child: Container(
           margin: const EdgeInsets.only(top: 8),
           decoration: const BoxDecoration(
-            color: Color(0xFFF4F6FB),
+            color: AppColors.bg,
             borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: Column(
@@ -930,9 +945,8 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
                     Expanded(
                       child: Text(
                         widget.title,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
                       ),
                     ),
                     if (widget.showExportButton) ...[
@@ -1006,7 +1020,12 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
                           horizontal: 16,
                           vertical: 6,
                         ),
-                        childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                        childrenPadding: const EdgeInsets.fromLTRB(
+                          12,
+                          0,
+                          12,
+                          12,
+                        ),
                         title: Text(
                           breed.breed,
                           style: const TextStyle(fontWeight: FontWeight.w700),
@@ -1025,7 +1044,10 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
                               runSpacing: 8,
                               children: [
                                 if (widget.showExhibitorCounts)
-                                  _countChip('Exhibitors', breed.exhibitorCount),
+                                  _countChip(
+                                    'Exhibitors',
+                                    breed.exhibitorCount,
+                                  ),
                                 _countChip('Showing', breed.rabbitCount),
                               ],
                             ),
@@ -1048,15 +1070,24 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
                                   horizontal: 16,
                                   vertical: 6,
                                 ),
-                                childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                                childrenPadding: const EdgeInsets.fromLTRB(
+                                  12,
+                                  0,
+                                  12,
+                                  12,
+                                ),
                                 title: Text(
                                   variety.variety,
-                                  style: const TextStyle(fontWeight: FontWeight.w600),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                                 subtitle: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text('${variety.classes.length} age/sex classes'),
+                                    Text(
+                                      '${variety.classes.length} age/sex classes',
+                                    ),
                                     const SizedBox(height: 8),
                                     _varietySummaryBar(variety),
                                     const SizedBox(height: 8),
@@ -1065,8 +1096,14 @@ class _EntriesByBreedSectionTableState extends State<EntriesByBreedSectionTable>
                                       runSpacing: 8,
                                       children: [
                                         if (widget.showExhibitorCounts)
-                                          _countChip('Exhibitors', variety.exhibitorCount),
-                                        _countChip('Showing', variety.rabbitCount),
+                                          _countChip(
+                                            'Exhibitors',
+                                            variety.exhibitorCount,
+                                          ),
+                                        _countChip(
+                                          'Showing',
+                                          variety.rabbitCount,
+                                        ),
                                       ],
                                     ),
                                   ],

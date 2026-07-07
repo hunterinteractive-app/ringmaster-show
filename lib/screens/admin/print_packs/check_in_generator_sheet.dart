@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/services/app_session.dart';
 
@@ -1563,8 +1564,8 @@ class _CheckInGeneratorSheetState extends State<CheckInGeneratorSheet> {
             ],
             FilledButton.icon(
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFFD4A623),
-                foregroundColor: Colors.black87,
+                backgroundColor: AppColors.primaryButton,
+                foregroundColor: AppColors.primaryButtonText,
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
               onPressed: (_building || _emailing) ? null : _generatePdf,
@@ -1575,8 +1576,8 @@ class _CheckInGeneratorSheetState extends State<CheckInGeneratorSheet> {
             const SizedBox(height: 8),
             FilledButton.icon(
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF11285A),
-                foregroundColor: Colors.white,
+                backgroundColor: AppColors.header,
+                foregroundColor: AppColors.headerForeground,
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
               onPressed: (_building || _emailing) ? null : _emailCheckInSheets,

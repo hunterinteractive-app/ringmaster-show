@@ -1,6 +1,7 @@
 // lib/screens/admin/admin_print_packs_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:ringmaster_show/services/app_session.dart';
@@ -11,7 +12,6 @@ import 'print_packs/coop_cards_generator_sheet.dart';
 import 'print_packs/remark_cards_generator_sheet.dart';
 
 final supabase = Supabase.instance.client;
-
 
 class AdminPrintPacksScreen extends StatefulWidget {
   final String showId;
@@ -42,10 +42,14 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
   bool _savingAutoEmailCheckInSheets = false;
   bool _savingSecretaryInfo = false;
   bool _secretaryInfoExpanded = true;
-  final TextEditingController _secretaryNameController = TextEditingController();
-  final TextEditingController _secretaryAddressController = TextEditingController();
-  final TextEditingController _secretaryPhoneController = TextEditingController();
-  final TextEditingController _secretaryEmailController = TextEditingController();
+  final TextEditingController _secretaryNameController =
+      TextEditingController();
+  final TextEditingController _secretaryAddressController =
+      TextEditingController();
+  final TextEditingController _secretaryPhoneController =
+      TextEditingController();
+  final TextEditingController _secretaryEmailController =
+      TextEditingController();
   bool _isSuperAdmin = false;
   bool _loadingSuperAdmin = true;
   DateTime? _entryCloseAt;
@@ -68,10 +72,7 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
   }
 
   Future<void> _loadInitialData() async {
-    await Future.wait([
-      _loadSuperAdminStatus(),
-      _loadSections(),
-    ]);
+    await Future.wait([_loadSuperAdminStatus(), _loadSections()]);
   }
 
   Future<void> _loadSuperAdminStatus() async {
@@ -136,8 +137,8 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
 
       final show = showRow ?? <String, dynamic>{};
       final rawEntryCloseAt = (show['entry_close_at'] ?? '').toString();
-      final rawAutoEmailedAt =
-          (show['checkin_sheets_auto_emailed_at'] ?? '').toString();
+      final rawAutoEmailedAt = (show['checkin_sheets_auto_emailed_at'] ?? '')
+          .toString();
 
       _entryCloseAt = rawEntryCloseAt.isEmpty
           ? null
@@ -183,7 +184,9 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
 
   void _autoFillSecretaryInfoFromShow(Map<String, dynamic> show) {
     final secretaryName = (show['secretary_name'] ?? '').toString().trim();
-    final secretaryAddress = (show['secretary_address'] ?? '').toString().trim();
+    final secretaryAddress = (show['secretary_address'] ?? '')
+        .toString()
+        .trim();
     final secretaryPhone = (show['secretary_phone'] ?? '').toString().trim();
     final secretaryEmail = (show['secretary_email'] ?? '').toString().trim();
 
@@ -195,6 +198,7 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
     // Keep this section open by default only when it still needs attention.
     _secretaryInfoExpanded = !_secretaryInfoComplete;
   }
+
   void _sortSections() {
     _sections.sort((a, b) {
       int kindRank(String k) {
@@ -244,7 +248,6 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
     });
   }
 
-
   String _sectionLabel(Map<String, dynamic> s) {
     final dn = (s['display_name'] ?? '').toString().trim();
     if (dn.isNotEmpty) return dn;
@@ -288,7 +291,8 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
 
     if (AppSession.isSupportMode) {
       setState(() {
-        _msg = 'Secretary information cannot be changed while viewing in support mode.';
+        _msg =
+            'Secretary information cannot be changed while viewing in support mode.';
       });
       return;
     }
@@ -301,7 +305,8 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
     if (name.isEmpty || address.isEmpty || phone.isEmpty || email.isEmpty) {
       setState(() {
         _secretaryInfoExpanded = true;
-        _msg = 'Please enter the show secretary name, address, phone, and email.';
+        _msg =
+            'Please enter the show secretary name, address, phone, and email.';
       });
       return;
     }
@@ -312,13 +317,16 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
     });
 
     try {
-      await supabase.from('shows').update({
-        'secretary_name': name,
-        'secretary_address': address,
-        'secretary_phone': phone,
-        'secretary_email': email,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      }).eq('id', widget.showId);
+      await supabase
+          .from('shows')
+          .update({
+            'secretary_name': name,
+            'secretary_address': address,
+            'secretary_phone': phone,
+            'secretary_email': email,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('id', widget.showId);
 
       if (!mounted) return;
       setState(() {
@@ -340,7 +348,8 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
 
     if (value && _entryCloseAt == null) {
       setState(() {
-        _msg = 'Set an entry deadline before enabling automatic check-in sheet emails.';
+        _msg =
+            'Set an entry deadline before enabling automatic check-in sheet emails.';
       });
       return;
     }
@@ -351,10 +360,13 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
     });
 
     try {
-      await supabase.from('shows').update({
-        'auto_email_checkin_sheets': value,
-        if (value) 'checkin_sheets_auto_email_error': null,
-      }).eq('id', widget.showId);
+      await supabase
+          .from('shows')
+          .update({
+            'auto_email_checkin_sheets': value,
+            if (value) 'checkin_sheets_auto_email_error': null,
+          })
+          .eq('id', widget.showId);
 
       if (!mounted) return;
       setState(() {
@@ -412,7 +424,8 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
     if (!_secretaryInfoComplete) {
       setState(() {
         _secretaryInfoExpanded = true;
-        _msg = 'Please save show secretary information before generating check-in sheets.';
+        _msg =
+            'Please save show secretary information before generating check-in sheets.';
       });
       return;
     }
@@ -465,7 +478,8 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
     if (!_secretaryInfoComplete) {
       setState(() {
         _secretaryInfoExpanded = true;
-        _msg = 'Please save show secretary information before generating control sheets.';
+        _msg =
+            'Please save show secretary information before generating control sheets.';
       });
       return;
     }
@@ -525,7 +539,10 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
     if (sections.isEmpty) return 'Section';
     if (sections.length == 1) return _sectionLabel(sections.first);
 
-    final letter = (sections.first['letter'] ?? '').toString().trim().toUpperCase();
+    final letter = (sections.first['letter'] ?? '')
+        .toString()
+        .trim()
+        .toUpperCase();
     if (letter.isNotEmpty) return 'Show $letter';
 
     return sections.map(_sectionLabel).join(' / ');
@@ -534,7 +551,8 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
   Widget _messageBanner() {
     if (_msg == null) return const SizedBox.shrink();
 
-    final isSuccess = !_msg!.toLowerCase().contains('failed') &&
+    final isSuccess =
+        !_msg!.toLowerCase().contains('failed') &&
         !_msg!.toLowerCase().contains('missing') &&
         !_msg!.toLowerCase().contains('please');
 
@@ -575,10 +593,7 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: .05),
-            blurRadius: 12,
-          ),
+          BoxShadow(color: Colors.black.withValues(alpha: .05), blurRadius: 12),
         ],
       ),
       child: ExpansionTile(
@@ -592,10 +607,7 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
         ),
         title: const Text(
           'Show Secretary Information',
-          style: TextStyle(
-            fontSize: 17,
-            fontWeight: FontWeight.w600,
-          ),
+          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
         ),
         subtitle: Text(
           complete
@@ -689,10 +701,7 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: .05),
-            blurRadius: 12,
-          ),
+          BoxShadow(color: Colors.black.withValues(alpha: .05), blurRadius: 12),
         ],
       ),
       child: Column(
@@ -714,10 +723,7 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
             ],
           ),
           const SizedBox(height: 6),
-          Text(
-            subtitle,
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
+          Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
           const SizedBox(height: 14),
           ...children,
         ],
@@ -727,7 +733,8 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final canOpenCheckIn = !_loading &&
+    final canOpenCheckIn =
+        !_loading &&
         (_combineSections ||
             (_selectedSectionId != null && _selectedSectionId!.isNotEmpty));
     final hasSections = _sections.isNotEmpty;
@@ -798,11 +805,11 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
                       subtitle: Text(
                         _pairOpenYouthByLetter
                             ? (_youthFirst
-                                ? 'Print order: Youth A, Open A, Youth B, Open B…'
-                                : 'Print order: Open A, Youth A, Open B, Youth B…')
+                                  ? 'Print order: Youth A, Open A, Youth B, Open B…'
+                                  : 'Print order: Open A, Youth A, Open B, Youth B…')
                             : (_youthFirst
-                                ? 'Print order: all Youth sections, then all Open sections.'
-                                : 'Print order: all Open sections, then all Youth sections.'),
+                                  ? 'Print order: all Youth sections, then all Open sections.'
+                                  : 'Print order: all Open sections, then all Youth sections.'),
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -856,17 +863,22 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
                             width: double.infinity,
                             child: FilledButton.icon(
                               style: FilledButton.styleFrom(
-                                backgroundColor: const Color(0xFFD4A623),
-                                foregroundColor: Colors.black87,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                backgroundColor: AppColors.primaryButton,
+                                foregroundColor: AppColors.primaryButtonText,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(14),
                                 ),
                               ),
-                              onPressed: () => _openControlSheetsGeneratorForSections(
-                                sections: sectionGroup,
-                                sectionLabel: _controlSheetButtonLabel(sectionGroup),
-                              ),
+                              onPressed: () =>
+                                  _openControlSheetsGeneratorForSections(
+                                    sections: sectionGroup,
+                                    sectionLabel: _controlSheetButtonLabel(
+                                      sectionGroup,
+                                    ),
+                                  ),
                               icon: const Icon(Icons.download),
                               label: Text(
                                 'Download Control Sheets — ${_controlSheetButtonLabel(sectionGroup)}',
@@ -886,7 +898,8 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
                     SwitchListTile(
                       value: _autoEmailCheckInSheets,
                       contentPadding: EdgeInsets.zero,
-                      onChanged: (_savingAutoEmailCheckInSheets ||
+                      onChanged:
+                          (_savingAutoEmailCheckInSheets ||
                               _entryCloseAt == null ||
                               _checkInSheetsAutoEmailedAt != null)
                           ? null
@@ -898,8 +911,8 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
                         _checkInSheetsAutoEmailedAt != null
                             ? 'Already emailed on ${_checkInSheetsAutoEmailedAt!.toLocal()}'
                             : _entryCloseAt == null
-                                ? 'Set an entry deadline before enabling this.'
-                                : 'Entry deadline: ${_entryCloseAt!.toLocal()}',
+                            ? 'Set an entry deadline before enabling this.'
+                            : 'Entry deadline: ${_entryCloseAt!.toLocal()}',
                       ),
                     ),
                     if (_checkInSheetsAutoEmailError != null) ...[
@@ -923,7 +936,8 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
                               (_selectedSectionId == null ||
                                   _selectedSectionId!.isEmpty) &&
                               _sections.isNotEmpty) {
-                            _selectedSectionId = _sections.first['id']?.toString();
+                            _selectedSectionId = _sections.first['id']
+                                ?.toString();
                           }
                         });
                       },
@@ -936,9 +950,12 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
                     if (!_combineSections) ...[
                       DropdownButtonFormField<String>(
                         isExpanded: true,
-                        initialValue: (_selectedSectionId != null &&
-                                _sections.any((s) =>
-                                    s['id']?.toString() == _selectedSectionId))
+                        initialValue:
+                            (_selectedSectionId != null &&
+                                _sections.any(
+                                  (s) =>
+                                      s['id']?.toString() == _selectedSectionId,
+                                ))
                             ? _selectedSectionId
                             : null,
                         hint: const Text('Select a section'),
@@ -985,14 +1002,16 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
                       width: double.infinity,
                       child: FilledButton.icon(
                         style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFFD4A623),
-                          foregroundColor: Colors.black87,
+                          backgroundColor: AppColors.primaryButton,
+                          foregroundColor: AppColors.primaryButtonText,
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
                           ),
                         ),
-                        onPressed: canOpenCheckIn ? _openCheckInGenerator : null,
+                        onPressed: canOpenCheckIn
+                            ? _openCheckInGenerator
+                            : null,
                         icon: const Icon(Icons.picture_as_pdf),
                         label: Text(
                           _combineSections
@@ -1014,8 +1033,8 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
                       width: double.infinity,
                       child: FilledButton.icon(
                         style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFFD4A623),
-                          foregroundColor: Colors.black87,
+                          backgroundColor: AppColors.primaryButton,
+                          foregroundColor: AppColors.primaryButtonText,
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
@@ -1028,38 +1047,40 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
                     ),
                   ],
                 ),
-                      _buildSectionCard(
-                        icon: Icons.rate_review_outlined,
-                        title: 'Remark Cards',
-                        subtitle:
-                            'Generate traditional rabbit show remark cards. Prints 2 cards per 8.5 x 11 sheet.',
-                        children: [
-                          SwitchListTile(
-                            value: _includeScratched,
-                            contentPadding: EdgeInsets.zero,
-                            onChanged: (v) => setState(() => _includeScratched = v),
-                            title: const Text('Include scratched entries'),
+                _buildSectionCard(
+                  icon: Icons.rate_review_outlined,
+                  title: 'Remark Cards',
+                  subtitle:
+                      'Generate traditional rabbit show remark cards. Prints 2 cards per 8.5 x 11 sheet.',
+                  children: [
+                    SwitchListTile(
+                      value: _includeScratched,
+                      contentPadding: EdgeInsets.zero,
+                      onChanged: (v) => setState(() => _includeScratched = v),
+                      title: const Text('Include scratched entries'),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.primaryButton,
+                          foregroundColor: AppColors.primaryButtonText,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
                           ),
-                          const SizedBox(height: 10),
-                          SizedBox(
-                            width: double.infinity,
-                            child: FilledButton.icon(
-                              style: FilledButton.styleFrom(
-                                backgroundColor: const Color(0xFFD4A623),
-                                foregroundColor: Colors.black87,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                              ),
-                              onPressed: hasSections ? _openRemarkCardsGenerator : null,
-                              icon: const Icon(Icons.picture_as_pdf),
-                              label: const Text('Generate Remark Cards'),
-                            ),
-                          ),
-                        ],
+                        ),
+                        onPressed: hasSections
+                            ? _openRemarkCardsGenerator
+                            : null,
+                        icon: const Icon(Icons.picture_as_pdf),
+                        label: const Text('Generate Remark Cards'),
                       ),
+                    ),
                   ],
+                ),
+              ],
             ),
     );
   }
@@ -1069,10 +1090,7 @@ Widget _themedBottomSheetShell(BuildContext context, {required Widget child}) {
   return Container(
     decoration: const BoxDecoration(
       gradient: LinearGradient(
-        colors: [
-          Color(0xFF11285A),
-          Color(0xFF0B1C43),
-        ],
+        colors: [AppColors.navy, AppColors.navyDark],
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
       ),
@@ -1083,7 +1101,7 @@ Widget _themedBottomSheetShell(BuildContext context, {required Widget child}) {
       child: Container(
         margin: const EdgeInsets.only(top: 8),
         decoration: const BoxDecoration(
-          color: Color(0xFFF4F6FB),
+          color: AppColors.bg,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: child,
@@ -1091,4 +1109,3 @@ Widget _themedBottomSheetShell(BuildContext context, {required Widget child}) {
     ),
   );
 }
-

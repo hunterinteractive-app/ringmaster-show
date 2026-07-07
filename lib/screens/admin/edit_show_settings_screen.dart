@@ -1,6 +1,7 @@
 // lib/screens/admin/edit_show_settings_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/widgets/help_report_dialog.dart';
 import 'dart:convert';
@@ -37,10 +38,7 @@ final supabase = Supabase.instance.client;
 class EditShowSettingsScreen extends StatefulWidget {
   final String showId;
 
-  const EditShowSettingsScreen({
-    super.key,
-    required this.showId,
-  });
+  const EditShowSettingsScreen({super.key, required this.showId});
 
   @override
   State<EditShowSettingsScreen> createState() => _EditShowSettingsScreenState();
@@ -66,15 +64,15 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
         throw Exception('No signed-in user found.');
       }
 
-      final rows = await supabase.rpc(
-        'get_my_show_staff_approval_pin',
-        params: {
-          'p_show_id': widget.showId,
-        },
-      ).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () => throw Exception('PIN lookup timed out.'),
-      );
+      final rows = await supabase
+          .rpc(
+            'get_my_show_staff_approval_pin',
+            params: {'p_show_id': widget.showId},
+          )
+          .timeout(
+            const Duration(seconds: 10),
+            onTimeout: () => throw Exception('PIN lookup timed out.'),
+          );
       if (!mounted) return;
       setState(() {
         final list = rows as List;
@@ -93,7 +91,8 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   }
 
   Future<void> _regenerateStaffPins() async {
-    final confirmed = await showDialog<bool>(
+    final confirmed =
+        await showDialog<bool>(
           context: context,
           builder: (_) => AlertDialog(
             title: const Text('Regenerate Staff PINs?'),
@@ -122,15 +121,15 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
     });
 
     try {
-      await supabase.rpc(
-        'regenerate_my_show_staff_approval_pin',
-        params: {
-          'p_show_id': widget.showId,
-        },
-      ).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () => throw Exception('PIN generation timed out.'),
-      );
+      await supabase
+          .rpc(
+            'regenerate_my_show_staff_approval_pin',
+            params: {'p_show_id': widget.showId},
+          )
+          .timeout(
+            const Duration(seconds: 10),
+            onTimeout: () => throw Exception('PIN generation timed out.'),
+          );
 
       await _loadStaffPins();
 
@@ -198,7 +197,6 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
     return n.isEmpty ? _showNameForTitle : n;
   }
 
-
   String _fmtDate(DateTime? d) {
     if (d == null) return '(not set)';
     final x = _asLocal(d);
@@ -227,7 +225,6 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
     return DateTime.tryParse(s);
   }
 
-
   String _finalAwardModeLabel(String mode) {
     switch (mode) {
       case 'bis_ris':
@@ -245,7 +242,8 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
 
     final nextLocked = !_isLocked;
 
-    final confirmed = await showDialog<bool>(
+    final confirmed =
+        await showDialog<bool>(
           context: context,
           builder: (_) => AlertDialog(
             title: Text(nextLocked ? 'Lock Show?' : 'Unlock Show?'),
@@ -276,10 +274,15 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
     });
 
     try {
-      await supabase.from('shows').update({
-        'is_locked': nextLocked,
-        'locked_at': nextLocked ? DateTime.now().toUtc().toIso8601String() : null,
-      }).eq('id', widget.showId);
+      await supabase
+          .from('shows')
+          .update({
+            'is_locked': nextLocked,
+            'locked_at': nextLocked
+                ? DateTime.now().toUtc().toIso8601String()
+                : null,
+          })
+          .eq('id', widget.showId);
 
       if (!mounted) return;
       setState(() {
@@ -323,7 +326,8 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
             !_clubs.any((club) => club['id']?.toString() == _selectedClubId)) {
           _clubs.insert(0, {
             'id': _selectedClubId,
-            'name': (_selectedClubName == null || _selectedClubName!.trim().isEmpty)
+            'name':
+                (_selectedClubName == null || _selectedClubName!.trim().isEmpty)
                 ? 'Current Hosting Club'
                 : _selectedClubName,
           });
@@ -331,9 +335,9 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
 
         if (_selectedClubId != null && _selectedClubId!.isNotEmpty) {
           final selected = _clubs.cast<Map<String, dynamic>?>().firstWhere(
-                (club) => club?['id']?.toString() == _selectedClubId,
-                orElse: () => null,
-              );
+            (club) => club?['id']?.toString() == _selectedClubId,
+            orElse: () => null,
+          );
 
           if (selected != null) {
             _selectedClubName = selected['name']?.toString();
@@ -489,10 +493,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                   }
 
                   if (updatedName != originalName) {
-                    await ClubService.updateClub(
-                      clubId: id,
-                      name: updatedName,
-                    );
+                    await ClubService.updateClub(clubId: id, name: updatedName);
                   }
                 }
 
@@ -563,8 +564,9 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
               ),
               actions: [
                 TextButton(
-                  onPressed:
-                      saving ? null : () => Navigator.of(dialogContext).pop(),
+                  onPressed: saving
+                      ? null
+                      : () => Navigator.of(dialogContext).pop(),
                   child: const Text('Close'),
                 ),
                 FilledButton(
@@ -695,7 +697,9 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
       lastDate: DateTime(2035),
     );
     if (picked == null) return;
-    setState(() => _startDate = DateTime(picked.year, picked.month, picked.day));
+    setState(
+      () => _startDate = DateTime(picked.year, picked.month, picked.day),
+    );
   }
 
   Future<void> _pickEndDate() async {
@@ -793,20 +797,23 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
     });
 
     try {
-      await supabase.from('shows').update({
-        'name': _name.text.trim(),
-        'location_name': _location.text.trim(),
-        'start_date': _startDate!.toIso8601String().substring(0, 10),
-        'end_date': _endDate!.toIso8601String().substring(0, 10),
-        'timezone': _timezone,
-        'is_published': _published,
-        'is_national_show': _isNationalShow,
-        'entry_open_at': _entryOpenAt?.toUtc().toIso8601String(),
-        'entry_close_at': _entryCloseAt?.toUtc().toIso8601String(),
-        'final_award_mode': _finalAwardMode,
-        'club_id': _selectedClubId,
-        'club_name': _selectedClubName,
-      }).eq('id', widget.showId);
+      await supabase
+          .from('shows')
+          .update({
+            'name': _name.text.trim(),
+            'location_name': _location.text.trim(),
+            'start_date': _startDate!.toIso8601String().substring(0, 10),
+            'end_date': _endDate!.toIso8601String().substring(0, 10),
+            'timezone': _timezone,
+            'is_published': _published,
+            'is_national_show': _isNationalShow,
+            'entry_open_at': _entryOpenAt?.toUtc().toIso8601String(),
+            'entry_close_at': _entryCloseAt?.toUtc().toIso8601String(),
+            'final_award_mode': _finalAwardMode,
+            'club_id': _selectedClubId,
+            'club_name': _selectedClubName,
+          })
+          .eq('id', widget.showId);
 
       if (!mounted) return;
       setState(() {
@@ -854,9 +861,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   void _openPaybacks() {
     showDialog<void>(
       context: context,
-      builder: (_) => PaybackSettingsDialog(
-        showId: widget.showId,
-      ),
+      builder: (_) => PaybackSettingsDialog(showId: widget.showId),
     );
   }
 
@@ -879,7 +884,6 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
       ),
     );
   }
-
 
   void _openEntryManagement() {
     Navigator.push(
@@ -941,15 +945,13 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
     );
   }
 
-//  void _openResultsValidation() {
-//    _showPostShowPlaceholder(
-//      title: 'Results Validation',
-//      body:
-//          'This is the next post-show screen to build.\n\nUse it to review missing placements, inconsistent specials, and incomplete class results before publishing.',
-//    );
-//  }
-
-
+  //  void _openResultsValidation() {
+  //    _showPostShowPlaceholder(
+  //      title: 'Results Validation',
+  //      body:
+  //          'This is the next post-show screen to build.\n\nUse it to review missing placements, inconsistent specials, and incomplete class results before publishing.',
+  //    );
+  //  }
 
   Future<void> _downloadLockedShowData() async {
     setState(() {
@@ -976,9 +978,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
           'Authorization': 'Bearer $accessToken',
           'Content-Type': 'application/json',
         },
-        sendData: jsonEncode({
-          'show_id': widget.showId,
-        }),
+        sendData: jsonEncode({'show_id': widget.showId}),
         responseType: 'arraybuffer',
       );
 
@@ -1045,10 +1045,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: .05),
-            blurRadius: 12,
-          ),
+          BoxShadow(color: Colors.black.withValues(alpha: .05), blurRadius: 12),
         ],
       ),
       child: Column(
@@ -1057,10 +1054,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
           Text(title, style: Theme.of(context).textTheme.titleMedium),
           if (subtitle != null) ...[
             const SizedBox(height: 4),
-            Text(
-              subtitle,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
+            Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
           ],
           const SizedBox(height: 12),
           ...children,
@@ -1080,9 +1074,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: Colors.black.withValues(alpha: .05),
-        ),
+        border: Border.all(color: Colors.black.withValues(alpha: .05)),
       ),
       child: ListTile(
         leading: Icon(icon),
@@ -1113,10 +1105,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
           const SizedBox(width: 6),
           Text(
             text,
-            style: TextStyle(
-              color: color,
-              fontWeight: FontWeight.w700,
-            ),
+            style: TextStyle(color: color, fontWeight: FontWeight.w700),
           ),
         ],
       ),
@@ -1162,16 +1151,19 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   bool _stripeReadyForPayments() {
     if (_stripeStatus == null) return true;
 
-    final status =
-        (_stripeStatus?['status'] ?? '').toString().toLowerCase().trim();
+    final status = (_stripeStatus?['status'] ?? '')
+        .toString()
+        .toLowerCase()
+        .trim();
     if (status == 'not_connected' || status.isEmpty) return true;
 
     final chargesEnabled = _stripeStatus?['charges_enabled'] == true;
     final payoutsEnabled = _stripeStatus?['payouts_enabled'] == true;
     final detailsSubmitted = _stripeStatus?['details_submitted'] == true;
     final cardPaymentsActive = _stripeStatus?['card_payments_active'] == true;
-    final disabledReason =
-        (_stripeStatus?['disabled_reason'] ?? '').toString().trim();
+    final disabledReason = (_stripeStatus?['disabled_reason'] ?? '')
+        .toString()
+        .trim();
 
     return status == 'ready' &&
         chargesEnabled &&
@@ -1228,8 +1220,9 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
     final payoutsEnabled = _stripeStatus?['payouts_enabled'] == true;
     final detailsSubmitted = _stripeStatus?['details_submitted'] == true;
     final cardPaymentsActive = _stripeStatus?['card_payments_active'] == true;
-    final disabledReason =
-        (_stripeStatus?['disabled_reason'] ?? '').toString().trim();
+    final disabledReason = (_stripeStatus?['disabled_reason'] ?? '')
+        .toString()
+        .trim();
 
     final requirements =
         (_stripeStatus?['requirements'] as Map<String, dynamic>?) ?? {};
@@ -1239,7 +1232,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
         (requirements['past_due'] as List?)?.cast<dynamic>() ?? const [];
     final pendingVerification =
         (requirements['pending_verification'] as List?)?.cast<dynamic>() ??
-            const [];
+        const [];
 
     final issues = <String>[];
     if (!chargesEnabled) issues.add('charges are not enabled');
@@ -1335,7 +1328,8 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final canManageShow = _permissions.canManageShow || AppSession.isSupportMode;
+    final canManageShow =
+        _permissions.canManageShow || AppSession.isSupportMode;
     final canManageShowSettings =
         _permissions.canManageShowSettings || AppSession.isSupportMode;
     final canManageEntries =
@@ -1354,10 +1348,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
         title: Row(
           children: [
             const SizedBox(width: 12),
-            Image.asset(
-              'assets/images/ringmaster_show_logo.png',
-              height: 42,
-            ),
+            Image.asset('assets/images/ringmaster_show_logo.png', height: 42),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
@@ -1379,9 +1370,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                 ? null
                 : () {
                     Navigator.of(context).pushAndRemoveUntil(
-                      MaterialPageRoute(
-                        builder: (_) => const ShowListScreen(),
-                      ),
+                      MaterialPageRoute(builder: (_) => const ShowListScreen()),
                       (route) => false,
                     );
                   },
@@ -1408,10 +1397,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [
-              Color(0xFF11285A),
-              Color(0xFF0B1C43),
-            ],
+            colors: [AppColors.navy, AppColors.navyDark],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
           ),
@@ -1421,18 +1407,20 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                 child: CircularProgressIndicator(color: Colors.white),
               )
             : !canManageShow
-                ? const Center(
-                    child: Text(
-                      'You do not have permission to manage this show.',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  )
-                : SafeArea(
+            ? const Center(
+                child: Text(
+                  'You do not have permission to manage this show.',
+                  style: TextStyle(color: Colors.white),
+                ),
+              )
+            : SafeArea(
                 child: Container(
                   margin: const EdgeInsets.only(top: 8),
                   decoration: const BoxDecoration(
-                    color: Color(0xFFF4F6FB),
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                    color: AppColors.bg,
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(24),
+                    ),
                   ),
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.all(16),
@@ -1461,7 +1449,9 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                 Expanded(
                                   child: Text(
                                     'Support Mode — You are managing this show as an admin while viewing another user.',
-                                    style: TextStyle(fontWeight: FontWeight.w700),
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -1487,7 +1477,9 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                     _isFinalized
                                         ? 'This show has been finalized. Show settings are view-only.'
                                         : 'This show is locked. Show settings are view-only.',
-                                    style: const TextStyle(fontWeight: FontWeight.w700),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -1499,14 +1491,16 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                             margin: const EdgeInsets.only(bottom: 16),
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: (_msg == 'Saved.' ||
+                              color:
+                                  (_msg == 'Saved.' ||
                                       _msg == 'Show locked.' ||
                                       _msg == 'Show unlocked.')
                                   ? Colors.green.withValues(alpha: .08)
                                   : Colors.red.withValues(alpha: .08),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                color: (_msg == 'Saved.' ||
+                                color:
+                                    (_msg == 'Saved.' ||
                                         _msg == 'Show locked.' ||
                                         _msg == 'Show unlocked.')
                                     ? Colors.green.withValues(alpha: .25)
@@ -1516,7 +1510,8 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                             child: Text(
                               _msg!,
                               style: TextStyle(
-                                color: (_msg == 'Saved.' ||
+                                color:
+                                    (_msg == 'Saved.' ||
                                         _msg == 'Show locked.' ||
                                         _msg == 'Show unlocked.')
                                     ? Colors.green
@@ -1529,12 +1524,14 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                         if (canManageShow || canEnterResults || canFinalizeShow)
                           _buildSectionCard(
                             title: 'Staff Approval PINs',
-                            subtitle: 'Use these codes to approve corrections during judging.',
+                            subtitle:
+                                'Use these codes to approve corrections during judging.',
                             children: [
-                              if (_loadingPins)
-                                const LinearProgressIndicator(),
+                              if (_loadingPins) const LinearProgressIndicator(),
                               if (!_loadingPins && _myStaffPin == null)
-                                const Text('No active approval PIN was found for your account on this show.'),
+                                const Text(
+                                  'No active approval PIN was found for your account on this show.',
+                                ),
                               if (!_loadingPins && _myStaffPin != null)
                                 Container(
                                   padding: const EdgeInsets.all(12),
@@ -1543,11 +1540,13 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Text(
-                                        ((_myStaffPin!['role'] ?? '').toString())
+                                        ((_myStaffPin!['role'] ?? '')
+                                                .toString())
                                             .replaceAll('_', ' ')
                                             .toUpperCase(),
                                         style: const TextStyle(
@@ -1558,7 +1557,8 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        (_myStaffPin!['pin_code'] ?? '').toString(),
+                                        (_myStaffPin!['pin_code'] ?? '')
+                                            .toString(),
                                         style: const TextStyle(
                                           fontSize: 22,
                                           fontWeight: FontWeight.w800,
@@ -1573,22 +1573,28 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                 Align(
                                   alignment: Alignment.centerLeft,
                                   child: OutlinedButton.icon(
-                                    onPressed: (_saving || _isReadOnly || _loadingPins || _regeneratingPins)
+                                    onPressed:
+                                        (_saving ||
+                                            _isReadOnly ||
+                                            _loadingPins ||
+                                            _regeneratingPins)
                                         ? null
                                         : _regenerateStaffPins,
                                     icon: _regeneratingPins
                                         ? const SizedBox(
                                             width: 16,
                                             height: 16,
-                                            child: CircularProgressIndicator(strokeWidth: 2),
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
                                           )
                                         : const Icon(Icons.refresh),
                                     label: Text(
                                       _regeneratingPins
                                           ? 'Generating…'
                                           : _myStaffPin == null
-                                              ? 'Generate My PIN'
-                                              : 'Regenerate My PIN',
+                                          ? 'Generate My PIN'
+                                          : 'Regenerate My PIN',
                                     ),
                                   ),
                                 ),
@@ -1602,7 +1608,10 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                             children: [
                               TextField(
                                 controller: _name,
-                                enabled: !_saving && !_isReadOnly && canManageShowSettings,
+                                enabled:
+                                    !_saving &&
+                                    !_isReadOnly &&
+                                    canManageShowSettings,
                                 decoration: const InputDecoration(
                                   labelText: 'Show name (required)',
                                   border: OutlineInputBorder(),
@@ -1611,16 +1620,25 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                               const SizedBox(height: 12),
                               TextField(
                                 controller: _location,
-                                enabled: !_saving && !_isReadOnly && canManageShowSettings,
+                                enabled:
+                                    !_saving &&
+                                    !_isReadOnly &&
+                                    canManageShowSettings,
                                 decoration: const InputDecoration(
                                   labelText: 'Location (required)',
                                   border: OutlineInputBorder(),
                                 ),
                               ),
                               const SizedBox(height: 12),
-                              if (_loadingClubs) const LinearProgressIndicator(),
+                              if (_loadingClubs)
+                                const LinearProgressIndicator(),
                               DropdownButtonFormField<String>(
-                                initialValue: _clubs.any((club) => club['id']?.toString() == _selectedClubId)
+                                initialValue:
+                                    _clubs.any(
+                                      (club) =>
+                                          club['id']?.toString() ==
+                                          _selectedClubId,
+                                    )
                                     ? _selectedClubId
                                     : null,
                                 decoration: InputDecoration(
@@ -1629,14 +1647,16 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                   helperText: _clubs.isEmpty
                                       ? 'No active clubs found. Add your first hosting club to continue.'
                                       : _canSwitchHostingClub
-                                          ? 'Select a hosting club, add a new club, or manage your existing clubs.'
-                                          : 'Locked to your account. Upgrade to Multi-Club Hosting to change this.',
+                                      ? 'Select a hosting club, add a new club, or manage your existing clubs.'
+                                      : 'Locked to your account. Upgrade to Multi-Club Hosting to change this.',
                                 ),
                                 items: [
                                   ..._clubs.map((club) {
                                     return DropdownMenuItem<String>(
                                       value: club['id'].toString(),
-                                      child: Text((club['name'] ?? 'Club').toString()),
+                                      child: Text(
+                                        (club['name'] ?? 'Club').toString(),
+                                      ),
                                     );
                                   }),
                                   if (_canManageHostingClubs)
@@ -1650,7 +1670,8 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                         ],
                                       ),
                                     ),
-                                  if (_canSwitchHostingClub && _clubs.isNotEmpty)
+                                  if (_canSwitchHostingClub &&
+                                      _clubs.isNotEmpty)
                                     const DropdownMenuItem<String>(
                                       value: _manageClubsActionValue,
                                       child: Row(
@@ -1662,7 +1683,12 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                       ),
                                     ),
                                 ],
-                                onChanged: (_saving || _isReadOnly || _loadingClubs || !_canManageHostingClubs || !canManageShowSettings)
+                                onChanged:
+                                    (_saving ||
+                                        _isReadOnly ||
+                                        _loadingClubs ||
+                                        !_canManageHostingClubs ||
+                                        !canManageShowSettings)
                                     ? null
                                     : (value) async {
                                         if (value == null) return;
@@ -1685,7 +1711,9 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                             orElse: () => <String, dynamic>{},
                                           );
 
-                                          _selectedClubName = (selected['name'] ?? '').toString();
+                                          _selectedClubName =
+                                              (selected['name'] ?? '')
+                                                  .toString();
                                         });
                                       },
                               ),
@@ -1704,7 +1732,9 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                     ),
                                   ),
                                   TextButton(
-                                    onPressed: (_saving || _isReadOnly) ? null : _pickStartDate,
+                                    onPressed: (_saving || _isReadOnly)
+                                        ? null
+                                        : _pickStartDate,
                                     child: const Text('Pick'),
                                   ),
                                 ],
@@ -1717,7 +1747,9 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                     ),
                                   ),
                                   TextButton(
-                                    onPressed: (_saving || _isReadOnly) ? null : _pickEndDate,
+                                    onPressed: (_saving || _isReadOnly)
+                                        ? null
+                                        : _pickEndDate,
                                     child: const Text('Pick'),
                                   ),
                                 ],
@@ -1738,11 +1770,17 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                     ),
                                   ),
                                   TextButton(
-                                    onPressed: (_saving || _isReadOnly) ? null : _pickEntryOpenAt,
+                                    onPressed: (_saving || _isReadOnly)
+                                        ? null
+                                        : _pickEntryOpenAt,
                                     child: const Text('Pick'),
                                   ),
                                   TextButton(
-                                    onPressed: (_saving || _isReadOnly) ? null : () => setState(() => _entryOpenAt = null),
+                                    onPressed: (_saving || _isReadOnly)
+                                        ? null
+                                        : () => setState(
+                                            () => _entryOpenAt = null,
+                                          ),
                                     child: const Text('Clear'),
                                   ),
                                 ],
@@ -1755,11 +1793,17 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                     ),
                                   ),
                                   TextButton(
-                                    onPressed: (_saving || _isReadOnly) ? null : _pickEntryCloseAt,
+                                    onPressed: (_saving || _isReadOnly)
+                                        ? null
+                                        : _pickEntryCloseAt,
                                     child: const Text('Pick'),
                                   ),
                                   TextButton(
-                                    onPressed: (_saving || _isReadOnly) ? null : () => setState(() => _entryCloseAt = null),
+                                    onPressed: (_saving || _isReadOnly)
+                                        ? null
+                                        : () => setState(
+                                            () => _entryCloseAt = null,
+                                          ),
                                     child: const Text('Clear'),
                                   ),
                                 ],
@@ -1796,9 +1840,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                         try {
                                           await supabase
                                               .from('shows')
-                                              .update({
-                                                'is_published': v,
-                                              })
+                                              .update({'is_published': v})
                                               .eq('id', widget.showId);
 
                                           if (!mounted) return;
@@ -1813,7 +1855,8 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                           setState(() {
                                             _published = previous;
                                             _saving = false;
-                                            _msg = 'Failed to update publish status: $e';
+                                            _msg =
+                                                'Failed to update publish status: $e';
                                           });
                                         }
                                       },
@@ -1828,7 +1871,8 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                 value: _isNationalShow,
                                 onChanged: (_saving || _isReadOnly)
                                     ? null
-                                    : (v) => setState(() => _isNationalShow = v),
+                                    : (v) =>
+                                          setState(() => _isNationalShow = v),
                               ),
                               const SizedBox(height: 12),
                               DropdownButtonFormField<String>(
@@ -1857,14 +1901,12 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                     ),
                                   ),
                                 ],
-                                onChanged:
-                                    (_saving || _isReadOnly)
-                                        ? null
-                                        : (v) => setState(
-                                          () =>
-                                              _finalAwardMode =
-                                                  v ?? 'four_six_bis',
-                                        ),
+                                onChanged: (_saving || _isReadOnly)
+                                    ? null
+                                    : (v) => setState(
+                                        () => _finalAwardMode =
+                                            v ?? 'four_six_bis',
+                                      ),
                               ),
                               const SizedBox(height: 8),
                               Text(
@@ -1882,21 +1924,21 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                               title: 'Judges',
                               subtitle:
                                   'Select judges available for staff assignment',
-                            onTap: (_saving || !canManageJudges)
-                                ? null
-                                : () async {
-                                    final changed =
-                                        await ShowJudgesDialog.open(
-                                          context,
-                                          showId: widget.showId,
-                                          showName: _showNameForTitle,
+                              onTap: (_saving || !canManageJudges)
+                                  ? null
+                                  : () async {
+                                      final changed =
+                                          await ShowJudgesDialog.open(
+                                            context,
+                                            showId: widget.showId,
+                                            showName: _showNameForTitle,
+                                          );
+                                      if (changed == true && mounted) {
+                                        setState(
+                                          () => _msg = 'Judges updated.',
                                         );
-                                    if (changed == true && mounted) {
-                                      setState(
-                                        () => _msg = 'Judges updated.',
-                                      );
-                                    }
-                                  },
+                                      }
+                                    },
                             ),
                             if (canManageEntries)
                               _buildSettingsActionTile(
@@ -1917,7 +1959,8 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                               _buildSettingsActionTile(
                                 icon: Icons.grid_on,
                                 title: 'Coop Numbers',
-                                subtitle: 'Generate, review, and manually edit coop assignments',
+                                subtitle:
+                                    'Generate, review, and manually edit coop assignments',
                                 onTap: _saving ? null : _openCoopNumbers,
                               ),
                             if (canManageShow)
@@ -1955,13 +1998,17 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                 ),
                               if (canManageShowSettings)
                                 _buildSettingsActionTile(
-                                  icon: _isLocked ? Icons.lock_open : Icons.lock,
-                                  title: _isLocked ? 'Unlock Show' : 'Lock Show',
+                                  icon: _isLocked
+                                      ? Icons.lock_open
+                                      : Icons.lock,
+                                  title: _isLocked
+                                      ? 'Unlock Show'
+                                      : 'Lock Show',
                                   subtitle: _isFinalized
                                       ? 'Finalized shows cannot be unlocked.'
                                       : _isLocked
-                                          ? 'Allow setup changes again if corrections are needed'
-                                          : 'Prevent further setup changes before closeout',
+                                      ? 'Allow setup changes again if corrections are needed'
+                                      : 'Prevent further setup changes before closeout',
                                   onTap: (_saving || _isFinalized)
                                       ? null
                                       : _toggleShowLock,
@@ -1970,7 +2017,8 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                 _buildSettingsActionTile(
                                   icon: Icons.download_for_offline,
                                   title: 'Download Locked Show Data',
-                                  subtitle: 'Download a ZIP backup of this show’s entries, results, settings, and reports',
+                                  subtitle:
+                                      'Download a ZIP backup of this show’s entries, results, settings, and reports',
                                   onTap: _saving
                                       ? null
                                       : _downloadLockedShowData,
@@ -1992,21 +2040,19 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                               _buildSettingsActionTile(
                                 icon: Icons.view_module,
                                 title: 'Modify Number of Shows',
-                                subtitle:
-                                    'Open A/B, Youth A/B, and setup',
-                                onTap:
-                                    _saving
-                                        ? null
-                                        : () async {
-                                          await ShowSectionsDialog.open(
-                                            context,
-                                            showId: widget.showId,
-                                            showName: _effectiveShowName(),
-                                          );
+                                subtitle: 'Open A/B, Youth A/B, and setup',
+                                onTap: _saving
+                                    ? null
+                                    : () async {
+                                        await ShowSectionsDialog.open(
+                                          context,
+                                          showId: widget.showId,
+                                          showName: _effectiveShowName(),
+                                        );
 
-                                          if (!mounted) return;
-                                          await _load();
-                                        },
+                                        if (!mounted) return;
+                                        await _load();
+                                      },
                               ),
                               _buildSettingsActionTile(
                                 icon: Icons.confirmation_number,
@@ -2027,29 +2073,33 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                 title: 'Payback Settings',
                                 subtitle:
                                     'Enter class payback schedules and special money by show letter',
-                                onTap: (_saving || _isReadOnly) ? null : _openPaybacks,
+                                onTap: (_saving || _isReadOnly)
+                                    ? null
+                                    : _openPaybacks,
                               ),
                               if (canManageShowSettings)
                                 _buildSettingsActionTile(
                                   icon: Icons.manage_accounts,
                                   title: 'Role Assignments',
-                                  subtitle: 'Assign Show Superintendent, and Other Staff Roles',
+                                  subtitle:
+                                      'Assign Show Superintendent, and Other Staff Roles',
                                   onTap: _saving ? null : _openRoleAssignments,
                                 ),
                               if (canManageShowSettings)
                                 _buildSettingsActionTile(
                                   icon: Icons.history,
                                   title: 'Audit Log Table',
-                                  subtitle: 'Review QR overrides and writer activity for this show',
+                                  subtitle:
+                                      'Review QR overrides and writer activity for this show',
                                   onTap: _saving ? null : _openAuditLogTable,
                                 ),
-//                               _buildSettingsActionTile(
-//                                 icon: Icons.rule,
-//                                 title: 'Show Rules',
-//                                 subtitle:
-//                                     'Validations like tattoo required, limits, and required fields',
-//                                 onTap: (_saving || _isReadOnly) ? null : _openRules,
-//                               ),
+                              //                               _buildSettingsActionTile(
+                              //                                 icon: Icons.rule,
+                              //                                 title: 'Show Rules',
+                              //                                 subtitle:
+                              //                                     'Validations like tattoo required, limits, and required fields',
+                              //                                 onTap: (_saving || _isReadOnly) ? null : _openRules,
+                              //                               ),
                             ],
                           ),
 
@@ -2058,7 +2108,8 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                         if (canManageShowSettings)
                           FilledButton(
                             style: FilledButton.styleFrom(
-                              backgroundColor: const Color(0xFFD4A623),
+                              backgroundColor: AppColors.primaryButton,
+                              foregroundColor: AppColors.primaryButtonText,
                               padding: const EdgeInsets.symmetric(vertical: 16),
                             ),
                             onPressed: (_saving || _isReadOnly) ? null : _save,
@@ -2066,8 +2117,8 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                               _saving
                                   ? 'Saving…'
                                   : _isReadOnly
-                                      ? 'View Only'
-                                      : 'Save Changes',
+                                  ? 'View Only'
+                                  : 'Save Changes',
                             ),
                           ),
                       ],

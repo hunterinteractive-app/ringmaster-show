@@ -1,6 +1,7 @@
 // lib/screens/admin/show_sections_dialog.dart
 
 import 'package:flutter/material.dart';
+import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/services/show_lock_service.dart';
 
@@ -15,10 +16,7 @@ class ShowSectionsDialog {
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => _ShowSectionsDialog(
-        showId: showId,
-        showName: showName,
-      ),
+      builder: (_) => _ShowSectionsDialog(showId: showId, showName: showName),
     );
 
     return result == true;
@@ -29,10 +27,7 @@ class _ShowSectionsDialog extends StatefulWidget {
   final String showId;
   final String showName;
 
-  const _ShowSectionsDialog({
-    required this.showId,
-    required this.showName,
-  });
+  const _ShowSectionsDialog({required this.showId, required this.showName});
 
   @override
   State<_ShowSectionsDialog> createState() => _ShowSectionsDialogState();
@@ -47,17 +42,16 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
   bool _isFinalized = false;
 
   bool get _isReadOnly => _isLocked || _isFinalized;
-  
 
   final List<_EditableSection> _sections = [];
   final Set<String> _deletedIds = <String>{};
   List<Map<String, dynamic>> _breedOptions = [];
 
-    @override
-    void initState() {
-      super.initState();
-      _loadAll();
-    }
+  @override
+  void initState() {
+    super.initState();
+    _loadAll();
+  }
 
   @override
   void dispose() {
@@ -67,55 +61,51 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
     super.dispose();
   }
 
-    Future<void> _loadAll() async {
+  Future<void> _loadAll() async {
+    if (!mounted) return;
+    setState(() {
+      _loading = true;
+      _msg = null;
+    });
+
+    try {
+      final show = await supabase
+          .from('shows')
+          .select('is_locked,finalized_at')
+          .eq('id', widget.showId)
+          .single();
+
+      _isLocked = show['is_locked'] == true;
+      _isFinalized = (show['finalized_at'] ?? '').toString().trim().isNotEmpty;
+
+      await Future.wait([_loadBreeds(), _loadSections()]);
+
       if (!mounted) return;
       setState(() {
-        _loading = true;
-        _msg = null;
+        _loading = false;
       });
-
-      try {
-        final show = await supabase
-            .from('shows')
-            .select('is_locked,finalized_at')
-            .eq('id', widget.showId)
-            .single();
-
-        _isLocked = show['is_locked'] == true;
-        _isFinalized =
-            (show['finalized_at'] ?? '').toString().trim().isNotEmpty;
-
-        await Future.wait([
-          _loadBreeds(),
-          _loadSections(),
-        ]);
-
-        if (!mounted) return;
-        setState(() {
-          _loading = false;
-        });
-      } catch (e) {
-        if (!mounted) return;
-        setState(() {
-          _loading = false;
-          _msg = 'Load failed: $e';
-        });
-      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _msg = 'Load failed: $e';
+      });
     }
+  }
 
-    Future<void> _loadBreeds() async {
-      _loadingBreeds = true;
+  Future<void> _loadBreeds() async {
+    _loadingBreeds = true;
 
-      final res = await supabase
-          .from('breeds')
-          .select('id, name, species, is_active')
-          .eq('is_active', true)
-          .order('species')
-          .order('name');
+    final res = await supabase
+        .from('breeds')
+        .select('id, name, species, is_active')
+        .eq('is_active', true)
+        .order('species')
+        .order('name');
 
-      _breedOptions = (res as List).cast<Map<String, dynamic>>();
-      _loadingBreeds = false;
-    }
+    _breedOptions = (res as List).cast<Map<String, dynamic>>();
+    _loadingBreeds = false;
+  }
 
   Future<void> _loadSections() async {
     setState(() {
@@ -145,8 +135,9 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
           }
         }
 
-        final kr = rank((a['kind'] ?? '').toString())
-            .compareTo(rank((b['kind'] ?? '').toString()));
+        final kr = rank(
+          (a['kind'] ?? '').toString(),
+        ).compareTo(rank((b['kind'] ?? '').toString()));
         if (kr != 0) return kr;
 
         final aso = int.tryParse((a['sort_order'] ?? '').toString()) ?? 9999;
@@ -282,48 +273,54 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
     });
   }
 
-    bool _validate() {
-      if (_isReadOnly) {
-        setState(() => _msg = _isFinalized
+  bool _validate() {
+    if (_isReadOnly) {
+      setState(
+        () => _msg = _isFinalized
             ? 'This show has been finalized. Sections can no longer be changed.'
-            : 'This show is locked. Sections can no longer be changed.');
-        return false;
-      }
-      if (_sections.isEmpty) {
-        setState(() => _msg = 'Add at least one section.');
-        return false;
-      }
-
-      final enabled = _sections.where((s) => s.isEnabled).toList();
-      if (enabled.isEmpty) {
-        setState(() => _msg = 'At least one section must be enabled.');
-        return false;
-      }
-
-      for (final s in _sections) {
-        final name = s.displayNameCtrl.text.trim();
-        if (name.isEmpty) {
-          setState(() => _msg = 'Every section needs a display name.');
-          return false;
-        }
-
-        if (s.breedScope == 'single' && s.allowedBreedIds.length != 1) {
-          setState(() => _msg =
-              '${name.isEmpty ? "A section" : name} must have exactly 1 breed selected.');
-          return false;
-        }
-
-        if (s.breedScope == 'limited') {
-          if (s.allowedBreedIds.isEmpty) {
-            setState(() => _msg =
-                '${name.isEmpty ? "A section" : name} must have at least 1 allowed breed.');
-            return false;
-          }
-        }
-      }
-
-      return true;
+            : 'This show is locked. Sections can no longer be changed.',
+      );
+      return false;
     }
+    if (_sections.isEmpty) {
+      setState(() => _msg = 'Add at least one section.');
+      return false;
+    }
+
+    final enabled = _sections.where((s) => s.isEnabled).toList();
+    if (enabled.isEmpty) {
+      setState(() => _msg = 'At least one section must be enabled.');
+      return false;
+    }
+
+    for (final s in _sections) {
+      final name = s.displayNameCtrl.text.trim();
+      if (name.isEmpty) {
+        setState(() => _msg = 'Every section needs a display name.');
+        return false;
+      }
+
+      if (s.breedScope == 'single' && s.allowedBreedIds.length != 1) {
+        setState(
+          () => _msg =
+              '${name.isEmpty ? "A section" : name} must have exactly 1 breed selected.',
+        );
+        return false;
+      }
+
+      if (s.breedScope == 'limited') {
+        if (s.allowedBreedIds.isEmpty) {
+          setState(
+            () => _msg =
+                '${name.isEmpty ? "A section" : name} must have at least 1 allowed breed.',
+          );
+          return false;
+        }
+      }
+    }
+
+    return true;
+  }
 
   Future<void> _saveAll() async {
     if (!_validate()) return;
@@ -353,8 +350,9 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
           'is_enabled': s.isEnabled,
           'sort_order': s.sortOrder,
           'breed_scope': s.breedScope,
-          'allowed_breed_ids':
-              s.allowedBreedIds.isEmpty ? null : s.allowedBreedIds,
+          'allowed_breed_ids': s.allowedBreedIds.isEmpty
+              ? null
+              : s.allowedBreedIds,
           'allow_meat_classes': s.allowMeatClasses,
         };
 
@@ -384,10 +382,12 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
 
   Widget _kindChip(String kind) {
     final label = kind == 'youth' ? 'Youth' : 'Open';
-    final bgColor =
-        kind == 'youth' ? const Color(0xFFEEE8FF) : const Color(0xFFE8F0FF);
-    final fgColor =
-        kind == 'youth' ? const Color(0xFF5B3FA8) : const Color(0xFF1D4E89);
+    final bgColor = kind == 'youth'
+        ? const Color(0xFFEEE8FF)
+        : const Color(0xFFE8F0FF);
+    final fgColor = kind == 'youth'
+        ? const Color(0xFF5B3FA8)
+        : const Color(0xFF1D4E89);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -406,234 +406,219 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
     );
   }
 
-    String _breedLabelFromId(String breedId) {
-      final match = _breedOptions.cast<Map<String, dynamic>?>().firstWhere(
-        (b) => b?['id']?.toString() == breedId,
-        orElse: () => null,
-      );
+  String _breedLabelFromId(String breedId) {
+    final match = _breedOptions.cast<Map<String, dynamic>?>().firstWhere(
+      (b) => b?['id']?.toString() == breedId,
+      orElse: () => null,
+    );
 
-      if (match == null) return breedId;
+    if (match == null) return breedId;
 
-      final species = (match['species'] ?? '').toString().trim();
-      final name = (match['name'] ?? '').toString().trim();
+    final species = (match['species'] ?? '').toString().trim();
+    final name = (match['name'] ?? '').toString().trim();
 
-      if (species.isEmpty) return name;
-      return '${species.toUpperCase()} — $name';
-    }
+    if (species.isEmpty) return name;
+    return '${species.toUpperCase()} — $name';
+  }
 
-    Future<void> _pickBreedsForSection(_EditableSection s) async {
-      if (_loadingBreeds) return;
+  Future<void> _pickBreedsForSection(_EditableSection s) async {
+    if (_loadingBreeds) return;
 
-      final working = Set<String>.from(s.allowedBreedIds);
+    final working = Set<String>.from(s.allowedBreedIds);
 
-      await showDialog<void>(
-        context: context,
-        builder: (ctx) {
-          return StatefulBuilder(
-            builder: (context, setInnerState) {
-              return AlertDialog(
-                title: Text(
-                  s.breedScope == 'single'
-                      ? 'Select breed'
-                      : 'Select allowed breeds',
-                ),
-                content: SizedBox(
-                  width: 520,
-                  height: 420,
-                  child: _loadingBreeds
-                      ? const Center(child: CircularProgressIndicator())
-                      : ListView.builder(
-                          itemCount: _breedOptions.length,
-                          itemBuilder: (context, index) {
-                            final breed = _breedOptions[index];
-                            final breedId = breed['id'].toString();
-                            final species =
-                                (breed['species'] ?? '').toString().toUpperCase();
-                            final name = (breed['name'] ?? '').toString();
-                            final checked = working.contains(breedId);
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setInnerState) {
+            return AlertDialog(
+              title: Text(
+                s.breedScope == 'single'
+                    ? 'Select breed'
+                    : 'Select allowed breeds',
+              ),
+              content: SizedBox(
+                width: 520,
+                height: 420,
+                child: _loadingBreeds
+                    ? const Center(child: CircularProgressIndicator())
+                    : ListView.builder(
+                        itemCount: _breedOptions.length,
+                        itemBuilder: (context, index) {
+                          final breed = _breedOptions[index];
+                          final breedId = breed['id'].toString();
+                          final species = (breed['species'] ?? '')
+                              .toString()
+                              .toUpperCase();
+                          final name = (breed['name'] ?? '').toString();
+                          final checked = working.contains(breedId);
 
-                            if (s.breedScope == 'single') {
-                              return RadioListTile<String>(
-                                value: breedId,
-                                groupValue:
-                                    working.isEmpty ? null : working.first,
-                                title: Text('$species — $name'),
-                                onChanged: _isReadOnly
-                                    ? null
-                                    : (value) {
-                                  if (value == null) return;
-                                  setInnerState(() {
-                                    working
-                                      ..clear()
-                                      ..add(value);
-                                  });
-                                },
-                              );
-                            }
-
-                            return CheckboxListTile(
-                              value: checked,
+                          if (s.breedScope == 'single') {
+                            return RadioListTile<String>(
+                              value: breedId,
+                              groupValue: working.isEmpty
+                                  ? null
+                                  : working.first,
                               title: Text('$species — $name'),
-                              subtitle: const Text(
-                                'Choose the breeds allowed in this show.',
-                              ),
                               onChanged: _isReadOnly
                                   ? null
                                   : (value) {
+                                      if (value == null) return;
                                       setInnerState(() {
-                                        if (value == true) {
-                                          working.add(breedId);
-                                        } else {
-                                          working.remove(breedId);
-                                        }
+                                        working
+                                          ..clear()
+                                          ..add(value);
                                       });
                                     },
                             );
-                          },
-                        ),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: _isReadOnly
-                        ? null
-                        : () {
-                            working.clear();
-                            Navigator.pop(ctx);
-                          },
-                    child: const Text('Clear'),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    child: const Text('Cancel'),
-                  ),
-                  FilledButton(
-                    onPressed: _isReadOnly
-                        ? null
-                        : () {
-                            setState(() {
-                              s.allowedBreedIds = working.toList();
-                            });
-                            Navigator.pop(ctx);
-                          },
-                    child: const Text('Apply'),
-                  ),
-                ],
-              );
-            },
-          );
-        },
-      );
-    }
+                          }
 
-    Widget _buildBreedScopeSelector(_EditableSection s) {
-      return DropdownButtonFormField<String>(
-        initialValue: s.breedScope,
-        decoration: const InputDecoration(
-          labelText: 'Breed scope',
-          border: OutlineInputBorder(),
-          isDense: true,
-        ),
-        items: const [
-          DropdownMenuItem(
-            value: 'all',
-            child: Text('All Breeds'),
-          ),
-          DropdownMenuItem(
-            value: 'single',
-            child: Text('Single Breed'),
-          ),
-          DropdownMenuItem(
-            value: 'limited',
-            child: Text('Selected Breeds'),
-          ),
-          DropdownMenuItem(
-            value: 'meat_only',
-            child: Text('Meat Classes Only'),
-          ),
-        ],
-        onChanged: (_saving || _isReadOnly)
-            ? null
-            : (value) {
-                if (value == null) return;
-                setState(() {
-                  s.breedScope = value;
-                  if (value == 'all') {
-                    s.allowedBreedIds = [];
-                  } else if (value == 'single' && s.allowedBreedIds.length > 1) {
-                    s.allowedBreedIds = [s.allowedBreedIds.first];
-                  }
-                  if (value == 'meat_only') {
-                    s.allowedBreedIds = [];
-                    s.allowMeatClasses = true; // force on
-                  }
-                });
-              },
-      );
-    }
-
-    Widget _buildAllowedBreedSummary(_EditableSection s) {
-      if (s.breedScope == 'meat_only') {
-        return Text(
-          'This section is for commercial (meat) classes only.',
-          style: Theme.of(context).textTheme.bodySmall,
-        );
-      }
-      
-      if (s.breedScope == 'all') {
-        return Text(
-          'This section accepts all breeds.',
-          style: Theme.of(context).textTheme.bodySmall,
-        );
-      }
-
-      final labels = s.allowedBreedIds.map(_breedLabelFromId).toList();
-
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: labels.isEmpty
-                ? [
-                    const Chip(
-                      label: Text('No breeds selected'),
-                    ),
-                  ]
-                : labels
-                    .map(
-                      (x) => Chip(
-                        label: Text(
-                          x,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                          return CheckboxListTile(
+                            value: checked,
+                            title: Text('$species — $name'),
+                            subtitle: const Text(
+                              'Choose the breeds allowed in this show.',
+                            ),
+                            onChanged: _isReadOnly
+                                ? null
+                                : (value) {
+                                    setInnerState(() {
+                                      if (value == true) {
+                                        working.add(breedId);
+                                      } else {
+                                        working.remove(breedId);
+                                      }
+                                    });
+                                  },
+                          );
+                        },
                       ),
-                    )
-                    .toList(),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              OutlinedButton.icon(
-                onPressed: (_saving || _isReadOnly) ? null : () => _pickBreedsForSection(s),
-                icon: const Icon(Icons.pets),
-                label: Text(
-                  s.breedScope == 'single' ? 'Choose Breed' : 'Choose Breeds',
-                ),
               ),
-              if (s.allowedBreedIds.isNotEmpty) ...[
-                const SizedBox(width: 8),
+              actions: [
                 TextButton(
-                  onPressed:
-                      (_saving || _isReadOnly) ? null : () => setState(() => s.allowedBreedIds = []),
+                  onPressed: _isReadOnly
+                      ? null
+                      : () {
+                          working.clear();
+                          Navigator.pop(ctx);
+                        },
                   child: const Text('Clear'),
                 ),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: _isReadOnly
+                      ? null
+                      : () {
+                          setState(() {
+                            s.allowedBreedIds = working.toList();
+                          });
+                          Navigator.pop(ctx);
+                        },
+                  child: const Text('Apply'),
+                ),
               ],
-            ],
-          ),
-        ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildBreedScopeSelector(_EditableSection s) {
+    return DropdownButtonFormField<String>(
+      initialValue: s.breedScope,
+      decoration: const InputDecoration(
+        labelText: 'Breed scope',
+        border: OutlineInputBorder(),
+        isDense: true,
+      ),
+      items: const [
+        DropdownMenuItem(value: 'all', child: Text('All Breeds')),
+        DropdownMenuItem(value: 'single', child: Text('Single Breed')),
+        DropdownMenuItem(value: 'limited', child: Text('Selected Breeds')),
+        DropdownMenuItem(value: 'meat_only', child: Text('Meat Classes Only')),
+      ],
+      onChanged: (_saving || _isReadOnly)
+          ? null
+          : (value) {
+              if (value == null) return;
+              setState(() {
+                s.breedScope = value;
+                if (value == 'all') {
+                  s.allowedBreedIds = [];
+                } else if (value == 'single' && s.allowedBreedIds.length > 1) {
+                  s.allowedBreedIds = [s.allowedBreedIds.first];
+                }
+                if (value == 'meat_only') {
+                  s.allowedBreedIds = [];
+                  s.allowMeatClasses = true; // force on
+                }
+              });
+            },
+    );
+  }
+
+  Widget _buildAllowedBreedSummary(_EditableSection s) {
+    if (s.breedScope == 'meat_only') {
+      return Text(
+        'This section is for commercial (meat) classes only.',
+        style: Theme.of(context).textTheme.bodySmall,
       );
     }
+
+    if (s.breedScope == 'all') {
+      return Text(
+        'This section accepts all breeds.',
+        style: Theme.of(context).textTheme.bodySmall,
+      );
+    }
+
+    final labels = s.allowedBreedIds.map(_breedLabelFromId).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: labels.isEmpty
+              ? [const Chip(label: Text('No breeds selected'))]
+              : labels
+                    .map(
+                      (x) =>
+                          Chip(label: Text(x, overflow: TextOverflow.ellipsis)),
+                    )
+                    .toList(),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            OutlinedButton.icon(
+              onPressed: (_saving || _isReadOnly)
+                  ? null
+                  : () => _pickBreedsForSection(s),
+              icon: const Icon(Icons.pets),
+              label: Text(
+                s.breedScope == 'single' ? 'Choose Breed' : 'Choose Breeds',
+              ),
+            ),
+            if (s.allowedBreedIds.isNotEmpty) ...[
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: (_saving || _isReadOnly)
+                    ? null
+                    : () => setState(() => s.allowedBreedIds = []),
+                child: const Text('Clear'),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
 
   Widget _sectionCard(int index) {
     final s = _sections[index];
@@ -644,10 +629,7 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: .05),
-            blurRadius: 10,
-          ),
+          BoxShadow(color: Colors.black.withValues(alpha: .05), blurRadius: 10),
         ],
       ),
       child: Padding(
@@ -669,19 +651,24 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
                 ),
                 IconButton(
                   tooltip: 'Move up',
-                  onPressed: (_saving || _isReadOnly || index == 0) ? null : () => _moveUp(index),
+                  onPressed: (_saving || _isReadOnly || index == 0)
+                      ? null
+                      : () => _moveUp(index),
                   icon: const Icon(Icons.arrow_upward),
                 ),
                 IconButton(
                   tooltip: 'Move down',
-                  onPressed: (_saving || _isReadOnly || index == _sections.length - 1)
+                  onPressed:
+                      (_saving || _isReadOnly || index == _sections.length - 1)
                       ? null
                       : () => _moveDown(index),
                   icon: const Icon(Icons.arrow_downward),
                 ),
                 IconButton(
                   tooltip: 'Delete',
-                  onPressed: (_saving || _isReadOnly) ? null : () => _removeSection(index),
+                  onPressed: (_saving || _isReadOnly)
+                      ? null
+                      : () => _removeSection(index),
                   icon: const Icon(Icons.delete_outline),
                 ),
               ],
@@ -771,10 +758,7 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
         child: Container(
           decoration: BoxDecoration(
             gradient: const LinearGradient(
-              colors: [
-                Color(0xFF11285A),
-                Color(0xFF0B1C43),
-              ],
+              colors: [AppColors.navy, AppColors.navyDark],
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
             ),
@@ -816,7 +800,7 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
                 child: Container(
                   margin: const EdgeInsets.only(top: 4),
                   decoration: const BoxDecoration(
-                    color: Color(0xFFF4F6FB),
+                    color: AppColors.bg,
                     borderRadius: BorderRadius.vertical(
                       top: Radius.circular(24),
                     ),
@@ -844,7 +828,9 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
                               _isFinalized
                                   ? 'This show has been finalized. Sections are view-only.'
                                   : 'This show is locked. Sections are view-only.',
-                              style: const TextStyle(fontWeight: FontWeight.w700),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 12),
@@ -875,12 +861,16 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
                           runSpacing: 8,
                           children: [
                             FilledButton.icon(
-                              onPressed: (_saving || _isReadOnly) ? null : () => _addSection('open'),
+                              onPressed: (_saving || _isReadOnly)
+                                  ? null
+                                  : () => _addSection('open'),
                               icon: const Icon(Icons.add),
                               label: const Text('Add Open'),
                             ),
                             FilledButton.icon(
-                              onPressed: (_saving || _isReadOnly) ? null : () => _addSection('youth'),
+                              onPressed: (_saving || _isReadOnly)
+                                  ? null
+                                  : () => _addSection('youth'),
                               icon: const Icon(Icons.add),
                               label: const Text('Add Youth'),
                             ),
@@ -896,17 +886,17 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
                           child: _loading
                               ? const Center(child: CircularProgressIndicator())
                               : _sections.isEmpty
-                                  ? const Align(
-                                      alignment: Alignment.topLeft,
-                                      child: Text(
-                                        'No sections yet. Add Open and/or Youth sections.',
-                                      ),
-                                    )
-                                  : ListView.builder(
-                                      itemCount: _sections.length,
-                                      itemBuilder: (context, index) =>
-                                          _sectionCard(index),
-                                    ),
+                              ? const Align(
+                                  alignment: Alignment.topLeft,
+                                  child: Text(
+                                    'No sections yet. Add Open and/or Youth sections.',
+                                  ),
+                                )
+                              : ListView.builder(
+                                  itemCount: _sections.length,
+                                  itemBuilder: (context, index) =>
+                                      _sectionCard(index),
+                                ),
                         ),
                         const SizedBox(height: 12),
                         Row(
@@ -923,11 +913,15 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
                             Expanded(
                               child: FilledButton(
                                 style: FilledButton.styleFrom(
-                                  backgroundColor: const Color(0xFFD4A623),
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 16),
+                                  backgroundColor: AppColors.primaryButton,
+                                  foregroundColor: AppColors.primaryButtonText,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                  ),
                                 ),
-                                onPressed: (_saving || _isReadOnly) ? null : _saveAll,
+                                onPressed: (_saving || _isReadOnly)
+                                    ? null
+                                    : _saveAll,
                                 child: Text(_saving ? 'Saving…' : 'Save'),
                               ),
                             ),
@@ -987,9 +981,7 @@ class _EditableSection {
       sortOrder: int.tryParse((row['sort_order'] ?? '').toString()) ?? 0,
       breedScope: (row['breed_scope'] ?? 'all').toString().trim().toLowerCase(),
       allowedBreedIds: allowed,
-      letterCtrl: TextEditingController(
-        text: (row['letter'] ?? '').toString(),
-      ),
+      letterCtrl: TextEditingController(text: (row['letter'] ?? '').toString()),
       displayNameCtrl: TextEditingController(
         text: (row['display_name'] ?? '').toString(),
       ),

@@ -1,6 +1,7 @@
 //lib/screens/admin/show_sanctions_dialog.dart
 
 import 'package:flutter/material.dart';
+import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/services/show_lock_service.dart';
 import 'sanction_directory_screen.dart';
@@ -16,10 +17,7 @@ class ShowSanctionsDialog {
     await showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => _ShowSanctionsDialog(
-        showId: showId,
-        showName: showName,
-      ),
+      builder: (_) => _ShowSanctionsDialog(showId: showId, showName: showName),
     );
   }
 }
@@ -28,10 +26,7 @@ class _ShowSanctionsDialog extends StatefulWidget {
   final String showId;
   final String showName;
 
-  const _ShowSanctionsDialog({
-    required this.showId,
-    required this.showName,
-  });
+  const _ShowSanctionsDialog({required this.showId, required this.showName});
 
   @override
   State<_ShowSanctionsDialog> createState() => _ShowSanctionsDialogState();
@@ -46,8 +41,7 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
   bool _isLocked = false;
   bool _isFinalized = false;
 
-  final TextEditingController _searchController =
-      TextEditingController();
+  final TextEditingController _searchController = TextEditingController();
   String _searchText = '';
 
   bool get _isReadOnly => _isLocked || _isFinalized;
@@ -95,8 +89,7 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
           .single();
 
       _isLocked = show['is_locked'] == true;
-      _isFinalized =
-          (show['finalized_at'] ?? '').toString().trim().isNotEmpty;
+      _isFinalized = (show['finalized_at'] ?? '').toString().trim().isNotEmpty;
 
       await _loadSections();
       await _buildPrebuiltRows();
@@ -373,7 +366,8 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
             .select('breed_id, breeds(name)')
             .eq('show_id', widget.showId);
 
-        for (final row in (showBreedsRes as List).cast<Map<String, dynamic>>()) {
+        for (final row
+            in (showBreedsRes as List).cast<Map<String, dynamic>>()) {
           final breed = row['breeds'];
           final breedName = breed is Map
               ? (breed['name'] ?? '').toString().trim()
@@ -399,7 +393,8 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
           .select('breed_id')
           .eq('show_id', widget.showId);
 
-      for (final row in (showBreedIdsRes as List).cast<Map<String, dynamic>>()) {
+      for (final row
+          in (showBreedIdsRes as List).cast<Map<String, dynamic>>()) {
         final breedId = (row['breed_id'] ?? '').toString().trim();
         final breedName = breedNameById[breedId] ?? '';
         if (breedName.isNotEmpty) {
@@ -429,14 +424,14 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
     final speciesRankByBreedName = <String, int>{
       for (final b in allBreedRows)
         _normName((b['name'] ?? '').toString()):
-            (((b['species'] ?? '').toString().trim().toLowerCase().contains('cavy') ||
-                    (b['species'] ?? '')
-                        .toString()
-                        .trim()
-                        .toLowerCase()
-                        .contains('guinea'))
-                ? 1
-                : 0),
+            (((b['species'] ?? '').toString().trim().toLowerCase().contains(
+                  'cavy',
+                ) ||
+                (b['species'] ?? '').toString().trim().toLowerCase().contains(
+                  'guinea',
+                ))
+            ? 1
+            : 0),
     };
 
     final allowedBreedNamesBySectionId = <String, Set<String>>{};
@@ -448,8 +443,10 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
 
       allSectionIds.add(sectionId);
 
-      final breedScope =
-          (section['breed_scope'] ?? 'all').toString().trim().toLowerCase();
+      final breedScope = (section['breed_scope'] ?? 'all')
+          .toString()
+          .trim()
+          .toLowerCase();
 
       if (breedScope == 'all') {
         allowedBreedNamesBySectionId[sectionId] = allBreedRows
@@ -471,7 +468,8 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
       }
 
       final configuredShowBreedNames = showBreedNamesBySectionId[sectionId];
-      if (configuredShowBreedNames != null && configuredShowBreedNames.isNotEmpty) {
+      if (configuredShowBreedNames != null &&
+          configuredShowBreedNames.isNotEmpty) {
         allowedBreedNamesBySectionId
             .putIfAbsent(sectionId, () => <String>{})
             .addAll(configuredShowBreedNames);
@@ -539,14 +537,17 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
         for (final entry in allowedBreedNamesBySectionId.entries) {
           final sectionId = entry.key;
           final allowedNames = entry.value;
-          if (allowedNames.any((allowedName) => _breedNamesMatch(allowedName, breedName))) {
+          if (allowedNames.any(
+            (allowedName) => _breedNamesMatch(allowedName, breedName),
+          )) {
             allowedSectionIds.add(sectionId);
           }
         }
       }
 
-      final isAmericanCavyBreeders =
-          clubName.toLowerCase().contains('american cavy breeders');
+      final isAmericanCavyBreeders = clubName.toLowerCase().contains(
+        'american cavy breeders',
+      );
 
       if (allowedSectionIds.isEmpty && isAmericanCavyBreeders) {
         allowedSectionIds = {...allSectionIds};
@@ -564,8 +565,9 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
           .where((entry) => _breedNamesMatch(entry.key, breedName))
           .map((entry) => entry.value)
           .toList();
-      final speciesRank =
-          matchingSpeciesRanks.isEmpty ? 0 : matchingSpeciesRanks.first;
+      final speciesRank = matchingSpeciesRanks.isEmpty
+          ? 0
+          : matchingSpeciesRanks.first;
       final dedupeKey =
           '$clubType|${clubName.toLowerCase()}|${breedName.toLowerCase()}|${(club['state_code'] ?? '').toString().trim().toUpperCase()}';
 
@@ -600,8 +602,9 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
           return a.label.toLowerCase().compareTo(b.label.toLowerCase());
         }
 
-        final breedCompare =
-            (a.breedName ?? '').toLowerCase().compareTo((b.breedName ?? '').toLowerCase());
+        final breedCompare = (a.breedName ?? '').toLowerCase().compareTo(
+          (b.breedName ?? '').toLowerCase(),
+        );
         if (breedCompare != 0) return breedCompare;
 
         return a.label.toLowerCase().compareTo(b.label.toLowerCase());
@@ -646,21 +649,30 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
 
           switch (row.rowType) {
             case _SanctionRowType.arba:
-              return (r['sanctioning_body'] ?? '').toString().trim().toLowerCase() ==
+              return (r['sanctioning_body'] ?? '')
+                      .toString()
+                      .trim()
+                      .toLowerCase() ==
                   'arba';
             case _SanctionRowType.groupHeader:
               return false;
             case _SanctionRowType.club:
-              final savedBreedClubId = (r['breed_club_id'] ?? '').toString().trim();
+              final savedBreedClubId = (r['breed_club_id'] ?? '')
+                  .toString()
+                  .trim();
               if (savedBreedClubId.isNotEmpty &&
                   savedBreedClubId == (row.breedClubId ?? '')) {
                 return true;
               }
 
-              final savedClubName =
-                  (r['club_name'] ?? '').toString().trim().toLowerCase();
-              final savedBreedName =
-                  (r['breed_name'] ?? '').toString().trim().toLowerCase();
+              final savedClubName = (r['club_name'] ?? '')
+                  .toString()
+                  .trim()
+                  .toLowerCase();
+              final savedBreedName = (r['breed_name'] ?? '')
+                  .toString()
+                  .trim()
+                  .toLowerCase();
 
               return savedClubName == (row.clubName ?? '').toLowerCase() &&
                   savedBreedName == (row.breedName ?? '').toLowerCase();
@@ -668,8 +680,9 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
         }).toList();
 
         final existing = match.isNotEmpty ? match.first : null;
-        final value =
-            existing == null ? '' : (existing['sanction_number'] ?? '').toString();
+        final value = existing == null
+            ? ''
+            : (existing['sanction_number'] ?? '').toString();
 
         _controllers[key] = TextEditingController(text: value);
 
@@ -679,8 +692,9 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
             _existingRecordIds[key] = id;
           }
 
-          final requestStatus =
-              (existing['request_status'] ?? '').toString().trim();
+          final requestStatus = (existing['request_status'] ?? '')
+              .toString()
+              .trim();
           if (requestStatus.isNotEmpty) {
             _requestStatusByCellKey[key] = requestStatus;
           }
@@ -756,7 +770,8 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
         return fields.any((field) {
           final plain = field.toLowerCase();
           final normalized = searchable(field);
-          return plain.contains(search) || normalized.contains(normalizedSearch);
+          return plain.contains(search) ||
+              normalized.contains(normalizedSearch);
         });
       }).toList();
     }
@@ -776,37 +791,35 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
       final pin = pinnedRank(a).compareTo(pinnedRank(b));
       if (pin != 0) return pin;
 
-      final breedCompare = (a.breedName ?? '')
-          .toLowerCase()
-          .compareTo((b.breedName ?? '').toLowerCase());
+      final breedCompare = (a.breedName ?? '').toLowerCase().compareTo(
+        (b.breedName ?? '').toLowerCase(),
+      );
       if (breedCompare != 0) return breedCompare;
 
       return a.label.toLowerCase().compareTo(b.label.toLowerCase());
     }
 
     if (tab == _SanctionTabKind.nationalBreed) {
-      return tabRows
-        ..sort((a, b) {
-          final pin = pinnedRank(a).compareTo(pinnedRank(b));
-          if (pin != 0) return pin;
+      return tabRows..sort((a, b) {
+        final pin = pinnedRank(a).compareTo(pinnedRank(b));
+        if (pin != 0) return pin;
 
-          final breedCompare = (a.breedName ?? '')
-              .toLowerCase()
-              .compareTo((b.breedName ?? '').toLowerCase());
+        final breedCompare = (a.breedName ?? '').toLowerCase().compareTo(
+          (b.breedName ?? '').toLowerCase(),
+        );
 
-          if (breedCompare != 0) return breedCompare;
+        if (breedCompare != 0) return breedCompare;
 
-          return a.label.toLowerCase().compareTo(b.label.toLowerCase());
-        });
+        return a.label.toLowerCase().compareTo(b.label.toLowerCase());
+      });
     }
 
     if (tab == _SanctionTabKind.stateClub) {
-      return tabRows
-        ..sort((a, b) {
-          final pin = pinnedRank(a).compareTo(pinnedRank(b));
-          if (pin != 0) return pin;
-          return a.label.toLowerCase().compareTo(b.label.toLowerCase());
-        });
+      return tabRows..sort((a, b) {
+        final pin = pinnedRank(a).compareTo(pinnedRank(b));
+        if (pin != 0) return pin;
+        return a.label.toLowerCase().compareTo(b.label.toLowerCase());
+      });
     }
 
     final result = <_SanctionRowModel>[];
@@ -837,6 +850,7 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
 
     return result;
   }
+
   Future<void> _saveAll() async {
     if (_isReadOnly) {
       setState(() {
@@ -870,7 +884,10 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
 
           if (row.rowType == _SanctionRowType.club &&
               (_useArbaByRowKey[row.key] ?? false)) {
-            final arbaValue = _controllerFor('__ARBA__', section.id).text.trim();
+            final arbaValue = _controllerFor(
+              '__ARBA__',
+              section.id,
+            ).text.trim();
             value = arbaValue;
           }
 
@@ -1036,7 +1053,7 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                   children: [
                     TableRow(
                       decoration: BoxDecoration(
-                        color: const Color(0xFF11285A).withValues(alpha: .08),
+                        color: AppColors.navy.withValues(alpha: .08),
                       ),
                       children: [
                         _headerCell('Club / Breed / State Club'),
@@ -1050,7 +1067,10 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                           'ARBA Number:',
                           height: rowHeight,
                           isBold: true,
-                          fillColor: _rowStatusColorForSections('__ARBA__', _sections.map((s) => s.id)),
+                          fillColor: _rowStatusColorForSections(
+                            '__ARBA__',
+                            _sections.map((s) => s.id),
+                          ),
                         ),
                         _centerCell(const SizedBox.shrink(), height: rowHeight),
                         ..._sections.map((s) {
@@ -1077,9 +1097,15 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                               height: smallRowHeight,
                               isBold: true,
                             ),
-                            _centerCell(const SizedBox.shrink(), height: smallRowHeight),
+                            _centerCell(
+                              const SizedBox.shrink(),
+                              height: smallRowHeight,
+                            ),
                             ..._sections.map(
-                              (_) => _centerCell(const SizedBox.shrink(), height: smallRowHeight),
+                              (_) => _centerCell(
+                                const SizedBox.shrink(),
+                                height: smallRowHeight,
+                              ),
                             ),
                           ],
                         );
@@ -1092,7 +1118,10 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                           _labelCell(
                             row.label,
                             height: smallRowHeight,
-                            fillColor: _rowStatusColorForSections(row.key, row.allowedSectionIds),
+                            fillColor: _rowStatusColorForSections(
+                              row.key,
+                              row.allowedSectionIds,
+                            ),
                           ),
                           _centerCell(
                             Checkbox(
@@ -1110,8 +1139,9 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                           ),
                           ..._sections.map((s) {
                             final c = _controllerFor(row.key, s.id);
-                            final allowedHere =
-                                row.allowedSectionIds.contains(s.id);
+                            final allowedHere = row.allowedSectionIds.contains(
+                              s.id,
+                            );
                             final locked = useArba;
 
                             if (!allowedHere) {
@@ -1124,8 +1154,10 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                             }
 
                             if (locked) {
-                              final arbaValue =
-                                  _controllerFor('__ARBA__', s.id).text.trim();
+                              final arbaValue = _controllerFor(
+                                '__ARBA__',
+                                s.id,
+                              ).text.trim();
                               if (c.text != arbaValue) {
                                 c.text = arbaValue;
                                 c.selection = TextSelection.fromPosition(
@@ -1160,10 +1192,7 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       child: Text(
         text,
-        style: const TextStyle(
-          fontWeight: FontWeight.w700,
-          fontSize: 13,
-        ),
+        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
       ),
     );
   }
@@ -1196,7 +1225,10 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
     );
   }
 
-  Color? _rowStatusColorForSections(String rowKey, Iterable<String> sectionIds) {
+  Color? _rowStatusColorForSections(
+    String rowKey,
+    Iterable<String> sectionIds,
+  ) {
     var hasGreen = false;
     var hasOrange = false;
     var hasBlue = false;
@@ -1304,10 +1336,7 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
         child: Container(
           decoration: BoxDecoration(
             gradient: const LinearGradient(
-              colors: [
-                Color(0xFF11285A),
-                Color(0xFF0B1C43),
-              ],
+              colors: [AppColors.navy, AppColors.navyDark],
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
             ),
@@ -1347,9 +1376,10 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                 child: Container(
                   margin: const EdgeInsets.only(top: 4),
                   decoration: const BoxDecoration(
-                    color: Color(0xFFF4F6FB),
-                    borderRadius:
-                        BorderRadius.vertical(top: Radius.circular(24)),
+                    color: AppColors.bg,
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(24),
+                    ),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
@@ -1372,9 +1402,10 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                                   : () async {
                                       await Navigator.of(context).push(
                                         MaterialPageRoute(
-                                          builder: (_) => SanctionDirectoryScreen(
-                                            showId: widget.showId,
-                                          ),
+                                          builder: (_) =>
+                                              SanctionDirectoryScreen(
+                                                showId: widget.showId,
+                                              ),
                                         ),
                                       );
 
@@ -1403,7 +1434,9 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                             fillColor: Colors.white,
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(color: Colors.grey.shade300),
+                              borderSide: BorderSide(
+                                color: Colors.grey.shade300,
+                              ),
                             ),
                             isDense: true,
                           ),
@@ -1427,7 +1460,9 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                               _isFinalized
                                   ? 'This show has been finalized. Sanction numbers are view-only.'
                                   : 'This show is locked. Sanction numbers are view-only.',
-                              style: const TextStyle(fontWeight: FontWeight.w700),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 12),
@@ -1466,7 +1501,9 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                                     borderRadius: BorderRadius.circular(16),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.black.withValues(alpha: .05),
+                                        color: Colors.black.withValues(
+                                          alpha: .05,
+                                        ),
                                         blurRadius: 10,
                                       ),
                                     ],
@@ -1482,8 +1519,9 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                           children: [
                             Expanded(
                               child: OutlinedButton(
-                                onPressed:
-                                    _saving ? null : () => Navigator.pop(context),
+                                onPressed: _saving
+                                    ? null
+                                    : () => Navigator.pop(context),
                                 child: const Text('Close'),
                               ),
                             ),
@@ -1491,17 +1529,21 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                             Expanded(
                               child: FilledButton(
                                 style: FilledButton.styleFrom(
-                                  backgroundColor: const Color(0xFFD4A623),
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 16),
+                                  backgroundColor: AppColors.primaryButton,
+                                  foregroundColor: AppColors.primaryButtonText,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                  ),
                                 ),
-                                onPressed: (_saving || _isReadOnly) ? null : _saveAll,
+                                onPressed: (_saving || _isReadOnly)
+                                    ? null
+                                    : _saveAll,
                                 child: Text(
                                   _saving
                                       ? 'Saving…'
                                       : _isReadOnly
-                                          ? 'View Only'
-                                          : 'Save',
+                                      ? 'View Only'
+                                      : 'Save',
                                 ),
                               ),
                             ),
@@ -1557,17 +1599,9 @@ class _SectionColumn {
   });
 }
 
-enum _SanctionRowType {
-  arba,
-  club,
-  groupHeader,
-}
+enum _SanctionRowType { arba, club, groupHeader }
 
-enum _SanctionTabKind {
-  nationalBreed,
-  stateBreed,
-  stateClub,
-}
+enum _SanctionTabKind { nationalBreed, stateBreed, stateClub }
 
 class _SanctionRowModel {
   final String key;
@@ -1602,10 +1636,7 @@ class _SanctionRowModel {
 }
 
 class _SanctionStatusLegendItem extends StatelessWidget {
-  const _SanctionStatusLegendItem({
-    required this.color,
-    required this.label,
-  });
+  const _SanctionStatusLegendItem({required this.color, required this.label});
 
   final Color color;
   final String label;
@@ -1627,9 +1658,9 @@ class _SanctionStatusLegendItem extends StatelessWidget {
         const SizedBox(width: 6),
         Text(
           label,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
         ),
       ],
     );

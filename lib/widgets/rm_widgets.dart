@@ -68,18 +68,30 @@ class RMCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final content = Padding(padding: padding, child: child);
 
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(AppRadius.md),
-      elevation: 1,
-      shadowColor: Colors.black.withValues(alpha: .06),
-      child: onTap == null
-          ? content
-          : InkWell(
-              borderRadius: BorderRadius.circular(AppRadius.md),
-              onTap: onTap,
-              child: content,
-            ),
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.headerForeground, width: 1.4),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: .06),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: onTap == null
+            ? content
+            : InkWell(
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                onTap: onTap,
+                child: content,
+              ),
+      ),
     );
   }
 }
@@ -103,20 +115,17 @@ class RMBadge extends StatelessWidget {
     final bg = danger
         ? AppColors.dangerBg
         : success
-            ? AppColors.successBg
-            : AppColors.bg;
+        ? AppColors.successBg
+        : AppColors.neutralBadgeBg;
 
     final fg = danger
         ? AppColors.danger
         : success
-            ? AppColors.success
-            : AppColors.text;
+        ? AppColors.success
+        : AppColors.text;
 
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 10,
-        vertical: 7,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(AppRadius.pill),

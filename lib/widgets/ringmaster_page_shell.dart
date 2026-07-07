@@ -1,6 +1,7 @@
 // lib/widgets/ringmaster_page_shell.dart
 
 import 'package:flutter/material.dart';
+import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:ringmaster_show/services/app_session.dart';
 import 'package:ringmaster_show/screens/show_list_screen.dart';
 import 'package:ringmaster_show/widgets/help_report_dialog.dart';
@@ -60,7 +61,8 @@ class RingMasterPageShell extends StatelessWidget {
     final routeArgs = route?.settings.arguments;
     final effectiveShowId = showId ?? _showIdFromRouteArguments(routeArgs);
     final isSupportMode = AppSession.isSupportMode;
-    final impersonatedLabel = AppSession.impersonatedUserName ??
+    final impersonatedLabel =
+        AppSession.impersonatedUserName ??
         AppSession.impersonatedUserEmail ??
         AppSession.impersonatedUserId ??
         AppSession.effectiveUserId;
@@ -69,36 +71,43 @@ class RingMasterPageShell extends StatelessWidget {
     final isMobile = screenWidth < 700;
     final isTablet = screenWidth >= 700 && screenWidth < 1100;
 
-    final topColor = headerColor ?? const Color(0xFF11285A);
-    final pageBg = backgroundColor ?? const Color(0xFFF4F6FB);
+    final theme = Theme.of(context);
+    final topColor = headerColor ?? theme.colorScheme.primary;
+    final headerForeground = _foregroundFor(topColor);
+    final pageBg = backgroundColor ?? theme.scaffoldBackgroundColor;
 
     final horizontalPadding = isMobile
         ? 16.0
         : isTablet
-            ? 20.0
-            : 24.0;
+        ? 20.0
+        : 24.0;
 
     final topPadding = isMobile ? 12.0 : 16.0;
     final bottomRadius = isMobile ? 24.0 : 28.0;
+    final pageDecoration = BoxDecoration(
+      color: backgroundColor,
+      gradient: backgroundColor == null ? AppGradients.page : null,
+      borderRadius: BorderRadius.vertical(top: Radius.circular(bottomRadius)),
+    );
 
     final logoSize = isMobile
         ? 48.0
         : isTablet
-            ? 58.0
-            : 64.0;
+        ? 58.0
+        : 64.0;
 
-  // Mobile header size
+    // Mobile header size
     final titleSize = isMobile
         ? 24.0
         : isTablet
-            ? 34.0
-            : 38.0;
+        ? 34.0
+        : 38.0;
 
     final subtitleSize = isMobile
         ? 15.0
         : isTablet
-            ? 17.0
-            : 18.0;
+        ? 17.0
+        : 18.0;
 
     final iconSize = isMobile ? 22.0 : 24.0;
 
@@ -106,16 +115,22 @@ class RingMasterPageShell extends StatelessWidget {
         leading != null || (showBackButton && _canPop(context));
 
     Widget resolvedBody = useScrollView
-        ? SingleChildScrollView(
-            padding: bodyPadding,
-            child: body,
-          )
-        : Padding(
-            padding: bodyPadding,
-            child: body,
-          );
+        ? SingleChildScrollView(padding: bodyPadding, child: body)
+        : Padding(padding: bodyPadding, child: body);
 
     final resolvedActions = <Widget>[
+      ...(actions ?? const []),
+      if (showHomeButton)
+        IconButton(
+          tooltip: 'Home',
+          icon: const Icon(Icons.home_outlined),
+          onPressed: () {
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => const ShowListScreen()),
+              (route) => false,
+            );
+          },
+        ),
       if (showHelpButton)
         IconButton(
           tooltip: 'Report an issue',
@@ -129,20 +144,6 @@ class RingMasterPageShell extends StatelessWidget {
             ),
           ),
         ),
-      if (showHomeButton)
-        IconButton(
-          tooltip: 'Home',
-          icon: const Icon(Icons.home_outlined),
-          onPressed: () {
-            Navigator.of(context).pushAndRemoveUntil(
-              MaterialPageRoute(
-                builder: (_) => const ShowListScreen(),
-              ),
-              (route) => false,
-            );
-          },
-        ),
-      ...(actions ?? const []),
     ];
 
     return Scaffold(
@@ -160,9 +161,7 @@ class RingMasterPageShell extends StatelessWidget {
                   AppSession.stopImpersonation();
 
                   Navigator.of(context).pushAndRemoveUntil(
-                    MaterialPageRoute(
-                      builder: (_) => const ShowListScreen(),
-                    ),
+                    MaterialPageRoute(builder: (_) => const ShowListScreen()),
                     (route) => false,
                   );
                 },
@@ -185,6 +184,7 @@ class RingMasterPageShell extends StatelessWidget {
                       onBack: onBack,
                       actions: resolvedActions,
                       topColor: topColor,
+                      foregroundColor: headerForeground,
                       logoSize: logoSize,
                       titleSize: titleSize,
                       subtitleSize: subtitleSize,
@@ -199,6 +199,7 @@ class RingMasterPageShell extends StatelessWidget {
                       onBack: onBack,
                       actions: resolvedActions,
                       topColor: topColor,
+                      foregroundColor: headerForeground,
                       logoSize: logoSize,
                       titleSize: titleSize,
                       subtitleSize: subtitleSize,
@@ -208,18 +209,15 @@ class RingMasterPageShell extends StatelessWidget {
             Expanded(
               child: Container(
                 width: double.infinity,
-                decoration: BoxDecoration(
-                  color: pageBg,
-                  borderRadius: BorderRadius.vertical(
-                    top: Radius.circular(bottomRadius),
-                  ),
-                ),
+                decoration: pageDecoration,
                 child: ClipRRect(
                   borderRadius: BorderRadius.vertical(
                     top: Radius.circular(bottomRadius),
                   ),
                   child: Material(
-                    color: pageBg,
+                    color: backgroundColor == null
+                        ? Colors.transparent
+                        : pageBg,
                     child: resolvedBody,
                   ),
                 ),
@@ -236,10 +234,7 @@ class _SupportModeBanner extends StatelessWidget {
   final String? label;
   final VoidCallback onExit;
 
-  const _SupportModeBanner({
-    required this.label,
-    required this.onExit,
-  });
+  const _SupportModeBanner({required this.label, required this.onExit});
 
   @override
   Widget build(BuildContext context) {
@@ -249,7 +244,7 @@ class _SupportModeBanner extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      color: const Color(0xFFFFF3CD),
+      color: AppColors.warningBg,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: SafeArea(
         top: false,
@@ -259,7 +254,7 @@ class _SupportModeBanner extends StatelessWidget {
             const Icon(
               Icons.visibility_outlined,
               size: 18,
-              color: Color(0xFF7A4F00),
+              color: AppColors.warning,
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -268,7 +263,7 @@ class _SupportModeBanner extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  color: Color(0xFF7A4F00),
+                  color: AppColors.warning,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -278,7 +273,7 @@ class _SupportModeBanner extends StatelessWidget {
               icon: const Icon(Icons.logout, size: 18),
               label: const Text('Exit'),
               style: TextButton.styleFrom(
-                foregroundColor: const Color(0xFF7A4F00),
+                foregroundColor: AppColors.warning,
                 visualDensity: VisualDensity.compact,
               ),
             ),
@@ -297,11 +292,7 @@ String? _showIdFromRouteArguments(Object? args) {
   }
 
   if (args is Map) {
-    final possibleKeys = [
-      'showId',
-      'show_id',
-      'id',
-    ];
+    final possibleKeys = ['showId', 'show_id', 'id'];
 
     for (final key in possibleKeys) {
       final value = args[key];
@@ -323,6 +314,7 @@ class _MobileHeader extends StatelessWidget {
   final VoidCallback? onBack;
   final List<Widget> actions;
   final Color topColor;
+  final Color foregroundColor;
   final double logoSize;
   final double titleSize;
   final double subtitleSize;
@@ -337,6 +329,7 @@ class _MobileHeader extends StatelessWidget {
     required this.onBack,
     required this.actions,
     required this.topColor,
+    required this.foregroundColor,
     required this.logoSize,
     required this.titleSize,
     required this.subtitleSize,
@@ -356,14 +349,22 @@ class _MobileHeader extends StatelessWidget {
             if (showBack)
               Padding(
                 padding: const EdgeInsets.only(right: 8, top: 2),
-                child: leading ??
+                child:
+                    leading ??
                     IconButton(
                       visualDensity: VisualDensity.compact,
-                      constraints:
-                          const BoxConstraints(minWidth: 40, minHeight: 40),
+                      constraints: const BoxConstraints(
+                        minWidth: 40,
+                        minHeight: 40,
+                      ),
                       padding: EdgeInsets.zero,
-                      icon: Icon(Icons.arrow_back, color: Colors.white, size: iconSize),
-                      onPressed: onBack ?? () => Navigator.of(context).maybePop(),
+                      icon: Icon(
+                        Icons.arrow_back,
+                        color: foregroundColor,
+                        size: iconSize,
+                      ),
+                      onPressed:
+                          onBack ?? () => Navigator.of(context).maybePop(),
                     ),
               ),
             if (canShowLogo)
@@ -372,10 +373,7 @@ class _MobileHeader extends StatelessWidget {
                 child: SizedBox(
                   width: logoSize,
                   height: logoSize,
-                  child: FittedBox(
-                    fit: BoxFit.contain,
-                    child: logo,
-                  ),
+                  child: FittedBox(fit: BoxFit.contain, child: logo),
                 ),
               ),
             Expanded(
@@ -389,7 +387,7 @@ class _MobileHeader extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: Colors.white,
+                        color: foregroundColor,
                         fontSize: titleSize,
                         fontWeight: FontWeight.w700,
                         height: 1.0,
@@ -402,7 +400,7 @@ class _MobileHeader extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: .9),
+                          color: foregroundColor.withValues(alpha: .82),
                           fontSize: subtitleSize,
                           fontWeight: FontWeight.w400,
                           height: 1.1,
@@ -417,16 +415,10 @@ class _MobileHeader extends StatelessWidget {
         ),
         if (actions.isNotEmpty) ...[
           const SizedBox(height: 10),
-          Wrap(
+          _LimitedHeaderActions(
+            actions: actions,
+            foregroundColor: foregroundColor,
             spacing: 6,
-            runSpacing: 6,
-            children: actions
-                .map(
-                  (action) => _HeaderActionContainer(
-                    child: action,
-                  ),
-                )
-                .toList(),
           ),
         ],
       ],
@@ -443,6 +435,7 @@ class _WideHeader extends StatelessWidget {
   final VoidCallback? onBack;
   final List<Widget> actions;
   final Color topColor;
+  final Color foregroundColor;
   final double logoSize;
   final double titleSize;
   final double subtitleSize;
@@ -457,6 +450,7 @@ class _WideHeader extends StatelessWidget {
     required this.onBack,
     required this.actions,
     required this.topColor,
+    required this.foregroundColor,
     required this.logoSize,
     required this.titleSize,
     required this.subtitleSize,
@@ -470,9 +464,14 @@ class _WideHeader extends StatelessWidget {
         if (showBack)
           Padding(
             padding: const EdgeInsets.only(right: 8),
-            child: leading ??
+            child:
+                leading ??
                 IconButton(
-                  icon: Icon(Icons.arrow_back, color: Colors.white, size: iconSize),
+                  icon: Icon(
+                    Icons.arrow_back,
+                    color: foregroundColor,
+                    size: iconSize,
+                  ),
                   onPressed: onBack ?? () => Navigator.of(context).maybePop(),
                 ),
           ),
@@ -482,10 +481,7 @@ class _WideHeader extends StatelessWidget {
             child: SizedBox(
               width: logoSize,
               height: logoSize,
-              child: FittedBox(
-                fit: BoxFit.contain,
-                child: logo,
-              ),
+              child: FittedBox(fit: BoxFit.contain, child: logo),
             ),
           ),
         Expanded(
@@ -498,7 +494,7 @@ class _WideHeader extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: Colors.white,
+                  color: foregroundColor,
                   fontSize: titleSize,
                   fontWeight: FontWeight.w700,
                   height: 1.0,
@@ -511,7 +507,7 @@ class _WideHeader extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: .9),
+                    color: foregroundColor.withValues(alpha: .82),
                     fontSize: subtitleSize,
                   ),
                 ),
@@ -520,38 +516,155 @@ class _WideHeader extends StatelessWidget {
           ),
         ),
         if (actions.isNotEmpty)
-          Wrap(
+          _LimitedHeaderActions(
+            actions: actions,
+            foregroundColor: foregroundColor,
             spacing: 8,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: actions
-                .map(
-                  (action) => _HeaderActionContainer(
-                    child: action,
-                  ),
-                )
-                .toList(),
           ),
       ],
     );
   }
 }
 
+class _LimitedHeaderActions extends StatelessWidget {
+  static const int maxVisibleIcons = 3;
+
+  final List<Widget> actions;
+  final Color foregroundColor;
+  final double spacing;
+
+  const _LimitedHeaderActions({
+    required this.actions,
+    required this.foregroundColor,
+    required this.spacing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasOverflow = actions.length > maxVisibleIcons;
+    final directCount = hasOverflow ? maxVisibleIcons - 1 : actions.length;
+    final directActions = actions.take(directCount);
+    final overflowActions = hasOverflow
+        ? actions.skip(directCount).toList()
+        : const <Widget>[];
+
+    return Wrap(
+      spacing: spacing,
+      runSpacing: spacing,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        for (final action in directActions)
+          _HeaderActionContainer(
+            foregroundColor: foregroundColor,
+            child: action,
+          ),
+        if (overflowActions.isNotEmpty)
+          _HeaderOverflowMenu(
+            actions: overflowActions,
+            foregroundColor: foregroundColor,
+          ),
+      ],
+    );
+  }
+}
+
+class _HeaderOverflowMenu extends StatelessWidget {
+  final List<Widget> actions;
+  final Color foregroundColor;
+
+  const _HeaderOverflowMenu({
+    required this.actions,
+    required this.foregroundColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final menuActions = actions.map(_HeaderMenuAction.fromWidget).toList();
+
+    return PopupMenuButton<int>(
+      tooltip: 'More',
+      icon: Icon(Icons.more_vert, color: foregroundColor),
+      onSelected: (index) => menuActions[index].onPressed?.call(),
+      itemBuilder: (context) => [
+        for (var index = 0; index < menuActions.length; index++)
+          PopupMenuItem<int>(
+            value: index,
+            enabled: menuActions[index].onPressed != null,
+            child: Row(
+              children: [
+                IconTheme(
+                  data: IconThemeData(color: AppColors.text, size: 20),
+                  child: menuActions[index].icon,
+                ),
+                const SizedBox(width: 12),
+                Expanded(child: Text(menuActions[index].label)),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _HeaderMenuAction {
+  final Widget icon;
+  final String label;
+  final VoidCallback? onPressed;
+
+  const _HeaderMenuAction({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  factory _HeaderMenuAction.fromWidget(Widget action) {
+    if (action is IconButton) {
+      return _HeaderMenuAction(
+        icon: action.icon,
+        label: action.tooltip ?? 'Action',
+        onPressed: action.onPressed,
+      );
+    }
+
+    if (action is Tooltip) {
+      return _HeaderMenuAction(
+        icon: const Icon(Icons.circle_outlined),
+        label: action.message ?? 'Action',
+        onPressed: null,
+      );
+    }
+
+    return const _HeaderMenuAction(
+      icon: Icon(Icons.circle_outlined),
+      label: 'Action',
+      onPressed: null,
+    );
+  }
+}
+
 class _HeaderActionContainer extends StatelessWidget {
   final Widget child;
+  final Color foregroundColor;
 
   const _HeaderActionContainer({
+    required this.foregroundColor,
     required this.child,
   });
 
   @override
   Widget build(BuildContext context) {
     return IconTheme(
-      data: const IconThemeData(color: Colors.white),
+      data: IconThemeData(color: foregroundColor),
       child: DefaultTextStyle(
-        style: const TextStyle(color: Colors.white),
+        style: TextStyle(color: foregroundColor),
         child: child,
       ),
     );
   }
+}
+
+Color _foregroundFor(Color background) {
+  return ThemeData.estimateBrightnessForColor(background) == Brightness.dark
+      ? AppColors.headerForeground
+      : AppColors.text;
 }

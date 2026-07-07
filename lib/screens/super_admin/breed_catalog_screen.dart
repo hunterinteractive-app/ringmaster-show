@@ -1,6 +1,7 @@
 // lib/screens/super_admin/breed_catalog_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
@@ -62,8 +63,7 @@ class _BreedCatalogScreenState extends State<BreedCatalogScreen> {
       final aSpecies = (a['species'] ?? '').toString();
       final bSpecies = (b['species'] ?? '').toString();
 
-      final speciesCmp =
-          speciesRank(aSpecies).compareTo(speciesRank(bSpecies));
+      final speciesCmp = speciesRank(aSpecies).compareTo(speciesRank(bSpecies));
       if (speciesCmp != 0) return speciesCmp;
 
       final aName = (a['name'] ?? '').toString().toLowerCase();
@@ -118,7 +118,8 @@ class _BreedCatalogScreenState extends State<BreedCatalogScreen> {
       if (existingNames.contains(_normalizeLookup(varietyName))) continue;
 
       varieties.add({
-        'id': 'cavy_sop:${_normalizeLookup(breedName)}:${_normalizeLookup(varietyName)}',
+        'id':
+            'cavy_sop:${_normalizeLookup(breedName)}:${_normalizeLookup(varietyName)}',
         'name': varietyName,
         'is_active': true,
         'is_cavy_sop': true,
@@ -154,10 +155,7 @@ class _BreedCatalogScreenState extends State<BreedCatalogScreen> {
     final changed = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-        builder: (_) => BreedEditorScreen(
-          species: species,
-          existing: existing,
-        ),
+        builder: (_) => BreedEditorScreen(species: species, existing: existing),
       ),
     );
 
@@ -226,10 +224,13 @@ class _BreedCatalogScreenState extends State<BreedCatalogScreen> {
     try {
       await supabase
           .from('varieties')
-          .update({'is_active': isActive}).eq('id', varietyId);
+          .update({'is_active': isActive})
+          .eq('id', varietyId);
 
       if (!mounted) return;
-      setState(() => _msg = isActive ? 'Variety re-enabled' : 'Variety disabled');
+      setState(
+        () => _msg = isActive ? 'Variety re-enabled' : 'Variety disabled',
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _msg = 'Update failed: $e');
@@ -243,7 +244,8 @@ class _BreedCatalogScreenState extends State<BreedCatalogScreen> {
     try {
       await supabase
           .from('breeds')
-          .update({'class_system': newValue}).eq('id', breedId);
+          .update({'class_system': newValue})
+          .eq('id', breedId);
 
       if (!mounted) return;
       setState(() => _msg = 'Updated class system');
@@ -260,7 +262,8 @@ class _BreedCatalogScreenState extends State<BreedCatalogScreen> {
     try {
       await supabase
           .from('breeds')
-          .update({'is_active': isActive}).eq('id', breedId);
+          .update({'is_active': isActive})
+          .eq('id', breedId);
 
       if (!mounted) return;
       setState(() => _msg = isActive ? 'Breed re-enabled' : 'Breed disabled');
@@ -273,7 +276,8 @@ class _BreedCatalogScreenState extends State<BreedCatalogScreen> {
   Widget _messageBanner() {
     if (_msg == null) return const SizedBox.shrink();
 
-    final isError = _msg!.toLowerCase().contains('failed') ||
+    final isError =
+        _msg!.toLowerCase().contains('failed') ||
         _msg!.toLowerCase().contains('error');
 
     return Container(
@@ -336,9 +340,7 @@ class _BreedCatalogScreenState extends State<BreedCatalogScreen> {
     return Card(
       elevation: 0,
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: ExpansionTile(
         tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -369,10 +371,7 @@ class _BreedCatalogScreenState extends State<BreedCatalogScreen> {
                     onChanged: (v) {
                       final nv = v ?? classSystem;
                       if (nv != classSystem) {
-                        _setBreedClassSystem(
-                          breedId: breedId,
-                          newValue: nv,
-                        );
+                        _setBreedClassSystem(breedId: breedId, newValue: nv);
                         setState(() {});
                       }
                     },
@@ -409,10 +408,7 @@ class _BreedCatalogScreenState extends State<BreedCatalogScreen> {
                       if (ok != true) return;
                     }
 
-                    await _setBreedActive(
-                      breedId: breedId,
-                      isActive: v,
-                    );
+                    await _setBreedActive(breedId: breedId, isActive: v);
                     if (!mounted) return;
                     setState(() {});
                   },
@@ -424,20 +420,15 @@ class _BreedCatalogScreenState extends State<BreedCatalogScreen> {
           Row(
             children: [
               OutlinedButton.icon(
-                onPressed: () => _openBreedEditor(
-                  species: species,
-                  existing: b,
-                ),
+                onPressed: () =>
+                    _openBreedEditor(species: species, existing: b),
                 icon: const Icon(Icons.edit),
                 label: const Text('Edit Breed'),
               ),
               const SizedBox(width: 10),
               FilledButton.icon(
                 onPressed: () async {
-                  await _addVariety(
-                    breedId: breedId,
-                    breedName: breedName,
-                  );
+                  await _addVariety(breedId: breedId, breedName: breedName);
                   if (!mounted) return;
                   setState(() {});
                 },
@@ -583,18 +574,12 @@ class _BreedCatalogScreenState extends State<BreedCatalogScreen> {
         tooltip: 'Add breed',
         onSelected: (value) => _openBreedEditor(species: value),
         itemBuilder: (_) => const [
-          PopupMenuItem(
-            value: 'rabbit',
-            child: Text('Add Rabbit Breed'),
-          ),
-          PopupMenuItem(
-            value: 'cavy',
-            child: Text('Add Cavy Breed'),
-          ),
+          PopupMenuItem(value: 'rabbit', child: Text('Add Rabbit Breed')),
+          PopupMenuItem(value: 'cavy', child: Text('Add Cavy Breed')),
         ],
         child: FloatingActionButton(
-          backgroundColor: Color(0xFFD4A623),
-          foregroundColor: Colors.black,
+          backgroundColor: AppColors.primaryButton,
+          foregroundColor: AppColors.primaryButtonText,
           onPressed: null,
           child: Icon(Icons.add),
         ),
@@ -607,9 +592,9 @@ class _BreedCatalogScreenState extends State<BreedCatalogScreen> {
               width: double.infinity,
               child: Text(
                 'Global Breed & Variety Catalog',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
               ),
             ),
           ),

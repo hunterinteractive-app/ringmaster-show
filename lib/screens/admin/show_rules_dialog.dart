@@ -1,6 +1,7 @@
 // lib/screens/admin/show_rules_dialog.dart
 
 import 'package:flutter/material.dart';
+import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/services/show_lock_service.dart';
 
@@ -24,10 +25,7 @@ class _ShowRulesDialog extends StatefulWidget {
   final String showId;
   final String showName;
 
-  const _ShowRulesDialog({
-    required this.showId,
-    required this.showName,
-  });
+  const _ShowRulesDialog({required this.showId, required this.showName});
 
   @override
   State<_ShowRulesDialog> createState() => _ShowRulesDialogState();
@@ -103,10 +101,13 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
           .eq('id', widget.showId)
           .single();
 
-      _finalAwardMode =
-          (showData['final_award_mode'] ?? 'four_six_bis').toString();
+      _finalAwardMode = (showData['final_award_mode'] ?? 'four_six_bis')
+          .toString();
       _isLocked = showData['is_locked'] == true;
-      _isFinalized = (showData['finalized_at'] ?? '').toString().trim().isNotEmpty;
+      _isFinalized = (showData['finalized_at'] ?? '')
+          .toString()
+          .trim()
+          .isNotEmpty;
 
       if (rulesData == null) {
         _maxEntriesPerExhibitor.text = '';
@@ -121,13 +122,12 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
 
         _maxEntriesPerExhibitor.text =
             (rulesData['max_entries_per_exhibitor'] ?? '').toString();
-        _maxEntriesPerAnimal.text =
-            (rulesData['max_entries_per_animal'] ?? 1).toString();
+        _maxEntriesPerAnimal.text = (rulesData['max_entries_per_animal'] ?? 1)
+            .toString();
 
         blockOutsideWindow =
             rulesData['block_entries_outside_entry_window'] == true;
-        blockUnpublished =
-            rulesData['block_unpublished_show_entries'] == true;
+        blockUnpublished = rulesData['block_unpublished_show_entries'] == true;
       }
 
       if (!mounted) return;
@@ -152,9 +152,11 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
 
   bool _validate() {
     if (_isReadOnly) {
-      setState(() => _msg = _isFinalized
-          ? 'This show has been finalized. Rules can no longer be changed.'
-          : 'This show is locked. Rules can no longer be changed.');
+      setState(
+        () => _msg = _isFinalized
+            ? 'This show has been finalized. Rules can no longer be changed.'
+            : 'This show is locked. Rules can no longer be changed.',
+      );
       return false;
     }
     final maxPerAnimal = _parseIntOrNull(_maxEntriesPerAnimal.text);
@@ -166,8 +168,10 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
     if (_maxEntriesPerExhibitor.text.trim().isNotEmpty) {
       final maxPerEx = _parseIntOrNull(_maxEntriesPerExhibitor.text);
       if (maxPerEx == null) {
-        setState(() => _msg =
-            'Max entries per exhibitor must be blank or an integer ≥ 1.');
+        setState(
+          () => _msg =
+              'Max entries per exhibitor must be blank or an integer ≥ 1.',
+        );
         return false;
       }
     }
@@ -210,9 +214,7 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
 
       await supabase
           .from('shows')
-          .update({
-            'final_award_mode': _finalAwardMode,
-          })
+          .update({'final_award_mode': _finalAwardMode})
           .eq('id', widget.showId);
 
       if (!mounted) return;
@@ -242,10 +244,7 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: .05),
-            blurRadius: 10,
-          ),
+          BoxShadow(color: Colors.black.withValues(alpha: .05), blurRadius: 10),
         ],
       ),
       child: Column(
@@ -275,10 +274,7 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
         child: Container(
           decoration: BoxDecoration(
             gradient: const LinearGradient(
-              colors: [
-                Color(0xFF11285A),
-                Color(0xFF0B1C43),
-              ],
+              colors: [AppColors.navy, AppColors.navyDark],
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
             ),
@@ -318,8 +314,10 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
                 child: Container(
                   margin: const EdgeInsets.only(top: 4),
                   decoration: const BoxDecoration(
-                    color: Color(0xFFF4F6FB),
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                    color: AppColors.bg,
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(24),
+                    ),
                   ),
                   child: _loading
                       ? const Center(child: CircularProgressIndicator())
@@ -335,13 +333,17 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
                                   decoration: BoxDecoration(
                                     color: Colors.amber.shade100,
                                     borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: Colors.amber.shade300),
+                                    border: Border.all(
+                                      color: Colors.amber.shade300,
+                                    ),
                                   ),
                                   child: Text(
                                     _isFinalized
                                         ? 'This show has been finalized. Rules and validation settings are view-only.'
                                         : 'This show is locked. Rules and validation settings are view-only.',
-                                    style: const TextStyle(fontWeight: FontWeight.w700),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -364,8 +366,9 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
                                   child: Text(
                                     _msg!,
                                     style: TextStyle(
-                                      color:
-                                          savedMessage ? Colors.green : Colors.red,
+                                      color: savedMessage
+                                          ? Colors.green
+                                          : Colors.red,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
@@ -380,11 +383,15 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
                                         children: [
                                           SwitchListTile(
                                             contentPadding: EdgeInsets.zero,
-                                            title: const Text('Tattoo / ID required'),
+                                            title: const Text(
+                                              'Tattoo / ID required',
+                                            ),
                                             value: requireTattoo,
                                             onChanged: (_saving || _isReadOnly)
                                                 ? null
-                                                : (v) => setState(() => requireTattoo = v),
+                                                : (v) => setState(
+                                                    () => requireTattoo = v,
+                                                  ),
                                           ),
                                           SwitchListTile(
                                             contentPadding: EdgeInsets.zero,
@@ -392,15 +399,21 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
                                             value: requireSex,
                                             onChanged: (_saving || _isReadOnly)
                                                 ? null
-                                                : (v) => setState(() => requireSex = v),
+                                                : (v) => setState(
+                                                    () => requireSex = v,
+                                                  ),
                                           ),
                                           SwitchListTile(
                                             contentPadding: EdgeInsets.zero,
-                                            title: const Text('Birth date required'),
+                                            title: const Text(
+                                              'Birth date required',
+                                            ),
                                             value: requireBirthDate,
                                             onChanged: (_saving || _isReadOnly)
                                                 ? null
-                                                : (v) => setState(() => requireBirthDate = v),
+                                                : (v) => setState(
+                                                    () => requireBirthDate = v,
+                                                  ),
                                           ),
                                           SwitchListTile(
                                             contentPadding: EdgeInsets.zero,
@@ -408,15 +421,21 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
                                             value: requireBreed,
                                             onChanged: (_saving || _isReadOnly)
                                                 ? null
-                                                : (v) => setState(() => requireBreed = v),
+                                                : (v) => setState(
+                                                    () => requireBreed = v,
+                                                  ),
                                           ),
                                           SwitchListTile(
                                             contentPadding: EdgeInsets.zero,
-                                            title: const Text('Variety required'),
+                                            title: const Text(
+                                              'Variety required',
+                                            ),
                                             value: requireVariety,
                                             onChanged: (_saving || _isReadOnly)
                                                 ? null
-                                                : (v) => setState(() => requireVariety = v),
+                                                : (v) => setState(
+                                                    () => requireVariety = v,
+                                                  ),
                                           ),
                                           SwitchListTile(
                                             contentPadding: EdgeInsets.zero,
@@ -427,7 +446,9 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
                                             value: requireName,
                                             onChanged: (_saving || _isReadOnly)
                                                 ? null
-                                                : (v) => setState(() => requireName = v),
+                                                : (v) => setState(
+                                                    () => requireName = v,
+                                                  ),
                                           ),
                                         ],
                                       ),
@@ -442,7 +463,8 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
                                             decoration: const InputDecoration(
                                               labelText:
                                                   'Max entries per exhibitor (optional)',
-                                              hintText: 'Leave blank for unlimited',
+                                              hintText:
+                                                  'Leave blank for unlimited',
                                               border: OutlineInputBorder(),
                                             ),
                                           ),
@@ -452,7 +474,8 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
                                             enabled: !_saving && !_isReadOnly,
                                             keyboardType: TextInputType.number,
                                             decoration: const InputDecoration(
-                                              labelText: 'Max entries per animal',
+                                              labelText:
+                                                  'Max entries per animal',
                                               hintText: 'Usually 1',
                                               border: OutlineInputBorder(),
                                             ),
@@ -499,9 +522,9 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
                                             alignment: Alignment.centerLeft,
                                             child: Text(
                                               'Current mode: ${_finalAwardModeLabel(_finalAwardMode)}',
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .bodySmall,
+                                              style: Theme.of(
+                                                context,
+                                              ).textTheme.bodySmall,
                                             ),
                                           ),
                                         ],
@@ -519,7 +542,8 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
                                             onChanged: (_saving || _isReadOnly)
                                                 ? null
                                                 : (v) => setState(
-                                                    () => blockOutsideWindow = v,
+                                                    () =>
+                                                        blockOutsideWindow = v,
                                                   ),
                                           ),
                                           SwitchListTile(
@@ -545,8 +569,9 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
                                 children: [
                                   Expanded(
                                     child: OutlinedButton(
-                                      onPressed:
-                                          _saving ? null : () => Navigator.pop(context),
+                                      onPressed: _saving
+                                          ? null
+                                          : () => Navigator.pop(context),
                                       child: const Text('Close'),
                                     ),
                                   ),
@@ -554,18 +579,23 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
                                   Expanded(
                                     child: FilledButton(
                                       style: FilledButton.styleFrom(
-                                        backgroundColor: const Color(0xFFD4A623),
+                                        backgroundColor:
+                                            AppColors.primaryButton,
+                                        foregroundColor:
+                                            AppColors.primaryButtonText,
                                         padding: const EdgeInsets.symmetric(
                                           vertical: 16,
                                         ),
                                       ),
-                                      onPressed: (_saving || _isReadOnly) ? null : _save,
+                                      onPressed: (_saving || _isReadOnly)
+                                          ? null
+                                          : _save,
                                       child: Text(
                                         _saving
                                             ? 'Saving…'
                                             : _isReadOnly
-                                                ? 'View Only'
-                                                : 'Save',
+                                            ? 'View Only'
+                                            : 'Save',
                                       ),
                                     ),
                                   ),

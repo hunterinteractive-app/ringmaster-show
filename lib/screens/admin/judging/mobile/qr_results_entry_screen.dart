@@ -1,6 +1,7 @@
 // lib/screens/admin/judging/mobile/qr_results_entry_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:ringmaster_show/screens/admin/results/admin_results_entry_screen.dart';
@@ -68,7 +69,8 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
   void didUpdateWidget(covariant QrResultsEntryScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    final qrTargetChanged = oldWidget.showId != widget.showId ||
+    final qrTargetChanged =
+        oldWidget.showId != widget.showId ||
         oldWidget.sectionId != widget.sectionId ||
         oldWidget.breedId != widget.breedId ||
         oldWidget.token != widget.token ||
@@ -184,14 +186,13 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
 
     final displayName = (section['display_name'] ?? '').toString().trim();
     final letter = (section['letter'] ?? '').toString().trim();
-    _sectionKind =
-        (section['kind'] ?? 'open').toString().trim().toLowerCase();
+    _sectionKind = (section['kind'] ?? 'open').toString().trim().toLowerCase();
 
     _sectionLabel = displayName.isNotEmpty
         ? displayName
         : letter.isNotEmpty
-            ? 'Show $letter'
-            : 'Section';
+        ? 'Show $letter'
+        : 'Section';
   }
 
   Future<void> _loadJudges() async {
@@ -222,14 +223,15 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
         final name = (judgeMap['name'] ?? '').toString().trim();
         final first = (judgeMap['first_name'] ?? '').toString().trim();
         final last = (judgeMap['last_name'] ?? '').toString().trim();
-        final arbaNumber =
-            (judgeMap['arba_judge_number'] ?? '').toString().trim();
+        final arbaNumber = (judgeMap['arba_judge_number'] ?? '')
+            .toString()
+            .trim();
 
         final baseName = displayName.isNotEmpty
             ? displayName
             : name.isNotEmpty
-                ? name
-                : [first, last].where((x) => x.isNotEmpty).join(' ').trim();
+            ? name
+            : [first, last].where((x) => x.isNotEmpty).join(' ').trim();
 
         label = baseName.isNotEmpty ? baseName : masterJudgeId;
 
@@ -270,8 +272,10 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
 
     for (final row in (rows as List).cast<Map<String, dynamic>>()) {
       final name = (row['name'] ?? '').toString().trim().toLowerCase();
-      final classSystem =
-          (row['class_system'] ?? 'four').toString().trim().toLowerCase();
+      final classSystem = (row['class_system'] ?? 'four')
+          .toString()
+          .trim()
+          .toLowerCase();
 
       if (name.isNotEmpty) {
         _breedClassSystems[name] = classSystem;
@@ -286,22 +290,18 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
         .eq('id', widget.showId)
         .single();
 
-    _finalAwardMode =
-        (row['final_award_mode'] ?? kDefaultFinalAwardMode).toString();
-    _coopNumberingMode =
-        (row['coop_numbering_mode'] ?? 'separate')
-            .toString()
-            .trim()
-            .toLowerCase();
+    _finalAwardMode = (row['final_award_mode'] ?? kDefaultFinalAwardMode)
+        .toString();
+    _coopNumberingMode = (row['coop_numbering_mode'] ?? 'separate')
+        .toString()
+        .trim()
+        .toLowerCase();
   }
 
   Future<void> _loadEntries() async {
     final rows = await supabase.rpc(
       'report_results_entry_rows',
-      params: {
-        'p_show_id': widget.showId,
-        'p_section_id': widget.sectionId,
-      },
+      params: {'p_show_id': widget.showId, 'p_section_id': widget.sectionId},
     );
 
     var entries = (rows as List)
@@ -316,14 +316,15 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
     final groupKey = (widget.groupKey ?? '').trim();
     if (groupKey.isNotEmpty) {
       entries = entries.where((e) {
-        final groupName = (
-          e['group_name'] ??
-          e['group_display_name'] ??
-          e['group_label'] ??
-          e['group'] ??
-          e['group_code'] ??
-          ''
-        ).toString().trim();
+        final groupName =
+            (e['group_name'] ??
+                    e['group_display_name'] ??
+                    e['group_label'] ??
+                    e['group'] ??
+                    e['group_code'] ??
+                    '')
+                .toString()
+                .trim();
 
         return groupName.toLowerCase() == groupKey.toLowerCase();
       }).toList();
@@ -332,8 +333,9 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
     final varietyKey = (widget.varietyKey ?? '').trim();
     if (varietyKey.isNotEmpty) {
       entries = entries.where((e) {
-        final variety =
-            (e['variety'] ?? e['variety_name'] ?? '').toString().trim();
+        final variety = (e['variety'] ?? e['variety_name'] ?? '')
+            .toString()
+            .trim();
 
         return variety.toLowerCase() == varietyKey.toLowerCase();
       }).toList();
@@ -396,8 +398,7 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
       }
     }
 
-    final coopScope =
-        _coopNumberingMode == 'combined' ? 'all' : _sectionKind;
+    final coopScope = _coopNumberingMode == 'combined' ? 'all' : _sectionKind;
 
     for (final entry in entries) {
       final entryId = (entry['entry_id'] ?? '').toString().trim();
@@ -441,18 +442,18 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
       e['animal_name'] ??= '';
       e['_awards'] = awardsByEntryId[id] ?? <String>[];
 
-      final normalizedGroup = (
-        e['group_name'] ??
-        e['group_display_name'] ??
-        e['group_label'] ??
-        e['group'] ??
-        e['group_code']
-      )?.toString().trim();
+      final normalizedGroup =
+          (e['group_name'] ??
+                  e['group_display_name'] ??
+                  e['group_label'] ??
+                  e['group'] ??
+                  e['group_code'])
+              ?.toString()
+              .trim();
 
-      e['group_name'] =
-          (normalizedGroup == null || normalizedGroup.isEmpty)
-              ? null
-              : normalizedGroup;
+      e['group_name'] = (normalizedGroup == null || normalizedGroup.isEmpty)
+          ? null
+          : normalizedGroup;
     }
 
     _entries = entries;
@@ -463,14 +464,15 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
     if (!usesGroups) return false;
 
     return entries.any((e) {
-      final groupName = (
-        e['group_name'] ??
-        e['group_display_name'] ??
-        e['group_label'] ??
-        e['group'] ??
-        e['group_code'] ??
-        ''
-      ).toString().trim();
+      final groupName =
+          (e['group_name'] ??
+                  e['group_display_name'] ??
+                  e['group_label'] ??
+                  e['group'] ??
+                  e['group_code'] ??
+                  '')
+              .toString()
+              .trim();
 
       return groupName.isNotEmpty;
     });
@@ -510,10 +512,7 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
 
     final cls = ageClassOnly(rawClass);
 
-    return [
-      if (cls.isNotEmpty) cls,
-      if (sex.isNotEmpty) sex,
-    ].join(' ');
+    return [if (cls.isNotEmpty) cls, if (sex.isNotEmpty) sex].join(' ');
   }
 
   Future<void> _applyJudgeToEntries(
@@ -534,8 +533,9 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
 
     if (ids.isEmpty) return;
 
-    final normalizedJudgeId =
-        (judgeId == null || judgeId.trim().isEmpty) ? null : judgeId.trim();
+    final normalizedJudgeId = (judgeId == null || judgeId.trim().isEmpty)
+        ? null
+        : judgeId.trim();
 
     for (var i = 0; i < ids.length; i += 100) {
       final chunk = ids.skip(i).take(100).toList();
@@ -567,26 +567,24 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
       setState(() {});
     }
 
-    return _entries
-        .map((entry) => Map<String, dynamic>.from(entry))
-        .toList();
+    return _entries.map((entry) => Map<String, dynamic>.from(entry)).toList();
   }
 
   @override
   Widget build(BuildContext context) {
     if (_loading) {
       return const Scaffold(
-        backgroundColor: Color(0xFFF4F6FB),
+        backgroundColor: AppColors.bg,
         body: Center(child: CircularProgressIndicator()),
       );
     }
 
     if (_msg != null) {
       return Scaffold(
-        backgroundColor: const Color(0xFFF4F6FB),
+        backgroundColor: AppColors.bg,
         appBar: AppBar(
-          backgroundColor: const Color(0xFF11285A),
-          foregroundColor: Colors.white,
+          backgroundColor: AppColors.header,
+          foregroundColor: AppColors.headerForeground,
           title: const Text('QR Results Entry'),
         ),
         body: Center(
@@ -616,10 +614,10 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
 
     if (_qrLocked) {
       return Scaffold(
-        backgroundColor: const Color(0xFFF4F6FB),
+        backgroundColor: AppColors.bg,
         appBar: AppBar(
-          backgroundColor: const Color(0xFF11285A),
-          foregroundColor: Colors.white,
+          backgroundColor: AppColors.header,
+          foregroundColor: AppColors.headerForeground,
           title: const Text('QR Results Entry'),
         ),
         body: const Center(
@@ -698,7 +696,8 @@ class _QrBreedDrilldownScreen extends StatefulWidget {
   final Future<void> Function(
     List<Map<String, dynamic>> entries,
     String? judgeId,
-  ) onBulkJudgeApply;
+  )
+  onBulkJudgeApply;
   final Future<List<Map<String, dynamic>>> Function() onReloadEntries;
 
   const _QrBreedDrilldownScreen({
@@ -735,14 +734,14 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
   }
 
   String _groupName(Map<String, dynamic> e) {
-    return (
-      e['group_name'] ??
-      e['group_display_name'] ??
-      e['group_label'] ??
-      e['group'] ??
-      e['group_code'] ??
-      ''
-    ).toString().trim();
+    return (e['group_name'] ??
+            e['group_display_name'] ??
+            e['group_label'] ??
+            e['group'] ??
+            e['group_code'] ??
+            '')
+        .toString()
+        .trim();
   }
 
   String _varietyName(Map<String, dynamic> e) {
@@ -779,10 +778,7 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
 
     final cls = ageClassOnly(rawClass);
 
-    return [
-      if (cls.isNotEmpty) cls,
-      if (sex.isNotEmpty) sex,
-    ].join(' ');
+    return [if (cls.isNotEmpty) cls, if (sex.isNotEmpty) sex].join(' ');
   }
 
   String? _singleJudgeIdFromEntries(List<Map<String, dynamic>> entries) {
@@ -940,10 +936,7 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
     return out;
   }
 
-  void _applyJudgeToLocalEntries(
-    Iterable<String> ids,
-    String? judgeId,
-  ) {
+  void _applyJudgeToLocalEntries(Iterable<String> ids, String? judgeId) {
     final idSet = ids.toSet();
 
     for (final e in _entries) {
@@ -972,8 +965,9 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
 
       await widget.onBulkJudgeApply(entries, judgeId);
 
-      final normalizedJudgeId =
-          (judgeId == null || judgeId.trim().isEmpty) ? null : judgeId.trim();
+      final normalizedJudgeId = (judgeId == null || judgeId.trim().isEmpty)
+          ? null
+          : judgeId.trim();
 
       _applyJudgeToLocalEntries(ids, normalizedJudgeId);
 
@@ -1048,14 +1042,13 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
     final selectedJudgeId = _singleJudgeIdFromEntries(entries);
 
     return DropdownButtonFormField<String>(
-      key: ValueKey('$keyPrefix-${selectedJudgeId ?? 'mixed'}-${entries.length}'),
+      key: ValueKey(
+        '$keyPrefix-${selectedJudgeId ?? 'mixed'}-${entries.length}',
+      ),
       initialValue: selectedJudgeId,
       decoration: InputDecoration(labelText: labelText),
       items: [
-        const DropdownMenuItem<String>(
-          value: '',
-          child: Text('(Not set)'),
-        ),
+        const DropdownMenuItem<String>(value: '', child: Text('(Not set)')),
         ...widget.judges.map(
           (j) => DropdownMenuItem<String>(
             value: (j['id'] ?? '').toString(),
@@ -1078,18 +1071,17 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
     required String title,
     required Map<String, List<Map<String, dynamic>>> grouped,
     required void Function(String label, List<Map<String, dynamic>> entries)
-        onTap,
+    onTap,
     String? judgeLabel,
   }) {
     final labels = grouped.keys.toList()
       ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
 
-
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6FB),
+      backgroundColor: AppColors.bg,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF11285A),
-        foregroundColor: Colors.white,
+        backgroundColor: AppColors.header,
+        foregroundColor: AppColors.headerForeground,
         title: Text(title),
       ),
       body: ListView.builder(
@@ -1117,10 +1109,7 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
                     contentPadding: EdgeInsets.zero,
                     leading: CircleAvatar(
                       backgroundColor: statusColor.withValues(alpha: 0.12),
-                      child: Icon(
-                        _statusIcon(rows),
-                        color: statusColor,
-                      ),
+                      child: Icon(_statusIcon(rows), color: statusColor),
                     ),
                     title: Text(
                       label,
@@ -1293,10 +1282,10 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
     final breedStatusColor = _statusColor(context, _entries);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6FB),
+      backgroundColor: AppColors.bg,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF11285A),
-        foregroundColor: Colors.white,
+        backgroundColor: AppColors.header,
+        foregroundColor: AppColors.headerForeground,
         title: const Text('QR Results Entry'),
       ),
       body: ListView(
@@ -1371,10 +1360,7 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
               contentPadding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
               leading: CircleAvatar(
                 backgroundColor: breedStatusColor.withValues(alpha: 0.12),
-                child: Icon(
-                  _statusIcon(_entries),
-                  color: breedStatusColor,
-                ),
+                child: Icon(_statusIcon(_entries), color: breedStatusColor),
               ),
               title: Text(
                 widget.breed,
@@ -1404,10 +1390,7 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
       ),
       child: Text(
         text,
-        style: const TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-        ),
+        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
       ),
     );
   }
@@ -1480,10 +1463,10 @@ class _QrWriterInfoScreenState extends State<_QrWriterInfoScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6FB),
+      backgroundColor: AppColors.bg,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF11285A),
-        foregroundColor: Colors.white,
+        backgroundColor: AppColors.header,
+        foregroundColor: AppColors.headerForeground,
         title: const Text('QR Results Entry'),
       ),
       body: ListView(

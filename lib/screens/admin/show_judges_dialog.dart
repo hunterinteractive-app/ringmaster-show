@@ -3,6 +3,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/services/show_lock_service.dart';
 
@@ -38,10 +39,7 @@ class ShowJudgesDialog extends StatefulWidget {
                 ? MediaQuery.of(context).size.height * 0.94
                 : 820,
           ),
-          child: ShowJudgesDialog(
-            showId: showId,
-            showName: showName,
-          ),
+          child: ShowJudgesDialog(showId: showId, showName: showName),
         ),
       ),
     );
@@ -100,10 +98,7 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
 
       _isLocked = show['is_locked'] == true;
       _isFinalized = (show['finalized_at'] ?? '').toString().trim().isNotEmpty;
-      await Future.wait([
-        _loadAssigned(),
-        _loadActiveJudges(),
-      ]);
+      await Future.wait([_loadAssigned(), _loadActiveJudges()]);
 
       if (!mounted) return;
       await _runSearch();
@@ -432,10 +427,7 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: .05),
-            blurRadius: 10,
-          ),
+          BoxShadow(color: Colors.black.withValues(alpha: .05), blurRadius: 10),
         ],
       ),
       child: Column(
@@ -466,10 +458,7 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
                       value: 'rabbit',
                       child: Text('Rabbit Judges'),
                     ),
-                    DropdownMenuItem(
-                      value: 'cavy',
-                      child: Text('Cavy Judges'),
-                    ),
+                    DropdownMenuItem(value: 'cavy', child: Text('Cavy Judges')),
                     DropdownMenuItem(value: 'dual', child: Text('Dual Judges')),
                   ],
                   onChanged: (_saving || _isReadOnly)
@@ -496,10 +485,8 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
                       child: Text('All States'),
                     ),
                     ...states.map(
-                      (state) => DropdownMenuItem(
-                        value: state,
-                        child: Text(state),
-                      ),
+                      (state) =>
+                          DropdownMenuItem(value: state, child: Text(state)),
                     ),
                   ],
                   onChanged: (_saving || _isReadOnly)
@@ -552,10 +539,7 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: .05),
-            blurRadius: 10,
-          ),
+          BoxShadow(color: Colors.black.withValues(alpha: .05), blurRadius: 10),
         ],
       ),
       child: Column(
@@ -585,16 +569,12 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final success =
-        _msg == 'Judge assigned.' || _msg == 'Judge removed.';
+    final success = _msg == 'Judge assigned.' || _msg == 'Judge removed.';
 
     return Container(
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [
-            Color(0xFF11285A),
-            Color(0xFF0B1C43),
-          ],
+          colors: [AppColors.navy, AppColors.navyDark],
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
         ),
@@ -629,7 +609,9 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
                 ),
                 IconButton(
                   tooltip: 'Close',
-                  onPressed: _saving ? null : () => Navigator.pop(context, true),
+                  onPressed: _saving
+                      ? null
+                      : () => Navigator.pop(context, true),
                   icon: const Icon(Icons.close, color: Colors.white),
                 ),
               ],
@@ -639,7 +621,7 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
             child: Container(
               margin: const EdgeInsets.only(top: 4),
               decoration: const BoxDecoration(
-                color: Color(0xFFF4F6FB),
+                color: AppColors.bg,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
               ),
               child: _loading
@@ -656,13 +638,17 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
                               decoration: BoxDecoration(
                                 color: Colors.amber.shade100,
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.amber.shade300),
+                                border: Border.all(
+                                  color: Colors.amber.shade300,
+                                ),
                               ),
                               child: Text(
                                 _isFinalized
                                     ? 'This show has been finalized. Judge assignments are view-only.'
                                     : 'This show is locked. Judge assignments are view-only.',
-                                style: const TextStyle(fontWeight: FontWeight.w700),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ),
                           ],
@@ -706,22 +692,24 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
                                           )
                                         : ListView.separated(
                                             itemCount: _assigned.length,
-                                            separatorBuilder: (context, index) =>
-                                                const Divider(height: 1),
+                                            separatorBuilder:
+                                                (context, index) =>
+                                                    const Divider(height: 1),
                                             itemBuilder: (context, i) {
                                               final assignment = _assigned[i];
                                               final judge =
                                                   assignment['judges'];
                                               final judgeMap = judge is Map
-                                                  ? judge.cast<String, dynamic>()
+                                                  ? judge
+                                                        .cast<String, dynamic>()
                                                   : <String, dynamic>{};
 
                                               return ListTile(
                                                 contentPadding:
                                                     const EdgeInsets.symmetric(
-                                                  horizontal: 16,
-                                                  vertical: 6,
-                                                ),
+                                                      horizontal: 16,
+                                                      vertical: 6,
+                                                    ),
                                                 title: Text(
                                                   _judgeDisplayName(judgeMap),
                                                 ),
@@ -733,11 +721,12 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
                                                   icon: const Icon(
                                                     Icons.remove_circle_outline,
                                                   ),
-                                                  onPressed: (_saving || _isReadOnly)
+                                                  onPressed:
+                                                      (_saving || _isReadOnly)
                                                       ? null
                                                       : () => _removeAssignment(
-                                                            assignment,
-                                                          ),
+                                                          assignment,
+                                                        ),
                                                 ),
                                               );
                                             },
@@ -746,8 +735,9 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
                                 ),
                                 Container(
                                   width: 1,
-                                  margin:
-                                      const EdgeInsets.symmetric(vertical: 12),
+                                  margin: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
                                   color: Theme.of(context).dividerColor,
                                 ),
                                 Expanded(
@@ -762,17 +752,18 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
                                           )
                                         : ListView.separated(
                                             itemCount: _searchResults.length,
-                                            separatorBuilder: (context, index) =>
-                                                const Divider(height: 1),
+                                            separatorBuilder:
+                                                (context, index) =>
+                                                    const Divider(height: 1),
                                             itemBuilder: (context, i) {
                                               final judge = _searchResults[i];
 
                                               return ListTile(
                                                 contentPadding:
                                                     const EdgeInsets.symmetric(
-                                                  horizontal: 16,
-                                                  vertical: 6,
-                                                ),
+                                                      horizontal: 16,
+                                                      vertical: 6,
+                                                    ),
                                                 title: Text(
                                                   _judgeDisplayName(judge),
                                                 ),
@@ -784,11 +775,11 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
                                                   icon: const Icon(
                                                     Icons.add_circle_outline,
                                                   ),
-                                                  onPressed: (_saving || _isReadOnly)
+                                                  onPressed:
+                                                      (_saving || _isReadOnly)
                                                       ? null
-                                                      : () => _assignJudge(
-                                                            judge,
-                                                          ),
+                                                      : () =>
+                                                            _assignJudge(judge),
                                                 ),
                                               );
                                             },
@@ -806,7 +797,9 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
                                 width: 180,
                                 child: FilledButton(
                                   style: FilledButton.styleFrom(
-                                    backgroundColor: const Color(0xFFD4A623),
+                                    backgroundColor: AppColors.primaryButton,
+                                    foregroundColor:
+                                        AppColors.primaryButtonText,
                                     padding: const EdgeInsets.symmetric(
                                       vertical: 16,
                                     ),

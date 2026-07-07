@@ -1,6 +1,7 @@
 // lib/screens/cart_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
@@ -108,14 +109,13 @@ class _CartScreenState extends State<CartScreen> {
       final sectionFeesRes = sectionIds.isEmpty
           ? <Map<String, dynamic>>[]
           : await supabase
-              .from('show_section_fee_settings')
-              .select(
-                'section_id,fee_per_entry,fee_per_show,fur_fee,updated_at',
-              )
-              .inFilter('section_id', sectionIds);
+                .from('show_section_fee_settings')
+                .select(
+                  'section_id,fee_per_entry,fee_per_show,fur_fee,updated_at',
+                )
+                .inFilter('section_id', sectionIds);
 
-      final sectionFees =
-          (sectionFeesRes as List).cast<Map<String, dynamic>>();
+      final sectionFees = (sectionFeesRes as List).cast<Map<String, dynamic>>();
 
       final items = await supabase
           .from('entry_cart_items')
@@ -127,15 +127,14 @@ class _CartScreenState extends State<CartScreen> {
 
       Map<String, dynamic>? stripeStatus;
       try {
-        stripeStatus =
-            await StripeConnectService.getAccountStatus(widget.showId);
+        stripeStatus = await StripeConnectService.getAccountStatus(
+          widget.showId,
+        );
       } catch (_) {
         stripeStatus = await _loadStripeStatusFallback();
       }
 
-      final parsedSections = {
-        for (final s in sections) s['id'].toString(): s,
-      };
+      final parsedSections = {for (final s in sections) s['id'].toString(): s};
 
       final parsedSectionFees = {
         for (final row in sectionFees) row['section_id'].toString(): row,
@@ -222,8 +221,8 @@ class _CartScreenState extends State<CartScreen> {
       final label = showingName.isNotEmpty
           ? showingName
           : (displayName.isNotEmpty
-              ? displayName
-              : [fn, ln].where((x) => x.isNotEmpty).join(' ').trim());
+                ? displayName
+                : [fn, ln].where((x) => x.isNotEmpty).join(' ').trim());
 
       _exhibitorLabelById[id] = label.isEmpty ? 'Exhibitor' : label;
     }
@@ -279,9 +278,7 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   String get _onlinePaymentFeeLabel {
-    final label = (_show?['online_payment_fee_label'] ?? '')
-        .toString()
-        .trim();
+    final label = (_show?['online_payment_fee_label'] ?? '').toString().trim();
     return label.isEmpty ? _defaultOnlinePaymentFeeLabel : label;
   }
 
@@ -340,8 +337,8 @@ class _CartScreenState extends State<CartScreen> {
     final showBalanceTotalCents = _dollarsToCents(showBalanceTotal);
     final onlinePaymentFeeCents =
         _stripeReady && _passesOnlinePaymentFeeToExhibitor
-            ? _calculateOnlinePaymentFeeCentsFromBase(showBalanceTotalCents)
-            : 0;
+        ? _calculateOnlinePaymentFeeCentsFromBase(showBalanceTotalCents)
+        : 0;
     final totalDueCents = showBalanceTotalCents + onlinePaymentFeeCents;
 
     return {
@@ -379,33 +376,41 @@ class _CartScreenState extends State<CartScreen> {
     final account = _stripeStatus?['show_payment_account'];
     final nestedStripeAccountId = account is Map
         ? (account['stripe_account_id'] ?? account['provider_account_id'] ?? '')
-            .toString()
-            .trim()
+              .toString()
+              .trim()
         : '';
 
-    final topLevelStripeAccountId = (_stripeStatus?['stripe_account_id'] ??
-            _stripeStatus?['provider_account_id'] ??
-            '')
-        .toString()
-        .trim();
+    final topLevelStripeAccountId =
+        (_stripeStatus?['stripe_account_id'] ??
+                _stripeStatus?['provider_account_id'] ??
+                '')
+            .toString()
+            .trim();
 
-    return nestedStripeAccountId.isNotEmpty || topLevelStripeAccountId.isNotEmpty;
+    return nestedStripeAccountId.isNotEmpty ||
+        topLevelStripeAccountId.isNotEmpty;
   }
 
   bool get _stripeReady {
     if (!_stripeHasAccount) return false;
 
-    final status = (_stripeStatus?['status'] ?? '').toString().toLowerCase().trim();
-    final accountStatus = (_stripeStatus?['account_status'] ??
-            (_stripeStatus?['show_payment_account'] is Map
-                ? (_stripeStatus!['show_payment_account'] as Map)['account_status']
-                : null) ??
-            '')
+    final status = (_stripeStatus?['status'] ?? '')
         .toString()
         .toLowerCase()
         .trim();
+    final accountStatus =
+        (_stripeStatus?['account_status'] ??
+                (_stripeStatus?['show_payment_account'] is Map
+                    ? (_stripeStatus!['show_payment_account']
+                          as Map)['account_status']
+                    : null) ??
+                '')
+            .toString()
+            .toLowerCase()
+            .trim();
 
-    final isRestricted = status == 'restricted' ||
+    final isRestricted =
+        status == 'restricted' ||
         accountStatus == 'restricted' ||
         status == 'incomplete' ||
         accountStatus == 'incomplete' ||
@@ -418,7 +423,6 @@ class _CartScreenState extends State<CartScreen> {
         _stripeStatus?['payouts_enabled'] == true &&
         _stripeStatus?['details_submitted'] == true;
   }
-
 
   bool get _canPayOnline {
     return !_loading &&
@@ -434,6 +438,9 @@ class _CartScreenState extends State<CartScreen> {
     List<Map<String, dynamic>> items,
   ) {
     final currency = (_feeSettings?['currency'] ?? 'USD').toString();
+    final regularItems = items
+        .where((item) => item['is_fur'] != true)
+        .toList(growable: false);
 
     final discountEnabled =
         _feeSettings?['multi_show_discount_enabled'] == true;
@@ -441,27 +448,25 @@ class _CartScreenState extends State<CartScreen> {
         .toString()
         .toLowerCase()
         .trim();
-    final discountValue =
-        _asDouble(_feeSettings?['multi_show_discount_value']);
+    final discountValue = _asDouble(_feeSettings?['multi_show_discount_value']);
     final discountBasis =
         (_feeSettings?['multi_show_discount_basis'] ?? 'each_show')
             .toString()
             .toLowerCase()
             .trim();
-    final discountScope =
-        (_feeSettings?['multi_show_discount_scope'] ?? 'both')
-            .toString()
-            .toLowerCase()
-            .trim();
+    final discountScope = (_feeSettings?['multi_show_discount_scope'] ?? 'both')
+        .toString()
+        .toLowerCase()
+        .trim();
     final minimumEntries =
         (_feeSettings?['multi_show_discount_min_entries'] as num?)?.toInt() ??
-            0;
+        0;
     final maximumEntries =
         (_feeSettings?['multi_show_discount_max_entries'] as num?)?.toInt();
     final minimumShows =
         (_feeSettings?['multi_show_discount_required_shows'] as num?)
-                ?.toInt() ??
-            0;
+            ?.toInt() ??
+        0;
 
     double entriesSubtotal = 0.0;
     double furSubtotal = 0.0;
@@ -470,23 +475,16 @@ class _CartScreenState extends State<CartScreen> {
 
     final Set<String> chargedShowFeeKeys = {};
 
-    for (final item in items) {
+    for (final item in regularItems) {
       final sectionId = (item['section_id'] ?? '').toString();
       final sectionFee = _sectionFeeBySectionId[sectionId];
 
       final feePerEntry = _asDouble(sectionFee?['fee_per_entry']);
       final feePerShow = _asDouble(sectionFee?['fee_per_show']);
-      final furFee = _asDouble(sectionFee?['fur_fee']);
 
       entriesSubtotal += feePerEntry;
 
-      if (item['is_fur'] == true) {
-        furSubtotal += furFee;
-        furCount += 1;
-      }
-
-      final exhibitorId =
-          (item['exhibitor_id'] ?? '__unassigned__').toString();
+      final exhibitorId = (item['exhibitor_id'] ?? '__unassigned__').toString();
       final showFeeKey = '$exhibitorId|$sectionId';
       if (sectionId.isNotEmpty &&
           !chargedShowFeeKeys.contains(showFeeKey) &&
@@ -496,6 +494,15 @@ class _CartScreenState extends State<CartScreen> {
       }
     }
 
+    for (final item in items.where((item) => item['is_fur'] == true)) {
+      final sectionId = (item['section_id'] ?? '').toString();
+      final sectionFee = _sectionFeeBySectionId[sectionId];
+      final furFee = _asDouble(sectionFee?['fur_fee']);
+
+      furSubtotal += furFee;
+      furCount += 1;
+    }
+
     double discountAmount = 0.0;
     int qualifyingEntryCount = 0;
     int qualifyingShowCount = 0;
@@ -503,21 +510,23 @@ class _CartScreenState extends State<CartScreen> {
     if (discountEnabled &&
         minimumEntries > 0 &&
         minimumShows > 0 &&
-        items.isNotEmpty) {
+        regularItems.isNotEmpty) {
       final itemsByExhibitor = <String, List<Map<String, dynamic>>>{};
 
-      for (final item in items) {
+      for (final item in regularItems) {
         final sectionId = (item['section_id'] ?? '').toString();
         final section = _sectionById[sectionId];
-        final sectionKind =
-            (section?['kind'] ?? '').toString().trim().toLowerCase();
+        final sectionKind = (section?['kind'] ?? '')
+            .toString()
+            .trim()
+            .toLowerCase();
 
-        final isEligibleForScope = discountScope == 'both' ||
-            sectionKind == discountScope;
+        final isEligibleForScope =
+            discountScope == 'both' || sectionKind == discountScope;
         if (!isEligibleForScope) continue;
 
-        final exhibitorId =
-            (item['exhibitor_id'] ?? '__unassigned__').toString();
+        final exhibitorId = (item['exhibitor_id'] ?? '__unassigned__')
+            .toString();
         itemsByExhibitor
             .putIfAbsent(exhibitorId, () => <Map<String, dynamic>>[])
             .add(item);
@@ -537,10 +546,11 @@ class _CartScreenState extends State<CartScreen> {
         final qualifyingItems = <Map<String, dynamic>>[];
 
         if (discountBasis == 'cumulative') {
-          final enteredSections = itemsBySection.entries
-              .where((entry) => entry.value.isNotEmpty)
-              .toList()
-            ..sort((a, b) => b.value.length.compareTo(a.value.length));
+          final enteredSections =
+              itemsBySection.entries
+                  .where((entry) => entry.value.isNotEmpty)
+                  .toList()
+                ..sort((a, b) => b.value.length.compareTo(a.value.length));
 
           if (enteredSections.length >= minimumShows &&
               exhibitorItems.length >= minimumEntries) {
@@ -553,10 +563,11 @@ class _CartScreenState extends State<CartScreen> {
             qualifyingItems.addAll(exhibitorItems.take(maxQualifying));
           }
         } else {
-          final qualifyingSections = itemsBySection.entries
-              .where((entry) => entry.value.length >= minimumEntries)
-              .toList()
-            ..sort((a, b) => b.value.length.compareTo(a.value.length));
+          final qualifyingSections =
+              itemsBySection.entries
+                  .where((entry) => entry.value.length >= minimumEntries)
+                  .toList()
+                ..sort((a, b) => b.value.length.compareTo(a.value.length));
 
           if (qualifyingSections.length >= minimumShows) {
             qualifyingShowCount += qualifyingSections.length;
@@ -600,7 +611,7 @@ class _CartScreenState extends State<CartScreen> {
 
     return {
       'currency': currency,
-      'entry_count': items.length,
+      'entry_count': regularItems.length,
       'fur_count': furCount,
       'entries_subtotal': entriesSubtotal,
       'fur_subtotal': furSubtotal,
@@ -653,8 +664,10 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   bool _isMeatPenEntry(Map<String, dynamic> item) {
-    final className =
-        (item['class_name'] ?? '').toString().trim().toLowerCase();
+    final className = (item['class_name'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
     final variety = (item['variety'] ?? '').toString().trim().toLowerCase();
     return className == 'meat pen' || variety == 'meat pen';
   }
@@ -751,8 +764,9 @@ class _CartScreenState extends State<CartScreen> {
 
     final uri = Uri.base;
     final returnCartId = (uri.queryParameters['cart_id'] ?? '').trim();
-    final stripeStatus =
-        (uri.queryParameters['stripe'] ?? '').trim().toLowerCase();
+    final stripeStatus = (uri.queryParameters['stripe'] ?? '')
+        .trim()
+        .toLowerCase();
 
     if (returnCartId.isEmpty || returnCartId != widget.cartId) {
       return;
@@ -789,9 +803,7 @@ class _CartScreenState extends State<CartScreen> {
                 onPressed: () {
                   Navigator.pop(context);
                   Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const MyEntriesScreen(),
-                    ),
+                    MaterialPageRoute(builder: (_) => const MyEntriesScreen()),
                   );
                 },
                 child: const Text('View My Entries'),
@@ -815,7 +827,10 @@ class _CartScreenState extends State<CartScreen> {
       return;
     }
     if (_items.isEmpty) {
-      setState(() => _msg = 'Your cart is empty. If you are looking for completed entries please return to the upcoming shows tab and select Entries.');
+      setState(
+        () => _msg =
+            'Your cart is empty. If you are looking for completed entries please return to the upcoming shows tab and select Entries.',
+      );
       return;
     }
 
@@ -855,8 +870,9 @@ class _CartScreenState extends State<CartScreen> {
     });
 
     try {
-      final checkoutUrl =
-          await StripeConnectService.createCheckoutSession(widget.cartId);
+      final checkoutUrl = await StripeConnectService.createCheckoutSession(
+        widget.cartId,
+      );
 
       final uri = Uri.parse(checkoutUrl);
       final launched = await launchUrl(
@@ -877,7 +893,8 @@ class _CartScreenState extends State<CartScreen> {
     } catch (e) {
       if (!mounted) return;
       final errorText = e.toString();
-      final friendlyMessage = errorText.contains('not yet ready to accept charges') ||
+      final friendlyMessage =
+          errorText.contains('not yet ready to accept charges') ||
               errorText.contains('Stripe account is not yet ready')
           ? 'Online payment is not available yet. The club’s Stripe setup is incomplete.'
           : 'Online payment failed: $e';
@@ -1028,9 +1045,7 @@ class _CartScreenState extends State<CartScreen> {
               : () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(
-                      builder: (_) => const MyEntriesScreen(),
-                    ),
+                    MaterialPageRoute(builder: (_) => const MyEntriesScreen()),
                   );
                 },
         ),
@@ -1120,8 +1135,9 @@ class _CartScreenState extends State<CartScreen> {
                               ? 'Entry deadline: PASSED'
                               : 'Entry deadline: ${formatLocalDateTime(_show?['entry_close_at']?.toString())}',
                           style: TextStyle(
-                            color:
-                                _deadlinePassed() ? Colors.red : Colors.black87,
+                            color: _deadlinePassed()
+                                ? Colors.red
+                                : Colors.black87,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -1156,7 +1172,8 @@ class _CartScreenState extends State<CartScreen> {
                                         'Per-show fees: ${_money(overallFee['show_fee'] as double, currency: currency)}',
                                       ),
                                     ),
-                                  if ((overallFee['discount_amount'] as double) >
+                                  if ((overallFee['discount_amount']
+                                          as double) >
                                       0)
                                     Padding(
                                       padding: const EdgeInsets.only(top: 4),
@@ -1180,9 +1197,7 @@ class _CartScreenState extends State<CartScreen> {
                                     style: Theme.of(context)
                                         .textTheme
                                         .titleSmall
-                                        ?.copyWith(
-                                          fontWeight: FontWeight.w700,
-                                        ),
+                                        ?.copyWith(fontWeight: FontWeight.w700),
                                   ),
                                   if (onlinePaymentFee > 0) ...[
                                     const SizedBox(height: 8),
@@ -1190,12 +1205,14 @@ class _CartScreenState extends State<CartScreen> {
                                       width: double.infinity,
                                       padding: const EdgeInsets.all(10),
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFF11285A)
-                                            .withValues(alpha: .05),
+                                        color: AppColors.navy.withValues(
+                                          alpha: .05,
+                                        ),
                                         borderRadius: BorderRadius.circular(12),
                                         border: Border.all(
-                                          color: const Color(0xFF11285A)
-                                              .withValues(alpha: .10),
+                                          color: AppColors.navy.withValues(
+                                            alpha: .10,
+                                          ),
                                         ),
                                       ),
                                       child: Text(
@@ -1216,8 +1233,8 @@ class _CartScreenState extends State<CartScreen> {
                           _stripeReady
                               ? 'Online payment available'
                               : (_stripeHasAccount
-                                  ? 'Online payment setup incomplete'
-                                  : 'Online payment not yet available for this show'),
+                                    ? 'Online payment setup incomplete'
+                                    : 'Online payment not yet available for this show'),
                           style: TextStyle(
                             color: _stripeReady
                                 ? Colors.green
@@ -1248,7 +1265,9 @@ class _CartScreenState extends State<CartScreen> {
                                   borderRadius: BorderRadius.circular(16),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withValues(alpha: .04),
+                                      color: Colors.black.withValues(
+                                        alpha: .04,
+                                      ),
                                       blurRadius: 8,
                                     ),
                                   ],
@@ -1256,11 +1275,11 @@ class _CartScreenState extends State<CartScreen> {
                                 child: Column(
                                   children: [
                                     _ExhibitorGroupHeader(
-                                      exhibitorName: entry.key ==
-                                              '__unassigned__'
+                                      exhibitorName:
+                                          entry.key == '__unassigned__'
                                           ? 'Unassigned Exhibitor'
                                           : (_exhibitorLabelById[entry.key] ??
-                                              'Exhibitor'),
+                                                'Exhibitor'),
                                       feeSettingsExists: hasFeeConfig,
                                       feeLine: hasFeeConfig
                                           ? _buildExhibitorFeeLine(
@@ -1286,18 +1305,18 @@ class _CartScreenState extends State<CartScreen> {
                                           ),
                                         ),
                                         subtitle: Text(_cartItemSubtitle(it)),
-                                        isThreeLine:
-                                            _cartItemIsThreeLine(it),
+                                        isThreeLine: _cartItemIsThreeLine(it),
                                         trailing: IconButton(
                                           tooltip: 'Remove',
                                           icon: const Icon(
                                             Icons.delete_outline,
                                           ),
-                                          onPressed: (_confirming || _payingOnline)
+                                          onPressed:
+                                              (_confirming || _payingOnline)
                                               ? null
                                               : () => _removeItem(
-                                                    it['id'].toString(),
-                                                  ),
+                                                  it['id'].toString(),
+                                                ),
                                         ),
                                       );
                                     }),
@@ -1325,10 +1344,10 @@ class _CartScreenState extends State<CartScreen> {
                         : FilledButton(
                             onPressed:
                                 (_confirming ||
-                                        _deadlinePassed() ||
-                                        _items.isEmpty)
-                                    ? null
-                                    : _confirmDayOf,
+                                    _deadlinePassed() ||
+                                    _items.isEmpty)
+                                ? null
+                                : _confirmDayOf,
                             child: Text(
                               _confirming
                                   ? 'Confirming…'
@@ -1360,26 +1379,21 @@ class _ExhibitorGroupHeader extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF11285A).withValues(alpha: .06),
-        borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(16),
-        ),
+        color: AppColors.navy.withValues(alpha: .06),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             exhibitorName,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
           if (feeSettingsExists && feeLine != null) ...[
             const SizedBox(height: 4),
-            Text(
-              feeLine!,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
+            Text(feeLine!, style: Theme.of(context).textTheme.bodySmall),
           ],
         ],
       ),

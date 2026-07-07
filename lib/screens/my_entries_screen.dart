@@ -62,7 +62,11 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
           ],
         ),
       );
-      html.window.history.replaceState(null, '', '${Uri.base.origin}/#/entries');
+      html.window.history.replaceState(
+        null,
+        '',
+        '${Uri.base.origin}/#/entries',
+      );
     });
   }
 
@@ -128,16 +132,19 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
             .inFilter('exhibitor_id', myExhibitorIds.toList())
             .order('created_at', ascending: true);
 
-        for (final row in (exhibitorRows as List).cast<Map<String, dynamic>>()) {
+        for (final row
+            in (exhibitorRows as List).cast<Map<String, dynamic>>()) {
           final id = (row['id'] ?? '').toString();
           if (id.isNotEmpty) rowsById[id] = row;
         }
       }
 
       _entries = rowsById.values.toList()
-        ..sort((a, b) => (a['created_at'] ?? '').toString().compareTo(
-              (b['created_at'] ?? '').toString(),
-            ));
+        ..sort(
+          (a, b) => (a['created_at'] ?? '').toString().compareTo(
+            (b['created_at'] ?? '').toString(),
+          ),
+        );
 
       final showIds = _entries
           .map((e) => (e['show_id'] ?? '').toString())
@@ -218,7 +225,9 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
     if (s == null) return 'Show';
     final name = (s['name'] ?? 'Show').toString();
     final sd = _parseTs(s['start_date']);
-    final date = sd == null ? '' : ' (${sd.toIso8601String().substring(0, 10)})';
+    final date = sd == null
+        ? ''
+        : ' (${sd.toIso8601String().substring(0, 10)})';
     return '$name$date';
   }
 
@@ -315,7 +324,8 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
 
     if (_deadlinePassedForShow(showId)) {
       setState(() {
-        _msg = 'Entry deadline passed. Scratched entries can no longer be restored.';
+        _msg =
+            'Entry deadline passed. Scratched entries can no longer be restored.';
       });
       return;
     }
@@ -343,10 +353,7 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
     if (confirmed != true) return;
 
     try {
-      await supabase
-          .from('entries')
-          .update({'status': 'entered'})
-          .eq('id', id);
+      await supabase.from('entries').update({'status': 'entered'}).eq('id', id);
 
       await _load();
 
@@ -360,7 +367,9 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
     }
   }
 
-  Future<List<Map<String, dynamic>>> _loadMyAnimals({String? currentAnimalId}) async {
+  Future<List<Map<String, dynamic>>> _loadMyAnimals({
+    String? currentAnimalId,
+  }) async {
     final userId = AppSession.effectiveUserId;
     if (userId == null) return [];
 
@@ -443,8 +452,10 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
     if (showId.isEmpty) return;
 
     if (_deadlinePassedForShow(showId)) {
-      setState(() => _msg =
-          'Entry deadline passed. Editing is locked. You can still scratch entries.');
+      setState(
+        () => _msg =
+            'Entry deadline passed. Editing is locked. You can still scratch entries.',
+      );
       return;
     }
 
@@ -453,33 +464,36 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
     final exhibitors = await _loadMyExhibitors();
 
     if (!mounted) return;
-    final showSections = _sectionsById.values
-        .where((s) => (s['show_id'] ?? '').toString() == showId)
-        .toList()
-      ..sort((a, b) {
-        int kindRank(dynamic value) {
-          final v = (value ?? '').toString().trim().toLowerCase();
-          if (v == 'open') return 0;
-          if (v == 'youth') return 1;
-          return 99;
-        }
+    final showSections =
+        _sectionsById.values
+            .where((s) => (s['show_id'] ?? '').toString() == showId)
+            .toList()
+          ..sort((a, b) {
+            int kindRank(dynamic value) {
+              final v = (value ?? '').toString().trim().toLowerCase();
+              if (v == 'open') return 0;
+              if (v == 'youth') return 1;
+              return 99;
+            }
 
-        int toInt(dynamic value, [int fallback = 9999]) {
-          if (value == null) return fallback;
-          if (value is int) return value;
-          return int.tryParse(value.toString()) ?? fallback;
-        }
+            int toInt(dynamic value, [int fallback = 9999]) {
+              if (value == null) return fallback;
+              if (value is int) return value;
+              return int.tryParse(value.toString()) ?? fallback;
+            }
 
-        final kindCmp = kindRank(a['kind']).compareTo(kindRank(b['kind']));
-        if (kindCmp != 0) return kindCmp;
+            final kindCmp = kindRank(a['kind']).compareTo(kindRank(b['kind']));
+            if (kindCmp != 0) return kindCmp;
 
-        final sortCmp = toInt(a['sort_order']).compareTo(toInt(b['sort_order']));
-        if (sortCmp != 0) return sortCmp;
+            final sortCmp = toInt(
+              a['sort_order'],
+            ).compareTo(toInt(b['sort_order']));
+            if (sortCmp != 0) return sortCmp;
 
-        return (a['letter'] ?? '').toString().compareTo(
+            return (a['letter'] ?? '').toString().compareTo(
               (b['letter'] ?? '').toString(),
             );
-      });
+          });
 
     final result = await showDialog<_EditEntryResult>(
       context: context,
@@ -526,7 +540,9 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
       (e) => (e['id'] ?? '').toString() == newExhibitorId,
     );
     if (!exhibitorBelongsToAccount) {
-      setState(() => _msg = 'Selected exhibitor was not found on your account.');
+      setState(
+        () => _msg = 'Selected exhibitor was not found on your account.',
+      );
       return;
     }
 
@@ -542,7 +558,9 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
         .where((e) => (e['id'] ?? '').toString() == newExhibitorId)
         .toList();
     if (selectedExhibitor.isEmpty) {
-      setState(() => _msg = 'Selected exhibitor was not found on your account.');
+      setState(
+        () => _msg = 'Selected exhibitor was not found on your account.',
+      );
       return;
     }
 
@@ -560,8 +578,9 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
 
     final a = picked.first;
     final rawSpecies = (a['species'] ?? '').toString().trim().toLowerCase();
-    final species =
-        (rawSpecies == 'rabbit' || rawSpecies == 'cavy') ? rawSpecies : null;
+    final species = (rawSpecies == 'rabbit' || rawSpecies == 'cavy')
+        ? rawSpecies
+        : null;
 
     if (species == null) {
       setState(() => _msg = 'Animal species must be rabbit or cavy.');
@@ -569,17 +588,20 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
     }
 
     try {
-      await supabase.from('entries').update({
-        'animal_id': a['id'],
-        'species': species,
-        'tattoo': a['tattoo'],
-        'breed': a['breed'],
-        'variety': a['variety'],
-        'sex': a['sex'],
-        'class_name': newClass,
-        'section_id': newSectionId,
-        'exhibitor_id': newExhibitorId,
-      }).eq('id', entry['id']);
+      await supabase
+          .from('entries')
+          .update({
+            'animal_id': a['id'],
+            'species': species,
+            'tattoo': a['tattoo'],
+            'breed': a['breed'],
+            'variety': a['variety'],
+            'sex': a['sex'],
+            'class_name': newClass,
+            'section_id': newSectionId,
+            'exhibitor_id': newExhibitorId,
+          })
+          .eq('id', entry['id']);
 
       await _load();
     } catch (e) {
@@ -633,9 +655,7 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
       context,
       MaterialPageRoute(
         builder: (_) => Scaffold(
-          appBar: AppBar(
-            title: Text('Breed Counts - $showName'),
-          ),
+          appBar: AppBar(title: Text('Breed Counts - $showName')),
           body: EntriesByBreedSectionTable(
             showId: showId,
             showName: showName,
@@ -711,14 +731,14 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
 
     int compareText(dynamic a, dynamic b) {
       return (a ?? '').toString().trim().toLowerCase().compareTo(
-            (b ?? '').toString().trim().toLowerCase(),
-          );
+        (b ?? '').toString().trim().toLowerCase(),
+      );
     }
 
     int compareEntries(Map<String, dynamic> a, Map<String, dynamic> b) {
-      final sectionCmp = _sectionLabel(a['section_id']).toLowerCase().compareTo(
-            _sectionLabel(b['section_id']).toLowerCase(),
-          );
+      final sectionCmp = _sectionLabel(
+        a['section_id'],
+      ).toLowerCase().compareTo(_sectionLabel(b['section_id']).toLowerCase());
       if (sectionCmp != 0) return sectionCmp;
 
       final breedCmp = compareText(a['breed'], b['breed']);
@@ -727,8 +747,9 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
       final varietyCmp = compareText(a['variety'], b['variety']);
       if (varietyCmp != 0) return varietyCmp;
 
-      final classRankCmp =
-          classRank(a['class_name']).compareTo(classRank(b['class_name']));
+      final classRankCmp = classRank(
+        a['class_name'],
+      ).compareTo(classRank(b['class_name']));
       if (classRankCmp != 0) return classRankCmp;
 
       final classCmp = compareText(a['class_name'], b['class_name']);
@@ -745,9 +766,9 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
 
     final exhibitorIds = exhibitorBuckets.keys.toList()
       ..sort(
-        (a, b) => _exhibitorLabelById(a).toLowerCase().compareTo(
-          _exhibitorLabelById(b).toLowerCase(),
-        ),
+        (a, b) => _exhibitorLabelById(
+          a,
+        ).toLowerCase().compareTo(_exhibitorLabelById(b).toLowerCase()),
       );
 
     final totalEntries = exhibitorBuckets.values.fold<int>(
@@ -819,7 +840,7 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
       color: #1f2937;
     }
     .notice {
-      border-left: 5px solid #d4a623;
+      border-left: 5px solid #f6c834;
       padding: 10px 12px;
       margin: 0 0 16px 0;
       background: #fffbeb;
@@ -994,23 +1015,22 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
   Widget build(BuildContext context) {
     final grouped = _grouped();
 
-    final visibleShowIds = grouped.keys
-        .where((showId) => !_hideShowAfter48h(showId))
-        .toList()
-      ..sort((a, b) {
-        final aDate = _showStartDate(a);
-        final bDate = _showStartDate(b);
+    final visibleShowIds =
+        grouped.keys.where((showId) => !_hideShowAfter48h(showId)).toList()
+          ..sort((a, b) {
+            final aDate = _showStartDate(a);
+            final bDate = _showStartDate(b);
 
-        if (aDate != null && bDate != null) {
-          return aDate.compareTo(bDate);
-        } else if (aDate != null) {
-          return -1;
-        } else if (bDate != null) {
-          return 1;
-        }
+            if (aDate != null && bDate != null) {
+              return aDate.compareTo(bDate);
+            } else if (aDate != null) {
+              return -1;
+            } else if (bDate != null) {
+              return 1;
+            }
 
-        return _showTitle(a).compareTo(_showTitle(b));
-      });
+            return _showTitle(a).compareTo(_showTitle(b));
+          });
 
     return RingMasterPageShell(
       title: 'RingMaster Show',
@@ -1040,87 +1060,88 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : visibleShowIds.isEmpty
-              ? const RMEmptyState(
-                  title: 'No recent entries',
-                  subtitle: 'Shows disappear here 48 hours after their show date.',
-                  icon: Icons.receipt_long_outlined,
-                )
-              : ListView(
-                  padding: const EdgeInsets.all(AppSpacing.lg),
-                  children: [
-                    if (AppSession.isSupportMode)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                        child: RMCard(
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: const [
-                              Icon(Icons.lock_outline, color: Colors.orange),
-                              SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  'You are viewing this account in support mode. Entry editing is disabled until you exit support mode.',
-                                  style: TextStyle(
-                                    color: Colors.orange,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
+          ? const RMEmptyState(
+              title: 'No recent entries',
+              subtitle: 'Shows disappear here 48 hours after their show date.',
+              icon: Icons.receipt_long_outlined,
+            )
+          : ListView(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              children: [
+                if (AppSession.isSupportMode)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                    child: RMCard(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: const [
+                          Icon(Icons.lock_outline, color: Colors.orange),
+                          SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'You are viewing this account in support mode. Entry editing is disabled until you exit support mode.',
+                              style: TextStyle(
+                                color: Colors.orange,
+                                fontWeight: FontWeight.w700,
                               ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    if (_msg != null)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                        child: RMCard(
-                          child: Text(
-                            _msg!,
-                            style: TextStyle(
-                              color: _msg!.toLowerCase().contains('failed') ||
-                                      _msg!.toLowerCase().contains('error') ||
-                                      _msg!.toLowerCase().contains('required') ||
-                                      _msg!.toLowerCase().contains('locked') ||
-                                      _msg!.toLowerCase().contains('disabled')
-                                  ? AppColors.danger
-                                  : AppColors.success,
-                              fontWeight: FontWeight.w600,
                             ),
                           ),
+                        ],
+                      ),
+                    ),
+                  ),
+                if (_msg != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                    child: RMCard(
+                      child: Text(
+                        _msg!,
+                        style: TextStyle(
+                          color:
+                              _msg!.toLowerCase().contains('failed') ||
+                                  _msg!.toLowerCase().contains('error') ||
+                                  _msg!.toLowerCase().contains('required') ||
+                                  _msg!.toLowerCase().contains('locked') ||
+                                  _msg!.toLowerCase().contains('disabled')
+                              ? AppColors.danger
+                              : AppColors.success,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                    for (final showId in visibleShowIds) ...[
-                      _ShowExpansionCard(
-                        title: _showTitle(showId),
-                        showId: showId,
-                        onBreedCounts: _openBreedCounts,
-                        onDownloadEntries: _downloadEntriesForShow,
-                        onJudgeOrder: _openJudgeOrder,
-                        judgeOrderPublished: _judgeOrderPublishedForShow(showId),
-                        deadlinePassed: _deadlinePassedForShow(showId),
-                        closeAt: _parseTs(_showsById[showId]?['entry_close_at']),
-                        readOnly: AppSession.isSupportMode,
-                        exhibitorBuckets: grouped[showId] ?? const {},
-                        exhibitorLabel: _exhibitorLabelById,
-                        sectionLabel: _sectionLabel,
-                        onEdit: _editEntry,
-                        onScratch: _scratchEntry,
-                        onRestore: _restoreEntry,
-                        initiallyExpanded: _expandedShowIds.contains(showId),
-                        onExpandedChanged: (expanded) {
-                          setState(() {
-                            if (expanded) {
-                              _expandedShowIds.add(showId);
-                            } else {
-                              _expandedShowIds.remove(showId);
-                            }
-                          });
-                        },
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                    ],
-                  ],
-                ),
+                    ),
+                  ),
+                for (final showId in visibleShowIds) ...[
+                  _ShowExpansionCard(
+                    title: _showTitle(showId),
+                    showId: showId,
+                    onBreedCounts: _openBreedCounts,
+                    onDownloadEntries: _downloadEntriesForShow,
+                    onJudgeOrder: _openJudgeOrder,
+                    judgeOrderPublished: _judgeOrderPublishedForShow(showId),
+                    deadlinePassed: _deadlinePassedForShow(showId),
+                    closeAt: _parseTs(_showsById[showId]?['entry_close_at']),
+                    readOnly: AppSession.isSupportMode,
+                    exhibitorBuckets: grouped[showId] ?? const {},
+                    exhibitorLabel: _exhibitorLabelById,
+                    sectionLabel: _sectionLabel,
+                    onEdit: _editEntry,
+                    onScratch: _scratchEntry,
+                    onRestore: _restoreEntry,
+                    initiallyExpanded: _expandedShowIds.contains(showId),
+                    onExpandedChanged: (expanded) {
+                      setState(() {
+                        if (expanded) {
+                          _expandedShowIds.add(showId);
+                        } else {
+                          _expandedShowIds.remove(showId);
+                        }
+                      });
+                    },
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                ],
+              ],
+            ),
     );
   }
 }
@@ -1139,9 +1160,11 @@ class _ShowExpansionCard extends StatelessWidget {
   final Future<void> Function(Map<String, dynamic> entry) onRestore;
   final bool initiallyExpanded;
   final ValueChanged<bool> onExpandedChanged;
-  final void Function(BuildContext context, String showId, String showName) onBreedCounts;
+  final void Function(BuildContext context, String showId, String showName)
+  onBreedCounts;
   final void Function(String showId, String showName) onDownloadEntries;
-  final void Function(BuildContext context, String showId, String showName) onJudgeOrder;
+  final void Function(BuildContext context, String showId, String showName)
+  onJudgeOrder;
   final bool judgeOrderPublished;
 
   const _ShowExpansionCard({
@@ -1207,52 +1230,52 @@ class _ShowExpansionCard extends StatelessWidget {
     final sectionA = sectionLabel(a['section_id']);
     final sectionB = sectionLabel(b['section_id']);
 
-    final sectionKindCmp = _sectionKindRank(sectionA).compareTo(
-      _sectionKindRank(sectionB),
-    );
+    final sectionKindCmp = _sectionKindRank(
+      sectionA,
+    ).compareTo(_sectionKindRank(sectionB));
     if (sectionKindCmp != 0) return sectionKindCmp;
 
     final sectionLabelCmp = sectionA.toLowerCase().compareTo(
-          sectionB.toLowerCase(),
-        );
+      sectionB.toLowerCase(),
+    );
     if (sectionLabelCmp != 0) return sectionLabelCmp;
 
-    final breedSortCmp = _toInt(a['breed_sort_order']).compareTo(
-      _toInt(b['breed_sort_order']),
-    );
+    final breedSortCmp = _toInt(
+      a['breed_sort_order'],
+    ).compareTo(_toInt(b['breed_sort_order']));
     if (breedSortCmp != 0) return breedSortCmp;
 
     final breedCmp = _safeLower(a['breed']).compareTo(_safeLower(b['breed']));
     if (breedCmp != 0) return breedCmp;
 
-    final groupSortCmp = _toInt(a['group_sort_order']).compareTo(
-      _toInt(b['group_sort_order']),
-    );
+    final groupSortCmp = _toInt(
+      a['group_sort_order'],
+    ).compareTo(_toInt(b['group_sort_order']));
     if (groupSortCmp != 0) return groupSortCmp;
 
-    final varietySortCmp = _toInt(a['variety_sort_order']).compareTo(
-      _toInt(b['variety_sort_order']),
-    );
+    final varietySortCmp = _toInt(
+      a['variety_sort_order'],
+    ).compareTo(_toInt(b['variety_sort_order']));
     if (varietySortCmp != 0) return varietySortCmp;
 
-    final varietyCmp = _safeLower(a['variety']).compareTo(
-      _safeLower(b['variety']),
-    );
+    final varietyCmp = _safeLower(
+      a['variety'],
+    ).compareTo(_safeLower(b['variety']));
     if (varietyCmp != 0) return varietyCmp;
 
-    final classSortCmp = _toInt(a['class_sort_order']).compareTo(
-      _toInt(b['class_sort_order']),
-    );
+    final classSortCmp = _toInt(
+      a['class_sort_order'],
+    ).compareTo(_toInt(b['class_sort_order']));
     if (classSortCmp != 0) return classSortCmp;
 
-    final classRankCmp = _classRank(a['class_name']).compareTo(
-      _classRank(b['class_name']),
-    );
+    final classRankCmp = _classRank(
+      a['class_name'],
+    ).compareTo(_classRank(b['class_name']));
     if (classRankCmp != 0) return classRankCmp;
 
-    final classCmp = _safeLower(a['class_name']).compareTo(
-      _safeLower(b['class_name']),
-    );
+    final classCmp = _safeLower(
+      a['class_name'],
+    ).compareTo(_safeLower(b['class_name']));
     if (classCmp != 0) return classCmp;
 
     final sexRankCmp = _sexRank(a['sex']).compareTo(_sexRank(b['sex']));
@@ -1270,9 +1293,12 @@ class _ShowExpansionCard extends StatelessWidget {
   }
 
   Map<String, Map<String, Map<String, Map<String, List<Map<String, dynamic>>>>>>
-      _groupEntriesForDisplay(List<Map<String, dynamic>> entries) {
+  _groupEntriesForDisplay(List<Map<String, dynamic>> entries) {
     final grouped =
-        <String, Map<String, Map<String, Map<String, List<Map<String, dynamic>>>>>>{};
+        <
+          String,
+          Map<String, Map<String, Map<String, List<Map<String, dynamic>>>>>
+        >{};
 
     final sorted = List<Map<String, dynamic>>.from(entries)
       ..sort(_compareEntriesForShowOrder);
@@ -1297,17 +1323,19 @@ class _ShowExpansionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final exhibitorIds = exhibitorBuckets.keys.toList()
       ..sort(
-        (a, b) => exhibitorLabel(a).toLowerCase().compareTo(
-          exhibitorLabel(b).toLowerCase(),
-        ),
+        (a, b) => exhibitorLabel(
+          a,
+        ).toLowerCase().compareTo(exhibitorLabel(b).toLowerCase()),
       );
 
     final deadlineText = closeAt == null
         ? '(deadline not set)'
         : formatLocalDateTime(closeAt!.toIso8601String());
 
-    final totalEntries =
-        exhibitorBuckets.values.fold<int>(0, (sum, list) => sum + list.length);
+    final totalEntries = exhibitorBuckets.values.fold<int>(
+      0,
+      (sum, list) => sum + list.length,
+    );
 
     return RMCard(
       child: Theme(
@@ -1319,10 +1347,9 @@ class _ShowExpansionCard extends StatelessWidget {
           childrenPadding: const EdgeInsets.only(bottom: AppSpacing.sm),
           title: Text(
             title,
-            style: Theme.of(context)
-                .textTheme
-                .titleMedium
-                ?.copyWith(fontWeight: FontWeight.w700),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
           subtitle: Padding(
             padding: const EdgeInsets.only(top: AppSpacing.xs),
@@ -1373,8 +1400,9 @@ class _ShowExpansionCard extends StatelessWidget {
             for (final exId in exhibitorIds) ...[
               Builder(
                 builder: (context) {
-                  final groupedEntries =
-                      _groupEntriesForDisplay(exhibitorBuckets[exId]!);
+                  final groupedEntries = _groupEntriesForDisplay(
+                    exhibitorBuckets[exId]!,
+                  );
 
                   return Container(
                     width: double.infinity,
@@ -1396,27 +1424,32 @@ class _ShowExpansionCard extends StatelessWidget {
                           final varieties = breedEntry.value;
 
                           final varietyKeys = varieties.keys.toList()
-                            ..sort((a, b) =>
-                                a.toLowerCase().compareTo(b.toLowerCase()));
+                            ..sort(
+                              (a, b) =>
+                                  a.toLowerCase().compareTo(b.toLowerCase()),
+                            );
 
                           return Padding(
-                            padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                            padding: const EdgeInsets.only(
+                              bottom: AppSpacing.md,
+                            ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
                                   breed,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleSmall
+                                  style: Theme.of(context).textTheme.titleSmall
                                       ?.copyWith(fontWeight: FontWeight.w700),
                                 ),
                                 const SizedBox(height: AppSpacing.sm),
                                 ...varietyKeys.map((variety) {
                                   final classes = varieties[variety]!;
                                   final classKeys = classes.keys.toList()
-                                    ..sort((a, b) => a.toLowerCase()
-                                        .compareTo(b.toLowerCase()));
+                                    ..sort(
+                                      (a, b) => a.toLowerCase().compareTo(
+                                        b.toLowerCase(),
+                                      ),
+                                    );
 
                                   return Padding(
                                     padding: const EdgeInsets.only(
@@ -1440,8 +1473,11 @@ class _ShowExpansionCard extends StatelessWidget {
                                         ...classKeys.map((className) {
                                           final sexes = classes[className]!;
                                           final sexKeys = sexes.keys.toList()
-                                            ..sort((a, b) => a.toLowerCase()
-                                                .compareTo(b.toLowerCase()));
+                                            ..sort(
+                                              (a, b) => a
+                                                  .toLowerCase()
+                                                  .compareTo(b.toLowerCase()),
+                                            );
 
                                           return Padding(
                                             padding: const EdgeInsets.only(
@@ -1468,9 +1504,9 @@ class _ShowExpansionCard extends StatelessWidget {
                                                   return Padding(
                                                     padding:
                                                         const EdgeInsets.only(
-                                                      left: 12,
-                                                      bottom: 8,
-                                                    ),
+                                                          left: 12,
+                                                          bottom: 8,
+                                                        ),
                                                     child: Column(
                                                       crossAxisAlignment:
                                                           CrossAxisAlignment
@@ -1483,193 +1519,237 @@ class _ShowExpansionCard extends StatelessWidget {
                                                                   .textTheme
                                                                   .bodyMedium,
                                                         ),
-                                                        const SizedBox(height: 6),
+                                                        const SizedBox(
+                                                          height: 6,
+                                                        ),
                                                         ...entries.map((e) {
                                                           final section =
                                                               sectionLabel(
-                                                                  e['section_id']);
+                                                                e['section_id'],
+                                                              );
                                                           final tattoo =
-                                                              (e['tattoo'] ?? '')
+                                                              (e['tattoo'] ??
+                                                                      '')
                                                                   .toString()
                                                                   .trim();
                                                           final rawStatus =
-                                                              (e['status'] ?? '')
+                                                              (e['status'] ??
+                                                                      '')
                                                                   .toString()
                                                                   .trim();
                                                           final normalizedStatus =
                                                               rawStatus.isEmpty
-                                                                  ? 'entered'
-                                                                  : rawStatus;
+                                                              ? 'entered'
+                                                              : rawStatus;
                                                           final scratched =
                                                               normalizedStatus
-                                                                      .toLowerCase() ==
-                                                                  'scratched';
+                                                                  .toLowerCase() ==
+                                                              'scratched';
 
                                                           final canEdit =
                                                               !readOnly &&
-                                                                  !deadlinePassed &&
-                                                                  !scratched;
+                                                              !deadlinePassed &&
+                                                              !scratched;
                                                           final canScratch =
                                                               !readOnly &&
-                                                                  !scratched;
+                                                              !scratched;
                                                           final canRestore =
                                                               !readOnly &&
-                                                                  scratched &&
-                                                                  !deadlinePassed;
+                                                              scratched &&
+                                                              !deadlinePassed;
 
                                                           return Padding(
                                                             padding:
-                                                                const EdgeInsets
-                                                                    .only(
-                                                              bottom: AppSpacing
-                                                                  .sm,
-                                                            ),
+                                                                const EdgeInsets.only(
+                                                                  bottom:
+                                                                      AppSpacing
+                                                                          .sm,
+                                                                ),
                                                             child: Material(
-                                                              color: Colors.white,
+                                                              color:
+                                                                  Colors.white,
                                                               borderRadius:
-                                                                  BorderRadius
-                                                                      .circular(
-                                                                AppRadius.sm,
-                                                              ),
+                                                                  BorderRadius.circular(
+                                                                    AppRadius
+                                                                        .sm,
+                                                                  ),
                                                               child: InkWell(
                                                                 borderRadius:
-                                                                    BorderRadius
-                                                                        .circular(
-                                                                  AppRadius.sm,
-                                                                ),
+                                                                    BorderRadius.circular(
+                                                                      AppRadius
+                                                                          .sm,
+                                                                    ),
                                                                 onTap: canEdit
-                                                                    ? () => onEdit(e)
+                                                                    ? () =>
+                                                                          onEdit(
+                                                                            e,
+                                                                          )
                                                                     : null,
                                                                 child: Container(
-                                                                  decoration:
-                                                                      BoxDecoration(
+                                                                  decoration: BoxDecoration(
                                                                     color: Colors
                                                                         .transparent,
                                                                     borderRadius:
-                                                                        BorderRadius
-                                                                            .circular(
-                                                                      AppRadius.sm,
-                                                                    ),
+                                                                        BorderRadius.circular(
+                                                                          AppRadius
+                                                                              .sm,
+                                                                        ),
                                                                     border: Border.all(
-                                                                      color: canEdit
-                                                                          ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.35)
+                                                                      color:
+                                                                          canEdit
+                                                                          ? Theme.of(
+                                                                              context,
+                                                                            ).colorScheme.primary.withValues(
+                                                                              alpha: 0.35,
+                                                                            )
                                                                           : Colors.grey.shade200,
                                                                     ),
                                                                   ),
                                                                   child: Padding(
                                                                     padding:
-                                                                        const EdgeInsets
-                                                                            .fromLTRB(
-                                                                      12,
-                                                                      8,
-                                                                      8,
-                                                                      8,
-                                                                    ),
-                                                            child: Column(
-                                                              crossAxisAlignment:
-                                                                  CrossAxisAlignment
-                                                                      .start,
-                                                              children: [
-                                                                Row(
-                                                                  crossAxisAlignment:
-                                                                      CrossAxisAlignment
-                                                                          .start,
-                                                                  children: [
-                                                                    Expanded(
-                                                                      child:
-                                                                          Column(
-                                                                        crossAxisAlignment:
-                                                                            CrossAxisAlignment.start,
-                                                                        children: [
-                                                                          Text(
-                                                                            tattoo.isEmpty ? '(No tattoo)' : tattoo,
-                                                                            style: TextStyle(
-                                                                              fontWeight: FontWeight.w600,
-                                                                              decoration: scratched ? TextDecoration.lineThrough : null,
+                                                                        const EdgeInsets.fromLTRB(
+                                                                          12,
+                                                                          8,
+                                                                          8,
+                                                                          8,
+                                                                        ),
+                                                                    child: Column(
+                                                                      crossAxisAlignment:
+                                                                          CrossAxisAlignment
+                                                                              .start,
+                                                                      children: [
+                                                                        Row(
+                                                                          crossAxisAlignment:
+                                                                              CrossAxisAlignment.start,
+                                                                          children: [
+                                                                            Expanded(
+                                                                              child: Column(
+                                                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                                                children: [
+                                                                                  Text(
+                                                                                    tattoo.isEmpty
+                                                                                        ? '(No tattoo)'
+                                                                                        : tattoo,
+                                                                                    style: TextStyle(
+                                                                                      fontWeight: FontWeight.w600,
+                                                                                      decoration: scratched
+                                                                                          ? TextDecoration.lineThrough
+                                                                                          : null,
+                                                                                    ),
+                                                                                  ),
+                                                                                  const SizedBox(
+                                                                                    height: 6,
+                                                                                  ),
+                                                                                  Text(
+                                                                                    'Status: $normalizedStatus\nSection: $section',
+                                                                                  ),
+                                                                                ],
+                                                                              ),
                                                                             ),
+                                                                            if (readOnly)
+                                                                              const Tooltip(
+                                                                                message: 'Actions are disabled while viewing in support mode',
+                                                                                child: Padding(
+                                                                                  padding: EdgeInsets.only(
+                                                                                    left: 8,
+                                                                                  ),
+                                                                                  child: Icon(
+                                                                                    Icons.lock_outline,
+                                                                                    color: Colors.grey,
+                                                                                  ),
+                                                                                ),
+                                                                              ),
+                                                                          ],
+                                                                        ),
+                                                                        if (!readOnly &&
+                                                                            (canEdit ||
+                                                                                canScratch ||
+                                                                                canRestore)) ...[
+                                                                          const SizedBox(
+                                                                            height:
+                                                                                8,
                                                                           ),
-                                                                          const SizedBox(height: 6),
+                                                                          Wrap(
+                                                                            spacing:
+                                                                                8,
+                                                                            runSpacing:
+                                                                                8,
+                                                                            children: [
+                                                                              if (canEdit)
+                                                                                FilledButton.icon(
+                                                                                  onPressed: () => onEdit(
+                                                                                    e,
+                                                                                  ),
+                                                                                  icon: const Icon(
+                                                                                    Icons.edit,
+                                                                                    size: 18,
+                                                                                  ),
+                                                                                  label: const Text(
+                                                                                    'Edit Entry',
+                                                                                  ),
+                                                                                ),
+                                                                              if (canScratch)
+                                                                                OutlinedButton.icon(
+                                                                                  onPressed: () => onScratch(
+                                                                                    e,
+                                                                                  ),
+                                                                                  icon: const Icon(
+                                                                                    Icons.remove_circle_outline,
+                                                                                    size: 18,
+                                                                                  ),
+                                                                                  label: const Text(
+                                                                                    'Scratch',
+                                                                                  ),
+                                                                                ),
+                                                                              if (canRestore)
+                                                                                OutlinedButton.icon(
+                                                                                  onPressed: () => onRestore(
+                                                                                    e,
+                                                                                  ),
+                                                                                  icon: const Icon(
+                                                                                    Icons.undo,
+                                                                                    size: 18,
+                                                                                  ),
+                                                                                  label: const Text(
+                                                                                    'Restore',
+                                                                                  ),
+                                                                                ),
+                                                                            ],
+                                                                          ),
+                                                                        ] else if (readOnly) ...[
+                                                                          const SizedBox(
+                                                                            height:
+                                                                                8,
+                                                                          ),
                                                                           Text(
-                                                                            'Status: $normalizedStatus\nSection: $section',
+                                                                            'Editing is disabled while viewing in support mode.',
+                                                                            style:
+                                                                                Theme.of(
+                                                                                  context,
+                                                                                ).textTheme.bodySmall?.copyWith(
+                                                                                  color: AppColors.muted,
+                                                                                  fontStyle: FontStyle.italic,
+                                                                                ),
+                                                                          ),
+                                                                        ] else if (deadlinePassed &&
+                                                                            !scratched) ...[
+                                                                          const SizedBox(
+                                                                            height:
+                                                                                8,
+                                                                          ),
+                                                                          Text(
+                                                                            'Editing is locked because the entry deadline has passed.',
+                                                                            style:
+                                                                                Theme.of(
+                                                                                  context,
+                                                                                ).textTheme.bodySmall?.copyWith(
+                                                                                  color: AppColors.muted,
+                                                                                  fontStyle: FontStyle.italic,
+                                                                                ),
                                                                           ),
                                                                         ],
-                                                                      ),
+                                                                      ],
                                                                     ),
-                                                                    if (readOnly)
-                                                                      const Tooltip(
-                                                                        message:
-                                                                            'Actions are disabled while viewing in support mode',
-                                                                        child:
-                                                                            Padding(
-                                                                          padding: EdgeInsets.only(left: 8),
-                                                                          child: Icon(
-                                                                            Icons.lock_outline,
-                                                                            color: Colors.grey,
-                                                                          ),
-                                                                        ),
-                                                                      ),
-                                                                  ],
-                                                                ),
-                                                                if (!readOnly &&
-                                                                    (canEdit ||
-                                                                        canScratch ||
-                                                                        canRestore)) ...[
-                                                                  const SizedBox(
-                                                                      height:
-                                                                          8),
-                                                                  Wrap(
-                                                                    spacing:
-                                                                        8,
-                                                                    runSpacing:
-                                                                        8,
-                                                                    children: [
-                                                                      if (canEdit)
-                                                                        FilledButton.icon(
-                                                                          onPressed: () => onEdit(e),
-                                                                          icon: const Icon(Icons.edit, size: 18),
-                                                                          label: const Text('Edit Entry'),
-                                                                        ),
-                                                                      if (canScratch)
-                                                                        OutlinedButton.icon(
-                                                                          onPressed: () => onScratch(e),
-                                                                          icon: const Icon(Icons.remove_circle_outline, size: 18),
-                                                                          label: const Text('Scratch'),
-                                                                        ),
-                                                                      if (canRestore)
-                                                                        OutlinedButton.icon(
-                                                                          onPressed: () => onRestore(e),
-                                                                          icon: const Icon(Icons.undo, size: 18),
-                                                                          label: const Text('Restore'),
-                                                                        ),
-                                                                    ],
-                                                                  ),
-                                                                ] else if (readOnly) ...[
-                                                                  const SizedBox(height: 8),
-                                                                  Text(
-                                                                    'Editing is disabled while viewing in support mode.',
-                                                                    style: Theme.of(context)
-                                                                        .textTheme
-                                                                        .bodySmall
-                                                                        ?.copyWith(
-                                                                          color: AppColors.muted,
-                                                                          fontStyle: FontStyle.italic,
-                                                                        ),
-                                                                  ),
-                                                                ] else if (deadlinePassed && !scratched) ...[
-                                                                  const SizedBox(height: 8),
-                                                                  Text(
-                                                                    'Editing is locked because the entry deadline has passed.',
-                                                                    style: Theme.of(context)
-                                                                        .textTheme
-                                                                        .bodySmall
-                                                                        ?.copyWith(
-                                                                          color: AppColors.muted,
-                                                                          fontStyle: FontStyle.italic,
-                                                                        ),
-                                                                  ),
-                                                                ],
-                                                              ],
-                                                            ),
                                                                   ),
                                                                 ),
                                                               ),
@@ -1784,9 +1864,11 @@ class _EditEntryDialogV2State extends State<_EditEntryDialogV2> {
         ? tattoo
         : (name.isNotEmpty ? name : (a['id'] ?? '').toString());
 
-    final details = [breed, variety, sex]
-        .where((part) => part.trim().isNotEmpty)
-        .join(' • ');
+    final details = [
+      breed,
+      variety,
+      sex,
+    ].where((part) => part.trim().isNotEmpty).join(' • ');
 
     return details.isEmpty ? top : '$top — $details';
   }
@@ -1801,7 +1883,6 @@ class _EditEntryDialogV2State extends State<_EditEntryDialogV2> {
     return (e['id'] ?? '').toString();
   }
 
-
   Future<void> _addNewAnimal() async {
     setState(() => _busy = true);
     try {
@@ -1811,8 +1892,9 @@ class _EditEntryDialogV2State extends State<_EditEntryDialogV2> {
 
       setState(() {
         _animals = refreshed;
-        final exists =
-            _animals.any((a) => (a['id'] ?? '').toString() == _animalId);
+        final exists = _animals.any(
+          (a) => (a['id'] ?? '').toString() == _animalId,
+        );
         if (!exists && _animals.isNotEmpty) {
           _animalId = (_animals.first['id'] ?? '').toString();
         }
@@ -1824,8 +1906,9 @@ class _EditEntryDialogV2State extends State<_EditEntryDialogV2> {
 
   @override
   Widget build(BuildContext context) {
-    final hasSelected =
-        _animals.any((a) => (a['id'] ?? '').toString() == _animalId);
+    final hasSelected = _animals.any(
+      (a) => (a['id'] ?? '').toString() == _animalId,
+    );
     final hasSelectedSection = widget.sections.any(
       (s) => (s['id'] ?? '').toString() == _sectionId,
     );
@@ -1881,7 +1964,8 @@ class _EditEntryDialogV2State extends State<_EditEntryDialogV2> {
                       },
                 decoration: const InputDecoration(
                   labelText: 'Show / Section',
-                  helperText: 'Move this entry to another open/youth show section.',
+                  helperText:
+                      'Move this entry to another open/youth show section.',
                 ),
               ),
               const SizedBox(height: 10),
@@ -1904,7 +1988,8 @@ class _EditEntryDialogV2State extends State<_EditEntryDialogV2> {
                       },
                 decoration: const InputDecoration(
                   labelText: 'Exhibitor',
-                  helperText: 'Move this entry to another exhibitor on your account.',
+                  helperText:
+                      'Move this entry to another exhibitor on your account.',
                 ),
               ),
               const SizedBox(height: 10),
@@ -1925,9 +2010,9 @@ class _EditEntryDialogV2State extends State<_EditEntryDialogV2> {
                 onChanged: _busy
                     ? null
                     : (v) => setState(() {
-                          _animalId = v ?? _animalId;
-                          _dialogError = null;
-                        }),
+                        _animalId = v ?? _animalId;
+                        _dialogError = null;
+                      }),
                 decoration: const InputDecoration(
                   labelText: 'Animal',
                   helperText: 'Swap to an existing animal from My Animals.',
@@ -2093,13 +2178,16 @@ class _JudgeOrderDialogState extends State<_JudgeOrderDialog> {
         final pipeParts = value.split('|');
         if (pipeParts.length > 1) {
           final possibleLetter = pipeParts.first.trim();
-          if (possibleLetter.length <= 3 && RegExp(r'^[A-Za-z]+$').hasMatch(possibleLetter)) {
+          if (possibleLetter.length <= 3 &&
+              RegExp(r'^[A-Za-z]+$').hasMatch(possibleLetter)) {
             return possibleLetter.toUpperCase();
           }
         }
 
-        final match = RegExp(r'\b(?:show\s*)?([A-Za-z])\b', caseSensitive: false)
-            .firstMatch(value);
+        final match = RegExp(
+          r'\b(?:show\s*)?([A-Za-z])\b',
+          caseSensitive: false,
+        ).firstMatch(value);
         if (match != null) return match.group(1)!.toUpperCase();
       }
 
@@ -2138,8 +2226,14 @@ class _JudgeOrderDialogState extends State<_JudgeOrderDialog> {
 
       if (inferredLetter != null) {
         final matchingSections = sectionsById.values.where((section) {
-          final sectionLetter = (section['letter'] ?? '').toString().trim().toUpperCase();
-          final sectionKind = (section['kind'] ?? '').toString().trim().toLowerCase();
+          final sectionLetter = (section['letter'] ?? '')
+              .toString()
+              .trim()
+              .toUpperCase();
+          final sectionKind = (section['kind'] ?? '')
+              .toString()
+              .trim()
+              .toLowerCase();
 
           if (sectionLetter != inferredLetter) return false;
           if (inferredKind != null && sectionKind != inferredKind) return false;
@@ -2153,7 +2247,10 @@ class _JudgeOrderDialogState extends State<_JudgeOrderDialog> {
         if (matchingSections.isNotEmpty) {
           matchingSections.sort((a, b) {
             int kindRank(Map<String, dynamic> section) {
-              final kind = (section['kind'] ?? '').toString().trim().toLowerCase();
+              final kind = (section['kind'] ?? '')
+                  .toString()
+                  .trim()
+                  .toLowerCase();
               if (kind == 'open') return 0;
               if (kind == 'youth') return 1;
               return 99;
@@ -2162,8 +2259,10 @@ class _JudgeOrderDialogState extends State<_JudgeOrderDialog> {
             final kindCmp = kindRank(a).compareTo(kindRank(b));
             if (kindCmp != 0) return kindCmp;
 
-            final aSort = int.tryParse((a['sort_order'] ?? '').toString()) ?? 9999;
-            final bSort = int.tryParse((b['sort_order'] ?? '').toString()) ?? 9999;
+            final aSort =
+                int.tryParse((a['sort_order'] ?? '').toString()) ?? 9999;
+            final bSort =
+                int.tryParse((b['sort_order'] ?? '').toString()) ?? 9999;
             return aSort.compareTo(bSort);
           });
 
@@ -2214,8 +2313,8 @@ class _JudgeOrderDialogState extends State<_JudgeOrderDialog> {
       final baseName = displayName.isNotEmpty
           ? displayName
           : name.isNotEmpty
-              ? name
-              : [first, last].where((part) => part.isNotEmpty).join(' ');
+          ? name
+          : [first, last].where((part) => part.isNotEmpty).join(' ');
 
       if (baseName.trim().isEmpty) return 'Judge not set';
       if (number.isNotEmpty && !baseName.contains('#$number')) {
@@ -2229,7 +2328,8 @@ class _JudgeOrderDialogState extends State<_JudgeOrderDialog> {
     String? activeJudgeId;
 
     for (final assignment in assignments) {
-      final isJudgeChange = assignment['is_judge_change'] == true ||
+      final isJudgeChange =
+          assignment['is_judge_change'] == true ||
           (assignment['breed_id'] ?? '').toString() == '__judge_change__';
 
       if (isJudgeChange) {
@@ -2274,7 +2374,9 @@ class _JudgeOrderDialogState extends State<_JudgeOrderDialog> {
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
     final dialogWidth = screenSize.width < 760 ? screenSize.width - 24 : 720.0;
-    final dialogHeight = screenSize.height < 720 ? screenSize.height * 0.86 : 640.0;
+    final dialogHeight = screenSize.height < 720
+        ? screenSize.height * 0.86
+        : 640.0;
 
     return AlertDialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
@@ -2284,9 +2386,9 @@ class _JudgeOrderDialogState extends State<_JudgeOrderDialog> {
       title: Text(
         '${widget.showName} Judge Order',
         style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w800,
-              fontSize: screenSize.width < 520 ? 20 : null,
-            ),
+          fontWeight: FontWeight.w800,
+          fontSize: screenSize.width < 520 ? 20 : null,
+        ),
       ),
       content: SizedBox(
         width: dialogWidth,
@@ -2316,7 +2418,10 @@ class _JudgeOrderDialogState extends State<_JudgeOrderDialog> {
 
             final groupedByTable = <int, List<_JudgeOrderRow>>{};
             for (final row in rows) {
-              groupedByTable.putIfAbsent(row.tableNumber, () => <_JudgeOrderRow>[]);
+              groupedByTable.putIfAbsent(
+                row.tableNumber,
+                () => <_JudgeOrderRow>[],
+              );
               groupedByTable[row.tableNumber]!.add(row);
             }
 
@@ -2331,8 +2436,11 @@ class _JudgeOrderDialogState extends State<_JudgeOrderDialog> {
                       if (widget.publishedAt.trim().isNotEmpty) ...[
                         Text(
                           'Published ${widget.publishedAt}',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
                                 fontWeight: FontWeight.w700,
                               ),
                         ),
@@ -2341,8 +2449,8 @@ class _JudgeOrderDialogState extends State<_JudgeOrderDialog> {
                       Text(
                         'Assignments may change at the show table.',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                       ),
                       const SizedBox(height: 10),
                     ],
@@ -2378,10 +2486,7 @@ class _JudgeOrderTableBlock extends StatelessWidget {
   final int tableNumber;
   final List<_JudgeOrderRow> rows;
 
-  const _JudgeOrderTableBlock({
-    required this.tableNumber,
-    required this.rows,
-  });
+  const _JudgeOrderTableBlock({required this.tableNumber, required this.rows});
 
   @override
   Widget build(BuildContext context) {
@@ -2401,9 +2506,9 @@ class _JudgeOrderTableBlock extends StatelessWidget {
         children: [
           Text(
             label,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w900,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 8),
           ...sortedRows.map((row) {
@@ -2426,8 +2531,8 @@ class _JudgeOrderTableBlock extends StatelessWidget {
                   Text(
                     breedLabel,
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Wrap(

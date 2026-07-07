@@ -1,6 +1,7 @@
 // lib/widgets/rm_timezone_notice_banner.dart
 
 import 'package:flutter/material.dart';
+import 'package:ringmaster_show/theme/app_theme.dart';
 
 class RMTimezoneNoticeBanner extends StatefulWidget {
   final Duration duration;
@@ -37,24 +38,20 @@ class _RMTimezoneNoticeBannerState extends State<RMTimezoneNoticeBanner> {
               margin: const EdgeInsets.only(bottom: 12),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFFEAF2FF),
+                color: AppColors.infoBg,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFB8D0FF)),
+                border: Border.all(color: AppColors.infoBorder),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: const [
-                  Icon(
-                    Icons.access_time,
-                    size: 18,
-                    color: Color(0xFF11285A),
-                  ),
+                  Icon(Icons.access_time, size: 18, color: AppColors.navy),
                   SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       'All time is adjusted for your current time zone.',
                       style: TextStyle(
-                        color: Color(0xFF11285A),
+                        color: AppColors.navy,
                         fontWeight: FontWeight.w600,
                       ),
                     ),

@@ -3,6 +3,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:pdf/pdf.dart';
@@ -1057,8 +1058,8 @@ class _RemarkCardsGeneratorSheetState extends State<RemarkCardsGeneratorSheet> {
 
             FilledButton.icon(
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFFD4A623),
-                foregroundColor: Colors.black87,
+                backgroundColor: AppColors.primaryButton,
+                foregroundColor: AppColors.primaryButtonText,
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
               onPressed: _building ? null : _generatePdf,
