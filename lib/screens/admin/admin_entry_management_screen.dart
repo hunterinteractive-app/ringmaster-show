@@ -1154,6 +1154,9 @@ Widget _surfaceTextScope(BuildContext context, {required Widget child}) {
   );
 }
 
+const _entrySheetDropdownTextStyle = TextStyle(color: AppColors.text);
+const _entrySheetDropdownSubtitleStyle = TextStyle(color: AppColors.muted);
+
 class _EditEntrySheet extends StatefulWidget {
   final Map<String, dynamic> entry;
 
@@ -1766,6 +1769,10 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
             if (_loadingBreeds) const LinearProgressIndicator(),
             DropdownButtonFormField<String>(
               initialValue: _breedId,
+              style: _entrySheetDropdownTextStyle,
+              dropdownColor: AppColors.surface,
+              iconEnabledColor: AppColors.muted,
+              iconDisabledColor: AppColors.muted,
               decoration: const InputDecoration(
                 labelText: 'Breed',
                 border: OutlineInputBorder(),
@@ -1774,7 +1781,10 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
                   .map(
                     (b) => DropdownMenuItem<String>(
                       value: (b['id'] ?? '').toString(),
-                      child: Text((b['name'] ?? '').toString()),
+                      child: Text(
+                        (b['name'] ?? '').toString(),
+                        style: _entrySheetDropdownTextStyle,
+                      ),
                     ),
                   )
                   .toList(),
@@ -1806,6 +1816,10 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
               initialValue: _variety.text.trim().isEmpty
                   ? null
                   : _variety.text.trim(),
+              style: _entrySheetDropdownTextStyle,
+              dropdownColor: AppColors.surface,
+              iconEnabledColor: AppColors.muted,
+              iconDisabledColor: AppColors.muted,
               decoration: const InputDecoration(
                 labelText: 'Variety',
                 border: OutlineInputBorder(),
@@ -1814,7 +1828,10 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
                   .map(
                     (v) => DropdownMenuItem<String>(
                       value: (v['name'] ?? '').toString(),
-                      child: Text((v['name'] ?? '').toString()),
+                      child: Text(
+                        (v['name'] ?? '').toString(),
+                        style: _entrySheetDropdownTextStyle,
+                      ),
                     ),
                   )
                   .toList(),
@@ -1830,20 +1847,36 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(
               initialValue: _classValue,
+              style: _entrySheetDropdownTextStyle,
+              dropdownColor: AppColors.surface,
+              iconEnabledColor: AppColors.muted,
+              iconDisabledColor: AppColors.muted,
               decoration: const InputDecoration(
                 labelText: 'Class',
                 border: OutlineInputBorder(),
               ),
               items: const [
-                DropdownMenuItem(value: 'Senior', child: Text('Senior')),
+                DropdownMenuItem(
+                  value: 'Senior',
+                  child: Text('Senior', style: _entrySheetDropdownTextStyle),
+                ),
                 DropdownMenuItem(
                   value: 'Intermediate',
-                  child: Text('Intermediate'),
+                  child: Text(
+                    'Intermediate',
+                    style: _entrySheetDropdownTextStyle,
+                  ),
                 ),
-                DropdownMenuItem(value: 'Junior', child: Text('Junior')),
+                DropdownMenuItem(
+                  value: 'Junior',
+                  child: Text('Junior', style: _entrySheetDropdownTextStyle),
+                ),
                 DropdownMenuItem(
                   value: 'Pre-Junior',
-                  child: Text('Pre-Junior'),
+                  child: Text(
+                    'Pre-Junior',
+                    style: _entrySheetDropdownTextStyle,
+                  ),
                 ),
               ],
               onChanged: _saving
@@ -1859,14 +1892,20 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(
               initialValue: _sexValue,
+              style: _entrySheetDropdownTextStyle,
+              dropdownColor: AppColors.surface,
+              iconEnabledColor: AppColors.muted,
+              iconDisabledColor: AppColors.muted,
               decoration: const InputDecoration(
                 labelText: 'Sex',
                 border: OutlineInputBorder(),
               ),
               items: _sexOptions
                   .map(
-                    (sex) =>
-                        DropdownMenuItem<String>(value: sex, child: Text(sex)),
+                    (sex) => DropdownMenuItem<String>(
+                      value: sex,
+                      child: Text(sex, style: _entrySheetDropdownTextStyle),
+                    ),
                   )
                   .toList(),
               onChanged: _saving
@@ -1900,13 +1939,23 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
                 initialValue: _furVarietyValue,
+                style: _entrySheetDropdownTextStyle,
+                dropdownColor: AppColors.surface,
+                iconEnabledColor: AppColors.muted,
+                iconDisabledColor: AppColors.muted,
                 decoration: const InputDecoration(
                   labelText: 'Fur / Wool Class',
                   border: OutlineInputBorder(),
                 ),
                 items: const [
-                  DropdownMenuItem(value: 'White', child: Text('White')),
-                  DropdownMenuItem(value: 'Colored', child: Text('Colored')),
+                  DropdownMenuItem(
+                    value: 'White',
+                    child: Text('White', style: _entrySheetDropdownTextStyle),
+                  ),
+                  DropdownMenuItem(
+                    value: 'Colored',
+                    child: Text('Colored', style: _entrySheetDropdownTextStyle),
+                  ),
                 ],
                 onChanged: _saving
                     ? null
@@ -4425,6 +4474,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                         return Align(
                           alignment: Alignment.topLeft,
                           child: Material(
+                            color: AppColors.surface,
                             elevation: 6,
                             borderRadius: BorderRadius.circular(12),
                             child: _surfaceTextScope(
@@ -4458,12 +4508,15 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                                       title: Text(
                                         _exhibitorLabel(option),
                                         overflow: TextOverflow.ellipsis,
+                                        style: _entrySheetDropdownTextStyle,
                                       ),
                                       subtitle: subtitle.isEmpty
                                           ? null
                                           : Text(
                                               subtitle,
                                               overflow: TextOverflow.ellipsis,
+                                              style:
+                                                  _entrySheetDropdownSubtitleStyle,
                                             ),
                                       onTap: () => onSelected(option),
                                     );
@@ -4491,6 +4544,10 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                       DropdownButtonFormField<Map<String, dynamic>>(
                         initialValue: _animal,
                         isExpanded: true,
+                        style: _entrySheetDropdownTextStyle,
+                        dropdownColor: AppColors.surface,
+                        iconEnabledColor: AppColors.muted,
+                        iconDisabledColor: AppColors.muted,
                         decoration: const InputDecoration(
                           labelText: 'Saved Animal',
                           border: OutlineInputBorder(),
@@ -4502,6 +4559,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                                 child: Text(
                                   _animalLabel(a),
                                   overflow: TextOverflow.ellipsis,
+                                  style: _entrySheetDropdownTextStyle,
                                 ),
                               ),
                             )
@@ -4545,6 +4603,10 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                   if (_useLocalAnimal) ...[
                     DropdownButtonFormField<String>(
                       initialValue: _species,
+                      style: _entrySheetDropdownTextStyle,
+                      dropdownColor: AppColors.surface,
+                      iconEnabledColor: AppColors.muted,
+                      iconDisabledColor: AppColors.muted,
                       decoration: const InputDecoration(
                         labelText: 'Species',
                         border: OutlineInputBorder(),
@@ -4552,9 +4614,18 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                       items: const [
                         DropdownMenuItem(
                           value: 'rabbit',
-                          child: Text('Rabbit'),
+                          child: Text(
+                            'Rabbit',
+                            style: _entrySheetDropdownTextStyle,
+                          ),
                         ),
-                        DropdownMenuItem(value: 'cavy', child: Text('Cavy')),
+                        DropdownMenuItem(
+                          value: 'cavy',
+                          child: Text(
+                            'Cavy',
+                            style: _entrySheetDropdownTextStyle,
+                          ),
+                        ),
                       ],
                       onChanged: (_saving || AppSession.isSupportMode)
                           ? null
@@ -4599,6 +4670,10 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                     if (_loadingBreeds) const LinearProgressIndicator(),
                     DropdownButtonFormField<String>(
                       initialValue: _breedId,
+                      style: _entrySheetDropdownTextStyle,
+                      dropdownColor: AppColors.surface,
+                      iconEnabledColor: AppColors.muted,
+                      iconDisabledColor: AppColors.muted,
                       decoration: const InputDecoration(
                         labelText: 'Breed',
                         border: OutlineInputBorder(),
@@ -4607,7 +4682,10 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                           .map(
                             (b) => DropdownMenuItem<String>(
                               value: (b['id'] ?? '').toString(),
-                              child: Text((b['name'] ?? '').toString()),
+                              child: Text(
+                                (b['name'] ?? '').toString(),
+                                style: _entrySheetDropdownTextStyle,
+                              ),
                             ),
                           )
                           .toList(),
@@ -4640,6 +4718,10 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                       initialValue: _variety.text.trim().isEmpty
                           ? null
                           : _variety.text.trim(),
+                      style: _entrySheetDropdownTextStyle,
+                      dropdownColor: AppColors.surface,
+                      iconEnabledColor: AppColors.muted,
+                      iconDisabledColor: AppColors.muted,
                       decoration: const InputDecoration(
                         labelText: 'Variety',
                         border: OutlineInputBorder(),
@@ -4648,7 +4730,10 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                           .map(
                             (v) => DropdownMenuItem<String>(
                               value: (v['name'] ?? '').toString(),
-                              child: Text((v['name'] ?? '').toString()),
+                              child: Text(
+                                (v['name'] ?? '').toString(),
+                                style: _entrySheetDropdownTextStyle,
+                              ),
                             ),
                           )
                           .toList(),
@@ -4668,6 +4753,10 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                     const SizedBox(height: 10),
                     DropdownButtonFormField<String>(
                       initialValue: _sexValue,
+                      style: _entrySheetDropdownTextStyle,
+                      dropdownColor: AppColors.surface,
+                      iconEnabledColor: AppColors.muted,
+                      iconDisabledColor: AppColors.muted,
                       decoration: const InputDecoration(
                         labelText: 'Sex',
                         border: OutlineInputBorder(),
@@ -4676,7 +4765,10 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                           .map(
                             (sex) => DropdownMenuItem<String>(
                               value: sex,
-                              child: Text(sex),
+                              child: Text(
+                                sex,
+                                style: _entrySheetDropdownTextStyle,
+                              ),
                             ),
                           )
                           .toList(),
@@ -4699,6 +4791,10 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     initialValue: _classValue,
+                    style: _entrySheetDropdownTextStyle,
+                    dropdownColor: AppColors.surface,
+                    iconEnabledColor: AppColors.muted,
+                    iconDisabledColor: AppColors.muted,
                     decoration: InputDecoration(
                       labelText: 'Class / Age Override',
                       helperText:
@@ -4711,15 +4807,33 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                       border: const OutlineInputBorder(),
                     ),
                     items: const [
-                      DropdownMenuItem(value: 'Senior', child: Text('Senior')),
+                      DropdownMenuItem(
+                        value: 'Senior',
+                        child: Text(
+                          'Senior',
+                          style: _entrySheetDropdownTextStyle,
+                        ),
+                      ),
                       DropdownMenuItem(
                         value: 'Intermediate',
-                        child: Text('Intermediate'),
+                        child: Text(
+                          'Intermediate',
+                          style: _entrySheetDropdownTextStyle,
+                        ),
                       ),
-                      DropdownMenuItem(value: 'Junior', child: Text('Junior')),
+                      DropdownMenuItem(
+                        value: 'Junior',
+                        child: Text(
+                          'Junior',
+                          style: _entrySheetDropdownTextStyle,
+                        ),
+                      ),
                       DropdownMenuItem(
                         value: 'Pre-Junior',
-                        child: Text('Pre-Junior'),
+                        child: Text(
+                          'Pre-Junior',
+                          style: _entrySheetDropdownTextStyle,
+                        ),
                       ),
                     ],
                     onChanged: (_saving || AppSession.isSupportMode)
@@ -4764,15 +4878,28 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                     const SizedBox(height: 10),
                     DropdownButtonFormField<String>(
                       initialValue: _furVarietyValue,
+                      style: _entrySheetDropdownTextStyle,
+                      dropdownColor: AppColors.surface,
+                      iconEnabledColor: AppColors.muted,
+                      iconDisabledColor: AppColors.muted,
                       decoration: const InputDecoration(
                         labelText: 'Fur / Wool Class',
                         border: OutlineInputBorder(),
                       ),
                       items: const [
-                        DropdownMenuItem(value: 'White', child: Text('White')),
+                        DropdownMenuItem(
+                          value: 'White',
+                          child: Text(
+                            'White',
+                            style: _entrySheetDropdownTextStyle,
+                          ),
+                        ),
                         DropdownMenuItem(
                           value: 'Colored',
-                          child: Text('Colored'),
+                          child: Text(
+                            'Colored',
+                            style: _entrySheetDropdownTextStyle,
+                          ),
                         ),
                       ],
                       onChanged: (_saving || AppSession.isSupportMode)

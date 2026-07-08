@@ -265,24 +265,6 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
     return rows;
   }
 
-  Future<void> _ensureShowAdmin({
-    required String showId,
-    required String userId,
-  }) async {
-    final existing = await supabase
-        .from('show_admins')
-        .select('show_id')
-        .eq('show_id', showId)
-        .eq('user_id', userId)
-        .maybeSingle();
-
-    if (existing == null) {
-      await supabase.from('show_admins').insert({
-        'show_id': showId,
-        'user_id': userId,
-      });
-    }
-  }
 
   Future<Map<String, dynamic>> _createFirstClubForUser({
     required String userId,
@@ -373,8 +355,6 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
       if (sectionRows.isNotEmpty) {
         await supabase.from('show_sections').insert(sectionRows);
       }
-
-      await _ensureShowAdmin(showId: showId, userId: userId);
 
       if (!mounted) return;
       Navigator.pop(context, true);
