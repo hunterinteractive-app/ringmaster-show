@@ -17,6 +17,7 @@ class CloseoutRunner {
     required String artifactId,
     String? breedName,
     String? clubName,
+    String? species,
     String? scope,
     String? showLetter,
     String? showName,
@@ -27,6 +28,9 @@ class CloseoutRunner {
     bool hideZeroBalances = true,
     bool isNationalShow = false,
   }) async {
+    final resolvedSpecies =
+        _normalizeSpecies(species) ?? await _loadArtifactSpecies(artifactId);
+
     final request = ReportRequest(
       showId: showId,
       reportName: reportName,
@@ -34,6 +38,7 @@ class CloseoutRunner {
       artifactId: artifactId,
       breedName: breedName,
       clubName: clubName,
+      species: resolvedSpecies,
       scope: scope,
       showLetter: showLetter,
       showName: showName,
@@ -64,5 +69,27 @@ class CloseoutRunner {
       await uploadService.markFailed(artifactId: artifactId, error: e);
       rethrow;
     }
+  }
+
+  Future<String?> _loadArtifactSpecies(String artifactId) async {
+    try {
+      final row = await uploadService.supabase
+          .from('show_report_artifacts')
+          .select('metadata')
+          .eq('id', artifactId)
+          .maybeSingle();
+
+      if (row == null || row['metadata'] is! Map) return null;
+
+      final metadata = Map<String, dynamic>.from(row['metadata'] as Map);
+      return _normalizeSpecies((metadata['species'] ?? '').toString());
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String? _normalizeSpecies(String? value) {
+    final normalized = (value ?? '').trim().toLowerCase();
+    return normalized == 'rabbit' || normalized == 'cavy' ? normalized : null;
   }
 }

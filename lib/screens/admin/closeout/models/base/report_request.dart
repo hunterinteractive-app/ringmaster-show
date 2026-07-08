@@ -8,6 +8,7 @@ class ReportRequest {
     this.artifactId,
     this.breedName,
     this.clubName,
+    this.species,
     this.scope,
     this.showLetter,
     this.showName,
@@ -26,6 +27,7 @@ class ReportRequest {
 
   final String? breedName;
   final String? clubName;
+  final String? species;
   final String? scope;
   final String? showLetter;
   final String? showName;
@@ -46,6 +48,7 @@ class ReportRequest {
       'artifactId': artifactId,
       'breedName': breedName,
       'clubName': clubName,
+      'species': species,
       'scope': scope,
       'showLetter': showLetter,
       'showName': showName,
@@ -65,6 +68,7 @@ class ReportRequest {
     String? artifactId,
     String? breedName,
     String? clubName,
+    String? species,
     String? scope,
     String? showLetter,
     String? showName,
@@ -82,6 +86,7 @@ class ReportRequest {
       artifactId: artifactId ?? this.artifactId,
       breedName: breedName ?? this.breedName,
       clubName: clubName ?? this.clubName,
+      species: species ?? this.species,
       scope: scope ?? this.scope,
       showLetter: showLetter ?? this.showLetter,
       showName: showName ?? this.showName,

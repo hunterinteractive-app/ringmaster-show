@@ -125,6 +125,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     'exh_by_breed',
     'best_display_report',
   };
+  static const int _stateClubSpeciesSplitVersion = 1;
 
   static const Set<String> _clubReportKeys = {
     ..._breedClubReportKeys,
@@ -274,6 +275,15 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     return artifacts;
   }
 
+  List<ReportArtifactSummary> _queuedRemainingReportArtifacts() {
+    return (_dashboard?.reports ?? const <ReportArtifactSummary>[])
+        .where((r) => r.isCurrent)
+        .where(
+          (r) => r.artifactStatus == 'queued' || r.artifactStatus == 'failed',
+        )
+        .toList();
+  }
+
   bool _artifactMatchesSelectedScope(ReportArtifactSummary artifact) {
     if (_selectedCloseoutScopeIsEntireShow) {
       return true;
@@ -304,10 +314,14 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     _ClubEmailTarget target,
   ) {
     final targetBody = target.sanctioningBody.trim().toUpperCase();
+    final targetSpecies = target.species.trim().toLowerCase();
     final artifactBreed = (_artifactMetaString(artifact, 'breed_name') ?? '')
         .trim()
         .toLowerCase();
     final artifactClub = (_artifactMetaString(artifact, 'club_name') ?? '')
+        .trim()
+        .toLowerCase();
+    final artifactSpecies = (_artifactMetaString(artifact, 'species') ?? '')
         .trim()
         .toLowerCase();
     final artifactBody =
@@ -329,8 +343,16 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     // State clubs are section-wide, so they match all reports in that section.
     if (targetBody == 'STATE CLUB') {
       if (!_stateClubReportKeys.contains(artifact.reportName)) return false;
-      return artifactClub.isEmpty ||
-          artifactClub == target.clubName.trim().toLowerCase();
+      if (artifactClub.isNotEmpty &&
+          artifactClub != target.clubName.trim().toLowerCase()) {
+        return false;
+      }
+
+      if (targetSpecies == 'rabbit' || targetSpecies == 'cavy') {
+        return artifactSpecies == targetSpecies;
+      }
+
+      return true;
     }
 
     if (!_breedClubReportKeys.contains(artifact.reportName)) return false;
@@ -435,6 +457,38 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           ''')
         .eq('show_id', widget.showId);
 
+    final stateClubContactRows = await supabase
+        .from('state_club_report_contacts')
+        .select('club_name, species, email')
+        .eq('is_active', true);
+
+    final stateClubContactsByClub = <String, List<_StateClubReportContact>>{};
+
+    for (final raw in (stateClubContactRows as List)) {
+      final row = Map<String, dynamic>.from(raw as Map);
+      final clubName = (row['club_name'] ?? '').toString().trim();
+      final species = (row['species'] ?? 'combined')
+          .toString()
+          .trim()
+          .toLowerCase();
+      final email = (row['email'] ?? '').toString().trim();
+
+      if (clubName.isEmpty || email.isEmpty) continue;
+      if (species != 'combined' && species != 'rabbit' && species != 'cavy') {
+        continue;
+      }
+
+      final key = clubName.toLowerCase();
+      stateClubContactsByClub.putIfAbsent(key, () => []);
+      stateClubContactsByClub[key]!.add(
+        _StateClubReportContact(
+          clubName: clubName,
+          species: species,
+          email: email,
+        ),
+      );
+    }
+
     final out = <String, _ClubEmailTarget>{};
 
     for (final raw in (rows as List)) {
@@ -467,10 +521,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           .trim()
           .toUpperCase();
 
-      if (clubName.isEmpty ||
-          scope.isEmpty ||
-          showLetter.isEmpty ||
-          email.isEmpty) {
+      if (clubName.isEmpty || scope.isEmpty || showLetter.isEmpty) {
         continue;
       }
 
@@ -479,8 +530,33 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         continue;
       }
 
+      if (sanctioningBody == 'STATE CLUB') {
+        final contacts = stateClubContactsByClub[clubName.toLowerCase()];
+
+        if (contacts != null && contacts.isNotEmpty) {
+          for (final contact in contacts) {
+            final key =
+                '$sanctioningBody|$clubName|$scope|$showLetter|${contact.species}|${contact.email}';
+
+            out[key] = _ClubEmailTarget(
+              clubName: clubName,
+              breedName: breedName,
+              scope: scope,
+              showLetter: showLetter,
+              email: contact.email,
+              species: contact.species,
+              sanctioningBody: sanctioningBody,
+            );
+          }
+          continue;
+        }
+      }
+
+      if (email.isEmpty) continue;
+
+      final species = sanctioningBody == 'STATE CLUB' ? 'combined' : '';
       final key = sanctioningBody == 'STATE CLUB'
-          ? '$sanctioningBody|$clubName|$scope|$showLetter|$email'
+          ? '$sanctioningBody|$clubName|$scope|$showLetter|$species|$email'
           : '$sanctioningBody|$clubName|$breedName|$scope|$showLetter|$email';
 
       out[key] = _ClubEmailTarget(
@@ -489,6 +565,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         scope: scope,
         showLetter: showLetter,
         email: email,
+        species: species,
         sanctioningBody: sanctioningBody,
       );
     }
@@ -676,11 +753,386 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     }
   }
 
-  Future<void> _syncClubDeliveryMetadata() async {
+  Future<void> _syncClubDeliveryMetadata({String? latestFinalizeRunId}) async {
     await supabase.rpc(
       'prepare_club_delivery_targets',
       params: {'p_show_id': widget.showId},
     );
+
+    await _ensureStateClubSpeciesArtifacts(
+      latestFinalizeRunId: latestFinalizeRunId,
+    );
+  }
+
+  Future<void> _ensureStateClubSpeciesArtifacts({
+    String? latestFinalizeRunId,
+  }) async {
+    final rows = await supabase
+        .from('show_report_artifacts')
+        .select('id, finalize_run_id, report_name, artifact_status, metadata')
+        .eq('show_id', widget.showId)
+        .eq('is_current', true)
+        .inFilter('report_name', _stateClubReportKeys.toList());
+
+    final artifacts = (rows as List)
+        .map((raw) => Map<String, dynamic>.from(raw as Map))
+        .toList();
+
+    if (artifacts.isEmpty) return;
+
+    final grouped = <String, List<Map<String, dynamic>>>{};
+
+    for (final artifact in artifacts) {
+      final metadata = artifact['metadata'] is Map
+          ? Map<String, dynamic>.from(artifact['metadata'] as Map)
+          : <String, dynamic>{};
+      final key = _stateClubArtifactBaseKey(
+        (artifact['report_name'] ?? '').toString(),
+        metadata,
+      );
+
+      if (key.isEmpty) continue;
+      grouped.putIfAbsent(key, () => []);
+      grouped[key]!.add(artifact);
+    }
+
+    for (final group in grouped.values) {
+      if (group.isEmpty) continue;
+
+      final species = <String>{};
+      for (final artifact in group) {
+        final metadata = artifact['metadata'] is Map
+            ? Map<String, dynamic>.from(artifact['metadata'] as Map)
+            : <String, dynamic>{};
+        species.addAll(await _loadStateClubSpeciesForArtifact(metadata));
+      }
+
+      final targetSpecies = [
+        'rabbit',
+        'cavy',
+      ].where((value) => species.contains(value)).toList();
+
+      if (targetSpecies.isEmpty) continue;
+
+      final existingBySpecies = <String, Map<String, dynamic>>{};
+      final withoutSpecies = <Map<String, dynamic>>[];
+
+      for (final artifact in group) {
+        final metadata = artifact['metadata'] is Map
+            ? Map<String, dynamic>.from(artifact['metadata'] as Map)
+            : <String, dynamic>{};
+        final artifactSpecies = _normalizeStateClubSpecies(
+          (metadata['species'] ?? '').toString(),
+        );
+
+        if (artifactSpecies.isEmpty) {
+          withoutSpecies.add(artifact);
+        } else {
+          existingBySpecies.putIfAbsent(artifactSpecies, () => artifact);
+        }
+      }
+
+      for (final species in targetSpecies) {
+        final existingArtifact = existingBySpecies[species];
+        if (existingArtifact != null) {
+          if (_stateClubArtifactNeedsSpeciesSplitRefresh(existingArtifact)) {
+            await _resetStateClubArtifactForSpecies(
+              existingArtifact,
+              species,
+              latestFinalizeRunId: latestFinalizeRunId,
+            );
+          }
+          continue;
+        }
+
+        await _insertStateClubArtifactForSpecies(
+          group.first,
+          species,
+          latestFinalizeRunId: latestFinalizeRunId,
+        );
+      }
+
+      for (final artifact in withoutSpecies) {
+        await supabase
+            .from('show_report_artifacts')
+            .update({
+              'is_current': false,
+              'superseded_at': DateTime.now().toUtc().toIso8601String(),
+            })
+            .eq('id', (artifact['id'] ?? '').toString());
+      }
+
+      for (final entry in existingBySpecies.entries) {
+        if (targetSpecies.contains(entry.key)) continue;
+        await supabase
+            .from('show_report_artifacts')
+            .update({
+              'is_current': false,
+              'superseded_at': DateTime.now().toUtc().toIso8601String(),
+            })
+            .eq('id', (entry.value['id'] ?? '').toString());
+      }
+    }
+  }
+
+  String _stateClubArtifactBaseKey(
+    String reportName,
+    Map<String, dynamic> metadata,
+  ) {
+    final normalizedReportName = reportName.trim();
+    if (!_stateClubReportKeys.contains(normalizedReportName)) return '';
+
+    final scope = (metadata['scope'] ?? '').toString().trim().toUpperCase();
+    final showLetter = (metadata['show_letter'] ?? '')
+        .toString()
+        .trim()
+        .toUpperCase();
+    final clubName = (metadata['club_name'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
+    final sectionId = (metadata['section_id'] ?? '').toString().trim();
+
+    if (scope.isEmpty || showLetter.isEmpty) return '';
+
+    return [
+      normalizedReportName,
+      scope,
+      showLetter,
+      clubName,
+      sectionId,
+    ].join('|');
+  }
+
+  Future<void> _resetStateClubArtifactForSpecies(
+    Map<String, dynamic> artifact,
+    String species, {
+    String? latestFinalizeRunId,
+  }) async {
+    final artifactId = (artifact['id'] ?? '').toString();
+    if (artifactId.isEmpty) return;
+
+    final metadata = artifact['metadata'] is Map
+        ? Map<String, dynamic>.from(artifact['metadata'] as Map)
+        : <String, dynamic>{};
+    final resolvedFinalizeRunId = _resolveStateClubFinalizeRunId(
+      source: artifact,
+      latestFinalizeRunId: latestFinalizeRunId,
+    );
+
+    await supabase
+        .from('show_report_artifacts')
+        .update({
+          if (resolvedFinalizeRunId != null)
+            'finalize_run_id': resolvedFinalizeRunId,
+          'artifact_status': 'queued',
+          'storage_bucket': null,
+          'storage_path': null,
+          'file_name': null,
+          'mime_type': null,
+          'file_size_bytes': null,
+          'generated_at': null,
+          'superseded_at': null,
+          'error_count': 0,
+          'warning_count': 0,
+          'metadata': {
+            ...metadata,
+            'species': species,
+            'species_split_version': _stateClubSpeciesSplitVersion,
+          },
+        })
+        .eq('id', artifactId);
+  }
+
+  Future<void> _insertStateClubArtifactForSpecies(
+    Map<String, dynamic> source,
+    String species, {
+    String? latestFinalizeRunId,
+  }) async {
+    final metadata = source['metadata'] is Map
+        ? Map<String, dynamic>.from(source['metadata'] as Map)
+        : <String, dynamic>{};
+    final resolvedFinalizeRunId = _resolveStateClubFinalizeRunId(
+      source: source,
+      latestFinalizeRunId: latestFinalizeRunId,
+    );
+
+    await supabase.from('show_report_artifacts').insert({
+      'show_id': widget.showId,
+      'finalize_run_id': resolvedFinalizeRunId,
+      'report_name': (source['report_name'] ?? '').toString(),
+      'artifact_status': 'queued',
+      'is_current': true,
+      'metadata': {
+        ...metadata,
+        'species': species,
+        'species_split_version': _stateClubSpeciesSplitVersion,
+      },
+    });
+  }
+
+  String? _resolveStateClubFinalizeRunId({
+    required Map<String, dynamic> source,
+    String? latestFinalizeRunId,
+  }) {
+    final latest = (latestFinalizeRunId ?? '').trim();
+    if (latest.isNotEmpty) return latest;
+
+    final sourceRunId = (source['finalize_run_id'] ?? '').toString().trim();
+    return sourceRunId.isEmpty ? null : sourceRunId;
+  }
+
+  bool _stateClubArtifactNeedsSpeciesSplitRefresh(
+    Map<String, dynamic> artifact,
+  ) {
+    final metadata = artifact['metadata'] is Map
+        ? Map<String, dynamic>.from(artifact['metadata'] as Map)
+        : <String, dynamic>{};
+    final versionValue = metadata['species_split_version'];
+    final version = versionValue is int
+        ? versionValue
+        : int.tryParse((versionValue ?? '').toString()) ?? 0;
+    return version < _stateClubSpeciesSplitVersion;
+  }
+
+  Future<Set<String>> _loadStateClubSpeciesForArtifact(
+    Map<String, dynamic> metadata,
+  ) async {
+    final scope = (metadata['scope'] ?? '').toString().trim().toUpperCase();
+    final showLetter = (metadata['show_letter'] ?? '')
+        .toString()
+        .trim()
+        .toUpperCase();
+
+    if (scope.isEmpty || showLetter.isEmpty) return const <String>{};
+
+    final sectionId =
+        (metadata['section_id'] ?? '').toString().trim().isNotEmpty
+        ? (metadata['section_id'] ?? '').toString().trim()
+        : await _loadSectionIdForScope(scope, showLetter);
+
+    if (sectionId.isEmpty) return const <String>{};
+
+    final results = await supabase.rpc(
+      'report_results_entry_rows',
+      params: {
+        'p_show_id': widget.showId,
+        'p_section_id': sectionId,
+        'p_show_letter': showLetter,
+      },
+    );
+
+    final rows = (results as List)
+        .map((raw) => Map<String, dynamic>.from(raw as Map))
+        .where(_stateClubSpeciesRowCounts)
+        .toList();
+
+    final species = <String>{};
+    final missingSpeciesEntryIds = <String>{};
+
+    for (final row in rows) {
+      final rowSpecies = _normalizeStateClubSpecies(
+        _firstRowText(row, const [
+          'species',
+          'animal_species',
+          'entry_species',
+        ]),
+      );
+
+      if (rowSpecies.isNotEmpty) {
+        species.add(rowSpecies);
+        continue;
+      }
+
+      final entryId = _firstRowText(row, const ['entry_id', 'id']);
+      if (entryId.isNotEmpty) missingSpeciesEntryIds.add(entryId);
+    }
+
+    if (missingSpeciesEntryIds.isNotEmpty) {
+      final entryRows = await supabase
+          .from('entries')
+          .select('id, species')
+          .eq('show_id', widget.showId)
+          .inFilter('id', missingSpeciesEntryIds.toList());
+
+      for (final raw in (entryRows as List)) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        final entrySpecies = _normalizeStateClubSpecies(
+          (row['species'] ?? '').toString(),
+        );
+        if (entrySpecies.isNotEmpty) species.add(entrySpecies);
+      }
+    }
+
+    return species;
+  }
+
+  Future<String> _loadSectionIdForScope(String scope, String showLetter) async {
+    final row = await supabase
+        .from('show_sections')
+        .select('id')
+        .eq('show_id', widget.showId)
+        .eq('kind', scope.toLowerCase())
+        .eq('letter', showLetter)
+        .eq('is_enabled', true)
+        .maybeSingle();
+
+    if (row == null) return '';
+    return (Map<String, dynamic>.from(row)['id'] ?? '').toString().trim();
+  }
+
+  bool _stateClubSpeciesRowCounts(Map<String, dynamic> row) {
+    if (_rowBool(row['is_test'])) return false;
+    if ((row['scratched_at'] ?? '').toString().trim().isNotEmpty) return false;
+    if (_rowBool(row['is_disqualified'])) return false;
+    if (!_rowBool(row['is_shown'], fallback: true)) return false;
+
+    final status = _firstRowText(row, const [
+      'result_status',
+      'status',
+    ]).toLowerCase();
+    final dqReason = _firstRowText(row, const [
+      'disqualified_reason',
+    ]).toLowerCase();
+    final combined = '$status $dqReason';
+
+    if (combined.contains('no show') ||
+        combined.contains('scratch') ||
+        combined.contains('disqual') ||
+        combined.contains('wrong sex') ||
+        combined.contains('wrong variety') ||
+        combined.contains('wrong class') ||
+        combined.contains('overweight') ||
+        combined.contains('unworthy')) {
+      return false;
+    }
+
+    return true;
+  }
+
+  String _normalizeStateClubSpecies(String value) {
+    final normalized = value.trim().toLowerCase();
+    return normalized == 'rabbit' || normalized == 'cavy' ? normalized : '';
+  }
+
+  String _firstRowText(Map<String, dynamic> row, List<String> keys) {
+    for (final key in keys) {
+      final value = (row[key] ?? '').toString().trim();
+      if (value.isNotEmpty) return value;
+    }
+    return '';
+  }
+
+  bool _rowBool(dynamic value, {bool fallback = false}) {
+    if (value is bool) return value;
+    final text = (value ?? '').toString().trim().toLowerCase();
+    if (text == 'true' || text == 't' || text == '1' || text == 'yes') {
+      return true;
+    }
+    if (text == 'false' || text == 'f' || text == '0' || text == 'no') {
+      return false;
+    }
+    return fallback;
   }
 
   Future<void> _loadMissingPlacements() async {
@@ -1431,13 +1883,24 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
   Future<void> _refreshDashboardOnly() async {
     try {
-      final dashboardResp = await supabase.rpc(
+      var dashboardResp = await supabase.rpc(
         'get_show_closeout_dashboard',
         params: {'p_show_id': widget.showId},
       );
 
-      final dashboardJson = Map<String, dynamic>.from(dashboardResp as Map);
-      final dashboard = CloseoutDashboard.fromJson(dashboardJson);
+      var dashboardJson = Map<String, dynamic>.from(dashboardResp as Map);
+      var dashboard = CloseoutDashboard.fromJson(dashboardJson);
+
+      await _syncClubDeliveryMetadata(
+        latestFinalizeRunId: dashboard.latestFinalize.id,
+      );
+
+      dashboardResp = await supabase.rpc(
+        'get_show_closeout_dashboard',
+        params: {'p_show_id': widget.showId},
+      );
+      dashboardJson = Map<String, dynamic>.from(dashboardResp);
+      dashboard = CloseoutDashboard.fromJson(dashboardJson);
 
       final readinessResp = await supabase.rpc(
         'show_results_readiness',
@@ -1494,12 +1957,17 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           );
 
       if (hasNewFinalize && hasCurrentReports) {
+        await _syncClubDeliveryMetadata(latestFinalizeRunId: latestId);
+        await _refreshDashboardOnly();
         return;
       }
 
       await Future.delayed(const Duration(milliseconds: 500));
     }
 
+    await _syncClubDeliveryMetadata(
+      latestFinalizeRunId: _dashboard?.latestFinalize.id,
+    );
     await _refreshDashboardOnly();
   }
 
@@ -1700,7 +2168,16 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     final runner = CloseoutRunner(engine: engine, uploadService: uploadService);
 
     String artifactKey(ReportArtifactSummary artifact) {
-      return '${artifact.reportName}::${artifact.id}';
+      final species = _stateClubReportKeys.contains(artifact.reportName)
+          ? (_artifactMetaString(artifact, 'species') ?? '')
+                .trim()
+                .toLowerCase()
+          : '';
+      return [
+        artifact.reportName,
+        artifact.id,
+        if (species.isNotEmpty) species,
+      ].join('::');
     }
 
     Future<void> runSingle(ReportArtifactSummary artifact) async {
@@ -1742,6 +2219,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
             artifact.reportName == 'exh_by_breed' ||
             artifact.reportName == 'best_display_report') {
           final breedName = _artifactMetaString(artifact, 'breed_name');
+          final species = _artifactMetaString(artifact, 'species');
           final scope = _artifactMetaString(artifact, 'scope');
           final showLetter = _artifactMetaString(artifact, 'show_letter');
 
@@ -1758,6 +2236,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
             reportName: artifact.reportName,
             artifactId: artifact.id,
             breedName: breedName,
+            species: species,
             scope: scope,
             showLetter: showLetter,
             showName: widget.showName,
@@ -2000,6 +2479,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
     final ready = await _ensureResultsReadyForReports();
     if (!ready) return;
+    if (!mounted) return;
 
     setState(() {
       _generatingReport = true;
@@ -2157,6 +2637,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
     final ready = await _ensureResultsReadyForReports();
     if (!ready) return;
+    if (!mounted) return;
 
     setState(() {
       _generatingReport = true;
@@ -2164,7 +2645,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
     try {
       await _loadData();
-      await _syncClubDeliveryMetadata();
+      await _syncClubDeliveryMetadata(
+        latestFinalizeRunId: _dashboard?.latestFinalize.id,
+      );
       await _loadData();
 
       final clubs = await _loadClubEmailTargets();
@@ -2188,7 +2671,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
             club.sanctioningBody.trim().toUpperCase() == 'STATE CLUB';
 
         final key = isStateClub
-            ? '${club.sanctioningBody.trim().toLowerCase()}|${club.clubName.trim().toLowerCase()}|${club.scope.trim().toUpperCase()}|${club.showLetter.trim().toUpperCase()}|${club.email.trim().toLowerCase()}'
+            ? '${club.sanctioningBody.trim().toLowerCase()}|${club.clubName.trim().toLowerCase()}|${club.scope.trim().toUpperCase()}|${club.showLetter.trim().toUpperCase()}|${club.species.trim().toLowerCase()}|${club.email.trim().toLowerCase()}'
             : '${club.sanctioningBody.trim().toLowerCase()}|${club.clubName.trim().toLowerCase()}|${club.breedName.trim().toLowerCase()}|${club.scope.trim().toUpperCase()}|${club.showLetter.trim().toUpperCase()}|${club.email.trim().toLowerCase()}';
 
         grouped.putIfAbsent(key, () => []);
@@ -2268,12 +2751,23 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         }
 
         try {
+          final species = first.species.trim().toLowerCase();
+          final speciesLabel = species == 'rabbit'
+              ? 'Rabbit '
+              : species == 'cavy'
+              ? 'Cavy '
+              : '';
+          final speciesMessagePrefix = species == 'rabbit'
+              ? 'rabbit '
+              : species == 'cavy'
+              ? 'cavy '
+              : '';
           final subject = isStateClub
-              ? '${widget.showName} - ${first.clubName} Club Reports'
+              ? '${widget.showName} - ${first.clubName} ${speciesLabel}Club Reports'
               : '${widget.showName} - ${first.breedName} Club Reports';
 
           final message = isStateClub
-              ? 'Attached are the Breed Totals, Breed Special Points, and Display Points reports for ${widget.showName} for ${first.scope} ${first.showLetter}.\n\n'
+              ? 'Attached are the ${speciesMessagePrefix}Breed Totals, Breed Special Points, and Display Points reports for ${widget.showName} for ${first.scope} ${first.showLetter}.\n\n'
                     '${includedSanctionNumbers.isNotEmpty ? 'Included shows: ${includedSanctionNumbers.join(', ')}.' : ''}'
               : 'Attached are the sweepstakes and breed results detail reports for ${widget.showName}.\n\n'
                     '${includedSanctionNumbers.isNotEmpty ? 'Included shows: ${includedSanctionNumbers.join(', ')}.' : ''}';
@@ -2682,13 +3176,24 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     });
 
     try {
-      final dashboardResp = await supabase.rpc(
+      var dashboardResp = await supabase.rpc(
         'get_show_closeout_dashboard',
         params: {'p_show_id': widget.showId},
       );
 
-      final dashboardJson = Map<String, dynamic>.from(dashboardResp as Map);
-      final dashboard = CloseoutDashboard.fromJson(dashboardJson);
+      var dashboardJson = Map<String, dynamic>.from(dashboardResp as Map);
+      var dashboard = CloseoutDashboard.fromJson(dashboardJson);
+
+      await _syncClubDeliveryMetadata(
+        latestFinalizeRunId: dashboard.latestFinalize.id,
+      );
+
+      dashboardResp = await supabase.rpc(
+        'get_show_closeout_dashboard',
+        params: {'p_show_id': widget.showId},
+      );
+      dashboardJson = Map<String, dynamic>.from(dashboardResp);
+      dashboard = CloseoutDashboard.fromJson(dashboardJson);
 
       final readinessResp = await supabase.rpc(
         'show_results_readiness',
@@ -2923,6 +3428,13 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       if (!ready) return;
     }
 
+    if (_stateClubReportKeys.contains(reportName)) {
+      await _syncClubDeliveryMetadata(
+        latestFinalizeRunId: _dashboard?.latestFinalize.id,
+      );
+      await _refreshDashboardOnly();
+    }
+
     final artifacts = _currentArtifactsForReportGroup(reportName);
 
     if (artifacts.isEmpty) {
@@ -3002,11 +3514,22 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         reportName == 'details_by_breed' ||
         reportName == 'exh_by_breed' ||
         reportName == 'best_display_report';
+    final isStateClubReport =
+        reportName == 'details_by_breed' ||
+        reportName == 'exh_by_breed' ||
+        reportName == 'best_display_report';
 
     final hasExplicitScope =
         (scope ?? '').trim().isNotEmpty && (showLetter ?? '').trim().isNotEmpty;
 
     if (isSectionScopedReport && !hasExplicitScope) {
+      if (isStateClubReport) {
+        await _syncClubDeliveryMetadata(
+          latestFinalizeRunId: _dashboard?.latestFinalize.id,
+        );
+        await _refreshDashboardOnly();
+      }
+
       final scopedArtifacts = _currentArtifactsForReportGroup(reportName);
 
       if (scopedArtifacts.isEmpty) {
@@ -3023,6 +3546,16 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       }
 
       await _generateCurrentReportGroupByName(reportName);
+      return;
+    }
+
+    if (isStateClubReport && hasExplicitScope) {
+      await _generateStateClubReportArtifactsForTarget(
+        reportName: reportName,
+        clubName: clubName,
+        scope: scope,
+        showLetter: showLetter,
+      );
       return;
     }
 
@@ -3202,6 +3735,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         reportName: reportName,
         artifactId: resolvedArtifact.id,
         breedName: breedName,
+        species: _artifactMetaString(resolvedArtifact, 'species'),
         scope: scope,
         showName: widget.showName,
         showDate: showDate,
@@ -3218,6 +3752,223 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('${_friendlyReportName(reportName)} generated.'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to generate report: $e')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _generatingReport = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _generateStateClubReportArtifactsForTarget({
+    required String reportName,
+    String? clubName,
+    String? scope,
+    String? showLetter,
+  }) async {
+    if (!_stateClubReportKeys.contains(reportName)) {
+      await _generateReportByName(
+        reportName,
+        clubName: clubName,
+        scope: scope,
+        showLetter: showLetter,
+      );
+      return;
+    }
+
+    await _syncClubDeliveryMetadata(
+      latestFinalizeRunId: _dashboard?.latestFinalize.id,
+    );
+    await _refreshDashboardOnly();
+
+    final targetClub = (clubName ?? '').trim().toLowerCase();
+    final targetScope = (scope ?? '').trim().toUpperCase();
+    final targetLetter = (showLetter ?? '').trim().toUpperCase();
+
+    final matchingArtifacts =
+        (_dashboard?.reports ?? const <ReportArtifactSummary>[])
+            .where((artifact) => artifact.isCurrent)
+            .where((artifact) => artifact.reportName == reportName)
+            .where(_artifactMatchesSelectedScope)
+            .where((artifact) {
+              final artifactClub =
+                  (_artifactMetaString(artifact, 'club_name') ?? '')
+                      .trim()
+                      .toLowerCase();
+              final artifactScope =
+                  (_artifactMetaString(artifact, 'scope') ?? '')
+                      .trim()
+                      .toUpperCase();
+              final artifactLetter =
+                  (_artifactMetaString(artifact, 'show_letter') ?? '')
+                      .trim()
+                      .toUpperCase();
+              final artifactSpecies =
+                  (_artifactMetaString(artifact, 'species') ?? '')
+                      .trim()
+                      .toLowerCase();
+
+              final clubMatches =
+                  targetClub.isEmpty ||
+                  artifactClub.isEmpty ||
+                  artifactClub == targetClub;
+
+              return clubMatches &&
+                  artifactScope == targetScope &&
+                  artifactLetter == targetLetter &&
+                  (artifactSpecies == 'rabbit' || artifactSpecies == 'cavy');
+            })
+            .toList()
+          ..sort(_compareStateClubArtifactsForGeneration);
+
+    final pendingArtifacts = matchingArtifacts
+        .where(
+          (artifact) =>
+              artifact.artifactStatus == 'queued' ||
+              artifact.artifactStatus == 'failed',
+        )
+        .toList();
+
+    final artifactsToGenerate = pendingArtifacts.isNotEmpty
+        ? pendingArtifacts
+        : matchingArtifacts;
+
+    if (artifactsToGenerate.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'No species-specific ${_friendlyReportName(reportName)} artifacts found.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _generatingReport = true;
+      _error = null;
+    });
+
+    final started = <String>{};
+    final finished = <String>{};
+    final failed = <String, Object>{};
+
+    try {
+      await _runGenerateAllReportsLive(
+        artifactsToGenerate,
+        onStarted: started.add,
+        onFinished: finished.add,
+        onFailed: (artifactKey, error) {
+          failed[artifactKey] = error;
+        },
+      );
+
+      await _refreshDashboardOnly();
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 8),
+          content: Text(
+            failed.isEmpty
+                ? 'Generated ${finished.length} ${_friendlyReportName(reportName)} file${finished.length == 1 ? '' : 's'}.'
+                : 'Generated ${finished.length} file${finished.length == 1 ? '' : 's'}; ${failed.length} failed.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed generating state club report: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _generatingReport = false;
+        });
+      }
+    }
+  }
+
+  int _compareStateClubArtifactsForGeneration(
+    ReportArtifactSummary a,
+    ReportArtifactSummary b,
+  ) {
+    final scopeCompare = ((_artifactMetaString(a, 'scope') ?? '').toUpperCase())
+        .compareTo((_artifactMetaString(b, 'scope') ?? '').toUpperCase());
+    if (scopeCompare != 0) return scopeCompare;
+
+    final letterCompare =
+        ((_artifactMetaString(a, 'show_letter') ?? '').toUpperCase()).compareTo(
+          (_artifactMetaString(b, 'show_letter') ?? '').toUpperCase(),
+        );
+    if (letterCompare != 0) return letterCompare;
+
+    final clubCompare =
+        ((_artifactMetaString(a, 'club_name') ?? '').toLowerCase()).compareTo(
+          (_artifactMetaString(b, 'club_name') ?? '').toLowerCase(),
+        );
+    if (clubCompare != 0) return clubCompare;
+
+    final speciesCompare = _speciesSortRank(
+      _artifactMetaString(a, 'species'),
+    ).compareTo(_speciesSortRank(_artifactMetaString(b, 'species')));
+    if (speciesCompare != 0) return speciesCompare;
+
+    return a.id.compareTo(b.id);
+  }
+
+  int _speciesSortRank(String? species) {
+    final normalized = (species ?? '').trim().toLowerCase();
+    if (normalized == 'rabbit') return 0;
+    if (normalized == 'cavy') return 1;
+    return 2;
+  }
+
+  Future<void> _generateReportArtifact(ReportArtifactSummary artifact) async {
+    if (artifact.reportName != 'unpaid_balances_report' &&
+        artifact.reportName != 'paid_exhibitor_report') {
+      final ready = await _ensureResultsReadyForReports();
+      if (!ready) return;
+    }
+
+    setState(() {
+      _generatingReport = true;
+      _error = null;
+    });
+
+    final finished = <String>{};
+    final failed = <String, Object>{};
+
+    try {
+      await _runGenerateAllReportsLive(
+        [artifact],
+        onStarted: (_) {},
+        onFinished: finished.add,
+        onFailed: (artifactKey, error) {
+          failed[artifactKey] = error;
+        },
+      );
+
+      await _refreshDashboardOnly();
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            failed.isEmpty
+                ? '${_friendlyReportName(artifact.reportName)} generated.'
+                : '${_friendlyReportName(artifact.reportName)} failed.',
+          ),
         ),
       );
     } catch (e) {
@@ -3387,6 +4138,35 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     }
   }
 
+  Future<void> _downloadReportArtifact(ReportArtifactSummary artifact) async {
+    try {
+      if (artifact.artifactStatus != 'generated' ||
+          artifact.storageBucket?.isNotEmpty != true ||
+          artifact.storagePath?.isNotEmpty != true) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'No generated ${_friendlyReportName(artifact.reportName)} found.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      final signedUrl = await supabase.storage
+          .from(artifact.storageBucket!)
+          .createSignedUrl(artifact.storagePath!, 60 * 5);
+
+      await launchUrlString(signedUrl, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Download failed: $e')));
+    }
+  }
+
   Map<String, dynamic> _normalizeFunctionData(dynamic raw) {
     if (raw is Map<String, dynamic>) return raw;
     if (raw is Map) {
@@ -3419,6 +4199,672 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
             'Email failed.',
       );
     }
+  }
+
+  void _showCloseoutSnack(SnackBar snackBar) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(snackBar);
+  }
+
+  String _artifactScope(ReportArtifactSummary artifact) {
+    return (_artifactMetaString(artifact, 'scope') ?? '').trim().toUpperCase();
+  }
+
+  String _artifactShowLetter(ReportArtifactSummary artifact) {
+    return (_artifactMetaString(artifact, 'show_letter') ?? '')
+        .trim()
+        .toUpperCase();
+  }
+
+  bool _artifactHasSameScope(
+    ReportArtifactSummary artifact,
+    ReportArtifactSummary sourceArtifact,
+  ) {
+    final sourceScope = _artifactScope(sourceArtifact);
+    return sourceScope.isNotEmpty && _artifactScope(artifact) == sourceScope;
+  }
+
+  bool _artifactHasSameLetter(
+    ReportArtifactSummary artifact,
+    ReportArtifactSummary sourceArtifact,
+  ) {
+    final sourceLetter = _artifactShowLetter(sourceArtifact);
+    return sourceLetter.isNotEmpty &&
+        _artifactShowLetter(artifact) == sourceLetter;
+  }
+
+  int _letterEmailReportRank(String reportName) {
+    switch (reportName) {
+      case 'exhibitor_report':
+        return 0;
+      case 'legs':
+        return 1;
+      case 'details_by_breed':
+        return 0;
+      case 'exh_by_breed':
+        return 1;
+      case 'best_display_report':
+        return 2;
+      case 'sweepstakes_report':
+        return 0;
+      case 'breed_results_detail_report':
+        return 1;
+      default:
+        return 99;
+    }
+  }
+
+  int _compareEmailArtifacts(ReportArtifactSummary a, ReportArtifactSummary b) {
+    final scopeCmp = _artifactScope(a).compareTo(_artifactScope(b));
+    if (scopeCmp != 0) return scopeCmp;
+
+    final letterCmp = _artifactShowLetter(a).compareTo(_artifactShowLetter(b));
+    if (letterCmp != 0) return letterCmp;
+
+    final reportCmp = _letterEmailReportRank(
+      a.reportName,
+    ).compareTo(_letterEmailReportRank(b.reportName));
+    if (reportCmp != 0) return reportCmp;
+
+    final breedCmp = (_artifactMetaString(a, 'breed_name') ?? '')
+        .toLowerCase()
+        .compareTo((_artifactMetaString(b, 'breed_name') ?? '').toLowerCase());
+    if (breedCmp != 0) return breedCmp;
+
+    return a.reportName.compareTo(b.reportName);
+  }
+
+  int _compareClubEmailArtifacts(
+    ReportArtifactSummary a,
+    ReportArtifactSummary b,
+  ) {
+    final scopeCmp = _artifactScope(a).compareTo(_artifactScope(b));
+    if (scopeCmp != 0) return scopeCmp;
+
+    final letterCmp = _artifactShowLetter(a).compareTo(_artifactShowLetter(b));
+    if (letterCmp != 0) return letterCmp;
+
+    final reportCmp = a.reportName.compareTo(b.reportName);
+    if (reportCmp != 0) return reportCmp;
+
+    final speciesCmp = _speciesSortRank(
+      _artifactMetaString(a, 'species'),
+    ).compareTo(_speciesSortRank(_artifactMetaString(b, 'species')));
+    if (speciesCmp != 0) return speciesCmp;
+
+    final breedCmp = (_artifactMetaString(a, 'breed_name') ?? '')
+        .toLowerCase()
+        .compareTo((_artifactMetaString(b, 'breed_name') ?? '').toLowerCase());
+    if (breedCmp != 0) return breedCmp;
+
+    return a.id.compareTo(b.id);
+  }
+
+  List<ReportArtifactSummary> _allLetterExhibitorArtifactsFor({
+    required ReportArtifactSummary sourceArtifact,
+    required _ExhibitorEmailTarget exhibitor,
+  }) {
+    final artifacts =
+        (_dashboard?.reports ?? const <ReportArtifactSummary>[]).where((
+          artifact,
+        ) {
+          if (artifact.reportName != 'exhibitor_report' &&
+              artifact.reportName != 'legs') {
+            return false;
+          }
+          return _artifactIsUsableCurrent(artifact) &&
+              _artifactHasSameScope(artifact, sourceArtifact) &&
+              _artifactMatchesExhibitor(artifact, exhibitor);
+        }).toList()..sort(_compareEmailArtifacts);
+
+    return artifacts;
+  }
+
+  List<ReportArtifactSummary> _letterExhibitorArtifactsFor({
+    required ReportArtifactSummary sourceArtifact,
+    required _ExhibitorEmailTarget exhibitor,
+  }) {
+    final artifacts =
+        _allLetterExhibitorArtifactsFor(
+              sourceArtifact: sourceArtifact,
+              exhibitor: exhibitor,
+            )
+            .where(
+              (artifact) => _artifactHasSameLetter(artifact, sourceArtifact),
+            )
+            .toList()
+          ..sort(_compareEmailArtifacts);
+
+    return artifacts;
+  }
+
+  _ClubEmailTarget _clubTargetForArtifactLetter(
+    _ClubEmailTarget target,
+    ReportArtifactSummary artifact,
+  ) {
+    return _ClubEmailTarget(
+      clubName: target.clubName,
+      breedName: target.breedName,
+      scope: target.scope,
+      showLetter: _artifactShowLetter(artifact),
+      email: target.email,
+      species: target.species,
+      sanctioningBody: target.sanctioningBody,
+    );
+  }
+
+  List<ReportArtifactSummary> _allLetterClubArtifactsFor({
+    required ReportArtifactSummary sourceArtifact,
+    required _ClubEmailTarget target,
+  }) {
+    final isStateClub =
+        target.sanctioningBody.trim().toUpperCase() == 'STATE CLUB';
+    final reportNames = isStateClub
+        ? _stateClubReportKeys
+        : _breedClubReportKeys;
+    final artifactsById = <String, ReportArtifactSummary>{};
+
+    for (final reportName in reportNames) {
+      for (final artifact in _allGeneratedArtifactsWhere(reportName, (
+        artifact,
+      ) {
+        if (!_artifactHasSameScope(artifact, sourceArtifact)) return false;
+        final targetForLetter = _clubTargetForArtifactLetter(target, artifact);
+        return _artifactMatchesClubTarget(artifact, targetForLetter);
+      })) {
+        artifactsById[artifact.id] = artifact;
+      }
+    }
+
+    final artifacts = artifactsById.values.toList()
+      ..sort(_compareClubEmailArtifacts);
+    return artifacts;
+  }
+
+  List<ReportArtifactSummary> _letterClubArtifactsFor({
+    required ReportArtifactSummary sourceArtifact,
+    required _ClubEmailTarget target,
+  }) {
+    final artifacts =
+        _allLetterClubArtifactsFor(
+              sourceArtifact: sourceArtifact,
+              target: target,
+            )
+            .where(
+              (artifact) => _artifactHasSameLetter(artifact, sourceArtifact),
+            )
+            .toList()
+          ..sort(_compareClubEmailArtifacts);
+
+    return artifacts;
+  }
+
+  _ExhibitorEmailTarget _exhibitorTargetForArtifact(
+    ReportArtifactSummary sourceArtifact, {
+    String? exhibitorId,
+    String? exhibitorName,
+    String? exhibitorEmail,
+  }) {
+    final resolvedId =
+        (exhibitorId ??
+                _artifactMetaString(sourceArtifact, 'exhibitor_id') ??
+                '')
+            .trim();
+    final resolvedName =
+        (exhibitorName ??
+                _artifactMetaString(sourceArtifact, 'exhibitor_name') ??
+                'Exhibitor')
+            .trim();
+    final resolvedEmail =
+        (exhibitorEmail ??
+                _artifactMetaString(sourceArtifact, 'exhibitor_email') ??
+                _artifactMetaString(sourceArtifact, 'email') ??
+                '')
+            .trim();
+
+    return _ExhibitorEmailTarget(
+      exhibitorId: resolvedId,
+      exhibitorName: resolvedName.isEmpty ? 'Exhibitor' : resolvedName,
+      email: resolvedEmail,
+    );
+  }
+
+  Future<_ClubEmailTarget?> _clubTargetForArtifact(
+    ReportArtifactSummary sourceArtifact,
+  ) async {
+    final reportName = sourceArtifact.reportName;
+    final isStateClubReport =
+        reportName == 'details_by_breed' ||
+        reportName == 'exh_by_breed' ||
+        reportName == 'best_display_report';
+    final isBreedClubReport =
+        reportName == 'sweepstakes_report' ||
+        reportName == 'breed_results_detail_report';
+
+    if (!isStateClubReport && !isBreedClubReport) return null;
+
+    final clubTargets = await _loadClubEmailTargets();
+    final sourceScope = _artifactScope(sourceArtifact);
+    final sourceLetter = _artifactShowLetter(sourceArtifact);
+
+    final sourceSpecies = (_artifactMetaString(sourceArtifact, 'species') ?? '')
+        .trim()
+        .toLowerCase();
+
+    final matches = clubTargets.where((target) {
+      if (target.scope.trim().toUpperCase() != sourceScope) return false;
+      if (target.showLetter.trim().toUpperCase() != sourceLetter) return false;
+      if (isStateClubReport &&
+          target.sanctioningBody.trim().toUpperCase() != 'STATE CLUB') {
+        return false;
+      }
+      if (isBreedClubReport &&
+          target.sanctioningBody.trim().toUpperCase() == 'STATE CLUB') {
+        return false;
+      }
+      return _artifactMatchesClubTarget(sourceArtifact, target);
+    }).toList();
+
+    if (matches.isEmpty) return null;
+
+    matches.sort((a, b) {
+      int rank(_ClubEmailTarget target) {
+        final targetSpecies = target.species.trim().toLowerCase();
+        if (targetSpecies == sourceSpecies) return 0;
+        if (targetSpecies == 'combined') return 1;
+        return 2;
+      }
+
+      return rank(a).compareTo(rank(b));
+    });
+
+    final selected = matches.first;
+    final selectedSpecies = selected.species.trim().toLowerCase();
+    if (isStateClubReport &&
+        selectedSpecies == 'combined' &&
+        (sourceSpecies == 'rabbit' || sourceSpecies == 'cavy')) {
+      return _ClubEmailTarget(
+        clubName: selected.clubName,
+        breedName: selected.breedName,
+        scope: selected.scope,
+        showLetter: selected.showLetter,
+        email: selected.email,
+        species: sourceSpecies,
+        sanctioningBody: selected.sanctioningBody,
+      );
+    }
+
+    return selected;
+  }
+
+  String _clubSpeciesLabel(_ClubEmailTarget target) {
+    final species = target.species.trim().toLowerCase();
+    if (species == 'rabbit') return 'Rabbit ';
+    if (species == 'cavy') return 'Cavy ';
+    return '';
+  }
+
+  String _clubEmailSubject({
+    required _ClubEmailTarget target,
+    required ReportArtifactSummary sourceArtifact,
+    required bool allLetters,
+  }) {
+    final scope = _artifactScope(sourceArtifact);
+    final letter = _artifactShowLetter(sourceArtifact);
+    final suffix = allLetters ? 'All $scope Shows' : '$scope $letter';
+    final isStateClub =
+        target.sanctioningBody.trim().toUpperCase() == 'STATE CLUB';
+
+    if (isStateClub) {
+      return '${widget.showName} - ${target.clubName} ${_clubSpeciesLabel(target)}Club Reports - $suffix';
+    }
+
+    return '${widget.showName} - ${target.breedName} Club Reports - $suffix';
+  }
+
+  String _formatIncludedShowLetters(
+    List<ReportArtifactSummary> artifacts, {
+    bool includeScope = true,
+  }) {
+    final labels =
+        artifacts
+            .map((artifact) {
+              final scope = _artifactScope(artifact);
+              final letter = _artifactShowLetter(artifact);
+              if (letter.isEmpty) return '';
+              return includeScope && scope.isNotEmpty
+                  ? '$scope $letter'
+                  : letter;
+            })
+            .where((label) => label.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
+
+    if (labels.isEmpty) return 'the selected show letters';
+    if (labels.length == 1) return labels.first;
+    if (labels.length == 2) return '${labels.first} and ${labels.last}';
+    return '${labels.take(labels.length - 1).join(', ')}, and ${labels.last}';
+  }
+
+  Future<bool> _confirmEmailAllLetters({
+    required String to,
+    required String scope,
+    required List<ReportArtifactSummary> artifacts,
+  }) async {
+    final letters = _formatIncludedShowLetters(artifacts, includeScope: true);
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Email all show letters?'),
+            content: Text(
+              'You are about to email ${artifacts.length} file${artifacts.length == 1 ? '' : 's'} for $letters to $to.\n\nScope: $scope',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Send All Letters'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  Future<void> _sendExhibitorReportsForArtifactLetter({
+    required ReportArtifactSummary sourceArtifact,
+    required _ExhibitorEmailTarget exhibitor,
+  }) async {
+    if (await _blockedBySupportModeForEmailSend('Exhibitor')) return;
+
+    final ready = await _ensureResultsReadyForReports();
+    if (!ready) return;
+    if (!mounted) return;
+
+    try {
+      if (exhibitor.email.trim().isEmpty) {
+        _showCloseoutSnack(
+          const SnackBar(content: Text('No email found for this exhibitor.')),
+        );
+        return;
+      }
+
+      final artifacts = _letterExhibitorArtifactsFor(
+        sourceArtifact: sourceArtifact,
+        exhibitor: exhibitor,
+      );
+
+      if (artifacts.isEmpty) {
+        _showCloseoutSnack(
+          const SnackBar(
+            content: Text(
+              'No generated exhibitor reports found for this letter.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      final scope = _artifactScope(sourceArtifact);
+      final showLetter = _artifactShowLetter(sourceArtifact);
+
+      await _sendExhibitorArtifactsEmail(
+        artifacts: artifacts,
+        to: exhibitor.email,
+        subject: '${widget.showName} - Exhibitor Reports - $scope $showLetter',
+        message:
+            'Attached are your exhibitor reports and any earned legs for ${widget.showName} - $scope $showLetter.',
+        allowLegs: true,
+      );
+
+      if (!mounted) return;
+      _showCloseoutSnack(
+        SnackBar(content: Text('Emailed ${artifacts.length} file(s).')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      _showCloseoutSnack(SnackBar(content: Text('Email failed: $e')));
+    }
+  }
+
+  Future<void> _sendExhibitorReportsForAllLetters({
+    required ReportArtifactSummary sourceArtifact,
+    required _ExhibitorEmailTarget exhibitor,
+  }) async {
+    if (await _blockedBySupportModeForEmailSend('Exhibitor')) return;
+
+    final ready = await _ensureResultsReadyForReports();
+    if (!ready) return;
+    if (!mounted) return;
+
+    try {
+      if (exhibitor.email.trim().isEmpty) {
+        _showCloseoutSnack(
+          const SnackBar(content: Text('No email found for this exhibitor.')),
+        );
+        return;
+      }
+
+      final artifacts = _allLetterExhibitorArtifactsFor(
+        sourceArtifact: sourceArtifact,
+        exhibitor: exhibitor,
+      );
+
+      if (artifacts.isEmpty) {
+        _showCloseoutSnack(
+          const SnackBar(
+            content: Text(
+              'No generated exhibitor reports found for all letters.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      final scope = _artifactScope(sourceArtifact);
+      final confirmed = await _confirmEmailAllLetters(
+        to: exhibitor.email,
+        scope: scope,
+        artifacts: artifacts,
+      );
+      if (!confirmed) return;
+      if (!mounted) return;
+
+      await _sendExhibitorArtifactsEmail(
+        artifacts: artifacts,
+        to: exhibitor.email,
+        subject: '${widget.showName} - Exhibitor Reports - All $scope Shows',
+        message:
+            'Attached are your exhibitor reports and any earned legs for all $scope show letters from ${widget.showName}.',
+        allowLegs: true,
+      );
+
+      if (!mounted) return;
+      _showCloseoutSnack(
+        SnackBar(content: Text('Emailed ${artifacts.length} file(s).')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      _showCloseoutSnack(SnackBar(content: Text('Email failed: $e')));
+    }
+  }
+
+  Future<void> _sendClubReportsForArtifactLetter({
+    required ReportArtifactSummary sourceArtifact,
+    required _ClubEmailTarget target,
+  }) async {
+    if (await _blockedBySupportModeForEmailSend('Club')) return;
+
+    final ready = await _ensureResultsReadyForReports();
+    if (!ready) return;
+    if (!mounted) return;
+
+    try {
+      final artifacts = _letterClubArtifactsFor(
+        sourceArtifact: sourceArtifact,
+        target: target,
+      );
+
+      if (artifacts.isEmpty) {
+        _showCloseoutSnack(
+          const SnackBar(
+            content: Text('No generated club reports found for this letter.'),
+          ),
+        );
+        return;
+      }
+
+      final scope = _artifactScope(sourceArtifact);
+      final showLetter = _artifactShowLetter(sourceArtifact);
+
+      await _sendClubArtifactsEmail(
+        artifacts: artifacts,
+        to: target.email,
+        subject: _clubEmailSubject(
+          target: target,
+          sourceArtifact: sourceArtifact,
+          allLetters: false,
+        ),
+        message:
+            'Attached are the reports for ${widget.showName} - $scope $showLetter.',
+      );
+
+      if (!mounted) return;
+      _showCloseoutSnack(
+        SnackBar(content: Text('Emailed ${artifacts.length} file(s).')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      _showCloseoutSnack(SnackBar(content: Text('Email failed: $e')));
+    }
+  }
+
+  Future<void> _sendClubReportsForAllLetters({
+    required ReportArtifactSummary sourceArtifact,
+    required _ClubEmailTarget target,
+  }) async {
+    if (await _blockedBySupportModeForEmailSend('Club')) return;
+
+    final ready = await _ensureResultsReadyForReports();
+    if (!ready) return;
+    if (!mounted) return;
+
+    try {
+      final artifacts = _allLetterClubArtifactsFor(
+        sourceArtifact: sourceArtifact,
+        target: target,
+      );
+
+      if (artifacts.isEmpty) {
+        _showCloseoutSnack(
+          const SnackBar(
+            content: Text('No generated club reports found for all letters.'),
+          ),
+        );
+        return;
+      }
+
+      final scope = _artifactScope(sourceArtifact);
+      final confirmed = await _confirmEmailAllLetters(
+        to: target.email,
+        scope: scope,
+        artifacts: artifacts,
+      );
+      if (!confirmed) return;
+      if (!mounted) return;
+
+      await _sendClubArtifactsEmail(
+        artifacts: artifacts,
+        to: target.email,
+        subject: _clubEmailSubject(
+          target: target,
+          sourceArtifact: sourceArtifact,
+          allLetters: true,
+        ),
+        message:
+            'Attached are the reports for all $scope show letters from ${widget.showName}.',
+      );
+
+      if (!mounted) return;
+      _showCloseoutSnack(
+        SnackBar(content: Text('Emailed ${artifacts.length} file(s).')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      _showCloseoutSnack(SnackBar(content: Text('Email failed: $e')));
+    }
+  }
+
+  Future<void> _emailArtifactThisLetter(
+    ReportArtifactSummary sourceArtifact, {
+    String? exhibitorId,
+    String? exhibitorName,
+    String? exhibitorEmail,
+  }) async {
+    if (sourceArtifact.reportName == 'exhibitor_report' ||
+        sourceArtifact.reportName == 'legs') {
+      return _sendExhibitorReportsForArtifactLetter(
+        sourceArtifact: sourceArtifact,
+        exhibitor: _exhibitorTargetForArtifact(
+          sourceArtifact,
+          exhibitorId: exhibitorId,
+          exhibitorName: exhibitorName,
+          exhibitorEmail: exhibitorEmail,
+        ),
+      );
+    }
+
+    final target = await _clubTargetForArtifact(sourceArtifact);
+    if (target == null) {
+      if (!mounted) return;
+      _showCloseoutSnack(
+        const SnackBar(content: Text('No club email found for this report.')),
+      );
+      return;
+    }
+
+    return _sendClubReportsForArtifactLetter(
+      sourceArtifact: sourceArtifact,
+      target: target,
+    );
+  }
+
+  Future<void> _emailArtifactAllLetters(
+    ReportArtifactSummary sourceArtifact, {
+    String? exhibitorId,
+    String? exhibitorName,
+    String? exhibitorEmail,
+  }) async {
+    if (sourceArtifact.reportName == 'exhibitor_report' ||
+        sourceArtifact.reportName == 'legs') {
+      return _sendExhibitorReportsForAllLetters(
+        sourceArtifact: sourceArtifact,
+        exhibitor: _exhibitorTargetForArtifact(
+          sourceArtifact,
+          exhibitorId: exhibitorId,
+          exhibitorName: exhibitorName,
+          exhibitorEmail: exhibitorEmail,
+        ),
+      );
+    }
+
+    final target = await _clubTargetForArtifact(sourceArtifact);
+    if (target == null) {
+      if (!mounted) return;
+      _showCloseoutSnack(
+        const SnackBar(content: Text('No club email found for this report.')),
+      );
+      return;
+    }
+
+    return _sendClubReportsForAllLetters(
+      sourceArtifact: sourceArtifact,
+      target: target,
+    );
   }
 
   Future<void> _emailReportByName(
@@ -4041,6 +5487,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                                   'legs',
                                                   'sweepstakes_report',
                                                   'breed_results_detail_report',
+                                                  'details_by_breed',
+                                                  'exh_by_breed',
+                                                  'best_display_report',
                                                 }.contains(r.reportName),
                                               )
                                               .toList();
@@ -4090,7 +5539,10 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                         );
                                       }
 
-                                      await _syncClubDeliveryMetadata();
+                                      await _syncClubDeliveryMetadata(
+                                        latestFinalizeRunId:
+                                            _dashboard?.latestFinalize.id,
+                                      );
                                       await _loadData();
 
                                       if (_dashboard
@@ -4155,15 +5607,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                           Builder(
                             builder: (context) {
                               final queuedRemaining =
-                                  (_dashboard?.reports ??
-                                          const <ReportArtifactSummary>[])
-                                      .where((r) => r.isCurrent)
-                                      .where(
-                                        (r) =>
-                                            r.artifactStatus == 'queued' ||
-                                            r.artifactStatus == 'failed',
-                                      )
-                                      .toList();
+                                  _queuedRemainingReportArtifacts();
 
                               return OutlinedButton.icon(
                                 style: OutlinedButton.styleFrom(
@@ -4180,12 +5624,31 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                 onPressed: _isBusy || queuedRemaining.isEmpty
                                     ? null
                                     : () async {
+                                        await _refreshDashboardOnly();
+                                        final latestQueuedRemaining =
+                                            _queuedRemainingReportArtifacts();
+
+                                        if (latestQueuedRemaining.isEmpty) {
+                                          if (!context.mounted) return;
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            const SnackBar(
+                                              content: Text(
+                                                'No queued reports found.',
+                                              ),
+                                            ),
+                                          );
+                                          return;
+                                        }
+
+                                        if (!context.mounted) return;
                                         await showDialog<bool>(
                                           context: context,
                                           barrierDismissible: false,
                                           builder: (context) {
                                             return _GenerateAllReportsDialog(
-                                              artifacts: queuedRemaining,
+                                              artifacts: latestQueuedRemaining,
                                               onRun:
                                                   (
                                                     onStarted,
@@ -4193,7 +5656,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                                     onFailed,
                                                   ) {
                                                     return _runGenerateAllReportsLive(
-                                                      queuedRemaining,
+                                                      latestQueuedRemaining,
                                                       onStarted: onStarted,
                                                       onFinished: onFinished,
                                                       onFailed: onFailed,
@@ -4329,7 +5792,11 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                           scope: scope,
                           showLetter: showLetter,
                         ),
+                    onGenerateArtifact: _generateReportArtifact,
+                    onDownloadArtifact: _downloadReportArtifact,
                     onEmail: _emailReportByName,
+                    onEmailThisLetter: _emailArtifactThisLetter,
+                    onEmailAllLetters: _emailArtifactAllLetters,
                     loading: _generatingReport,
                     reportsBlocked: reportsBlocked,
                     reportsBlockedMessage: reportsBlockedMessage,
@@ -4665,6 +6132,10 @@ class _ReportActionsCard extends StatefulWidget {
     String? showLetter,
   })
   onDownload;
+  final Future<void> Function(ReportArtifactSummary artifact)
+  onGenerateArtifact;
+  final Future<void> Function(ReportArtifactSummary artifact)
+  onDownloadArtifact;
   final Future<void> Function(
     String reportName, {
     String? exhibitorId,
@@ -4675,6 +6146,20 @@ class _ReportActionsCard extends StatefulWidget {
     String? showLetter,
   })
   onEmail;
+  final Future<void> Function(
+    ReportArtifactSummary sourceArtifact, {
+    String? exhibitorId,
+    String? exhibitorName,
+    String? exhibitorEmail,
+  })
+  onEmailThisLetter;
+  final Future<void> Function(
+    ReportArtifactSummary sourceArtifact, {
+    String? exhibitorId,
+    String? exhibitorName,
+    String? exhibitorEmail,
+  })
+  onEmailAllLetters;
   final bool loading;
   final String showId;
   final bool reportsBlocked;
@@ -4686,7 +6171,11 @@ class _ReportActionsCard extends StatefulWidget {
     required this.groupedReportNames,
     required this.onGenerate,
     required this.onDownload,
+    required this.onGenerateArtifact,
+    required this.onDownloadArtifact,
     required this.onEmail,
+    required this.onEmailThisLetter,
+    required this.onEmailAllLetters,
     required this.loading,
     required this.reportsBlocked,
     this.reportsBlockedMessage,
@@ -4747,9 +6236,14 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
   List<String> get _currentReports =>
       widget.groupedReportNames[_selectedGroup] ?? const [];
 
-  ReportArtifactSummary? get _selectedArtifact {
+  bool get _selectedReportIsStateClub =>
+      _selectedReportName == 'details_by_breed' ||
+      _selectedReportName == 'exh_by_breed' ||
+      _selectedReportName == 'best_display_report';
+
+  List<ReportArtifactSummary> get _selectedArtifacts {
     final reportName = _selectedReportName;
-    if (reportName == null) return null;
+    if (reportName == null) return const <ReportArtifactSummary>[];
 
     var matches = widget.reports
         .where((r) => r.reportName == reportName)
@@ -4807,6 +6301,13 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
 
     final list = matches.toList()
       ..sort((a, b) {
+        if (_selectedReportIsStateClub) {
+          final speciesCmp = _artifactSpeciesRank(
+            _artifactSpecies(a),
+          ).compareTo(_artifactSpeciesRank(_artifactSpecies(b)));
+          if (speciesCmp != 0) return speciesCmp;
+        }
+
         final aDt =
             DateTime.tryParse(a.generatedAt ?? '') ??
             DateTime.fromMillisecondsSinceEpoch(0);
@@ -4816,6 +6317,11 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
         return bDt.compareTo(aDt);
       });
 
+    return list;
+  }
+
+  ReportArtifactSummary? get _selectedArtifact {
+    final list = _selectedArtifacts;
     return list.isEmpty ? null : list.first;
   }
 
@@ -4850,12 +6356,43 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
       _selectedReportName == 'exhibitor_report' ||
       _selectedReportName == 'legs';
 
-  bool get _canDownload {
-    final artifact = _selectedArtifact;
+  bool _artifactCanDownload(ReportArtifactSummary? artifact) {
     return artifact != null &&
         artifact.artifactStatus == 'generated' &&
         (artifact.storageBucket?.isNotEmpty == true) &&
         (artifact.storagePath?.isNotEmpty == true);
+  }
+
+  String _artifactSpecies(ReportArtifactSummary? artifact) {
+    final species = (artifact?.metadata['species'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
+    if (species == 'rabbit' || species == 'cavy') return species;
+    return 'combined';
+  }
+
+  int _artifactSpeciesRank(String species) {
+    if (species == 'rabbit') return 0;
+    if (species == 'cavy') return 1;
+    return 2;
+  }
+
+  String _speciesLabel(ReportArtifactSummary? artifact) {
+    final species = _artifactSpecies(artifact);
+    if (species == 'rabbit') return 'Rabbit';
+    if (species == 'cavy') return 'Cavy';
+    return 'Combined';
+  }
+
+  String _stateClubTitleForArtifact(ReportArtifactSummary artifact) {
+    final base = switch (artifact.reportName) {
+      'details_by_breed' => 'Breed Totals',
+      'exh_by_breed' => 'Exhibitor by Breed',
+      'best_display_report' => 'Display Points',
+      _ => _friendlyReportName(artifact.reportName),
+    };
+    return '$base - ${_speciesLabel(artifact)}';
   }
 
   Future<void> _loadExhibitors() async {
@@ -5305,10 +6842,242 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
     }
   }
 
+  Widget _buildArtifactActions({
+    required ReportArtifactSummary? artifact,
+    bool stateClubSpeciesCard = false,
+  }) {
+    final reportName = artifact?.reportName ?? _selectedReportName;
+    final canDownload = _artifactCanDownload(artifact);
+    final speciesLabel = stateClubSpeciesCard ? _speciesLabel(artifact) : '';
+    final emailShowLetter =
+        (artifact?.metadata['show_letter'] ?? _selectedShowLetter)
+            .toString()
+            .trim()
+            .toUpperCase();
+    final emailThisShowLabel = stateClubSpeciesCard
+        ? (emailShowLetter.isEmpty
+              ? 'Email $speciesLabel Show'
+              : 'Email $speciesLabel Show $emailShowLetter')
+        : (emailShowLetter.isEmpty
+              ? 'Email This Show'
+              : 'Email Show $emailShowLetter');
+    final emailAllShowsLabel = stateClubSpeciesCard
+        ? 'Email $speciesLabel All Shows'
+        : 'Email All Shows';
+    final emailThisShowTooltip = emailShowLetter.isEmpty
+        ? 'Sends reports for this show only.'
+        : 'Sends reports for Show $emailShowLetter only.';
+    final downloadLabel = stateClubSpeciesCard
+        ? 'Download $speciesLabel'
+        : 'Download';
+
+    final canGenerate =
+        !widget.loading &&
+        !_selectedReportBlocked &&
+        reportName != null &&
+        (_selectedReportNeedsExhibitor ? _selectedExhibitorId != null : true) &&
+        (_selectedReportNeedsBreedScope
+            ? _breedController.text.trim().isNotEmpty
+            : true) &&
+        (_selectedReportNeedsClubScope
+            ? _clubController.text.trim().isNotEmpty
+            : true);
+
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: [
+        FilledButton.icon(
+          style: FilledButton.styleFrom(
+            backgroundColor: AppColors.primaryButton,
+            foregroundColor: AppColors.primaryButtonText,
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          ),
+          onPressed: canGenerate
+              ? () async {
+                  if (stateClubSpeciesCard && artifact != null) {
+                    await widget.onGenerateArtifact(artifact);
+                    return;
+                  }
+                  await widget.onGenerate(
+                    reportName,
+                    breedName: _selectedReportNeedsBreedScope
+                        ? _breedController.text.trim()
+                        : null,
+                    clubName: _selectedReportNeedsClubScope
+                        ? _clubController.text.trim()
+                        : null,
+                    scope:
+                        _selectedReportNeedsBreedScope ||
+                            _selectedReportNeedsClubScope
+                        ? _selectedScope
+                        : null,
+                    showLetter:
+                        _selectedReportNeedsBreedScope ||
+                            _selectedReportNeedsClubScope
+                        ? _selectedShowLetter
+                        : null,
+                    exhibitorId: _selectedReportNeedsExhibitor
+                        ? _selectedExhibitorId
+                        : null,
+                    exhibitorName: _selectedReportNeedsExhibitor
+                        ? _selectedExhibitorName
+                        : null,
+                  );
+                }
+              : null,
+          icon: widget.loading
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.picture_as_pdf),
+          label: Text(widget.loading ? 'Generating...' : 'Generate'),
+        ),
+        OutlinedButton.icon(
+          onPressed: canDownload && reportName != null
+              ? () async {
+                  if (stateClubSpeciesCard && artifact != null) {
+                    await widget.onDownloadArtifact(artifact);
+                    return;
+                  }
+                  await widget.onDownload(
+                    reportName,
+                    exhibitorId: _selectedReportNeedsExhibitor
+                        ? _selectedExhibitorId
+                        : null,
+                    breedName: _selectedReportNeedsBreedScope
+                        ? _breedController.text.trim()
+                        : null,
+                    clubName: _selectedReportNeedsClubScope
+                        ? _clubController.text.trim()
+                        : null,
+                    scope:
+                        _selectedReportNeedsBreedScope ||
+                            _selectedReportNeedsClubScope
+                        ? _selectedScope
+                        : null,
+                    showLetter:
+                        _selectedReportNeedsBreedScope ||
+                            _selectedReportNeedsClubScope
+                        ? _selectedShowLetter
+                        : null,
+                  );
+                }
+              : null,
+          icon: const Icon(Icons.download),
+          label: Text(downloadLabel),
+        ),
+        if (reportName == 'arba_report')
+          OutlinedButton.icon(
+            onPressed:
+                _selectedReportCanEmail && canDownload && reportName != null
+                ? () => widget.onEmail(reportName)
+                : null,
+            icon: const Icon(Icons.email_outlined),
+            label: const Text('Email to ARBA'),
+          )
+        else ...[
+          Tooltip(
+            message: emailThisShowTooltip,
+            child: OutlinedButton.icon(
+              onPressed:
+                  _selectedReportCanEmail && canDownload && artifact != null
+                  ? () => widget.onEmailThisLetter(
+                      artifact,
+                      exhibitorId: _selectedReportNeedsExhibitor
+                          ? _selectedExhibitorId
+                          : null,
+                      exhibitorName: _selectedReportNeedsExhibitor
+                          ? _selectedExhibitorName
+                          : null,
+                      exhibitorEmail: _selectedReportNeedsExhibitor
+                          ? _selectedExhibitorEmail
+                          : null,
+                    )
+                  : null,
+              icon: const Icon(Icons.email_outlined),
+              label: Text(emailThisShowLabel),
+            ),
+          ),
+          Tooltip(
+            message: "Sends this target's reports for all shows in one email.",
+            child: OutlinedButton.icon(
+              onPressed:
+                  _selectedReportCanEmail && canDownload && artifact != null
+                  ? () => widget.onEmailAllLetters(
+                      artifact,
+                      exhibitorId: _selectedReportNeedsExhibitor
+                          ? _selectedExhibitorId
+                          : null,
+                      exhibitorName: _selectedReportNeedsExhibitor
+                          ? _selectedExhibitorName
+                          : null,
+                      exhibitorEmail: _selectedReportNeedsExhibitor
+                          ? _selectedExhibitorEmail
+                          : null,
+                    )
+                  : null,
+              icon: const Icon(Icons.mark_email_read_outlined),
+              label: Text(emailAllShowsLabel),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  List<Widget> _buildReportStatusAndActions() {
+    if (_selectedReportIsStateClub) {
+      final artifacts = _selectedArtifacts;
+      if (artifacts.isEmpty) {
+        return [
+          _ReportInfoTile(
+            reportName: _selectedReportName == null
+                ? '-'
+                : _friendlyReportName(_selectedReportName),
+            status: 'not_generated',
+            generatedAt: null,
+          ),
+          const SizedBox(height: 16),
+          _buildArtifactActions(artifact: null, stateClubSpeciesCard: true),
+        ];
+      }
+
+      return [
+        for (var index = 0; index < artifacts.length; index++) ...[
+          if (index > 0) const SizedBox(height: 16),
+          _ReportInfoTile(
+            reportName: _stateClubTitleForArtifact(artifacts[index]),
+            status: artifacts[index].artifactStatus,
+            generatedAt: artifacts[index].generatedAt,
+          ),
+          const SizedBox(height: 12),
+          _buildArtifactActions(
+            artifact: artifacts[index],
+            stateClubSpeciesCard: true,
+          ),
+        ],
+      ];
+    }
+
+    final artifact = _selectedArtifact;
+    return [
+      _ReportInfoTile(
+        reportName: _selectedReportName == null
+            ? '-'
+            : _friendlyReportName(_selectedReportName),
+        status: artifact?.artifactStatus ?? 'not_generated',
+        generatedAt: artifact?.generatedAt,
+      ),
+      const SizedBox(height: 16),
+      _buildArtifactActions(artifact: artifact),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
-    final artifact = _selectedArtifact;
-
     return _CloseoutSectionCard(
       title: 'Reports & Distribution',
       subtitle:
@@ -5669,13 +7438,7 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
         ],
 
         const SizedBox(height: 16),
-        _ReportInfoTile(
-          reportName: _selectedReportName == null
-              ? '-'
-              : _friendlyReportName(_selectedReportName),
-          status: artifact?.artifactStatus ?? 'not_generated',
-          generatedAt: artifact?.generatedAt,
-        ),
+        ..._buildReportStatusAndActions(),
 
         if (_selectedReportBlocked) ...[
           const SizedBox(height: 16),
@@ -5697,134 +7460,6 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
             ),
           ),
         ],
-
-        const SizedBox(height: 16),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: [
-            FilledButton.icon(
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primaryButton,
-                foregroundColor: AppColors.primaryButtonText,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 18,
-                  vertical: 14,
-                ),
-              ),
-              onPressed:
-                  widget.loading ||
-                      _selectedReportBlocked ||
-                      _selectedReportName == null ||
-                      (_selectedReportNeedsExhibitor &&
-                          _selectedExhibitorId == null) ||
-                      (_selectedReportNeedsBreedScope &&
-                          _breedController.text.trim().isEmpty) ||
-                      (_selectedReportNeedsClubScope &&
-                          _clubController.text.trim().isEmpty)
-                  ? null
-                  : () => widget.onGenerate(
-                      _selectedReportName!,
-                      breedName: _selectedReportNeedsBreedScope
-                          ? _breedController.text.trim()
-                          : null,
-                      clubName: _selectedReportNeedsClubScope
-                          ? _clubController.text.trim()
-                          : null,
-                      scope:
-                          _selectedReportNeedsBreedScope ||
-                              _selectedReportNeedsClubScope
-                          ? _selectedScope
-                          : null,
-                      showLetter:
-                          _selectedReportNeedsBreedScope ||
-                              _selectedReportNeedsClubScope
-                          ? _selectedShowLetter
-                          : null,
-                      exhibitorId: _selectedReportNeedsExhibitor
-                          ? _selectedExhibitorId
-                          : null,
-                      exhibitorName: _selectedReportNeedsExhibitor
-                          ? _selectedExhibitorName
-                          : null,
-                    ),
-              icon: widget.loading
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.picture_as_pdf),
-              label: Text(widget.loading ? 'Generating…' : 'Generate'),
-            ),
-            OutlinedButton.icon(
-              onPressed: _canDownload && _selectedReportName != null
-                  ? () => widget.onDownload(
-                      _selectedReportName!,
-                      exhibitorId: _selectedReportNeedsExhibitor
-                          ? _selectedExhibitorId
-                          : null,
-                      breedName: _selectedReportNeedsBreedScope
-                          ? _breedController.text.trim()
-                          : null,
-                      clubName: _selectedReportNeedsClubScope
-                          ? _clubController.text.trim()
-                          : null,
-                      scope:
-                          _selectedReportNeedsBreedScope ||
-                              _selectedReportNeedsClubScope
-                          ? _selectedScope
-                          : null,
-                      showLetter:
-                          _selectedReportNeedsBreedScope ||
-                              _selectedReportNeedsClubScope
-                          ? _selectedShowLetter
-                          : null,
-                    )
-                  : null,
-              icon: const Icon(Icons.download),
-              label: const Text('Download'),
-            ),
-            OutlinedButton.icon(
-              onPressed:
-                  _selectedReportCanEmail &&
-                      _canDownload &&
-                      _selectedReportName != null
-                  ? () => widget.onEmail(
-                      _selectedReportName!,
-                      exhibitorId: _selectedReportNeedsExhibitor
-                          ? _selectedExhibitorId
-                          : null,
-                      exhibitorEmail: _selectedReportNeedsExhibitor
-                          ? _selectedExhibitorEmail
-                          : null,
-                      breedName: _selectedReportNeedsBreedScope
-                          ? _breedController.text.trim()
-                          : null,
-                      clubName: _selectedReportNeedsClubScope
-                          ? _clubController.text.trim()
-                          : null,
-                      scope:
-                          _selectedReportNeedsBreedScope ||
-                              _selectedReportNeedsClubScope
-                          ? _selectedScope
-                          : null,
-                      showLetter:
-                          _selectedReportNeedsBreedScope ||
-                              _selectedReportNeedsClubScope
-                          ? _selectedShowLetter
-                          : null,
-                    )
-                  : null,
-              icon: const Icon(Icons.email_outlined),
-              label: Text(
-                _selectedReportName == 'arba_report'
-                    ? 'Email to ARBA'
-                    : 'Email',
-              ),
-            ),
-          ],
-        ),
       ],
     );
   }
@@ -5993,14 +7628,36 @@ class _GenerateAllReportsDialogState extends State<_GenerateAllReportsDialog> {
   }
 
   String _artifactKey(ReportArtifactSummary artifact) {
-    return '${artifact.reportName}::${artifact.id}';
+    final species =
+        {
+          'details_by_breed',
+          'exh_by_breed',
+          'best_display_report',
+        }.contains(artifact.reportName)
+        ? (artifact.metadata['species'] ?? '').toString().trim().toLowerCase()
+        : '';
+
+    return [
+      artifact.reportName,
+      artifact.id,
+      if (species.isNotEmpty) species,
+    ].join('::');
   }
 
   String _artifactLabel(ReportArtifactSummary artifact) {
     if (artifact.fileName?.trim().isNotEmpty ?? false) {
       return artifact.fileName!.trim();
     }
-    return _friendlyReportName(artifact.reportName);
+    final species = (artifact.metadata['species'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
+    final speciesLabel = species == 'rabbit'
+        ? ' Rabbit'
+        : species == 'cavy'
+        ? ' Cavy'
+        : '';
+    return '${_friendlyReportName(artifact.reportName)}$speciesLabel';
   }
 
   void _scheduleProgressRefresh() {
@@ -6067,8 +7724,20 @@ class _GenerateAllReportsDialogState extends State<_GenerateAllReportsDialog> {
 
   @override
   Widget build(BuildContext context) {
+    const dialogBackground = Color(0xFF3D1B78);
+    const primaryText = Colors.white;
+    const secondaryText = Color(0xFFD8CCF4);
+    const warningText = Color(0xFFFFB4AB);
+    const successText = Color(0xFF8BE28B);
+    const queuedText = Color(0xFFC6B8E8);
+
     return AlertDialog(
-      title: const Text('Generating Reports'),
+      backgroundColor: dialogBackground,
+      surfaceTintColor: Colors.transparent,
+      title: const Text(
+        'Generating Reports',
+        style: TextStyle(color: primaryText, fontWeight: FontWeight.w700),
+      ),
       content: SizedBox(
         width: 520,
         child: Column(
@@ -6079,15 +7748,23 @@ class _GenerateAllReportsDialogState extends State<_GenerateAllReportsDialog> {
               'Please do not leave this window while reports are generating. This could take several minutes.',
               style: TextStyle(
                 fontSize: 13,
-                color: Colors.red,
+                color: warningText,
                 fontWeight: FontWeight.w500,
               ),
             ),
             const SizedBox(height: 12),
-            LinearProgressIndicator(value: _finished ? 1 : _progress),
+            LinearProgressIndicator(
+              value: _finished ? 1 : _progress,
+              backgroundColor: Colors.white24,
+              color: AppColors.gold,
+            ),
             const SizedBox(height: 12),
             Text(
               '${_completed.length + _failed.length} of ${widget.artifacts.length} reports processed',
+              style: const TextStyle(
+                color: primaryText,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             const SizedBox(height: 12),
             SizedBox(
@@ -6108,11 +7785,11 @@ class _GenerateAllReportsDialogState extends State<_GenerateAllReportsDialog> {
 
                   if (failedMessage != null) {
                     icon = Icons.error;
-                    color = Colors.red;
+                    color = warningText;
                     status = 'Failed';
                   } else if (isDone) {
                     icon = Icons.check_circle;
-                    color = Colors.green;
+                    color = successText;
                     status = 'Done';
                   } else if (isRunning) {
                     icon = Icons.autorenew;
@@ -6120,7 +7797,7 @@ class _GenerateAllReportsDialogState extends State<_GenerateAllReportsDialog> {
                     status = 'Running';
                   } else {
                     icon = Icons.schedule;
-                    color = Colors.grey;
+                    color = queuedText;
                     status = 'Queued';
                   }
 
@@ -6131,7 +7808,13 @@ class _GenerateAllReportsDialogState extends State<_GenerateAllReportsDialog> {
                         dense: true,
                         contentPadding: EdgeInsets.zero,
                         leading: Icon(icon, color: color),
-                        title: Text(_artifactLabel(artifact)),
+                        title: Text(
+                          _artifactLabel(artifact),
+                          style: const TextStyle(
+                            color: primaryText,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                         subtitle: Text(
                           (artifact.metadata['exhibitor_name'] ??
                                       artifact.metadata['breed_name'] ??
@@ -6144,8 +7827,15 @@ class _GenerateAllReportsDialogState extends State<_GenerateAllReportsDialog> {
                                         artifact.metadata['breed_name'])
                                     .toString()
                                     .trim(),
+                          style: const TextStyle(color: secondaryText),
                         ),
-                        trailing: Text(status),
+                        trailing: Text(
+                          status,
+                          style: TextStyle(
+                            color: color,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
                       if (failedMessage != null)
                         Padding(
@@ -6153,7 +7843,7 @@ class _GenerateAllReportsDialogState extends State<_GenerateAllReportsDialog> {
                           child: Text(
                             failedMessage,
                             style: const TextStyle(
-                              color: Colors.red,
+                              color: warningText,
                               fontSize: 12,
                             ),
                           ),
@@ -6165,7 +7855,7 @@ class _GenerateAllReportsDialogState extends State<_GenerateAllReportsDialog> {
             ),
             if (_error != null) ...[
               const SizedBox(height: 12),
-              Text(_error!, style: const TextStyle(color: Colors.red)),
+              Text(_error!, style: const TextStyle(color: warningText)),
             ],
           ],
         ),
@@ -6173,6 +7863,10 @@ class _GenerateAllReportsDialogState extends State<_GenerateAllReportsDialog> {
       actions: [
         TextButton(
           onPressed: _finished ? () => Navigator.of(context).pop(true) : null,
+          style: TextButton.styleFrom(
+            foregroundColor: primaryText,
+            disabledForegroundColor: secondaryText,
+          ),
           child: Text(_finished ? 'Close' : 'Working...'),
         ),
       ],
@@ -6192,12 +7886,25 @@ class _ExhibitorEmailTarget {
   });
 }
 
+class _StateClubReportContact {
+  final String clubName;
+  final String species;
+  final String email;
+
+  const _StateClubReportContact({
+    required this.clubName,
+    required this.species,
+    required this.email,
+  });
+}
+
 class _ClubEmailTarget {
   final String clubName;
   final String breedName;
   final String scope; // OPEN / YOUTH
   final String showLetter;
   final String email;
+  final String species;
   final String sanctioningBody; // NATIONAL CLUB / STATE BREED CLUB / STATE CLUB
 
   const _ClubEmailTarget({
@@ -6206,6 +7913,7 @@ class _ClubEmailTarget {
     required this.scope,
     required this.showLetter,
     required this.email,
+    required this.species,
     required this.sanctioningBody,
   });
 }

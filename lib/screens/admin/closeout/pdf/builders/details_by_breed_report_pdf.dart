@@ -14,10 +14,12 @@ class DetailsByBreedReportPdf {
   DetailsByBreedReportPdf({this.logoBytes});
 
   Future<pw.ThemeData> _theme() async {
-    final regular =
-        pw.Font.ttf(await rootBundle.load('assets/fonts/NotoSans-Regular.ttf'));
-    final bold =
-        pw.Font.ttf(await rootBundle.load('assets/fonts/NotoSans-Bold.ttf'));
+    final regular = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSans-Regular.ttf'),
+    );
+    final bold = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSans-Bold.ttf'),
+    );
     return pw.ThemeData.withFont(base: regular, bold: bold);
   }
 
@@ -53,30 +55,39 @@ class DetailsByBreedReportPdf {
       ),
     );
 
+    final speciesPart = _speciesFilePart(request.species);
+
     return ReportFileResult(
       fileName:
-          '${_clean(data.showName)}_Details_By_Breed_${_clean(data.scope)}_${_clean(data.showLetter)}.pdf',
+          '${_clean(data.showName)}_Breed_Totals${speciesPart}_${_clean(data.scope)}_${_clean(data.showLetter)}.pdf',
       mimeType: 'application/pdf',
       bytes: await pdf.save(),
     );
   }
 
+  String _speciesFilePart(String? species) {
+    final normalized = (species ?? '').trim().toLowerCase();
+    if (normalized == 'rabbit') return '_Rabbit';
+    if (normalized == 'cavy') return '_Cavy';
+    return '';
+  }
+
   pw.Widget _header(DetailsByBreedReportData data) {
     pw.Widget item(String label, String value) => pw.Padding(
-          padding: const pw.EdgeInsets.only(bottom: 3),
-          child: pw.RichText(
-            text: pw.TextSpan(
-              style: const pw.TextStyle(fontSize: 7.5),
-              children: [
-                pw.TextSpan(
-                  text: '$label: ',
-                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                ),
-                pw.TextSpan(text: value.isEmpty ? '—' : value),
-              ],
+      padding: const pw.EdgeInsets.only(bottom: 3),
+      child: pw.RichText(
+        text: pw.TextSpan(
+          style: const pw.TextStyle(fontSize: 7.5),
+          children: [
+            pw.TextSpan(
+              text: '$label: ',
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
             ),
-          ),
-        );
+            pw.TextSpan(text: value.isEmpty ? '—' : value),
+          ],
+        ),
+      ),
+    );
 
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -89,19 +100,27 @@ class DetailsByBreedReportPdf {
                 width: 70,
                 height: 46,
                 alignment: pw.Alignment.center,
-                child: pw.Image(pw.MemoryImage(logoBytes!), fit: pw.BoxFit.contain),
+                child: pw.Image(
+                  pw.MemoryImage(logoBytes!),
+                  fit: pw.BoxFit.contain,
+                ),
               ),
             if (logoBytes != null) pw.SizedBox(width: 12),
             pw.Expanded(
               child: pw.Text(
                 'Show Report — Details by Breed',
                 textAlign: pw.TextAlign.center,
-                style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold),
+                style: pw.TextStyle(
+                  fontSize: 15,
+                  fontWeight: pw.FontWeight.bold,
+                ),
               ),
             ),
             pw.SizedBox(width: 12),
-            pw.Text('Report Date: ${data.reportDate}',
-                style: const pw.TextStyle(fontSize: 7.5)),
+            pw.Text(
+              'Report Date: ${data.reportDate}',
+              style: const pw.TextStyle(fontSize: 7.5),
+            ),
           ],
         ),
         pw.SizedBox(height: 8),
@@ -193,7 +212,11 @@ class DetailsByBreedReportPdf {
               _cell(_classSex(row.className, row.sex)),
               _cell(row.exhibitorName),
               _cell('${row.showAnimals} / ${row.showExhibitors}', center: true),
-              _cell(row.additionalAwards.isEmpty ? '—' : row.additionalAwards.join(', ')),
+              _cell(
+                row.additionalAwards.isEmpty
+                    ? '—'
+                    : row.additionalAwards.join(', '),
+              ),
             ],
           ),
       ],
@@ -234,9 +257,7 @@ class DetailsByBreedReportPdf {
               pw.SizedBox(width: 5),
               pw.Expanded(
                 child: pw.Text(
-                  breed.judgeName.isEmpty
-                      ? 'Not assigned'
-                      : breed.judgeName,
+                  breed.judgeName.isEmpty ? 'Not assigned' : breed.judgeName,
                   style: const pw.TextStyle(fontSize: 8),
                 ),
               ),
@@ -263,7 +284,10 @@ class DetailsByBreedReportPdf {
           pw.Container(height: .5, color: PdfColors.grey400),
           if (variety.bov != null || variety.bosv != null) ...[
             pw.SizedBox(height: 3),
-            _breedAwardsTable([if (variety.bov != null) variety.bov!, if (variety.bosv != null) variety.bosv!]),
+            _breedAwardsTable([
+              if (variety.bov != null) variety.bov!,
+              if (variety.bosv != null) variety.bosv!,
+            ]),
           ],
           for (final clazz in variety.classes) ...[
             pw.SizedBox(height: 5),
@@ -273,7 +297,6 @@ class DetailsByBreedReportPdf {
       ],
     );
   }
-
 
   pw.Widget _specialAwardsBlock(List<DetailsByBreedAwardRow> rows) {
     return pw.Container(
@@ -290,16 +313,15 @@ class DetailsByBreedReportPdf {
             color: PdfColors.grey200,
             child: pw.Text(
               'Special Awards',
-              style: pw.TextStyle(
-                fontSize: 8,
-                fontWeight: pw.FontWeight.bold,
-              ),
+              style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
             ),
           ),
           pw.Table(
             border: const pw.TableBorder(
-              horizontalInside:
-                  pw.BorderSide(color: PdfColors.grey300, width: .35),
+              horizontalInside: pw.BorderSide(
+                color: PdfColors.grey300,
+                width: .35,
+              ),
             ),
             columnWidths: const {
               0: pw.FlexColumnWidth(1.15),
@@ -358,7 +380,11 @@ class DetailsByBreedReportPdf {
               _cell(_classSex(row.className, row.sex)),
               _cell(row.exhibitorName),
               _cell('${row.animalsShown}/${row.exhibitorCount}', center: true),
-              _cell(row.additionalAwards.isEmpty ? '—' : row.additionalAwards.join(', ')),
+              _cell(
+                row.additionalAwards.isEmpty
+                    ? '—'
+                    : row.additionalAwards.join(', '),
+              ),
             ],
           ),
       ],
@@ -375,7 +401,10 @@ class DetailsByBreedReportPdf {
         ),
         pw.SizedBox(height: 2),
         if (clazz.placements.isEmpty)
-          pw.Text('No recorded placements.', style: const pw.TextStyle(fontSize: 7))
+          pw.Text(
+            'No recorded placements.',
+            style: const pw.TextStyle(fontSize: 7),
+          )
         else
           pw.Table(
             columnWidths: const {
@@ -430,12 +459,14 @@ class DetailsByBreedReportPdf {
   }
 
   pw.Widget _sectionTitle(String text) => pw.Container(
-        width: double.infinity,
-        padding: const pw.EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-        color: PdfColors.grey200,
-        child: pw.Text(text,
-            style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
-      );
+    width: double.infinity,
+    padding: const pw.EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+    color: PdfColors.grey200,
+    child: pw.Text(
+      text,
+      style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+    ),
+  );
 
   pw.Widget _cell(String text, {bool bold = false, bool center = false}) {
     return pw.Padding(
@@ -452,9 +483,9 @@ class DetailsByBreedReportPdf {
   }
 
   pw.Widget _plainCell(String text) => pw.Padding(
-        padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
-        child: pw.Text(text, style: const pw.TextStyle(fontSize: 6.8)),
-      );
+    padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
+    child: pw.Text(text, style: const pw.TextStyle(fontSize: 6.8)),
+  );
 
   String _classSex(String className, String sex) {
     final parts = <String>[
@@ -465,16 +496,18 @@ class DetailsByBreedReportPdf {
   }
 
   pw.Widget _footer(pw.Context context) => pw.Row(
-        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-        children: [
-          pw.Text('Generated by RingMaster Show',
-              style: const pw.TextStyle(fontSize: 7)),
-          pw.Text(
-            'Page ${context.pageNumber} of ${context.pagesCount}',
-            style: const pw.TextStyle(fontSize: 7),
-          ),
-        ],
-      );
+    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+    children: [
+      pw.Text(
+        'Generated by RingMaster Show',
+        style: const pw.TextStyle(fontSize: 7),
+      ),
+      pw.Text(
+        'Page ${context.pageNumber} of ${context.pagesCount}',
+        style: const pw.TextStyle(fontSize: 7),
+      ),
+    ],
+  );
 
   String _clean(String value) => value
       .replaceAll(RegExp(r'[^\w\s-]'), '')

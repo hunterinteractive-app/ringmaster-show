@@ -7,6 +7,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../../models/base/report_file_result.dart';
+import '../../models/base/report_request.dart';
 import '../../models/exhibitor/best_display_report_data.dart';
 
 class BestDisplayReportPdfBuilder {
@@ -58,9 +59,11 @@ class BestDisplayReportPdfBuilder {
                 ),
               ),
               pw.SizedBox(height: 10),
-              for (var index = 0;
-                  index < data.breedSections.length;
-                  index++) ...[
+              for (
+                var index = 0;
+                index < data.breedSections.length;
+                index++
+              ) ...[
                 if (index > 0) pw.NewPage(),
                 ..._buildBreedSection(data.breedSections[index]),
               ],
@@ -81,10 +84,7 @@ class BestDisplayReportPdfBuilder {
       await rootBundle.load('assets/fonts/NotoSans-Bold.ttf'),
     );
 
-    return _BestDisplayFonts(
-      regular: regular,
-      bold: bold,
-    );
+    return _BestDisplayFonts(regular: regular, bold: bold);
   }
 
   pw.PageTheme _pageTheme(_BestDisplayFonts fonts) {
@@ -105,10 +105,7 @@ class BestDisplayReportPdfBuilder {
       padding: const pw.EdgeInsets.only(bottom: 8),
       decoration: const pw.BoxDecoration(
         border: pw.Border(
-          bottom: pw.BorderSide(
-            width: 0.7,
-            color: PdfColors.grey600,
-          ),
+          bottom: pw.BorderSide(width: 0.7, color: PdfColors.grey600),
         ),
       ),
       child: pw.Row(
@@ -170,13 +167,9 @@ class BestDisplayReportPdfBuilder {
   }
 
   pw.Widget _buildSummary(BestDisplayReportData data) {
-    final eligibleCount = data.allRows
-        .where((row) => row.isEligible)
-        .length;
+    final eligibleCount = data.allRows.where((row) => row.isEligible).length;
 
-    final winnerCount = data.allRows
-        .where((row) => row.isWinner)
-        .length;
+    final winnerCount = data.allRows.where((row) => row.isWinner).length;
 
     final tiedSectionCount = data.sections
         .where((section) => section.hasFirstPlaceTie)
@@ -190,43 +183,22 @@ class BestDisplayReportPdfBuilder {
       padding: const pw.EdgeInsets.all(8),
       decoration: pw.BoxDecoration(
         color: PdfColors.grey100,
-        border: pw.Border.all(
-          color: PdfColors.grey700,
-          width: 0.4,
-        ),
+        border: pw.Border.all(color: PdfColors.grey700, width: 0.4),
         borderRadius: pw.BorderRadius.circular(4),
       ),
       child: pw.Row(
         children: <pw.Widget>[
-          _summaryItem(
-            'Sections',
-            data.sections.length.toString(),
-          ),
+          _summaryItem('Sections', data.sections.length.toString()),
           _summaryDivider(),
-          _summaryItem(
-            'Standings',
-            data.totalStandingRows.toString(),
-          ),
+          _summaryItem('Standings', data.totalStandingRows.toString()),
           _summaryDivider(),
-          _summaryItem(
-            'Eligible Displays',
-            eligibleCount.toString(),
-          ),
+          _summaryItem('Eligible Displays', eligibleCount.toString()),
           _summaryDivider(),
-          _summaryItem(
-            'Winners',
-            winnerCount.toString(),
-          ),
+          _summaryItem('Winners', winnerCount.toString()),
           _summaryDivider(),
-          _summaryItem(
-            'Breed Winners',
-            breedWinnerCount.toString(),
-          ),
+          _summaryItem('Breed Winners', breedWinnerCount.toString()),
           _summaryDivider(),
-          _summaryItem(
-            'First-Place Ties',
-            tiedSectionCount.toString(),
-          ),
+          _summaryItem('First-Place Ties', tiedSectionCount.toString()),
         ],
       ),
     );
@@ -239,32 +211,20 @@ class BestDisplayReportPdfBuilder {
         children: <pw.Widget>[
           pw.Text(
             value,
-            style: pw.TextStyle(
-              fontSize: 13,
-              fontWeight: pw.FontWeight.bold,
-            ),
+            style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold),
           ),
           pw.SizedBox(height: 2),
-          pw.Text(
-            label,
-            style: const pw.TextStyle(fontSize: 8),
-          ),
+          pw.Text(label, style: const pw.TextStyle(fontSize: 8)),
         ],
       ),
     );
   }
 
   pw.Widget _summaryDivider() {
-    return pw.Container(
-      width: 0.5,
-      height: 28,
-      color: PdfColors.grey400,
-    );
+    return pw.Container(width: 0.5, height: 28, color: PdfColors.grey400);
   }
 
-  List<pw.Widget> _buildSection(
-    BestDisplaySectionData section,
-  ) {
+  List<pw.Widget> _buildSection(BestDisplaySectionData section) {
     return <pw.Widget>[
       _buildSectionHeader(section),
       pw.SizedBox(height: 6),
@@ -278,21 +238,13 @@ class BestDisplayReportPdfBuilder {
     ];
   }
 
-  pw.Widget _buildSectionHeader(
-    BestDisplaySectionData section,
-  ) {
+  pw.Widget _buildSectionHeader(BestDisplaySectionData section) {
     return pw.Container(
       margin: const pw.EdgeInsets.only(top: 2),
-      padding: const pw.EdgeInsets.symmetric(
-        horizontal: 8,
-        vertical: 6,
-      ),
+      padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: pw.BoxDecoration(
         color: PdfColors.grey300,
-        border: pw.Border.all(
-          color: PdfColors.grey700,
-          width: 0.4,
-        ),
+        border: pw.Border.all(color: PdfColors.grey700, width: 0.4),
         borderRadius: const pw.BorderRadius.only(
           topLeft: pw.Radius.circular(4),
           topRight: pw.Radius.circular(4),
@@ -303,65 +255,42 @@ class BestDisplayReportPdfBuilder {
           pw.Expanded(
             child: pw.Text(
               section.displayName,
-              style: pw.TextStyle(
-                fontSize: 11,
-                fontWeight: pw.FontWeight.bold,
-              ),
+              style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
             ),
           ),
           pw.Text(
             '${section.rows.length} exhibitor'
             '${section.rows.length == 1 ? '' : 's'}',
-            style: pw.TextStyle(
-              fontSize: 9,
-              fontWeight: pw.FontWeight.bold,
-            ),
+            style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
           ),
         ],
       ),
     );
   }
 
-  pw.Widget _buildWinnerNotice(
-    BestDisplayStandingRow winner,
-  ) {
+  pw.Widget _buildWinnerNotice(BestDisplayStandingRow winner) {
     return pw.Container(
-      padding: const pw.EdgeInsets.symmetric(
-        horizontal: 8,
-        vertical: 6,
-      ),
+      padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: pw.BoxDecoration(
         color: PdfColors.grey100,
-        border: pw.Border.all(
-          color: PdfColors.grey600,
-          width: 0.4,
-        ),
+        border: pw.Border.all(color: PdfColors.grey600, width: 0.4),
         borderRadius: pw.BorderRadius.circular(4),
       ),
       child: pw.Row(
         children: <pw.Widget>[
           pw.Text(
             'Winner: ',
-            style: pw.TextStyle(
-              fontSize: 9,
-              fontWeight: pw.FontWeight.bold,
-            ),
+            style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
           ),
           pw.Expanded(
             child: pw.Text(
               winner.exhibitorName,
-              style: pw.TextStyle(
-                fontSize: 9,
-                fontWeight: pw.FontWeight.bold,
-              ),
+              style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
             ),
           ),
           pw.Text(
             '${_formatPoints(winner.displayPoints)} points',
-            style: pw.TextStyle(
-              fontSize: 9,
-              fontWeight: pw.FontWeight.bold,
-            ),
+            style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
           ),
         ],
       ),
@@ -370,37 +299,23 @@ class BestDisplayReportPdfBuilder {
 
   pw.Widget _buildTieNotice() {
     return pw.Container(
-      padding: const pw.EdgeInsets.symmetric(
-        horizontal: 8,
-        vertical: 6,
-      ),
+      padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: pw.BoxDecoration(
         color: PdfColors.grey100,
-        border: pw.Border.all(
-          color: PdfColors.grey600,
-          width: 0.4,
-        ),
+        border: pw.Border.all(color: PdfColors.grey600, width: 0.4),
         borderRadius: pw.BorderRadius.circular(4),
       ),
       child: pw.Text(
         'First-place tie detected. The sponsoring club must resolve '
         'the tie before a winner is recorded.',
-        style: pw.TextStyle(
-          fontSize: 9,
-          fontWeight: pw.FontWeight.bold,
-        ),
+        style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
       ),
     );
   }
 
-  pw.Widget _buildStandingsTable(
-    List<BestDisplayStandingRow> rows,
-  ) {
+  pw.Widget _buildStandingsTable(List<BestDisplayStandingRow> rows) {
     return pw.Table(
-      border: pw.TableBorder.all(
-        color: PdfColors.grey700,
-        width: 0.4,
-      ),
+      border: pw.TableBorder.all(color: PdfColors.grey700, width: 0.4),
       columnWidths: const <int, pw.TableColumnWidth>{
         0: pw.FixedColumnWidth(38),
         1: pw.FlexColumnWidth(2.4),
@@ -422,15 +337,10 @@ class BestDisplayReportPdfBuilder {
   }
 
   pw.TableRow _standingsHeaderRow() {
-    final style = pw.TextStyle(
-      fontSize: 7.5,
-      fontWeight: pw.FontWeight.bold,
-    );
+    final style = pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold);
 
     return pw.TableRow(
-      decoration: const pw.BoxDecoration(
-        color: PdfColors.grey300,
-      ),
+      decoration: const pw.BoxDecoration(color: PdfColors.grey300),
       children: <pw.Widget>[
         _cell('Rank', style: style, isHeader: true),
         _cell('Exhibitor', style: style, isHeader: true),
@@ -447,49 +357,32 @@ class BestDisplayReportPdfBuilder {
     );
   }
 
-  pw.TableRow _standingsDataRow(
-    BestDisplayStandingRow row,
-  ) {
+  pw.TableRow _standingsDataRow(BestDisplayStandingRow row) {
     final style = pw.TextStyle(
       fontSize: 7.5,
-      fontWeight: row.isWinner
-          ? pw.FontWeight.bold
-          : pw.FontWeight.normal,
-      color: row.isEligible
-          ? PdfColors.black
-          : PdfColors.grey700,
+      fontWeight: row.isWinner ? pw.FontWeight.bold : pw.FontWeight.normal,
+      color: row.isEligible ? PdfColors.black : PdfColors.grey700,
     );
 
     final background = row.isWinner
         ? PdfColors.grey200
         : row.isEligible
-            ? PdfColors.white
-            : PdfColors.grey100;
+        ? PdfColors.white
+        : PdfColors.grey100;
 
     return pw.TableRow(
-      decoration: pw.BoxDecoration(
-        color: background,
-      ),
+      decoration: pw.BoxDecoration(color: background),
       children: <pw.Widget>[
         _cell(row.rankLabel, style: style),
         _cell(row.exhibitorName, style: style),
-        _cell(
-          row.qualifyingEntryCount.toString(),
-          style: style,
-        ),
-        _cell(
-          row.pointEarningEntryCount.toString(),
-          style: style,
-        ),
+        _cell(row.qualifyingEntryCount.toString(), style: style),
+        _cell(row.pointEarningEntryCount.toString(), style: style),
         _cell(row.firstPlaceCount.toString(), style: style),
         _cell(row.secondPlaceCount.toString(), style: style),
         _cell(row.thirdPlaceCount.toString(), style: style),
         _cell(row.fourthPlaceCount.toString(), style: style),
         _cell(row.fifthPlaceCount.toString(), style: style),
-        _cell(
-          _formatPoints(row.displayPoints),
-          style: style,
-        ),
+        _cell(_formatPoints(row.displayPoints), style: style),
         _cell(row.statusLabel, style: style),
       ],
     );
@@ -522,8 +415,7 @@ class BestDisplayReportPdfBuilder {
         children: <pw.Widget>[
           pw.Divider(thickness: 0.5),
           pw.Row(
-            mainAxisAlignment:
-                pw.MainAxisAlignment.spaceBetween,
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: <pw.Widget>[
               pw.Text(
                 'Generated by RingMaster Show',
@@ -558,7 +450,7 @@ class BestDisplayReportPdfBuilder {
 
   Future<ReportFileResult> buildFile(
     BestDisplayReportData data,
-    dynamic request,
+    ReportRequest request,
   ) async {
     final bytes = await build(data);
 
@@ -566,10 +458,18 @@ class BestDisplayReportPdfBuilder {
         .replaceAll(RegExp(r'[^A-Za-z0-9]+'), '_')
         .replaceAll(RegExp(r'_+'), '_')
         .replaceAll(RegExp(r'^_|_$'), '');
+    final speciesPart = _speciesFilePart(request.species);
+    final scopePart = _clean(request.scope ?? '');
+    final showLetterPart = _clean(request.showLetter ?? '');
+    final sectionParts = [
+      if (scopePart.isNotEmpty) scopePart,
+      if (showLetterPart.isNotEmpty) showLetterPart,
+    ].join('_');
+    final suffix = sectionParts.isEmpty ? '' : '_$sectionParts';
 
     final fileName = safeShowName.isEmpty
-        ? 'Best_Display_Report.pdf'
-        : '${safeShowName}_Best_Display_Report.pdf';
+        ? 'Display_Points$speciesPart$suffix.pdf'
+        : '${safeShowName}_Display_Points$speciesPart$suffix.pdf';
 
     return ReportFileResult(
       bytes: bytes,
@@ -578,9 +478,20 @@ class BestDisplayReportPdfBuilder {
     );
   }
 
-  List<pw.Widget> _buildBreedSection(
-    BestDisplayBreedSectionData section,
-  ) {
+  String _speciesFilePart(String? species) {
+    final normalized = (species ?? '').trim().toLowerCase();
+    if (normalized == 'rabbit') return '_Rabbit';
+    if (normalized == 'cavy') return '_Cavy';
+    return '';
+  }
+
+  String _clean(String value) => value
+      .replaceAll(RegExp(r'[^\w\s-]'), '')
+      .trim()
+      .replaceAll(RegExp(r'\s+'), '_')
+      .replaceAll(RegExp(r'_+'), '_');
+
+  List<pw.Widget> _buildBreedSection(BestDisplayBreedSectionData section) {
     return <pw.Widget>[
       _buildBreedSectionHeader(section),
       pw.SizedBox(height: 6),
@@ -594,21 +505,13 @@ class BestDisplayReportPdfBuilder {
     ];
   }
 
-  pw.Widget _buildBreedSectionHeader(
-    BestDisplayBreedSectionData section,
-  ) {
+  pw.Widget _buildBreedSectionHeader(BestDisplayBreedSectionData section) {
     return pw.Container(
       margin: const pw.EdgeInsets.only(top: 2),
-      padding: const pw.EdgeInsets.symmetric(
-        horizontal: 8,
-        vertical: 6,
-      ),
+      padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: pw.BoxDecoration(
         color: PdfColors.grey300,
-        border: pw.Border.all(
-          color: PdfColors.grey700,
-          width: 0.4,
-        ),
+        border: pw.Border.all(color: PdfColors.grey700, width: 0.4),
         borderRadius: const pw.BorderRadius.only(
           topLeft: pw.Radius.circular(4),
           topRight: pw.Radius.circular(4),
@@ -619,84 +522,56 @@ class BestDisplayReportPdfBuilder {
           pw.Expanded(
             child: pw.Text(
               section.displayName,
-              style: pw.TextStyle(
-                fontSize: 11,
-                fontWeight: pw.FontWeight.bold,
-              ),
+              style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
             ),
           ),
           pw.Text(
             '${section.rows.length} exhibitor'
             '${section.rows.length == 1 ? '' : 's'}',
-            style: pw.TextStyle(
-              fontSize: 9,
-              fontWeight: pw.FontWeight.bold,
-            ),
+            style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
           ),
         ],
       ),
     );
   }
 
-  pw.Widget _buildBreedWinnerNotice(
-    BestDisplayBreedStandingRow winner,
-  ) {
+  pw.Widget _buildBreedWinnerNotice(BestDisplayBreedStandingRow winner) {
     return pw.Container(
-      padding: const pw.EdgeInsets.symmetric(
-        horizontal: 8,
-        vertical: 6,
-      ),
+      padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: pw.BoxDecoration(
         color: PdfColors.grey100,
-        border: pw.Border.all(
-          color: PdfColors.grey600,
-          width: 0.4,
-        ),
+        border: pw.Border.all(color: PdfColors.grey600, width: 0.4),
         borderRadius: pw.BorderRadius.circular(4),
       ),
       child: pw.Row(
         children: <pw.Widget>[
           pw.Text(
             'Winner: ',
-            style: pw.TextStyle(
-              fontSize: 9,
-              fontWeight: pw.FontWeight.bold,
-            ),
+            style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
           ),
           pw.Expanded(
             child: pw.Text(
               winner.exhibitorName,
-              style: pw.TextStyle(
-                fontSize: 9,
-                fontWeight: pw.FontWeight.bold,
-              ),
+              style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
             ),
           ),
           pw.Text(
             '${_formatPoints(winner.displayPoints)} points',
-            style: pw.TextStyle(
-              fontSize: 9,
-              fontWeight: pw.FontWeight.bold,
-            ),
+            style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
           ),
         ],
       ),
     );
   }
 
-  pw.Widget _buildBreedStandingsTable(
-    List<BestDisplayBreedStandingRow> rows,
-  ) {
+  pw.Widget _buildBreedStandingsTable(List<BestDisplayBreedStandingRow> rows) {
     final headerStyle = pw.TextStyle(
       fontSize: 7.5,
       fontWeight: pw.FontWeight.bold,
     );
 
     return pw.Table(
-      border: pw.TableBorder.all(
-        color: PdfColors.grey700,
-        width: 0.4,
-      ),
+      border: pw.TableBorder.all(color: PdfColors.grey700, width: 0.4),
       columnWidths: const <int, pw.TableColumnWidth>{
         0: pw.FixedColumnWidth(44),
         1: pw.FlexColumnWidth(2.6),
@@ -707,9 +582,7 @@ class BestDisplayReportPdfBuilder {
       },
       children: <pw.TableRow>[
         pw.TableRow(
-          decoration: const pw.BoxDecoration(
-            color: PdfColors.grey300,
-          ),
+          decoration: const pw.BoxDecoration(color: PdfColors.grey300),
           children: <pw.Widget>[
             _cell('Rank', style: headerStyle, isHeader: true),
             _cell('Exhibitor', style: headerStyle, isHeader: true),
@@ -725,36 +598,23 @@ class BestDisplayReportPdfBuilder {
             fontWeight: row.isWinner
                 ? pw.FontWeight.bold
                 : pw.FontWeight.normal,
-            color: row.isEligible
-                ? PdfColors.black
-                : PdfColors.grey700,
+            color: row.isEligible ? PdfColors.black : PdfColors.grey700,
           );
 
           final background = row.isWinner
               ? PdfColors.grey200
               : row.isEligible
-                  ? PdfColors.white
-                  : PdfColors.grey100;
+              ? PdfColors.white
+              : PdfColors.grey100;
 
           return pw.TableRow(
-            decoration: pw.BoxDecoration(
-              color: background,
-            ),
+            decoration: pw.BoxDecoration(color: background),
             children: <pw.Widget>[
               _cell(row.rankLabel, style: style),
               _cell(row.exhibitorName, style: style),
-              _cell(
-                row.qualifyingEntryCount.toString(),
-                style: style,
-              ),
-              _cell(
-                row.pointEarningEntryCount.toString(),
-                style: style,
-              ),
-              _cell(
-                _formatPoints(row.displayPoints),
-                style: style,
-              ),
+              _cell(row.qualifyingEntryCount.toString(), style: style),
+              _cell(row.pointEarningEntryCount.toString(), style: style),
+              _cell(_formatPoints(row.displayPoints), style: style),
               _cell(row.statusLabel, style: style),
             ],
           );
@@ -765,10 +625,7 @@ class BestDisplayReportPdfBuilder {
 }
 
 class _BestDisplayFonts {
-  const _BestDisplayFonts({
-    required this.regular,
-    required this.bold,
-  });
+  const _BestDisplayFonts({required this.regular, required this.bold});
 
   final pw.Font regular;
   final pw.Font bold;

@@ -10,6 +10,7 @@ class ExhibitorByBreedReportLoader {
   Future<ExhibitorByBreedReportData> load(ReportRequest request) async {
     final scope = (request.scope ?? '').trim().toUpperCase();
     final showLetter = (request.showLetter ?? '').trim().toUpperCase();
+    final species = _normalizeSpecies(request.species ?? '');
 
     if (scope.isEmpty) {
       throw Exception('Exhibitor by Breed requires scope.');
@@ -30,7 +31,7 @@ class ExhibitorByBreedReportLoader {
       },
     );
 
-    final resultRows = (resultsResponse as List)
+    var resultRows = (resultsResponse as List)
         .map((e) => Map<String, dynamic>.from(e as Map))
         .where((row) {
           final rowScope = _text(row, [
@@ -42,6 +43,12 @@ class ExhibitorByBreedReportLoader {
               _isActuallyShown(row);
         })
         .toList();
+
+    resultRows = await _filterRowsBySpecies(
+      request.showId,
+      resultRows,
+      species,
+    );
 
     final animalCounts = <String, int>{};
     final addresses = <String, String>{};
@@ -94,6 +101,11 @@ class ExhibitorByBreedReportLoader {
       final breed = _text(row, ['breed_name']).trim();
       final exhibitor = _text(row, ['exhibitor_name']).trim();
       if (breed.isEmpty || exhibitor.isEmpty) continue;
+      if (species.isNotEmpty &&
+          !breeds.keys.contains(_key(breed)) &&
+          !_rowMatchesSpecies(row, species)) {
+        continue;
+      }
 
       final breedKey = _key(breed);
       final exhibitorKey = _key(exhibitor);
@@ -340,6 +352,66 @@ class ExhibitorByBreedReportLoader {
     if (_bool(row['is_fur']) || _bool(row['is_wool'])) return false;
 
     return true;
+  }
+
+  Future<List<Map<String, dynamic>>> _filterRowsBySpecies(
+    String showId,
+    List<Map<String, dynamic>> rows,
+    String species,
+  ) async {
+    if (species.isEmpty) return rows;
+
+    final missingSpeciesEntryIds = rows
+        .where((row) => _normalizeSpecies(_text(row, ['species'])).isEmpty)
+        .map((row) => _text(row, ['entry_id', 'id']).trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+
+    final speciesByEntryId = <String, String>{};
+
+    if (missingSpeciesEntryIds.isNotEmpty) {
+      final entryRows = await repo.supabase
+          .from('entries')
+          .select('id, species')
+          .eq('show_id', showId)
+          .inFilter('id', missingSpeciesEntryIds);
+
+      for (final raw in (entryRows as List)) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        final entryId = (row['id'] ?? '').toString().trim();
+        final entrySpecies = _normalizeSpecies(
+          (row['species'] ?? '').toString(),
+        );
+        if (entryId.isNotEmpty && entrySpecies.isNotEmpty) {
+          speciesByEntryId[entryId] = entrySpecies;
+        }
+      }
+    }
+
+    return rows.where((row) {
+      final entryId = _text(row, ['entry_id', 'id']).trim();
+      final rowSpecies = _normalizeSpecies(
+        _text(row, ['species', 'animal_species', 'entry_species']),
+      );
+      final resolvedSpecies = rowSpecies.isNotEmpty
+          ? rowSpecies
+          : (speciesByEntryId[entryId] ?? '');
+
+      return resolvedSpecies == species;
+    }).toList();
+  }
+
+  static bool _rowMatchesSpecies(Map<String, dynamic> row, String species) {
+    return _normalizeSpecies(
+          _text(row, ['species', 'animal_species', 'entry_species']),
+        ) ==
+        species;
+  }
+
+  static String _normalizeSpecies(String value) {
+    final normalized = value.trim().toLowerCase();
+    return normalized == 'rabbit' || normalized == 'cavy' ? normalized : '';
   }
 
   static String _exhibitorName(Map<String, dynamic> row) => _text(row, [
