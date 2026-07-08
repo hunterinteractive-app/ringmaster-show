@@ -1128,14 +1128,6 @@ class _ShowListScreenState extends State<ShowListScreen> {
   }
 
   void _openEnterShow(BuildContext context, String showId, String showName) {
-    if (SupportImpersonationSession.isActive) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Entry is disabled while viewing in support mode.'),
-        ),
-      );
-      return;
-    }
     Navigator.push(
       context,
       MaterialPageRoute(

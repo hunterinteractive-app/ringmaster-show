@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:ringmaster_show/services/app_session.dart';
-import 'package:ringmaster_show/services/role_service.dart';
+import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:ringmaster_show/superintendent/superintendent_lineup_screen.dart';
 import 'package:ringmaster_show/superintendent/superintendent_preferences_screen.dart';
@@ -15,7 +15,8 @@ class SuperintendentShowsScreen extends StatefulWidget {
   const SuperintendentShowsScreen({super.key});
 
   @override
-  State<SuperintendentShowsScreen> createState() => _SuperintendentShowsScreenState();
+  State<SuperintendentShowsScreen> createState() =>
+      _SuperintendentShowsScreenState();
 }
 
 class _SuperintendentShowsScreenState extends State<SuperintendentShowsScreen> {
@@ -38,26 +39,15 @@ class _SuperintendentShowsScreenState extends State<SuperintendentShowsScreen> {
     final userId = AppSession.effectiveUserId;
     if (userId == null) return [];
 
-    final isSuperAdmin = !AppSession.isSupportMode && await RoleService.isSuperAdmin();
-
-    if (isSuperAdmin) {
-      final rows = await supabase
-          .from('shows')
-          .select('id, name, start_date, end_date, location_name')
-          .order('start_date', ascending: false);
-
-      return List<Map<String, dynamic>>.from(rows as List);
-    }
-
     final roleRows = await supabase
         .from('role_assignments')
-        .select('show_id')
+        .select('show_id, role')
         .eq('user_id', userId)
-        .eq('role', 'superintendent');
+        .inFilter('role', const ['superintendent', 'super_admin']);
 
     final showIds = List<Map<String, dynamic>>.from(roleRows as List)
-        .map((row) => row['show_id'] as String?)
-        .whereType<String>()
+        .map((row) => (row['show_id'] ?? '').toString().trim())
+        .where((showId) => showId.isNotEmpty)
         .toSet()
         .toList();
 
@@ -66,10 +56,48 @@ class _SuperintendentShowsScreenState extends State<SuperintendentShowsScreen> {
     final rows = await supabase
         .from('shows')
         .select('id, name, start_date, end_date, location_name')
-        .inFilter('id', showIds)
-        .order('start_date', ascending: false);
+        .inFilter('id', showIds);
 
-    return List<Map<String, dynamic>>.from(rows as List);
+    final shows = List<Map<String, dynamic>>.from(rows as List);
+    shows.sort(_compareShowsForSuperintendent);
+    return shows;
+  }
+
+  int _compareShowsForSuperintendent(
+    Map<String, dynamic> a,
+    Map<String, dynamic> b,
+  ) {
+    final today = DateTime.now();
+    final todayDate = DateTime(today.year, today.month, today.day);
+    final aDate = _parseShowDate(a['start_date']);
+    final bDate = _parseShowDate(b['start_date']);
+    final aUpcoming = aDate == null || !aDate.isBefore(todayDate);
+    final bUpcoming = bDate == null || !bDate.isBefore(todayDate);
+
+    if (aUpcoming != bUpcoming) return aUpcoming ? -1 : 1;
+
+    if (aDate != null && bDate != null) {
+      final byDate = aUpcoming
+          ? aDate.compareTo(bDate)
+          : bDate.compareTo(aDate);
+      if (byDate != 0) return byDate;
+    } else if (aDate != null) {
+      return -1;
+    } else if (bDate != null) {
+      return 1;
+    }
+
+    final aName = (a['name'] ?? '').toString().toLowerCase();
+    final bName = (b['name'] ?? '').toString().toLowerCase();
+    return aName.compareTo(bName);
+  }
+
+  DateTime? _parseShowDate(dynamic value) {
+    final raw = (value ?? '').toString().trim();
+    if (raw.isEmpty) return null;
+    final parsed = DateTime.tryParse(raw);
+    if (parsed == null) return null;
+    return DateTime(parsed.year, parsed.month, parsed.day);
   }
 
   String _formatDateRange(Map<String, dynamic> show) {
@@ -91,7 +119,9 @@ class _SuperintendentShowsScreenState extends State<SuperintendentShowsScreen> {
     final showId = (show['id'] ?? '').toString();
     if (showId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unable to open line-up: missing show ID.')),
+        const SnackBar(
+          content: Text('Unable to open line-up: missing show ID.'),
+        ),
       );
       return;
     }
@@ -127,8 +157,10 @@ class _SuperintendentShowsScreenState extends State<SuperintendentShowsScreen> {
           icon: const Icon(Icons.tune),
           label: const Text('Preferences'),
           style: TextButton.styleFrom(
-            foregroundColor: Colors.white,
-            disabledForegroundColor: Colors.white54,
+            foregroundColor: AppColors.headerText,
+            disabledForegroundColor: AppColors.headerText.withValues(
+              alpha: .45,
+            ),
           ),
         ),
         IconButton(
@@ -156,17 +188,20 @@ class _SuperintendentShowsScreenState extends State<SuperintendentShowsScreen> {
           final supportBanner = AppSession.isSupportMode
               ? Padding(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.amber.shade100,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.amber.shade300),
-                    ),
-                    child: const Text(
-                      'Support Mode — Showing superintendent access for the user you are viewing. Preferences are disabled.',
-                      style: TextStyle(fontWeight: FontWeight.w700),
+                  child: AppTheme.surfaceTextScope(
+                    context,
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade100,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.amber.shade300),
+                      ),
+                      child: const Text(
+                        'Support Mode — Showing superintendent access for the user you are viewing. Preferences are disabled.',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
                     ),
                   ),
                 )
@@ -231,62 +266,68 @@ class _ShowCard extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    return Material(
-      color: colorScheme.surface,
-      borderRadius: BorderRadius.circular(18),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            border: Border.all(color: colorScheme.outlineVariant),
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                  color: colorScheme.primary.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(14),
+    return AppTheme.surfaceTextScope(
+      context,
+      child: Material(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(18),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              border: Border.all(color: colorScheme.outlineVariant),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: AppColors.header.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(
+                    Icons.fact_check,
+                    color: AppColors.headerDark,
+                  ),
                 ),
-                child: Icon(
-                  Icons.fact_check,
-                  color: colorScheme.primary,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      showName,
-                      style: textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        showName,
+                        style: textTheme.titleMedium?.copyWith(
+                          color: AppColors.text,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      dateRange,
-                      style: textTheme.bodyMedium,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      location,
-                      style: textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
+                      const SizedBox(height: 6),
+                      Text(
+                        dateRange,
+                        style: textTheme.bodyMedium?.copyWith(
+                          color: AppColors.text,
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 4),
+                      Text(
+                        location,
+                        style: textTheme.bodySmall?.copyWith(
+                          color: AppColors.muted,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              const Icon(Icons.chevron_right),
-            ],
+                const SizedBox(width: 8),
+                const Icon(Icons.chevron_right, color: AppColors.muted),
+              ],
+            ),
           ),
         ),
       ),
@@ -313,17 +354,17 @@ class _EmptyState extends StatelessWidget {
             const SizedBox(height: 16),
             Text(
               'No superintendent shows found',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
               'Shows will appear here when you are assigned the superintendent role.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
               textAlign: TextAlign.center,
             ),
           ],
@@ -334,10 +375,7 @@ class _EmptyState extends StatelessWidget {
 }
 
 class _ErrorState extends StatelessWidget {
-  const _ErrorState({
-    required this.message,
-    required this.onRetry,
-  });
+  const _ErrorState({required this.message, required this.onRetry});
 
   final String message;
   final Future<void> Function() onRetry;
@@ -350,17 +388,13 @@ class _ErrorState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
-              Icons.error_outline,
-              size: 56,
-              color: Colors.redAccent,
-            ),
+            const Icon(Icons.error_outline, size: 56, color: Colors.redAccent),
             const SizedBox(height: 16),
             Text(
               'Unable to load superintendent shows',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),

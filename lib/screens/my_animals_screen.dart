@@ -78,13 +78,8 @@ class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
     }
   }
 
-  Future<void> _openAnimalEditor({
-    Map<String, dynamic>? existing,
-  }) async {
-    final saved = await openAnimalEditorDialog(
-      context,
-      existing: existing,
-    );
+  Future<void> _openAnimalEditor({Map<String, dynamic>? existing}) async {
+    final saved = await openAnimalEditorDialog(context, existing: existing);
 
     if (saved == true && mounted) {
       setState(() {});
@@ -102,7 +97,9 @@ class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
     if (AppSession.isSupportMode) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Account settings are disabled while viewing in support mode.'),
+          content: Text(
+            'Account settings are disabled while viewing in support mode.',
+          ),
         ),
       );
       return;
@@ -176,7 +173,8 @@ class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
           if (animals.isEmpty) {
             return const RMEmptyState(
               title: 'No animals yet',
-              subtitle: 'Add your animals here so they are ready when entering shows.',
+              subtitle:
+                  'Add your animals here so they are ready when entering shows.',
               icon: Icons.pets_outlined,
             );
           }
@@ -190,8 +188,10 @@ class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
               final breed = (a['breed'] ?? '').toString();
               final variety = (a['variety'] ?? '').toString();
               final sex = (a['sex'] ?? '').toString();
-              final tattoo =
-                  (a['tattoo'] ?? '').toString().trim().toUpperCase();
+              final tattoo = (a['tattoo'] ?? '')
+                  .toString()
+                  .trim()
+                  .toUpperCase();
               final name = (a['name'] ?? '').toString().trim();
 
               final title = name.isEmpty
@@ -202,71 +202,74 @@ class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
                 padding: const EdgeInsets.only(bottom: AppSpacing.md),
                 child: RMCard(
                   onTap: () => _openAnimalEditor(existing: a),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
+                  child: AppTheme.surfaceTextScope(
+                    context,
+                    child: Builder(
+                      builder: (context) => Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Text(
-                              title,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
-                                  ?.copyWith(fontWeight: FontWeight.w700),
-                            ),
-                          ),
-                          PopupMenuButton<String>(
-                            tooltip: AppSession.isSupportMode
-                                ? 'Actions while viewing as this user'
-                                : 'Actions',
-                            onSelected: (value) {
-                              if (value == 'edit') {
-                                _openAnimalEditor(existing: a);
-                              } else if (value == 'delete') {
-                                _confirmDeleteAnimal(a);
-                              }
-                            },
-                            itemBuilder: (_) => const [
-                              PopupMenuItem(
-                                value: 'edit',
-                                child: Text('Edit'),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  title,
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
                               ),
-                              PopupMenuItem(
-                                value: 'delete',
-                                child: Text('Delete'),
+                              PopupMenuButton<String>(
+                                tooltip: AppSession.isSupportMode
+                                    ? 'Actions while viewing as this user'
+                                    : 'Actions',
+                                color: AppColors.surface,
+                                iconColor: AppColors.text,
+                                onSelected: (value) {
+                                  if (value == 'edit') {
+                                    _openAnimalEditor(existing: a);
+                                  } else if (value == 'delete') {
+                                    _confirmDeleteAnimal(a);
+                                  }
+                                },
+                                itemBuilder: (_) => const [
+                                  PopupMenuItem(
+                                    value: 'edit',
+                                    child: Text('Edit'),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'delete',
+                                    child: Text('Delete'),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
+                          const SizedBox(height: AppSpacing.sm),
+                          Wrap(
+                            spacing: AppSpacing.sm,
+                            runSpacing: AppSpacing.sm,
+                            children: [
+                              RMBadge(
+                                text: _speciesLabel(species),
+                                icon: Icons.category_outlined,
+                              ),
+                              if (sex.isNotEmpty)
+                                RMBadge(text: sex, icon: Icons.info_outline),
+                              RMBadge(
+                                text: _dobBadgeText(a),
+                                icon: Icons.cake_outlined,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          Text(
+                            '$breed • $variety',
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(color: AppColors.muted),
+                          ),
                         ],
                       ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Wrap(
-                        spacing: AppSpacing.sm,
-                        runSpacing: AppSpacing.sm,
-                        children: [
-                          RMBadge(
-                            text: _speciesLabel(species),
-                            icon: Icons.category_outlined,
-                          ),
-                          if (sex.isNotEmpty)
-                            RMBadge(
-                              text: sex,
-                              icon: Icons.info_outline,
-                            ),
-                          RMBadge(
-                            text: _dobBadgeText(a),
-                            icon: Icons.cake_outlined,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      Text(
-                        '$breed • $variety',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               );

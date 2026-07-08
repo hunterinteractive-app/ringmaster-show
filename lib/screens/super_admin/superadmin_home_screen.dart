@@ -176,15 +176,20 @@ class _SuperadminHomeScreenState extends State<SuperadminHomeScreen> {
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: Text(
               'Global Admin Tools',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: AppColors.headerForeground,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 6, 16, 12),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
             child: Text(
               'Manage shared catalogs, support tools, and system-wide imports.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppColors.headerForeground.withValues(alpha: .82),
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
           if (_msg != null)
@@ -194,20 +199,16 @@ class _SuperadminHomeScreenState extends State<SuperadminHomeScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: success
-                      ? Colors.green.withValues(alpha: .08)
-                      : Colors.red.withValues(alpha: .08),
+                  color: success ? AppColors.successBg : AppColors.dangerBg,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: success
-                        ? Colors.green.withValues(alpha: .25)
-                        : Colors.red.withValues(alpha: .25),
+                    color: success ? AppColors.success : AppColors.danger,
                   ),
                 ),
                 child: Text(
                   _msg!,
                   style: TextStyle(
-                    color: success ? Colors.green.shade800 : Colors.red,
+                    color: success ? AppColors.success : AppColors.danger,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -280,30 +281,55 @@ class _SuperadminToolCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 10,
+    return AppTheme.surfaceTextScope(
+      context,
+      child: Card(
+        elevation: 0,
+        color: AppColors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          side: const BorderSide(color: AppColors.headerForeground, width: 1.4),
         ),
-        leading: Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            color: AppColors.navy.withValues(alpha: .08),
-            borderRadius: BorderRadius.circular(12),
+        child: Builder(
+          builder: (context) => ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 10,
+            ),
+            leading: Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: AppColors.header.withValues(alpha: .18),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child:
+                  leadingOverride ??
+                  Icon(icon, color: AppColors.secondaryButton),
+            ),
+            title: Text(
+              title,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: AppColors.text,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            subtitle: Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                subtitle,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: AppColors.muted),
+              ),
+            ),
+            trailing: const Icon(
+              Icons.chevron_right,
+              color: AppColors.headerForeground,
+            ),
+            onTap: onTap,
           ),
-          child: leadingOverride ?? Icon(icon, color: AppColors.navy),
         ),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 6),
-          child: Text(subtitle),
-        ),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: onTap,
       ),
     );
   }
@@ -540,15 +566,20 @@ class _SupportImpersonationScreenState
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Text(
               'Support Impersonation',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: AppColors.headerForeground,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             child: Text(
               'Select a user from the list, or search by email or display name to narrow it down.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppColors.headerForeground.withValues(alpha: .82),
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
           Padding(
@@ -556,21 +587,29 @@ class _SupportImpersonationScreenState
             child: Row(
               children: [
                 Expanded(
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: const InputDecoration(
-                      labelText: 'Search users',
-                      hintText: 'Email or name',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.search),
+                  child: AppTheme.surfaceTextScope(
+                    context,
+                    child: TextField(
+                      controller: _searchController,
+                      style: const TextStyle(color: AppColors.text),
+                      decoration: const InputDecoration(
+                        labelText: 'Search users',
+                        hintText: 'Email or name',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.search, color: AppColors.muted),
+                        labelStyle: TextStyle(color: AppColors.muted),
+                        hintStyle: TextStyle(color: AppColors.muted),
+                        filled: true,
+                        fillColor: AppColors.surface,
+                      ),
+                      textInputAction: TextInputAction.search,
+                      onSubmitted: (_) => _searchUsers(),
+                      onChanged: (value) {
+                        if (value.trim().isEmpty && !_showingInitialUsers) {
+                          _loadInitialUsers();
+                        }
+                      },
                     ),
-                    textInputAction: TextInputAction.search,
-                    onSubmitted: (_) => _searchUsers(),
-                    onChanged: (value) {
-                      if (value.trim().isEmpty && !_showingInitialUsers) {
-                        _loadInitialUsers();
-                      }
-                    },
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -606,14 +645,14 @@ class _SupportImpersonationScreenState
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.red.withValues(alpha: .08),
+                  color: AppColors.dangerBg,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.red.withValues(alpha: .25)),
+                  border: Border.all(color: AppColors.danger),
                 ),
                 child: Text(
                   _error!,
                   style: const TextStyle(
-                    color: Colors.red,
+                    color: AppColors.danger,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -632,7 +671,12 @@ class _SupportImpersonationScreenState
                               ? 'Showing up to 100 users'
                               : 'Search results',
                           style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(fontWeight: FontWeight.w700),
+                              ?.copyWith(
+                                color: AppColors.headerForeground.withValues(
+                                  alpha: .82,
+                                ),
+                                fontWeight: FontWeight.w700,
+                              ),
                         ),
                       ),
                       Expanded(
@@ -644,59 +688,85 @@ class _SupportImpersonationScreenState
                           itemBuilder: (context, index) {
                             final user = _users[index];
 
-                            return Card(
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
-                              ),
-                              child: ListTile(
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 10,
-                                ),
-                                leading: CircleAvatar(
-                                  child: Text(
-                                    user.label.isEmpty
-                                        ? '?'
-                                        : user.label.characters.first
-                                              .toUpperCase(),
+                            return AppTheme.surfaceTextScope(
+                              context,
+                              child: Card(
+                                elevation: 0,
+                                color: AppColors.surface,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(
+                                    AppRadius.md,
+                                  ),
+                                  side: const BorderSide(
+                                    color: AppColors.headerForeground,
+                                    width: 1.4,
                                   ),
                                 ),
-                                title: Text(
-                                  user.label,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
+                                child: Builder(
+                                  builder: (context) => ListTile(
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 10,
+                                    ),
+                                    leading: CircleAvatar(
+                                      backgroundColor: AppColors.header
+                                          .withValues(alpha: .18),
+                                      foregroundColor:
+                                          AppColors.secondaryButton,
+                                      child: Text(
+                                        user.label.isEmpty
+                                            ? '?'
+                                            : user.label.characters.first
+                                                  .toUpperCase(),
+                                      ),
+                                    ),
+                                    title: Text(
+                                      user.label,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium
+                                          ?.copyWith(
+                                            color: AppColors.text,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                    ),
+                                    subtitle: Padding(
+                                      padding: const EdgeInsets.only(top: 6),
+                                      child: Text(
+                                        [
+                                              if (user.email.isNotEmpty)
+                                                user.email,
+                                              if (user.displayName
+                                                      .trim()
+                                                      .isNotEmpty &&
+                                                  user.displayName.trim() !=
+                                                      user.label)
+                                                'Profile: ${user.displayName.trim()}',
+                                            ].join(' • ').isEmpty
+                                            ? user.userId
+                                            : [
+                                                if (user.email.isNotEmpty)
+                                                  user.email,
+                                                if (user.displayName
+                                                        .trim()
+                                                        .isNotEmpty &&
+                                                    user.displayName.trim() !=
+                                                        user.label)
+                                                  'Profile: ${user.displayName.trim()}',
+                                              ].join(' • '),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.copyWith(color: AppColors.muted),
+                                      ),
+                                    ),
+                                    trailing: FilledButton.icon(
+                                      onPressed: () =>
+                                          _startImpersonation(user),
+                                      icon: const Icon(Icons.visibility),
+                                      label: const Text('View As'),
+                                    ),
                                   ),
-                                ),
-                                subtitle: Padding(
-                                  padding: const EdgeInsets.only(top: 6),
-                                  child: Text(
-                                    [
-                                          if (user.email.isNotEmpty) user.email,
-                                          if (user.displayName
-                                                  .trim()
-                                                  .isNotEmpty &&
-                                              user.displayName.trim() !=
-                                                  user.label)
-                                            'Profile: ${user.displayName.trim()}',
-                                        ].join(' • ').isEmpty
-                                        ? user.userId
-                                        : [
-                                            if (user.email.isNotEmpty)
-                                              user.email,
-                                            if (user.displayName
-                                                    .trim()
-                                                    .isNotEmpty &&
-                                                user.displayName.trim() !=
-                                                    user.label)
-                                              'Profile: ${user.displayName.trim()}',
-                                          ].join(' • '),
-                                  ),
-                                ),
-                                trailing: FilledButton.icon(
-                                  onPressed: () => _startImpersonation(user),
-                                  icon: const Icon(Icons.visibility),
-                                  label: const Text('View As'),
                                 ),
                               ),
                             );

@@ -146,7 +146,10 @@ class _ExhibitorPastReportsScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.pageBackground,
       appBar: AppBar(
+        backgroundColor: AppColors.header,
+        foregroundColor: AppColors.headerText,
         title: const Text('Past Show Reports'),
         actions: [
           IconButton(
@@ -156,70 +159,74 @@ class _ExhibitorPastReportsScreenState
           ),
         ],
       ),
-      body: FutureBuilder<List<_PastShowReport>>(
-        future: _future,
-        builder: (context, snap) {
-          if (snap.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      body: Container(
+        decoration: const BoxDecoration(gradient: AppGradients.page),
+        child: FutureBuilder<List<_PastShowReport>>(
+          future: _future,
+          builder: (context, snap) {
+            if (snap.connectionState != ConnectionState.done) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-          if (snap.hasError) {
-            return _ErrorState(
-              message: snap.error.toString(),
-              onRetry: _refresh,
-            );
-          }
+            if (snap.hasError) {
+              return _ErrorState(
+                message: snap.error.toString(),
+                onRetry: _refresh,
+              );
+            }
 
-          final reports = snap.data ?? const <_PastShowReport>[];
-          final filteredReports = _filterReports(reports);
-          final grouped = _groupReportsByShow(filteredReports);
+            final reports = snap.data ?? const <_PastShowReport>[];
+            final filteredReports = _filterReports(reports);
+            final grouped = _groupReportsByShow(filteredReports);
 
-          return RefreshIndicator(
-            onRefresh: _refresh,
-            child: ListView(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              children: [
-                if (_isViewingAs) ...[
-                  const _SupportModeNotice(),
-                  const SizedBox(height: AppSpacing.md),
-                ],
-                Text(
-                  _introText,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(color: AppColors.muted),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                _ReportsSearchField(
-                  controller: _searchController,
-                  onChanged: (value) {
-                    setState(() {
-                      _searchText = value.trim();
-                    });
-                  },
-                  onClear: () {
-                    _searchController.clear();
-                    setState(() {
-                      _searchText = '';
-                    });
-                  },
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                if (reports.isEmpty)
-                  _EmptyState(isViewingAs: _isViewingAs)
-                else if (filteredReports.isEmpty)
-                  _NoSearchResultsState(searchText: _searchText)
-                else
-                  for (final showReports in grouped)
-                    _PastShowReportCard(
-                      reports: showReports,
-                      downloadingArtifactIds: _downloadingArtifactIds,
-                      onDownload: _downloadReport,
+            return RefreshIndicator(
+              onRefresh: _refresh,
+              child: ListView(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                children: [
+                  if (_isViewingAs) ...[
+                    const _SupportModeNotice(),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
+                  Text(
+                    _introText,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.headerForeground.withValues(alpha: .86),
+                      fontWeight: FontWeight.w600,
                     ),
-              ],
-            ),
-          );
-        },
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  _ReportsSearchField(
+                    controller: _searchController,
+                    onChanged: (value) {
+                      setState(() {
+                        _searchText = value.trim();
+                      });
+                    },
+                    onClear: () {
+                      _searchController.clear();
+                      setState(() {
+                        _searchText = '';
+                      });
+                    },
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  if (reports.isEmpty)
+                    _EmptyState(isViewingAs: _isViewingAs)
+                  else if (filteredReports.isEmpty)
+                    _NoSearchResultsState(searchText: _searchText)
+                  else
+                    for (final showReports in grouped)
+                      _PastShowReportCard(
+                        reports: showReports,
+                        downloadingArtifactIds: _downloadingArtifactIds,
+                        onDownload: _downloadReport,
+                      ),
+                ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -295,22 +302,29 @@ class _ReportsSearchField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      onChanged: onChanged,
-      decoration: InputDecoration(
-        prefixIcon: const Icon(Icons.search),
-        suffixIcon: controller.text.trim().isEmpty
-            ? null
-            : IconButton(
-                tooltip: 'Clear search',
-                icon: const Icon(Icons.close),
-                onPressed: onClear,
-              ),
-        labelText: 'Search past show reports',
-        hintText: 'Search by show, exhibitor, report, location, or file name',
-        filled: true,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+    return AppTheme.surfaceTextScope(
+      context,
+      child: TextField(
+        controller: controller,
+        onChanged: onChanged,
+        style: const TextStyle(color: AppColors.text),
+        decoration: InputDecoration(
+          prefixIcon: const Icon(Icons.search, color: AppColors.muted),
+          suffixIcon: controller.text.trim().isEmpty
+              ? null
+              : IconButton(
+                  tooltip: 'Clear search',
+                  icon: const Icon(Icons.close, color: AppColors.muted),
+                  onPressed: onClear,
+                ),
+          labelText: 'Search past show reports',
+          hintText: 'Search by show, exhibitor, report, location, or file name',
+          labelStyle: const TextStyle(color: AppColors.muted),
+          hintStyle: const TextStyle(color: AppColors.muted),
+          filled: true,
+          fillColor: AppColors.surface,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+        ),
       ),
     );
   }
@@ -324,21 +338,22 @@ class _SupportModeNotice extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: Colors.amber.withValues(alpha: 0.14),
+        color: AppColors.warningBg,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.amber.withValues(alpha: 0.55)),
+        border: Border.all(color: AppColors.warningBorder),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.visibility_outlined),
+          const Icon(Icons.visibility_outlined, color: AppColors.warning),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
               'View As mode is active. Reports are being loaded for the selected user.',
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w700),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.warning,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],
@@ -368,44 +383,63 @@ class _PastShowReportCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
       child: RMCard(
-        child: Theme(
-          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-          child: ExpansionTile(
-            initiallyExpanded: false,
-            tilePadding: EdgeInsets.zero,
-            childrenPadding: const EdgeInsets.only(top: AppSpacing.sm),
-            leading: const Icon(Icons.event_note_outlined),
-            title: Text(
-              first.showName,
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (dateText.isNotEmpty) Text(dateText),
-                if (first.showLocation.isNotEmpty) Text(first.showLocation),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  '$reportCount report${reportCount == 1 ? '' : 's'} • $exhibitorCount exhibitor${exhibitorCount == 1 ? '' : 's'}',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.muted,
-                    fontWeight: FontWeight.w700,
+        child: AppTheme.surfaceTextScope(
+          context,
+          child: Builder(
+            builder: (context) => Theme(
+              data: AppTheme.surfaceTheme(
+                Theme.of(context),
+              ).copyWith(dividerColor: Colors.transparent),
+              child: ExpansionTile(
+                initiallyExpanded: false,
+                tilePadding: EdgeInsets.zero,
+                childrenPadding: const EdgeInsets.only(top: AppSpacing.sm),
+                leading: const Icon(
+                  Icons.event_note_outlined,
+                  color: AppColors.secondaryButton,
+                ),
+                title: Text(
+                  first.showName,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: AppColors.text,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
-              ],
-            ),
-            children: [
-              for (final report in reports)
-                _ReportRow(
-                  report: report,
-                  downloading: downloadingArtifactIds.contains(
-                    report.artifactId,
-                  ),
-                  onDownload: onDownload,
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (dateText.isNotEmpty)
+                      Text(
+                        dateText,
+                        style: const TextStyle(color: AppColors.text),
+                      ),
+                    if (first.showLocation.isNotEmpty)
+                      Text(
+                        first.showLocation,
+                        style: const TextStyle(color: AppColors.text),
+                      ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      '$reportCount report${reportCount == 1 ? '' : 's'} • $exhibitorCount exhibitor${exhibitorCount == 1 ? '' : 's'}',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.muted,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                 ),
-            ],
+                children: [
+                  for (final report in reports)
+                    _ReportRow(
+                      report: report,
+                      downloading: downloadingArtifactIds.contains(
+                        report.artifactId,
+                      ),
+                      onDownload: onDownload,
+                    ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -446,18 +480,24 @@ class _ReportRow extends StatelessWidget {
     return Card(
       margin: const EdgeInsets.only(bottom: AppSpacing.sm),
       elevation: 0,
-      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      color: AppColors.neutralBadgeBg,
       child: ListTile(
         leading: Icon(
           isLegs
               ? Icons.workspace_premium_outlined
               : Icons.description_outlined,
+          color: AppColors.secondaryButton,
         ),
         title: Text(
           report.reportLabel,
-          style: const TextStyle(fontWeight: FontWeight.w700),
+          style: const TextStyle(
+            color: AppColors.text,
+            fontWeight: FontWeight.w700,
+          ),
         ),
-        subtitle: subtitle.isEmpty ? null : Text(subtitle),
+        subtitle: subtitle.isEmpty
+            ? null
+            : Text(subtitle, style: const TextStyle(color: AppColors.muted)),
         trailing: downloading
             ? const SizedBox(
                 width: 22,
@@ -466,7 +506,10 @@ class _ReportRow extends StatelessWidget {
               )
             : IconButton(
                 tooltip: 'Download',
-                icon: const Icon(Icons.download),
+                icon: const Icon(
+                  Icons.download,
+                  color: AppColors.secondaryButton,
+                ),
                 onPressed: () => onDownload(report),
               ),
       ),
@@ -490,32 +533,40 @@ class _EmptyState extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
       child: Center(
         child: RMCard(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.folder_copy_outlined,
-                size: 44,
-                color: AppColors.muted,
+          child: AppTheme.surfaceTextScope(
+            context,
+            child: Builder(
+              builder: (context) => Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.folder_copy_outlined,
+                    size: 44,
+                    color: AppColors.muted,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    isViewingAs
+                        ? 'No reports for this View As user'
+                        : 'No past show reports yet',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: AppColors.text,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    isViewingAs
+                        ? 'This means the selected user does not currently match any finalized exhibitor reports or ARBA legs through entries, owner profile, or claimed profile.'
+                        : 'Finalized exhibitor reports and ARBA legs will appear here after a show secretary generates closeout reports. Reports will be available for up to 1 year after they are generated.',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: AppColors.muted),
+                  ),
+                ],
               ),
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                isViewingAs
-                    ? 'No reports for this View As user'
-                    : 'No past show reports yet',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                isViewingAs
-                    ? 'This means the selected user does not currently match any finalized exhibitor reports or ARBA legs through entries, owner profile, or claimed profile.'
-                    : 'Finalized exhibitor reports and ARBA legs will appear here after a show secretary generates closeout reports. Reports will be available for up to 1 year after they are generated.',
-                textAlign: TextAlign.center,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: AppColors.muted),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -535,34 +586,42 @@ class _ErrorState extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.xl),
         child: RMCard(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.error_outline,
-                size: 44,
-                color: AppColors.danger,
+          child: AppTheme.surfaceTextScope(
+            context,
+            child: Builder(
+              builder: (context) => Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.error_outline,
+                    size: 44,
+                    color: AppColors.danger,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    'Unable to load reports',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: AppColors.text,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: AppColors.muted),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  FilledButton.icon(
+                    onPressed: onRetry,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Try Again'),
+                  ),
+                ],
               ),
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                'Unable to load reports',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                message,
-                textAlign: TextAlign.center,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: AppColors.muted),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              FilledButton.icon(
-                onPressed: onRetry,
-                icon: const Icon(Icons.refresh),
-                label: const Text('Try Again'),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -648,24 +707,36 @@ class _NoSearchResultsState extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
       child: Center(
         child: RMCard(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.search_off_outlined, size: 44, color: AppColors.muted),
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                'No matching reports',
-                style: Theme.of(context).textTheme.titleMedium,
+          child: AppTheme.surfaceTextScope(
+            context,
+            child: Builder(
+              builder: (context) => Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.search_off_outlined,
+                    size: 44,
+                    color: AppColors.muted,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    'No matching reports',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: AppColors.text,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    'No reports matched “$searchText”. Try searching by show name, exhibitor name, report type, location, or file name.',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: AppColors.muted),
+                  ),
+                ],
               ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                'No reports matched “$searchText”. Try searching by show name, exhibitor name, report type, location, or file name.',
-                textAlign: TextAlign.center,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: AppColors.muted),
-              ),
-            ],
+            ),
           ),
         ),
       ),

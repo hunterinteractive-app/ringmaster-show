@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:ringmaster_show/services/app_session.dart';
+import 'package:ringmaster_show/theme/app_theme.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -25,8 +26,9 @@ class _SuperintendentPreferencesScreenState
   String _autoFillPriority = 'balanced_head_count';
   bool _prioritizeSameBreedTogether = false;
   bool _avoidSameJudgeBreedAcrossLetters = true;
-  final TextEditingController _warnHeadCountController =
-      TextEditingController(text: '250');
+  final TextEditingController _warnHeadCountController = TextEditingController(
+    text: '250',
+  );
   String _displayDensity = 'roomy';
   String _showCountsMode = 'always';
   String _defaultBreedSort = 'letter';
@@ -65,7 +67,8 @@ class _SuperintendentPreferencesScreenState
     super.dispose();
   }
 
-  String? get _userId => AppSession.effectiveUserId ?? supabase.auth.currentUser?.id;
+  String? get _userId =>
+      AppSession.effectiveUserId ?? supabase.auth.currentUser?.id;
 
   Future<void> _loadData() async {
     final userId = _userId;
@@ -88,23 +91,25 @@ class _SuperintendentPreferencesScreenState
       final row = preferences.first;
       _openYouthMode = (row['open_youth_mode'] ?? _openYouthMode).toString();
       _showOrder = (row['show_order'] ?? _showOrder).toString();
-      _autoFillPriority =
-          (row['auto_fill_priority'] ?? _autoFillPriority).toString();
+      _autoFillPriority = (row['auto_fill_priority'] ?? _autoFillPriority)
+          .toString();
       _prioritizeSameBreedTogether =
           row['prioritize_same_breed_together'] == true;
       _avoidSameJudgeBreedAcrossLetters =
           row['avoid_same_judge_breed_across_letters'] != false;
-      _warnHeadCountController.text =
-          (row['warn_head_count'] ?? 250).toString();
+      _warnHeadCountController.text = (row['warn_head_count'] ?? 250)
+          .toString();
       _displayDensity = (row['display_density'] ?? _displayDensity).toString();
       _showCountsMode = (row['show_counts_mode'] ?? _showCountsMode).toString();
-      _defaultBreedSort =
-          (row['default_breed_sort'] ?? _defaultBreedSort).toString();
+      _defaultBreedSort = (row['default_breed_sort'] ?? _defaultBreedSort)
+          .toString();
     }
 
     final judgeRows = await supabase
         .from('judges')
-        .select('id, display_name, name, first_name, last_name, city, state, judge_type, is_active')
+        .select(
+          'id, display_name, name, first_name, last_name, city, state, judge_type, is_active',
+        )
         .order('display_name', ascending: true);
 
     _judges = List<Map<String, dynamic>>.from(judgeRows as List);
@@ -124,7 +129,9 @@ class _SuperintendentPreferencesScreenState
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Preferences are disabled while viewing as another user.'),
+          content: Text(
+            'Preferences are disabled while viewing as another user.',
+          ),
         ),
       );
       return;
@@ -153,14 +160,14 @@ class _SuperintendentPreferencesScreenState
       }, onConflict: 'user_id');
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Preferences saved.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Preferences saved.')));
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString())),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
     } finally {
       if (mounted) setState(() => _savingPreferences = false);
     }
@@ -194,22 +201,20 @@ class _SuperintendentPreferencesScreenState
 
     final rows = await supabase.rpc('get_private_judge_ratings');
 
-    _judgeRatings = (rows as List)
-        .map((raw) {
-          final row = Map<String, dynamic>.from(raw as Map);
-          final payload = row['payload'];
-          final payloadMap = payload is Map
-              ? Map<String, dynamic>.from(payload)
-              : <String, dynamic>{};
+    _judgeRatings = (rows as List).map((raw) {
+      final row = Map<String, dynamic>.from(raw as Map);
+      final payload = row['payload'];
+      final payloadMap = payload is Map
+          ? Map<String, dynamic>.from(payload)
+          : <String, dynamic>{};
 
-          return <String, dynamic>{
-            'user_id': row['user_id'],
-            'judge_id': row['judge_id'],
-            'updated_at': row['updated_at'],
-            ...payloadMap,
-          };
-        })
-        .toList();
+      return <String, dynamic>{
+        'user_id': row['user_id'],
+        'judge_id': row['judge_id'],
+        'updated_at': row['updated_at'],
+        ...payloadMap,
+      };
+    }).toList();
   }
 
   String _ratedJudgeLabel(Map<String, dynamic> rating) {
@@ -229,19 +234,21 @@ class _SuperintendentPreferencesScreenState
     final speed = (rating['speed_rating'] ?? '').toString();
     final quality = (rating['overall_quality_rating'] ?? '').toString();
     final accuracy = (rating['accuracy_rating'] ?? '').toString();
-    final bestClassSystem = (rating['best_class_system'] ?? '').toString().trim();
+    final bestClassSystem = (rating['best_class_system'] ?? '')
+        .toString()
+        .trim();
     final dailyHeadLimit = (rating['daily_head_limit'] ?? '').toString().trim();
-    final overageRate = (
-      rating['overage_rate_per_head'] ??
-      rating['overage_rate_per_'] ??
-      ''
-    ).toString().trim();
+    final overageRate =
+        (rating['overage_rate_per_head'] ?? rating['overage_rate_per_'] ?? '')
+            .toString()
+            .trim();
 
     final parts = <String>[
       if (speed.isNotEmpty) 'Speed $speed',
       if (quality.isNotEmpty) 'Quality $quality',
       if (accuracy.isNotEmpty) 'Accuracy $accuracy',
-      if (bestClassSystem.isNotEmpty && bestClassSystem != 'unknown') bestClassSystem,
+      if (bestClassSystem.isNotEmpty && bestClassSystem != 'unknown')
+        bestClassSystem,
       if (dailyHeadLimit.isNotEmpty) '$dailyHeadLimit head/day',
       if (overageRate.isNotEmpty) 'Overage $overageRate/head',
     ];
@@ -266,16 +273,16 @@ class _SuperintendentPreferencesScreenState
 
     rows.sort((a, b) {
       if (_judgeSortMode == 'state') {
-        final stateCompare = (a['state'] ?? '')
-            .toString()
-            .compareTo((b['state'] ?? '').toString());
+        final stateCompare = (a['state'] ?? '').toString().compareTo(
+          (b['state'] ?? '').toString(),
+        );
         if (stateCompare != 0) return stateCompare;
       }
 
       if (_judgeSortMode == 'type') {
-        final typeCompare = (a['judge_type'] ?? '')
-            .toString()
-            .compareTo((b['judge_type'] ?? '').toString());
+        final typeCompare = (a['judge_type'] ?? '').toString().compareTo(
+          (b['judge_type'] ?? '').toString(),
+        );
         if (typeCompare != 0) return typeCompare;
       }
 
@@ -320,10 +327,7 @@ class _SuperintendentPreferencesScreenState
     if (row.isEmpty) return;
 
     setState(() {
-      _selectedJudgeRating = {
-        'judge_id': judgeId,
-        ...row,
-      };
+      _selectedJudgeRating = {'judge_id': judgeId, ...row};
       _speedRating = ((row['speed_rating'] as num?)?.toDouble() ?? 5)
           .clamp(1, 10)
           .toDouble();
@@ -334,12 +338,13 @@ class _SuperintendentPreferencesScreenState
       _accuracyRating = ((row['accuracy_rating'] as num?)?.toDouble() ?? 5)
           .clamp(1, 10)
           .toDouble();
-      _bestClassSystem =
-          (row['best_class_system'] ?? _bestClassSystem).toString();
+      _bestClassSystem = (row['best_class_system'] ?? _bestClassSystem)
+          .toString();
       _judgeNotesController.text = (row['notes'] ?? '').toString();
       _dailyHeadLimit = (row['daily_head_limit'] as num?)?.toInt() ?? 250;
       _allowsOverage = row['allows_overage'] != false;
-      final rawOverageRate = row['overage_rate_per_head'] ?? row['overage_rate_per_'];
+      final rawOverageRate =
+          row['overage_rate_per_head'] ?? row['overage_rate_per_'];
       _overageRatePer = rawOverageRate is num
           ? rawOverageRate.toDouble()
           : double.tryParse(rawOverageRate?.toString() ?? '');
@@ -354,7 +359,9 @@ class _SuperintendentPreferencesScreenState
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Judge ratings are disabled while viewing as another user.'),
+          content: Text(
+            'Judge ratings are disabled while viewing as another user.',
+          ),
         ),
       );
       return;
@@ -398,9 +405,9 @@ class _SuperintendentPreferencesScreenState
       if (mounted) setState(() {});
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString())),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
     } finally {
       if (mounted) setState(() => _savingRating = false);
     }
@@ -410,7 +417,9 @@ class _SuperintendentPreferencesScreenState
     if (AppSession.isSupportMode) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Judge ratings are disabled while viewing as another user.'),
+          content: Text(
+            'Judge ratings are disabled while viewing as another user.',
+          ),
         ),
       );
       return;
@@ -434,311 +443,330 @@ class _SuperintendentPreferencesScreenState
             }
 
             return Dialog(
+              backgroundColor: Colors.white,
               insetPadding: const EdgeInsets.all(24),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 720),
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.star_rate,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                'Private Judge Ratings',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleLarge
-                                    ?.copyWith(fontWeight: FontWeight.w900),
+              child: AppTheme.surfaceTextScope(
+                context,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 720),
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.star_rate,
+                                color: Theme.of(context).colorScheme.primary,
                               ),
-                            ),
-                            IconButton(
-                              tooltip: 'Close',
-                              onPressed: () => Navigator.pop(context),
-                              icon: const Icon(Icons.close),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'These ratings are private to your account and are stored as an encrypted payload.',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant,
-                              ),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Your rated judges',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w900,
-                              ),
-                        ),
-                        const SizedBox(height: 8),
-                        if (ratedJudges.isEmpty)
-                          Text(
-                            'No saved judge ratings yet.',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant,
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Private Judge Ratings',
+                                  style: Theme.of(context).textTheme.titleLarge
+                                      ?.copyWith(fontWeight: FontWeight.w900),
                                 ),
-                          )
-                        else
-                          ConstrainedBox(
-                            constraints: const BoxConstraints(maxHeight: 220),
-                            child: ListView.separated(
-                              shrinkWrap: true,
-                              itemCount: ratedJudges.length,
-                              separatorBuilder: (context, index) => const Divider(height: 1),
-                              itemBuilder: (context, index) {
-                                final rating = ratedJudges[index];
-                                final judgeId = (rating['judge_id'] ?? '').toString();
-                                final selected = judgeId == _selectedJudgeId;
-
-                                return ListTile(
-                                  dense: true,
-                                  selected: selected,
-                                  leading: Icon(
-                                    selected ? Icons.edit : Icons.star_rate,
-                                  ),
-                                  title: Text(
-                                    _ratedJudgeLabel(rating),
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                  subtitle: Text(_ratedJudgeSubtitle(rating)),
-                                  trailing: const Icon(Icons.chevron_right),
-                                  onTap: () => selectJudge(judgeId),
-                                );
-                              },
-                            ),
-                          ),
-                        const SizedBox(height: 20),
-                        TextField(
-                          controller: _judgeSearchController,
-                          decoration: const InputDecoration(
-                            labelText: 'Search judges',
-                            hintText: 'Search by name, city, state, or type',
-                            prefixIcon: Icon(Icons.search),
-                            border: OutlineInputBorder(),
-                          ),
-                          onChanged: (_) => dialogSetState(() {}),
-                        ),
-                        const SizedBox(height: 12),
-                        SegmentedButton<String>(
-                          segments: const [
-                            ButtonSegment(
-                              value: 'name',
-                              icon: Icon(Icons.sort_by_alpha),
-                              label: Text('Name'),
-                            ),
-                            ButtonSegment(
-                              value: 'state',
-                              icon: Icon(Icons.location_on_outlined),
-                              label: Text('State'),
-                            ),
-                            ButtonSegment(
-                              value: 'type',
-                              icon: Icon(Icons.badge_outlined),
-                              label: Text('Type'),
-                            ),
-                          ],
-                          selected: {_judgeSortMode},
-                          onSelectionChanged: (selection) {
-                            setState(() => _judgeSortMode = selection.first);
-                            dialogSetState(() {});
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        ConstrainedBox(
-                          constraints: const BoxConstraints(maxHeight: 260),
-                          child: judgeOptions.isEmpty
-                              ? Text(
-                                  'No judges match your search.',
-                                  style: Theme.of(context).textTheme.bodyMedium,
-                                )
-                              : ListView.separated(
-                                  shrinkWrap: true,
-                                  itemCount: judgeOptions.length,
-                                  separatorBuilder: (context, index) => const Divider(height: 1),
-                                  itemBuilder: (context, index) {
-                                    final judge = judgeOptions[index];
-                                    final id = judge['id'].toString();
-                                    final selected = id == _selectedJudgeId;
-                                    final location = _judgeLocation(judge);
-                                    final judgeType =
-                                        (judge['judge_type'] ?? '').toString().trim();
-
-                                    return ListTile(
-                                      selected: selected,
-                                      leading: Icon(
-                                        selected
-                                            ? Icons.check_circle
-                                            : Icons.person_outline,
-                                      ),
-                                      title: Text(
-                                        _judgeLabel(judge),
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                      ),
-                                      subtitle: [
-                                        if (location.isNotEmpty) location,
-                                        if (judgeType.isNotEmpty) judgeType,
-                                      ].join(' • ').isEmpty
-                                          ? null
-                                          : Text([
-                                              if (location.isNotEmpty) location,
-                                              if (judgeType.isNotEmpty) judgeType,
-                                            ].join(' • ')),
-                                      onTap: () => selectJudge(id),
-                                    );
-                                  },
-                                ),
-                        ),
-                        const SizedBox(height: 18),
-                        if (_selectedJudgeId == null)
-                          Text(
-                            'Select a judge to add your private rating.',
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          )
-                        else ...[
-                          _RatingSlider(
-                            label: 'Speed',
-                            value: _speedRating,
-                            onChanged: (value) {
-                              setState(() => _speedRating = value);
-                              dialogSetState(() {});
-                            },
-                          ),
-                          _RatingSlider(
-                            label: 'Overall Quality',
-                            value: _overallQualityRating,
-                            onChanged: (value) {
-                              setState(() => _overallQualityRating = value);
-                              dialogSetState(() {});
-                            },
-                          ),
-                          _RatingSlider(
-                            label: 'Accuracy',
-                            value: _accuracyRating,
-                            onChanged: (value) {
-                              setState(() => _accuracyRating = value);
-                              dialogSetState(() {});
-                            },
-                          ),
-                          const SizedBox(height: 8),
-                          _SegmentedPreference<String>(
-                            label: 'Better with',
-                            selected: _bestClassSystem,
-                            segments: const [
-                              ButtonSegment(
-                                value: 'four_class',
-                                label: Text('4-Class'),
                               ),
-                              ButtonSegment(
-                                value: 'six_class',
-                                label: Text('6-Class'),
-                              ),
-                              ButtonSegment(value: 'both', label: Text('Both')),
-                              ButtonSegment(
-                                value: 'unknown',
-                                label: Text('Unknown'),
+                              IconButton(
+                                tooltip: 'Close',
+                                onPressed: () => Navigator.pop(context),
+                                icon: const Icon(Icons.close),
                               ),
                             ],
-                            onChanged: (value) {
-                              setState(() => _bestClassSystem = value);
-                              dialogSetState(() {});
-                            },
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'These ratings are private to your account and are stored as an encrypted payload.',
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                                ),
                           ),
                           const SizedBox(height: 16),
                           Text(
-                            'Capacity & Overages',
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w900,
-                                ),
+                            'Your rated judges',
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w900),
                           ),
                           const SizedBox(height: 8),
-                          TextFormField(
-                            initialValue: _dailyHeadLimit.toString(),
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(
-                              labelText: 'Daily head limit',
-                              border: OutlineInputBorder(),
-                            ),
-                            onChanged: (value) {
-                              final parsed = int.tryParse(value);
-                              if (parsed != null) {
-                                setState(() => _dailyHeadLimit = parsed);
-                                dialogSetState(() {});
-                              }
-                            },
-                          ),
-                          SwitchListTile.adaptive(
-                            contentPadding: EdgeInsets.zero,
-                            title: const Text('Allow overage'),
-                            value: _allowsOverage,
-                            onChanged: (value) {
-                              setState(() => _allowsOverage = value);
-                              dialogSetState(() {});
-                            },
-                          ),
-                          TextField(
-                            controller: _overageRateController,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                            decoration: const InputDecoration(
-                              labelText: 'Overage rate per head (optional)',
-                              hintText: 'e.g. 2.50',
-                              border: OutlineInputBorder(),
-                            ),
-                            onChanged: (value) {
-                              setState(() {
-                                _overageRatePer = value.trim().isEmpty
-                                    ? null
-                                    : double.tryParse(value.trim());
-                              });
-                              dialogSetState(() {});
-                            },
-                          ),
-                          const SizedBox(height: 16),
-                          TextField(
-                            controller: _judgeNotesController,
-                            maxLines: 4,
-                            decoration: const InputDecoration(
-                              labelText: 'Private notes',
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: FilledButton.icon(
-                              onPressed: _savingRating ? null : saveRating,
-                              icon: const Icon(Icons.save),
-                              label: Text(
-                                _savingRating
-                                    ? 'Saving...'
-                                    : (_selectedJudgeRating == null
-                                        ? 'Save Rating'
-                                        : 'Update Rating'),
+                          if (ratedJudges.isEmpty)
+                            Text(
+                              'No saved judge ratings yet.',
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                                  ),
+                            )
+                          else
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxHeight: 220),
+                              child: ListView.separated(
+                                shrinkWrap: true,
+                                itemCount: ratedJudges.length,
+                                separatorBuilder: (context, index) =>
+                                    const Divider(height: 1),
+                                itemBuilder: (context, index) {
+                                  final rating = ratedJudges[index];
+                                  final judgeId = (rating['judge_id'] ?? '')
+                                      .toString();
+                                  final selected = judgeId == _selectedJudgeId;
+
+                                  return ListTile(
+                                    dense: true,
+                                    selected: selected,
+                                    leading: Icon(
+                                      selected ? Icons.edit : Icons.star_rate,
+                                    ),
+                                    title: Text(
+                                      _ratedJudgeLabel(rating),
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                    subtitle: Text(_ratedJudgeSubtitle(rating)),
+                                    trailing: const Icon(Icons.chevron_right),
+                                    onTap: () => selectJudge(judgeId),
+                                  );
+                                },
                               ),
                             ),
+                          const SizedBox(height: 20),
+                          TextField(
+                            controller: _judgeSearchController,
+                            decoration: const InputDecoration(
+                              labelText: 'Search judges',
+                              hintText: 'Search by name, city, state, or type',
+                              prefixIcon: Icon(Icons.search),
+                              border: OutlineInputBorder(),
+                            ),
+                            onChanged: (_) => dialogSetState(() {}),
                           ),
+                          const SizedBox(height: 12),
+                          SegmentedButton<String>(
+                            segments: const [
+                              ButtonSegment(
+                                value: 'name',
+                                icon: Icon(Icons.sort_by_alpha),
+                                label: Text('Name'),
+                              ),
+                              ButtonSegment(
+                                value: 'state',
+                                icon: Icon(Icons.location_on_outlined),
+                                label: Text('State'),
+                              ),
+                              ButtonSegment(
+                                value: 'type',
+                                icon: Icon(Icons.badge_outlined),
+                                label: Text('Type'),
+                              ),
+                            ],
+                            selected: {_judgeSortMode},
+                            onSelectionChanged: (selection) {
+                              setState(() => _judgeSortMode = selection.first);
+                              dialogSetState(() {});
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxHeight: 260),
+                            child: judgeOptions.isEmpty
+                                ? Text(
+                                    'No judges match your search.',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodyMedium,
+                                  )
+                                : ListView.separated(
+                                    shrinkWrap: true,
+                                    itemCount: judgeOptions.length,
+                                    separatorBuilder: (context, index) =>
+                                        const Divider(height: 1),
+                                    itemBuilder: (context, index) {
+                                      final judge = judgeOptions[index];
+                                      final id = judge['id'].toString();
+                                      final selected = id == _selectedJudgeId;
+                                      final location = _judgeLocation(judge);
+                                      final judgeType =
+                                          (judge['judge_type'] ?? '')
+                                              .toString()
+                                              .trim();
+
+                                      return ListTile(
+                                        selected: selected,
+                                        leading: Icon(
+                                          selected
+                                              ? Icons.check_circle
+                                              : Icons.person_outline,
+                                        ),
+                                        title: Text(
+                                          _judgeLabel(judge),
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                        subtitle:
+                                            [
+                                              if (location.isNotEmpty) location,
+                                              if (judgeType.isNotEmpty)
+                                                judgeType,
+                                            ].join(' • ').isEmpty
+                                            ? null
+                                            : Text(
+                                                [
+                                                  if (location.isNotEmpty)
+                                                    location,
+                                                  if (judgeType.isNotEmpty)
+                                                    judgeType,
+                                                ].join(' • '),
+                                              ),
+                                        onTap: () => selectJudge(id),
+                                      );
+                                    },
+                                  ),
+                          ),
+                          const SizedBox(height: 18),
+                          if (_selectedJudgeId == null)
+                            Text(
+                              'Select a judge to add your private rating.',
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            )
+                          else ...[
+                            _RatingSlider(
+                              label: 'Speed',
+                              value: _speedRating,
+                              onChanged: (value) {
+                                setState(() => _speedRating = value);
+                                dialogSetState(() {});
+                              },
+                            ),
+                            _RatingSlider(
+                              label: 'Overall Quality',
+                              value: _overallQualityRating,
+                              onChanged: (value) {
+                                setState(() => _overallQualityRating = value);
+                                dialogSetState(() {});
+                              },
+                            ),
+                            _RatingSlider(
+                              label: 'Accuracy',
+                              value: _accuracyRating,
+                              onChanged: (value) {
+                                setState(() => _accuracyRating = value);
+                                dialogSetState(() {});
+                              },
+                            ),
+                            const SizedBox(height: 8),
+                            _SegmentedPreference<String>(
+                              label: 'Better with',
+                              selected: _bestClassSystem,
+                              segments: const [
+                                ButtonSegment(
+                                  value: 'four_class',
+                                  label: Text('4-Class'),
+                                ),
+                                ButtonSegment(
+                                  value: 'six_class',
+                                  label: Text('6-Class'),
+                                ),
+                                ButtonSegment(
+                                  value: 'both',
+                                  label: Text('Both'),
+                                ),
+                                ButtonSegment(
+                                  value: 'unknown',
+                                  label: Text('Unknown'),
+                                ),
+                              ],
+                              onChanged: (value) {
+                                setState(() => _bestClassSystem = value);
+                                dialogSetState(() {});
+                              },
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Capacity & Overages',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w900),
+                            ),
+                            const SizedBox(height: 8),
+                            TextFormField(
+                              initialValue: _dailyHeadLimit.toString(),
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                labelText: 'Daily head limit',
+                                border: OutlineInputBorder(),
+                              ),
+                              onChanged: (value) {
+                                final parsed = int.tryParse(value);
+                                if (parsed != null) {
+                                  setState(() => _dailyHeadLimit = parsed);
+                                  dialogSetState(() {});
+                                }
+                              },
+                            ),
+                            SwitchListTile.adaptive(
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text('Allow overage'),
+                              value: _allowsOverage,
+                              onChanged: (value) {
+                                setState(() => _allowsOverage = value);
+                                dialogSetState(() {});
+                              },
+                            ),
+                            TextField(
+                              controller: _overageRateController,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              decoration: const InputDecoration(
+                                labelText: 'Overage rate per head (optional)',
+                                hintText: 'e.g. 2.50',
+                                border: OutlineInputBorder(),
+                              ),
+                              onChanged: (value) {
+                                setState(() {
+                                  _overageRatePer = value.trim().isEmpty
+                                      ? null
+                                      : double.tryParse(value.trim());
+                                });
+                                dialogSetState(() {});
+                              },
+                            ),
+                            const SizedBox(height: 16),
+                            TextField(
+                              controller: _judgeNotesController,
+                              maxLines: 4,
+                              decoration: const InputDecoration(
+                                labelText: 'Private notes',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: FilledButton.icon(
+                                onPressed: _savingRating ? null : saveRating,
+                                icon: const Icon(Icons.save),
+                                label: Text(
+                                  _savingRating
+                                      ? 'Saving...'
+                                      : (_selectedJudgeRating == null
+                                            ? 'Save Rating'
+                                            : 'Update Rating'),
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
                 ),
@@ -760,7 +788,12 @@ class _SuperintendentPreferencesScreenState
           onPressed: _reload,
           icon: const Icon(Icons.refresh),
           label: const Text('Refresh'),
-          style: TextButton.styleFrom(foregroundColor: Colors.white),
+          style: TextButton.styleFrom(
+            foregroundColor: AppColors.headerText,
+            disabledForegroundColor: AppColors.headerText.withValues(
+              alpha: .45,
+            ),
+          ),
         ),
       ],
       body: FutureBuilder<void>(
@@ -779,7 +812,10 @@ class _SuperintendentPreferencesScreenState
                   children: [
                     const Icon(Icons.error_outline, size: 56),
                     const SizedBox(height: 12),
-                    Text(snapshot.error.toString(), textAlign: TextAlign.center),
+                    Text(
+                      snapshot.error.toString(),
+                      textAlign: TextAlign.center,
+                    ),
                     const SizedBox(height: 16),
                     FilledButton.icon(
                       onPressed: _reload,
@@ -797,17 +833,20 @@ class _SuperintendentPreferencesScreenState
             padding: const EdgeInsets.all(16),
             children: [
               if (readOnly) ...[
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.amber.shade100,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.amber.shade300),
-                  ),
-                  child: const Text(
-                    'Support Mode — Superintendent preferences are view-only while viewing as another user. Private judge ratings are hidden.',
-                    style: TextStyle(fontWeight: FontWeight.w700),
+                AppTheme.surfaceTextScope(
+                  context,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade100,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.amber.shade300),
+                    ),
+                    child: const Text(
+                      'Support Mode — Superintendent preferences are view-only while viewing as another user. Private judge ratings are hidden.',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -832,8 +871,14 @@ class _SuperintendentPreferencesScreenState
                     label: 'Show order',
                     selected: _showOrder,
                     segments: const [
-                      ButtonSegment(value: 'open_first', label: Text('Open first')),
-                      ButtonSegment(value: 'youth_first', label: Text('Youth first')),
+                      ButtonSegment(
+                        value: 'open_first',
+                        label: Text('Open first'),
+                      ),
+                      ButtonSegment(
+                        value: 'youth_first',
+                        label: Text('Youth first'),
+                      ),
                     ],
                     onChanged: readOnly
                         ? null
@@ -869,18 +914,21 @@ class _SuperintendentPreferencesScreenState
                     value: _prioritizeSameBreedTogether,
                     onChanged: readOnly
                         ? null
-                        : (value) =>
-                            setState(() => _prioritizeSameBreedTogether = value),
+                        : (value) => setState(
+                            () => _prioritizeSameBreedTogether = value,
+                          ),
                   ),
                   SwitchListTile.adaptive(
                     contentPadding: EdgeInsets.zero,
-                    title: const Text('Avoid same judge/breed across show letters'),
+                    title: const Text(
+                      'Avoid same judge/breed across show letters',
+                    ),
                     value: _avoidSameJudgeBreedAcrossLetters,
                     onChanged: readOnly
                         ? null
                         : (value) => setState(
-                              () => _avoidSameJudgeBreedAcrossLetters = value,
-                            ),
+                            () => _avoidSameJudgeBreedAcrossLetters = value,
+                          ),
                   ),
                   TextField(
                     controller: _warnHeadCountController,
@@ -888,7 +936,8 @@ class _SuperintendentPreferencesScreenState
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(
                       labelText: 'Warn at head count',
-                      helperText: 'ARBA recommendation defaults to 250 head/day.',
+                      helperText:
+                          'ARBA recommendation defaults to 250 head/day.',
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -928,9 +977,13 @@ class _SuperintendentPreferencesScreenState
               Align(
                 alignment: Alignment.centerRight,
                 child: FilledButton.icon(
-                  onPressed: (_savingPreferences || readOnly) ? null : _savePreferences,
+                  onPressed: (_savingPreferences || readOnly)
+                      ? null
+                      : _savePreferences,
                   icon: const Icon(Icons.save),
-                  label: Text(_savingPreferences ? 'Saving...' : 'Save Preferences'),
+                  label: Text(
+                    _savingPreferences ? 'Saving...' : 'Save Preferences',
+                  ),
                 ),
               ),
               if (!readOnly) ...[
@@ -978,34 +1031,39 @@ class _PreferencesCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: BorderSide(color: colorScheme.outlineVariant),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(icon, color: colorScheme.primary),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
+    return AppTheme.surfaceTextScope(
+      context,
+      child: Card(
+        color: Colors.white,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: BorderSide(color: colorScheme.outlineVariant),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(icon, color: AppColors.headerDark),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: AppColors.text,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            ...children,
-          ],
+                ],
+              ),
+              const SizedBox(height: 16),
+              ...children,
+            ],
+          ),
         ),
       ),
     );
@@ -1032,9 +1090,9 @@ class _SegmentedPreference<T> extends StatelessWidget {
       children: [
         Text(
           label,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 8),
         SegmentedButton<T>(
@@ -1070,9 +1128,9 @@ class _RatingSlider extends StatelessWidget {
             Expanded(
               child: Text(
                 label,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w800),
               ),
             ),
             Text(value.round().toString()),

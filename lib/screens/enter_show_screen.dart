@@ -3,6 +3,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:ringmaster_show/widgets/exhibitor_builder_dialog.dart';
 import 'package:ringmaster_show/utils/cavy/cavy_sop_order.dart';
@@ -28,8 +29,7 @@ class EnterShowScreen extends StatefulWidget {
 }
 
 class _EnterShowScreenState extends State<EnterShowScreen> {
-  bool get isDemo =>
-      widget.showId == '0f432fe8-2be2-467a-842f-ff3777436992';
+  bool get isDemo => widget.showId == '0f432fe8-2be2-467a-842f-ff3777436992';
   final Map<String, bool> _selected = {};
   final Map<String, TextEditingController> _classControllers = {};
 
@@ -44,7 +44,6 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   final Map<String, String> _rabbitBreedClassSystem = {};
 
   final Map<String, Map<String, dynamic>> _rabbitBreedMeta = {};
-
 
   bool _sectionIsMeatOnly(String? sectionId) {
     final id = (sectionId ?? '').trim();
@@ -95,22 +94,10 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   final Map<String, Map<String, dynamic>> _commercialByCode = {};
 
   final List<Map<String, String>> _commercialDefaults = const [
-    {
-      'class_code': 'single_fryer',
-      'display_name': 'Single Fryers',
-    },
-    {
-      'class_code': 'roaster',
-      'display_name': 'Roasters',
-    },
-    {
-      'class_code': 'stewer',
-      'display_name': 'Stewers',
-    },
-    {
-      'class_code': 'meat_pen',
-      'display_name': 'Meat Pens',
-    },
+    {'class_code': 'single_fryer', 'display_name': 'Single Fryers'},
+    {'class_code': 'roaster', 'display_name': 'Roasters'},
+    {'class_code': 'stewer', 'display_name': 'Stewers'},
+    {'class_code': 'meat_pen', 'display_name': 'Meat Pens'},
   ];
 
   static const double _singleFryerMinWeight = 3.5;
@@ -189,9 +176,8 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   bool get _hasUnsubmittedCart =>
       _activeCartId != null && _animalIdsInCart.isNotEmpty;
 
-  bool get _selectionIncludesYouth => _selectedSectionIds.any(
-        (id) => _sectionKindForId(id) == 'youth',
-      );
+  bool get _selectionIncludesYouth =>
+      _selectedSectionIds.any((id) => _sectionKindForId(id) == 'youth');
 
   Future<bool> _confirmLeaveIfNeeded() async {
     if (!_hasUnsubmittedCart) return true;
@@ -220,12 +206,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   }
 
   Future<void> _openAddAnimalDialog() async {
-    
-    
-    final saved = await openAnimalEditorDialog(
-    context,
-    showId: widget.showId,
-  );
+    final saved = await openAnimalEditorDialog(context, showId: widget.showId);
 
     if (saved == true) {
       await _reloadAll();
@@ -375,14 +356,8 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     }
 
     final cartId = AppSession.isSupportMode
-        ? await _getActiveCartIdIfExists(
-            showId: widget.showId,
-            userId: userId,
-          )
-        : await _getOrCreateActiveCartId(
-            showId: widget.showId,
-            userId: userId,
-          );
+        ? await _getActiveCartIdIfExists(showId: widget.showId, userId: userId)
+        : await _getOrCreateActiveCartId(showId: widget.showId, userId: userId);
 
     if (cartId == null) {
       setState(() => _msg = 'No active cart found for this user.');
@@ -472,9 +447,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     return type == 'youth' || (type == 'group' && groupShowsAsYouth);
   }
 
-  bool _isExhibitorAllowedForCurrentSelection(
-    Map<String, dynamic> exhibitor,
-  ) {
+  bool _isExhibitorAllowedForCurrentSelection(Map<String, dynamic> exhibitor) {
     if (_selectionIncludesYouth) {
       return _isYouthExhibitor(exhibitor);
     }
@@ -558,11 +531,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
 
     final created = await supabase
         .from('entry_carts')
-        .insert({
-          'show_id': showId,
-          'user_id': userId,
-          'status': 'active',
-        })
+        .insert({'show_id': showId, 'user_id': userId, 'status': 'active'})
         .select('id')
         .single();
 
@@ -694,7 +663,8 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
             .select()
             .inFilter('section_id', sectionIds);
 
-        for (final row in (sectionFeeRows as List).cast<Map<String, dynamic>>()) {
+        for (final row
+            in (sectionFeeRows as List).cast<Map<String, dynamic>>()) {
           if (rowHasFurFee(row)) {
             _furEntriesEnabled = true;
             return;
@@ -824,10 +794,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
         final breedLower = breedName.toLowerCase();
 
         _breedHasVarietyOverrides.add(breedLower);
-        _allowedVarietiesByBreedLower.putIfAbsent(
-          breedLower,
-          () => <String>{},
-        );
+        _allowedVarietiesByBreedLower.putIfAbsent(breedLower, () => <String>{});
 
         final enabled = r['is_enabled'] == true;
         if (!enabled) continue;
@@ -853,7 +820,9 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   Future<List<Map<String, dynamic>>> _loadEnabledSections() async {
     final List rows = await supabase
         .from('show_sections')
-        .select('id,kind,letter,display_name,sort_order,allow_meat_classes,breed_scope')
+        .select(
+          'id,kind,letter,display_name,sort_order,allow_meat_classes,breed_scope',
+        )
         .eq('show_id', widget.showId)
         .eq('is_enabled', true);
 
@@ -884,24 +853,25 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     }
 
     sections.sort((a, b) {
-      final kindCmp = kindRank((a['kind'] ?? '').toString())
-          .compareTo(kindRank((b['kind'] ?? '').toString()));
+      final kindCmp = kindRank(
+        (a['kind'] ?? '').toString(),
+      ).compareTo(kindRank((b['kind'] ?? '').toString()));
       if (kindCmp != 0) return kindCmp;
 
-      final letterCmp = letterRank((a['letter'] ?? '').toString())
-          .compareTo(letterRank((b['letter'] ?? '').toString()));
+      final letterCmp = letterRank(
+        (a['letter'] ?? '').toString(),
+      ).compareTo(letterRank((b['letter'] ?? '').toString()));
       if (letterCmp != 0) return letterCmp;
 
-      return ((a['display_name'] ?? '').toString())
-          .compareTo((b['display_name'] ?? '').toString());
+      return ((a['display_name'] ?? '').toString()).compareTo(
+        (b['display_name'] ?? '').toString(),
+      );
     });
 
     _sectionById
       ..clear()
       ..addEntries(
-        sections.map(
-          (s) => MapEntry((s['id'] ?? '').toString(), s),
-        ),
+        sections.map((s) => MapEntry((s['id'] ?? '').toString(), s)),
       );
 
     return sections;
@@ -944,8 +914,8 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     final kindLabel = kind == 'youth'
         ? 'Youth'
         : kind == 'open'
-            ? 'Open'
-            : 'Section';
+        ? 'Open'
+        : 'Section';
 
     return letter.isEmpty ? kindLabel : '$kindLabel $letter';
   }
@@ -987,7 +957,6 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     return days / 30.4375;
   }
 
-
   String _suggestRabbitDivision({
     required String breedName,
     required String sex,
@@ -1002,21 +971,20 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     if (meta != null && meta['has_prejunior'] == true) {
       if (_isGiantChinchilla(breedName)) {
         if (sex == 'buck') {
-          final maxAge =
-              (meta['prejunior_buck_age_max_months'] as num?)?.toDouble();
+          final maxAge = (meta['prejunior_buck_age_max_months'] as num?)
+              ?.toDouble();
           if (maxAge != null && months < maxAge) {
             return 'Pre-Junior';
           }
         } else if (sex == 'doe') {
-          final maxAge =
-              (meta['prejunior_doe_age_max_months'] as num?)?.toDouble();
+          final maxAge = (meta['prejunior_doe_age_max_months'] as num?)
+              ?.toDouble();
           if (maxAge != null && months < maxAge) {
             return 'Pre-Junior';
           }
         }
       } else {
-        final maxAge =
-            (meta['prejunior_age_max_months'] as num?)?.toDouble();
+        final maxAge = (meta['prejunior_age_max_months'] as num?)?.toDouble();
         if (maxAge != null && months < maxAge) {
           return 'Pre-Junior';
         }
@@ -1180,10 +1148,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     });
   }
 
-  void _toggleSection({
-    required String sectionId,
-    required String kind,
-  }) {
+  void _toggleSection({required String sectionId, required String kind}) {
     setState(() {
       _msg = null;
 
@@ -1205,7 +1170,6 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
       } else {
         _selectedSectionIds.add(sectionId);
       }
-
 
       _ensureSelectedExhibitorStillAllowed();
 
@@ -1381,7 +1345,8 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
       final animalId = (a['id'] ?? '').toString();
       final title = _displayAnimalTitle(a);
       final pending = selectedPairs[animalId] ?? const <Map<String, String>>[];
-      final existing = existingByAnimal[animalId] ?? const <Map<String, String>>[];
+      final existing =
+          existingByAnimal[animalId] ?? const <Map<String, String>>[];
 
       for (final p in pending) {
         final pLetter = (p['letter'] ?? '').trim().toUpperCase();
@@ -1476,35 +1441,42 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                   style: TextStyle(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 6),
-                ...chosen.map(
-                  (a) {
-                    final animalId = (a['id'] ?? '').toString();
+                ...chosen.map((a) {
+                  final animalId = (a['id'] ?? '').toString();
 
-                    final furDescriptions = _furEntriesEnabled
-                        ? (_selectedSectionIds
-                            .where((sectionId) =>
-                                _isFurSelectedForAnimalSection(animalId, sectionId))
+                  final furDescriptions = _furEntriesEnabled
+                      ? (_selectedSectionIds
+                            .where(
+                              (sectionId) => _isFurSelectedForAnimalSection(
+                                animalId,
+                                sectionId,
+                              ),
+                            )
                             .map((sectionId) {
-                              final sectionLabel = _sectionLabelForId(sectionId);
-                              final furVariety =
-                                  _furVarietyForAnimalSection(animalId, sectionId);
+                              final sectionLabel = _sectionLabelForId(
+                                sectionId,
+                              );
+                              final furVariety = _furVarietyForAnimalSection(
+                                animalId,
+                                sectionId,
+                              );
                               if (furVariety != null && furVariety.isNotEmpty) {
                                 return '$sectionLabel ($furVariety)';
                               }
                               return sectionLabel;
-                            }).toList()
+                            })
+                            .toList()
                           ..sort())
-                        : <String>[];
+                      : <String>[];
 
-                    final furText = furDescriptions.isEmpty
-                        ? ''
-                        : ' • Fur/Wool: ${furDescriptions.join(', ')}';
+                  final furText = furDescriptions.isEmpty
+                      ? ''
+                      : ' • Fur/Wool: ${furDescriptions.join(', ')}';
 
-                    return Text(
-                      '• ${_displayAnimalTitle(a)} — ${_classControllerFor(animalId).text.trim()}$furText',
-                    );
-                  },
-                ),
+                  return Text(
+                    '• ${_displayAnimalTitle(a)} — ${_classControllerFor(animalId).text.trim()}$furText',
+                  );
+                }),
               ],
             ),
           ),
@@ -1535,8 +1507,9 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     }
 
     if (_exhibitors.isEmpty) {
-      setState(() => _msg =
-          'No active exhibitors found. Click Add Exhibitor first.');
+      setState(
+        () => _msg = 'No active exhibitors found. Click Add Exhibitor first.',
+      );
       return;
     }
 
@@ -1551,8 +1524,9 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
       return;
     }
 
-    final chosen =
-        eligibleAnimals.where((a) => _selected[a['id']] == true).toList();
+    final chosen = eligibleAnimals
+        .where((a) => _selected[a['id']] == true)
+        .toList();
 
     final immediateErrors = _collectImmediateSelectionErrors(
       chosen: chosen,
@@ -1637,7 +1611,8 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
       if (itemsToAdd.isEmpty) {
         if (!mounted) return;
         setState(() {
-          _msg = 'Select at least one non-meat show section before adding animals to the cart.';
+          _msg =
+              'Select at least one non-meat show section before adding animals to the cart.';
           _submitting = false;
         });
         return;
@@ -1727,50 +1702,55 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
       final speciesA = _safeString(a, 'species').toLowerCase();
       final speciesB = _safeString(b, 'species').toLowerCase();
 
-      final speciesCmp =
-          _speciesRank(speciesA).compareTo(_speciesRank(speciesB));
+      final speciesCmp = _speciesRank(
+        speciesA,
+      ).compareTo(_speciesRank(speciesB));
       if (speciesCmp != 0) return speciesCmp;
 
       if (speciesA == 'cavy' && speciesB == 'cavy') {
-        final breedCmp = cavyBreedSortIndex(_safeString(a, 'breed'))
-            .compareTo(cavyBreedSortIndex(_safeString(b, 'breed')));
+        final breedCmp = cavyBreedSortIndex(
+          _safeString(a, 'breed'),
+        ).compareTo(cavyBreedSortIndex(_safeString(b, 'breed')));
         if (breedCmp != 0) return breedCmp;
 
-        final varietyCmp = cavyVarietySortIndex(
-          _safeString(a, 'breed'),
-          _safeString(a, 'variety'),
-        ).compareTo(
-          cavyVarietySortIndex(
-            _safeString(b, 'breed'),
-            _safeString(b, 'variety'),
-          ),
-        );
+        final varietyCmp =
+            cavyVarietySortIndex(
+              _safeString(a, 'breed'),
+              _safeString(a, 'variety'),
+            ).compareTo(
+              cavyVarietySortIndex(
+                _safeString(b, 'breed'),
+                _safeString(b, 'variety'),
+              ),
+            );
         if (varietyCmp != 0) return varietyCmp;
       } else {
-        final breedCmp = _safeString(a, 'breed')
-            .toLowerCase()
-            .compareTo(_safeString(b, 'breed').toLowerCase());
+        final breedCmp = _safeString(
+          a,
+          'breed',
+        ).toLowerCase().compareTo(_safeString(b, 'breed').toLowerCase());
         if (breedCmp != 0) return breedCmp;
 
-        final varietyCmp = _safeString(a, 'variety')
-            .toLowerCase()
-            .compareTo(_safeString(b, 'variety').toLowerCase());
+        final varietyCmp = _safeString(
+          a,
+          'variety',
+        ).toLowerCase().compareTo(_safeString(b, 'variety').toLowerCase());
         if (varietyCmp != 0) return varietyCmp;
       }
 
-      final titleCmp = _displayAnimalTitle(a)
-          .toLowerCase()
-          .compareTo(_displayAnimalTitle(b).toLowerCase());
+      final titleCmp = _displayAnimalTitle(
+        a,
+      ).toLowerCase().compareTo(_displayAnimalTitle(b).toLowerCase());
       if (titleCmp != 0) return titleCmp;
 
-      return _safeString(a, 'tattoo')
-          .toLowerCase()
-          .compareTo(_safeString(b, 'tattoo').toLowerCase());
+      return _safeString(
+        a,
+        'tattoo',
+      ).toLowerCase().compareTo(_safeString(b, 'tattoo').toLowerCase());
     });
 
     return list;
   }
-
 
   Widget _buildAnimalTile(Map<String, dynamic> a) {
     final id = a['id'] as String;
@@ -1805,7 +1785,11 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
           ),
           const SizedBox(height: 10),
           DropdownButtonFormField<String>(
-            initialValue: classOptions.contains(selectedClass) ? selectedClass : null,
+            initialValue: classOptions.contains(selectedClass)
+                ? selectedClass
+                : null,
+            dropdownColor: AppColors.surface,
+            style: const TextStyle(color: AppColors.text),
             decoration: InputDecoration(
               labelText: 'Class',
               helperText: needsValidation
@@ -1822,7 +1806,10 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                 .map(
                   (opt) => DropdownMenuItem<String>(
                     value: opt,
-                    child: Text(opt),
+                    child: Text(
+                      opt,
+                      style: const TextStyle(color: AppColors.text),
+                    ),
                   ),
                 )
                 .toList(),
@@ -1843,100 +1830,118 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
               _selectedSectionIds.isEmpty
                   ? 'Fur entry option: select a show section first.'
                   : _selected[id] != true
-                      ? 'Fur entry option: check this animal to add White or Colored fur.'
-                      : 'Optional Fur entry: choose White or Colored for each selected section.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+                  ? 'Fur entry option: check this animal to add White or Colored fur.'
+                  : 'Optional Fur entry: choose White or Colored for each selected section.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 6),
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: (_selected[id] == true ? _selectedSectionIds : <String>{})
-                  .where((sectionId) => !_sectionIsMeatOnly(sectionId))
-                  .map((sectionId) {
-                final label = _sectionLabelForId(sectionId);
-                final furSelected =
-                    _isFurSelectedForAnimalSection(id, sectionId);
-                final breedName = _safeString(a, 'breed');
-                final needsWhiteColored =
-                    _breedUsesWhiteColoredFur(breedName);
-                final selectedFurVariety =
-                    _furVarietyForAnimalSection(id, sectionId);
+              children:
+                  (_selected[id] == true ? _selectedSectionIds : <String>{})
+                      .where((sectionId) => !_sectionIsMeatOnly(sectionId))
+                      .map((sectionId) {
+                        final label = _sectionLabelForId(sectionId);
+                        final furSelected = _isFurSelectedForAnimalSection(
+                          id,
+                          sectionId,
+                        );
+                        final breedName = _safeString(a, 'breed');
+                        final needsWhiteColored = _breedUsesWhiteColoredFur(
+                          breedName,
+                        );
+                        final selectedFurVariety = _furVarietyForAnimalSection(
+                          id,
+                          sectionId,
+                        );
 
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    FilterChip(
-                      label: Text('$label Fur Entry'),
-                      selected: furSelected,
-                      onSelected: (_submitting || disabled)
-                          ? null
-                          : (value) => _toggleFurForAnimalSection(
-                                animalId: id,
-                                sectionId: sectionId,
-                                value: value,
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            FilterChip(
+                              label: Text('$label Fur Entry'),
+                              selected: furSelected,
+                              onSelected: (_submitting || disabled)
+                                  ? null
+                                  : (value) => _toggleFurForAnimalSection(
+                                      animalId: id,
+                                      sectionId: sectionId,
+                                      value: value,
+                                    ),
+                            ),
+                            if (furSelected && needsWhiteColored) ...[
+                              const SizedBox(height: 6),
+                              SizedBox(
+                                width: 180,
+                                child: DropdownButtonFormField<String>(
+                                  initialValue:
+                                      (selectedFurVariety == 'White' ||
+                                          selectedFurVariety == 'Colored')
+                                      ? selectedFurVariety
+                                      : null,
+                                  dropdownColor: AppColors.surface,
+                                  style: const TextStyle(color: AppColors.text),
+                                  decoration: const InputDecoration(
+                                    labelText: 'Fur Class',
+                                    border: OutlineInputBorder(),
+                                    isDense: true,
+                                  ),
+                                  items: const [
+                                    DropdownMenuItem(
+                                      value: 'White',
+                                      child: Text(
+                                        'White',
+                                        style: TextStyle(color: AppColors.text),
+                                      ),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'Colored',
+                                      child: Text(
+                                        'Colored',
+                                        style: TextStyle(color: AppColors.text),
+                                      ),
+                                    ),
+                                  ],
+                                  onChanged: (_submitting || disabled)
+                                      ? null
+                                      : (value) {
+                                          _setFurVarietyForAnimalSection(
+                                            animalId: id,
+                                            sectionId: sectionId,
+                                            value: value,
+                                          );
+                                        },
+                                ),
                               ),
-                    ),
-                    if (furSelected && needsWhiteColored) ...[
-                      const SizedBox(height: 6),
-                      SizedBox(
-                        width: 180,
-                        child: DropdownButtonFormField<String>(
-                          initialValue: (selectedFurVariety == 'White' ||
-                                  selectedFurVariety == 'Colored')
-                              ? selectedFurVariety
-                              : null,
-                          decoration: const InputDecoration(
-                            labelText: 'Fur Class',
-                            border: OutlineInputBorder(),
-                            isDense: true,
-                          ),
-                          items: const [
-                            DropdownMenuItem(
-                              value: 'White',
-                              child: Text('White'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'Colored',
-                              child: Text('Colored'),
-                            ),
+                            ],
                           ],
-                          onChanged: (_submitting || disabled)
-                              ? null
-                              : (value) {
-                                  _setFurVarietyForAnimalSection(
-                                    animalId: id,
-                                    sectionId: sectionId,
-                                    value: value,
-                                  );
-                                },
-                        ),
-                      ),
-                    ],
-                  ],
-                );
-              }).toList(),
+                        );
+                      })
+                      .toList(),
             ),
           ],
-          if (alreadyEnteredInSelectedSection || hasSectionConflict || inCart) ...[
+          if (alreadyEnteredInSelectedSection ||
+              hasSectionConflict ||
+              inCart) ...[
             const SizedBox(height: 8),
             Text(
               alreadyEnteredInSelectedSection
                   ? (alreadyEnteredLabel.isEmpty
-                      ? 'Already entered in one of the selected sections'
-                      : 'Already entered in $alreadyEnteredLabel')
+                        ? 'Already entered in one of the selected sections'
+                        : 'Already entered in $alreadyEnteredLabel')
                   : hasSectionConflict
-                      ? (conflictLabel.isEmpty
-                          ? 'Cannot enter the same letter in both Open and Youth'
-                          : 'Conflicts with existing $conflictLabel')
-                      : 'Already in cart',
+                  ? (conflictLabel.isEmpty
+                        ? 'Cannot enter the same letter in both Open and Youth'
+                        : 'Conflicts with existing $conflictLabel')
+                  : 'Already in cart',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.red,
-                    fontWeight: FontWeight.w600,
-                  ),
+                color: Colors.red,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ],
         ],
@@ -1946,10 +1951,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
 
     return Column(
       children: [
-        Opacity(
-          opacity: disabled ? 0.45 : 1.0,
-          child: tile,
-        ),
+        Opacity(opacity: disabled ? 0.45 : 1.0, child: tile),
         const Divider(height: 1),
       ],
     );
@@ -1972,9 +1974,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   }
 
   String _formatWeight(double value) {
-    return value.toStringAsFixed(
-      value.truncateToDouble() == value ? 0 : 1,
-    );
+    return value.toStringAsFixed(value.truncateToDouble() == value ? 0 : 1);
   }
 
   String _commercialRuleText(String classCode) {
@@ -2016,10 +2016,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                 'Single Fryer failed age check. Rabbit is $ageDays days old and must be not over $_singleFryerMaxAgeDays days.',
           );
         }
-        return _CommercialValidationResult(
-          ok: true,
-          ageDays: ageDays,
-        );
+        return _CommercialValidationResult(ok: true, ageDays: ageDays);
 
       case 'roaster':
         if (ageDays >= _roasterMaxAgeDaysExclusive) {
@@ -2030,10 +2027,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                 'Roaster failed age check. Rabbit is $ageDays days old and must be under 6 months.',
           );
         }
-        return _CommercialValidationResult(
-          ok: true,
-          ageDays: ageDays,
-        );
+        return _CommercialValidationResult(ok: true, ageDays: ageDays);
 
       case 'stewer':
         if (ageDays < _stewerMinAgeDays) {
@@ -2044,10 +2038,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                 'Stewer failed age check. Rabbit is $ageDays days old and must be 6 months of age or older.',
           );
         }
-        return _CommercialValidationResult(
-          ok: true,
-          ageDays: ageDays,
-        );
+        return _CommercialValidationResult(ok: true, ageDays: ageDays);
 
       default:
         return const _CommercialValidationResult(
@@ -2196,7 +2187,8 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
 
     if (_isAnimalAlreadyEnteredInAnySelectedSection(animalId)) {
       setState(() {
-        _msg = 'That animal is already entered in one of the selected sections.';
+        _msg =
+            'That animal is already entered in one of the selected sections.';
       });
       return;
     }
@@ -2296,7 +2288,10 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
 
     final allowedSectionIds = _selectedMeatAllowedSectionIds;
     if (allowedSectionIds.isEmpty) {
-      setState(() => _msg = 'Select at least one section that allows Meat Classes first.');
+      setState(
+        () => _msg =
+            'Select at least one section that allows Meat Classes first.',
+      );
       return;
     }
 
@@ -2319,7 +2314,10 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
 
       final allowedSectionIds = _selectedMeatAllowedSectionIds;
       if (allowedSectionIds.isEmpty) {
-        setState(() => _msg = 'Select at least one section that allows Meat Classes first.');
+        setState(
+          () => _msg =
+              'Select at least one section that allows Meat Classes first.',
+        );
         return;
       }
 
@@ -2364,123 +2362,128 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
       return const SizedBox.shrink();
     }
 
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: .05),
-            blurRadius: 10,
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Commercial Entries',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Use these for Single Fryers, Roasters, Stewers, and Meat Pens.',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: 12),
-          ..._commercialByCode.keys.map((classCode) {
-            final label = _commercialLabel(classCode);
+    return AppTheme.surfaceTextScope(
+      context,
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: .05),
+              blurRadius: 10,
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Commercial Entries',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Use these for Single Fryers, Roasters, Stewers, and Meat Pens.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            ..._commercialByCode.keys.map((classCode) {
+              final label = _commercialLabel(classCode);
 
-            if (classCode == 'meat_pen') {
+              if (classCode == 'meat_pen') {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _submitting ? null : _addMeatPenToCart,
+                      icon: const Icon(Icons.set_meal),
+                      label: Text('Add $label'),
+                    ),
+                  ),
+                );
+              }
+
               return Padding(
                 padding: const EdgeInsets.only(bottom: 10),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: _submitting ? null : _addMeatPenToCart,
-                    icon: const Icon(Icons.set_meal),
-                    label: Text('Add $label'),
+                child: PopupMenuButton<String>(
+                  enabled: !_submitting && rabbitAnimals.isNotEmpty,
+                  tooltip: 'Select rabbit for $label',
+                  onSelected: (animalId) {
+                    final animal = rabbitAnimals.firstWhere(
+                      (a) => (a['id'] ?? '').toString() == animalId,
+                    );
+                    _addCommercialSingleAnimalToCart(
+                      animal: animal,
+                      classCode: classCode,
+                    );
+                  },
+                  itemBuilder: (_) => rabbitAnimals.map((a) {
+                    final animalId = (a['id'] ?? '').toString();
+                    final ageDays = _animalAgeDaysOnShowDate(a);
+
+                    return PopupMenuItem<String>(
+                      value: animalId,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(_displayAnimalTitle(a)),
+                          const SizedBox(height: 2),
+                          Text(
+                            ageDays == null
+                                ? 'DOB missing'
+                                : 'Age eligible for this class',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: Colors.black.withValues(alpha: .12),
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.pets),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Add $label Using Rabbit'),
+                              const SizedBox(height: 2),
+                              Text(
+                                _commercialRuleText(classCode),
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.arrow_drop_down),
+                      ],
+                    ),
                   ),
                 ),
               );
-            }
-
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: PopupMenuButton<String>(
-                enabled: !_submitting && rabbitAnimals.isNotEmpty,
-                tooltip: 'Select rabbit for $label',
-                onSelected: (animalId) {
-                  final animal = rabbitAnimals.firstWhere(
-                    (a) => (a['id'] ?? '').toString() == animalId,
-                  );
-                  _addCommercialSingleAnimalToCart(
-                    animal: animal,
-                    classCode: classCode,
-                  );
-                },
-                itemBuilder: (_) => rabbitAnimals.map((a) {
-                  final animalId = (a['id'] ?? '').toString();
-                  final ageDays = _animalAgeDaysOnShowDate(a);
-
-                  return PopupMenuItem<String>(
-                    value: animalId,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(_displayAnimalTitle(a)),
-                        const SizedBox(height: 2),
-                        Text(
-                          ageDays == null
-                              ? 'DOB missing'
-                              : 'Age eligible for this class',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 14,
-                  ),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.black.withValues(alpha: .12)),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.pets),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Add $label Using Rabbit'),
-                            const SizedBox(height: 2),
-                            Text(
-                              _commercialRuleText(classCode),
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Icon(Icons.arrow_drop_down),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          }),
-        ],
+            }),
+          ],
+        ),
       ),
     );
   }
@@ -2498,12 +2501,10 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
           actions: [
             IconButton(
               tooltip: AppSession.isSupportMode
-                  ? 'Add animal disabled in support mode'
+                  ? 'Add animal while viewing as this user'
                   : 'Add Animal',
               icon: const Icon(Icons.add),
-              onPressed: (_submitting || AppSession.isSupportMode)
-                  ? null
-                  : _openAddAnimalDialog,
+              onPressed: _submitting ? null : _openAddAnimalDialog,
             ),
             IconButton(
               tooltip: 'View Cart',
@@ -2527,10 +2528,12 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
 
               _exhibitors = bundle.exhibitors;
 
-              final allowedExhibitors =
-                  _allowedExhibitorsForCurrentSelection(_exhibitors);
+              final allowedExhibitors = _allowedExhibitorsForCurrentSelection(
+                _exhibitors,
+              );
 
-              final selectedStillAllowed = _selectedExhibitorId != null &&
+              final selectedStillAllowed =
+                  _selectedExhibitorId != null &&
                   allowedExhibitors.any(
                     (e) => e['id'].toString() == _selectedExhibitorId,
                   );
@@ -2557,168 +2560,197 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                         children: [
                           Padding(
                             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                            child: Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: .05),
-                                    blurRadius: 10,
-                                  ),
-                                ],
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Show Date: $showDateText',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  DropdownButtonFormField<String>(
-                                    initialValue: allowedExhibitors.any(
-                                            (e) =>
-                                                e['id'].toString() ==
-                                                _selectedExhibitorId)
-                                        ? _selectedExhibitorId
-                                        : null,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Exhibitor',
-                                      border: OutlineInputBorder(),
-                                    ),
-                                    items: allowedExhibitors.map((e) {
-                                      return DropdownMenuItem<String>(
-                                        value: e['id'].toString(),
-                                        child: Text(_exhibitorLabel(e)),
-                                      );
-                                    }).toList(),
-                                    onChanged: _submitting
-                                        ? null
-                                        : (v) {
-                                            setState(() {
-                                              _selectedExhibitorId = v;
-                                              _msg = null;
-                                            });
-                                          },
-                                  ),
-                                  const SizedBox(height: 10),
-                                  Wrap(
-                                    spacing: 8,
-                                    runSpacing: 8,
-                                    children: [
-                                      OutlinedButton.icon(
-                                        onPressed: _submitting
-                                            ? null
-                                            : _openAddExhibitorDialog,
-                                        icon:
-                                            const Icon(Icons.person_add_alt_1),
-                                        label: const Text('Add Exhibitor'),
+                            child: AppTheme.surfaceTextScope(
+                              context,
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: AppColors.surface,
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(
+                                        alpha: .05,
                                       ),
-                                    ],
-                                  ),
-                                  if (_selectionIncludesYouth) ...[
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      'Youth sections selected. Only youth exhibitors may be used.',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodySmall
-                                          ?.copyWith(
-                                            color: Colors.red,
-                                            fontWeight: FontWeight.w600,
-                                          ),
+                                      blurRadius: 10,
                                     ),
                                   ],
-                                  const SizedBox(height: 12),
-                                  Wrap(
-                                    spacing: 8,
-                                    runSpacing: 8,
-                                    children: [
-                                      if (_selectedSectionIds.isNotEmpty)
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Show Date: $showDateText',
+                                      style: const TextStyle(
+                                        color: AppColors.text,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    DropdownButtonFormField<String>(
+                                      initialValue:
+                                          allowedExhibitors.any(
+                                            (e) =>
+                                                e['id'].toString() ==
+                                                _selectedExhibitorId,
+                                          )
+                                          ? _selectedExhibitorId
+                                          : null,
+                                      dropdownColor: AppColors.surface,
+                                      style: const TextStyle(
+                                        color: AppColors.text,
+                                      ),
+                                      decoration: const InputDecoration(
+                                        labelText: 'Exhibitor',
+                                        labelStyle: TextStyle(
+                                          color: AppColors.muted,
+                                        ),
+                                        border: OutlineInputBorder(),
+                                      ),
+                                      items: allowedExhibitors.map((e) {
+                                        return DropdownMenuItem<String>(
+                                          value: e['id'].toString(),
+                                          child: Text(
+                                            _exhibitorLabel(e),
+                                            style: const TextStyle(
+                                              color: AppColors.text,
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
+                                      onChanged: _submitting
+                                          ? null
+                                          : (v) {
+                                              setState(() {
+                                                _selectedExhibitorId = v;
+                                                _msg = null;
+                                              });
+                                            },
+                                    ),
+                                    const SizedBox(height: 10),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: [
                                         OutlinedButton.icon(
                                           onPressed: _submitting
                                               ? null
-                                              : _clearSectionSelection,
-                                          icon: const Icon(Icons.clear_all),
-                                          label: const Text('Clear Sections'),
+                                              : _openAddExhibitorDialog,
+                                          icon: const Icon(
+                                            Icons.person_add_alt_1,
+                                          ),
+                                          label: const Text('Add Exhibitor'),
                                         ),
+                                      ],
+                                    ),
+                                    if (_selectionIncludesYouth) ...[
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'Youth sections selected. Only youth exhibitors may be used.',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                              color: AppColors.danger,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                      ),
                                     ],
-                                  ),
-                                ],
+                                    const SizedBox(height: 12),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: [
+                                        if (_selectedSectionIds.isNotEmpty)
+                                          OutlinedButton.icon(
+                                            onPressed: _submitting
+                                                ? null
+                                                : _clearSectionSelection,
+                                            icon: const Icon(Icons.clear_all),
+                                            label: const Text('Clear Sections'),
+                                          ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
                           Padding(
                             padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                            child: Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: .05),
-                                    blurRadius: 10,
-                                  ),
-                                ],
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Select show(s) to enter',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium
-                                        ?.copyWith(
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    'Choose the section(s) you want to enter for this show, such as Youth A, Youth B, Open A, or Open B.',
-                                    style: Theme.of(context).textTheme.bodySmall,
-                                  ),
-                                  const SizedBox(height: 12),
-                                  Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: Wrap(
-                                      spacing: 8,
-                                      runSpacing: 8,
-                                      children: sections.map((s) {
-                                        final id = s['id'].toString();
-                                        final selected =
-                                            _selectedSectionIds.contains(id);
+                            child: AppTheme.surfaceTextScope(
+                              context,
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: AppColors.surface,
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(
+                                        alpha: .05,
+                                      ),
+                                      blurRadius: 10,
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Select show(s) to enter',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium
+                                          ?.copyWith(
+                                            color: AppColors.text,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      'Choose the section(s) you want to enter for this show, such as Youth A, Youth B, Open A, or Open B.',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(color: AppColors.muted),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: Wrap(
+                                        spacing: 8,
+                                        runSpacing: 8,
+                                        children: sections.map((s) {
+                                          final id = s['id'].toString();
+                                          final selected = _selectedSectionIds
+                                              .contains(id);
 
-                                        return FilterChip(
-                                          label: Text(_sectionChipLabel(s)),
-                                          selected: selected,
-                                          onSelected: _submitting
-                                              ? null
-                                              : (_) => _toggleSection(
+                                          return FilterChip(
+                                            label: Text(_sectionChipLabel(s)),
+                                            selected: selected,
+                                            onSelected: _submitting
+                                                ? null
+                                                : (_) => _toggleSection(
                                                     sectionId: id,
                                                     kind: (s['kind'] ?? '')
                                                         .toString(),
                                                   ),
-                                        );
-                                      }).toList(),
+                                          );
+                                        }).toList(),
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
                           ),
                           _buildCommercialCard(animals),
                           if (_msg != null)
                             Padding(
-                              padding:
-                                  const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                               child: Container(
                                 width: double.infinity,
                                 padding: const EdgeInsets.all(12),
@@ -2742,27 +2774,40 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                           if (animals.isEmpty)
                             const Padding(
                               padding: EdgeInsets.only(top: 48),
-                              child: Center(child: Text('No animals found.')),
+                              child: Center(
+                                child: Text(
+                                  'No animals found.',
+                                  style: TextStyle(
+                                    color: AppColors.headerForeground,
+                                  ),
+                                ),
+                              ),
                             )
                           else
                             Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 16),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                              ),
                               child: Column(
                                 children: animals.map((a) {
-                                  return Container(
-                                    margin: const EdgeInsets.only(bottom: 10),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(14),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withValues(alpha: .04),
-                                          blurRadius: 8,
-                                        ),
-                                      ],
+                                  return AppTheme.surfaceTextScope(
+                                    context,
+                                    child: Container(
+                                      margin: const EdgeInsets.only(bottom: 10),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.surface,
+                                        borderRadius: BorderRadius.circular(14),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withValues(
+                                              alpha: .04,
+                                            ),
+                                            blurRadius: 8,
+                                          ),
+                                        ],
+                                      ),
+                                      child: _buildAnimalTile(a),
                                     ),
-                                    child: _buildAnimalTile(a),
                                   );
                                 }).toList(),
                               ),
@@ -2891,8 +2936,7 @@ class _MeatPenDialogState extends State<_MeatPenDialog> {
     if (varietyName.isEmpty) return false;
 
     return _varietyOptions.any((v) {
-      return ((v['name'] ?? '').toString().trim().toLowerCase() ==
-          varietyName);
+      return ((v['name'] ?? '').toString().trim().toLowerCase() == varietyName);
     });
   }
 
@@ -3010,10 +3054,11 @@ class _MeatPenDialogState extends State<_MeatPenDialog> {
     if (!mounted) return;
     setState(() {
       _varietyOptions = (res as List).cast<Map<String, dynamic>>()
-        ..sort((a, b) => (a['name'] ?? '')
-            .toString()
-            .toLowerCase()
-            .compareTo((b['name'] ?? '').toString().toLowerCase()));
+        ..sort(
+          (a, b) => (a['name'] ?? '').toString().toLowerCase().compareTo(
+            (b['name'] ?? '').toString().toLowerCase(),
+          ),
+        );
       _loadingVarieties = false;
     });
   }
@@ -3057,11 +3102,7 @@ class _MeatPenDialogState extends State<_MeatPenDialog> {
 
     Navigator.pop(
       context,
-      _MeatPenInput(
-        breed: breed,
-        variety: variety,
-        tattoos: [t1, t2, t3],
-      ),
+      _MeatPenInput(breed: breed, variety: variety, tattoos: [t1, t2, t3]),
     );
   }
 
@@ -3166,10 +3207,7 @@ class _MeatPenDialogState extends State<_MeatPenDialog> {
           },
           child: const Text('Cancel'),
         ),
-        FilledButton(
-          onPressed: _save,
-          child: const Text('Save'),
-        ),
+        FilledButton(onPressed: _save, child: const Text('Save')),
       ],
     );
   }
@@ -3285,30 +3323,33 @@ class _FocusOpenAutocompleteState extends State<_FocusOpenAutocomplete> {
 
         final q = textEditingValue.text.trim().toLowerCase();
 
-        final results = widget.options.where((opt) {
-          final label = widget.displayStringForOption(opt).trim().toLowerCase();
-          return q.isEmpty || label.contains(q);
-        }).toList()
-          ..sort((a, b) {
-            final aSort = a['sort_order'];
-            final bSort = b['sort_order'];
+        final results =
+            widget.options.where((opt) {
+              final label = widget
+                  .displayStringForOption(opt)
+                  .trim()
+                  .toLowerCase();
+              return q.isEmpty || label.contains(q);
+            }).toList()..sort((a, b) {
+              final aSort = a['sort_order'];
+              final bSort = b['sort_order'];
 
-            if (aSort != null || bSort != null) {
-              final ai = aSort is int
-                  ? aSort
-                  : int.tryParse(aSort?.toString() ?? '') ?? 9999;
-              final bi = bSort is int
-                  ? bSort
-                  : int.tryParse(bSort?.toString() ?? '') ?? 9999;
+              if (aSort != null || bSort != null) {
+                final ai = aSort is int
+                    ? aSort
+                    : int.tryParse(aSort?.toString() ?? '') ?? 9999;
+                final bi = bSort is int
+                    ? bSort
+                    : int.tryParse(bSort?.toString() ?? '') ?? 9999;
 
-              final cmp = ai.compareTo(bi);
-              if (cmp != 0) return cmp;
-            }
+                final cmp = ai.compareTo(bi);
+                if (cmp != 0) return cmp;
+              }
 
-            final aLabel = widget.displayStringForOption(a).toLowerCase();
-            final bLabel = widget.displayStringForOption(b).toLowerCase();
-            return aLabel.compareTo(bLabel);
-          });
+              final aLabel = widget.displayStringForOption(a).toLowerCase();
+              final bLabel = widget.displayStringForOption(b).toLowerCase();
+              return aLabel.compareTo(bLabel);
+            });
 
         _lastOptions = List<Map<String, dynamic>>.from(results);
         if (_highlightedIndex >= _lastOptions.length) {
@@ -3331,63 +3372,59 @@ class _FocusOpenAutocompleteState extends State<_FocusOpenAutocomplete> {
           await widget.onSelectedAsync!(opt);
         }
       },
-      fieldViewBuilder: (
-        context,
-        textEditingController,
-        focusNode,
-        onFieldSubmitted,
-      ) {
-        return Focus(
-          onKeyEvent: (node, event) {
-            if (event is! KeyDownEvent) return KeyEventResult.ignored;
+      fieldViewBuilder:
+          (context, textEditingController, focusNode, onFieldSubmitted) {
+            return Focus(
+              onKeyEvent: (node, event) {
+                if (event is! KeyDownEvent) return KeyEventResult.ignored;
 
-            if (event.logicalKey == LogicalKeyboardKey.arrowDown &&
-                _lastOptions.isNotEmpty) {
-              setState(() {
-                _highlightedIndex =
-                    (_highlightedIndex + 1) % _lastOptions.length;
-              });
-              return KeyEventResult.handled;
-            }
+                if (event.logicalKey == LogicalKeyboardKey.arrowDown &&
+                    _lastOptions.isNotEmpty) {
+                  setState(() {
+                    _highlightedIndex =
+                        (_highlightedIndex + 1) % _lastOptions.length;
+                  });
+                  return KeyEventResult.handled;
+                }
 
-            if (event.logicalKey == LogicalKeyboardKey.arrowUp &&
-                _lastOptions.isNotEmpty) {
-              setState(() {
-                _highlightedIndex =
-                    (_highlightedIndex - 1 + _lastOptions.length) %
+                if (event.logicalKey == LogicalKeyboardKey.arrowUp &&
+                    _lastOptions.isNotEmpty) {
+                  setState(() {
+                    _highlightedIndex =
+                        (_highlightedIndex - 1 + _lastOptions.length) %
                         _lastOptions.length;
-              });
-              return KeyEventResult.handled;
-            }
+                  });
+                  return KeyEventResult.handled;
+                }
 
-            if ((event.logicalKey == LogicalKeyboardKey.enter ||
-                    event.logicalKey == LogicalKeyboardKey.tab) &&
-                _lastOptions.isNotEmpty) {
-              _commitHighlightedOption();
-              return KeyEventResult.handled;
-            }
+                if ((event.logicalKey == LogicalKeyboardKey.enter ||
+                        event.logicalKey == LogicalKeyboardKey.tab) &&
+                    _lastOptions.isNotEmpty) {
+                  _commitHighlightedOption();
+                  return KeyEventResult.handled;
+                }
 
-            return KeyEventResult.ignored;
+                return KeyEventResult.ignored;
+              },
+              child: TextField(
+                controller: textEditingController,
+                focusNode: focusNode,
+                enabled: widget.enabled,
+                readOnly: widget.readOnly,
+                textInputAction: TextInputAction.next,
+                onTap: () {
+                  widget.onFieldTap?.call();
+                  _openOptions();
+                },
+                onSubmitted: (_) => onFieldSubmitted(),
+                decoration: InputDecoration(
+                  labelText: widget.labelText,
+                  hintText: widget.hintText,
+                  suffixIcon: widget.suffixIcon,
+                ),
+              ),
+            );
           },
-          child: TextField(
-            controller: textEditingController,
-            focusNode: focusNode,
-            enabled: widget.enabled,
-            readOnly: widget.readOnly,
-            textInputAction: TextInputAction.next,
-            onTap: () {
-              widget.onFieldTap?.call();
-              _openOptions();
-            },
-            onSubmitted: (_) => onFieldSubmitted(),
-            decoration: InputDecoration(
-              labelText: widget.labelText,
-              hintText: widget.hintText,
-              suffixIcon: widget.suffixIcon,
-            ),
-          ),
-        );
-      },
       optionsViewBuilder: (context, onSelected, options) {
         final opts = options.toList();
         _rawOnSelected = onSelected;
@@ -3400,10 +3437,7 @@ class _FocusOpenAutocompleteState extends State<_FocusOpenAutocomplete> {
             elevation: 6,
             borderRadius: BorderRadius.circular(12),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxWidth: 420,
-                maxHeight: 240,
-              ),
+              constraints: const BoxConstraints(maxWidth: 420, maxHeight: 240),
               child: ListView.builder(
                 padding: EdgeInsets.zero,
                 shrinkWrap: true,
@@ -3416,8 +3450,9 @@ class _FocusOpenAutocompleteState extends State<_FocusOpenAutocomplete> {
                   return InkWell(
                     onTap: () => onSelected(opt),
                     child: Container(
-                      color:
-                          isHighlighted ? Theme.of(context).highlightColor : null,
+                      color: isHighlighted
+                          ? Theme.of(context).highlightColor
+                          : null,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 12,
                         vertical: 10,
@@ -3425,8 +3460,9 @@ class _FocusOpenAutocompleteState extends State<_FocusOpenAutocomplete> {
                       child: Text(
                         label,
                         style: TextStyle(
-                          fontWeight:
-                              isHighlighted ? FontWeight.w600 : FontWeight.normal,
+                          fontWeight: isHighlighted
+                              ? FontWeight.w600
+                              : FontWeight.normal,
                         ),
                       ),
                     ),

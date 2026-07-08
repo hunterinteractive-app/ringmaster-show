@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
 final supabase = Supabase.instance.client;
@@ -22,7 +23,8 @@ class SuperintendentLineupScreen extends StatefulWidget {
       _SuperintendentLineupScreenState();
 }
 
-class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen> {
+class _SuperintendentLineupScreenState
+    extends State<SuperintendentLineupScreen> {
   late Future<_LineupData> _future;
   int _extraTableCount = 0;
   bool _isAutoFilling = false;
@@ -53,7 +55,9 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Line-up saved, but entry judge sync failed: $error')),
+        SnackBar(
+          content: Text('Line-up saved, but entry judge sync failed: $error'),
+        ),
       );
     }
   }
@@ -70,9 +74,9 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
     if (!mounted) return;
     setState(() => _isSyncingEntries = false);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Judges synced to entries.')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Judges synced to entries.')));
   }
 
   Future<bool> _confirmPublishWithIssues(_LineupData data) async {
@@ -105,7 +109,8 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
   int _lineupConflictCount(List<Map<String, dynamic>> assignments) {
     var count = 0;
     for (final row in assignments) {
-      final isJudgeChange = row['is_judge_change'] == true ||
+      final isJudgeChange =
+          row['is_judge_change'] == true ||
           (row['breed_id'] ?? '').toString() == '__judge_change__';
       if (isJudgeChange) continue;
 
@@ -120,10 +125,7 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
     return count;
   }
 
-  Future<void> _setJudgeOrderPublished(
-    _LineupData data,
-    bool value,
-  ) async {
+  Future<void> _setJudgeOrderPublished(_LineupData data, bool value) async {
     if (_isSavingPublishedState) return;
 
     if (value) {
@@ -138,10 +140,12 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
           .from('shows')
           .update({
             'superintendent_judge_order_published': value,
-            'superintendent_judge_order_published_at':
-                value ? DateTime.now().toUtc().toIso8601String() : null,
-            'superintendent_judge_order_published_by':
-                value ? supabase.auth.currentUser?.id : null,
+            'superintendent_judge_order_published_at': value
+                ? DateTime.now().toUtc().toIso8601String()
+                : null,
+            'superintendent_judge_order_published_by': value
+                ? supabase.auth.currentUser?.id
+                : null,
           })
           .eq('id', widget.showId);
 
@@ -166,9 +170,9 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
     } catch (error) {
       if (!mounted) return;
       setState(() => _isSavingPublishedState = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Publish update failed: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Publish update failed: $error')));
     }
   }
 
@@ -207,10 +211,11 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
         ? const <Map<String, dynamic>>[]
         : List<Map<String, dynamic>>.from(
             await supabase
-                .from('show_superintendent_user_preferences')
-                .select()
-                .eq('user_id', currentUserId)
-                .limit(1) as List,
+                    .from('show_superintendent_user_preferences')
+                    .select()
+                    .eq('user_id', currentUserId)
+                    .limit(1)
+                as List,
           );
 
     final sections = await supabase
@@ -241,14 +246,15 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
       final current = (row['section_id'] ?? '').toString().trim();
       if (current.isNotEmpty) return current;
 
-      final letter = (row['show_letter'] ??
-              row['letter'] ??
-              row['section_letter'] ??
-              row['showLetter'] ??
-              '')
-          .toString()
-          .trim()
-          .toLowerCase();
+      final letter =
+          (row['show_letter'] ??
+                  row['letter'] ??
+                  row['section_letter'] ??
+                  row['showLetter'] ??
+                  '')
+              .toString()
+              .trim()
+              .toLowerCase();
 
       final kind = normalizedSectionKind(
         row['scope'] ??
@@ -283,7 +289,9 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
 
     for (final assignment in assignmentRows) {
       final assignmentId = (assignment['id'] ?? '').toString().trim();
-      final existingSectionId = (assignment['section_id'] ?? '').toString().trim();
+      final existingSectionId = (assignment['section_id'] ?? '')
+          .toString()
+          .trim();
       final inferredSectionId = inferSectionIdForAssignment(assignment);
 
       if (existingSectionId.isEmpty &&
@@ -343,11 +351,15 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
       }
 
       final judgeId = assignment['judge_id']?.toString();
-      final hasJudgeName =
-          (assignment['judge_name'] ?? '').toString().trim().isNotEmpty;
+      final hasJudgeName = (assignment['judge_name'] ?? '')
+          .toString()
+          .trim()
+          .isNotEmpty;
 
       if (judgeId != null && judgeId.isNotEmpty && !hasJudgeName) {
-        final matchingJudge = judgeRows.cast<Map<String, dynamic>?>().firstWhere(
+        final matchingJudge = judgeRows
+            .cast<Map<String, dynamic>?>()
+            .firstWhere(
               (judge) => judge?['judge_id']?.toString() == judgeId,
               orElse: () => null,
             );
@@ -362,24 +374,26 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
       if (assignment['is_judge_change'] == true) continue;
       if ((assignment['species'] ?? '').toString().isNotEmpty) continue;
 
-      final matchingBreed = breedRows.cast<Map<String, dynamic>?>().firstWhere(
-        (breed) {
-          if (breed == null) return false;
+      final matchingBreed = breedRows.cast<Map<String, dynamic>?>().firstWhere((
+        breed,
+      ) {
+        if (breed == null) return false;
 
-          final sameSection = (breed['section_id'] ?? '').toString() ==
-              (assignment['section_id'] ?? '').toString();
-          final sameBreed = (breed['breed'] ?? '').toString().toLowerCase() ==
-              (assignment['breed_id'] ?? '').toString().toLowerCase();
-          final assignmentVariety =
-              (assignment['variety_key'] ?? '').toString().toLowerCase();
-          final breedVariety = (breed['variety'] ?? '').toString().toLowerCase();
-          final sameVariety = assignmentVariety.isEmpty ||
-              breedVariety == assignmentVariety;
+        final sameSection =
+            (breed['section_id'] ?? '').toString() ==
+            (assignment['section_id'] ?? '').toString();
+        final sameBreed =
+            (breed['breed'] ?? '').toString().toLowerCase() ==
+            (assignment['breed_id'] ?? '').toString().toLowerCase();
+        final assignmentVariety = (assignment['variety_key'] ?? '')
+            .toString()
+            .toLowerCase();
+        final breedVariety = (breed['variety'] ?? '').toString().toLowerCase();
+        final sameVariety =
+            assignmentVariety.isEmpty || breedVariety == assignmentVariety;
 
-          return sameSection && sameBreed && sameVariety;
-        },
-        orElse: () => null,
-      );
+        return sameSection && sameBreed && sameVariety;
+      }, orElse: () => null);
 
       if (matchingBreed != null) {
         void fillIfBlank(String key, dynamic value) {
@@ -409,10 +423,10 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
           : preferenceRows.first,
       judgeOrderPublished:
           (showRow?['superintendent_judge_order_published'] == true),
-      judgeOrderPublishedAt:
-          showRow?['superintendent_judge_order_published_at']?.toString(),
-      judgeOrderPublishedBy:
-          showRow?['superintendent_judge_order_published_by']?.toString(),
+      judgeOrderPublishedAt: showRow?['superintendent_judge_order_published_at']
+          ?.toString(),
+      judgeOrderPublishedBy: showRow?['superintendent_judge_order_published_by']
+          ?.toString(),
     );
   }
 
@@ -439,7 +453,8 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
 
       for (var i = 0; i < rows.length; i++) {
         final row = rows[i];
-        final isJudgeChange = row['is_judge_change'] == true ||
+        final isJudgeChange =
+            row['is_judge_change'] == true ||
             (row['breed_id'] ?? '').toString() == '__judge_change__';
 
         if (isJudgeChange) {
@@ -452,16 +467,21 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
           continue;
         }
 
-        row['effective_judge_name'] = currentJudgeName ??
+        row['effective_judge_name'] =
+            currentJudgeName ??
             (row['judge_name'] ?? 'Judge not set').toString();
-        row['effective_judge_id'] = currentJudgeId ?? row['judge_id']?.toString();
+        row['effective_judge_id'] =
+            currentJudgeId ?? row['judge_id']?.toString();
 
         if (currentJudgeRowIndex != null) {
           final actual = (row['entry_count_actual'] as num?)?.toInt();
           final estimated = (row['entry_count_estimated'] as num?)?.toInt();
           final count = actual ?? estimated ?? 0;
           rows[currentJudgeRowIndex]['block_head_count'] =
-              ((rows[currentJudgeRowIndex]['block_head_count'] as num?)?.toInt() ?? 0) + count;
+              ((rows[currentJudgeRowIndex]['block_head_count'] as num?)
+                      ?.toInt() ??
+                  0) +
+              count;
         }
       }
     }
@@ -473,7 +493,8 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
 
     for (final rows in grouped.values) {
       for (final row in rows) {
-        final isJudgeChange = row['is_judge_change'] == true ||
+        final isJudgeChange =
+            row['is_judge_change'] == true ||
             (row['breed_id'] ?? '').toString() == '__judge_change__';
         if (isJudgeChange) continue;
 
@@ -494,7 +515,8 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
 
     for (final rows in grouped.values) {
       for (final row in rows) {
-        final isJudgeChange = row['is_judge_change'] == true ||
+        final isJudgeChange =
+            row['is_judge_change'] == true ||
             (row['breed_id'] ?? '').toString() == '__judge_change__';
         if (!isJudgeChange) continue;
 
@@ -510,13 +532,11 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
           continue;
         }
 
-        final existingCreated = DateTime.tryParse(
-              (existing['created_at'] ?? '').toString(),
-            ) ??
+        final existingCreated =
+            DateTime.tryParse((existing['created_at'] ?? '').toString()) ??
             DateTime.fromMillisecondsSinceEpoch(0);
-        final rowCreated = DateTime.tryParse(
-              (row['created_at'] ?? '').toString(),
-            ) ??
+        final rowCreated =
+            DateTime.tryParse((row['created_at'] ?? '').toString()) ??
             DateTime.fromMillisecondsSinceEpoch(0);
 
         if (rowCreated.isAfter(existingCreated)) {
@@ -534,21 +554,25 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
 
     for (final rows in grouped.values) {
       for (final row in rows) {
-        final isJudgeChange = row['is_judge_change'] == true ||
+        final isJudgeChange =
+            row['is_judge_change'] == true ||
             (row['breed_id'] ?? '').toString() == '__judge_change__';
         if (isJudgeChange) continue;
 
-        final judgeId = (row['effective_judge_id'] ?? row['judge_id'] ?? '').toString();
+        final judgeId = (row['effective_judge_id'] ?? row['judge_id'] ?? '')
+            .toString();
         final breed = (row['breed_id'] ?? '').toString().trim().toLowerCase();
         final scope = (row['scope'] ?? row['section_kind'] ?? row['kind'] ?? '')
             .toString()
             .trim()
             .toLowerCase();
-        final letter = (row['show_letter'] ?? row['letter'] ?? row['section_letter'] ?? '')
-            .toString()
-            .trim()
-            .toLowerCase();
-        if (judgeId.isEmpty || breed.isEmpty || scope.isEmpty || letter.isEmpty) continue;
+        final letter =
+            (row['show_letter'] ?? row['letter'] ?? row['section_letter'] ?? '')
+                .toString()
+                .trim()
+                .toLowerCase();
+        if (judgeId.isEmpty || breed.isEmpty || scope.isEmpty || letter.isEmpty)
+          continue;
 
         final key = '$judgeId|$breed|$scope';
         judgeBreedLetters.putIfAbsent(key, () => <String>{}).add(letter);
@@ -557,24 +581,29 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
 
     for (final rows in grouped.values) {
       for (final row in rows) {
-        final isJudgeChange = row['is_judge_change'] == true ||
+        final isJudgeChange =
+            row['is_judge_change'] == true ||
             (row['breed_id'] ?? '').toString() == '__judge_change__';
         if (isJudgeChange) continue;
 
-        final judgeId = (row['effective_judge_id'] ?? row['judge_id'] ?? '').toString();
+        final judgeId = (row['effective_judge_id'] ?? row['judge_id'] ?? '')
+            .toString();
         final breed = (row['breed_id'] ?? '').toString().trim().toLowerCase();
         final scope = (row['scope'] ?? row['section_kind'] ?? row['kind'] ?? '')
             .toString()
             .trim()
             .toLowerCase();
-        final letter = (row['show_letter'] ?? row['letter'] ?? row['section_letter'] ?? '')
-            .toString()
-            .trim()
-            .toLowerCase();
-        if (judgeId.isEmpty || breed.isEmpty || scope.isEmpty || letter.isEmpty) continue;
+        final letter =
+            (row['show_letter'] ?? row['letter'] ?? row['section_letter'] ?? '')
+                .toString()
+                .trim()
+                .toLowerCase();
+        if (judgeId.isEmpty || breed.isEmpty || scope.isEmpty || letter.isEmpty)
+          continue;
 
         final key = '$judgeId|$breed|$scope';
-        row['duplicate_judge_breed'] = (judgeBreedLetters[key]?.length ?? 0) > 1;
+        row['duplicate_judge_breed'] =
+            (judgeBreedLetters[key]?.length ?? 0) > 1;
       }
     }
     // --- END: Duplicate judge/breed/scope detection across show letters ---
@@ -703,7 +732,9 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Remove from line-up?'),
-        content: const Text('This will remove this breed from the judging line-up.'),
+        content: const Text(
+          'This will remove this breed from the judging line-up.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -762,10 +793,7 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
 
     await supabase
         .from('show_judging_assignments')
-        .update({
-          'table_number': tableNumber,
-          'sort_order': sortOrder,
-        })
+        .update({'table_number': tableNumber, 'sort_order': sortOrder})
         .eq('id', assignmentId);
 
     await _syncLineupToEntries();
@@ -774,15 +802,16 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
 
   // --- BEGIN: Auto Fill Helpers ---
   String _scopeLabelForAutoRow(Map<String, dynamic> row) {
-    final raw = (row['scope'] ??
-            row['section_scope'] ??
-            row['section_kind'] ??
-            row['kind'] ??
-            row['breed_scope'] ??
-            '')
-        .toString()
-        .trim()
-        .toLowerCase();
+    final raw =
+        (row['scope'] ??
+                row['section_scope'] ??
+                row['section_kind'] ??
+                row['kind'] ??
+                row['breed_scope'] ??
+                '')
+            .toString()
+            .trim()
+            .toLowerCase();
 
     if (raw == 'open') return 'Open';
     if (raw == 'youth') return 'Youth';
@@ -847,8 +876,8 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
     final rows = grouped.values.toList();
     final openYouthMode =
         (data.userPreferences['open_youth_mode'] ?? 'together').toString();
-    final showOrder =
-        (data.userPreferences['show_order'] ?? 'open_first').toString();
+    final showOrder = (data.userPreferences['show_order'] ?? 'open_first')
+        .toString();
     final pairOpenYouth = openYouthMode == 'together';
 
     int scopeRank(String scope) {
@@ -870,7 +899,7 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
       final key = '$letter|$breed'.toLowerCase();
       breedTotalsByLetter[key] =
           (breedTotalsByLetter[key] ?? 0) +
-              ((row['entry_count'] as num?)?.toInt() ?? 0);
+          ((row['entry_count'] as num?)?.toInt() ?? 0);
     }
 
     rows.sort((a, b) {
@@ -927,7 +956,8 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
     }
 
     final existingBreedRows = data.assignments.where((row) {
-      final isJudgeChange = row['is_judge_change'] == true ||
+      final isJudgeChange =
+          row['is_judge_change'] == true ||
           (row['breed_id'] ?? '').toString() == '__judge_change__';
       return !isJudgeChange;
     }).toList();
@@ -962,7 +992,9 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
     final breedRows = _autoBreedOptions(data);
     if (breedRows.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No breed counts available to auto fill.')),
+        const SnackBar(
+          content: Text('No breed counts available to auto fill.'),
+        ),
       );
       setState(() => _isAutoFilling = false);
       return;
@@ -997,11 +1029,12 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
             ? const <Map<String, dynamic>>[]
             : List<Map<String, dynamic>>.from(
                 await supabase
-                    .from('show_superintendent_judge_preferences')
-                    .select(
-                      'judge_id, speed_rating, overall_quality_rating, accuracy_rating, best_class_system, daily_head_limit, allows_overage, overage_rate_per_, average_entries_per_hour',
-                    )
-                    .eq('user_id', currentUserId) as List,
+                        .from('show_superintendent_judge_preferences')
+                        .select(
+                          'judge_id, speed_rating, overall_quality_rating, accuracy_rating, best_class_system, daily_head_limit, allows_overage, overage_rate_per_, average_entries_per_hour',
+                        )
+                        .eq('user_id', currentUserId)
+                    as List,
               );
       }
 
@@ -1020,36 +1053,44 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
           return currentLoad + breedCount.toDouble();
         }
 
-        final speed = (preference['speed_rating'] ??
+        final speed =
+            (preference['speed_rating'] ??
                     preference['avg_speed_rating'] ??
                     preference['weighted_speed_rating'] as num?)
                 ?.toDouble() ??
             5;
-        final quality = (preference['overall_quality_rating'] ??
+        final quality =
+            (preference['overall_quality_rating'] ??
                     preference['avg_overall_quality_rating'] ??
                     preference['weighted_overall_quality_rating'] as num?)
                 ?.toDouble() ??
             5;
-        final accuracy = (preference['accuracy_rating'] ??
+        final accuracy =
+            (preference['accuracy_rating'] ??
                     preference['avg_accuracy_rating'] ??
                     preference['weighted_accuracy_rating'] as num?)
                 ?.toDouble() ??
             5;
-        final dailyLimit = (preference['daily_head_limit'] ??
+        final dailyLimit =
+            (preference['daily_head_limit'] ??
                     preference['avg_daily_head_limit'] ??
                     preference['weighted_daily_head_limit'] as num?)
                 ?.toInt() ??
             250;
         final allowsOverage = preference['allows_overage'] != false;
-        final overageRate = (preference['overage_rate_per_'] ??
+        final overageRate =
+            (preference['overage_rate_per_'] ??
                     preference['avg_overage_rate_per_'] ??
                     preference['weighted_overage_rate_per_'] as num?)
                 ?.toDouble() ??
             0;
         final bestClassSystem =
-            (preference['best_class_system'] ?? preference['preferred_class_system'] ?? 'unknown')
+            (preference['best_class_system'] ??
+                    preference['preferred_class_system'] ??
+                    'unknown')
                 .toString();
-        final averageEntriesPerHour = (preference['average_entries_per_hour'] ??
+        final averageEntriesPerHour =
+            (preference['average_entries_per_hour'] ??
                     preference['avg_average_entries_per_hour'] ??
                     preference['weighted_average_entries_per_hour'] as num?)
                 ?.toDouble() ??
@@ -1087,13 +1128,15 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
         }
 
         // Small preference nudge if the user marked the judge better for a class system.
-        final classSystem = (breed['class_system'] ?? breed['classSystem'] ?? '')
-            .toString()
-            .toLowerCase();
+        final classSystem =
+            (breed['class_system'] ?? breed['classSystem'] ?? '')
+                .toString()
+                .toLowerCase();
         if (classSystem.isNotEmpty) {
           if (bestClassSystem == 'four_class' && classSystem.contains('four')) {
             score -= 15;
-          } else if (bestClassSystem == 'six_class' && classSystem.contains('six')) {
+          } else if (bestClassSystem == 'six_class' &&
+              classSystem.contains('six')) {
             score -= 15;
           } else if (bestClassSystem == 'both') {
             score -= 8;
@@ -1174,7 +1217,10 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
 
         // If every judge already has this breed/scope somewhere, place it with
         // the lowest scored judge and record an override note.
-        selectedJudge ??= data.judges.fold<Map<String, dynamic>?>(null, (best, judge) {
+        selectedJudge ??= data.judges.fold<Map<String, dynamic>?>(null, (
+          best,
+          judge,
+        ) {
           final judgeId = judge['judge_id']?.toString();
           if (judgeId == null || judgeId.isEmpty) return best;
           if (best == null) return judge;
@@ -1222,14 +1268,16 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
             'p_notes': requiresOverride
                 ? 'Auto Fill override: same judge assigned same breed/Open-Youth because no clean judge was available.'
                 : judgePreferencesByJudgeId.containsKey(judgeId)
-                    ? 'Auto Fill used superintendent judge preferences including judging pace when available.'
-                    : null,
+                ? 'Auto Fill used superintendent judge preferences including judging pace when available.'
+                : null,
           },
         );
 
         sortOrderByTable[tableNumber] = sortOrder + 1;
         judgeLoads[judgeId] = (judgeLoads[judgeId] ?? 0) + count;
-        judgeBreedScopes.putIfAbsent(judgeId, () => <String>{}).add(breedScopeKey);
+        judgeBreedScopes
+            .putIfAbsent(judgeId, () => <String>{})
+            .add(breedScopeKey);
       }
 
       await _syncLineupToEntries();
@@ -1243,14 +1291,16 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Auto Fill completed. Review before finalizing.')),
+        const SnackBar(
+          content: Text('Auto Fill completed. Review before finalizing.'),
+        ),
       );
     } catch (error) {
       if (!mounted) return;
       setState(() => _isAutoFilling = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString())),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
       if (!mounted) return;
       setState(() {
         _future = _loadData();
@@ -1271,7 +1321,10 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
           icon: const Icon(Icons.refresh),
           label: const Text('Refresh'),
           style: TextButton.styleFrom(
-            foregroundColor: Colors.white,
+            foregroundColor: AppColors.headerText,
+            disabledForegroundColor: AppColors.headerText.withValues(
+              alpha: .45,
+            ),
           ),
         ),
         TextButton.icon(
@@ -1285,7 +1338,10 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
               : const Icon(Icons.sync),
           label: Text(_isSyncingEntries ? 'Syncing...' : 'Sync Judges'),
           style: TextButton.styleFrom(
-            foregroundColor: Colors.white,
+            foregroundColor: AppColors.headerText,
+            disabledForegroundColor: AppColors.headerText.withValues(
+              alpha: .45,
+            ),
           ),
         ),
         TextButton.icon(
@@ -1305,7 +1361,10 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
               : const Icon(Icons.auto_fix_high),
           label: Text(_isAutoFilling ? 'Auto Filling...' : 'Auto Fill'),
           style: TextButton.styleFrom(
-            foregroundColor: Colors.white,
+            foregroundColor: AppColors.headerText,
+            disabledForegroundColor: AppColors.headerText.withValues(
+              alpha: .45,
+            ),
           ),
         ),
         TextButton.icon(
@@ -1313,7 +1372,10 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
           icon: const Icon(Icons.table_chart),
           label: const Text('Add Table'),
           style: TextButton.styleFrom(
-            foregroundColor: Colors.white,
+            foregroundColor: AppColors.headerText,
+            disabledForegroundColor: AppColors.headerText.withValues(
+              alpha: .45,
+            ),
           ),
         ),
       ],
@@ -1348,10 +1410,8 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
                       _SummaryCards(
                         data: data,
                         isSavingPublishedState: _isSavingPublishedState,
-                        onPublishChanged: (value) => _setJudgeOrderPublished(
-                          data,
-                          value,
-                        ),
+                        onPublishChanged: (value) =>
+                            _setJudgeOrderPublished(data, value),
                       ),
                       const SizedBox(height: 16),
                       _ResponsiveTableGrid(
@@ -1360,21 +1420,27 @@ class _SuperintendentLineupScreenState extends State<SuperintendentLineupScreen>
                         onAddBreed: (tableNumber) => _openAddSheet(
                           data,
                           tableNumber: tableNumber,
-                          sortOrder: _nextSortOrderForTable(tableNumber, grouped),
+                          sortOrder: _nextSortOrderForTable(
+                            tableNumber,
+                            grouped,
+                          ),
                         ),
                         onChangeJudge: (tableNumber) => _openAddJudgeSheet(
                           data,
                           tableNumber: tableNumber,
-                          sortOrder: _nextSortOrderForTable(tableNumber, grouped),
+                          sortOrder: _nextSortOrderForTable(
+                            tableNumber,
+                            grouped,
+                          ),
                         ),
                         onDeleteAssignment: _deleteAssignment,
                         onReorderAssignments: _reorderAssignments,
                         onMoveAssignmentToTable: (assignmentId, tableNumber) =>
                             _moveAssignmentToTable(
-                          assignmentId,
-                          tableNumber,
-                          _nextSortOrderForTable(tableNumber, grouped),
-                        ),
+                              assignmentId,
+                              tableNumber,
+                              _nextSortOrderForTable(tableNumber, grouped),
+                            ),
                       ),
                     ],
                   ),
@@ -1401,15 +1467,15 @@ class _LineupData {
   });
 
   factory _LineupData.empty() => const _LineupData(
-        assignments: <Map<String, dynamic>>[],
-        judges: <Map<String, dynamic>>[],
-        breedCounts: <Map<String, dynamic>>[],
-        workloads: <Map<String, dynamic>>[],
-        userPreferences: <String, dynamic>{},
-        judgeOrderPublished: false,
-        judgeOrderPublishedAt: null,
-        judgeOrderPublishedBy: null,
-      );
+    assignments: <Map<String, dynamic>>[],
+    judges: <Map<String, dynamic>>[],
+    breedCounts: <Map<String, dynamic>>[],
+    workloads: <Map<String, dynamic>>[],
+    userPreferences: <String, dynamic>{},
+    judgeOrderPublished: false,
+    judgeOrderPublishedAt: null,
+    judgeOrderPublishedBy: null,
+  );
 
   final List<Map<String, dynamic>> assignments;
   final List<Map<String, dynamic>> judges;
@@ -1479,7 +1545,9 @@ class _SummaryCards extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final assignedBreedRows = data.assignments.where((row) => !_isJudgeRow(row)).toList();
+    final assignedBreedRows = data.assignments
+        .where((row) => !_isJudgeRow(row))
+        .toList();
     final judgeRows = data.assignments.where(_isJudgeRow).toList();
 
     final assignedBreedKeys = <String>{};
@@ -1502,8 +1570,13 @@ class _SummaryCards extends StatelessWidget {
       availableHead += _headCountForRow(row);
     }
 
-    final unassignedBreedRows = availableBreedKeys.difference(assignedBreedKeys).length;
-    final remainingHead = (availableHead - assignedHead).clamp(0, availableHead);
+    final unassignedBreedRows = availableBreedKeys
+        .difference(assignedBreedKeys)
+        .length;
+    final remainingHead = (availableHead - assignedHead).clamp(
+      0,
+      availableHead,
+    );
 
     final tableNumbers = data.assignments
         .map((row) => (row['table_number'] ?? '').toString())
@@ -1515,7 +1588,8 @@ class _SummaryCards extends StatelessWidget {
         .where((id) => id.isNotEmpty)
         .toSet();
 
-    final assignedJudgeLabel = '${assignedJudgeIds.length}/${data.judges.length}';
+    final assignedJudgeLabel =
+        '${assignedJudgeIds.length}/${data.judges.length}';
     final assignedHeadLabel = '$assignedHead/$availableHead';
 
     return Wrap(
@@ -1585,8 +1659,8 @@ class _PublishJudgeOrderCard extends StatelessWidget {
     final hour12 = local.hour == 0
         ? 12
         : local.hour > 12
-            ? local.hour - 12
-            : local.hour;
+        ? local.hour - 12
+        : local.hour;
     final amPm = local.hour >= 12 ? 'PM' : 'AM';
 
     return 'Published $date $hour12:$minute $amPm';
@@ -1598,54 +1672,57 @@ class _PublishJudgeOrderCard extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final color = published ? Colors.green : Colors.orange;
 
-    return Container(
-      width: 250,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            published ? Icons.visibility : Icons.visibility_off,
-            color: color,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  published ? 'Published' : 'Not Published',
-                  style: textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    color: color,
-                  ),
-                ),
-                Text(
-                  'Judge Order',
-                  style: textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  _publishedHelper(),
-                  style: textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
+    return AppTheme.surfaceTextScope(
+      context,
+      child: Container(
+        width: 250,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: colorScheme.surface,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: colorScheme.outlineVariant),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              published ? Icons.visibility : Icons.visibility_off,
+              color: color,
             ),
-          ),
-          Switch.adaptive(
-            value: published,
-            onChanged: saving ? null : onChanged,
-          ),
-        ],
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    published ? 'Published' : 'Not Published',
+                    style: textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      color: color,
+                    ),
+                  ),
+                  Text(
+                    'Judge Order',
+                    style: textTheme.bodySmall?.copyWith(
+                      color: AppColors.muted,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _publishedHelper(),
+                    style: textTheme.bodySmall?.copyWith(
+                      color: AppColors.muted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Switch.adaptive(
+              value: published,
+              onChanged: saving ? null : onChanged,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1672,54 +1749,56 @@ class _MetricCard extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final color = isWarning ? colorScheme.error : colorScheme.primary;
 
-    return Container(
-      width: 190,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: color),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  value,
-                  style: textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    color: color,
-                  ),
-                ),
-                Text(
-                  label,
-                  style: textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                if (helper != null && helper!.isNotEmpty) ...[
-                  const SizedBox(height: 2),
+    return AppTheme.surfaceTextScope(
+      context,
+      child: Container(
+        width: 190,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: colorScheme.surface,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: colorScheme.outlineVariant),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: color),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    helper!,
-                    style: textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
+                    value,
+                    style: textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      color: color,
                     ),
                   ),
+                  Text(
+                    label,
+                    style: textTheme.bodySmall?.copyWith(
+                      color: AppColors.muted,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  if (helper != null && helper!.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      helper!,
+                      style: textTheme.bodySmall?.copyWith(
+                        color: AppColors.muted,
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
-
 
 class _ResponsiveTableGrid extends StatelessWidget {
   const _ResponsiveTableGrid({
@@ -1741,9 +1820,10 @@ class _ResponsiveTableGrid extends StatelessWidget {
     List<Map<String, dynamic>> assignments,
     int oldIndex,
     int newIndex,
-  ) onReorderAssignments;
+  )
+  onReorderAssignments;
   final Future<void> Function(String assignmentId, String tableNumber)
-      onMoveAssignmentToTable;
+  onMoveAssignmentToTable;
 
   @override
   Widget build(BuildContext context) {
@@ -1753,10 +1833,10 @@ class _ResponsiveTableGrid extends StatelessWidget {
         final columns = maxWidth >= 1200
             ? 4
             : maxWidth >= 900
-                ? 3
-                : maxWidth >= 620
-                    ? 2
-                    : 1;
+            ? 3
+            : maxWidth >= 620
+            ? 2
+            : 1;
         final spacing = 12.0;
         final cardWidth = (maxWidth - (spacing * (columns - 1))) / columns;
 
@@ -1769,7 +1849,9 @@ class _ResponsiveTableGrid extends StatelessWidget {
               child: _TableCard(
                 tableNumber: tableNumber,
                 tableNumbers: tableNumbers,
-                assignments: groupedAssignments[tableNumber] ?? const <Map<String, dynamic>>[],
+                assignments:
+                    groupedAssignments[tableNumber] ??
+                    const <Map<String, dynamic>>[],
                 onAddBreed: () => onAddBreed(tableNumber),
                 onChangeJudge: () => onChangeJudge(tableNumber),
                 onDeleteAssignment: onDeleteAssignment,
@@ -1806,27 +1888,30 @@ class _TableCard extends StatelessWidget {
     List<Map<String, dynamic>> assignments,
     int oldIndex,
     int newIndex,
-  ) onReorderAssignments;
+  )
+  onReorderAssignments;
   final Future<void> Function(String assignmentId, String tableNumber)
-      onMoveAssignmentToTable;
-
+  onMoveAssignmentToTable;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final hasBreedRows = assignments.any((row) {
-      final isJudgeChange = row['is_judge_change'] == true ||
+      final isJudgeChange =
+          row['is_judge_change'] == true ||
           (row['breed_id'] ?? '').toString() == '__judge_change__';
       return !isJudgeChange;
     });
     final hasJudgeRows = assignments.any((row) {
-      final isJudgeChange = row['is_judge_change'] == true ||
+      final isJudgeChange =
+          row['is_judge_change'] == true ||
           (row['breed_id'] ?? '').toString() == '__judge_change__';
       return isJudgeChange;
     });
     final hasActiveJudgeRows = assignments.any((row) {
-      final isJudgeChange = row['is_judge_change'] == true ||
+      final isJudgeChange =
+          row['is_judge_change'] == true ||
           (row['breed_id'] ?? '').toString() == '__judge_change__';
       if (!isJudgeChange) return false;
 
@@ -1842,187 +1927,203 @@ class _TableCard extends StatelessWidget {
       builder: (context, candidateData, rejectedData) {
         final isDragTarget = candidateData.isNotEmpty;
 
-        return Container(
-          decoration: BoxDecoration(
-            color: colorScheme.surface,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: isDragTarget ? colorScheme.primary : colorScheme.outlineVariant,
-              width: isDragTarget ? 2 : 1,
+        return AppTheme.surfaceTextScope(
+          context,
+          child: Container(
+            decoration: BoxDecoration(
+              color: colorScheme.surface,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isDragTarget
+                    ? colorScheme.primary
+                    : colorScheme.outlineVariant,
+                width: isDragTarget ? 2 : 1,
+              ),
             ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final veryCompact = constraints.maxWidth < 330;
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final veryCompact = constraints.maxWidth < 330;
 
-                final title = Text(
-                  'Table $tableNumber',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
-                );
+                      final title = Text(
+                        'Table $tableNumber',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: textTheme.titleMedium?.copyWith(
+                          color: AppColors.text,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      );
 
-                final judgeButton = OutlinedButton.icon(
-                  onPressed: onChangeJudge,
-                  icon: const Icon(Icons.gavel, size: 16),
-                  label: const Text('Judge'),
-                  style: OutlinedButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    minimumSize: const Size(0, 36),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                );
+                      final judgeButton = OutlinedButton.icon(
+                        onPressed: onChangeJudge,
+                        icon: const Icon(Icons.gavel, size: 16),
+                        label: const Text('Judge'),
+                        style: OutlinedButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 8,
+                          ),
+                          minimumSize: const Size(0, 36),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      );
 
-                final breedButton = FilledButton.icon(
-                  onPressed: onAddBreed,
-                  icon: const Icon(Icons.add, size: 16),
-                  label: const Text('Breed'),
-                  style: FilledButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    minimumSize: const Size(0, 36),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                );
+                      final breedButton = FilledButton.icon(
+                        onPressed: onAddBreed,
+                        icon: const Icon(Icons.add, size: 16),
+                        label: const Text('Breed'),
+                        style: FilledButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 8,
+                          ),
+                          minimumSize: const Size(0, 36),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      );
 
-                if (veryCompact) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      title,
-                      const SizedBox(height: 10),
-                      Row(
+                      if (veryCompact) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            title,
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                judgeButton,
+                                const SizedBox(width: 8),
+                                breedButton,
+                              ],
+                            ),
+                          ],
+                        );
+                      }
+
+                      return Row(
                         children: [
+                          SizedBox(width: 72, child: title),
+                          const SizedBox(width: 8),
                           judgeButton,
                           const SizedBox(width: 8),
                           breedButton,
                         ],
-                      ),
-                    ],
-                  );
-                }
-
-                return Row(
-                  children: [
-                    SizedBox(
-                      width: 72,
-                      child: title,
-                    ),
-                    const SizedBox(width: 8),
-                    judgeButton,
-                    const SizedBox(width: 8),
-                    breedButton,
-                  ],
-                );
-              },
-            ),
-          ),
-          const Divider(height: 1),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: assignments.isEmpty
-                ? Text(
-                    'Table empty — fill with judge.',
-                    style: textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ReorderableListView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        buildDefaultDragHandles: false,
-                        itemCount: assignments.length,
-                        onReorder: (oldIndex, newIndex) => onReorderAssignments(
-                          assignments,
-                          oldIndex,
-                          newIndex,
-                        ),
-                        itemBuilder: (context, index) {
-                          final row = assignments[index];
-                          final id = row['id']?.toString() ?? 'row-$index';
-
-                      return _LineupRow(
-                        key: ValueKey(id),
-                        row: row,
-                        index: index,
-                        currentTableNumber: tableNumber,
-                        tableNumbers: tableNumbers,
-                        onMoveToTable: onMoveAssignmentToTable,
-                        onDelete: () {
-                          final assignmentId = row['id']?.toString();
-                          if (assignmentId == null || assignmentId.isEmpty) return;
-                          onDeleteAssignment(assignmentId);
-                        },
                       );
-                        },
-                      ),
-                      if (!hasBreedRows) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          'Table empty — fill with breeds for this judge.',
-                          style: textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                            fontStyle: FontStyle.italic,
-                          ),
-                        ),
-                      ],
-                      if (hasBreedRows && !hasActiveJudgeRows) ...[
-                        const SizedBox(height: 10),
-                        Divider(
-                          height: 1,
-                          color: colorScheme.error.withValues(alpha: 0.35),
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          hasJudgeRows
-                              ? 'Judge moved — fill this table with a judge.'
-                              : 'Table has breeds — fill with judge.',
-                          style: textTheme.bodyMedium?.copyWith(
-                            color: colorScheme.error,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: OutlinedButton.icon(
-                            onPressed: onChangeJudge,
-                            icon: const Icon(Icons.gavel, size: 16),
-                            label: const Text('Add Judge'),
-                            style: OutlinedButton.styleFrom(
-                              visualDensity: VisualDensity.compact,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 8,
-                              ),
-                              minimumSize: const Size(0, 36),
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
+                    },
                   ),
-          ),
-            ],
+                ),
+                const Divider(height: 1),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: assignments.isEmpty
+                      ? Text(
+                          'Table empty — fill with judge.',
+                          style: textTheme.bodySmall?.copyWith(
+                            color: AppColors.muted,
+                          ),
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ReorderableListView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              buildDefaultDragHandles: false,
+                              itemCount: assignments.length,
+                              onReorder: (oldIndex, newIndex) =>
+                                  onReorderAssignments(
+                                    assignments,
+                                    oldIndex,
+                                    newIndex,
+                                  ),
+                              itemBuilder: (context, index) {
+                                final row = assignments[index];
+                                final id =
+                                    row['id']?.toString() ?? 'row-$index';
+
+                                return _LineupRow(
+                                  key: ValueKey(id),
+                                  row: row,
+                                  index: index,
+                                  currentTableNumber: tableNumber,
+                                  tableNumbers: tableNumbers,
+                                  onMoveToTable: onMoveAssignmentToTable,
+                                  onDelete: () {
+                                    final assignmentId = row['id']?.toString();
+                                    if (assignmentId == null ||
+                                        assignmentId.isEmpty) {
+                                      return;
+                                    }
+                                    onDeleteAssignment(assignmentId);
+                                  },
+                                );
+                              },
+                            ),
+                            if (!hasBreedRows) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                'Table empty — fill with breeds for this judge.',
+                                style: textTheme.bodySmall?.copyWith(
+                                  color: AppColors.muted,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ],
+                            if (hasBreedRows && !hasActiveJudgeRows) ...[
+                              const SizedBox(height: 10),
+                              Divider(
+                                height: 1,
+                                color: colorScheme.error.withValues(
+                                  alpha: 0.35,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                hasJudgeRows
+                                    ? 'Judge moved — fill this table with a judge.'
+                                    : 'Table has breeds — fill with judge.',
+                                style: textTheme.bodyMedium?.copyWith(
+                                  color: colorScheme.error,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: OutlinedButton.icon(
+                                  onPressed: onChangeJudge,
+                                  icon: const Icon(Icons.gavel, size: 16),
+                                  label: const Text('Add Judge'),
+                                  style: OutlinedButton.styleFrom(
+                                    visualDensity: VisualDensity.compact,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 8,
+                                    ),
+                                    minimumSize: const Size(0, 36),
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                ),
+              ],
+            ),
           ),
         );
       },
     );
   }
 }
-
 
 class _SpeciesIcon extends StatelessWidget {
   const _SpeciesIcon({required this.speciesLabel});
@@ -2037,8 +2138,8 @@ class _SpeciesIcon extends StatelessWidget {
     final emoji = normalized == 'rabbit'
         ? '🐇'
         : normalized == 'cavy'
-            ? '🐹'
-            : '•';
+        ? '🐹'
+        : '•';
 
     return SizedBox(
       width: 22,
@@ -2054,6 +2155,7 @@ class _SpeciesIcon extends StatelessWidget {
     );
   }
 }
+
 class _LineupRow extends StatelessWidget {
   const _LineupRow({
     super.key,
@@ -2070,39 +2172,41 @@ class _LineupRow extends StatelessWidget {
   final String currentTableNumber;
   final List<String> tableNumbers;
   final Future<void> Function(String assignmentId, String tableNumber)
-      onMoveToTable;
+  onMoveToTable;
   final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final isJudgeChange = row['is_judge_change'] == true ||
+    final isJudgeChange =
+        row['is_judge_change'] == true ||
         (row['breed_id'] ?? '').toString() == '__judge_change__';
-    final headCount = (row['entry_count_actual'] as num?)?.toInt() ??
+    final headCount =
+        (row['entry_count_actual'] as num?)?.toInt() ??
         (row['entry_count_estimated'] as num?)?.toInt() ??
         0;
     final judgeName = (row['judge_name'] ?? 'Judge not set').toString();
-    final showLetter = (row['show_letter'] ??
-            row['letter'] ??
-            row['section_letter'] ??
-            row['showLetter'] ??
-            '')
-        .toString()
-        .trim();
+    final showLetter =
+        (row['show_letter'] ??
+                row['letter'] ??
+                row['section_letter'] ??
+                row['showLetter'] ??
+                '')
+            .toString()
+            .trim();
     final rawBreedName = (row['breed_id'] ?? 'Breed not set').toString();
     final breedName = isJudgeChange
         ? judgeName
-        : [
-            if (showLetter.isNotEmpty) showLetter,
-            rawBreedName,
-          ].join(' | ');
-    final speciesRaw = (row['species'] ?? row['species_name'] ?? '').toString().toLowerCase();
+        : [if (showLetter.isNotEmpty) showLetter, rawBreedName].join(' | ');
+    final speciesRaw = (row['species'] ?? row['species_name'] ?? '')
+        .toString()
+        .toLowerCase();
     final speciesLabel = speciesRaw == 'cavy'
         ? 'Cavy'
         : speciesRaw == 'rabbit'
-            ? 'Rabbit'
-            : 'Species not set';
+        ? 'Rabbit'
+        : 'Species not set';
     final scopeRaw = (row['scope'] ?? row['section_kind'] ?? row['kind'] ?? '')
         .toString()
         .trim()
@@ -2110,8 +2214,8 @@ class _LineupRow extends StatelessWidget {
     final scopeLabel = scopeRaw == 'youth'
         ? 'Youth'
         : scopeRaw == 'open'
-            ? 'Open'
-            : '';
+        ? 'Open'
+        : '';
 
     // Duplicate judge/breed detection and override
     final isDuplicateJudgeBreed = row['duplicate_judge_breed'] == true;
@@ -2146,7 +2250,8 @@ class _LineupRow extends StatelessWidget {
                   breedName,
                   style: textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w900,
-                    color: !isJudgeChange && isDuplicateJudgeBreed && !hasOverride
+                    color:
+                        !isJudgeChange && isDuplicateJudgeBreed && !hasOverride
                         ? colorScheme.error
                         : null,
                   ),
@@ -2171,7 +2276,9 @@ class _LineupRow extends StatelessWidget {
                         ? 'Duplicate judge/breed override recorded'
                         : 'Duplicate judge/breed needs override',
                     style: textTheme.bodySmall?.copyWith(
-                      color: hasOverride ? colorScheme.primary : colorScheme.error,
+                      color: hasOverride
+                          ? colorScheme.primary
+                          : colorScheme.error,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -2214,12 +2321,14 @@ class _LineupRow extends StatelessWidget {
             ),
             onPressed: onDelete,
           ),
-          if (!(isJudgeChange && ((row['block_head_count'] as num?)?.toInt() ?? 0) == 0)) ...[
+          if (!(isJudgeChange &&
+              ((row['block_head_count'] as num?)?.toInt() ?? 0) == 0)) ...[
             const SizedBox(width: 4),
             Text(
               isJudgeChange
                   ? (() {
-                      final total = (row['block_head_count'] as num?)?.toInt() ?? 0;
+                      final total =
+                          (row['block_head_count'] as num?)?.toInt() ?? 0;
                       return total == 0 ? '' : '$total / 250';
                     })()
                   : '$headCount',
@@ -2242,28 +2351,29 @@ class _LineupRow extends StatelessWidget {
       feedback: Material(
         elevation: 6,
         borderRadius: BorderRadius.circular(12),
-        child: Container(
-          width: 240,
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: colorScheme.surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: colorScheme.outlineVariant),
-          ),
-          child: Text(
-            breedName,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w900,
+        child: AppTheme.surfaceTextScope(
+          context,
+          child: Container(
+            width: 240,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: colorScheme.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: colorScheme.outlineVariant),
+            ),
+            child: Text(
+              breedName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: textTheme.titleSmall?.copyWith(
+                color: AppColors.text,
+                fontWeight: FontWeight.w900,
+              ),
             ),
           ),
         ),
       ),
-      childWhenDragging: Opacity(
-        opacity: 0.35,
-        child: rowContent,
-      ),
+      childWhenDragging: Opacity(opacity: 0.35, child: rowContent),
       child: rowContent,
     );
   }
@@ -2298,9 +2408,9 @@ class _AddJudgeChangeSheetState extends State<_AddJudgeChangeSheet> {
 
   Future<void> _save() async {
     if (_judgeId == null || _judgeId!.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Select a judge first.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Select a judge first.')));
       return;
     }
 
@@ -2329,9 +2439,9 @@ class _AddJudgeChangeSheetState extends State<_AddJudgeChangeSheet> {
       Navigator.pop(context, true);
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString())),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -2347,9 +2457,9 @@ class _AddJudgeChangeSheetState extends State<_AddJudgeChangeSheet> {
         children: [
           Text(
             'Add Judge to Table ${widget.tableNumber}',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w900,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 16),
           DropdownButtonFormField<String>(
@@ -2361,10 +2471,7 @@ class _AddJudgeChangeSheetState extends State<_AddJudgeChangeSheet> {
             items: widget.judges.map((judge) {
               final id = judge['judge_id']?.toString();
               final name = (judge['judge_name'] ?? 'Unknown Judge').toString();
-              return DropdownMenuItem<String>(
-                value: id,
-                child: Text(name),
-              );
+              return DropdownMenuItem<String>(value: id, child: Text(name));
             }).toList(),
             onChanged: _selectJudge,
           ),
@@ -2425,7 +2532,8 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
     }
 
     for (final row in widget.assignedRows) {
-      final isJudgeChange = row['is_judge_change'] == true ||
+      final isJudgeChange =
+          row['is_judge_change'] == true ||
           (row['breed_id'] ?? '').toString() == '__judge_change__';
       if (isJudgeChange) continue;
 
@@ -2442,16 +2550,18 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
 
     return false;
   }
+
   String _scopeLabelForRow(Map<String, dynamic> row) {
-    final raw = (row['scope'] ??
-            row['section_scope'] ??
-            row['section_kind'] ??
-            row['kind'] ??
-            row['breed_scope'] ??
-            '')
-        .toString()
-        .trim()
-        .toLowerCase();
+    final raw =
+        (row['scope'] ??
+                row['section_scope'] ??
+                row['section_kind'] ??
+                row['kind'] ??
+                row['breed_scope'] ??
+                '')
+            .toString()
+            .trim()
+            .toLowerCase();
 
     if (raw == 'open') return 'Open';
     if (raw == 'youth') return 'Youth';
@@ -2475,6 +2585,7 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
         .toString()
         .trim();
   }
+
   bool _saving = false;
   bool _addedAny = false;
   late String _breedSortMode;
@@ -2492,7 +2603,8 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
     final keys = <String>{};
 
     for (final row in widget.assignedRows) {
-      final isJudgeChange = row['is_judge_change'] == true ||
+      final isJudgeChange =
+          row['is_judge_change'] == true ||
           (row['breed_id'] ?? '').toString() == '__judge_change__';
       if (isJudgeChange) continue;
 
@@ -2529,7 +2641,9 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
 
   Map<String, dynamic>? get _currentJudgeRow {
     final tableRows = widget.assignedRows
-        .where((row) => (row['table_number'] ?? '').toString() == widget.tableNumber)
+        .where(
+          (row) => (row['table_number'] ?? '').toString() == widget.tableNumber,
+        )
         .toList();
 
     tableRows.sort((a, b) {
@@ -2539,7 +2653,8 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
     });
 
     for (final row in tableRows.reversed) {
-      final isJudgeChange = row['is_judge_change'] == true ||
+      final isJudgeChange =
+          row['is_judge_change'] == true ||
           (row['breed_id'] ?? '').toString() == '__judge_change__';
       if (isJudgeChange) return row;
     }
@@ -2605,8 +2720,8 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
 
     final openYouthMode =
         (widget.userPreferences['open_youth_mode'] ?? 'together').toString();
-    final showOrder =
-        (widget.userPreferences['show_order'] ?? 'open_first').toString();
+    final showOrder = (widget.userPreferences['show_order'] ?? 'open_first')
+        .toString();
     final pairOpenYouth = openYouthMode == 'together';
 
     int scopeRank(String scope) {
@@ -2628,7 +2743,7 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
       final key = '$letter|$breed'.toLowerCase();
       breedTotalsByLetter[key] =
           (breedTotalsByLetter[key] ?? 0) +
-              ((row['entry_count'] as num?)?.toInt() ?? 0);
+          ((row['entry_count'] as num?)?.toInt() ?? 0);
     }
 
     options.sort((a, b) {
@@ -2726,9 +2841,12 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
     return matches;
   }
 
-  List<Map<String, dynamic>> _existingSameJudgeBreedRows(Map<String, dynamic> breed) {
+  List<Map<String, dynamic>> _existingSameJudgeBreedRows(
+    Map<String, dynamic> breed,
+  ) {
     final judgeId = _currentJudgeId;
-    if (judgeId == null || judgeId.isEmpty) return const <Map<String, dynamic>>[];
+    if (judgeId == null || judgeId.isEmpty)
+      return const <Map<String, dynamic>>[];
 
     final targetBreed = (breed['breed'] ?? '').toString().trim().toLowerCase();
     final targetScope = _scopeLabelForRow(breed).toLowerCase();
@@ -2755,7 +2873,8 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
       String? activeJudgeId;
 
       for (final row in rows) {
-        final isJudgeChange = row['is_judge_change'] == true ||
+        final isJudgeChange =
+            row['is_judge_change'] == true ||
             (row['breed_id'] ?? '').toString() == '__judge_change__';
 
         if (isJudgeChange) {
@@ -2763,7 +2882,10 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
           continue;
         }
 
-        final rowBreed = (row['breed_id'] ?? '').toString().trim().toLowerCase();
+        final rowBreed = (row['breed_id'] ?? '')
+            .toString()
+            .trim()
+            .toLowerCase();
         final rowScope = _scopeLabelForRow(row).toLowerCase();
         final rowLetter = _showLetterForRow(row).toLowerCase();
 
@@ -2796,14 +2918,17 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('$judgeName already has ${_scopeLabelForRow(breed)} $breedName assigned in another show letter.'),
+            Text(
+              '$judgeName already has ${_scopeLabelForRow(breed)} $breedName assigned in another show letter.',
+            ),
             const SizedBox(height: 12),
             TextField(
               controller: controller,
               maxLines: 3,
               decoration: const InputDecoration(
                 labelText: 'Override reason',
-                hintText: 'Example: emergency judge change, superintendent approved, etc.',
+                hintText:
+                    'Example: emergency judge change, superintendent approved, etc.',
                 border: OutlineInputBorder(),
               ),
             ),
@@ -2835,7 +2960,9 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('That show letter, breed, and Open/Youth row is already assigned.'),
+            content: Text(
+              'That show letter, breed, and Open/Youth row is already assigned.',
+            ),
           ),
         );
       }
@@ -2870,7 +2997,9 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Could not determine the show letter for this breed row.'),
+            content: Text(
+              'Could not determine the show letter for this breed row.',
+            ),
           ),
         );
       }
@@ -2878,7 +3007,10 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
     }
     // --- END: Determine usable section_id for breed row ---
 
-    final conflicts = await _loadJudgeBreedConflictsWithSectionId(breed, sectionId);
+    final conflicts = await _loadJudgeBreedConflictsWithSectionId(
+      breed,
+      sectionId,
+    );
     if (!mounted) return false;
 
     final canAdd = await _confirmConflicts(breed, conflicts);
@@ -2924,7 +3056,10 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
   }
 
   // Helper to use sectionId in judge conflict check
-  Future<List<String>> _loadJudgeBreedConflictsWithSectionId(Map<String, dynamic> breed, String? sectionId) async {
+  Future<List<String>> _loadJudgeBreedConflictsWithSectionId(
+    Map<String, dynamic> breed,
+    String? sectionId,
+  ) async {
     final judgeId = _currentJudgeId;
     if (judgeId == null || judgeId.isEmpty) return const <String>[];
 
@@ -2943,16 +3078,19 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
 
       return result.map<String>((item) {
         if (item is Map) {
-          final exhibitor = (item['exhibitor_name'] ??
-                  item['display_name'] ??
-                  item['exhibitor_display_name'] ??
-                  'Unknown exhibitor')
+          final exhibitor =
+              (item['exhibitor_name'] ??
+                      item['display_name'] ??
+                      item['exhibitor_display_name'] ??
+                      'Unknown exhibitor')
+                  .toString();
+          final relationship =
+              (item['relationship'] ??
+                      item['conflict_type'] ??
+                      'entry conflict')
+                  .toString();
+          final scope = (item['scope'] ?? item['section_scope'] ?? '')
               .toString();
-          final relationship = (item['relationship'] ??
-                  item['conflict_type'] ??
-                  'entry conflict')
-              .toString();
-          final scope = (item['scope'] ?? item['section_scope'] ?? '').toString();
           final scopeLabel = scope.isEmpty ? '' : ' • $scope';
           return '$exhibitor • $relationship$scopeLabel';
         }
@@ -2969,7 +3107,9 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
     Navigator.pop(context, _addedAny);
   }
 
-  Future<List<String>> _loadJudgeBreedConflicts(Map<String, dynamic> breed) async {
+  Future<List<String>> _loadJudgeBreedConflicts(
+    Map<String, dynamic> breed,
+  ) async {
     final judgeId = _currentJudgeId;
     if (judgeId == null || judgeId.isEmpty) return const <String>[];
 
@@ -2988,16 +3128,19 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
 
       return result.map<String>((item) {
         if (item is Map) {
-          final exhibitor = (item['exhibitor_name'] ??
-                  item['display_name'] ??
-                  item['exhibitor_display_name'] ??
-                  'Unknown exhibitor')
+          final exhibitor =
+              (item['exhibitor_name'] ??
+                      item['display_name'] ??
+                      item['exhibitor_display_name'] ??
+                      'Unknown exhibitor')
+                  .toString();
+          final relationship =
+              (item['relationship'] ??
+                      item['conflict_type'] ??
+                      'entry conflict')
+                  .toString();
+          final scope = (item['scope'] ?? item['section_scope'] ?? '')
               .toString();
-          final relationship = (item['relationship'] ??
-                  item['conflict_type'] ??
-                  'entry conflict')
-              .toString();
-          final scope = (item['scope'] ?? item['section_scope'] ?? '').toString();
           final scopeLabel = scope.isEmpty ? '' : ' • $scope';
           return '$exhibitor • $relationship$scopeLabel';
         }
@@ -3026,9 +3169,13 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('$judgeName may have entries or family entries in $breedName.'),
+            Text(
+              '$judgeName may have entries or family entries in $breedName.',
+            ),
             const SizedBox(height: 12),
-            ...conflicts.take(6).map(
+            ...conflicts
+                .take(6)
+                .map(
                   (conflict) => Padding(
                     padding: const EdgeInsets.only(bottom: 4),
                     child: Text('• $conflict'),
@@ -3062,9 +3209,9 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
       await _addBreedRow(breed);
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString())),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -3088,9 +3235,9 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
       }
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString())),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -3100,7 +3247,9 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
   Widget build(BuildContext context) {
     final availableLetters = _availableShowLetters;
     final selectedLetterForDropdown =
-        availableLetters.contains(_selectedShowLetter) ? _selectedShowLetter : null;
+        availableLetters.contains(_selectedShowLetter)
+        ? _selectedShowLetter
+        : null;
 
     if (_selectedShowLetter != selectedLetterForDropdown) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -3127,8 +3276,8 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
                   child: Text(
                     'Add Breeds to Table ${widget.tableNumber}',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ),
                 IconButton(
@@ -3142,8 +3291,8 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
             Text(
               'Current judge: $_currentJudgeName',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
@@ -3201,8 +3350,8 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
                 child: Text(
                   'All available breeds have already been added to the line-up.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
               )
             else
@@ -3215,11 +3364,17 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
                   itemBuilder: (context, index) {
                     final breed = options[index];
                     final scope = _scopeLabelForRow(breed);
-                    final label = [
-                      breed['show_letter'],
-                      if (scope.isNotEmpty) scope,
-                      breed['breed'],
-                    ].where((part) => part != null && part.toString().isNotEmpty).join(' • ');
+                    final label =
+                        [
+                              breed['show_letter'],
+                              if (scope.isNotEmpty) scope,
+                              breed['breed'],
+                            ]
+                            .where(
+                              (part) =>
+                                  part != null && part.toString().isNotEmpty,
+                            )
+                            .join(' • ');
                     final count = (breed['entry_count'] as num?)?.toInt() ?? 0;
                     final pair = _openYouthPairFor(breed, options);
                     final canAddPair = pair.length > 1;
@@ -3240,7 +3395,9 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
                               message: 'Add Open & Youth',
                               child: IconButton(
                                 visualDensity: VisualDensity.compact,
-                                icon: const Icon(Icons.library_add_check_outlined),
+                                icon: const Icon(
+                                  Icons.library_add_check_outlined,
+                                ),
                                 onPressed: _saving
                                     ? null
                                     : () => _addOpenYouthPair(breed, options),
@@ -3251,7 +3408,9 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
                             child: IconButton(
                               visualDensity: VisualDensity.compact,
                               icon: const Icon(Icons.add_circle_outline),
-                              onPressed: _saving ? null : () => _addBreed(breed),
+                              onPressed: _saving
+                                  ? null
+                                  : () => _addBreed(breed),
                             ),
                           ),
                         ],
@@ -3300,21 +3459,25 @@ class _EmptyLineupCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Icon(Icons.table_chart_outlined, size: 56, color: colorScheme.primary),
+          Icon(
+            Icons.table_chart_outlined,
+            size: 56,
+            color: colorScheme.primary,
+          ),
           const SizedBox(height: 16),
           Text(
             'No line-up rows yet',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w900,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 8),
           Text(
             'Add a breed to start building the superintendent judging order.',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
+              color: colorScheme.onSurfaceVariant,
+            ),
           ),
           const SizedBox(height: 16),
           FilledButton.icon(
@@ -3329,10 +3492,7 @@ class _EmptyLineupCard extends StatelessWidget {
 }
 
 class _ErrorState extends StatelessWidget {
-  const _ErrorState({
-    required this.message,
-    required this.onRetry,
-  });
+  const _ErrorState({required this.message, required this.onRetry});
 
   final String message;
   final Future<void> Function() onRetry;
@@ -3349,9 +3509,9 @@ class _ErrorState extends StatelessWidget {
             const SizedBox(height: 16),
             Text(
               'Unable to load line-up',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),

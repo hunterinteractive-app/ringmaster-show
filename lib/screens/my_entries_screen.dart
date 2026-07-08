@@ -1339,7 +1339,15 @@ class _ShowExpansionCard extends StatelessWidget {
 
     return RMCard(
       child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        data: AppTheme.surfaceTheme(Theme.of(context)).copyWith(
+          dividerColor: Colors.transparent,
+          expansionTileTheme: const ExpansionTileThemeData(
+            textColor: AppColors.text,
+            collapsedTextColor: AppColors.text,
+            iconColor: AppColors.muted,
+            collapsedIconColor: AppColors.muted,
+          ),
+        ),
         child: ExpansionTile(
           initiallyExpanded: initiallyExpanded,
           onExpansionChanged: onExpandedChanged,
@@ -1347,9 +1355,10 @@ class _ShowExpansionCard extends StatelessWidget {
           childrenPadding: const EdgeInsets.only(bottom: AppSpacing.sm),
           title: Text(
             title,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: AppColors.text,
+              fontWeight: FontWeight.w700,
+            ),
           ),
           subtitle: Padding(
             padding: const EdgeInsets.only(top: AppSpacing.xs),
@@ -1382,17 +1391,38 @@ class _ShowExpansionCard extends StatelessWidget {
                   onPressed: () => onBreedCounts(context, showId, title),
                   icon: const Icon(Icons.bar_chart),
                   label: const Text('Breed Counts'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.secondaryButton,
+                    side: const BorderSide(
+                      color: AppColors.secondaryButton,
+                      width: 1.4,
+                    ),
+                  ),
                 ),
                 if (judgeOrderPublished)
                   OutlinedButton.icon(
                     onPressed: () => onJudgeOrder(context, showId, title),
                     icon: const Icon(Icons.assignment_ind_outlined),
                     label: const Text('Judge Order'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.secondaryButton,
+                      side: const BorderSide(
+                        color: AppColors.secondaryButton,
+                        width: 1.4,
+                      ),
+                    ),
                   ),
                 OutlinedButton.icon(
                   onPressed: () => onDownloadEntries(showId, title),
                   icon: const Icon(Icons.download),
                   label: const Text('Download Entries'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.secondaryButton,
+                    side: const BorderSide(
+                      color: AppColors.secondaryButton,
+                      width: 1.4,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -1411,368 +1441,377 @@ class _ShowExpansionCard extends StatelessWidget {
                       color: AppColors.bg,
                       borderRadius: BorderRadius.circular(AppRadius.sm),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          exhibitorLabel(exId),
-                          style: Theme.of(context).textTheme.titleSmall,
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                        ...groupedEntries.entries.map((breedEntry) {
-                          final breed = breedEntry.key;
-                          final varieties = breedEntry.value;
-
-                          final varietyKeys = varieties.keys.toList()
-                            ..sort(
-                              (a, b) =>
-                                  a.toLowerCase().compareTo(b.toLowerCase()),
-                            );
-
-                          return Padding(
-                            padding: const EdgeInsets.only(
-                              bottom: AppSpacing.md,
+                    child: AppTheme.gradientTextScope(
+                      context,
+                      child: Builder(
+                        builder: (context) => Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              exhibitorLabel(exId),
+                              style: Theme.of(context).textTheme.titleSmall,
                             ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  breed,
-                                  style: Theme.of(context).textTheme.titleSmall
-                                      ?.copyWith(fontWeight: FontWeight.w700),
+                            const SizedBox(height: AppSpacing.sm),
+                            ...groupedEntries.entries.map((breedEntry) {
+                              final breed = breedEntry.key;
+                              final varieties = breedEntry.value;
+
+                              final varietyKeys = varieties.keys.toList()
+                                ..sort(
+                                  (a, b) => a.toLowerCase().compareTo(
+                                    b.toLowerCase(),
+                                  ),
+                                );
+
+                              return Padding(
+                                padding: const EdgeInsets.only(
+                                  bottom: AppSpacing.md,
                                 ),
-                                const SizedBox(height: AppSpacing.sm),
-                                ...varietyKeys.map((variety) {
-                                  final classes = varieties[variety]!;
-                                  final classKeys = classes.keys.toList()
-                                    ..sort(
-                                      (a, b) => a.toLowerCase().compareTo(
-                                        b.toLowerCase(),
-                                      ),
-                                    );
-
-                                  return Padding(
-                                    padding: const EdgeInsets.only(
-                                      left: 12,
-                                      bottom: AppSpacing.sm,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      breed,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleSmall
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                          ),
                                     ),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          variety,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodyLarge
-                                              ?.copyWith(
-                                                fontWeight: FontWeight.w600,
-                                              ),
+                                    const SizedBox(height: AppSpacing.sm),
+                                    ...varietyKeys.map((variety) {
+                                      final classes = varieties[variety]!;
+                                      final classKeys = classes.keys.toList()
+                                        ..sort(
+                                          (a, b) => a.toLowerCase().compareTo(
+                                            b.toLowerCase(),
+                                          ),
+                                        );
+
+                                      return Padding(
+                                        padding: const EdgeInsets.only(
+                                          left: 12,
+                                          bottom: AppSpacing.sm,
                                         ),
-                                        const SizedBox(height: 6),
-                                        ...classKeys.map((className) {
-                                          final sexes = classes[className]!;
-                                          final sexKeys = sexes.keys.toList()
-                                            ..sort(
-                                              (a, b) => a
-                                                  .toLowerCase()
-                                                  .compareTo(b.toLowerCase()),
-                                            );
-
-                                          return Padding(
-                                            padding: const EdgeInsets.only(
-                                              left: 12,
-                                              bottom: 8,
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              variety,
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodyLarge
+                                                  ?.copyWith(
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
                                             ),
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  className,
-                                                  style: Theme.of(context)
-                                                      .textTheme
-                                                      .bodyMedium
-                                                      ?.copyWith(
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                      ),
+                                            const SizedBox(height: 6),
+                                            ...classKeys.map((className) {
+                                              final sexes = classes[className]!;
+                                              final sexKeys =
+                                                  sexes.keys.toList()..sort(
+                                                    (a, b) => a
+                                                        .toLowerCase()
+                                                        .compareTo(
+                                                          b.toLowerCase(),
+                                                        ),
+                                                  );
+
+                                              return Padding(
+                                                padding: const EdgeInsets.only(
+                                                  left: 12,
+                                                  bottom: 8,
                                                 ),
-                                                const SizedBox(height: 4),
-                                                ...sexKeys.map((sex) {
-                                                  final entries = sexes[sex]!;
-                                                  return Padding(
-                                                    padding:
-                                                        const EdgeInsets.only(
-                                                          left: 12,
-                                                          bottom: 8,
-                                                        ),
-                                                    child: Column(
-                                                      crossAxisAlignment:
-                                                          CrossAxisAlignment
-                                                              .start,
-                                                      children: [
-                                                        Text(
-                                                          sex,
-                                                          style:
-                                                              Theme.of(context)
-                                                                  .textTheme
-                                                                  .bodyMedium,
-                                                        ),
-                                                        const SizedBox(
-                                                          height: 6,
-                                                        ),
-                                                        ...entries.map((e) {
-                                                          final section =
-                                                              sectionLabel(
-                                                                e['section_id'],
-                                                              );
-                                                          final tattoo =
-                                                              (e['tattoo'] ??
-                                                                      '')
-                                                                  .toString()
-                                                                  .trim();
-                                                          final rawStatus =
-                                                              (e['status'] ??
-                                                                      '')
-                                                                  .toString()
-                                                                  .trim();
-                                                          final normalizedStatus =
-                                                              rawStatus.isEmpty
-                                                              ? 'entered'
-                                                              : rawStatus;
-                                                          final scratched =
-                                                              normalizedStatus
-                                                                  .toLowerCase() ==
-                                                              'scratched';
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      className,
+                                                      style: Theme.of(context)
+                                                          .textTheme
+                                                          .bodyMedium
+                                                          ?.copyWith(
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                          ),
+                                                    ),
+                                                    const SizedBox(height: 4),
+                                                    ...sexKeys.map((sex) {
+                                                      final entries =
+                                                          sexes[sex]!;
+                                                      return Padding(
+                                                        padding:
+                                                            const EdgeInsets.only(
+                                                              left: 12,
+                                                              bottom: 8,
+                                                            ),
+                                                        child: Column(
+                                                          crossAxisAlignment:
+                                                              CrossAxisAlignment
+                                                                  .start,
+                                                          children: [
+                                                            Text(
+                                                              sex,
+                                                              style:
+                                                                  Theme.of(
+                                                                        context,
+                                                                      )
+                                                                      .textTheme
+                                                                      .bodyMedium,
+                                                            ),
+                                                            const SizedBox(
+                                                              height: 6,
+                                                            ),
+                                                            ...entries.map((e) {
+                                                              final section =
+                                                                  sectionLabel(
+                                                                    e['section_id'],
+                                                                  );
+                                                              final tattoo =
+                                                                  (e['tattoo'] ??
+                                                                          '')
+                                                                      .toString()
+                                                                      .trim();
+                                                              final rawStatus =
+                                                                  (e['status'] ??
+                                                                          '')
+                                                                      .toString()
+                                                                      .trim();
+                                                              final normalizedStatus =
+                                                                  rawStatus
+                                                                      .isEmpty
+                                                                  ? 'entered'
+                                                                  : rawStatus;
+                                                              final scratched =
+                                                                  normalizedStatus
+                                                                      .toLowerCase() ==
+                                                                  'scratched';
 
-                                                          final canEdit =
-                                                              !readOnly &&
-                                                              !deadlinePassed &&
-                                                              !scratched;
-                                                          final canScratch =
-                                                              !readOnly &&
-                                                              !scratched;
-                                                          final canRestore =
-                                                              !readOnly &&
-                                                              scratched &&
-                                                              !deadlinePassed;
+                                                              final canEdit =
+                                                                  !readOnly &&
+                                                                  !deadlinePassed &&
+                                                                  !scratched;
+                                                              final canScratch =
+                                                                  !readOnly &&
+                                                                  !scratched;
+                                                              final canRestore =
+                                                                  !readOnly &&
+                                                                  scratched &&
+                                                                  !deadlinePassed;
 
-                                                          return Padding(
-                                                            padding:
-                                                                const EdgeInsets.only(
+                                                              return Padding(
+                                                                padding: const EdgeInsets.only(
                                                                   bottom:
                                                                       AppSpacing
                                                                           .sm,
                                                                 ),
-                                                            child: Material(
-                                                              color:
-                                                                  Colors.white,
-                                                              borderRadius:
-                                                                  BorderRadius.circular(
-                                                                    AppRadius
-                                                                        .sm,
-                                                                  ),
-                                                              child: InkWell(
-                                                                borderRadius:
-                                                                    BorderRadius.circular(
-                                                                      AppRadius
-                                                                          .sm,
-                                                                    ),
-                                                                onTap: canEdit
-                                                                    ? () =>
-                                                                          onEdit(
-                                                                            e,
-                                                                          )
-                                                                    : null,
-                                                                child: Container(
-                                                                  decoration: BoxDecoration(
-                                                                    color: Colors
-                                                                        .transparent,
+                                                                child: AppTheme.surfaceTextScope(
+                                                                  context,
+                                                                  child: Material(
+                                                                    color: AppColors
+                                                                        .surface,
                                                                     borderRadius:
                                                                         BorderRadius.circular(
                                                                           AppRadius
                                                                               .sm,
                                                                         ),
-                                                                    border: Border.all(
-                                                                      color:
+                                                                    child: InkWell(
+                                                                      borderRadius: BorderRadius.circular(
+                                                                        AppRadius
+                                                                            .sm,
+                                                                      ),
+                                                                      onTap:
                                                                           canEdit
-                                                                          ? Theme.of(
-                                                                              context,
-                                                                            ).colorScheme.primary.withValues(
-                                                                              alpha: 0.35,
+                                                                          ? () => onEdit(
+                                                                              e,
                                                                             )
-                                                                          : Colors.grey.shade200,
-                                                                    ),
-                                                                  ),
-                                                                  child: Padding(
-                                                                    padding:
-                                                                        const EdgeInsets.fromLTRB(
-                                                                          12,
-                                                                          8,
-                                                                          8,
-                                                                          8,
+                                                                          : null,
+                                                                      child: Container(
+                                                                        decoration: BoxDecoration(
+                                                                          color:
+                                                                              Colors.transparent,
+                                                                          borderRadius: BorderRadius.circular(
+                                                                            AppRadius.sm,
+                                                                          ),
+                                                                          border: Border.all(
+                                                                            color:
+                                                                                canEdit
+                                                                                ? AppColors.secondaryButton.withValues(
+                                                                                    alpha: 0.35,
+                                                                                  )
+                                                                                : Colors.grey.shade300,
+                                                                          ),
                                                                         ),
-                                                                    child: Column(
-                                                                      crossAxisAlignment:
-                                                                          CrossAxisAlignment
-                                                                              .start,
-                                                                      children: [
-                                                                        Row(
-                                                                          crossAxisAlignment:
-                                                                              CrossAxisAlignment.start,
-                                                                          children: [
-                                                                            Expanded(
-                                                                              child: Column(
+                                                                        child: Padding(
+                                                                          padding: const EdgeInsets.fromLTRB(
+                                                                            12,
+                                                                            8,
+                                                                            8,
+                                                                            8,
+                                                                          ),
+                                                                          child: Column(
+                                                                            crossAxisAlignment:
+                                                                                CrossAxisAlignment.start,
+                                                                            children: [
+                                                                              Row(
                                                                                 crossAxisAlignment: CrossAxisAlignment.start,
                                                                                 children: [
-                                                                                  Text(
-                                                                                    tattoo.isEmpty
-                                                                                        ? '(No tattoo)'
-                                                                                        : tattoo,
-                                                                                    style: TextStyle(
-                                                                                      fontWeight: FontWeight.w600,
-                                                                                      decoration: scratched
-                                                                                          ? TextDecoration.lineThrough
-                                                                                          : null,
+                                                                                  Expanded(
+                                                                                    child: Column(
+                                                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                                                      children: [
+                                                                                        Text(
+                                                                                          tattoo.isEmpty
+                                                                                              ? '(No tattoo)'
+                                                                                              : tattoo,
+                                                                                          style: TextStyle(
+                                                                                            color: AppColors.text,
+                                                                                            fontWeight: FontWeight.w600,
+                                                                                            decoration: scratched
+                                                                                                ? TextDecoration.lineThrough
+                                                                                                : null,
+                                                                                          ),
+                                                                                        ),
+                                                                                        const SizedBox(
+                                                                                          height: 6,
+                                                                                        ),
+                                                                                        Text(
+                                                                                          'Status: $normalizedStatus\nSection: $section',
+                                                                                          style: const TextStyle(
+                                                                                            color: AppColors.muted,
+                                                                                          ),
+                                                                                        ),
+                                                                                      ],
                                                                                     ),
                                                                                   ),
-                                                                                  const SizedBox(
-                                                                                    height: 6,
-                                                                                  ),
-                                                                                  Text(
-                                                                                    'Status: $normalizedStatus\nSection: $section',
-                                                                                  ),
+                                                                                  if (readOnly)
+                                                                                    const Tooltip(
+                                                                                      message: 'Actions are disabled while viewing in support mode',
+                                                                                      child: Padding(
+                                                                                        padding: EdgeInsets.only(
+                                                                                          left: 8,
+                                                                                        ),
+                                                                                        child: Icon(
+                                                                                          Icons.lock_outline,
+                                                                                          color: Colors.grey,
+                                                                                        ),
+                                                                                      ),
+                                                                                    ),
                                                                                 ],
                                                                               ),
-                                                                            ),
-                                                                            if (readOnly)
-                                                                              const Tooltip(
-                                                                                message: 'Actions are disabled while viewing in support mode',
-                                                                                child: Padding(
-                                                                                  padding: EdgeInsets.only(
-                                                                                    left: 8,
-                                                                                  ),
-                                                                                  child: Icon(
-                                                                                    Icons.lock_outline,
-                                                                                    color: Colors.grey,
-                                                                                  ),
+                                                                              if (!readOnly &&
+                                                                                  (canEdit ||
+                                                                                      canScratch ||
+                                                                                      canRestore)) ...[
+                                                                                const SizedBox(
+                                                                                  height: 8,
                                                                                 ),
-                                                                              ),
-                                                                          ],
-                                                                        ),
-                                                                        if (!readOnly &&
-                                                                            (canEdit ||
-                                                                                canScratch ||
-                                                                                canRestore)) ...[
-                                                                          const SizedBox(
-                                                                            height:
-                                                                                8,
-                                                                          ),
-                                                                          Wrap(
-                                                                            spacing:
-                                                                                8,
-                                                                            runSpacing:
-                                                                                8,
-                                                                            children: [
-                                                                              if (canEdit)
-                                                                                FilledButton.icon(
-                                                                                  onPressed: () => onEdit(
-                                                                                    e,
-                                                                                  ),
-                                                                                  icon: const Icon(
-                                                                                    Icons.edit,
-                                                                                    size: 18,
-                                                                                  ),
-                                                                                  label: const Text(
-                                                                                    'Edit Entry',
-                                                                                  ),
+                                                                                Wrap(
+                                                                                  spacing: 8,
+                                                                                  runSpacing: 8,
+                                                                                  children: [
+                                                                                    if (canEdit)
+                                                                                      FilledButton.icon(
+                                                                                        onPressed: () => onEdit(
+                                                                                          e,
+                                                                                        ),
+                                                                                        icon: const Icon(
+                                                                                          Icons.edit,
+                                                                                          size: 18,
+                                                                                        ),
+                                                                                        label: const Text(
+                                                                                          'Edit Entry',
+                                                                                        ),
+                                                                                      ),
+                                                                                    if (canScratch)
+                                                                                      OutlinedButton.icon(
+                                                                                        onPressed: () => onScratch(
+                                                                                          e,
+                                                                                        ),
+                                                                                        icon: const Icon(
+                                                                                          Icons.remove_circle_outline,
+                                                                                          size: 18,
+                                                                                        ),
+                                                                                        label: const Text(
+                                                                                          'Scratch',
+                                                                                        ),
+                                                                                      ),
+                                                                                    if (canRestore)
+                                                                                      OutlinedButton.icon(
+                                                                                        onPressed: () => onRestore(
+                                                                                          e,
+                                                                                        ),
+                                                                                        icon: const Icon(
+                                                                                          Icons.undo,
+                                                                                          size: 18,
+                                                                                        ),
+                                                                                        label: const Text(
+                                                                                          'Restore',
+                                                                                        ),
+                                                                                      ),
+                                                                                  ],
                                                                                 ),
-                                                                              if (canScratch)
-                                                                                OutlinedButton.icon(
-                                                                                  onPressed: () => onScratch(
-                                                                                    e,
-                                                                                  ),
-                                                                                  icon: const Icon(
-                                                                                    Icons.remove_circle_outline,
-                                                                                    size: 18,
-                                                                                  ),
-                                                                                  label: const Text(
-                                                                                    'Scratch',
-                                                                                  ),
+                                                                              ] else if (readOnly) ...[
+                                                                                const SizedBox(
+                                                                                  height: 8,
                                                                                 ),
-                                                                              if (canRestore)
-                                                                                OutlinedButton.icon(
-                                                                                  onPressed: () => onRestore(
-                                                                                    e,
-                                                                                  ),
-                                                                                  icon: const Icon(
-                                                                                    Icons.undo,
-                                                                                    size: 18,
-                                                                                  ),
-                                                                                  label: const Text(
-                                                                                    'Restore',
-                                                                                  ),
+                                                                                Text(
+                                                                                  'Editing is disabled while viewing in support mode.',
+                                                                                  style:
+                                                                                      Theme.of(
+                                                                                        context,
+                                                                                      ).textTheme.bodySmall?.copyWith(
+                                                                                        color: AppColors.muted,
+                                                                                        fontStyle: FontStyle.italic,
+                                                                                      ),
                                                                                 ),
+                                                                              ] else if (deadlinePassed &&
+                                                                                  !scratched) ...[
+                                                                                const SizedBox(
+                                                                                  height: 8,
+                                                                                ),
+                                                                                Text(
+                                                                                  'Editing is locked because the entry deadline has passed.',
+                                                                                  style:
+                                                                                      Theme.of(
+                                                                                        context,
+                                                                                      ).textTheme.bodySmall?.copyWith(
+                                                                                        color: AppColors.muted,
+                                                                                        fontStyle: FontStyle.italic,
+                                                                                      ),
+                                                                                ),
+                                                                              ],
                                                                             ],
                                                                           ),
-                                                                        ] else if (readOnly) ...[
-                                                                          const SizedBox(
-                                                                            height:
-                                                                                8,
-                                                                          ),
-                                                                          Text(
-                                                                            'Editing is disabled while viewing in support mode.',
-                                                                            style:
-                                                                                Theme.of(
-                                                                                  context,
-                                                                                ).textTheme.bodySmall?.copyWith(
-                                                                                  color: AppColors.muted,
-                                                                                  fontStyle: FontStyle.italic,
-                                                                                ),
-                                                                          ),
-                                                                        ] else if (deadlinePassed &&
-                                                                            !scratched) ...[
-                                                                          const SizedBox(
-                                                                            height:
-                                                                                8,
-                                                                          ),
-                                                                          Text(
-                                                                            'Editing is locked because the entry deadline has passed.',
-                                                                            style:
-                                                                                Theme.of(
-                                                                                  context,
-                                                                                ).textTheme.bodySmall?.copyWith(
-                                                                                  color: AppColors.muted,
-                                                                                  fontStyle: FontStyle.italic,
-                                                                                ),
-                                                                          ),
-                                                                        ],
-                                                                      ],
+                                                                        ),
+                                                                      ),
                                                                     ),
                                                                   ),
                                                                 ),
-                                                              ),
-                                                            ),
-                                                          );
-                                                        }),
-                                                      ],
-                                                    ),
-                                                  );
-                                                }),
-                                              ],
-                                            ),
-                                          );
-                                        }),
-                                      ],
-                                    ),
-                                  );
-                                }),
-                              ],
-                            ),
-                          );
-                        }),
-                      ],
+                                                              );
+                                                            }),
+                                                          ],
+                                                        ),
+                                                      );
+                                                    }),
+                                                  ],
+                                                ),
+                                              );
+                                            }),
+                                          ],
+                                        ),
+                                      );
+                                    }),
+                                  ],
+                                ),
+                              );
+                            }),
+                          ],
+                        ),
+                      ),
                     ),
                   );
                 },
@@ -2501,53 +2540,69 @@ class _JudgeOrderTableBlock extends StatelessWidget {
         color: AppColors.bg,
         borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: Theme.of(
-              context,
-            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
-          ),
-          const SizedBox(height: 8),
-          ...sortedRows.map((row) {
-            final breedLabel = row.variety.isEmpty
-                ? row.breed
-                : '${row.breed} • ${row.variety}';
-
-            return Container(
-              width: double.infinity,
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(AppRadius.sm),
-                border: Border.all(color: Colors.grey.shade200),
+      child: AppTheme.gradientTextScope(
+        context,
+        child: Builder(
+          builder: (context) => Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    breedLabel,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      fontWeight: FontWeight.w900,
+              const SizedBox(height: 8),
+              ...sortedRows.map((row) {
+                final breedLabel = row.variety.isEmpty
+                    ? row.breed
+                    : '${row.breed} • ${row.variety}';
+
+                return AppTheme.surfaceTextScope(
+                  context,
+                  child: Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          breedLabel,
+                          style: Theme.of(context).textTheme.bodyLarge
+                              ?.copyWith(
+                                color: AppColors.text,
+                                fontWeight: FontWeight.w900,
+                              ),
+                        ),
+                        const SizedBox(height: 4),
+                        Wrap(
+                          spacing: 10,
+                          runSpacing: 2,
+                          children: [
+                            Text(
+                              'Show: ${row.showLabel}',
+                              style: const TextStyle(color: AppColors.muted),
+                            ),
+                            Text(
+                              'Judge: ${row.judgeLabel}',
+                              style: const TextStyle(color: AppColors.muted),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 2,
-                    children: [
-                      Text('Show: ${row.showLabel}'),
-                      Text('Judge: ${row.judgeLabel}'),
-                    ],
-                  ),
-                ],
-              ),
-            );
-          }),
-        ],
+                );
+              }),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -1258,69 +1258,78 @@ class _CartScreenState extends State<CartScreen> {
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           children: [
                             for (final entry in grouped.entries) ...[
-                              Container(
-                                margin: const EdgeInsets.only(bottom: 10),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(16),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(
-                                        alpha: .04,
+                              AppTheme.surfaceTextScope(
+                                context,
+                                child: Container(
+                                  margin: const EdgeInsets.only(bottom: 10),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.surface,
+                                    borderRadius: BorderRadius.circular(16),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(
+                                          alpha: .04,
+                                        ),
+                                        blurRadius: 8,
                                       ),
-                                      blurRadius: 8,
-                                    ),
-                                  ],
-                                ),
-                                child: Column(
-                                  children: [
-                                    _ExhibitorGroupHeader(
-                                      exhibitorName:
-                                          entry.key == '__unassigned__'
-                                          ? 'Unassigned Exhibitor'
-                                          : (_exhibitorLabelById[entry.key] ??
-                                                'Exhibitor'),
-                                      feeSettingsExists: hasFeeConfig,
-                                      feeLine: hasFeeConfig
-                                          ? _buildExhibitorFeeLine(
-                                              exhibitorItems: entry.value,
-                                              currency: currency,
-                                            )
-                                          : null,
-                                    ),
-                                    const Divider(height: 1),
-                                    ...entry.value.map((it) {
-                                      final sectionId =
-                                          it['section_id']?.toString() ?? '';
-                                      final sec = _sectionById[sectionId];
-                                      final secName =
-                                          (sec?['display_name'] ?? 'Section')
-                                              .toString();
+                                    ],
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      _ExhibitorGroupHeader(
+                                        exhibitorName:
+                                            entry.key == '__unassigned__'
+                                            ? 'Unassigned Exhibitor'
+                                            : (_exhibitorLabelById[entry.key] ??
+                                                  'Exhibitor'),
+                                        feeSettingsExists: hasFeeConfig,
+                                        feeLine: hasFeeConfig
+                                            ? _buildExhibitorFeeLine(
+                                                exhibitorItems: entry.value,
+                                                currency: currency,
+                                              )
+                                            : null,
+                                      ),
+                                      const Divider(height: 1),
+                                      ...entry.value.map((it) {
+                                        final sectionId =
+                                            it['section_id']?.toString() ?? '';
+                                        final sec = _sectionById[sectionId];
+                                        final secName =
+                                            (sec?['display_name'] ?? 'Section')
+                                                .toString();
 
-                                      return ListTile(
-                                        title: Text(
-                                          _cartItemTitle(it, secName),
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w600,
+                                        return ListTile(
+                                          title: Text(
+                                            _cartItemTitle(it, secName),
+                                            style: const TextStyle(
+                                              color: AppColors.text,
+                                              fontWeight: FontWeight.w600,
+                                            ),
                                           ),
-                                        ),
-                                        subtitle: Text(_cartItemSubtitle(it)),
-                                        isThreeLine: _cartItemIsThreeLine(it),
-                                        trailing: IconButton(
-                                          tooltip: 'Remove',
-                                          icon: const Icon(
-                                            Icons.delete_outline,
+                                          subtitle: Text(
+                                            _cartItemSubtitle(it),
+                                            style: const TextStyle(
+                                              color: AppColors.muted,
+                                            ),
                                           ),
-                                          onPressed:
-                                              (_confirming || _payingOnline)
-                                              ? null
-                                              : () => _removeItem(
-                                                  it['id'].toString(),
-                                                ),
-                                        ),
-                                      );
-                                    }),
-                                  ],
+                                          isThreeLine: _cartItemIsThreeLine(it),
+                                          trailing: IconButton(
+                                            tooltip: 'Remove',
+                                            icon: const Icon(
+                                              Icons.delete_outline,
+                                            ),
+                                            onPressed:
+                                                (_confirming || _payingOnline)
+                                                ? null
+                                                : () => _removeItem(
+                                                    it['id'].toString(),
+                                                  ),
+                                          ),
+                                        );
+                                      }),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ],
@@ -1387,13 +1396,20 @@ class _ExhibitorGroupHeader extends StatelessWidget {
         children: [
           Text(
             exhibitorName,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: AppColors.text,
+              fontWeight: FontWeight.w700,
+            ),
           ),
           if (feeSettingsExists && feeLine != null) ...[
             const SizedBox(height: 4),
-            Text(feeLine!, style: Theme.of(context).textTheme.bodySmall),
+            Text(
+              feeLine!,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.muted,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ],
         ],
       ),

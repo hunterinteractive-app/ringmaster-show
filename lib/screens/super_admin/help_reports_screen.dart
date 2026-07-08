@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
 class HelpReportsScreen extends StatefulWidget {
@@ -34,16 +35,16 @@ class _HelpReportsScreenState extends State<HelpReportsScreen> {
     try {
       final rows = _statusFilter == 'all'
           ? await supabase
-              .from('help_reports')
-              .select()
-              .order('created_at', ascending: false)
-              .limit(100)
+                .from('help_reports')
+                .select()
+                .order('created_at', ascending: false)
+                .limit(100)
           : await supabase
-              .from('help_reports')
-              .select()
-              .eq('status', _statusFilter)
-              .order('created_at', ascending: false)
-              .limit(100);
+                .from('help_reports')
+                .select()
+                .eq('status', _statusFilter)
+                .order('created_at', ascending: false)
+                .limit(100);
 
       if (!mounted) return;
 
@@ -61,10 +62,7 @@ class _HelpReportsScreenState extends State<HelpReportsScreen> {
     }
   }
 
-  Future<void> _updateStatus(
-    Map<String, dynamic> report,
-    String status,
-  ) async {
+  Future<void> _updateStatus(Map<String, dynamic> report, String status) async {
     final id = report['id']?.toString();
     if (id == null || id.isEmpty) return;
 
@@ -78,9 +76,9 @@ class _HelpReportsScreenState extends State<HelpReportsScreen> {
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not update report: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not update report: $e')));
     }
   }
 
@@ -107,7 +105,9 @@ class _HelpReportsScreenState extends State<HelpReportsScreen> {
         'is_internal_note': isInternalNote,
       });
 
-      final nextStatus = isInternalNote ? report['status']?.toString() ?? 'reviewing' : 'waiting_on_user';
+      final nextStatus = isInternalNote
+          ? report['status']?.toString() ?? 'reviewing'
+          : 'waiting_on_user';
 
       await supabase
           .from('help_reports')
@@ -121,9 +121,9 @@ class _HelpReportsScreenState extends State<HelpReportsScreen> {
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not add message: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not add message: $e')));
     }
   }
 
@@ -135,10 +135,10 @@ class _HelpReportsScreenState extends State<HelpReportsScreen> {
         onStatusChanged: (status) => _updateStatus(report, status),
         onAddMessage: ({required message, required isInternalNote}) =>
             _addMessage(
-          report,
-          message: message,
-          isInternalNote: isInternalNote,
-        ),
+              report,
+              message: message,
+              isInternalNote: isInternalNote,
+            ),
       ),
     );
   }
@@ -151,64 +151,55 @@ class _HelpReportsScreenState extends State<HelpReportsScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              ChoiceChip(
-                label: const Text('New'),
-                selected: _statusFilter == 'new',
-                onSelected: (_) {
-                  setState(() => _statusFilter = 'new');
-                  _loadReports();
-                },
-              ),
-              ChoiceChip(
-                label: const Text('Reviewing'),
-                selected: _statusFilter == 'reviewing',
-                onSelected: (_) {
-                  setState(() => _statusFilter = 'reviewing');
-                  _loadReports();
-                },
-              ),
-              ChoiceChip(
-                label: const Text('Waiting on User'),
-                selected: _statusFilter == 'waiting_on_user',
-                onSelected: (_) {
-                  setState(() => _statusFilter = 'waiting_on_user');
-                  _loadReports();
-                },
-              ),
-              ChoiceChip(
-                label: const Text('Resolved'),
-                selected: _statusFilter == 'resolved',
-                onSelected: (_) {
-                  setState(() => _statusFilter = 'resolved');
-                  _loadReports();
-                },
-              ),
-              ChoiceChip(
-                label: const Text('All'),
-                selected: _statusFilter == 'all',
-                onSelected: (_) {
-                  setState(() => _statusFilter = 'all');
-                  _loadReports();
-                },
-              ),
-              IconButton(
-                tooltip: 'Refresh',
-                onPressed: _loadReports,
-                icon: const Icon(Icons.refresh),
-              ),
-            ],
+          AppTheme.gradientTextScope(
+            context,
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                _statusChip('New', 'new'),
+                _statusChip('Reviewing', 'reviewing'),
+                _statusChip('Waiting on User', 'waiting_on_user'),
+                _statusChip('Resolved', 'resolved'),
+                _statusChip('All', 'all'),
+                IconButton(
+                  tooltip: 'Refresh',
+                  onPressed: _loadReports,
+                  icon: const Icon(Icons.refresh),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 16),
-          Expanded(
-            child: _buildBody(),
-          ),
+          Expanded(child: _buildBody()),
         ],
       ),
+    );
+  }
+
+  Widget _statusChip(String label, String value) {
+    final selected = _statusFilter == value;
+
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      selectedColor: AppColors.headerForeground.withValues(alpha: .92),
+      backgroundColor: AppColors.headerForeground.withValues(alpha: .86),
+      checkmarkColor: AppColors.text,
+      labelStyle: TextStyle(
+        color: selected ? AppColors.text : AppColors.muted,
+        fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+      ),
+      side: BorderSide(
+        color: selected
+            ? AppColors.headerForeground
+            : AppColors.headerForeground.withValues(alpha: .48),
+      ),
+      onSelected: (_) {
+        setState(() => _statusFilter = value);
+        _loadReports();
+      },
     );
   }
 
@@ -222,13 +213,23 @@ class _HelpReportsScreenState extends State<HelpReportsScreen> {
         child: Text(
           'Could not load help reports:\n$_error',
           textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: AppColors.headerForeground,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       );
     }
 
     if (_reports.isEmpty) {
       return const Center(
-        child: Text('No help reports found.'),
+        child: Text(
+          'No help reports found.',
+          style: TextStyle(
+            color: AppColors.headerForeground,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       );
     }
 
@@ -243,41 +244,70 @@ class _HelpReportsScreenState extends State<HelpReportsScreen> {
         final userEmail = report['user_email']?.toString() ?? 'Unknown user';
         final status = report['status']?.toString() ?? 'new';
         final createdAt = report['created_at']?.toString() ?? '';
-        final createdDate = createdAt.length >= 10 ? createdAt.substring(0, 10) : createdAt;
+        final createdDate = createdAt.length >= 10
+            ? createdAt.substring(0, 10)
+            : createdAt;
         final screenshotPath = report['screenshot_path']?.toString();
 
-        return Card(
-          child: ListTile(
-            leading: Icon(
-              screenshotPath == null || screenshotPath.isEmpty
-                  ? Icons.report_problem_outlined
-                  : Icons.image_outlined,
+        return AppTheme.surfaceTextScope(
+          context,
+          child: Card(
+            color: AppColors.surface,
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              side: const BorderSide(color: AppColors.headerForeground),
             ),
-            title: Text(pageTitle),
-            subtitle: Text(
-              [
-                userEmail,
-                if (createdDate.isNotEmpty) createdDate,
-                message,
-              ].join('\n'),
-              maxLines: 4,
-              overflow: TextOverflow.ellipsis,
-            ),
-            isThreeLine: false,
-            trailing: SizedBox(
-              width: 88,
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: Chip(
-                  label: Text(
-                    status,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  visualDensity: VisualDensity.compact,
+            child: ListTile(
+              leading: Icon(
+                screenshotPath == null || screenshotPath.isEmpty
+                    ? Icons.report_problem_outlined
+                    : Icons.image_outlined,
+                color: AppColors.muted,
+              ),
+              title: Text(
+                pageTitle,
+                style: const TextStyle(
+                  color: AppColors.text,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
+              subtitle: Text(
+                [
+                  userEmail,
+                  if (createdDate.isNotEmpty) createdDate,
+                  message,
+                ].join('\n'),
+                maxLines: 4,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppColors.muted,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              isThreeLine: false,
+              trailing: SizedBox(
+                width: 88,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Chip(
+                    backgroundColor: AppColors.neutralBadgeBg,
+                    side: const BorderSide(color: AppColors.headerForeground),
+                    label: Text(
+                      status,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.text,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+              ),
+              onTap: () => _openReport(report),
             ),
-            onTap: () => _openReport(report),
           ),
         );
       },
@@ -297,10 +327,12 @@ class _HelpReportDetailsDialog extends StatefulWidget {
   final Future<void> Function({
     required String message,
     required bool isInternalNote,
-  }) onAddMessage;
+  })
+  onAddMessage;
 
   @override
-  State<_HelpReportDetailsDialog> createState() => _HelpReportDetailsDialogState();
+  State<_HelpReportDetailsDialog> createState() =>
+      _HelpReportDetailsDialogState();
 }
 
 class _HelpReportDetailsDialogState extends State<_HelpReportDetailsDialog> {
@@ -319,7 +351,7 @@ class _HelpReportDetailsDialogState extends State<_HelpReportDetailsDialog> {
     super.initState();
     _loadMessages();
     _loadScreenshotUrl();
-    }
+  }
 
   @override
   void dispose() {
@@ -331,30 +363,30 @@ class _HelpReportDetailsDialogState extends State<_HelpReportDetailsDialog> {
     final path = widget.report['screenshot_path']?.toString();
 
     if (path != null && path.trim().isNotEmpty) {
-        setState(() => _loadingScreenshot = true);
+      setState(() => _loadingScreenshot = true);
 
-        try {
+      try {
         final signedUrl = await supabase.storage
             .from('help-report-screenshots')
             .createSignedUrl(path.trim(), 60 * 60);
 
         if (!mounted) return;
         setState(() {
-            _signedScreenshotUrl = signedUrl;
-            _loadingScreenshot = false;
+          _signedScreenshotUrl = signedUrl;
+          _loadingScreenshot = false;
         });
         return;
-        } catch (_) {
+      } catch (_) {
         if (!mounted) return;
         setState(() => _loadingScreenshot = false);
-        }
+      }
     }
 
     final existingUrl = widget.report['screenshot_url']?.toString();
     if (existingUrl != null && existingUrl.trim().isNotEmpty) {
-        setState(() => _signedScreenshotUrl = existingUrl.trim());
+      setState(() => _signedScreenshotUrl = existingUrl.trim());
     }
-    }
+  }
 
   Future<void> _loadMessages() async {
     final reportId = widget.report['id']?.toString();
@@ -401,10 +433,7 @@ class _HelpReportDetailsDialogState extends State<_HelpReportDetailsDialog> {
     setState(() => _sendingMessage = true);
 
     try {
-      await widget.onAddMessage(
-        message: text,
-        isInternalNote: isInternalNote,
-      );
+      await widget.onAddMessage(message: text, isInternalNote: isInternalNote);
 
       _replyController.clear();
       await _loadMessages();
@@ -414,9 +443,9 @@ class _HelpReportDetailsDialogState extends State<_HelpReportDetailsDialog> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _sendingMessage = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not send message: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not send message: $e')));
     }
   }
 
@@ -429,199 +458,260 @@ class _HelpReportDetailsDialogState extends State<_HelpReportDetailsDialog> {
     final status = widget.report['status']?.toString() ?? 'new';
     final screenshotUrl = widget.report['screenshot_url']?.toString();
     final screenshotPath = widget.report['screenshot_path']?.toString();
-    final effectiveScreenshotUrl = _signedScreenshotUrl ??
+    final effectiveScreenshotUrl =
+        _signedScreenshotUrl ??
         ((screenshotUrl != null && screenshotUrl.trim().isNotEmpty)
             ? screenshotUrl.trim()
             : null);
     final deviceInfo = widget.report['device_info'];
 
-    return AlertDialog(
-      title: Text(pageTitle),
-      content: SizedBox(
-        width: 820,
-        height: MediaQuery.of(context).size.height * 0.75,
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  Chip(label: Text('Status: $status')),
-                  if (screenshotPath != null && screenshotPath.isNotEmpty)
-                    const Chip(
-                      avatar: Icon(Icons.image_outlined, size: 18),
-                      label: Text('Screenshot attached'),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              _detail('User', userEmail),
-              if (showId != null && showId.isNotEmpty) _detail('Show ID', showId),
-              _detail('Page route', widget.report['page_route']?.toString() ?? ''),
-              _detail('Created', widget.report['created_at']?.toString() ?? ''),
-              _detail('Workflow version', widget.report['workflow_version']?.toString() ?? ''),
-              _detail('App version', widget.report['app_version']?.toString() ?? ''),
-              _detail('Build number', widget.report['build_number']?.toString() ?? ''),
-              _detail('Platform', widget.report['platform']?.toString() ?? ''),
-              _detail('OS', widget.report['operating_system']?.toString() ?? ''),
-              const SizedBox(height: 16),
-              const Text(
-                'Original Message',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 6),
-              SelectableText(message),
-              const SizedBox(height: 16),
-              if (effectiveScreenshotUrl != null &&
-                    effectiveScreenshotUrl.isNotEmpty) ...[
-                const Text(
-                    'Screenshot',
-                    style: TextStyle(fontWeight: FontWeight.bold),
+    return AppTheme.surfaceTextScope(
+      context,
+      child: AlertDialog(
+        backgroundColor: AppColors.surface,
+        surfaceTintColor: Colors.transparent,
+        title: Text(pageTitle),
+        content: SizedBox(
+          width: 820,
+          height: MediaQuery.of(context).size.height * 0.75,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    Chip(label: Text('Status: $status')),
+                    if (screenshotPath != null && screenshotPath.isNotEmpty)
+                      const Chip(
+                        avatar: Icon(Icons.image_outlined, size: 18),
+                        label: Text('Screenshot attached'),
+                      ),
+                  ],
                 ),
-                const SizedBox(height: 8),
-                ClipRRect(
+                const SizedBox(height: 12),
+                _detail('User', userEmail),
+                if (showId != null && showId.isNotEmpty)
+                  _detail('Show ID', showId),
+                _detail(
+                  'Page route',
+                  widget.report['page_route']?.toString() ?? '',
+                ),
+                _detail(
+                  'Created',
+                  widget.report['created_at']?.toString() ?? '',
+                ),
+                _detail(
+                  'Workflow version',
+                  widget.report['workflow_version']?.toString() ?? '',
+                ),
+                _detail(
+                  'App version',
+                  widget.report['app_version']?.toString() ?? '',
+                ),
+                _detail(
+                  'Build number',
+                  widget.report['build_number']?.toString() ?? '',
+                ),
+                _detail(
+                  'Platform',
+                  widget.report['platform']?.toString() ?? '',
+                ),
+                _detail(
+                  'OS',
+                  widget.report['operating_system']?.toString() ?? '',
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Original Message',
+                  style: TextStyle(
+                    color: AppColors.text,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                SelectableText(
+                  message,
+                  style: const TextStyle(color: AppColors.text),
+                ),
+                const SizedBox(height: 16),
+                if (effectiveScreenshotUrl != null &&
+                    effectiveScreenshotUrl.isNotEmpty) ...[
+                  const Text(
+                    'Screenshot',
+                    style: TextStyle(
+                      color: AppColors.text,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ClipRRect(
                     borderRadius: BorderRadius.circular(12),
                     child: Container(
-                    constraints: const BoxConstraints(maxHeight: 420),
-                    decoration: BoxDecoration(
-                        border: Border.all(color: Color(0xFFE0E0E0)),
+                      constraints: const BoxConstraints(maxHeight: 420),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: AppColors.headerForeground),
                         borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: InteractiveViewer(
+                      ),
+                      child: InteractiveViewer(
                         minScale: 0.5,
                         maxScale: 4,
                         child: Image.network(
-                        effectiveScreenshotUrl,
-                        fit: BoxFit.contain,
-                        loadingBuilder: (context, child, loadingProgress) {
+                          effectiveScreenshotUrl,
+                          fit: BoxFit.contain,
+                          loadingBuilder: (context, child, loadingProgress) {
                             if (loadingProgress == null) return child;
                             return const SizedBox(
-                            height: 220,
-                            child: Center(child: CircularProgressIndicator()),
+                              height: 220,
+                              child: Center(child: CircularProgressIndicator()),
                             );
-                        },
-                        errorBuilder: (context, error, stackTrace) {
+                          },
+                          errorBuilder: (context, error, stackTrace) {
                             return SizedBox(
-                            height: 160,
-                            child: Center(
+                              height: 160,
+                              child: Center(
                                 child: Text(
-                                'Could not load screenshot image.'
-                                '${screenshotPath == null || screenshotPath.isEmpty ? '' : ' Path: $screenshotPath'}',
-                                textAlign: TextAlign.center,
+                                  'Could not load screenshot image.'
+                                  '${screenshotPath == null || screenshotPath.isEmpty ? '' : ' Path: $screenshotPath'}',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(color: AppColors.text),
                                 ),
-                            ),
+                              ),
                             );
-                        },
+                          },
                         ),
+                      ),
                     ),
-                    ),
-                ),
+                  ),
                 ] else if (_loadingScreenshot) ...[
-                const Text(
+                  const Text(
                     'Screenshot',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                const SizedBox(
+                    style: TextStyle(
+                      color: AppColors.text,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const SizedBox(
                     height: 120,
                     child: Center(child: CircularProgressIndicator()),
-                ),
-                ] else if (screenshotPath != null && screenshotPath.isNotEmpty) ...[
-                const Text(
+                  ),
+                ] else if (screenshotPath != null &&
+                    screenshotPath.isNotEmpty) ...[
+                  const Text(
                     'Screenshot',
-                    style: TextStyle(fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      color: AppColors.text,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SelectableText(
+                    'Screenshot saved at: $screenshotPath',
+                    style: const TextStyle(color: AppColors.text),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                const Divider(),
+                const Text(
+                  'Conversation',
+                  style: TextStyle(
+                    color: AppColors.text,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 8),
-                SelectableText('Screenshot saved at: $screenshotPath'),
-                ],
-              const SizedBox(height: 16),
-              const Divider(),
-              const Text(
-                'Conversation',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              _buildMessages(),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _replyController,
-                minLines: 3,
-                maxLines: 6,
-                decoration: const InputDecoration(
-                  labelText: 'Reply or internal note',
-                  hintText: 'Type a message back to the user, or add an internal note...',
-                  border: OutlineInputBorder(),
+                _buildMessages(),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _replyController,
+                  minLines: 3,
+                  maxLines: 6,
+                  style: const TextStyle(color: AppColors.text),
+                  decoration: const InputDecoration(
+                    labelText: 'Reply or internal note',
+                    hintText:
+                        'Type a message back to the user, or add an internal note...',
+                    border: OutlineInputBorder(),
+                    labelStyle: TextStyle(color: AppColors.muted),
+                    hintStyle: TextStyle(color: AppColors.muted),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  FilledButton.icon(
-                    onPressed: _sendingMessage
-                        ? null
-                        : () => _sendMessage(isInternalNote: false),
-                    icon: const Icon(Icons.reply),
-                    label: const Text('Reply to User'),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    FilledButton.icon(
+                      onPressed: _sendingMessage
+                          ? null
+                          : () => _sendMessage(isInternalNote: false),
+                      icon: const Icon(Icons.reply),
+                      label: const Text('Reply to User'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _sendingMessage
+                          ? null
+                          : () => _sendMessage(isInternalNote: true),
+                      icon: const Icon(Icons.lock_outline),
+                      label: const Text('Add Internal Note'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const Divider(),
+                const Text(
+                  'Device Info',
+                  style: TextStyle(
+                    color: AppColors.text,
+                    fontWeight: FontWeight.bold,
                   ),
-                  OutlinedButton.icon(
-                    onPressed: _sendingMessage
-                        ? null
-                        : () => _sendMessage(isInternalNote: true),
-                    icon: const Icon(Icons.lock_outline),
-                    label: const Text('Add Internal Note'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              const Divider(),
-              const Text(
-                'Device Info',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              SelectableText(deviceInfo?.toString() ?? '{}'),
-            ],
+                ),
+                const SizedBox(height: 8),
+                SelectableText(
+                  deviceInfo?.toString() ?? '{}',
+                  style: const TextStyle(color: AppColors.text),
+                ),
+              ],
+            ),
           ),
         ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              widget.onStatusChanged('new');
+              Navigator.of(context).pop();
+            },
+            child: const Text('Mark New'),
+          ),
+          TextButton(
+            onPressed: () {
+              widget.onStatusChanged('reviewing');
+              Navigator.of(context).pop();
+            },
+            child: const Text('Mark Reviewing'),
+          ),
+          TextButton(
+            onPressed: () {
+              widget.onStatusChanged('waiting_on_user');
+              Navigator.of(context).pop();
+            },
+            child: const Text('Waiting on User'),
+          ),
+          FilledButton(
+            onPressed: () {
+              widget.onStatusChanged('resolved');
+              Navigator.of(context).pop();
+            },
+            child: const Text('Mark Resolved'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () {
-            widget.onStatusChanged('new');
-            Navigator.of(context).pop();
-          },
-          child: const Text('Mark New'),
-        ),
-        TextButton(
-          onPressed: () {
-            widget.onStatusChanged('reviewing');
-            Navigator.of(context).pop();
-          },
-          child: const Text('Mark Reviewing'),
-        ),
-        TextButton(
-          onPressed: () {
-            widget.onStatusChanged('waiting_on_user');
-            Navigator.of(context).pop();
-          },
-          child: const Text('Waiting on User'),
-        ),
-        FilledButton(
-          onPressed: () {
-            widget.onStatusChanged('resolved');
-            Navigator.of(context).pop();
-          },
-          child: const Text('Mark Resolved'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Close'),
-        ),
-      ],
     );
   }
 
@@ -636,53 +726,81 @@ class _HelpReportDetailsDialogState extends State<_HelpReportDetailsDialog> {
     if (_messageError != null) {
       return Text(
         'Could not load messages: $_messageError',
-        style: const TextStyle(color: Colors.red),
+        style: const TextStyle(
+          color: AppColors.danger,
+          fontWeight: FontWeight.w600,
+        ),
       );
     }
 
     if (_messages.isEmpty) {
-      return const Text('No replies yet.');
+      return const Text(
+        'No replies yet.',
+        style: TextStyle(color: AppColors.muted),
+      );
     }
 
     return Column(
       children: _messages.map((message) {
         final senderRole = message['sender_role']?.toString() ?? 'user';
-        final senderEmail = message['sender_email']?.toString() ?? 'Unknown sender';
+        final senderEmail =
+            message['sender_email']?.toString() ?? 'Unknown sender';
         final body = message['message']?.toString() ?? '';
         final createdAt = message['created_at']?.toString() ?? '';
         final isInternal = message['is_internal_note'] == true;
 
-        return Card(
-          margin: const EdgeInsets.only(bottom: 8),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 4,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    Text(
-                      senderRole == 'admin' ? 'RingMaster Support' : senderEmail,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    if (isInternal)
-                      const Chip(
-                        label: Text('Internal'),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                    if (createdAt.isNotEmpty)
+        return AppTheme.surfaceTextScope(
+          context,
+          child: Card(
+            color: AppColors.headerForeground,
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            margin: const EdgeInsets.only(bottom: 8),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              side: BorderSide(color: AppColors.muted.withValues(alpha: .22)),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
                       Text(
-                        createdAt,
-                        style: const TextStyle(fontSize: 12),
+                        senderRole == 'admin'
+                            ? 'RingMaster Support'
+                            : senderEmail,
+                        style: const TextStyle(
+                          color: AppColors.text,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                SelectableText(body),
-              ],
+                      if (isInternal)
+                        const Chip(
+                          label: Text('Internal'),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      if (createdAt.isNotEmpty)
+                        Text(
+                          createdAt,
+                          style: const TextStyle(
+                            color: AppColors.muted,
+                            fontSize: 12,
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  SelectableText(
+                    body,
+                    style: const TextStyle(color: AppColors.text),
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -700,9 +818,15 @@ class _HelpReportDetailsDialogState extends State<_HelpReportDetailsDialog> {
           children: [
             TextSpan(
               text: '$label: ',
-              style: const TextStyle(fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                color: AppColors.text,
+                fontWeight: FontWeight.bold,
+              ),
             ),
-            TextSpan(text: value),
+            TextSpan(
+              text: value,
+              style: const TextStyle(color: AppColors.text),
+            ),
           ],
         ),
       ),

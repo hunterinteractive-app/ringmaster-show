@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
-
+import '../theme/app_theme.dart';
 import '../services/app_session.dart';
 import '../widgets/exhibitor_builder_dialog.dart';
 
@@ -14,8 +14,7 @@ class AccountSettingsScreen extends StatefulWidget {
   const AccountSettingsScreen({super.key});
 
   @override
-  State<AccountSettingsScreen> createState() =>
-      _AccountSettingsScreenState();
+  State<AccountSettingsScreen> createState() => _AccountSettingsScreenState();
 }
 
 class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
@@ -104,9 +103,10 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         primaryExhibitorId = defaultExhibitor?['id']?.toString();
 
         if (primaryExhibitorId != null && !AppSession.isSupportMode) {
-          await supabase.from('profiles').update({
-            'primary_exhibitor_id': primaryExhibitorId,
-          }).eq('user_id', userId);
+          await supabase
+              .from('profiles')
+              .update({'primary_exhibitor_id': primaryExhibitorId})
+              .eq('user_id', userId);
         }
       }
 
@@ -127,7 +127,6 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     }
   }
 
-
   // ------------------------------
   // Exhibitor Dialog (NEW)
   // ------------------------------
@@ -142,9 +141,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     final saved = await showDialog<Map<String, dynamic>>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => ExhibitorBuilderDialog(
-        exhibitorId: existing?['id']?.toString(),
-      ),
+      builder: (_) =>
+          ExhibitorBuilderDialog(exhibitorId: existing?['id']?.toString()),
     );
 
     if (saved != null) {
@@ -158,7 +156,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   Future<void> _setPrimaryExhibitor(Map<String, dynamic> exhibitor) async {
     if (AppSession.isSupportMode) {
       setState(() {
-        _msg = 'Changing the primary exhibitor is disabled while viewing in support mode.';
+        _msg =
+            'Changing the primary exhibitor is disabled while viewing in support mode.';
       });
       return;
     }
@@ -178,14 +177,16 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     }
 
     try {
-      await supabase.from('profiles').update({
-        'primary_exhibitor_id': exhibitorId,
-      }).eq('user_id', userId);
+      await supabase
+          .from('profiles')
+          .update({'primary_exhibitor_id': exhibitorId})
+          .eq('user_id', userId);
 
       if (!mounted) return;
       setState(() {
         _primaryExhibitorId = exhibitorId;
-        _msg = '${(exhibitor['display_name'] ?? 'Exhibitor').toString()} is now the primary exhibitor.';
+        _msg =
+            '${(exhibitor['display_name'] ?? 'Exhibitor').toString()} is now the primary exhibitor.';
       });
     } catch (e) {
       if (!mounted) return;
@@ -199,7 +200,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   Future<void> _toggleActive(String id, bool newActive) async {
     if (AppSession.isSupportMode) {
       setState(() {
-        _msg = 'Activating and deactivating exhibitors is disabled while viewing in support mode.';
+        _msg =
+            'Activating and deactivating exhibitors is disabled while viewing in support mode.';
       });
       return;
     }
@@ -213,9 +215,10 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       if (!newActive && id == _primaryExhibitorId) {
         final userId = AppSession.effectiveUserId;
         if (userId != null) {
-          await supabase.from('profiles').update({
-            'primary_exhibitor_id': null,
-          }).eq('user_id', userId);
+          await supabase
+              .from('profiles')
+              .update({'primary_exhibitor_id': null})
+              .eq('user_id', userId);
         }
       }
 
@@ -320,8 +323,12 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                             return Container(
                               margin: const EdgeInsets.only(bottom: 10),
                               decoration: BoxDecoration(
-                                color: Colors.white,
+                                color: AppColors.surface,
                                 borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: AppColors.headerForeground,
+                                  width: 1.4,
+                                ),
                                 boxShadow: [
                                   BoxShadow(
                                     color: Colors.black.withValues(alpha: .05),
@@ -329,109 +336,127 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                                   ),
                                 ],
                               ),
-                              child: ListTile(
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 8,
-                                ),
-                                title: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        name,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
+                              child: AppTheme.surfaceTextScope(
+                                context,
+                                child: Builder(
+                                  builder: (context) => ListTile(
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 8,
                                     ),
-                                    if (isPrimary)
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 4,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: Colors.blue.withValues(alpha: .10),
-                                          borderRadius: BorderRadius.circular(999),
-                                          border: Border.all(
-                                            color: Colors.blue.withValues(alpha: .30),
+                                    title: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            name,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .titleMedium
+                                                ?.copyWith(
+                                                  fontWeight: FontWeight.w700,
+                                                ),
                                           ),
                                         ),
-                                        child: const Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(
-                                              Icons.star,
-                                              size: 15,
-                                              color: Colors.blue,
+                                        if (isPrimary)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                              vertical: 4,
                                             ),
-                                            SizedBox(width: 4),
-                                            Text(
-                                              'PRIMARY',
-                                              style: TextStyle(
-                                                color: Colors.blue,
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w800,
+                                            decoration: BoxDecoration(
+                                              color: AppColors.infoBg,
+                                              borderRadius:
+                                                  BorderRadius.circular(999),
+                                              border: Border.all(
+                                                color: AppColors.infoBorder,
                                               ),
                                             ),
-                                          ],
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                                subtitle: Text(
-                                  'Type: ${type.toUpperCase()}'
-                                  '${bd == null ? '' : ' • DOB: $bd'}'
-                                  '${active ? '' : ' • INACTIVE'}',
-                                ),
-                                onTap: AppSession.isSupportMode
-                                    ? null
-                                    : () => _openExhibitorEditor(existing: e),
-                                trailing: AppSession.isSupportMode
-                                    ? null
-                                    : PopupMenuButton<String>(
-                                        onSelected: (v) {
-                                          if (v == 'edit') {
-                                            _openExhibitorEditor(existing: e);
-                                          }
-                                          if (v == 'primary') {
-                                            _setPrimaryExhibitor(e);
-                                          }
-                                          if (v == 'deactivate') {
-                                            _toggleActive(id, false);
-                                          }
-                                          if (v == 'activate') {
-                                            _toggleActive(id, true);
-                                          }
-                                        },
-                                        itemBuilder: (_) => [
-                                          const PopupMenuItem(
-                                            value: 'edit',
-                                            child: Text('Edit'),
+                                            child: const Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  Icons.star,
+                                                  size: 15,
+                                                  color: Colors.blue,
+                                                ),
+                                                SizedBox(width: 4),
+                                                Text(
+                                                  'PRIMARY',
+                                                  style: TextStyle(
+                                                    color: Colors.blue,
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w800,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
                                           ),
-                                          if (active && !isPrimary)
-                                            const PopupMenuItem(
-                                              value: 'primary',
-                                              child: Row(
-                                                children: [
-                                                  Icon(Icons.star_outline),
-                                                  SizedBox(width: 8),
-                                                  Text('Set as primary'),
-                                                ],
+                                      ],
+                                    ),
+                                    subtitle: Text(
+                                      'Type: ${type.toUpperCase()}'
+                                      '${bd == null ? '' : ' • DOB: $bd'}'
+                                      '${active ? '' : ' • INACTIVE'}',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(color: AppColors.muted),
+                                    ),
+                                    onTap: AppSession.isSupportMode
+                                        ? null
+                                        : () =>
+                                              _openExhibitorEditor(existing: e),
+                                    trailing: AppSession.isSupportMode
+                                        ? null
+                                        : PopupMenuButton<String>(
+                                            color: AppColors.surface,
+                                            iconColor: AppColors.text,
+                                            onSelected: (v) {
+                                              if (v == 'edit') {
+                                                _openExhibitorEditor(
+                                                  existing: e,
+                                                );
+                                              }
+                                              if (v == 'primary') {
+                                                _setPrimaryExhibitor(e);
+                                              }
+                                              if (v == 'deactivate') {
+                                                _toggleActive(id, false);
+                                              }
+                                              if (v == 'activate') {
+                                                _toggleActive(id, true);
+                                              }
+                                            },
+                                            itemBuilder: (_) => [
+                                              const PopupMenuItem(
+                                                value: 'edit',
+                                                child: Text('Edit'),
                                               ),
-                                            ),
-                                          if (active)
-                                            const PopupMenuItem(
-                                              value: 'deactivate',
-                                              child: Text('Deactivate'),
-                                            )
-                                          else
-                                            const PopupMenuItem(
-                                              value: 'activate',
-                                              child: Text('Activate'),
-                                            ),
-                                        ],
-                                      ),
+                                              if (active && !isPrimary)
+                                                const PopupMenuItem(
+                                                  value: 'primary',
+                                                  child: Row(
+                                                    children: [
+                                                      Icon(Icons.star_outline),
+                                                      SizedBox(width: 8),
+                                                      Text('Set as primary'),
+                                                    ],
+                                                  ),
+                                                ),
+                                              if (active)
+                                                const PopupMenuItem(
+                                                  value: 'deactivate',
+                                                  child: Text('Deactivate'),
+                                                )
+                                              else
+                                                const PopupMenuItem(
+                                                  value: 'activate',
+                                                  child: Text('Activate'),
+                                                ),
+                                            ],
+                                          ),
+                                  ),
+                                ),
                               ),
                             );
                           },

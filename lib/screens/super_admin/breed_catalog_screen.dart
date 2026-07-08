@@ -174,26 +174,34 @@ class _BreedCatalogScreenState extends State<BreedCatalogScreen> {
 
     final ok = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: Text('Add Variety — $breedName'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(
-            labelText: 'Variety name',
-            hintText: 'Example: Broken, Black, Himalayan…',
+      builder: (_) => AppTheme.surfaceTextScope(
+        context,
+        child: AlertDialog(
+          backgroundColor: AppColors.surface,
+          surfaceTintColor: Colors.transparent,
+          title: Text('Add Variety — $breedName'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            style: const TextStyle(color: AppColors.text),
+            decoration: const InputDecoration(
+              labelText: 'Variety name',
+              hintText: 'Example: Broken, Black, Himalayan…',
+              labelStyle: TextStyle(color: AppColors.muted),
+              hintStyle: TextStyle(color: AppColors.muted),
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Add'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Add'),
-          ),
-        ],
       ),
     );
 
@@ -285,16 +293,16 @@ class _BreedCatalogScreenState extends State<BreedCatalogScreen> {
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: (isError ? Colors.red : Colors.green).withValues(alpha: .08),
+        color: isError ? AppColors.dangerBg : AppColors.successBg,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: (isError ? Colors.red : Colors.green).withValues(alpha: .22),
+          color: isError ? AppColors.danger : AppColors.success,
         ),
       ),
       child: Text(
         _msg!,
         style: TextStyle(
-          color: isError ? Colors.red : Colors.green.shade700,
+          color: isError ? AppColors.danger : AppColors.success,
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -307,23 +315,54 @@ class _BreedCatalogScreenState extends State<BreedCatalogScreen> {
       child: Row(
         children: [
           Expanded(
-            child: TextField(
-              decoration: const InputDecoration(
-                labelText: 'Search breeds',
-                prefixIcon: Icon(Icons.search),
+            child: AppTheme.surfaceTextScope(
+              context,
+              child: TextField(
+                style: const TextStyle(color: AppColors.text),
+                decoration: const InputDecoration(
+                  labelText: 'Search breeds',
+                  prefixIcon: Icon(Icons.search, color: AppColors.muted),
+                  labelStyle: TextStyle(color: AppColors.muted),
+                  filled: true,
+                  fillColor: AppColors.surface,
+                ),
+                onChanged: (v) => setState(() => _search = v),
               ),
-              onChanged: (v) => setState(() => _search = v),
             ),
           ),
           const SizedBox(width: 12),
-          DropdownButton<String>(
-            value: _speciesFilter,
-            items: const [
-              DropdownMenuItem(value: 'all', child: Text('All')),
-              DropdownMenuItem(value: 'rabbit', child: Text('Rabbits')),
-              DropdownMenuItem(value: 'cavy', child: Text('Cavies')),
-            ],
-            onChanged: (v) => setState(() => _speciesFilter = v ?? 'all'),
+          AppTheme.gradientTextScope(
+            context,
+            child: DropdownButton<String>(
+              value: _speciesFilter,
+              dropdownColor: AppColors.surface,
+              iconEnabledColor: AppColors.headerForeground,
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                color: AppColors.headerForeground,
+                fontWeight: FontWeight.w800,
+              ),
+              items: const [
+                DropdownMenuItem(
+                  value: 'all',
+                  child: Text('All', style: TextStyle(color: AppColors.text)),
+                ),
+                DropdownMenuItem(
+                  value: 'rabbit',
+                  child: Text(
+                    'Rabbits',
+                    style: TextStyle(color: AppColors.text),
+                  ),
+                ),
+                DropdownMenuItem(
+                  value: 'cavy',
+                  child: Text(
+                    'Cavies',
+                    style: TextStyle(color: AppColors.text),
+                  ),
+                ),
+              ],
+              onChanged: (v) => setState(() => _speciesFilter = v ?? 'all'),
+            ),
           ),
         ],
       ),
@@ -337,216 +376,276 @@ class _BreedCatalogScreenState extends State<BreedCatalogScreen> {
     final classSystem = (b['class_system'] ?? 'four').toString();
     final isActive = b['is_active'] == true;
 
-    return Card(
-      elevation: 0,
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      child: ExpansionTile(
-        tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-        title: Text(
-          breedName,
-          style: TextStyle(
-            decoration: isActive ? null : TextDecoration.lineThrough,
-          ),
+    return AppTheme.surfaceTextScope(
+      context,
+      child: Card(
+        elevation: 0,
+        color: AppColors.surface,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          side: const BorderSide(color: AppColors.headerForeground, width: 1.4),
         ),
-        subtitle: Text(
-          '${species.toUpperCase()} • class: $classSystem${isActive ? '' : ' • inactive'}',
-        ),
-        trailing: const Icon(Icons.expand_more),
-        children: [
-          Row(
-            children: [
-              if (species == 'rabbit')
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    initialValue: classSystem,
-                    decoration: const InputDecoration(
-                      labelText: 'Class system',
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 'four', child: Text('4-class')),
-                      DropdownMenuItem(value: 'six', child: Text('6-class')),
-                    ],
-                    onChanged: (v) {
-                      final nv = v ?? classSystem;
-                      if (nv != classSystem) {
-                        _setBreedClassSystem(breedId: breedId, newValue: nv);
-                        setState(() {});
-                      }
-                    },
-                  ),
-                ),
-              if (species == 'rabbit') const SizedBox(width: 12),
-              Expanded(
-                child: SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Active'),
-                  value: isActive,
-                  onChanged: (v) async {
-                    if (!v) {
-                      final ok = await showDialog<bool>(
-                        context: context,
-                        builder: (_) => AlertDialog(
-                          title: const Text('Disable breed?'),
-                          content: Text(
-                            'Disable "$breedName" globally?\n\n'
-                            'This keeps historical data but removes it from normal use.',
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context, false),
-                              child: const Text('Cancel'),
-                            ),
-                            FilledButton(
-                              onPressed: () => Navigator.pop(context, true),
-                              child: const Text('Disable'),
-                            ),
-                          ],
-                        ),
-                      );
-                      if (ok != true) return;
-                    }
-
-                    await _setBreedActive(breedId: breedId, isActive: v);
-                    if (!mounted) return;
-                    setState(() {});
-                  },
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              OutlinedButton.icon(
-                onPressed: () =>
-                    _openBreedEditor(species: species, existing: b),
-                icon: const Icon(Icons.edit),
-                label: const Text('Edit Breed'),
-              ),
-              const SizedBox(width: 10),
-              FilledButton.icon(
-                onPressed: () async {
-                  await _addVariety(breedId: breedId, breedName: breedName);
-                  if (!mounted) return;
-                  setState(() {});
-                },
-                icon: const Icon(Icons.add),
-                label: const Text('Add Variety'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          FutureBuilder<List<Map<String, dynamic>>>(
-            future: _loadVarieties(
-              breedId: breedId,
-              breedName: breedName,
-              species: species,
+        child: Builder(
+          builder: (context) => ExpansionTile(
+            tilePadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 4,
             ),
-            builder: (context, vSnap) {
-              if (vSnap.connectionState != ConnectionState.done) {
-                return const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: LinearProgressIndicator(),
-                );
-              }
-
-              if (vSnap.hasError) {
-                return Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Text('Varieties error: ${vSnap.error}'),
-                );
-              }
-
-              final vars = vSnap.data ?? [];
-              if (vars.isEmpty) {
-                return const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text('No varieties for this breed yet.'),
-                  ),
-                );
-              }
-
-              return Column(
-                children: vars.map((v) {
-                  final varietyId = v['id'].toString();
-                  final varietyName = (v['name'] ?? '').toString();
-                  final isVarietyActive = v['is_active'] == true;
-                  final isCavySop = v['is_cavy_sop'] == true;
-
-                  return ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(
-                      varietyName,
-                      style: TextStyle(
-                        decoration: isVarietyActive
-                            ? null
-                            : TextDecoration.lineThrough,
+            childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            iconColor: AppColors.headerDark,
+            collapsedIconColor: AppColors.muted,
+            title: Text(
+              breedName,
+              style: TextStyle(
+                color: AppColors.text,
+                fontWeight: FontWeight.w700,
+                decoration: isActive ? null : TextDecoration.lineThrough,
+              ),
+            ),
+            subtitle: Text(
+              '${species.toUpperCase()} • class: $classSystem${isActive ? '' : ' • inactive'}',
+              style: const TextStyle(color: AppColors.text),
+            ),
+            trailing: const Icon(Icons.expand_more, color: AppColors.muted),
+            children: [
+              Row(
+                children: [
+                  if (species == 'rabbit')
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        initialValue: classSystem,
+                        decoration: const InputDecoration(
+                          labelText: 'Class system',
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'four',
+                            child: Text('4-class'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'six',
+                            child: Text('6-class'),
+                          ),
+                        ],
+                        onChanged: (v) {
+                          final nv = v ?? classSystem;
+                          if (nv != classSystem) {
+                            _setBreedClassSystem(
+                              breedId: breedId,
+                              newValue: nv,
+                            );
+                            setState(() {});
+                          }
+                        },
                       ),
                     ),
-                    subtitle: Text(
-                      isCavySop
-                          ? 'Cavy SOP variety'
-                          : (isVarietyActive ? 'Active' : 'Disabled'),
-                    ),
-                    trailing: isCavySop
-                        ? const Tooltip(
-                            message: 'Managed by cavy_sop_variety_order',
-                            child: Icon(Icons.lock_outline),
-                          )
-                        : IconButton(
-                            tooltip: isVarietyActive
-                                ? 'Disable globally'
-                                : 'Re-enable',
-                            icon: Icon(
-                              isVarietyActive
-                                  ? Icons.remove_circle_outline
-                                  : Icons.undo,
-                            ),
-                            onPressed: () async {
-                              if (isVarietyActive) {
-                                final ok = await showDialog<bool>(
-                                  context: context,
-                                  builder: (_) => AlertDialog(
-                                    title: const Text('Disable variety?'),
-                                    content: Text(
-                                      'Disable "$varietyName" globally for $breedName?\n\n'
-                                      'This keeps historical data but removes it from dropdowns.',
-                                    ),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () =>
-                                            Navigator.pop(context, false),
-                                        child: const Text('Cancel'),
-                                      ),
-                                      FilledButton(
-                                        onPressed: () =>
-                                            Navigator.pop(context, true),
-                                        child: const Text('Disable'),
-                                      ),
-                                    ],
+                  if (species == 'rabbit') const SizedBox(width: 12),
+                  Expanded(
+                    child: SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      activeThumbColor: AppColors.secondaryButton,
+                      activeTrackColor: AppColors.header.withValues(alpha: .65),
+                      title: const Text(
+                        'Active',
+                        style: TextStyle(color: AppColors.text),
+                      ),
+                      value: isActive,
+                      onChanged: (v) async {
+                        if (!v) {
+                          final ok = await showDialog<bool>(
+                            context: context,
+                            builder: (_) => AppTheme.surfaceTextScope(
+                              context,
+                              child: AlertDialog(
+                                backgroundColor: AppColors.surface,
+                                surfaceTintColor: Colors.transparent,
+                                title: const Text('Disable breed?'),
+                                content: Text(
+                                  'Disable "$breedName" globally?\n\n'
+                                  'This keeps historical data but removes it from normal use.',
+                                  style: const TextStyle(color: AppColors.text),
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(context, false),
+                                    child: const Text('Cancel'),
                                   ),
-                                );
-                                if (ok != true) return;
-                              }
+                                  FilledButton(
+                                    onPressed: () =>
+                                        Navigator.pop(context, true),
+                                    child: const Text('Disable'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                          if (ok != true) return;
+                        }
 
-                              await _setVarietyActive(
-                                varietyId: varietyId,
-                                isActive: !isVarietyActive,
-                              );
-                              if (!mounted) return;
-                              setState(() {});
-                            },
+                        await _setBreedActive(breedId: breedId, isActive: v);
+                        if (!mounted) return;
+                        setState(() {});
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: () =>
+                        _openBreedEditor(species: species, existing: b),
+                    icon: const Icon(Icons.edit),
+                    label: const Text('Edit Breed'),
+                  ),
+                  const SizedBox(width: 10),
+                  FilledButton.icon(
+                    onPressed: () async {
+                      await _addVariety(breedId: breedId, breedName: breedName);
+                      if (!mounted) return;
+                      setState(() {});
+                    },
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add Variety'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              FutureBuilder<List<Map<String, dynamic>>>(
+                future: _loadVarieties(
+                  breedId: breedId,
+                  breedName: breedName,
+                  species: species,
+                ),
+                builder: (context, vSnap) {
+                  if (vSnap.connectionState != ConnectionState.done) {
+                    return const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: LinearProgressIndicator(),
+                    );
+                  }
+
+                  if (vSnap.hasError) {
+                    return Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Text(
+                        'Varieties error: ${vSnap.error}',
+                        style: const TextStyle(color: AppColors.danger),
+                      ),
+                    );
+                  }
+
+                  final vars = vSnap.data ?? [];
+                  if (vars.isEmpty) {
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'No varieties for this breed yet.',
+                          style: TextStyle(color: AppColors.muted),
+                        ),
+                      ),
+                    );
+                  }
+
+                  return Column(
+                    children: vars.map((v) {
+                      final varietyId = v['id'].toString();
+                      final varietyName = (v['name'] ?? '').toString();
+                      final isVarietyActive = v['is_active'] == true;
+                      final isCavySop = v['is_cavy_sop'] == true;
+
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(
+                          varietyName,
+                          style: TextStyle(
+                            color: AppColors.text,
+                            fontWeight: FontWeight.w600,
+                            decoration: isVarietyActive
+                                ? null
+                                : TextDecoration.lineThrough,
                           ),
+                        ),
+                        subtitle: Text(
+                          isCavySop
+                              ? 'Cavy SOP variety'
+                              : (isVarietyActive ? 'Active' : 'Disabled'),
+                          style: const TextStyle(color: AppColors.muted),
+                        ),
+                        trailing: isCavySop
+                            ? const Tooltip(
+                                message: 'Managed by cavy_sop_variety_order',
+                                child: Icon(
+                                  Icons.lock_outline,
+                                  color: AppColors.muted,
+                                ),
+                              )
+                            : IconButton(
+                                tooltip: isVarietyActive
+                                    ? 'Disable globally'
+                                    : 'Re-enable',
+                                icon: Icon(
+                                  isVarietyActive
+                                      ? Icons.remove_circle_outline
+                                      : Icons.undo,
+                                  color: AppColors.muted,
+                                ),
+                                onPressed: () async {
+                                  if (isVarietyActive) {
+                                    final ok = await showDialog<bool>(
+                                      context: context,
+                                      builder: (_) => AppTheme.surfaceTextScope(
+                                        context,
+                                        child: AlertDialog(
+                                          backgroundColor: AppColors.surface,
+                                          surfaceTintColor: Colors.transparent,
+                                          title: const Text('Disable variety?'),
+                                          content: Text(
+                                            'Disable "$varietyName" globally for $breedName?\n\n'
+                                            'This keeps historical data but removes it from dropdowns.',
+                                            style: const TextStyle(
+                                              color: AppColors.text,
+                                            ),
+                                          ),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () =>
+                                                  Navigator.pop(context, false),
+                                              child: const Text('Cancel'),
+                                            ),
+                                            FilledButton(
+                                              onPressed: () =>
+                                                  Navigator.pop(context, true),
+                                              child: const Text('Disable'),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                    if (ok != true) return;
+                                  }
+
+                                  await _setVarietyActive(
+                                    varietyId: varietyId,
+                                    isActive: !isVarietyActive,
+                                  );
+                                  if (!mounted) return;
+                                  setState(() {});
+                                },
+                              ),
+                      );
+                    }).toList(),
                   );
-                }).toList(),
-              );
-            },
+                },
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -592,18 +691,23 @@ class _BreedCatalogScreenState extends State<BreedCatalogScreen> {
               width: double.infinity,
               child: Text(
                 'Global Breed & Variety Catalog',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: AppColors.headerForeground,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
           ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             child: SizedBox(
               width: double.infinity,
               child: Text(
                 'Manage the shared breed and variety list used throughout the system.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppColors.headerForeground.withValues(alpha: .82),
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ),
@@ -618,12 +722,22 @@ class _BreedCatalogScreenState extends State<BreedCatalogScreen> {
                 }
 
                 if (snap.hasError) {
-                  return Center(child: Text('Error: ${snap.error}'));
+                  return Center(
+                    child: Text(
+                      'Error: ${snap.error}',
+                      style: const TextStyle(color: AppColors.headerForeground),
+                    ),
+                  );
                 }
 
                 final breeds = snap.data ?? [];
                 if (breeds.isEmpty) {
-                  return const Center(child: Text('No breeds found.'));
+                  return const Center(
+                    child: Text(
+                      'No breeds found.',
+                      style: TextStyle(color: AppColors.headerForeground),
+                    ),
+                  );
                 }
 
                 return ListView.builder(
