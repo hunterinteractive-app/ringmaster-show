@@ -11,6 +11,24 @@ final supabase = Supabase.instance.client;
 
 const String kDefaultFinalAwardMode = 'four_six_bis';
 
+const _resultSurfaceDropdownStyle = TextStyle(
+  color: AppColors.text,
+  fontWeight: FontWeight.w700,
+);
+
+List<Widget> _judgeSelectedItems(List<Map<String, dynamic>> judges) {
+  return [
+    const Text('(Not set)', style: _resultSurfaceDropdownStyle),
+    ...judges.map(
+      (j) => Text(
+        (j['name'] ?? '').toString(),
+        style: _resultSurfaceDropdownStyle,
+        overflow: TextOverflow.ellipsis,
+      ),
+    ),
+  ];
+}
+
 const List<String> kBestAgeAwardCodes = [
   'Best Junior',
   'Best Intermediate',
@@ -2353,77 +2371,106 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      clipBehavior: Clip.antiAlias,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       showDragHandle: true,
-      builder: (_) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.8,
-        minChildSize: 0.45,
-        maxChildSize: 0.95,
-        builder: (context, scrollController) {
-          return SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-              child: Column(
-                children: [
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Results Validation',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      issues.isEmpty
-                          ? 'No validation issues found.'
-                          : '${issues.length} validation issue${issues.length == 1 ? '' : 's'} found.',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Expanded(
-                    child: issues.isEmpty
-                        ? const Align(
-                            alignment: Alignment.topLeft,
-                            child: Text('Everything looks good so far.'),
-                          )
-                        : ListView.separated(
-                            controller: scrollController,
-                            itemCount: issues.length,
-                            separatorBuilder: (_, _) =>
-                                const Divider(height: 1),
-                            itemBuilder: (context, i) {
-                              final issue = issues[i];
-                              return ListTile(
-                                leading: const Icon(
-                                  Icons.warning_amber_rounded,
+      builder: (sheetContext) => AppTheme.surfaceTextScope(
+        sheetContext,
+        child: DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.8,
+          minChildSize: 0.45,
+          maxChildSize: 0.95,
+          builder: (context, scrollController) {
+            return Material(
+              color: AppColors.surface,
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  child: Column(
+                    children: [
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Results Validation',
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(
+                                color: AppColors.text,
+                                fontWeight: FontWeight.w800,
+                              ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          issues.isEmpty
+                              ? 'No validation issues found.'
+                              : '${issues.length} validation issue${issues.length == 1 ? '' : 's'} found.',
+                          style: const TextStyle(color: AppColors.text),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Expanded(
+                        child: issues.isEmpty
+                            ? const Align(
+                                alignment: Alignment.topLeft,
+                                child: Text(
+                                  'Everything looks good so far.',
+                                  style: TextStyle(color: AppColors.muted),
                                 ),
-                                title: Text(issue.title),
-                                subtitle: Text(
-                                  '${issue.message}\n${_issueSubtitle(issue)}',
-                                ),
-                                isThreeLine: true,
-                                trailing: TextButton(
-                                  onPressed: () async {
-                                    Navigator.pop(context);
-                                    await _jumpToIssue(issue);
-                                  },
-                                  child: const Text('Fix'),
-                                ),
-                                onTap: () async {
-                                  Navigator.pop(context);
-                                  await _jumpToIssue(issue);
+                              )
+                            : ListView.separated(
+                                controller: scrollController,
+                                itemCount: issues.length,
+                                separatorBuilder: (_, _) =>
+                                    const Divider(height: 1),
+                                itemBuilder: (context, i) {
+                                  final issue = issues[i];
+                                  return ListTile(
+                                    leading: const Icon(
+                                      Icons.warning_amber_rounded,
+                                      color: Colors.orange,
+                                    ),
+                                    title: Text(
+                                      issue.title,
+                                      style: const TextStyle(
+                                        color: AppColors.text,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    subtitle: Text(
+                                      '${issue.message}\n${_issueSubtitle(issue)}',
+                                      style: const TextStyle(
+                                        color: AppColors.muted,
+                                      ),
+                                    ),
+                                    isThreeLine: true,
+                                    trailing: TextButton(
+                                      onPressed: () async {
+                                        Navigator.pop(context);
+                                        await _jumpToIssue(issue);
+                                      },
+                                      child: const Text('Fix'),
+                                    ),
+                                    onTap: () async {
+                                      Navigator.pop(context);
+                                      await _jumpToIssue(issue);
+                                    },
+                                  );
                                 },
-                              );
-                            },
-                          ),
+                              ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
@@ -2486,11 +2533,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                   child: Container(
                     width: double.infinity,
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [AppColors.navy, AppColors.navyDark],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
+                      gradient: AppGradients.page,
                       borderRadius: BorderRadius.circular(24),
                     ),
                     child: Padding(
@@ -2573,74 +2616,107 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                   ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                  child: Card(
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        children: [
-                          DropdownButtonFormField<String>(
-                            initialValue: _selectedSectionId ?? '',
-                            decoration: const InputDecoration(
-                              labelText: 'Show Letter / Section',
-                            ),
-                            items: [
-                              const DropdownMenuItem<String>(
-                                value: '',
-                                child: Text('All Sections'),
+                  child: AppTheme.surfaceTextScope(
+                    context,
+                    child: Card(
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          children: [
+                            DropdownButtonFormField<String>(
+                              initialValue: _selectedSectionId ?? '',
+                              style: const TextStyle(
+                                color: AppColors.text,
+                                fontWeight: FontWeight.w700,
                               ),
-                              ..._sections.map(
-                                (s) => DropdownMenuItem<String>(
-                                  value: s['id']?.toString(),
-                                  child: Text(_sectionLabel(s)),
+                              dropdownColor: AppColors.surface,
+                              iconEnabledColor: AppColors.text,
+                              decoration: const InputDecoration(
+                                labelText: 'Show Letter / Section',
+                                labelStyle: TextStyle(color: AppColors.muted),
+                                floatingLabelStyle: TextStyle(
+                                  color: AppColors.muted,
                                 ),
                               ),
-                            ],
-                            onChanged: _onChangeSection,
-                          ),
-                          const SizedBox(height: 14),
-                          Container(
-                            decoration: BoxDecoration(
-                              color: issues.isEmpty
-                                  ? Colors.green.withValues(alpha: .08)
-                                  : Colors.orange.withValues(alpha: .10),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: issues.isEmpty
-                                    ? Colors.green.withValues(alpha: .20)
-                                    : Colors.orange.withValues(alpha: .22),
-                              ),
+                              items: [
+                                const DropdownMenuItem<String>(
+                                  value: '',
+                                  child: Text('All Sections'),
+                                ),
+                                ..._sections.map(
+                                  (s) => DropdownMenuItem<String>(
+                                    value: s['id']?.toString(),
+                                    child: Text(_sectionLabel(s)),
+                                  ),
+                                ),
+                              ],
+                              selectedItemBuilder: (context) => [
+                                const Text(
+                                  'All Sections',
+                                  style: _resultSurfaceDropdownStyle,
+                                ),
+                                ..._sections.map(
+                                  (s) => Text(
+                                    _sectionLabel(s),
+                                    style: _resultSurfaceDropdownStyle,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                              onChanged: _onChangeSection,
                             ),
-                            child: ListTile(
-                              leading: Icon(
-                                issues.isEmpty
-                                    ? Icons.check_circle_outline
-                                    : Icons.warning_amber_rounded,
+                            const SizedBox(height: 14),
+                            Container(
+                              decoration: BoxDecoration(
                                 color: issues.isEmpty
-                                    ? Colors.green
-                                    : Colors.orange,
-                              ),
-                              title: Text(
-                                issues.isEmpty
-                                    ? 'Validation looks good'
-                                    : 'Validation issues found',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
+                                    ? Colors.green.withValues(alpha: .08)
+                                    : Colors.orange.withValues(alpha: .10),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: issues.isEmpty
+                                      ? Colors.green.withValues(alpha: .20)
+                                      : Colors.orange.withValues(alpha: .22),
                                 ),
                               ),
-                              subtitle: Text(
-                                issues.isEmpty
-                                    ? 'No current award/result conflicts found.'
-                                    : '${issues.length} issue${issues.length == 1 ? '' : 's'} to review.',
+                              child: ListTile(
+                                leading: Icon(
+                                  issues.isEmpty
+                                      ? Icons.check_circle_outline
+                                      : Icons.warning_amber_rounded,
+                                  color: issues.isEmpty
+                                      ? Colors.green
+                                      : Colors.orange,
+                                ),
+                                title: Text(
+                                  issues.isEmpty
+                                      ? 'Validation looks good'
+                                      : 'Validation issues found',
+                                  style: const TextStyle(
+                                    color: AppColors.text,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  issues.isEmpty
+                                      ? 'No current award/result conflicts found.'
+                                      : '${issues.length} issue${issues.length == 1 ? '' : 's'} to review.',
+                                  style: const TextStyle(
+                                    color: AppColors.muted,
+                                  ),
+                                ),
+                                trailing: const Icon(
+                                  Icons.chevron_right,
+                                  color: AppColors.text,
+                                ),
+                                onTap: _openValidationSheet,
                               ),
-                              trailing: const Icon(Icons.chevron_right),
-                              onTap: _openValidationSheet,
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -2746,6 +2822,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                                 title: Text(
                                   breed,
                                   style: const TextStyle(
+                                    color: AppColors.headerForeground,
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),
@@ -2753,9 +2830,16 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                                   padding: const EdgeInsets.only(top: 6),
                                   child: Text(
                                     '$completed/$count entered • ${_statusLabel(breedEntries)}\n$species • $flowLabel • ${_judgeSummary(breedEntries)}${breedSpecials.isEmpty ? '' : '\n$breedSpecials'}',
+                                    style: TextStyle(
+                                      color: AppColors.headerForeground
+                                          .withValues(alpha: .86),
+                                    ),
                                   ),
                                 ),
-                                trailing: const Icon(Icons.chevron_right),
+                                trailing: const Icon(
+                                  Icons.chevron_right,
+                                  color: AppColors.headerForeground,
+                                ),
                                 onTap: () async {
                                   if (byGroup) {
                                     await Navigator.push(
@@ -3156,199 +3240,228 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
       appBar: AppBar(
         elevation: 0,
         backgroundColor: AppColors.header,
-        foregroundColor: AppColors.headerForeground,
+        foregroundColor: AppColors.headerText,
         title: Text(widget.breed),
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-            child: Card(
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        '${widget.showName} • ${widget.sectionLabel}',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    DropdownButtonFormField<String>(
-                      initialValue: _singleJudgeId(_entries),
-                      decoration: const InputDecoration(
-                        labelText: 'Judge for this breed',
-                      ),
-                      items: [
-                        const DropdownMenuItem<String>(
-                          value: '',
-                          child: Text('(Not set)'),
-                        ),
-                        ...widget.judges.map(
-                          (j) => DropdownMenuItem<String>(
-                            value: (j['id'] ?? '').toString(),
-                            child: Text((j['name'] ?? '').toString()),
-                          ),
-                        ),
-                      ],
-                      onChanged: _savingJudge
-                          ? null
-                          : (v) {
-                              _applyJudgeToEntries(
-                                _entries,
-                                (v == null || v.isEmpty) ? null : v,
-                              );
-                            },
-                    ),
-                    if (AppSession.isSupportMode)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.amber.shade100,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: Colors.amber.shade300),
-                          ),
-                          child: const Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Icon(Icons.support_agent, size: 18),
-                              SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  'Support Mode — You are entering results as an admin while viewing another user.',
-                                  style: TextStyle(fontWeight: FontWeight.w700),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    if (_msg != null) ...[
-                      const SizedBox(height: 12),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          _msg!,
-                          style: TextStyle(
-                            color: _msg == 'Judge updated.'
-                                ? Colors.green
-                                : Colors.red,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              itemCount: groups.length,
-              itemBuilder: (context, i) {
-                final groupName = groups[i];
-                final groupEntries = grouped[groupName]!;
-                final count = groupEntries.length;
-                final completed = _completedCount(groupEntries);
-                final statusColor = _statusColor(context, groupEntries);
-                final groupSpecials = _specialsSummaryForEntries(
-                  groupEntries,
-                  widget.showsByVariety
-                      ? const ['BOG', 'BOSG', 'BOV', 'BOSV']
-                      : const ['BOG', 'BOSG'],
-                );
-
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 12),
+      body: AppTheme.gradientTextScope(
+        context,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              child: AppTheme.surfaceTextScope(
+                context,
+                child: Card(
                   elevation: 0,
-                  color: statusColor.withValues(alpha: 0.06),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
-                    leading: CircleAvatar(
-                      backgroundColor: statusColor.withValues(alpha: 0.12),
-                      child: Icon(
-                        _statusIcon(groupEntries),
-                        color: statusColor,
-                      ),
-                    ),
-                    title: Text(
-                      groupName,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    subtitle: Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Text(
-                        '$completed/$count entered • ${_statusLabel(groupEntries)}\n${_judgeSummary(groupEntries)}${groupSpecials.isEmpty ? '' : '\n$groupSpecials'}',
-                      ),
-                    ),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () async {
-                      if (widget.showsByVariety &&
-                          groupName != 'Fur / Wool' &&
-                          groupName != '(No Group Assigned)') {
-                        await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => _ResultsVarietyScreen(
-                              showId: widget.showId,
-                              showName: widget.showName,
-                              sectionLabel: widget.sectionLabel,
-                              breed: widget.breed,
-                              entries: groupEntries,
-                              judges: widget.judges,
-                              breedClassSystems: widget.breedClassSystems,
-                              finalAwardMode: widget.finalAwardMode,
-                              parentGroupLabel: groupName,
-                              isQrEntryMode: widget.isQrEntryMode,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            '${widget.showName} • ${widget.sectionLabel}',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        DropdownButtonFormField<String>(
+                          initialValue: _singleJudgeId(_entries),
+                          style: const TextStyle(
+                            color: AppColors.text,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          dropdownColor: AppColors.surface,
+                          iconEnabledColor: AppColors.text,
+                          decoration: const InputDecoration(
+                            labelText: 'Judge for this breed',
+                          ),
+                          items: [
+                            const DropdownMenuItem<String>(
+                              value: '',
+                              child: Text('(Not set)'),
+                            ),
+                            ...widget.judges.map(
+                              (j) => DropdownMenuItem<String>(
+                                value: (j['id'] ?? '').toString(),
+                                child: Text((j['name'] ?? '').toString()),
+                              ),
+                            ),
+                          ],
+                          selectedItemBuilder: (context) =>
+                              _judgeSelectedItems(widget.judges),
+                          onChanged: _savingJudge
+                              ? null
+                              : (v) {
+                                  _applyJudgeToEntries(
+                                    _entries,
+                                    (v == null || v.isEmpty) ? null : v,
+                                  );
+                                },
+                        ),
+                        if (AppSession.isSupportMode)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.amber.shade100,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: Colors.amber.shade300,
+                                ),
+                              ),
+                              child: const Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Icon(Icons.support_agent, size: 18),
+                                  SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Support Mode — You are entering results as an admin while viewing another user.',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        );
-                      } else {
-                        await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => _ResultsClassSexScreen(
-                              showId: widget.showId,
-                              showName: widget.showName,
-                              sectionLabel: widget.sectionLabel,
-                              breed: widget.breed,
-                              variety: '',
-                              contextLabel: groupName,
-                              entries: groupEntries,
-                              judges: widget.judges,
-                              breedClassSystems: widget.breedClassSystems,
-                              finalAwardMode: widget.finalAwardMode,
-                              showsByGroup: true,
-                              showsByVariety: false,
-                              isQrEntryMode: widget.isQrEntryMode,
+                        if (_msg != null) ...[
+                          const SizedBox(height: 12),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              _msg!,
+                              style: TextStyle(
+                                color: _msg == 'Judge updated.'
+                                    ? Colors.green
+                                    : Colors.red,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
-                        );
-                      }
-
-                      await _reloadEntries();
-                    },
+                        ],
+                      ],
+                    ),
                   ),
-                );
-              },
+                ),
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 12),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                itemCount: groups.length,
+                itemBuilder: (context, i) {
+                  final groupName = groups[i];
+                  final groupEntries = grouped[groupName]!;
+                  final count = groupEntries.length;
+                  final completed = _completedCount(groupEntries);
+                  final statusColor = _statusColor(context, groupEntries);
+                  final groupSpecials = _specialsSummaryForEntries(
+                    groupEntries,
+                    widget.showsByVariety
+                        ? const ['BOG', 'BOSG', 'BOV', 'BOSV']
+                        : const ['BOG', 'BOSG'],
+                  );
+
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    elevation: 0,
+                    color: statusColor.withValues(alpha: 0.06),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
+                      leading: CircleAvatar(
+                        backgroundColor: statusColor.withValues(alpha: 0.12),
+                        child: Icon(
+                          _statusIcon(groupEntries),
+                          color: statusColor,
+                        ),
+                      ),
+                      title: Text(
+                        groupName,
+                        style: const TextStyle(
+                          color: AppColors.headerForeground,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      subtitle: Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Text(
+                          '$completed/$count entered • ${_statusLabel(groupEntries)}\n${_judgeSummary(groupEntries)}${groupSpecials.isEmpty ? '' : '\n$groupSpecials'}',
+                          style: TextStyle(
+                            color: AppColors.headerForeground.withValues(
+                              alpha: .86,
+                            ),
+                          ),
+                        ),
+                      ),
+                      trailing: const Icon(
+                        Icons.chevron_right,
+                        color: AppColors.headerForeground,
+                      ),
+                      onTap: () async {
+                        if (widget.showsByVariety &&
+                            groupName != 'Fur / Wool' &&
+                            groupName != '(No Group Assigned)') {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => _ResultsVarietyScreen(
+                                showId: widget.showId,
+                                showName: widget.showName,
+                                sectionLabel: widget.sectionLabel,
+                                breed: widget.breed,
+                                entries: groupEntries,
+                                judges: widget.judges,
+                                breedClassSystems: widget.breedClassSystems,
+                                finalAwardMode: widget.finalAwardMode,
+                                parentGroupLabel: groupName,
+                                isQrEntryMode: widget.isQrEntryMode,
+                              ),
+                            ),
+                          );
+                        } else {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => _ResultsClassSexScreen(
+                                showId: widget.showId,
+                                showName: widget.showName,
+                                sectionLabel: widget.sectionLabel,
+                                breed: widget.breed,
+                                variety: '',
+                                contextLabel: groupName,
+                                entries: groupEntries,
+                                judges: widget.judges,
+                                breedClassSystems: widget.breedClassSystems,
+                                finalAwardMode: widget.finalAwardMode,
+                                showsByGroup: true,
+                                showsByVariety: false,
+                                isQrEntryMode: widget.isQrEntryMode,
+                              ),
+                            ),
+                          );
+                        }
+
+                        await _reloadEntries();
+                      },
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -3674,205 +3787,239 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
       appBar: AppBar(
         elevation: 0,
         backgroundColor: AppColors.header,
-        foregroundColor: AppColors.headerForeground,
+        foregroundColor: AppColors.headerText,
         title: Text(widget.parentGroupLabel ?? widget.breed),
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-            child: Card(
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        widget.parentGroupLabel == null
-                            ? '${widget.showName} • ${widget.sectionLabel} • ${widget.breed}'
-                            : '${widget.showName} • ${widget.sectionLabel} • ${widget.breed} • ${widget.parentGroupLabel}',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-                    if (_msg != null) ...[
-                      const SizedBox(height: 12),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          _msg!,
-                          style: TextStyle(
-                            color: _msg == 'Judge updated.'
-                                ? Colors.green
-                                : Colors.red,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              itemCount: varieties.length,
-              itemBuilder: (context, i) {
-                final variety = varieties[i];
-                final varietyEntries = grouped[variety]!;
-                final count = varietyEntries.length;
-                final completed = _completedCount(varietyEntries);
-                final statusColor = _statusColor(context, varietyEntries);
-                final varietySpecials = _specialsSummaryForEntries(
-                  varietyEntries,
-                  const ['BOV', 'BOSV'],
-                );
-
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 12),
+      body: AppTheme.gradientTextScope(
+        context,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              child: AppTheme.surfaceTextScope(
+                context,
+                child: Card(
                   elevation: 0,
-                  color: statusColor.withValues(alpha: 0.06),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
+                    padding: const EdgeInsets.all(16),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: CircleAvatar(
-                            backgroundColor: statusColor.withValues(
-                              alpha: 0.12,
-                            ),
-                            child: Icon(
-                              _statusIcon(varietyEntries),
-                              color: statusColor,
-                            ),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            widget.parentGroupLabel == null
+                                ? '${widget.showName} • ${widget.sectionLabel} • ${widget.breed}'
+                                : '${widget.showName} • ${widget.sectionLabel} • ${widget.breed} • ${widget.parentGroupLabel}',
+                            style: Theme.of(context).textTheme.bodySmall,
                           ),
-                          title: Text(
-                            variety,
-                            style: const TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                          subtitle: Padding(
-                            padding: const EdgeInsets.only(top: 6),
+                        ),
+                        if (_msg != null) ...[
+                          const SizedBox(height: 12),
+                          Align(
+                            alignment: Alignment.centerLeft,
                             child: Text(
-                              '$completed/$count entered • ${_statusLabel(varietyEntries)}\n${_judgeSummary(varietyEntries)}${varietySpecials.isEmpty ? '' : '\n$varietySpecials'}',
-                            ),
-                          ),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () async {
-                            await Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => _ResultsClassSexScreen(
-                                  showId: widget.showId,
-                                  showName: widget.showName,
-                                  sectionLabel: widget.sectionLabel,
-                                  breed: widget.breed,
-                                  variety: variety,
-                                  contextLabel:
-                                      _isFurEntry(varietyEntries.first)
-                                      ? 'Fur / Wool'
-                                      : (widget.parentGroupLabel ?? variety),
-                                  entries: varietyEntries,
-                                  judges: widget.judges,
-                                  breedClassSystems: widget.breedClassSystems,
-                                  finalAwardMode: widget.finalAwardMode,
-                                  showsByGroup:
-                                      !_isFurEntry(varietyEntries.first) &&
-                                      ((widget.parentGroupLabel ?? '')
-                                              .trim()
-                                              .isNotEmpty ||
-                                          varietyEntries.any((e) {
-                                            final usesGroupsRaw =
-                                                e['uses_group_awards'];
-                                            final usesGroups =
-                                                usesGroupsRaw == true ||
-                                                usesGroupsRaw
-                                                        .toString()
-                                                        .trim()
-                                                        .toLowerCase() ==
-                                                    'true' ||
-                                                usesGroupsRaw
-                                                        .toString()
-                                                        .trim()
-                                                        .toLowerCase() ==
-                                                    't' ||
-                                                usesGroupsRaw
-                                                        .toString()
-                                                        .trim() ==
-                                                    '1';
-                                            final groupName =
-                                                (e['group_name'] ??
-                                                        e['group_display_name'] ??
-                                                        e['group_label'] ??
-                                                        e['group'] ??
-                                                        e['group_code'] ??
-                                                        '')
-                                                    .toString()
-                                                    .trim();
-
-                                            return usesGroups &&
-                                                groupName.isNotEmpty;
-                                          })),
-                                  showsByVariety: !_isFurEntry(
-                                    varietyEntries.first,
-                                  ),
-                                  isQrEntryMode: widget.isQrEntryMode,
-                                ),
-                              ),
-                            );
-
-                            await _reloadEntries();
-                          },
-                        ),
-                        const SizedBox(height: 10),
-                        DropdownButtonFormField<String>(
-                          key: ValueKey(
-                            'variety-judge-$variety-${_singleJudgeId(varietyEntries) ?? 'mixed'}',
-                          ),
-                          initialValue: _singleJudgeId(varietyEntries),
-                          decoration: const InputDecoration(
-                            labelText: 'Judge for this variety',
-                          ),
-                          items: [
-                            const DropdownMenuItem<String>(
-                              value: '',
-                              child: Text('(Not set)'),
-                            ),
-                            ...widget.judges.map(
-                              (j) => DropdownMenuItem<String>(
-                                value: (j['id'] ?? '').toString(),
-                                child: Text((j['name'] ?? '').toString()),
+                              _msg!,
+                              style: TextStyle(
+                                color: _msg == 'Judge updated.'
+                                    ? Colors.green
+                                    : Colors.red,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
-                          ],
-                          onChanged: _savingJudge
-                              ? null
-                              : (v) {
-                                  _applyJudgeToEntries(
-                                    varietyEntries,
-                                    (v == null || v.isEmpty) ? null : v,
-                                  );
-                                },
-                        ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
-                );
-              },
+                ),
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 12),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                itemCount: varieties.length,
+                itemBuilder: (context, i) {
+                  final variety = varieties[i];
+                  final varietyEntries = grouped[variety]!;
+                  final count = varietyEntries.length;
+                  final completed = _completedCount(varietyEntries);
+                  final statusColor = _statusColor(context, varietyEntries);
+                  final varietySpecials = _specialsSummaryForEntries(
+                    varietyEntries,
+                    const ['BOV', 'BOSV'],
+                  );
+
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    elevation: 0,
+                    color: statusColor.withValues(alpha: 0.06),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: CircleAvatar(
+                              backgroundColor: statusColor.withValues(
+                                alpha: 0.12,
+                              ),
+                              child: Icon(
+                                _statusIcon(varietyEntries),
+                                color: statusColor,
+                              ),
+                            ),
+                            title: Text(
+                              variety,
+                              style: const TextStyle(
+                                color: AppColors.headerForeground,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            subtitle: Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Text(
+                                '$completed/$count entered • ${_statusLabel(varietyEntries)}\n${_judgeSummary(varietyEntries)}${varietySpecials.isEmpty ? '' : '\n$varietySpecials'}',
+                                style: TextStyle(
+                                  color: AppColors.headerForeground.withValues(
+                                    alpha: .86,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            trailing: const Icon(
+                              Icons.chevron_right,
+                              color: AppColors.headerForeground,
+                            ),
+                            onTap: () async {
+                              await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => _ResultsClassSexScreen(
+                                    showId: widget.showId,
+                                    showName: widget.showName,
+                                    sectionLabel: widget.sectionLabel,
+                                    breed: widget.breed,
+                                    variety: variety,
+                                    contextLabel:
+                                        _isFurEntry(varietyEntries.first)
+                                        ? 'Fur / Wool'
+                                        : (widget.parentGroupLabel ?? variety),
+                                    entries: varietyEntries,
+                                    judges: widget.judges,
+                                    breedClassSystems: widget.breedClassSystems,
+                                    finalAwardMode: widget.finalAwardMode,
+                                    showsByGroup:
+                                        !_isFurEntry(varietyEntries.first) &&
+                                        ((widget.parentGroupLabel ?? '')
+                                                .trim()
+                                                .isNotEmpty ||
+                                            varietyEntries.any((e) {
+                                              final usesGroupsRaw =
+                                                  e['uses_group_awards'];
+                                              final usesGroups =
+                                                  usesGroupsRaw == true ||
+                                                  usesGroupsRaw
+                                                          .toString()
+                                                          .trim()
+                                                          .toLowerCase() ==
+                                                      'true' ||
+                                                  usesGroupsRaw
+                                                          .toString()
+                                                          .trim()
+                                                          .toLowerCase() ==
+                                                      't' ||
+                                                  usesGroupsRaw
+                                                          .toString()
+                                                          .trim() ==
+                                                      '1';
+                                              final groupName =
+                                                  (e['group_name'] ??
+                                                          e['group_display_name'] ??
+                                                          e['group_label'] ??
+                                                          e['group'] ??
+                                                          e['group_code'] ??
+                                                          '')
+                                                      .toString()
+                                                      .trim();
+
+                                              return usesGroups &&
+                                                  groupName.isNotEmpty;
+                                            })),
+                                    showsByVariety: !_isFurEntry(
+                                      varietyEntries.first,
+                                    ),
+                                    isQrEntryMode: widget.isQrEntryMode,
+                                  ),
+                                ),
+                              );
+
+                              await _reloadEntries();
+                            },
+                          ),
+                          const SizedBox(height: 10),
+                          AppTheme.surfaceTextScope(
+                            context,
+                            child: DropdownButtonFormField<String>(
+                              key: ValueKey(
+                                'variety-judge-$variety-${_singleJudgeId(varietyEntries) ?? 'mixed'}',
+                              ),
+                              initialValue: _singleJudgeId(varietyEntries),
+                              style: const TextStyle(
+                                color: AppColors.text,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              dropdownColor: AppColors.surface,
+                              iconEnabledColor: AppColors.text,
+                              decoration: InputDecoration(
+                                labelText: 'Judge for this variety',
+                                labelStyle: TextStyle(
+                                  color: Colors.white.withValues(alpha: .9),
+                                ),
+                                floatingLabelStyle: const TextStyle(
+                                  color: Colors.white,
+                                ),
+                              ),
+                              items: [
+                                const DropdownMenuItem<String>(
+                                  value: '',
+                                  child: Text('(Not set)'),
+                                ),
+                                ...widget.judges.map(
+                                  (j) => DropdownMenuItem<String>(
+                                    value: (j['id'] ?? '').toString(),
+                                    child: Text((j['name'] ?? '').toString()),
+                                  ),
+                                ),
+                              ],
+                              selectedItemBuilder: (context) =>
+                                  _judgeSelectedItems(widget.judges),
+                              onChanged: _savingJudge
+                                  ? null
+                                  : (v) {
+                                      _applyJudgeToEntries(
+                                        varietyEntries,
+                                        (v == null || v.isEmpty) ? null : v,
+                                      );
+                                    },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -4386,154 +4533,179 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
       appBar: AppBar(
         elevation: 0,
         backgroundColor: AppColors.header,
-        foregroundColor: AppColors.headerForeground,
+        foregroundColor: AppColors.headerText,
         title: Text(widget.contextLabel),
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-            child: Card(
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        [
-                          widget.showName,
-                          widget.sectionLabel,
-                          widget.breed,
-                          if (widget.contextLabel != widget.breed &&
-                              widget.contextLabel.trim().isNotEmpty)
-                            widget.contextLabel,
-                        ].join(' • '),
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-
-                    const SizedBox(height: 14),
-
-                    DropdownButtonFormField<String>(
-                      initialValue: _singleJudgeId(_entries),
-                      decoration: const InputDecoration(
-                        labelText: 'Judge for this class',
-                      ),
-                      items: [
-                        const DropdownMenuItem<String>(
-                          value: '',
-                          child: Text('(Not set)'),
-                        ),
-                        ...widget.judges.map(
-                          (j) => DropdownMenuItem<String>(
-                            value: (j['id'] ?? '').toString(),
-                            child: Text((j['name'] ?? '').toString()),
-                          ),
-                        ),
-                      ],
-                      onChanged: _savingJudge
-                          ? null
-                          : (v) {
-                              _applyJudgeToEntries(
-                                _entries,
-                                (v == null || v.isEmpty) ? null : v,
-                              );
-                            },
-                    ),
-                    if (_msg != null) ...[
-                      const SizedBox(height: 12),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          _msg!,
-                          style: TextStyle(
-                            color: _msg == 'Judge updated.'
-                                ? Colors.green
-                                : Colors.red,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              itemCount: labels.length,
-              itemBuilder: (context, i) {
-                final label = labels[i];
-                final classEntries = grouped[label]!;
-                final count = classEntries.length;
-                final completed = _completedCount(classEntries);
-                final statusColor = _statusColor(context, classEntries);
-                final classSpecials =
-                    _specialsSummaryForEntries(classEntries, const [
-                      'BOV',
-                      'BOSV',
-                      'BOG',
-                      'BOSG',
-                      'BOB',
-                      'BOSB',
-                      'Best Junior',
-                      'Best Intermediate',
-                      'Best Senior',
-                      'Best 4-Class',
-                      'Best 6-Class',
-                      'Best In Show',
-                      'Reserve In Show',
-                      'BIS',
-                      'RIS',
-                      '1RIS',
-                      '2RIS',
-                      'HM',
-                    ]);
-
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 12),
+      body: AppTheme.gradientTextScope(
+        context,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              child: AppTheme.surfaceTextScope(
+                context,
+                child: Card(
                   elevation: 0,
-                  color: statusColor.withValues(alpha: 0.06),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
-                    leading: CircleAvatar(
-                      backgroundColor: statusColor.withValues(alpha: 0.12),
-                      child: Icon(
-                        _statusIcon(classEntries),
-                        color: statusColor,
-                      ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            [
+                              widget.showName,
+                              widget.sectionLabel,
+                              widget.breed,
+                              if (widget.contextLabel != widget.breed &&
+                                  widget.contextLabel.trim().isNotEmpty)
+                                widget.contextLabel,
+                            ].join(' • '),
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+
+                        const SizedBox(height: 14),
+
+                        DropdownButtonFormField<String>(
+                          initialValue: _singleJudgeId(_entries),
+                          style: const TextStyle(
+                            color: AppColors.text,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          dropdownColor: AppColors.surface,
+                          iconEnabledColor: AppColors.text,
+                          decoration: const InputDecoration(
+                            labelText: 'Judge for this class',
+                          ),
+                          items: [
+                            const DropdownMenuItem<String>(
+                              value: '',
+                              child: Text('(Not set)'),
+                            ),
+                            ...widget.judges.map(
+                              (j) => DropdownMenuItem<String>(
+                                value: (j['id'] ?? '').toString(),
+                                child: Text((j['name'] ?? '').toString()),
+                              ),
+                            ),
+                          ],
+                          selectedItemBuilder: (context) =>
+                              _judgeSelectedItems(widget.judges),
+                          onChanged: _savingJudge
+                              ? null
+                              : (v) {
+                                  _applyJudgeToEntries(
+                                    _entries,
+                                    (v == null || v.isEmpty) ? null : v,
+                                  );
+                                },
+                        ),
+                        if (_msg != null) ...[
+                          const SizedBox(height: 12),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              _msg!,
+                              style: TextStyle(
+                                color: _msg == 'Judge updated.'
+                                    ? Colors.green
+                                    : Colors.red,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
-                    title: Text(
-                      label,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    subtitle: Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Text(
-                        '$completed/$count entered • ${_statusLabel(classEntries)}\n${_judgeSummary(classEntries)}${classSpecials.isEmpty ? '' : '\n$classSpecials'}',
-                      ),
-                    ),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () async {
-                      await _openClassSexByIndex(i);
-                    },
                   ),
-                );
-              },
+                ),
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 12),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                itemCount: labels.length,
+                itemBuilder: (context, i) {
+                  final label = labels[i];
+                  final classEntries = grouped[label]!;
+                  final count = classEntries.length;
+                  final completed = _completedCount(classEntries);
+                  final statusColor = _statusColor(context, classEntries);
+                  final classSpecials =
+                      _specialsSummaryForEntries(classEntries, const [
+                        'BOV',
+                        'BOSV',
+                        'BOG',
+                        'BOSG',
+                        'BOB',
+                        'BOSB',
+                        'Best Junior',
+                        'Best Intermediate',
+                        'Best Senior',
+                        'Best 4-Class',
+                        'Best 6-Class',
+                        'Best In Show',
+                        'Reserve In Show',
+                        'BIS',
+                        'RIS',
+                        '1RIS',
+                        '2RIS',
+                        'HM',
+                      ]);
+
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    elevation: 0,
+                    color: statusColor.withValues(alpha: 0.06),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
+                      leading: CircleAvatar(
+                        backgroundColor: statusColor.withValues(alpha: 0.12),
+                        child: Icon(
+                          _statusIcon(classEntries),
+                          color: statusColor,
+                        ),
+                      ),
+                      title: Text(
+                        label,
+                        style: const TextStyle(
+                          color: AppColors.headerForeground,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      subtitle: Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Text(
+                          '$completed/$count entered • ${_statusLabel(classEntries)}\n${_judgeSummary(classEntries)}${classSpecials.isEmpty ? '' : '\n$classSpecials'}',
+                          style: TextStyle(
+                            color: AppColors.headerForeground.withValues(
+                              alpha: .86,
+                            ),
+                          ),
+                        ),
+                      ),
+                      trailing: const Icon(
+                        Icons.chevron_right,
+                        color: AppColors.headerForeground,
+                      ),
+                      onTap: () async {
+                        await _openClassSexByIndex(i);
+                      },
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -5706,205 +5878,222 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
       appBar: AppBar(
         elevation: 0,
         backgroundColor: AppColors.header,
-        foregroundColor: AppColors.headerForeground,
+        foregroundColor: AppColors.headerText,
         title: Text(widget.classSexLabel),
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-            child: Card(
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        [
-                          widget.showName,
-                          widget.sectionLabel,
-                          widget.breed,
-                          if (widget.variety.trim().isNotEmpty) widget.variety,
-                        ].join(' • '),
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    DropdownButtonFormField<String>(
-                      initialValue: _currentJudgeId,
-                      decoration: const InputDecoration(
-                        labelText: 'Judge for this class',
-                      ),
-                      items: [
-                        const DropdownMenuItem<String>(
-                          value: '',
-                          child: Text('(Not set)'),
-                        ),
-                        ...widget.judges.map(
-                          (j) => DropdownMenuItem<String>(
-                            value: (j['id'] ?? '').toString(),
-                            child: Text((j['name'] ?? '').toString()),
-                          ),
-                        ),
-                      ],
-                      onChanged: _savingJudge
-                          ? null
-                          : (v) {
-                              _applyJudgeToClass(
-                                (v == null || v.isEmpty) ? null : v,
-                              );
-                            },
-                    ),
-                    const SizedBox(height: 14),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          _infoPill('$entryCount entries'),
-                          _infoPill('$exhibitorCount exhibitors'),
-                          _infoPill('${_shownCount()} shown/eligible'),
-                        ],
-                      ),
-                    ),
-                    if (_msg != null) ...[
-                      const SizedBox(height: 12),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          _msg!,
-                          style: TextStyle(
-                            color:
-                                _msg == 'Judge updated.' ||
-                                    _msg == 'Results updated.'
-                                ? Colors.green
-                                : Colors.red,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              itemCount: _entries.length,
-              itemBuilder: (context, i) {
-                final e = _entries[i];
-                final coopNumber = (e['coop_number'] ?? '').toString().trim();
-                final animalName = (e['animal_name'] ?? '').toString().trim();
-                final tattoo = (e['tattoo'] ?? '').toString().trim();
-                final exhibitor = _exhibitorName(e);
-                final placement = (e['placement'] ?? '').toString().trim();
-                final awards = ((e['_awards'] as List?) ?? const [])
-                    .map((x) => _awardDisplayLabel(x.toString(), e))
-                    .toList();
-                final awardsText = awards.join(', ');
-                final isShown = e['is_shown'] != false;
-                final isDisqualified = e['is_disqualified'] == true;
-                final scratched = (e['scratched_at'] ?? '')
-                    .toString()
-                    .trim()
-                    .isNotEmpty;
-                final resultStatus = (e['result_status'] ?? '')
-                    .toString()
-                    .trim();
-                final judgeId = (e['judged_by_show_judge_id'] ?? '')
-                    .toString()
-                    .trim();
-                final judgeName = _judgeNameById(judgeId);
-
-                final subtitleParts = <String>[
-                  if (exhibitor.isNotEmpty) exhibitor,
-                  if (resultStatus.isNotEmpty) 'Status: $resultStatus',
-                  if (placement.isNotEmpty) 'Place: $placement',
-                  if (awardsText.isNotEmpty) 'Awards: $awardsText',
-                  if (judgeId.isNotEmpty)
-                    'Judge: ${judgeName.isEmpty ? judgeId : judgeName}',
-                  if (!isShown && resultStatus.isEmpty) 'Not shown',
-                  if (isDisqualified && resultStatus.isEmpty) 'Disqualified',
-                  if (scratched) 'Scratched',
-                ];
-
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 12),
+      body: AppTheme.gradientTextScope(
+        context,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              child: AppTheme.surfaceTextScope(
+                context,
+                child: Card(
                   elevation: 0,
-                  color: _rowTint(e),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
-                    side: BorderSide(color: _rowBorder(e)),
                   ),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(20),
-                    onTap: () => _openResultEntryAt(i),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    if (coopNumber.isNotEmpty)
-                                      Text(
-                                        'Coop #: $coopNumber',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                      ),
-                                    Text(
-                                      animalName.isNotEmpty && tattoo.isNotEmpty
-                                          ? '$animalName • Ear #: $tattoo'
-                                          : animalName.isNotEmpty
-                                          ? animalName
-                                          : 'Ear #: ${tattoo.isEmpty ? '(No ear #)' : tattoo}',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(subtitleParts.join(' • ')),
-                                  ],
-                                ),
-                              ),
-                              const Icon(Icons.chevron_right),
-                            ],
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            [
+                              widget.showName,
+                              widget.sectionLabel,
+                              widget.breed,
+                              if (widget.variety.trim().isNotEmpty)
+                                widget.variety,
+                            ].join(' • '),
+                            style: Theme.of(context).textTheme.bodySmall,
                           ),
-                          if (_canRequestQrCorrection) ...[
-                            const SizedBox(height: 10),
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: OutlinedButton.icon(
-                                onPressed: () => _showQrCorrectionDialog(e),
-                                icon: const Icon(Icons.edit_note_outlined),
-                                label: const Text('Request Correction'),
+                        ),
+                        const SizedBox(height: 14),
+                        DropdownButtonFormField<String>(
+                          initialValue: _currentJudgeId,
+                          style: const TextStyle(
+                            color: AppColors.text,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          dropdownColor: AppColors.surface,
+                          iconEnabledColor: AppColors.text,
+                          decoration: const InputDecoration(
+                            labelText: 'Judge for this class',
+                          ),
+                          items: [
+                            const DropdownMenuItem<String>(
+                              value: '',
+                              child: Text('(Not set)'),
+                            ),
+                            ...widget.judges.map(
+                              (j) => DropdownMenuItem<String>(
+                                value: (j['id'] ?? '').toString(),
+                                child: Text((j['name'] ?? '').toString()),
                               ),
                             ),
                           ],
+                          selectedItemBuilder: (context) =>
+                              _judgeSelectedItems(widget.judges),
+                          onChanged: _savingJudge
+                              ? null
+                              : (v) {
+                                  _applyJudgeToClass(
+                                    (v == null || v.isEmpty) ? null : v,
+                                  );
+                                },
+                        ),
+                        const SizedBox(height: 14),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              _infoPill('$entryCount entries'),
+                              _infoPill('$exhibitorCount exhibitors'),
+                              _infoPill('${_shownCount()} shown/eligible'),
+                            ],
+                          ),
+                        ),
+                        if (_msg != null) ...[
+                          const SizedBox(height: 12),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              _msg!,
+                              style: TextStyle(
+                                color:
+                                    _msg == 'Judge updated.' ||
+                                        _msg == 'Results updated.'
+                                    ? Colors.green
+                                    : Colors.red,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
                         ],
-                      ),
+                      ],
                     ),
                   ),
-                );
-              },
+                ),
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 12),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                itemCount: _entries.length,
+                itemBuilder: (context, i) {
+                  final e = _entries[i];
+                  final coopNumber = (e['coop_number'] ?? '').toString().trim();
+                  final animalName = (e['animal_name'] ?? '').toString().trim();
+                  final tattoo = (e['tattoo'] ?? '').toString().trim();
+                  final exhibitor = _exhibitorName(e);
+                  final placement = (e['placement'] ?? '').toString().trim();
+                  final awards = ((e['_awards'] as List?) ?? const [])
+                      .map((x) => _awardDisplayLabel(x.toString(), e))
+                      .toList();
+                  final awardsText = awards.join(', ');
+                  final isShown = e['is_shown'] != false;
+                  final isDisqualified = e['is_disqualified'] == true;
+                  final scratched = (e['scratched_at'] ?? '')
+                      .toString()
+                      .trim()
+                      .isNotEmpty;
+                  final resultStatus = (e['result_status'] ?? '')
+                      .toString()
+                      .trim();
+                  final judgeId = (e['judged_by_show_judge_id'] ?? '')
+                      .toString()
+                      .trim();
+                  final judgeName = _judgeNameById(judgeId);
+
+                  final subtitleParts = <String>[
+                    if (exhibitor.isNotEmpty) exhibitor,
+                    if (resultStatus.isNotEmpty) 'Status: $resultStatus',
+                    if (placement.isNotEmpty) 'Place: $placement',
+                    if (awardsText.isNotEmpty) 'Awards: $awardsText',
+                    if (judgeId.isNotEmpty)
+                      'Judge: ${judgeName.isEmpty ? judgeId : judgeName}',
+                    if (!isShown && resultStatus.isEmpty) 'Not shown',
+                    if (isDisqualified && resultStatus.isEmpty) 'Disqualified',
+                    if (scratched) 'Scratched',
+                  ];
+
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    elevation: 0,
+                    color: _rowTint(e),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      side: BorderSide(color: _rowBorder(e)),
+                    ),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(20),
+                      onTap: () => _openResultEntryAt(i),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      if (coopNumber.isNotEmpty)
+                                        Text(
+                                          'Coop #: $coopNumber',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      Text(
+                                        animalName.isNotEmpty &&
+                                                tattoo.isNotEmpty
+                                            ? '$animalName • Ear #: $tattoo'
+                                            : animalName.isNotEmpty
+                                            ? animalName
+                                            : 'Ear #: ${tattoo.isEmpty ? '(No ear #)' : tattoo}',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(subtitleParts.join(' • ')),
+                                    ],
+                                  ),
+                                ),
+                                const Icon(Icons.chevron_right),
+                              ],
+                            ),
+                            if (_canRequestQrCorrection) ...[
+                              const SizedBox(height: 10),
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: OutlinedButton.icon(
+                                  onPressed: () => _showQrCorrectionDialog(e),
+                                  icon: const Icon(Icons.edit_note_outlined),
+                                  label: const Text('Request Correction'),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

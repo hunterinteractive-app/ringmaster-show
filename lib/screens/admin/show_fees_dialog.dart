@@ -341,15 +341,6 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
         return false;
       }
 
-      final requiredShows = _parsePositiveInt(_discountRequiredShows.text);
-      if (requiredShows == null) {
-        setState(
-          () => _msg =
-              'Minimum number of shows must be a whole number of 1 or greater.',
-        );
-        return false;
-      }
-
       final eligibleSectionCount = _sections.where((section) {
         if (_discountScope == 'both') return true;
         final kind = (section['kind'] ?? '').toString().trim().toLowerCase();
@@ -361,6 +352,15 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
           () => _msg = _discountScope == 'open'
               ? 'There are no enabled Open show sections for this discount.'
               : 'There are no enabled Youth show sections for this discount.',
+        );
+        return false;
+      }
+
+      final requiredShows = _parsePositiveInt(_discountRequiredShows.text);
+      if (requiredShows == null) {
+        setState(
+          () => _msg =
+              'Minimum number of shows must be a whole number of 1 or greater.',
         );
         return false;
       }
@@ -605,43 +605,52 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
     String? subtitle,
     IconData? icon,
   }) {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: .05), blurRadius: 12),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              if (icon != null) ...[
-                Icon(icon, size: 20, color: AppColors.navy),
-                const SizedBox(width: 8),
-              ],
-              Expanded(
-                child: Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          if (subtitle != null && subtitle.trim().isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+    return AppTheme.surfaceTextScope(
+      context,
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: .05),
+              blurRadius: 12,
+            ),
           ],
-          const SizedBox(height: 14),
-          ...children,
-        ],
+        ),
+        child: Builder(
+          builder: (context) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    if (icon != null) ...[
+                      Icon(icon, size: 20, color: AppColors.navy),
+                      const SizedBox(width: 8),
+                    ],
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ],
+                ),
+                if (subtitle != null && subtitle.trim().isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+                ],
+                const SizedBox(height: 14),
+                ...children,
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -825,11 +834,11 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
         title: const Text(
-          'Enable multi-show volume discount',
+          'Enable entry volume discount',
           style: TextStyle(fontWeight: FontWeight.w600),
         ),
         subtitle: const Text(
-          'Offer a discounted entry price when an exhibitor meets the required entry count across multiple show sections.',
+          'Offer a discounted entry price when an exhibitor meets the required entry count per show or across multiple show sections.',
         ),
         value: _discountEnabled,
         onChanged: (_saving || _isReadOnly)
@@ -849,7 +858,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
                 DropdownMenuItem(
                   value: 'each_show',
                   child: Text(
-                    'Minimum entries in each required show',
+                    'Minimum entries per show',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -857,7 +866,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
                 DropdownMenuItem(
                   value: 'cumulative',
                   child: Text(
-                    'Cumulative entries across required shows',
+                    'Cumulative entries across shows',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -921,7 +930,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
                       ? 'Minimum entries per show'
                       : 'Minimum total entries',
                   helperText: _discountBasis == 'each_show'
-                      ? 'Example: 12 rabbits in each show'
+                      ? 'Example: 12 animals in a show'
                       : 'Example: 36 entries across 3 shows',
                   helperMaxLines: 2,
                   border: const OutlineInputBorder(),
@@ -932,11 +941,13 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
                 enabled: !_saving && !_isReadOnly,
                 keyboardType: TextInputType.number,
                 textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(
-                  labelText: 'Maximum entries',
+                decoration: InputDecoration(
+                  labelText: _discountBasis == 'each_show'
+                      ? 'Maximum entries per show'
+                      : 'Maximum entries',
                   helperText: 'Optional; leave blank for no maximum',
                   helperMaxLines: 2,
-                  border: OutlineInputBorder(),
+                  border: const OutlineInputBorder(),
                 ),
               ),
               TextField(
@@ -1068,12 +1079,12 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
                       ? 'Open or Youth'
                       : _discountScope == 'open'
                       ? 'Open'
-                      : 'Youth'} shows, then charge the selected discounted rate for qualifying entries.'
+                      : 'Youth'} shows, then apply the discount to qualifying entries.'
                 : 'Example: require 36 total entries across 3 ${_discountScope == 'both'
                       ? 'Open or Youth'
                       : _discountScope == 'open'
                       ? 'Open'
-                      : 'Youth'} shows, then charge the selected discounted rate for qualifying entries.',
+                      : 'Youth'} shows, then apply the selected discount to qualifying entries.',
             style: const TextStyle(fontWeight: FontWeight.w500),
           ),
         ),
@@ -1326,9 +1337,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
           maxHeight: media.height < 840 ? media.height * 0.94 : 800,
         ),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [AppColors.navy, AppColors.navyDark],
-          ),
+          gradient: AppGradients.page,
           borderRadius: BorderRadius.circular(24),
         ),
         child: Column(
@@ -1338,7 +1347,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
               child: Row(
                 children: [
                   Image.asset(
-                    'assets/images/ringmaster_show_logo.png',
+                    'assets/images/RingMaster_One_Show_Transparent.png',
                     height: 36,
                   ),
                   const SizedBox(width: 12),
@@ -1369,115 +1378,119 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
                   color: AppColors.bg,
                   borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
                 ),
-                child: _loading
-                    ? const Center(child: CircularProgressIndicator())
-                    : Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Column(
-                          children: [
-                            if (_isReadOnly) ...[
-                              Container(
-                                width: double.infinity,
-                                margin: const EdgeInsets.only(bottom: 16),
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Colors.amber.shade100,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: Colors.amber.shade300,
-                                  ),
-                                ),
-                                child: Text(
-                                  _isFinalized
-                                      ? 'This show has been finalized. Fees and payment settings are view-only.'
-                                      : 'This show is locked. Fees and payment settings are view-only.',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                            ],
-                            if (_msg != null)
-                              Container(
-                                width: double.infinity,
-                                margin: const EdgeInsets.only(bottom: 16),
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: success
-                                      ? Colors.green.withValues(alpha: .08)
-                                      : Colors.red.withValues(alpha: .08),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: success
-                                        ? Colors.green.withValues(alpha: .25)
-                                        : Colors.red.withValues(alpha: .25),
-                                  ),
-                                ),
-                                child: Text(
-                                  _msg!,
-                                  style: TextStyle(
-                                    color: success
-                                        ? Colors.green.shade700
-                                        : Colors.red,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            Expanded(
-                              child: SingleChildScrollView(
-                                child: Column(
-                                  children: [
-                                    _buildSectionFeesSection(),
-                                    _buildDiscountSection(),
-                                    _buildOnlinePaymentFeeSection(),
-                                    _buildStripeSection(),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: OutlinedButton(
-                                    onPressed: (_saving || _connectingStripe)
-                                        ? null
-                                        : () => Navigator.pop(context),
-                                    child: const Text('Close'),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: FilledButton.icon(
-                                    style: FilledButton.styleFrom(
-                                      backgroundColor: AppColors.primaryButton,
-                                      foregroundColor:
-                                          AppColors.primaryButtonText,
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 16,
-                                      ),
+                child: AppTheme.gradientTextScope(
+                  context,
+                  child: _loading
+                      ? const Center(child: CircularProgressIndicator())
+                      : Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            children: [
+                              if (_isReadOnly) ...[
+                                Container(
+                                  width: double.infinity,
+                                  margin: const EdgeInsets.only(bottom: 16),
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amber.shade100,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: Colors.amber.shade300,
                                     ),
-                                    onPressed:
-                                        (_saving ||
-                                            _isReadOnly ||
-                                            _connectingStripe)
-                                        ? null
-                                        : _save,
-                                    icon: const Icon(Icons.save_outlined),
-                                    label: Text(
-                                      _saving
-                                          ? 'Saving…'
-                                          : _isReadOnly
-                                          ? 'View Only'
-                                          : 'Save Changes',
+                                  ),
+                                  child: Text(
+                                    _isFinalized
+                                        ? 'This show has been finalized. Fees and payment settings are view-only.'
+                                        : 'This show is locked. Fees and payment settings are view-only.',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
                                     ),
                                   ),
                                 ),
                               ],
-                            ),
-                          ],
+                              if (_msg != null)
+                                Container(
+                                  width: double.infinity,
+                                  margin: const EdgeInsets.only(bottom: 16),
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: success
+                                        ? Colors.green.withValues(alpha: .08)
+                                        : Colors.red.withValues(alpha: .08),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: success
+                                          ? Colors.green.withValues(alpha: .25)
+                                          : Colors.red.withValues(alpha: .25),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    _msg!,
+                                    style: TextStyle(
+                                      color: success
+                                          ? Colors.green.shade700
+                                          : Colors.red,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              Expanded(
+                                child: SingleChildScrollView(
+                                  child: Column(
+                                    children: [
+                                      _buildSectionFeesSection(),
+                                      _buildDiscountSection(),
+                                      _buildOnlinePaymentFeeSection(),
+                                      _buildStripeSection(),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: OutlinedButton(
+                                      onPressed: (_saving || _connectingStripe)
+                                          ? null
+                                          : () => Navigator.pop(context),
+                                      child: const Text('Close'),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: FilledButton.icon(
+                                      style: FilledButton.styleFrom(
+                                        backgroundColor:
+                                            AppColors.primaryButton,
+                                        foregroundColor:
+                                            AppColors.primaryButtonText,
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 16,
+                                        ),
+                                      ),
+                                      onPressed:
+                                          (_saving ||
+                                              _isReadOnly ||
+                                              _connectingStripe)
+                                          ? null
+                                          : _save,
+                                      icon: const Icon(Icons.save_outlined),
+                                      label: Text(
+                                        _saving
+                                            ? 'Saving…'
+                                            : _isReadOnly
+                                            ? 'View Only'
+                                            : 'Save Changes',
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
+                ),
               ),
             ),
           ],

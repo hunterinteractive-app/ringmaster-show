@@ -45,13 +45,13 @@ class _RMTimezoneNoticeBannerState extends State<RMTimezoneNoticeBanner> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: const [
-                  Icon(Icons.access_time, size: 18, color: AppColors.navy),
+                  Icon(Icons.access_time, size: 18, color: AppColors.text),
                   SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       'All time is adjusted for your current time zone.',
                       style: TextStyle(
-                        color: AppColors.navy,
+                        color: AppColors.text,
                         fontWeight: FontWeight.w600,
                       ),
                     ),

@@ -236,24 +236,34 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
     required String title,
     required List<Widget> children,
   }) {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: .05), blurRadius: 10),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 12),
-          ...children,
-        ],
+    return AppTheme.surfaceTextScope(
+      context,
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: .05),
+              blurRadius: 10,
+            ),
+          ],
+        ),
+        child: Builder(
+          builder: (context) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 12),
+                ...children,
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -273,11 +283,7 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
         ),
         child: Container(
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [AppColors.navy, AppColors.navyDark],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
+            gradient: AppGradients.page,
             borderRadius: BorderRadius.circular(24),
           ),
           child: Column(
@@ -287,7 +293,7 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
                 child: Row(
                   children: [
                     Image.asset(
-                      'assets/images/ringmaster_show_logo.png',
+                      'assets/images/RingMaster_One_Show_Transparent.png',
                       height: 38,
                     ),
                     const SizedBox(width: 12),
@@ -319,291 +325,314 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
                       top: Radius.circular(24),
                     ),
                   ),
-                  child: _loading
-                      ? const Center(child: CircularProgressIndicator())
-                      : Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
-                          child: Column(
-                            children: [
-                              if (_isReadOnly) ...[
-                                Container(
-                                  width: double.infinity,
-                                  margin: const EdgeInsets.only(bottom: 16),
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: Colors.amber.shade100,
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: Colors.amber.shade300,
-                                    ),
-                                  ),
-                                  child: Text(
-                                    _isFinalized
-                                        ? 'This show has been finalized. Rules and validation settings are view-only.'
-                                        : 'This show is locked. Rules and validation settings are view-only.',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                              if (_msg != null)
-                                Container(
-                                  width: double.infinity,
-                                  margin: const EdgeInsets.only(bottom: 16),
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: savedMessage
-                                        ? Colors.green.withValues(alpha: .08)
-                                        : Colors.red.withValues(alpha: .08),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: savedMessage
-                                          ? Colors.green.withValues(alpha: .25)
-                                          : Colors.red.withValues(alpha: .25),
-                                    ),
-                                  ),
-                                  child: Text(
-                                    _msg!,
-                                    style: TextStyle(
-                                      color: savedMessage
-                                          ? Colors.green
-                                          : Colors.red,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              Expanded(
-                                child: SingleChildScrollView(
-                                  child: Column(
-                                    children: [
-                                      _buildSectionCard(
-                                        context: context,
-                                        title: 'Required Fields',
-                                        children: [
-                                          SwitchListTile(
-                                            contentPadding: EdgeInsets.zero,
-                                            title: const Text(
-                                              'Tattoo / ID required',
-                                            ),
-                                            value: requireTattoo,
-                                            onChanged: (_saving || _isReadOnly)
-                                                ? null
-                                                : (v) => setState(
-                                                    () => requireTattoo = v,
-                                                  ),
-                                          ),
-                                          SwitchListTile(
-                                            contentPadding: EdgeInsets.zero,
-                                            title: const Text('Sex required'),
-                                            value: requireSex,
-                                            onChanged: (_saving || _isReadOnly)
-                                                ? null
-                                                : (v) => setState(
-                                                    () => requireSex = v,
-                                                  ),
-                                          ),
-                                          SwitchListTile(
-                                            contentPadding: EdgeInsets.zero,
-                                            title: const Text(
-                                              'Birth date required',
-                                            ),
-                                            value: requireBirthDate,
-                                            onChanged: (_saving || _isReadOnly)
-                                                ? null
-                                                : (v) => setState(
-                                                    () => requireBirthDate = v,
-                                                  ),
-                                          ),
-                                          SwitchListTile(
-                                            contentPadding: EdgeInsets.zero,
-                                            title: const Text('Breed required'),
-                                            value: requireBreed,
-                                            onChanged: (_saving || _isReadOnly)
-                                                ? null
-                                                : (v) => setState(
-                                                    () => requireBreed = v,
-                                                  ),
-                                          ),
-                                          SwitchListTile(
-                                            contentPadding: EdgeInsets.zero,
-                                            title: const Text(
-                                              'Variety required',
-                                            ),
-                                            value: requireVariety,
-                                            onChanged: (_saving || _isReadOnly)
-                                                ? null
-                                                : (v) => setState(
-                                                    () => requireVariety = v,
-                                                  ),
-                                          ),
-                                          SwitchListTile(
-                                            contentPadding: EdgeInsets.zero,
-                                            title: const Text('Name required'),
-                                            subtitle: const Text(
-                                              'Default is OFF so animal name stays optional.',
-                                            ),
-                                            value: requireName,
-                                            onChanged: (_saving || _isReadOnly)
-                                                ? null
-                                                : (v) => setState(
-                                                    () => requireName = v,
-                                                  ),
-                                          ),
-                                        ],
+                  child: AppTheme.gradientTextScope(
+                    context,
+                    child: _loading
+                        ? const Center(child: CircularProgressIndicator())
+                        : Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+                            child: Column(
+                              children: [
+                                if (_isReadOnly) ...[
+                                  Container(
+                                    width: double.infinity,
+                                    margin: const EdgeInsets.only(bottom: 16),
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.amber.shade100,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: Colors.amber.shade300,
                                       ),
-                                      _buildSectionCard(
-                                        context: context,
-                                        title: 'Limits',
-                                        children: [
-                                          TextField(
-                                            controller: _maxEntriesPerExhibitor,
-                                            enabled: !_saving && !_isReadOnly,
-                                            keyboardType: TextInputType.number,
-                                            decoration: const InputDecoration(
-                                              labelText:
-                                                  'Max entries per exhibitor (optional)',
-                                              hintText:
-                                                  'Leave blank for unlimited',
-                                              border: OutlineInputBorder(),
-                                            ),
-                                          ),
-                                          const SizedBox(height: 12),
-                                          TextField(
-                                            controller: _maxEntriesPerAnimal,
-                                            enabled: !_saving && !_isReadOnly,
-                                            keyboardType: TextInputType.number,
-                                            decoration: const InputDecoration(
-                                              labelText:
-                                                  'Max entries per animal',
-                                              hintText: 'Usually 1',
-                                              border: OutlineInputBorder(),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      _buildSectionCard(
-                                        context: context,
-                                        title: 'Award Rules',
-                                        children: [
-                                          DropdownButtonFormField<String>(
-                                            initialValue: _finalAwardMode,
-                                            decoration: const InputDecoration(
-                                              labelText: 'Final award format',
-                                              helperText:
-                                                  'Choose how final show awards are selected.',
-                                              border: OutlineInputBorder(),
-                                            ),
-                                            items: const [
-                                              DropdownMenuItem(
-                                                value: 'four_six_bis',
-                                                child: Text(
-                                                  'Best 4-Class / Best 6-Class / Best in Show',
-                                                ),
-                                              ),
-                                              DropdownMenuItem(
-                                                value: 'bis_ris',
-                                                child: Text(
-                                                  'Best in Show / Reserve in Show',
-                                                ),
-                                              ),
-                                            ],
-                                            onChanged: (_saving || _isReadOnly)
-                                                ? null
-                                                : (v) {
-                                                    setState(() {
-                                                      _finalAwardMode =
-                                                          v ?? 'four_six_bis';
-                                                    });
-                                                  },
-                                          ),
-                                          const SizedBox(height: 8),
-                                          Align(
-                                            alignment: Alignment.centerLeft,
-                                            child: Text(
-                                              'Current mode: ${_finalAwardModeLabel(_finalAwardMode)}',
-                                              style: Theme.of(
-                                                context,
-                                              ).textTheme.bodySmall,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      _buildSectionCard(
-                                        context: context,
-                                        title: 'Enforcement',
-                                        children: [
-                                          SwitchListTile(
-                                            contentPadding: EdgeInsets.zero,
-                                            title: const Text(
-                                              'Block entries outside entry window',
-                                            ),
-                                            value: blockOutsideWindow,
-                                            onChanged: (_saving || _isReadOnly)
-                                                ? null
-                                                : (v) => setState(
-                                                    () =>
-                                                        blockOutsideWindow = v,
-                                                  ),
-                                          ),
-                                          SwitchListTile(
-                                            contentPadding: EdgeInsets.zero,
-                                            title: const Text(
-                                              'Block entries when show is unpublished',
-                                            ),
-                                            value: blockUnpublished,
-                                            onChanged: (_saving || _isReadOnly)
-                                                ? null
-                                                : (v) => setState(
-                                                    () => blockUnpublished = v,
-                                                  ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: OutlinedButton(
-                                      onPressed: _saving
-                                          ? null
-                                          : () => Navigator.pop(context),
-                                      child: const Text('Close'),
                                     ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: FilledButton(
-                                      style: FilledButton.styleFrom(
-                                        backgroundColor:
-                                            AppColors.primaryButton,
-                                        foregroundColor:
-                                            AppColors.primaryButtonText,
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 16,
-                                        ),
-                                      ),
-                                      onPressed: (_saving || _isReadOnly)
-                                          ? null
-                                          : _save,
-                                      child: Text(
-                                        _saving
-                                            ? 'Saving…'
-                                            : _isReadOnly
-                                            ? 'View Only'
-                                            : 'Save',
+                                    child: Text(
+                                      _isFinalized
+                                          ? 'This show has been finalized. Rules and validation settings are view-only.'
+                                          : 'This show is locked. Rules and validation settings are view-only.',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
                                       ),
                                     ),
                                   ),
                                 ],
-                              ),
-                            ],
+                                if (_msg != null)
+                                  Container(
+                                    width: double.infinity,
+                                    margin: const EdgeInsets.only(bottom: 16),
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: savedMessage
+                                          ? Colors.green.withValues(alpha: .08)
+                                          : Colors.red.withValues(alpha: .08),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: savedMessage
+                                            ? Colors.green.withValues(
+                                                alpha: .25,
+                                              )
+                                            : Colors.red.withValues(alpha: .25),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      _msg!,
+                                      style: TextStyle(
+                                        color: savedMessage
+                                            ? Colors.green
+                                            : Colors.red,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                Expanded(
+                                  child: SingleChildScrollView(
+                                    child: Column(
+                                      children: [
+                                        _buildSectionCard(
+                                          context: context,
+                                          title: 'Required Fields',
+                                          children: [
+                                            SwitchListTile(
+                                              contentPadding: EdgeInsets.zero,
+                                              title: const Text(
+                                                'Tattoo / ID required',
+                                              ),
+                                              value: requireTattoo,
+                                              onChanged:
+                                                  (_saving || _isReadOnly)
+                                                  ? null
+                                                  : (v) => setState(
+                                                      () => requireTattoo = v,
+                                                    ),
+                                            ),
+                                            SwitchListTile(
+                                              contentPadding: EdgeInsets.zero,
+                                              title: const Text('Sex required'),
+                                              value: requireSex,
+                                              onChanged:
+                                                  (_saving || _isReadOnly)
+                                                  ? null
+                                                  : (v) => setState(
+                                                      () => requireSex = v,
+                                                    ),
+                                            ),
+                                            SwitchListTile(
+                                              contentPadding: EdgeInsets.zero,
+                                              title: const Text(
+                                                'Birth date required',
+                                              ),
+                                              value: requireBirthDate,
+                                              onChanged:
+                                                  (_saving || _isReadOnly)
+                                                  ? null
+                                                  : (v) => setState(
+                                                      () =>
+                                                          requireBirthDate = v,
+                                                    ),
+                                            ),
+                                            SwitchListTile(
+                                              contentPadding: EdgeInsets.zero,
+                                              title: const Text(
+                                                'Breed required',
+                                              ),
+                                              value: requireBreed,
+                                              onChanged:
+                                                  (_saving || _isReadOnly)
+                                                  ? null
+                                                  : (v) => setState(
+                                                      () => requireBreed = v,
+                                                    ),
+                                            ),
+                                            SwitchListTile(
+                                              contentPadding: EdgeInsets.zero,
+                                              title: const Text(
+                                                'Variety required',
+                                              ),
+                                              value: requireVariety,
+                                              onChanged:
+                                                  (_saving || _isReadOnly)
+                                                  ? null
+                                                  : (v) => setState(
+                                                      () => requireVariety = v,
+                                                    ),
+                                            ),
+                                            SwitchListTile(
+                                              contentPadding: EdgeInsets.zero,
+                                              title: const Text(
+                                                'Name required',
+                                              ),
+                                              subtitle: const Text(
+                                                'Default is OFF so animal name stays optional.',
+                                              ),
+                                              value: requireName,
+                                              onChanged:
+                                                  (_saving || _isReadOnly)
+                                                  ? null
+                                                  : (v) => setState(
+                                                      () => requireName = v,
+                                                    ),
+                                            ),
+                                          ],
+                                        ),
+                                        _buildSectionCard(
+                                          context: context,
+                                          title: 'Limits',
+                                          children: [
+                                            TextField(
+                                              controller:
+                                                  _maxEntriesPerExhibitor,
+                                              enabled: !_saving && !_isReadOnly,
+                                              keyboardType:
+                                                  TextInputType.number,
+                                              decoration: const InputDecoration(
+                                                labelText:
+                                                    'Max entries per exhibitor (optional)',
+                                                hintText:
+                                                    'Leave blank for unlimited',
+                                                border: OutlineInputBorder(),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 12),
+                                            TextField(
+                                              controller: _maxEntriesPerAnimal,
+                                              enabled: !_saving && !_isReadOnly,
+                                              keyboardType:
+                                                  TextInputType.number,
+                                              decoration: const InputDecoration(
+                                                labelText:
+                                                    'Max entries per animal',
+                                                hintText: 'Usually 1',
+                                                border: OutlineInputBorder(),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        _buildSectionCard(
+                                          context: context,
+                                          title: 'Award Rules',
+                                          children: [
+                                            DropdownButtonFormField<String>(
+                                              initialValue: _finalAwardMode,
+                                              decoration: const InputDecoration(
+                                                labelText: 'Final award format',
+                                                helperText:
+                                                    'Choose how final show awards are selected.',
+                                                border: OutlineInputBorder(),
+                                              ),
+                                              items: const [
+                                                DropdownMenuItem(
+                                                  value: 'four_six_bis',
+                                                  child: Text(
+                                                    'Best 4-Class / Best 6-Class / Best in Show',
+                                                  ),
+                                                ),
+                                                DropdownMenuItem(
+                                                  value: 'bis_ris',
+                                                  child: Text(
+                                                    'Best in Show / Reserve in Show',
+                                                  ),
+                                                ),
+                                              ],
+                                              onChanged:
+                                                  (_saving || _isReadOnly)
+                                                  ? null
+                                                  : (v) {
+                                                      setState(() {
+                                                        _finalAwardMode =
+                                                            v ?? 'four_six_bis';
+                                                      });
+                                                    },
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Align(
+                                              alignment: Alignment.centerLeft,
+                                              child: Text(
+                                                'Current mode: ${_finalAwardModeLabel(_finalAwardMode)}',
+                                                style: Theme.of(
+                                                  context,
+                                                ).textTheme.bodySmall,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        _buildSectionCard(
+                                          context: context,
+                                          title: 'Enforcement',
+                                          children: [
+                                            SwitchListTile(
+                                              contentPadding: EdgeInsets.zero,
+                                              title: const Text(
+                                                'Block entries outside entry window',
+                                              ),
+                                              value: blockOutsideWindow,
+                                              onChanged:
+                                                  (_saving || _isReadOnly)
+                                                  ? null
+                                                  : (v) => setState(
+                                                      () => blockOutsideWindow =
+                                                          v,
+                                                    ),
+                                            ),
+                                            SwitchListTile(
+                                              contentPadding: EdgeInsets.zero,
+                                              title: const Text(
+                                                'Block entries when show is unpublished',
+                                              ),
+                                              value: blockUnpublished,
+                                              onChanged:
+                                                  (_saving || _isReadOnly)
+                                                  ? null
+                                                  : (v) => setState(
+                                                      () =>
+                                                          blockUnpublished = v,
+                                                    ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: OutlinedButton(
+                                        onPressed: _saving
+                                            ? null
+                                            : () => Navigator.pop(context),
+                                        child: const Text('Close'),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: FilledButton(
+                                        style: FilledButton.styleFrom(
+                                          backgroundColor:
+                                              AppColors.primaryButton,
+                                          foregroundColor:
+                                              AppColors.primaryButtonText,
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 16,
+                                          ),
+                                        ),
+                                        onPressed: (_saving || _isReadOnly)
+                                            ? null
+                                            : _save,
+                                        child: Text(
+                                          _saving
+                                              ? 'Saving…'
+                                              : _isReadOnly
+                                              ? 'View Only'
+                                              : 'Save',
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
+                  ),
                 ),
               ),
             ],

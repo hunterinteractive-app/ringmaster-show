@@ -4,19 +4,20 @@ class AppColors {
   static const pageBackground = Color(0xFF391C77);
   static const pageBackgroundMid = Color(0xFF4B2A8F);
   static const pageBackgroundDeep = Color(0xFF211044);
-  static const header = Color(0xFFE9EDEE);
-  static const headerDark = Color(0xFFD8DEE0);
+  static const header = Color(0xFF51A5AE);
+  static const headerDark = Color(0xFF3F8F98);
   static const card = Color(0xFFE9EDEE);
   static const primaryButton = Color(0xFFF6C834);
   static const primaryButtonText = Color(0xFF1E2849);
   static const secondaryButton = Color(0xFF391C77);
   static const text = Color(0xFF1E2849);
   static const muted = Color(0xFF4D5566);
+  static const headerText = Color(0xFF391C77);
   static const headerForeground = Colors.white;
   static const neutralBadgeBg = Color(0xFFE8EBEC);
 
-  static const navy = header;
-  static const navyDark = headerDark;
+  static const navy = text;
+  static const navyDark = primaryButtonText;
   static const gold = primaryButton;
   static const bg = pageBackground;
   static const surface = card;
@@ -62,6 +63,151 @@ class AppSpacing {
 }
 
 class AppTheme {
+  static Widget gradientTextScope(
+    BuildContext context, {
+    required Widget child,
+  }) {
+    return Theme(
+      data: onGradientTheme(Theme.of(context)),
+      child: DefaultTextStyle.merge(
+        style: const TextStyle(color: AppColors.headerForeground),
+        child: IconTheme(
+          data: const IconThemeData(color: AppColors.headerForeground),
+          child: child,
+        ),
+      ),
+    );
+  }
+
+  static Widget surfaceTextScope(
+    BuildContext context, {
+    required Widget child,
+  }) {
+    return Theme(
+      data: surfaceTheme(Theme.of(context)),
+      child: DefaultTextStyle.merge(
+        style: const TextStyle(color: AppColors.text),
+        child: IconTheme(
+          data: const IconThemeData(color: AppColors.text),
+          child: child,
+        ),
+      ),
+    );
+  }
+
+  static ThemeData onGradientTheme(ThemeData base) {
+    final brightText = AppColors.headerForeground;
+    final mutedText = AppColors.headerForeground.withValues(alpha: .82);
+
+    return base.copyWith(
+      textTheme: _textThemeWithColors(base.textTheme, brightText, mutedText),
+      iconTheme: base.iconTheme.copyWith(color: brightText),
+      listTileTheme: ListTileThemeData(
+        textColor: brightText,
+        iconColor: brightText,
+        titleTextStyle: base.textTheme.titleMedium?.copyWith(
+          color: brightText,
+          fontWeight: FontWeight.w500,
+        ),
+        subtitleTextStyle: base.textTheme.bodyMedium?.copyWith(
+          color: mutedText,
+        ),
+      ),
+      popupMenuTheme: const PopupMenuThemeData(
+        color: AppColors.surface,
+        textStyle: TextStyle(color: AppColors.text),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: ButtonStyle(
+          foregroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.disabled)) {
+              return mutedText.withValues(alpha: .45);
+            }
+            return brightText;
+          }),
+          side: WidgetStateProperty.resolveWith((states) {
+            final color = states.contains(WidgetState.disabled)
+                ? mutedText.withValues(alpha: .28)
+                : brightText.withValues(alpha: .9);
+            return BorderSide(color: color, width: 1.4);
+          }),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(foregroundColor: brightText),
+      ),
+    );
+  }
+
+  static ThemeData surfaceTheme(ThemeData base) {
+    return base.copyWith(
+      textTheme: _textThemeWithColors(
+        base.textTheme,
+        AppColors.text,
+        AppColors.muted,
+      ),
+      iconTheme: base.iconTheme.copyWith(color: AppColors.text),
+      listTileTheme: ListTileThemeData(
+        textColor: AppColors.text,
+        iconColor: AppColors.text,
+        titleTextStyle: base.textTheme.titleMedium?.copyWith(
+          color: AppColors.text,
+          fontWeight: FontWeight.w500,
+        ),
+        subtitleTextStyle: base.textTheme.bodyMedium?.copyWith(
+          color: AppColors.muted,
+        ),
+      ),
+      popupMenuTheme: const PopupMenuThemeData(
+        color: AppColors.surface,
+        textStyle: TextStyle(color: AppColors.text),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(foregroundColor: AppColors.secondaryButton),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: ButtonStyle(
+          foregroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.disabled)) {
+              return AppColors.muted.withValues(alpha: .45);
+            }
+            return AppColors.secondaryButton;
+          }),
+          side: WidgetStateProperty.resolveWith((states) {
+            final color = states.contains(WidgetState.disabled)
+                ? AppColors.muted.withValues(alpha: .28)
+                : AppColors.secondaryButton;
+            return BorderSide(color: color, width: 1.4);
+          }),
+        ),
+      ),
+    );
+  }
+
+  static TextTheme _textThemeWithColors(
+    TextTheme textTheme,
+    Color primary,
+    Color muted,
+  ) {
+    return textTheme.copyWith(
+      displayLarge: textTheme.displayLarge?.copyWith(color: primary),
+      displayMedium: textTheme.displayMedium?.copyWith(color: primary),
+      displaySmall: textTheme.displaySmall?.copyWith(color: primary),
+      headlineLarge: textTheme.headlineLarge?.copyWith(color: primary),
+      headlineMedium: textTheme.headlineMedium?.copyWith(color: primary),
+      headlineSmall: textTheme.headlineSmall?.copyWith(color: primary),
+      titleLarge: textTheme.titleLarge?.copyWith(color: primary),
+      titleMedium: textTheme.titleMedium?.copyWith(color: primary),
+      titleSmall: textTheme.titleSmall?.copyWith(color: primary),
+      bodyLarge: textTheme.bodyLarge?.copyWith(color: primary),
+      bodyMedium: textTheme.bodyMedium?.copyWith(color: primary),
+      bodySmall: textTheme.bodySmall?.copyWith(color: muted),
+      labelLarge: textTheme.labelLarge?.copyWith(color: primary),
+      labelMedium: textTheme.labelMedium?.copyWith(color: primary),
+      labelSmall: textTheme.labelSmall?.copyWith(color: muted),
+    );
+  }
+
   static ThemeData get lightTheme {
     final base = ThemeData(
       useMaterial3: true,
@@ -69,7 +215,7 @@ class AppTheme {
         seedColor: AppColors.secondaryButton,
         brightness: Brightness.light,
         primary: AppColors.header,
-        onPrimary: AppColors.text,
+        onPrimary: AppColors.headerText,
         secondary: AppColors.secondaryButton,
         onSecondary: AppColors.surface,
         tertiary: AppColors.primaryButton,
@@ -92,9 +238,27 @@ class AppTheme {
       ),
       appBarTheme: const AppBarTheme(
         backgroundColor: AppColors.header,
-        foregroundColor: AppColors.text,
+        foregroundColor: AppColors.headerText,
         elevation: 0,
         centerTitle: false,
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: AppColors.pageBackground,
+        surfaceTintColor: Colors.transparent,
+        titleTextStyle: base.textTheme.headlineSmall?.copyWith(
+          color: AppColors.headerForeground,
+          fontWeight: FontWeight.w800,
+        ),
+        contentTextStyle: base.textTheme.bodyMedium?.copyWith(
+          color: AppColors.headerForeground.withValues(alpha: .9),
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
       ),
       cardTheme: CardThemeData(
         color: AppColors.surface,

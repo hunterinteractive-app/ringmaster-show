@@ -66,7 +66,16 @@ class RMCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final content = Padding(padding: padding, child: child);
+    final content = Theme(
+      data: AppTheme.surfaceTheme(Theme.of(context)),
+      child: DefaultTextStyle.merge(
+        style: const TextStyle(color: AppColors.text),
+        child: IconTheme(
+          data: const IconThemeData(color: AppColors.text),
+          child: Padding(padding: padding, child: child),
+        ),
+      ),
+    );
 
     return Container(
       decoration: BoxDecoration(

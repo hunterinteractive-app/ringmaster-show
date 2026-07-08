@@ -252,24 +252,34 @@ class _ShowPaymentSettingsDialogState
     required String title,
     required List<Widget> children,
   }) {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: .05), blurRadius: 10),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 12),
-          ...children,
-        ],
+    return AppTheme.surfaceTextScope(
+      context,
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: .05),
+              blurRadius: 10,
+            ),
+          ],
+        ),
+        child: Builder(
+          builder: (context) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 12),
+                ...children,
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -289,11 +299,7 @@ class _ShowPaymentSettingsDialogState
         ),
         child: Container(
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [AppColors.navy, AppColors.navyDark],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
+            gradient: AppGradients.page,
             borderRadius: BorderRadius.circular(24),
           ),
           child: Column(
@@ -303,7 +309,7 @@ class _ShowPaymentSettingsDialogState
                 child: Row(
                   children: [
                     Image.asset(
-                      'assets/images/ringmaster_show_logo.png',
+                      'assets/images/RingMaster_One_Show_Transparent.png',
                       height: 38,
                     ),
                     const SizedBox(width: 12),
@@ -335,346 +341,366 @@ class _ShowPaymentSettingsDialogState
                       top: Radius.circular(24),
                     ),
                   ),
-                  child: _loading
-                      ? const Center(child: CircularProgressIndicator())
-                      : Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
-                          child: Column(
-                            children: [
-                              if (_isReadOnly) ...[
-                                Container(
-                                  width: double.infinity,
-                                  margin: const EdgeInsets.only(bottom: 16),
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: Colors.amber.shade100,
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: Colors.amber.shade300,
-                                    ),
-                                  ),
-                                  child: Text(
-                                    _isFinalized
-                                        ? 'This show has been finalized. Payment settings are view-only.'
-                                        : 'This show is locked. Payment settings are view-only.',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                              if (_msg != null)
-                                Container(
-                                  width: double.infinity,
-                                  margin: const EdgeInsets.only(bottom: 16),
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: savedMessage
-                                        ? Colors.green.withValues(alpha: .08)
-                                        : Colors.red.withValues(alpha: .08),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: savedMessage
-                                          ? Colors.green.withValues(alpha: .25)
-                                          : Colors.red.withValues(alpha: .25),
-                                    ),
-                                  ),
-                                  child: Text(
-                                    _msg!,
-                                    style: TextStyle(
-                                      color: savedMessage
-                                          ? Colors.green
-                                          : Colors.red,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              Expanded(
-                                child: SingleChildScrollView(
-                                  child: Column(
-                                    children: [
-                                      _buildSectionCard(
-                                        context: context,
-                                        title: 'Payment Mode',
-                                        children: [
-                                          DropdownButtonFormField<String>(
-                                            initialValue: _paymentMode,
-                                            decoration: const InputDecoration(
-                                              labelText: 'Payment mode',
-                                              border: OutlineInputBorder(),
-                                            ),
-                                            items: const [
-                                              DropdownMenuItem(
-                                                value: 'pay_day_of_show',
-                                                child: Text('Pay Day of Show'),
-                                              ),
-                                              DropdownMenuItem(
-                                                value: 'stripe',
-                                                child: Text('Stripe'),
-                                              ),
-                                              DropdownMenuItem(
-                                                value: 'square',
-                                                child: Text('Square'),
-                                              ),
-                                              DropdownMenuItem(
-                                                value: 'hybrid',
-                                                child: Text(
-                                                  'Hybrid (Stripe + Square)',
-                                                ),
-                                              ),
-                                            ],
-                                            onChanged: (_saving || _isReadOnly)
-                                                ? null
-                                                : (v) => setState(
-                                                    () => _paymentMode =
-                                                        v ?? 'pay_day_of_show',
-                                                  ),
-                                          ),
-                                          const SizedBox(height: 12),
-                                          SwitchListTile(
-                                            contentPadding: EdgeInsets.zero,
-                                            title: const Text(
-                                              'Require payment to submit',
-                                            ),
-                                            subtitle: const Text(
-                                              'Keep OFF for MVP until live payment flow is fully built.',
-                                            ),
-                                            value: _requirePaymentToSubmit,
-                                            onChanged: (_saving || _isReadOnly)
-                                                ? null
-                                                : (v) => setState(
-                                                    () =>
-                                                        _requirePaymentToSubmit =
-                                                            v,
-                                                  ),
-                                          ),
-                                          SwitchListTile(
-                                            contentPadding: EdgeInsets.zero,
-                                            title: const Text('Allow refunds'),
-                                            value: _allowRefunds,
-                                            onChanged: (_saving || _isReadOnly)
-                                                ? null
-                                                : (v) => setState(
-                                                    () => _allowRefunds = v,
-                                                  ),
-                                          ),
-                                        ],
+                  child: AppTheme.gradientTextScope(
+                    context,
+                    child: _loading
+                        ? const Center(child: CircularProgressIndicator())
+                        : Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+                            child: Column(
+                              children: [
+                                if (_isReadOnly) ...[
+                                  Container(
+                                    width: double.infinity,
+                                    margin: const EdgeInsets.only(bottom: 16),
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.amber.shade100,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: Colors.amber.shade300,
                                       ),
-                                      if (_paymentMode == 'stripe' ||
-                                          _paymentMode == 'hybrid')
-                                        _buildSectionCard(
-                                          context: context,
-                                          title: 'Stripe',
-                                          children: [
-                                            Container(
-                                              width: double.infinity,
-                                              padding: const EdgeInsets.all(12),
-                                              decoration: BoxDecoration(
-                                                color: _stripeReady
-                                                    ? Colors.green.withValues(
-                                                        alpha: .08,
-                                                      )
-                                                    : Colors.orange.withValues(
-                                                        alpha: .10,
-                                                      ),
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                                border: Border.all(
-                                                  color: _stripeReady
-                                                      ? Colors.green.withValues(
-                                                          alpha: .25,
-                                                        )
-                                                      : Colors.orange
-                                                            .withValues(
-                                                              alpha: .35,
-                                                            ),
-                                                ),
-                                              ),
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    _stripeReady
-                                                        ? 'Ready to accept online payments'
-                                                        : (_stripeHasAccount
-                                                              ? 'Stripe setup incomplete'
-                                                              : 'Stripe not connected'),
-                                                    style: TextStyle(
-                                                      color: _stripeReady
-                                                          ? Colors
-                                                                .green
-                                                                .shade700
-                                                          : Colors
-                                                                .orange
-                                                                .shade900,
-                                                      fontWeight:
-                                                          FontWeight.w700,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 8),
-                                                  Wrap(
-                                                    spacing: 18,
-                                                    runSpacing: 6,
-                                                    children: [
-                                                      Text(
-                                                        'Stripe account: ${_stripeHasAccount ? _stripeAccountId.text.trim() : '—'}',
-                                                      ),
-                                                      Text(
-                                                        'Charges: ${_stripeChargesEnabled ? 'Enabled' : 'Not enabled'}',
-                                                      ),
-                                                      Text(
-                                                        'Payouts: ${_stripePayoutsEnabled ? 'Enabled' : 'Not enabled'}',
-                                                      ),
-                                                      Text(
-                                                        'Details: ${_stripeDetailsSubmitted ? 'Submitted' : 'Incomplete'}',
-                                                      ),
-                                                      if (_stripeAccountStatus
-                                                          .trim()
-                                                          .isNotEmpty)
-                                                        Text(
-                                                          'Status: $_stripeAccountStatus',
-                                                        ),
-                                                    ],
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                            const SizedBox(height: 12),
-                                            SwitchListTile(
-                                              contentPadding: EdgeInsets.zero,
-                                              title: const Text(
-                                                'Enable Stripe',
-                                              ),
-                                              subtitle: const Text(
-                                                'Only enable this after Stripe shows ready to accept online payments.',
-                                              ),
-                                              value: _stripeEnabled,
-                                              onChanged:
-                                                  (_saving ||
-                                                      _isReadOnly ||
-                                                      !_stripeReady)
-                                                  ? null
-                                                  : (v) => setState(
-                                                      () => _stripeEnabled = v,
-                                                    ),
-                                            ),
-                                            const SizedBox(height: 8),
-                                            TextField(
-                                              controller: _stripePublishableKey,
-                                              enabled:
-                                                  !_saving &&
-                                                  !_isReadOnly &&
-                                                  _stripeEnabled,
-                                              decoration: const InputDecoration(
-                                                labelText:
-                                                    'Stripe publishable key',
-                                                border: OutlineInputBorder(),
-                                              ),
-                                            ),
-                                            const SizedBox(height: 12),
-                                            TextField(
-                                              controller: _stripeAccountId,
-                                              enabled: false,
-                                              decoration: const InputDecoration(
-                                                labelText:
-                                                    'Connected Stripe account id',
-                                                border: OutlineInputBorder(),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      if (_paymentMode == 'square' ||
-                                          _paymentMode == 'hybrid')
-                                        _buildSectionCard(
-                                          context: context,
-                                          title: 'Square',
-                                          children: [
-                                            SwitchListTile(
-                                              contentPadding: EdgeInsets.zero,
-                                              title: const Text(
-                                                'Enable Square',
-                                              ),
-                                              value: _squareEnabled,
-                                              onChanged:
-                                                  (_saving || _isReadOnly)
-                                                  ? null
-                                                  : (v) => setState(
-                                                      () => _squareEnabled = v,
-                                                    ),
-                                            ),
-                                            const SizedBox(height: 8),
-                                            TextField(
-                                              controller: _squareAppId,
-                                              enabled:
-                                                  !_saving &&
-                                                  !_isReadOnly &&
-                                                  _squareEnabled,
-                                              decoration: const InputDecoration(
-                                                labelText:
-                                                    'Square application id',
-                                                border: OutlineInputBorder(),
-                                              ),
-                                            ),
-                                            const SizedBox(height: 12),
-                                            TextField(
-                                              controller: _squareLocationId,
-                                              enabled:
-                                                  !_saving &&
-                                                  !_isReadOnly &&
-                                                  _squareEnabled,
-                                              decoration: const InputDecoration(
-                                                labelText:
-                                                    'Square location id (optional)',
-                                                border: OutlineInputBorder(),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: OutlinedButton(
-                                      onPressed: _saving
-                                          ? null
-                                          : () => Navigator.pop(context),
-                                      child: const Text('Close'),
                                     ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: FilledButton(
-                                      style: FilledButton.styleFrom(
-                                        backgroundColor:
-                                            AppColors.primaryButton,
-                                        foregroundColor:
-                                            AppColors.primaryButtonText,
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 16,
-                                        ),
-                                      ),
-                                      onPressed: (_saving || _isReadOnly)
-                                          ? null
-                                          : _save,
-                                      child: Text(
-                                        _saving
-                                            ? 'Saving…'
-                                            : _isReadOnly
-                                            ? 'View Only'
-                                            : 'Save',
+                                    child: Text(
+                                      _isFinalized
+                                          ? 'This show has been finalized. Payment settings are view-only.'
+                                          : 'This show is locked. Payment settings are view-only.',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
                                       ),
                                     ),
                                   ),
                                 ],
-                              ),
-                            ],
+                                if (_msg != null)
+                                  Container(
+                                    width: double.infinity,
+                                    margin: const EdgeInsets.only(bottom: 16),
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: savedMessage
+                                          ? Colors.green.withValues(alpha: .08)
+                                          : Colors.red.withValues(alpha: .08),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: savedMessage
+                                            ? Colors.green.withValues(
+                                                alpha: .25,
+                                              )
+                                            : Colors.red.withValues(alpha: .25),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      _msg!,
+                                      style: TextStyle(
+                                        color: savedMessage
+                                            ? Colors.green
+                                            : Colors.red,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                Expanded(
+                                  child: SingleChildScrollView(
+                                    child: Column(
+                                      children: [
+                                        _buildSectionCard(
+                                          context: context,
+                                          title: 'Payment Mode',
+                                          children: [
+                                            DropdownButtonFormField<String>(
+                                              initialValue: _paymentMode,
+                                              decoration: const InputDecoration(
+                                                labelText: 'Payment mode',
+                                                border: OutlineInputBorder(),
+                                              ),
+                                              items: const [
+                                                DropdownMenuItem(
+                                                  value: 'pay_day_of_show',
+                                                  child: Text(
+                                                    'Pay Day of Show',
+                                                  ),
+                                                ),
+                                                DropdownMenuItem(
+                                                  value: 'stripe',
+                                                  child: Text('Stripe'),
+                                                ),
+                                                DropdownMenuItem(
+                                                  value: 'square',
+                                                  child: Text('Square'),
+                                                ),
+                                                DropdownMenuItem(
+                                                  value: 'hybrid',
+                                                  child: Text(
+                                                    'Hybrid (Stripe + Square)',
+                                                  ),
+                                                ),
+                                              ],
+                                              onChanged:
+                                                  (_saving || _isReadOnly)
+                                                  ? null
+                                                  : (v) => setState(
+                                                      () => _paymentMode =
+                                                          v ??
+                                                          'pay_day_of_show',
+                                                    ),
+                                            ),
+                                            const SizedBox(height: 12),
+                                            SwitchListTile(
+                                              contentPadding: EdgeInsets.zero,
+                                              title: const Text(
+                                                'Require payment to submit',
+                                              ),
+                                              subtitle: const Text(
+                                                'Keep OFF for MVP until live payment flow is fully built.',
+                                              ),
+                                              value: _requirePaymentToSubmit,
+                                              onChanged:
+                                                  (_saving || _isReadOnly)
+                                                  ? null
+                                                  : (v) => setState(
+                                                      () =>
+                                                          _requirePaymentToSubmit =
+                                                              v,
+                                                    ),
+                                            ),
+                                            SwitchListTile(
+                                              contentPadding: EdgeInsets.zero,
+                                              title: const Text(
+                                                'Allow refunds',
+                                              ),
+                                              value: _allowRefunds,
+                                              onChanged:
+                                                  (_saving || _isReadOnly)
+                                                  ? null
+                                                  : (v) => setState(
+                                                      () => _allowRefunds = v,
+                                                    ),
+                                            ),
+                                          ],
+                                        ),
+                                        if (_paymentMode == 'stripe' ||
+                                            _paymentMode == 'hybrid')
+                                          _buildSectionCard(
+                                            context: context,
+                                            title: 'Stripe',
+                                            children: [
+                                              Container(
+                                                width: double.infinity,
+                                                padding: const EdgeInsets.all(
+                                                  12,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: _stripeReady
+                                                      ? Colors.green.withValues(
+                                                          alpha: .08,
+                                                        )
+                                                      : Colors.orange
+                                                            .withValues(
+                                                              alpha: .10,
+                                                            ),
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                  border: Border.all(
+                                                    color: _stripeReady
+                                                        ? Colors.green
+                                                              .withValues(
+                                                                alpha: .25,
+                                                              )
+                                                        : Colors.orange
+                                                              .withValues(
+                                                                alpha: .35,
+                                                              ),
+                                                  ),
+                                                ),
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      _stripeReady
+                                                          ? 'Ready to accept online payments'
+                                                          : (_stripeHasAccount
+                                                                ? 'Stripe setup incomplete'
+                                                                : 'Stripe not connected'),
+                                                      style: TextStyle(
+                                                        color: _stripeReady
+                                                            ? Colors
+                                                                  .green
+                                                                  .shade700
+                                                            : Colors
+                                                                  .orange
+                                                                  .shade900,
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(height: 8),
+                                                    Wrap(
+                                                      spacing: 18,
+                                                      runSpacing: 6,
+                                                      children: [
+                                                        Text(
+                                                          'Stripe account: ${_stripeHasAccount ? _stripeAccountId.text.trim() : '—'}',
+                                                        ),
+                                                        Text(
+                                                          'Charges: ${_stripeChargesEnabled ? 'Enabled' : 'Not enabled'}',
+                                                        ),
+                                                        Text(
+                                                          'Payouts: ${_stripePayoutsEnabled ? 'Enabled' : 'Not enabled'}',
+                                                        ),
+                                                        Text(
+                                                          'Details: ${_stripeDetailsSubmitted ? 'Submitted' : 'Incomplete'}',
+                                                        ),
+                                                        if (_stripeAccountStatus
+                                                            .trim()
+                                                            .isNotEmpty)
+                                                          Text(
+                                                            'Status: $_stripeAccountStatus',
+                                                          ),
+                                                      ],
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              const SizedBox(height: 12),
+                                              SwitchListTile(
+                                                contentPadding: EdgeInsets.zero,
+                                                title: const Text(
+                                                  'Enable Stripe',
+                                                ),
+                                                subtitle: const Text(
+                                                  'Only enable this after Stripe shows ready to accept online payments.',
+                                                ),
+                                                value: _stripeEnabled,
+                                                onChanged:
+                                                    (_saving ||
+                                                        _isReadOnly ||
+                                                        !_stripeReady)
+                                                    ? null
+                                                    : (v) => setState(
+                                                        () =>
+                                                            _stripeEnabled = v,
+                                                      ),
+                                              ),
+                                              const SizedBox(height: 8),
+                                              TextField(
+                                                controller:
+                                                    _stripePublishableKey,
+                                                enabled:
+                                                    !_saving &&
+                                                    !_isReadOnly &&
+                                                    _stripeEnabled,
+                                                decoration: const InputDecoration(
+                                                  labelText:
+                                                      'Stripe publishable key',
+                                                  border: OutlineInputBorder(),
+                                                ),
+                                              ),
+                                              const SizedBox(height: 12),
+                                              TextField(
+                                                controller: _stripeAccountId,
+                                                enabled: false,
+                                                decoration: const InputDecoration(
+                                                  labelText:
+                                                      'Connected Stripe account id',
+                                                  border: OutlineInputBorder(),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        if (_paymentMode == 'square' ||
+                                            _paymentMode == 'hybrid')
+                                          _buildSectionCard(
+                                            context: context,
+                                            title: 'Square',
+                                            children: [
+                                              SwitchListTile(
+                                                contentPadding: EdgeInsets.zero,
+                                                title: const Text(
+                                                  'Enable Square',
+                                                ),
+                                                value: _squareEnabled,
+                                                onChanged:
+                                                    (_saving || _isReadOnly)
+                                                    ? null
+                                                    : (v) => setState(
+                                                        () =>
+                                                            _squareEnabled = v,
+                                                      ),
+                                              ),
+                                              const SizedBox(height: 8),
+                                              TextField(
+                                                controller: _squareAppId,
+                                                enabled:
+                                                    !_saving &&
+                                                    !_isReadOnly &&
+                                                    _squareEnabled,
+                                                decoration: const InputDecoration(
+                                                  labelText:
+                                                      'Square application id',
+                                                  border: OutlineInputBorder(),
+                                                ),
+                                              ),
+                                              const SizedBox(height: 12),
+                                              TextField(
+                                                controller: _squareLocationId,
+                                                enabled:
+                                                    !_saving &&
+                                                    !_isReadOnly &&
+                                                    _squareEnabled,
+                                                decoration: const InputDecoration(
+                                                  labelText:
+                                                      'Square location id (optional)',
+                                                  border: OutlineInputBorder(),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: OutlinedButton(
+                                        onPressed: _saving
+                                            ? null
+                                            : () => Navigator.pop(context),
+                                        child: const Text('Close'),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: FilledButton(
+                                        style: FilledButton.styleFrom(
+                                          backgroundColor:
+                                              AppColors.primaryButton,
+                                          foregroundColor:
+                                              AppColors.primaryButtonText,
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 16,
+                                          ),
+                                        ),
+                                        onPressed: (_saving || _isReadOnly)
+                                            ? null
+                                            : _save,
+                                        child: Text(
+                                          _saving
+                                              ? 'Saving…'
+                                              : _isReadOnly
+                                              ? 'View Only'
+                                              : 'Save',
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
+                  ),
                 ),
               ),
             ],

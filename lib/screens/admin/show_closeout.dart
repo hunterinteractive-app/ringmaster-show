@@ -1170,27 +1170,50 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     final count = _dashboard?.resultsReadiness.missingJudgeCount ?? 0;
     if (count <= 0) return const SizedBox.shrink();
 
-    return ExpansionTile(
-      title: Text('$count missing judges'),
-      onExpansionChanged: (expanded) async {
-        if (expanded && !_missingJudgesLoaded) {
-          await _loadMissingJudges();
-        }
-      },
-      children: [
-        if (_loadingMissingJudges)
-          const Padding(
-            padding: EdgeInsets.all(12),
-            child: Center(child: CircularProgressIndicator()),
-          )
-        else if (_missingJudgeItems.isEmpty)
-          const ListTile(title: Text('No missing judge rows found.'))
-        else
-          ..._missingJudgeItems.map(
-            (e) => ListTile(
-              title: Text(e.tattoo.isEmpty ? '(No ear #)' : e.tattoo),
-              subtitle: Text(
-                [
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.orange.withValues(alpha: .08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.orange.withValues(alpha: .22)),
+      ),
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        iconColor: AppColors.gold,
+        collapsedIconColor: AppColors.gold,
+        textColor: AppColors.gold,
+        collapsedTextColor: AppColors.gold,
+        leading: const Icon(Icons.gavel_outlined, color: AppColors.gold),
+        title: Text(
+          '$count missing judges',
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+        subtitle: Text(
+          'Tap to view entries without judges.',
+          style: TextStyle(color: AppColors.gold.withValues(alpha: .82)),
+        ),
+        onExpansionChanged: (expanded) async {
+          if (expanded && !_missingJudgesLoaded) {
+            await _loadMissingJudges();
+          }
+        },
+        children: [
+          if (_loadingMissingJudges)
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_missingJudgeItems.isEmpty)
+            const _CloseoutWarningDetailTile(
+              title: 'No missing judge rows found.',
+            )
+          else
+            ..._missingJudgeItems.map(
+              (e) => _CloseoutWarningDetailTile(
+                title: e.tattoo.isEmpty ? '(No ear #)' : e.tattoo,
+                subtitle: [
                   e.sectionLabel,
                   e.breedName,
                   if (e.varietyName != null && e.varietyName!.isNotEmpty)
@@ -1199,16 +1222,16 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                   e.sex,
                   if (e.exhibitorLabel.isNotEmpty) e.exhibitorLabel,
                 ].join(' • '),
+                trailing: TextButton.icon(
+                  icon: const Icon(Icons.build, size: 18),
+                  label: const Text('Fix'),
+                  onPressed: () => _openResultsEntryFix(e.entryId),
+                ),
+                onTap: () => _openResultsEntryFix(e.entryId),
               ),
-              trailing: TextButton.icon(
-                icon: const Icon(Icons.build, size: 18),
-                label: const Text('Fix'),
-                onPressed: () => _openResultsEntryFix(e.entryId),
-              ),
-              onTap: () => _openResultsEntryFix(e.entryId),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -1217,37 +1240,56 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         _dashboard?.resultsReadiness.duplicatePlacementGroupCount ?? 0;
     if (count <= 0) return const SizedBox.shrink();
 
-    return ExpansionTile(
-      title: Text('$count duplicate placements'),
-      subtitle: const Text('Tap to view duplicated placements.'),
-      onExpansionChanged: (expanded) async {
-        if (expanded && !_duplicatePlacementsLoaded) {
-          await _loadDuplicatePlacementGroups();
-        }
-      },
-      children: [
-        if (_loadingDuplicatePlacements)
-          const Padding(
-            padding: EdgeInsets.all(12),
-            child: Center(child: CircularProgressIndicator()),
-          )
-        else if (_duplicatePlacementsLoaded &&
-            _duplicatePlacementGroupItems.isEmpty)
-          const ListTile(
-            title: Text('No duplicate placement rows found.'),
-            subtitle: Text(
-              'The readiness count found duplicates, but the detail loader did not match them. Refresh the dashboard and confirm show_results_readiness uses the same row source as results entry.',
-            ),
-          )
-        else
-          ..._duplicatePlacementGroupItems.map((group) {
-            final firstEntryId = group.entries.isEmpty
-                ? ''
-                : group.entries.first.entryId;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.orange.withValues(alpha: .08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.orange.withValues(alpha: .22)),
+      ),
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        iconColor: AppColors.gold,
+        collapsedIconColor: AppColors.gold,
+        textColor: AppColors.gold,
+        collapsedTextColor: AppColors.gold,
+        leading: const Icon(Icons.rule_folder_outlined, color: AppColors.gold),
+        title: Text(
+          '$count duplicate placements',
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+        subtitle: Text(
+          'Tap to view duplicated placements.',
+          style: TextStyle(color: AppColors.gold.withValues(alpha: .82)),
+        ),
+        onExpansionChanged: (expanded) async {
+          if (expanded && !_duplicatePlacementsLoaded) {
+            await _loadDuplicatePlacementGroups();
+          }
+        },
+        children: [
+          if (_loadingDuplicatePlacements)
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_duplicatePlacementsLoaded &&
+              _duplicatePlacementGroupItems.isEmpty)
+            const _CloseoutWarningDetailTile(
+              title: 'No duplicate placement rows found.',
+              subtitle:
+                  'The readiness count found duplicates, but the detail loader did not match them. Refresh the dashboard and confirm show_results_readiness uses the same row source as results entry.',
+            )
+          else
+            ..._duplicatePlacementGroupItems.map((group) {
+              final firstEntryId = group.entries.isEmpty
+                  ? ''
+                  : group.entries.first.entryId;
 
-            return ListTile(
-              title: Text(
-                [
+              return _CloseoutWarningDetailTile(
+                title: [
                   group.sectionLabel,
                   group.breedName,
                   if (group.varietyName != null &&
@@ -1257,30 +1299,26 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                   group.sex,
                   'Place ${group.placement}',
                 ].where((x) => x.trim().isNotEmpty).join(' • '),
-              ),
-              subtitle: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: group.entries
+                subtitle: group.entries
                     .map(
-                      (e) => Text(
-                        '${e.tattoo.isEmpty ? '(No ear #)' : e.tattoo} • ${e.exhibitorLabel}',
-                      ),
+                      (e) =>
+                          '${e.tattoo.isEmpty ? '(No ear #)' : e.tattoo} • ${e.exhibitorLabel}',
                     )
-                    .toList(),
-              ),
-              trailing: TextButton.icon(
-                icon: const Icon(Icons.build, size: 18),
-                label: const Text('Fix'),
-                onPressed: firstEntryId.isEmpty
+                    .join('\n'),
+                trailing: TextButton.icon(
+                  icon: const Icon(Icons.build, size: 18),
+                  label: const Text('Fix'),
+                  onPressed: firstEntryId.isEmpty
+                      ? null
+                      : () => _openResultsEntryFix(firstEntryId),
+                ),
+                onTap: firstEntryId.isEmpty
                     ? null
                     : () => _openResultsEntryFix(firstEntryId),
-              ),
-              onTap: firstEntryId.isEmpty
-                  ? null
-                  : () => _openResultsEntryFix(firstEntryId),
-            );
-          }),
-      ],
+              );
+            }),
+        ],
+      ),
     );
   }
 
@@ -1294,22 +1332,26 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: Colors.orange.withOpacity(.08),
+        color: Colors.orange.withValues(alpha: .08),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.orange.withOpacity(.22)),
+        border: Border.all(color: Colors.orange.withValues(alpha: .22)),
       ),
       child: ExpansionTile(
         tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-        leading: const Icon(Icons.format_list_numbered, color: Colors.orange),
+        iconColor: AppColors.gold,
+        collapsedIconColor: AppColors.gold,
+        textColor: AppColors.gold,
+        collapsedTextColor: AppColors.gold,
+        leading: const Icon(Icons.format_list_numbered, color: AppColors.gold),
         title: Text(
           '$missingCount missing placement${missingCount == 1 ? '' : 's'}',
-          style: const TextStyle(
-            fontWeight: FontWeight.w700,
-            color: Colors.orange,
-          ),
+          style: const TextStyle(fontWeight: FontWeight.w700),
         ),
-        subtitle: const Text('Tap to view which entries are still missing.'),
+        subtitle: Text(
+          'Tap to view which entries are still missing.',
+          style: TextStyle(color: AppColors.gold.withValues(alpha: .82)),
+        ),
         onExpansionChanged: (expanded) async {
           if (expanded && !_missingPlacementsLoaded) {
             await _loadMissingPlacements();
@@ -1340,37 +1382,45 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                 if (item.exhibitorLabel.isNotEmpty) item.exhibitorLabel,
               ];
 
-              return Container(
-                margin: const EdgeInsets.only(top: 8),
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.pets, size: 18),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            item.tattoo.isEmpty ? '(No ear #)' : item.tattoo,
-                            style: const TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(parts.join(' • ')),
-                        ],
+              return AppTheme.surfaceTextScope(
+                context,
+                child: Container(
+                  margin: const EdgeInsets.only(top: 8),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: AppColors.muted.withValues(alpha: .12),
+                    ),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.pets, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item.tattoo.isEmpty ? '(No ear #)' : item.tattoo,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(parts.join(' • ')),
+                          ],
+                        ),
                       ),
-                    ),
-                    TextButton.icon(
-                      onPressed: () => _openResultsEntryFix(item.entryId),
-                      icon: const Icon(Icons.build, size: 18),
-                      label: const Text('Fix'),
-                    ),
-                  ],
+                      TextButton.icon(
+                        onPressed: () => _openResultsEntryFix(item.entryId),
+                        icon: const Icon(Icons.build, size: 18),
+                        label: const Text('Fix'),
+                      ),
+                    ],
+                  ),
                 ),
               );
             }),
@@ -3829,10 +3879,10 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                       margin: const EdgeInsets.only(bottom: 12),
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.orange.withOpacity(.10),
+                        color: Colors.orange.withValues(alpha: .10),
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
-                          color: Colors.orange.withOpacity(.22),
+                          color: Colors.orange.withValues(alpha: .22),
                         ),
                       ),
                       child: Row(
@@ -3861,288 +3911,360 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                     const SizedBox(height: 16),
                   ],
 
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: [
-                      FilledButton.icon(
-                        style: FilledButton.styleFrom(
-                          backgroundColor: reportsBlocked
-                              ? Colors.grey
-                              : (_dashboard
-                                            ?.dashboard
-                                            .closeout
-                                            .isReportsStale ==
-                                        true
-                                    ? AppColors.gold
-                                    : Colors.green),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 18,
-                            vertical: 14,
-                          ),
+                  AppTheme.surfaceTextScope(
+                    context,
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: AppColors.muted.withValues(alpha: .18),
                         ),
-                        onPressed: (_isBusy || reportsBlocked)
-                            ? null
-                            : () async {
-                                final confirmed =
-                                    await showDialog<bool>(
-                                      context: context,
-                                      builder: (context) {
-                                        return AlertDialog(
-                                          title: const Text(
-                                            'Finalize & Generate Reports',
-                                          ),
-                                          content: const Text(
-                                            'This will finalize the show and generate all closeout reports.\n\n'
-                                            'By continuing, you confirm that all results — including any submitted via QR Code '
-                                            'have been reviewed for accuracy and completeness.\n\n'
-                                            'Once finalized, results can be emailed. Emails will not be sent automatically.',
-                                          ),
-                                          actions: [
-                                            TextButton(
-                                              onPressed: () =>
-                                                  Navigator.pop(context, false),
-                                              child: const Text('Cancel'),
-                                            ),
-                                            FilledButton(
-                                              onPressed: () =>
-                                                  Navigator.pop(context, true),
-                                              child: const Text('Finalize'),
-                                            ),
-                                          ],
+                      ),
+                      child: Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: [
+                          FilledButton.icon(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: reportsBlocked
+                                  ? Colors.grey
+                                  : (_dashboard
+                                                ?.dashboard
+                                                .closeout
+                                                .isReportsStale ==
+                                            true
+                                        ? AppColors.gold
+                                        : Colors.green),
+                              foregroundColor: AppColors.text,
+                              disabledForegroundColor: AppColors.text
+                                  .withValues(alpha: .62),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 18,
+                                vertical: 14,
+                              ),
+                            ),
+                            onPressed: (_isBusy || reportsBlocked)
+                                ? null
+                                : () async {
+                                    final confirmed =
+                                        await showDialog<bool>(
+                                          context: context,
+                                          builder: (context) {
+                                            return AlertDialog(
+                                              title: const Text(
+                                                'Finalize & Generate Reports',
+                                              ),
+                                              content: const Text(
+                                                'This will finalize the show and generate all closeout reports.\n\n'
+                                                'By continuing, you confirm that all results — including any submitted via QR Code '
+                                                'have been reviewed for accuracy and completeness.\n\n'
+                                                'Once finalized, results can be emailed. Emails will not be sent automatically.',
+                                              ),
+                                              actions: [
+                                                TextButton(
+                                                  onPressed: () =>
+                                                      Navigator.pop(
+                                                        context,
+                                                        false,
+                                                      ),
+                                                  child: const Text('Cancel'),
+                                                ),
+                                                FilledButton(
+                                                  onPressed: () =>
+                                                      Navigator.pop(
+                                                        context,
+                                                        true,
+                                                      ),
+                                                  child: const Text('Finalize'),
+                                                ),
+                                              ],
+                                            );
+                                          },
+                                        ) ??
+                                        false;
+
+                                    if (!confirmed) return;
+
+                                    setState(() {
+                                      _generatingReport = true;
+                                    });
+
+                                    try {
+                                      final previousFinalizeId =
+                                          _dashboard?.latestFinalize.id ?? '';
+
+                                      await _finalizeShow();
+
+                                      await _loadDataUntilFinalizeVisible(
+                                        previousFinalizeId: previousFinalizeId,
+                                      );
+
+                                      final artifactCount =
+                                          await _countQueuedArtifactsForShow();
+
+                                      if (artifactCount == 0) {
+                                        throw Exception(
+                                          'Finalize completed but no report artifacts were created.',
                                         );
-                                      },
-                                    ) ??
-                                    false;
+                                      }
 
-                                if (!confirmed) return;
+                                      final List<ReportArtifactSummary>
+                                      artifactsToGenerate =
+                                          (_dashboard?.reports ??
+                                                  const <
+                                                    ReportArtifactSummary
+                                                  >[])
+                                              .where((r) => r.isCurrent)
+                                              .where((r) {
+                                                if (_selectedCloseoutScopeIsEntireShow)
+                                                  return true;
 
-                                setState(() {
-                                  _generatingReport = true;
-                                });
+                                                return (r.metadata['scope_label'] ??
+                                                            '')
+                                                        .toString() ==
+                                                    _selectedCloseoutScopeLabel;
+                                              })
+                                              .where(
+                                                (r) =>
+                                                    r.artifactStatus ==
+                                                        'queued' ||
+                                                    r.artifactStatus ==
+                                                        'failed',
+                                              )
+                                              .where(
+                                                (r) => {
+                                                  'arba_report',
+                                                  'exhibitor_report',
+                                                  'legs',
+                                                  'sweepstakes_report',
+                                                  'breed_results_detail_report',
+                                                }.contains(r.reportName),
+                                              )
+                                              .toList();
 
-                                try {
-                                  final previousFinalizeId =
-                                      _dashboard?.latestFinalize.id ?? '';
+                                      if (artifactsToGenerate.isEmpty) {
+                                        await _refreshDashboardOnly();
+                                        if (mounted) {
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            const SnackBar(
+                                              content: Text(
+                                                'Finalize completed. No queued Flutter-rendered reports needed generation.',
+                                              ),
+                                            ),
+                                          );
+                                        }
+                                        return;
+                                      }
 
-                                  await _finalizeShow();
+                                      final generatedOk = await showDialog<bool>(
+                                        context: context,
+                                        barrierDismissible: false,
+                                        builder: (context) {
+                                          return _GenerateAllReportsDialog(
+                                            artifacts: artifactsToGenerate,
+                                            onRun:
+                                                (
+                                                  onStarted,
+                                                  onFinished,
+                                                  onFailed,
+                                                ) {
+                                                  return _runGenerateAllReportsLive(
+                                                    artifactsToGenerate,
+                                                    onStarted: onStarted,
+                                                    onFinished: onFinished,
+                                                    onFailed: onFailed,
+                                                  );
+                                                },
+                                          );
+                                        },
+                                      );
 
-                                  await _loadDataUntilFinalizeVisible(
-                                    previousFinalizeId: previousFinalizeId,
-                                  );
+                                      if (generatedOk != true) {
+                                        throw Exception(
+                                          'Report generation was cancelled or did not finish cleanly.',
+                                        );
+                                      }
 
-                                  final artifactCount =
-                                      await _countQueuedArtifactsForShow();
+                                      await _syncClubDeliveryMetadata();
+                                      await _loadData();
 
-                                  if (artifactCount == 0) {
-                                    throw Exception(
-                                      'Finalize completed but no report artifacts were created.',
-                                    );
-                                  }
+                                      if (_dashboard
+                                              ?.dashboard
+                                              .closeout
+                                              .isReportsStale ==
+                                          true) {
+                                        throw Exception(
+                                          'Flutter generation completed, but reports are still marked stale.',
+                                        );
+                                      }
 
-                                  final List<ReportArtifactSummary>
-                                  artifactsToGenerate =
-                                      (_dashboard?.reports ??
-                                              const <ReportArtifactSummary>[])
-                                          .where((r) => r.isCurrent)
-                                          .where((r) {
-                                            if (_selectedCloseoutScopeIsEntireShow)
-                                              return true;
+                                      if (!mounted) return;
 
-                                            return (r.metadata['scope_label'] ??
-                                                        '')
-                                                    .toString() ==
-                                                _selectedCloseoutScopeLabel;
-                                          })
-                                          .where(
-                                            (r) =>
-                                                r.artifactStatus == 'queued' ||
-                                                r.artifactStatus == 'failed',
-                                          )
-                                          .where(
-                                            (r) => {
-                                              'arba_report',
-                                              'exhibitor_report',
-                                              'legs',
-                                              'sweepstakes_report',
-                                              'breed_results_detail_report',
-                                            }.contains(r.reportName),
-                                          )
-                                          .toList();
-
-                                  if (artifactsToGenerate.isEmpty) {
-                                    await _refreshDashboardOnly();
-                                    if (mounted) {
                                       ScaffoldMessenger.of(
                                         context,
                                       ).showSnackBar(
                                         const SnackBar(
                                           content: Text(
-                                            'Finalize completed. No queued Flutter-rendered reports needed generation.',
+                                            'Finalize and report generation completed. Review reports, then use the send buttons when ready.',
                                           ),
                                         ),
                                       );
-                                    }
-                                    return;
-                                  }
+                                    } catch (e) {
+                                      if (!mounted) return;
 
-                                  final generatedOk = await showDialog<bool>(
-                                    context: context,
-                                    barrierDismissible: false,
-                                    builder: (context) {
-                                      return _GenerateAllReportsDialog(
-                                        artifacts: artifactsToGenerate,
-                                        onRun:
-                                            (onStarted, onFinished, onFailed) {
-                                              return _runGenerateAllReportsLive(
-                                                artifactsToGenerate,
-                                                onStarted: onStarted,
-                                                onFinished: onFinished,
-                                                onFailed: onFailed,
-                                              );
-                                            },
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            'Finalize flow failed: $e',
+                                          ),
+                                        ),
                                       );
-                                    },
-                                  );
-
-                                  if (generatedOk != true) {
-                                    throw Exception(
-                                      'Report generation was cancelled or did not finish cleanly.',
-                                    );
-                                  }
-
-                                  await _syncClubDeliveryMetadata();
-                                  await _loadData();
-
-                                  if (_dashboard
-                                          ?.dashboard
-                                          .closeout
-                                          .isReportsStale ==
-                                      true) {
-                                    throw Exception(
-                                      'Flutter generation completed, but reports are still marked stale.',
-                                    );
-                                  }
-
-                                  if (!mounted) return;
-
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Finalize and report generation completed. Review reports, then use the send buttons when ready.',
-                                      ),
-                                    ),
-                                  );
-                                } catch (e) {
-                                  if (!mounted) return;
-
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('Finalize flow failed: $e'),
-                                    ),
-                                  );
-                                } finally {
-                                  if (mounted) {
-                                    setState(() {
-                                      _generatingReport = false;
-                                    });
-                                  }
-                                }
-                              },
-                        icon: const Icon(Icons.auto_awesome),
-                        label: Text(
-                          reportsBlocked
-                              ? 'Finish Results Before Finalize'
-                              : (_dashboard
-                                            ?.dashboard
-                                            .closeout
-                                            .isReportsStale ==
-                                        true
-                                    ? (_selectedCloseoutScopeIsEntireShow
-                                          ? 'Finalize Show'
-                                          : 'Finalize $_selectedCloseoutScopeLabel')
-                                    : (_selectedCloseoutScopeIsEntireShow
-                                          ? 'Re-Finalize Show'
-                                          : 'Re-Finalize $_selectedCloseoutScopeLabel')),
-                        ),
-                      ),
-
-                      Builder(
-                        builder: (context) {
-                          final queuedRemaining =
-                              (_dashboard?.reports ??
-                                      const <ReportArtifactSummary>[])
-                                  .where((r) => r.isCurrent)
-                                  .where(
-                                    (r) =>
-                                        r.artifactStatus == 'queued' ||
-                                        r.artifactStatus == 'failed',
-                                  )
-                                  .toList();
-
-                          return OutlinedButton.icon(
-                            onPressed: _isBusy || queuedRemaining.isEmpty
-                                ? null
-                                : () async {
-                                    await showDialog<bool>(
-                                      context: context,
-                                      barrierDismissible: false,
-                                      builder: (context) {
-                                        return _GenerateAllReportsDialog(
-                                          artifacts: queuedRemaining,
-                                          onRun:
-                                              (
-                                                onStarted,
-                                                onFinished,
-                                                onFailed,
-                                              ) {
-                                                return _runGenerateAllReportsLive(
-                                                  queuedRemaining,
-                                                  onStarted: onStarted,
-                                                  onFinished: onFinished,
-                                                  onFailed: onFailed,
-                                                );
-                                              },
-                                        );
-                                      },
-                                    );
-
-                                    await _refreshDashboardOnly();
+                                    } finally {
+                                      if (mounted) {
+                                        setState(() {
+                                          _generatingReport = false;
+                                        });
+                                      }
+                                    }
                                   },
-                            icon: const Icon(Icons.play_circle_outline),
+                            icon: const Icon(Icons.auto_awesome),
                             label: Text(
-                              'Generate Remaining (${queuedRemaining.length})',
+                              reportsBlocked
+                                  ? 'Finish Results Before Finalize'
+                                  : (_dashboard
+                                                ?.dashboard
+                                                .closeout
+                                                .isReportsStale ==
+                                            true
+                                        ? (_selectedCloseoutScopeIsEntireShow
+                                              ? 'Finalize Show'
+                                              : 'Finalize $_selectedCloseoutScopeLabel')
+                                        : (_selectedCloseoutScopeIsEntireShow
+                                              ? 'Re-Finalize Show'
+                                              : 'Re-Finalize $_selectedCloseoutScopeLabel')),
                             ),
-                          );
-                        },
-                      ),
+                          ),
 
-                      OutlinedButton.icon(
-                        onPressed: _isBusy ? null : _sendAllExhibitorReports,
-                        icon: const Icon(Icons.send_outlined),
-                        label: Text(
-                          _selectedCloseoutScopeIsEntireShow
-                              ? 'Send All Exhibitor Reports'
-                              : 'Send $_selectedCloseoutScopeLabel Exhibitor Reports',
-                        ),
-                      ),
-                      /*
+                          Builder(
+                            builder: (context) {
+                              final queuedRemaining =
+                                  (_dashboard?.reports ??
+                                          const <ReportArtifactSummary>[])
+                                      .where((r) => r.isCurrent)
+                                      .where(
+                                        (r) =>
+                                            r.artifactStatus == 'queued' ||
+                                            r.artifactStatus == 'failed',
+                                      )
+                                      .toList();
+
+                              return OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppColors.secondaryButton,
+                                  disabledForegroundColor: AppColors.muted
+                                      .withValues(alpha: .72),
+                                  side: BorderSide(
+                                    color: AppColors.secondaryButton.withValues(
+                                      alpha: .78,
+                                    ),
+                                    width: 1.4,
+                                  ),
+                                ),
+                                onPressed: _isBusy || queuedRemaining.isEmpty
+                                    ? null
+                                    : () async {
+                                        await showDialog<bool>(
+                                          context: context,
+                                          barrierDismissible: false,
+                                          builder: (context) {
+                                            return _GenerateAllReportsDialog(
+                                              artifacts: queuedRemaining,
+                                              onRun:
+                                                  (
+                                                    onStarted,
+                                                    onFinished,
+                                                    onFailed,
+                                                  ) {
+                                                    return _runGenerateAllReportsLive(
+                                                      queuedRemaining,
+                                                      onStarted: onStarted,
+                                                      onFinished: onFinished,
+                                                      onFailed: onFailed,
+                                                    );
+                                                  },
+                                            );
+                                          },
+                                        );
+
+                                        await _refreshDashboardOnly();
+                                      },
+                                icon: const Icon(Icons.play_circle_outline),
+                                label: Text(
+                                  'Generate Remaining (${queuedRemaining.length})',
+                                ),
+                              );
+                            },
+                          ),
+
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.secondaryButton,
+                              disabledForegroundColor: AppColors.muted
+                                  .withValues(alpha: .72),
+                              side: BorderSide(
+                                color: AppColors.secondaryButton.withValues(
+                                  alpha: .78,
+                                ),
+                                width: 1.4,
+                              ),
+                            ),
+                            onPressed: _isBusy
+                                ? null
+                                : _sendAllExhibitorReports,
+                            icon: const Icon(Icons.send_outlined),
+                            label: Text(
+                              _selectedCloseoutScopeIsEntireShow
+                                  ? 'Send All Exhibitor Reports'
+                                  : 'Send $_selectedCloseoutScopeLabel Exhibitor Reports',
+                            ),
+                          ),
+                          /*
                                 ElevatedButton.icon(
                                   onPressed: _isBusy || _isSupportMode ? null : _sendAllLegsReports,
                                   icon: const Icon(Icons.pets),
                                   label: const Text('Send All Legs'),
                                 ),
                                 */
-                      OutlinedButton.icon(
-                        onPressed: _isBusy ? null : _sendAllClubReports,
-                        icon: const Icon(Icons.group_outlined),
-                        label: Text(
-                          _selectedCloseoutScopeIsEntireShow
-                              ? 'Send All Club Reports'
-                              : 'Send $_selectedCloseoutScopeLabel Club Reports',
-                        ),
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.secondaryButton,
+                              disabledForegroundColor: AppColors.muted
+                                  .withValues(alpha: .72),
+                              side: BorderSide(
+                                color: AppColors.secondaryButton.withValues(
+                                  alpha: .78,
+                                ),
+                                width: 1.4,
+                              ),
+                            ),
+                            onPressed: _isBusy ? null : _sendAllClubReports,
+                            icon: const Icon(Icons.group_outlined),
+                            label: Text(
+                              _selectedCloseoutScopeIsEntireShow
+                                  ? 'Send All Club Reports'
+                                  : 'Send $_selectedCloseoutScopeLabel Club Reports',
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
 
                   const SizedBox(height: 16),
@@ -4258,6 +4380,48 @@ class _CloseoutSectionCard extends StatelessWidget {
           const SizedBox(height: 12),
           ...children,
         ],
+      ),
+    );
+  }
+}
+
+class _CloseoutWarningDetailTile extends StatelessWidget {
+  final String title;
+  final String? subtitle;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+
+  const _CloseoutWarningDetailTile({
+    required this.title,
+    this.subtitle,
+    this.trailing,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AppTheme.surfaceTextScope(
+      context,
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(top: 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.muted.withValues(alpha: .12)),
+        ),
+        child: ListTile(
+          dense: true,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          title: Text(title),
+          subtitle: subtitle == null || subtitle!.trim().isEmpty
+              ? null
+              : Text(subtitle!),
+          trailing: trailing,
+          onTap: onTap,
+        ),
       ),
     );
   }
@@ -5519,9 +5683,9 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
             width: double.infinity,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.orange.withOpacity(.10),
+              color: Colors.orange.withValues(alpha: .10),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.orange.withOpacity(.22)),
+              border: Border.all(color: Colors.orange.withValues(alpha: .22)),
             ),
             child: Text(
               widget.reportsBlockedMessage ??
@@ -5763,13 +5927,7 @@ class _ErrorView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [AppColors.navy, AppColors.navyDark],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        ),
-      ),
+      decoration: const BoxDecoration(gradient: AppGradients.page),
       child: Center(
         child: Container(
           margin: const EdgeInsets.all(24),

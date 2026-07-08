@@ -480,24 +480,34 @@ class _ShowRoleAssignmentsDialogState
     required String title,
     required List<Widget> children,
   }) {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: .05), blurRadius: 10),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 12),
-          ...children,
-        ],
+    return AppTheme.surfaceTextScope(
+      context,
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: .05),
+              blurRadius: 10,
+            ),
+          ],
+        ),
+        child: Builder(
+          builder: (context) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 12),
+                ...children,
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -585,11 +595,7 @@ class _ShowRoleAssignmentsDialogState
         ),
         child: Container(
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [AppColors.navy, AppColors.navyDark],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
+            gradient: AppGradients.page,
             borderRadius: BorderRadius.circular(24),
           ),
           child: Column(
@@ -599,7 +605,7 @@ class _ShowRoleAssignmentsDialogState
                 child: Row(
                   children: [
                     Image.asset(
-                      'assets/images/ringmaster_show_logo.png',
+                      'assets/images/RingMaster_One_Show_Transparent.png',
                       height: 38,
                     ),
                     const SizedBox(width: 12),
@@ -631,184 +637,189 @@ class _ShowRoleAssignmentsDialogState
                       top: Radius.circular(24),
                     ),
                   ),
-                  child: _loading
-                      ? const Center(child: CircularProgressIndicator())
-                      : Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
-                          child: Column(
-                            children: [
-                              if (_msg != null)
-                                Container(
-                                  width: double.infinity,
-                                  margin: const EdgeInsets.only(bottom: 16),
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: successMessage
-                                        ? Colors.green.withValues(alpha: .08)
-                                        : Colors.red.withValues(alpha: .08),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
+                  child: AppTheme.gradientTextScope(
+                    context,
+                    child: _loading
+                        ? const Center(child: CircularProgressIndicator())
+                        : Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+                            child: Column(
+                              children: [
+                                if (_msg != null)
+                                  Container(
+                                    width: double.infinity,
+                                    margin: const EdgeInsets.only(bottom: 16),
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
                                       color: successMessage
-                                          ? Colors.green.withValues(alpha: .25)
-                                          : Colors.red.withValues(alpha: .25),
+                                          ? Colors.green.withValues(alpha: .08)
+                                          : Colors.red.withValues(alpha: .08),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: successMessage
+                                            ? Colors.green.withValues(
+                                                alpha: .25,
+                                              )
+                                            : Colors.red.withValues(alpha: .25),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      _msg!,
+                                      style: TextStyle(
+                                        color: successMessage
+                                            ? Colors.green
+                                            : Colors.red,
+                                        fontWeight: FontWeight.w600,
+                                      ),
                                     ),
                                   ),
-                                  child: Text(
-                                    _msg!,
-                                    style: TextStyle(
-                                      color: successMessage
-                                          ? Colors.green
-                                          : Colors.red,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              Expanded(
-                                child: SingleChildScrollView(
-                                  child: Column(
-                                    children: [
-                                      _buildSectionCard(
-                                        context: context,
-                                        title: 'Current Staff Roles',
-                                        children: [
-                                          if (_assignments.isEmpty)
+                                Expanded(
+                                  child: SingleChildScrollView(
+                                    child: Column(
+                                      children: [
+                                        _buildSectionCard(
+                                          context: context,
+                                          title: 'Current Staff Roles',
+                                          children: [
+                                            if (_assignments.isEmpty)
+                                              const Text(
+                                                'No staff roles have been assigned yet.',
+                                              )
+                                            else
+                                              ..._assignments.map(
+                                                _buildAssignmentTile,
+                                              ),
+                                          ],
+                                        ),
+                                        _buildSectionCard(
+                                          context: context,
+                                          title: 'Add or Update Staff Role',
+                                          children: [
                                             const Text(
-                                              'No staff roles have been assigned yet.',
-                                            )
-                                          else
-                                            ..._assignments.map(
-                                              _buildAssignmentTile,
+                                              'Search by any exhibitor name or account email. Every exhibitor on an account can be selected, including non-primary exhibitors. Access is still assigned to the login account connected to that exhibitor.',
                                             ),
-                                        ],
-                                      ),
-                                      _buildSectionCard(
-                                        context: context,
-                                        title: 'Add or Update Staff Role',
-                                        children: [
-                                          const Text(
-                                            'Search by any exhibitor name or account email. Every exhibitor on an account can be selected, including non-primary exhibitors. Access is still assigned to the login account connected to that exhibitor.',
-                                          ),
-                                          const SizedBox(height: 12),
-                                          DropdownButtonFormField<String>(
-                                            initialValue: _selectedRole,
-                                            decoration: const InputDecoration(
-                                              labelText: 'Role',
-                                              border: OutlineInputBorder(),
-                                            ),
-                                            items: _allowedRoles
-                                                .map(
-                                                  (role) => DropdownMenuItem(
-                                                    value: role,
-                                                    child: Text(
-                                                      _roleLabel(role),
-                                                    ),
-                                                  ),
-                                                )
-                                                .toList(),
-                                            onChanged: _saving
-                                                ? null
-                                                : (value) => setState(
-                                                    () => _selectedRole =
-                                                        value ??
-                                                        'superintendent',
-                                                  ),
-                                          ),
-                                          const SizedBox(height: 12),
-                                          TextField(
-                                            controller: _searchController,
-                                            enabled: !_saving,
-                                            decoration: InputDecoration(
-                                              labelText:
-                                                  'Search current users by name or email',
-                                              border:
-                                                  const OutlineInputBorder(),
-                                              suffixIcon: _searching
-                                                  ? const Padding(
-                                                      padding: EdgeInsets.all(
-                                                        12,
-                                                      ),
-                                                      child: SizedBox(
-                                                        width: 20,
-                                                        height: 20,
-                                                        child:
-                                                            CircularProgressIndicator(
-                                                              strokeWidth: 2,
-                                                            ),
-                                                      ),
-                                                    )
-                                                  : IconButton(
-                                                      tooltip: 'Search',
-                                                      onPressed: _saving
-                                                          ? null
-                                                          : () => _searchUsers(
-                                                              _searchController
-                                                                  .text,
-                                                            ),
-                                                      icon: const Icon(
-                                                        Icons.search,
-                                                      ),
-                                                    ),
-                                            ),
-                                            onChanged: _saving
-                                                ? null
-                                                : _queueUserSearch,
-                                            onSubmitted: _saving
-                                                ? null
-                                                : _searchUsers,
-                                          ),
-                                          if (_searchResults.isNotEmpty)
-                                            ..._searchResults.map(
-                                              _buildSearchResultTile,
-                                            ),
-                                          const SizedBox(height: 12),
-                                          SizedBox(
-                                            width: double.infinity,
-                                            child: FilledButton.icon(
-                                              style: FilledButton.styleFrom(
-                                                backgroundColor:
-                                                    AppColors.primaryButton,
-                                                foregroundColor:
-                                                    AppColors.primaryButtonText,
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      vertical: 16,
-                                                    ),
+                                            const SizedBox(height: 12),
+                                            DropdownButtonFormField<String>(
+                                              initialValue: _selectedRole,
+                                              decoration: const InputDecoration(
+                                                labelText: 'Role',
+                                                border: OutlineInputBorder(),
                                               ),
-                                              onPressed: _saving
+                                              items: _allowedRoles
+                                                  .map(
+                                                    (role) => DropdownMenuItem(
+                                                      value: role,
+                                                      child: Text(
+                                                        _roleLabel(role),
+                                                      ),
+                                                    ),
+                                                  )
+                                                  .toList(),
+                                              onChanged: _saving
                                                   ? null
-                                                  : _addAssignment,
-                                              icon: const Icon(
-                                                Icons.person_add,
+                                                  : (value) => setState(
+                                                      () => _selectedRole =
+                                                          value ??
+                                                          'superintendent',
+                                                    ),
+                                            ),
+                                            const SizedBox(height: 12),
+                                            TextField(
+                                              controller: _searchController,
+                                              enabled: !_saving,
+                                              decoration: InputDecoration(
+                                                labelText:
+                                                    'Search current users by name or email',
+                                                border:
+                                                    const OutlineInputBorder(),
+                                                suffixIcon: _searching
+                                                    ? const Padding(
+                                                        padding: EdgeInsets.all(
+                                                          12,
+                                                        ),
+                                                        child: SizedBox(
+                                                          width: 20,
+                                                          height: 20,
+                                                          child:
+                                                              CircularProgressIndicator(
+                                                                strokeWidth: 2,
+                                                              ),
+                                                        ),
+                                                      )
+                                                    : IconButton(
+                                                        tooltip: 'Search',
+                                                        onPressed: _saving
+                                                            ? null
+                                                            : () => _searchUsers(
+                                                                _searchController
+                                                                    .text,
+                                                              ),
+                                                        icon: const Icon(
+                                                          Icons.search,
+                                                        ),
+                                                      ),
                                               ),
-                                              label: Text(
-                                                _saving
-                                                    ? 'Saving…'
-                                                    : 'Add / Update Role',
+                                              onChanged: _saving
+                                                  ? null
+                                                  : _queueUserSearch,
+                                              onSubmitted: _saving
+                                                  ? null
+                                                  : _searchUsers,
+                                            ),
+                                            if (_searchResults.isNotEmpty)
+                                              ..._searchResults.map(
+                                                _buildSearchResultTile,
+                                              ),
+                                            const SizedBox(height: 12),
+                                            SizedBox(
+                                              width: double.infinity,
+                                              child: FilledButton.icon(
+                                                style: FilledButton.styleFrom(
+                                                  backgroundColor:
+                                                      AppColors.primaryButton,
+                                                  foregroundColor: AppColors
+                                                      .primaryButtonText,
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        vertical: 16,
+                                                      ),
+                                                ),
+                                                onPressed: _saving
+                                                    ? null
+                                                    : _addAssignment,
+                                                icon: const Icon(
+                                                  Icons.person_add,
+                                                ),
+                                                label: Text(
+                                                  _saving
+                                                      ? 'Saving…'
+                                                      : 'Add / Update Role',
+                                                ),
                                               ),
                                             ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: OutlinedButton(
-                                      onPressed: _saving
-                                          ? null
-                                          : () => Navigator.pop(context),
-                                      child: const Text('Close'),
+                                          ],
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                ],
-                              ),
-                            ],
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: OutlinedButton(
+                                        onPressed: _saving
+                                            ? null
+                                            : () => Navigator.pop(context),
+                                        child: const Text('Close'),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
+                  ),
                 ),
               ),
             ],

@@ -196,8 +196,9 @@ class _EntriesByBreedSectionTableState
     final l = s.toLowerCase();
 
     if (l.contains('senior') || l.startsWith('sr')) return 'Senior';
-    if (l.contains('intermediate') || l.startsWith('int'))
+    if (l.contains('intermediate') || l.startsWith('int')) {
       return 'Intermediate';
+    }
     if (l.contains('junior') || l.startsWith('jr')) return 'Junior';
     if (l.contains('open')) return 'Open';
 
@@ -617,65 +618,68 @@ class _EntriesByBreedSectionTableState
       }
     }
 
-    return Container(
-      margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Entry Totals',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 10),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                ..._sections.map((s) {
-                  final sid = s['id'].toString();
-                  var showing = 0;
-                  final exhibitors = <String>{};
+    return AppTheme.surfaceTextScope(
+      context,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 10,
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Entry Totals',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 10),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  ..._sections.map((s) {
+                    final sid = s['id'].toString();
+                    var showing = 0;
+                    final exhibitors = <String>{};
 
-                  for (final breed in _breedGroups) {
-                    showing += _countForSection(breed.countsBySection, sid);
-                    exhibitors.addAll(
-                      breed.exhibitorsBySection[sid] ?? const <String>{},
+                    for (final breed in _breedGroups) {
+                      showing += _countForSection(breed.countsBySection, sid);
+                      exhibitors.addAll(
+                        breed.exhibitorsBySection[sid] ?? const <String>{},
+                      );
+                    }
+
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: _summaryChip(
+                        widget.showExhibitorCounts
+                            ? '${_sectionHeader(s)}: $showing/${exhibitors.length}'
+                            : '${_sectionHeader(s)}: $showing',
+                      ),
                     );
-                  }
-
-                  return Padding(
+                  }),
+                  Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: _summaryChip(
                       widget.showExhibitorCounts
-                          ? '${_sectionHeader(s)}: $showing/${exhibitors.length}'
-                          : '${_sectionHeader(s)}: $showing',
+                          ? 'Overall: $totalShowing/${totalExhibitors.length}'
+                          : 'Overall: $totalShowing',
                     ),
-                  );
-                }),
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: _summaryChip(
-                    widget.showExhibitorCounts
-                        ? 'Overall: $totalShowing/${totalExhibitors.length}'
-                        : 'Overall: $totalShowing',
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -746,15 +750,18 @@ class _EntriesByBreedSectionTableState
       margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: AppColors.navy.withValues(alpha: 0.05),
+        color: Colors.white.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.navy.withValues(alpha: 0.10)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
       ),
       child: Text(
         widget.showExhibitorCounts
             ? 'All section counts are shown as Rabbit/Cavy / Exhibitors (R/E).'
             : 'All section counts are shown as entries currently showing.',
-        style: const TextStyle(fontWeight: FontWeight.w600),
+        style: const TextStyle(
+          color: AppColors.headerForeground,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
@@ -841,13 +848,7 @@ class _EntriesByBreedSectionTableState
   Widget build(BuildContext context) {
     if (_loading) {
       return Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [AppColors.navy, AppColors.navyDark],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-        ),
+        decoration: const BoxDecoration(gradient: AppGradients.page),
         child: const Center(
           child: CircularProgressIndicator(color: Colors.white),
         ),
@@ -856,13 +857,7 @@ class _EntriesByBreedSectionTableState
 
     if (_msg != null) {
       return Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [AppColors.navy, AppColors.navyDark],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-        ),
+        decoration: const BoxDecoration(gradient: AppGradients.page),
         child: Center(
           child: Container(
             margin: const EdgeInsets.all(24),
@@ -886,13 +881,7 @@ class _EntriesByBreedSectionTableState
 
     if (_sections.isEmpty) {
       return Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [AppColors.navy, AppColors.navyDark],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-        ),
+        decoration: const BoxDecoration(gradient: AppGradients.page),
         child: const Center(
           child: Text(
             'No enabled sections for this show.',
@@ -904,13 +893,7 @@ class _EntriesByBreedSectionTableState
 
     if (_breedGroups.isEmpty) {
       return Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [AppColors.navy, AppColors.navyDark],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-        ),
+        decoration: const BoxDecoration(gradient: AppGradients.page),
         child: const Center(
           child: Text(
             'No entries found for this show.',
@@ -921,13 +904,7 @@ class _EntriesByBreedSectionTableState
     }
 
     return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [AppColors.navy, AppColors.navyDark],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        ),
-      ),
+      decoration: const BoxDecoration(gradient: AppGradients.page),
       child: SafeArea(
         child: Container(
           margin: const EdgeInsets.only(top: 8),
@@ -935,193 +912,204 @@ class _EntriesByBreedSectionTableState
             color: AppColors.bg,
             borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 14, 12, 6),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        widget.title,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                    if (widget.showExportButton) ...[
-                      TextButton.icon(
-                        onPressed: _exportCsv,
-                        icon: const Icon(Icons.download),
-                        label: const Text('CSV'),
-                      ),
-                      TextButton.icon(
-                        onPressed: _exportPdf,
-                        icon: const Icon(Icons.picture_as_pdf),
-                        label: const Text('PDF'),
-                      ),
-                      const SizedBox(width: 6),
-                    ],
-                    IconButton(
-                      tooltip: 'Reload',
-                      onPressed: _load,
-                      icon: const Icon(Icons.refresh),
-                    ),
-                  ],
-                ),
-              ),
-              if (AppSession.isSupportMode)
-                Container(
-                  width: double.infinity,
-                  margin: const EdgeInsets.fromLTRB(12, 4, 12, 0),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.amber.shade100,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.amber.shade300),
-                  ),
-                  child: const Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          child: AppTheme.gradientTextScope(
+            context,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 14, 12, 6),
+                  child: Row(
                     children: [
-                      Icon(Icons.support_agent, size: 18),
-                      SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Support Mode — Viewing entry counts as an admin while viewing another user.',
-                          style: TextStyle(fontWeight: FontWeight.w700),
+                          widget.title,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
                         ),
+                      ),
+                      if (widget.showExportButton) ...[
+                        TextButton.icon(
+                          onPressed: _exportCsv,
+                          icon: const Icon(Icons.download),
+                          label: const Text('CSV'),
+                        ),
+                        TextButton.icon(
+                          onPressed: _exportPdf,
+                          icon: const Icon(Icons.picture_as_pdf),
+                          label: const Text('PDF'),
+                        ),
+                        const SizedBox(width: 6),
+                      ],
+                      IconButton(
+                        tooltip: 'Reload',
+                        onPressed: _load,
+                        icon: const Icon(Icons.refresh),
                       ),
                     ],
                   ),
                 ),
-              _countsLegendBar(),
-              _overallTotalsHeader(),
-              Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(12),
-                  itemCount: _breedGroups.length,
-                  itemBuilder: (context, index) {
-                    final breed = _breedGroups[index];
-
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(18),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.05),
-                            blurRadius: 12,
+                if (AppSession.isSupportMode)
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade100,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.amber.shade300),
+                    ),
+                    child: const Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.support_agent, size: 18),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Support Mode — Viewing entry counts as an admin while viewing another user.',
+                            style: TextStyle(fontWeight: FontWeight.w700),
                           ),
-                        ],
-                      ),
-                      child: ExpansionTile(
-                        tilePadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 6,
                         ),
-                        childrenPadding: const EdgeInsets.fromLTRB(
-                          12,
-                          0,
-                          12,
-                          12,
-                        ),
-                        title: Text(
-                          breed.breed,
-                          style: const TextStyle(fontWeight: FontWeight.w700),
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '${breed.species.toUpperCase()} • ${breed.varieties.length} varieties',
+                      ],
+                    ),
+                  ),
+                _countsLegendBar(),
+                _overallTotalsHeader(),
+                Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(12),
+                    itemCount: _breedGroups.length,
+                    itemBuilder: (context, index) {
+                      final breed = _breedGroups[index];
+
+                      return AppTheme.surfaceTextScope(
+                        context,
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(18),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.05),
+                                blurRadius: 12,
+                              ),
+                            ],
+                          ),
+                          child: ExpansionTile(
+                            tilePadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 6,
                             ),
-                            const SizedBox(height: 8),
-                            _breedSummaryBar(breed),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
+                            childrenPadding: const EdgeInsets.fromLTRB(
+                              12,
+                              0,
+                              12,
+                              12,
+                            ),
+                            title: Text(
+                              breed.breed,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                if (widget.showExhibitorCounts)
-                                  _countChip(
-                                    'Exhibitors',
-                                    breed.exhibitorCount,
-                                  ),
-                                _countChip('Showing', breed.rabbitCount),
+                                Text(
+                                  '${breed.species.toUpperCase()} • ${breed.varieties.length} varieties',
+                                ),
+                                const SizedBox(height: 8),
+                                _breedSummaryBar(breed),
+                                const SizedBox(height: 8),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    if (widget.showExhibitorCounts)
+                                      _countChip(
+                                        'Exhibitors',
+                                        breed.exhibitorCount,
+                                      ),
+                                    _countChip('Showing', breed.rabbitCount),
+                                  ],
+                                ),
                               ],
                             ),
-                          ],
-                        ),
-                        children: [
-                          const SizedBox(height: 8),
-                          ...breed.varieties.map((variety) {
-                            return Container(
-                              margin: const EdgeInsets.only(top: 8),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF8F9FC),
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: Colors.black.withValues(alpha: 0.05),
-                                ),
-                              ),
-                              child: ExpansionTile(
-                                tilePadding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 6,
-                                ),
-                                childrenPadding: const EdgeInsets.fromLTRB(
-                                  12,
-                                  0,
-                                  12,
-                                  12,
-                                ),
-                                title: Text(
-                                  variety.variety,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      '${variety.classes.length} age/sex classes',
+                            children: [
+                              const SizedBox(height: 8),
+                              ...breed.varieties.map((variety) {
+                                return Container(
+                                  margin: const EdgeInsets.only(top: 8),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF8F9FC),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: Colors.black.withValues(
+                                        alpha: 0.05,
+                                      ),
                                     ),
-                                    const SizedBox(height: 8),
-                                    _varietySummaryBar(variety),
-                                    const SizedBox(height: 8),
-                                    Wrap(
-                                      spacing: 8,
-                                      runSpacing: 8,
+                                  ),
+                                  child: ExpansionTile(
+                                    tilePadding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 6,
+                                    ),
+                                    childrenPadding: const EdgeInsets.fromLTRB(
+                                      12,
+                                      0,
+                                      12,
+                                      12,
+                                    ),
+                                    title: Text(
+                                      variety.variety,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    subtitle: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
-                                        if (widget.showExhibitorCounts)
-                                          _countChip(
-                                            'Exhibitors',
-                                            variety.exhibitorCount,
-                                          ),
-                                        _countChip(
-                                          'Showing',
-                                          variety.rabbitCount,
+                                        Text(
+                                          '${variety.classes.length} age/sex classes',
+                                        ),
+                                        const SizedBox(height: 8),
+                                        _varietySummaryBar(variety),
+                                        const SizedBox(height: 8),
+                                        Wrap(
+                                          spacing: 8,
+                                          runSpacing: 8,
+                                          children: [
+                                            if (widget.showExhibitorCounts)
+                                              _countChip(
+                                                'Exhibitors',
+                                                variety.exhibitorCount,
+                                              ),
+                                            _countChip(
+                                              'Showing',
+                                              variety.rabbitCount,
+                                            ),
+                                          ],
                                         ),
                                       ],
                                     ),
-                                  ],
-                                ),
-                                children: [
-                                  const SizedBox(height: 8),
-                                  _classTable(variety),
-                                ],
-                              ),
-                            );
-                          }),
-                        ],
-                      ),
-                    );
-                  },
+                                    children: [
+                                      const SizedBox(height: 8),
+                                      _classTable(variety),
+                                    ],
+                                  ),
+                                );
+                              }),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

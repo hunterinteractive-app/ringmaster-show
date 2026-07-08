@@ -596,94 +596,97 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
           BoxShadow(color: Colors.black.withValues(alpha: .05), blurRadius: 12),
         ],
       ),
-      child: ExpansionTile(
-        initiallyExpanded: _secretaryInfoExpanded || !complete,
-        onExpansionChanged: (value) {
-          setState(() => _secretaryInfoExpanded = value);
-        },
-        leading: Icon(
-          complete ? Icons.check_circle_outline : Icons.info_outline,
-          color: complete ? Colors.green : Colors.orange,
-        ),
-        title: const Text(
-          'Show Secretary Information',
-          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
-        ),
-        subtitle: Text(
-          complete
-              ? 'Saved to the show record for printed sheets and email reports.'
-              : 'Required for check-in sheets and emailed reports.',
-        ),
-        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        children: [
-          const SizedBox(height: 8),
-          TextField(
-            controller: _secretaryNameController,
-            readOnly: readOnly,
-            textInputAction: TextInputAction.next,
-            decoration: const InputDecoration(
-              labelText: 'Show Secretary Name',
-              border: OutlineInputBorder(),
-            ),
-            onChanged: (_) => setState(() {}),
+      child: AppTheme.surfaceTextScope(
+        context,
+        child: ExpansionTile(
+          initiallyExpanded: _secretaryInfoExpanded || !complete,
+          onExpansionChanged: (value) {
+            setState(() => _secretaryInfoExpanded = value);
+          },
+          leading: Icon(
+            complete ? Icons.check_circle_outline : Icons.info_outline,
+            color: complete ? Colors.green : Colors.orange,
           ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _secretaryAddressController,
-            readOnly: readOnly,
-            textInputAction: TextInputAction.next,
-            minLines: 2,
-            maxLines: 3,
-            decoration: const InputDecoration(
-              labelText: 'Show Secretary Address',
-              border: OutlineInputBorder(),
-            ),
-            onChanged: (_) => setState(() {}),
+          title: const Text(
+            'Show Secretary Information',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
           ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _secretaryPhoneController,
-            readOnly: readOnly,
-            keyboardType: TextInputType.phone,
-            textInputAction: TextInputAction.next,
-            decoration: const InputDecoration(
-              labelText: 'Show Secretary Phone',
-              border: OutlineInputBorder(),
-            ),
-            onChanged: (_) => setState(() {}),
+          subtitle: Text(
+            complete
+                ? 'Saved to the show record for printed sheets and email reports.'
+                : 'Required for check-in sheets and emailed reports.',
           ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _secretaryEmailController,
-            readOnly: readOnly,
-            keyboardType: TextInputType.emailAddress,
-            textInputAction: TextInputAction.done,
-            decoration: const InputDecoration(
-              labelText: 'Show Secretary Email',
-              border: OutlineInputBorder(),
+          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          children: [
+            const SizedBox(height: 8),
+            TextField(
+              controller: _secretaryNameController,
+              readOnly: readOnly,
+              textInputAction: TextInputAction.next,
+              decoration: const InputDecoration(
+                labelText: 'Show Secretary Name',
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (_) => setState(() {}),
             ),
-            onChanged: (_) => setState(() {}),
-          ),
-          const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerRight,
-            child: FilledButton.icon(
-              onPressed: readOnly || _savingSecretaryInfo
-                  ? null
-                  : _saveSecretaryInfo,
-              icon: _savingSecretaryInfo
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.save),
-              label: Text(
-                _savingSecretaryInfo ? 'Saving...' : 'Save Secretary Info',
+            const SizedBox(height: 12),
+            TextField(
+              controller: _secretaryAddressController,
+              readOnly: readOnly,
+              textInputAction: TextInputAction.next,
+              minLines: 2,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'Show Secretary Address',
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _secretaryPhoneController,
+              readOnly: readOnly,
+              keyboardType: TextInputType.phone,
+              textInputAction: TextInputAction.next,
+              decoration: const InputDecoration(
+                labelText: 'Show Secretary Phone',
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _secretaryEmailController,
+              readOnly: readOnly,
+              keyboardType: TextInputType.emailAddress,
+              textInputAction: TextInputAction.done,
+              decoration: const InputDecoration(
+                labelText: 'Show Secretary Email',
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton.icon(
+                onPressed: readOnly || _savingSecretaryInfo
+                    ? null
+                    : _saveSecretaryInfo,
+                icon: _savingSecretaryInfo
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.save),
+                label: Text(
+                  _savingSecretaryInfo ? 'Saving...' : 'Save Secretary Info',
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -704,29 +707,32 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
           BoxShadow(color: Colors.black.withValues(alpha: .05), blurRadius: 12),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w600,
+      child: AppTheme.surfaceTextScope(
+        context,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
-          const SizedBox(height: 14),
-          ...children,
-        ],
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
+            const SizedBox(height: 14),
+            ...children,
+          ],
+        ),
       ),
     );
   }
@@ -1087,13 +1093,11 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
 }
 
 Widget _themedBottomSheetShell(BuildContext context, {required Widget child}) {
+  final gradientTheme = AppTheme.onGradientTheme(Theme.of(context));
+
   return Container(
     decoration: const BoxDecoration(
-      gradient: LinearGradient(
-        colors: [AppColors.navy, AppColors.navyDark],
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-      ),
+      gradient: AppGradients.page,
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
     child: SafeArea(
@@ -1101,10 +1105,19 @@ Widget _themedBottomSheetShell(BuildContext context, {required Widget child}) {
       child: Container(
         margin: const EdgeInsets.only(top: 8),
         decoration: const BoxDecoration(
-          color: AppColors.bg,
+          color: Colors.transparent,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
-        child: child,
+        child: Theme(
+          data: gradientTheme,
+          child: DefaultTextStyle.merge(
+            style: const TextStyle(color: AppColors.headerForeground),
+            child: IconTheme(
+              data: const IconThemeData(color: AppColors.headerForeground),
+              child: child,
+            ),
+          ),
+        ),
       ),
     ),
   );

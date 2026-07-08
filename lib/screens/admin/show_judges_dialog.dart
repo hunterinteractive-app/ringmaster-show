@@ -419,111 +419,123 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
   Widget _buildFilterBar() {
     final states = _availableStates();
 
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: .05), blurRadius: 10),
-        ],
-      ),
-      child: Column(
-        children: [
-          TextField(
-            controller: _search,
-            enabled: !_saving && !_isReadOnly,
-            decoration: const InputDecoration(
-              labelText: 'Search judges to assign',
-              hintText: 'Name, ARBA number, type, email, city, state...',
-              prefixIcon: Icon(Icons.search),
-              border: OutlineInputBorder(),
+    return AppTheme.surfaceTextScope(
+      context,
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: .05),
+              blurRadius: 10,
             ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  initialValue: _judgeTypeFilter,
-                  decoration: const InputDecoration(
-                    labelText: 'Judge Type',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: const [
-                    DropdownMenuItem(value: 'all', child: Text('All Judges')),
-                    DropdownMenuItem(
-                      value: 'rabbit',
-                      child: Text('Rabbit Judges'),
-                    ),
-                    DropdownMenuItem(value: 'cavy', child: Text('Cavy Judges')),
-                    DropdownMenuItem(value: 'dual', child: Text('Dual Judges')),
-                  ],
-                  onChanged: (_saving || _isReadOnly)
-                      ? null
-                      : (v) async {
-                          setState(() {
-                            _judgeTypeFilter = v ?? 'all';
-                          });
-                          await _runSearch();
-                        },
-                ),
+          ],
+        ),
+        child: Column(
+          children: [
+            TextField(
+              controller: _search,
+              enabled: !_saving && !_isReadOnly,
+              decoration: const InputDecoration(
+                labelText: 'Search judges to assign',
+                hintText: 'Name, ARBA number, type, email, city, state...',
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  initialValue: _stateFilter,
-                  decoration: const InputDecoration(
-                    labelText: 'State',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: [
-                    const DropdownMenuItem(
-                      value: 'all',
-                      child: Text('All States'),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _judgeTypeFilter,
+                    decoration: const InputDecoration(
+                      labelText: 'Judge Type',
+                      border: OutlineInputBorder(),
                     ),
-                    ...states.map(
-                      (state) =>
-                          DropdownMenuItem(value: state, child: Text(state)),
-                    ),
-                  ],
-                  onChanged: (_saving || _isReadOnly)
-                      ? null
-                      : (v) async {
-                          setState(() {
-                            _stateFilter = v ?? 'all';
-                          });
-                          await _runSearch();
-                        },
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  initialValue: _sortBy,
-                  decoration: const InputDecoration(
-                    labelText: 'Sort By',
-                    border: OutlineInputBorder(),
+                    items: const [
+                      DropdownMenuItem(value: 'all', child: Text('All Judges')),
+                      DropdownMenuItem(
+                        value: 'rabbit',
+                        child: Text('Rabbit Judges'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'cavy',
+                        child: Text('Cavy Judges'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'dual',
+                        child: Text('Dual Judges'),
+                      ),
+                    ],
+                    onChanged: (_saving || _isReadOnly)
+                        ? null
+                        : (v) async {
+                            setState(() {
+                              _judgeTypeFilter = v ?? 'all';
+                            });
+                            await _runSearch();
+                          },
                   ),
-                  items: const [
-                    DropdownMenuItem(value: 'name', child: Text('Name')),
-                    DropdownMenuItem(value: 'state', child: Text('State')),
-                  ],
-                  onChanged: (_saving || _isReadOnly)
-                      ? null
-                      : (v) async {
-                          setState(() {
-                            _sortBy = v ?? 'name';
-                          });
-                          await _runSearch();
-                        },
                 ),
-              ),
-            ],
-          ),
-        ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _stateFilter,
+                    decoration: const InputDecoration(
+                      labelText: 'State',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: [
+                      const DropdownMenuItem(
+                        value: 'all',
+                        child: Text('All States'),
+                      ),
+                      ...states.map(
+                        (state) =>
+                            DropdownMenuItem(value: state, child: Text(state)),
+                      ),
+                    ],
+                    onChanged: (_saving || _isReadOnly)
+                        ? null
+                        : (v) async {
+                            setState(() {
+                              _stateFilter = v ?? 'all';
+                            });
+                            await _runSearch();
+                          },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _sortBy,
+                    decoration: const InputDecoration(
+                      labelText: 'Sort By',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'name', child: Text('Name')),
+                      DropdownMenuItem(value: 'state', child: Text('State')),
+                    ],
+                    onChanged: (_saving || _isReadOnly)
+                        ? null
+                        : (v) async {
+                            setState(() {
+                              _sortBy = v ?? 'name';
+                            });
+                            await _runSearch();
+                          },
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -533,36 +545,42 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
     required int count,
     required Widget child,
   }) {
-    return Container(
-      margin: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: .05), blurRadius: 10),
-        ],
-      ),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '$title ($count)',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 16,
+    return AppTheme.surfaceTextScope(
+      context,
+      child: Container(
+        margin: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: .05),
+              blurRadius: 10,
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '$title ($count)',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          Divider(height: 1, color: Colors.grey.shade300),
-          Expanded(child: child),
-        ],
+            Divider(height: 1, color: Colors.grey.shade300),
+            Expanded(child: child),
+          ],
+        ),
       ),
     );
   }
@@ -573,11 +591,7 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
 
     return Container(
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.navy, AppColors.navyDark],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        ),
+        gradient: AppGradients.page,
         borderRadius: BorderRadius.circular(24),
       ),
       child: Column(
@@ -587,7 +601,7 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
             child: Row(
               children: [
                 Image.asset(
-                  'assets/images/ringmaster_show_logo.png',
+                  'assets/images/RingMaster_One_Show_Transparent.png',
                   height: 38,
                 ),
                 const SizedBox(width: 12),
@@ -624,197 +638,206 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
                 color: AppColors.bg,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
               ),
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
-                      child: Column(
-                        children: [
-                          if (_isReadOnly) ...[
-                            Container(
-                              width: double.infinity,
-                              margin: const EdgeInsets.only(bottom: 16),
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.amber.shade100,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: Colors.amber.shade300,
+              child: AppTheme.gradientTextScope(
+                context,
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+                        child: Column(
+                          children: [
+                            if (_isReadOnly) ...[
+                              Container(
+                                width: double.infinity,
+                                margin: const EdgeInsets.only(bottom: 16),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber.shade100,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: Colors.amber.shade300,
+                                  ),
+                                ),
+                                child: Text(
+                                  _isFinalized
+                                      ? 'This show has been finalized. Judge assignments are view-only.'
+                                      : 'This show is locked. Judge assignments are view-only.',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                 ),
                               ),
-                              child: Text(
-                                _isFinalized
-                                    ? 'This show has been finalized. Judge assignments are view-only.'
-                                    : 'This show is locked. Judge assignments are view-only.',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                          ],
-                          if (_msg != null)
-                            Container(
-                              width: double.infinity,
-                              margin: const EdgeInsets.only(bottom: 16),
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: success
-                                    ? Colors.green.withValues(alpha: .08)
-                                    : Colors.red.withValues(alpha: .08),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
+                            ],
+                            if (_msg != null)
+                              Container(
+                                width: double.infinity,
+                                margin: const EdgeInsets.only(bottom: 16),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
                                   color: success
-                                      ? Colors.green.withValues(alpha: .25)
-                                      : Colors.red.withValues(alpha: .25),
+                                      ? Colors.green.withValues(alpha: .08)
+                                      : Colors.red.withValues(alpha: .08),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: success
+                                        ? Colors.green.withValues(alpha: .25)
+                                        : Colors.red.withValues(alpha: .25),
+                                  ),
+                                ),
+                                child: Text(
+                                  _msg!,
+                                  style: TextStyle(
+                                    color: success ? Colors.green : Colors.red,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ),
-                              child: Text(
-                                _msg!,
-                                style: TextStyle(
-                                  color: success ? Colors.green : Colors.red,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                            _buildFilterBar(),
+                            Expanded(
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildPanel(
+                                      title: 'Assigned to Show',
+                                      count: _assigned.length,
+                                      child: _assigned.isEmpty
+                                          ? const Center(
+                                              child: Text(
+                                                'No judges assigned to this show yet.',
+                                              ),
+                                            )
+                                          : ListView.separated(
+                                              itemCount: _assigned.length,
+                                              separatorBuilder:
+                                                  (context, index) =>
+                                                      const Divider(height: 1),
+                                              itemBuilder: (context, i) {
+                                                final assignment = _assigned[i];
+                                                final judge =
+                                                    assignment['judges'];
+                                                final judgeMap = judge is Map
+                                                    ? judge
+                                                          .cast<
+                                                            String,
+                                                            dynamic
+                                                          >()
+                                                    : <String, dynamic>{};
+
+                                                return ListTile(
+                                                  contentPadding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 16,
+                                                        vertical: 6,
+                                                      ),
+                                                  title: Text(
+                                                    _judgeDisplayName(judgeMap),
+                                                  ),
+                                                  subtitle: Text(
+                                                    _judgeSubtitle(judgeMap),
+                                                  ),
+                                                  trailing: IconButton(
+                                                    tooltip: 'Remove from show',
+                                                    icon: const Icon(
+                                                      Icons
+                                                          .remove_circle_outline,
+                                                    ),
+                                                    onPressed:
+                                                        (_saving || _isReadOnly)
+                                                        ? null
+                                                        : () =>
+                                                              _removeAssignment(
+                                                                assignment,
+                                                              ),
+                                                  ),
+                                                );
+                                              },
+                                            ),
+                                    ),
+                                  ),
+                                  Container(
+                                    width: 1,
+                                    margin: const EdgeInsets.symmetric(
+                                      vertical: 12,
+                                    ),
+                                    color: Theme.of(context).dividerColor,
+                                  ),
+                                  Expanded(
+                                    child: _buildPanel(
+                                      title: 'Available Judges',
+                                      count: _searchResults.length,
+                                      child: _searchResults.isEmpty
+                                          ? const Center(
+                                              child: Text(
+                                                'No matching active judges found.',
+                                              ),
+                                            )
+                                          : ListView.separated(
+                                              itemCount: _searchResults.length,
+                                              separatorBuilder:
+                                                  (context, index) =>
+                                                      const Divider(height: 1),
+                                              itemBuilder: (context, i) {
+                                                final judge = _searchResults[i];
+
+                                                return ListTile(
+                                                  contentPadding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 16,
+                                                        vertical: 6,
+                                                      ),
+                                                  title: Text(
+                                                    _judgeDisplayName(judge),
+                                                  ),
+                                                  subtitle: Text(
+                                                    _judgeSubtitle(judge),
+                                                  ),
+                                                  trailing: IconButton(
+                                                    tooltip: 'Assign to show',
+                                                    icon: const Icon(
+                                                      Icons.add_circle_outline,
+                                                    ),
+                                                    onPressed:
+                                                        (_saving || _isReadOnly)
+                                                        ? null
+                                                        : () => _assignJudge(
+                                                            judge,
+                                                          ),
+                                                  ),
+                                                );
+                                              },
+                                            ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          _buildFilterBar(),
-                          Expanded(
-                            child: Row(
+                            const SizedBox(height: 12),
+                            Row(
                               children: [
-                                Expanded(
-                                  child: _buildPanel(
-                                    title: 'Assigned to Show',
-                                    count: _assigned.length,
-                                    child: _assigned.isEmpty
-                                        ? const Center(
-                                            child: Text(
-                                              'No judges assigned to this show yet.',
-                                            ),
-                                          )
-                                        : ListView.separated(
-                                            itemCount: _assigned.length,
-                                            separatorBuilder:
-                                                (context, index) =>
-                                                    const Divider(height: 1),
-                                            itemBuilder: (context, i) {
-                                              final assignment = _assigned[i];
-                                              final judge =
-                                                  assignment['judges'];
-                                              final judgeMap = judge is Map
-                                                  ? judge
-                                                        .cast<String, dynamic>()
-                                                  : <String, dynamic>{};
-
-                                              return ListTile(
-                                                contentPadding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 16,
-                                                      vertical: 6,
-                                                    ),
-                                                title: Text(
-                                                  _judgeDisplayName(judgeMap),
-                                                ),
-                                                subtitle: Text(
-                                                  _judgeSubtitle(judgeMap),
-                                                ),
-                                                trailing: IconButton(
-                                                  tooltip: 'Remove from show',
-                                                  icon: const Icon(
-                                                    Icons.remove_circle_outline,
-                                                  ),
-                                                  onPressed:
-                                                      (_saving || _isReadOnly)
-                                                      ? null
-                                                      : () => _removeAssignment(
-                                                          assignment,
-                                                        ),
-                                                ),
-                                              );
-                                            },
-                                          ),
-                                  ),
-                                ),
-                                Container(
-                                  width: 1,
-                                  margin: const EdgeInsets.symmetric(
-                                    vertical: 12,
-                                  ),
-                                  color: Theme.of(context).dividerColor,
-                                ),
-                                Expanded(
-                                  child: _buildPanel(
-                                    title: 'Available Judges',
-                                    count: _searchResults.length,
-                                    child: _searchResults.isEmpty
-                                        ? const Center(
-                                            child: Text(
-                                              'No matching active judges found.',
-                                            ),
-                                          )
-                                        : ListView.separated(
-                                            itemCount: _searchResults.length,
-                                            separatorBuilder:
-                                                (context, index) =>
-                                                    const Divider(height: 1),
-                                            itemBuilder: (context, i) {
-                                              final judge = _searchResults[i];
-
-                                              return ListTile(
-                                                contentPadding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 16,
-                                                      vertical: 6,
-                                                    ),
-                                                title: Text(
-                                                  _judgeDisplayName(judge),
-                                                ),
-                                                subtitle: Text(
-                                                  _judgeSubtitle(judge),
-                                                ),
-                                                trailing: IconButton(
-                                                  tooltip: 'Assign to show',
-                                                  icon: const Icon(
-                                                    Icons.add_circle_outline,
-                                                  ),
-                                                  onPressed:
-                                                      (_saving || _isReadOnly)
-                                                      ? null
-                                                      : () =>
-                                                            _assignJudge(judge),
-                                                ),
-                                              );
-                                            },
-                                          ),
+                                const Spacer(),
+                                SizedBox(
+                                  width: 180,
+                                  child: FilledButton(
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: AppColors.primaryButton,
+                                      foregroundColor:
+                                          AppColors.primaryButtonText,
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 16,
+                                      ),
+                                    ),
+                                    onPressed: _saving
+                                        ? null
+                                        : () => Navigator.pop(context, true),
+                                    child: const Text('Done'),
                                   ),
                                 ),
                               ],
                             ),
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              const Spacer(),
-                              SizedBox(
-                                width: 180,
-                                child: FilledButton(
-                                  style: FilledButton.styleFrom(
-                                    backgroundColor: AppColors.primaryButton,
-                                    foregroundColor:
-                                        AppColors.primaryButtonText,
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 16,
-                                    ),
-                                  ),
-                                  onPressed: _saving
-                                      ? null
-                                      : () => Navigator.pop(context, true),
-                                  child: const Text('Done'),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
+              ),
             ),
           ),
         ],

@@ -623,121 +623,129 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
   Widget _sectionCard(int index) {
     final s = _sections[index];
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: .05), blurRadius: 10),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                _kindChip(s.kind),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Section ${index + 1}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                    ),
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Move up',
-                  onPressed: (_saving || _isReadOnly || index == 0)
-                      ? null
-                      : () => _moveUp(index),
-                  icon: const Icon(Icons.arrow_upward),
-                ),
-                IconButton(
-                  tooltip: 'Move down',
-                  onPressed:
-                      (_saving || _isReadOnly || index == _sections.length - 1)
-                      ? null
-                      : () => _moveDown(index),
-                  icon: const Icon(Icons.arrow_downward),
-                ),
-                IconButton(
-                  tooltip: 'Delete',
-                  onPressed: (_saving || _isReadOnly)
-                      ? null
-                      : () => _removeSection(index),
-                  icon: const Icon(Icons.delete_outline),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                SizedBox(
-                  width: 90,
-                  child: TextField(
-                    controller: s.letterCtrl,
-                    enabled: false,
-                    decoration: const InputDecoration(
-                      labelText: 'Letter',
-                      isDense: true,
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
-                    controller: s.displayNameCtrl,
-                    enabled: !_saving && !_isReadOnly,
-                    decoration: const InputDecoration(
-                      labelText: 'Display Name',
-                      hintText: 'Example: Open A or Sweepstakes Youth',
-                      isDense: true,
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _buildBreedScopeSelector(s),
-            const SizedBox(height: 10),
-            _buildAllowedBreedSummary(s),
-            const SizedBox(height: 8),
-            SwitchListTile(
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              value: s.allowMeatClasses,
-              onChanged: (_saving || _isReadOnly)
-                  ? null
-                  : (v) {
-                      setState(() {
-                        s.allowMeatClasses = v;
-                      });
-                    },
-              title: const Text('Allow Meat Classes'),
-              subtitle: const Text(
-                'Show commercial entries like Fryer, Roaster, Stewer, and Meat Pen for this section.',
-              ),
-            ),
-            SwitchListTile(
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              value: s.isEnabled,
-              onChanged: (_saving || _isReadOnly)
-                  ? null
-                  : (v) {
-                      setState(() {
-                        s.isEnabled = v;
-                      });
-                    },
-              title: const Text('Enabled'),
+    return AppTheme.surfaceTextScope(
+      context,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: .05),
+              blurRadius: 10,
             ),
           ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  _kindChip(s.kind),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Section ${index + 1}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Move up',
+                    onPressed: (_saving || _isReadOnly || index == 0)
+                        ? null
+                        : () => _moveUp(index),
+                    icon: const Icon(Icons.arrow_upward),
+                  ),
+                  IconButton(
+                    tooltip: 'Move down',
+                    onPressed:
+                        (_saving ||
+                            _isReadOnly ||
+                            index == _sections.length - 1)
+                        ? null
+                        : () => _moveDown(index),
+                    icon: const Icon(Icons.arrow_downward),
+                  ),
+                  IconButton(
+                    tooltip: 'Delete',
+                    onPressed: (_saving || _isReadOnly)
+                        ? null
+                        : () => _removeSection(index),
+                    icon: const Icon(Icons.delete_outline),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  SizedBox(
+                    width: 90,
+                    child: TextField(
+                      controller: s.letterCtrl,
+                      enabled: false,
+                      decoration: const InputDecoration(
+                        labelText: 'Letter',
+                        isDense: true,
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: s.displayNameCtrl,
+                      enabled: !_saving && !_isReadOnly,
+                      decoration: const InputDecoration(
+                        labelText: 'Display Name',
+                        hintText: 'Example: Open A or Sweepstakes Youth',
+                        isDense: true,
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _buildBreedScopeSelector(s),
+              const SizedBox(height: 10),
+              _buildAllowedBreedSummary(s),
+              const SizedBox(height: 8),
+              SwitchListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                value: s.allowMeatClasses,
+                onChanged: (_saving || _isReadOnly)
+                    ? null
+                    : (v) {
+                        setState(() {
+                          s.allowMeatClasses = v;
+                        });
+                      },
+                title: const Text('Allow Meat Classes'),
+                subtitle: const Text(
+                  'Show commercial entries like Fryer, Roaster, Stewer, and Meat Pen for this section.',
+                ),
+              ),
+              SwitchListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                value: s.isEnabled,
+                onChanged: (_saving || _isReadOnly)
+                    ? null
+                    : (v) {
+                        setState(() {
+                          s.isEnabled = v;
+                        });
+                      },
+                title: const Text('Enabled'),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -757,11 +765,7 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
         ),
         child: Container(
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [AppColors.navy, AppColors.navyDark],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
+            gradient: AppGradients.page,
             borderRadius: BorderRadius.circular(24),
           ),
           child: Column(
@@ -771,7 +775,7 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
                 child: Row(
                   children: [
                     Image.asset(
-                      'assets/images/ringmaster_show_logo.png',
+                      'assets/images/RingMaster_One_Show_Transparent.png',
                       height: 38,
                     ),
                     const SizedBox(width: 12),
@@ -805,129 +809,141 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
                       top: Radius.circular(24),
                     ),
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Set the show order, enable or disable sections, customize names, and control which breeds are allowed in each letter show.',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                        const SizedBox(height: 14),
-                        if (_isReadOnly) ...[
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.amber.shade100,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.amber.shade300),
-                            ),
-                            child: Text(
-                              _isFinalized
-                                  ? 'This show has been finalized. Sections are view-only.'
-                                  : 'This show is locked. Sections are view-only.',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
+                  child: AppTheme.gradientTextScope(
+                    context,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Set the show order, enable or disable sections, customize names, and control which breeds are allowed in each letter show.',
+                            style: TextStyle(
+                              color: AppColors.headerForeground.withValues(
+                                alpha: .9,
                               ),
                             ),
                           ),
-                          const SizedBox(height: 12),
-                        ],
-                        if (_msg != null) ...[
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.red.withValues(alpha: .08),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: Colors.red.withValues(alpha: .25),
+                          const SizedBox(height: 14),
+                          if (_isReadOnly) ...[
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.amber.shade100,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: Colors.amber.shade300,
+                                ),
+                              ),
+                              child: Text(
+                                _isFinalized
+                                    ? 'This show has been finalized. Sections are view-only.'
+                                    : 'This show is locked. Sections are view-only.',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ),
-                            child: Text(
-                              _msg!,
-                              style: const TextStyle(
-                                color: Colors.red,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                        ],
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            FilledButton.icon(
-                              onPressed: (_saving || _isReadOnly)
-                                  ? null
-                                  : () => _addSection('open'),
-                              icon: const Icon(Icons.add),
-                              label: const Text('Add Open'),
-                            ),
-                            FilledButton.icon(
-                              onPressed: (_saving || _isReadOnly)
-                                  ? null
-                                  : () => _addSection('youth'),
-                              icon: const Icon(Icons.add),
-                              label: const Text('Add Youth'),
-                            ),
-                            OutlinedButton.icon(
-                              onPressed: _saving ? null : _loadAll,
-                              icon: const Icon(Icons.refresh),
-                              label: const Text('Reload'),
-                            ),
+                            const SizedBox(height: 12),
                           ],
-                        ),
-                        const SizedBox(height: 14),
-                        Expanded(
-                          child: _loading
-                              ? const Center(child: CircularProgressIndicator())
-                              : _sections.isEmpty
-                              ? const Align(
-                                  alignment: Alignment.topLeft,
-                                  child: Text(
-                                    'No sections yet. Add Open and/or Youth sections.',
-                                  ),
-                                )
-                              : ListView.builder(
-                                  itemCount: _sections.length,
-                                  itemBuilder: (context, index) =>
-                                      _sectionCard(index),
+                          if (_msg != null) ...[
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.red.withValues(alpha: .08),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: Colors.red.withValues(alpha: .25),
                                 ),
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: _saving
-                                    ? null
-                                    : () => Navigator.pop(context, false),
-                                child: const Text('Close'),
+                              ),
+                              child: Text(
+                                _msg!,
+                                style: const TextStyle(
+                                  color: Colors.red,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: FilledButton(
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: AppColors.primaryButton,
-                                  foregroundColor: AppColors.primaryButtonText,
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 16,
-                                  ),
-                                ),
+                            const SizedBox(height: 12),
+                          ],
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              FilledButton.icon(
                                 onPressed: (_saving || _isReadOnly)
                                     ? null
-                                    : _saveAll,
-                                child: Text(_saving ? 'Saving…' : 'Save'),
+                                    : () => _addSection('open'),
+                                icon: const Icon(Icons.add),
+                                label: const Text('Add Open'),
                               ),
-                            ),
-                          ],
-                        ),
-                      ],
+                              FilledButton.icon(
+                                onPressed: (_saving || _isReadOnly)
+                                    ? null
+                                    : () => _addSection('youth'),
+                                icon: const Icon(Icons.add),
+                                label: const Text('Add Youth'),
+                              ),
+                              OutlinedButton.icon(
+                                onPressed: _saving ? null : _loadAll,
+                                icon: const Icon(Icons.refresh),
+                                label: const Text('Reload'),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          Expanded(
+                            child: _loading
+                                ? const Center(
+                                    child: CircularProgressIndicator(),
+                                  )
+                                : _sections.isEmpty
+                                ? const Align(
+                                    alignment: Alignment.topLeft,
+                                    child: Text(
+                                      'No sections yet. Add Open and/or Youth sections.',
+                                    ),
+                                  )
+                                : ListView.builder(
+                                    itemCount: _sections.length,
+                                    itemBuilder: (context, index) =>
+                                        _sectionCard(index),
+                                  ),
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: _saving
+                                      ? null
+                                      : () => Navigator.pop(context, false),
+                                  child: const Text('Close'),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: FilledButton(
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: AppColors.primaryButton,
+                                    foregroundColor:
+                                        AppColors.primaryButtonText,
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 16,
+                                    ),
+                                  ),
+                                  onPressed: (_saving || _isReadOnly)
+                                      ? null
+                                      : _saveAll,
+                                  child: Text(_saving ? 'Saving…' : 'Save'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),

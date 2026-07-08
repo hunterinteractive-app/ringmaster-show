@@ -1,5 +1,3 @@
-// lib/screens/admin/closeout/pdf/builders/unpaid_balances_report_pdf.dart
-
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -186,6 +184,19 @@ class UnpaidBalancesReportPdfBuilder {
   }
 
   pw.Widget _table(UnpaidBalancesReportData data) {
+    final rows = data.rows.toList()
+      ..sort((a, b) {
+        final lastNameCompare = _lastNameSortKey(
+          a.exhibitorName,
+        ).compareTo(_lastNameSortKey(b.exhibitorName));
+
+        if (lastNameCompare != 0) return lastNameCompare;
+
+        return _normalizeSortText(
+          a.exhibitorName,
+        ).compareTo(_normalizeSortText(b.exhibitorName));
+      });
+
     return pw.Table(
       border: pw.TableBorder.all(
         color: PdfColors.grey700,
@@ -205,7 +216,7 @@ class UnpaidBalancesReportPdfBuilder {
       },
       children: [
         _headerRow(),
-        ...data.rows.map(_dataRow),
+        ...rows.map(_dataRow),
       ],
     );
   }
@@ -457,6 +468,27 @@ class UnpaidBalancesReportPdfBuilder {
     );
   }
 
+  String _lastNameSortKey(String name) {
+    final cleaned = name.trim().replaceAll(RegExp(r'\s+'), ' ');
+    if (cleaned.isEmpty) return '';
+
+    final withoutSuffix = cleaned.replaceFirst(
+      RegExp(r'\s+(Jr\.?|Sr\.?|II|III|IV|V)$', caseSensitive: false),
+      '',
+    );
+
+    final parts = withoutSuffix.split(' ');
+    final last = parts.isEmpty ? withoutSuffix : parts.last;
+
+    return '${_normalizeSortText(last)}|${_normalizeSortText(withoutSuffix)}';
+  }
+
+  String _normalizeSortText(String value) {
+    return value
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+        .trim();
+  }
   String _money(double value, {String? currency}) {
     final sym = _currencySymbol(currency);
     return '$sym${value.toStringAsFixed(2)}';

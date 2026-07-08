@@ -3,6 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:ringmaster_show/theme/app_theme.dart';
+
 class AdminCoopNumbersScreen extends StatefulWidget {
   final String showId;
   final String showName;
@@ -14,8 +16,7 @@ class AdminCoopNumbersScreen extends StatefulWidget {
   });
 
   @override
-  State<AdminCoopNumbersScreen> createState() =>
-      _AdminCoopNumbersScreenState();
+  State<AdminCoopNumbersScreen> createState() => _AdminCoopNumbersScreenState();
 }
 
 class _AdminCoopNumbersScreenState extends State<AdminCoopNumbersScreen> {
@@ -108,8 +109,7 @@ class _AdminCoopNumbersScreenState extends State<AdminCoopNumbersScreen> {
             .inFilter('animal_id', chunk);
 
         entryRows.addAll(
-          (data as List)
-              .map((row) => Map<String, dynamic>.from(row as Map)),
+          (data as List).map((row) => Map<String, dynamic>.from(row as Map)),
         );
       }
 
@@ -161,7 +161,9 @@ class _AdminCoopNumbersScreenState extends State<AdminCoopNumbersScreen> {
 
         Map<String, dynamic>? representative;
         for (final entry in scopedEntries) {
-          final className = (entry['class_name'] ?? '').toString().toLowerCase();
+          final className = (entry['class_name'] ?? '')
+              .toString()
+              .toLowerCase();
           if (!className.contains('fur') && !className.contains('wool')) {
             representative = entry;
             break;
@@ -197,24 +199,25 @@ class _AdminCoopNumbersScreenState extends State<AdminCoopNumbersScreen> {
           final kindCompare = aKind.compareTo(bKind);
           if (kindCompare != 0) return kindCompare;
 
-          final aSort = int.tryParse((a['sort_order'] ?? 9999).toString()) ?? 9999;
-          final bSort = int.tryParse((b['sort_order'] ?? 9999).toString()) ?? 9999;
+          final aSort =
+              int.tryParse((a['sort_order'] ?? 9999).toString()) ?? 9999;
+          final bSort =
+              int.tryParse((b['sort_order'] ?? 9999).toString()) ?? 9999;
           final sortCompare = aSort.compareTo(bSort);
           if (sortCompare != 0) return sortCompare;
 
-          return (a['label'] ?? '')
-              .toString()
-              .compareTo((b['label'] ?? '').toString());
+          return (a['label'] ?? '').toString().compareTo(
+            (b['label'] ?? '').toString(),
+          );
         });
 
         newRows.add(
           _CoopAssignmentRow(
             animalId: animalId,
             scope: scope,
-            breedName: (assignment['breed_name'] ??
-                    representative?['breed'] ??
-                    '')
-                .toString(),
+            breedName:
+                (assignment['breed_name'] ?? representative?['breed'] ?? '')
+                    .toString(),
             coopNumber: (assignment['coop_number'] ?? '').toString(),
             variety: (representative?['variety'] ?? '').toString(),
             className: (representative?['class_name'] ?? '').toString(),
@@ -272,13 +275,13 @@ class _AdminCoopNumbersScreenState extends State<AdminCoopNumbersScreen> {
     if (scopeCompare != 0) return scopeCompare;
 
     final breedCompare = a.breedName.toLowerCase().compareTo(
-          b.breedName.toLowerCase(),
-        );
+      b.breedName.toLowerCase(),
+    );
     if (breedCompare != 0) return breedCompare;
 
-    final numberCompare = _coopNumericPart(a.coopController.text).compareTo(
-          _coopNumericPart(b.coopController.text),
-        );
+    final numberCompare = _coopNumericPart(
+      a.coopController.text,
+    ).compareTo(_coopNumericPart(b.coopController.text));
     if (numberCompare != 0) return numberCompare;
 
     return a.tattoo.toLowerCase().compareTo(b.tattoo.toLowerCase());
@@ -552,10 +555,7 @@ class _AdminCoopNumbersScreenState extends State<AdminCoopNumbersScreen> {
       ),
       child: Text(
         _message!,
-        style: TextStyle(
-          color: color,
-          fontWeight: FontWeight.w600,
-        ),
+        style: TextStyle(color: color, fontWeight: FontWeight.w600),
       ),
     );
   }
@@ -570,85 +570,90 @@ class _AdminCoopNumbersScreenState extends State<AdminCoopNumbersScreen> {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: 125,
-              child: TextField(
-                controller: row.coopController,
-                enabled: !_busy,
-                textCapitalization: TextCapitalization.characters,
-                decoration: const InputDecoration(
-                  labelText: 'Coop #',
-                  border: OutlineInputBorder(),
-                  isDense: true,
+      child: AppTheme.surfaceTextScope(
+        context,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 125,
+                child: TextField(
+                  controller: row.coopController,
+                  enabled: !_busy,
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: const InputDecoration(
+                    labelText: 'Coop #',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Text(
-                        row.breedName.isEmpty ? 'Unknown Breed' : row.breedName,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: row.scope == 'youth'
-                              ? Colors.purple.withValues(alpha: .10)
-                              : Colors.blue.withValues(alpha: .10),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          row.scopeLabel,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          row.breedName.isEmpty
+                              ? 'Unknown Breed'
+                              : row.breedName,
                           style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
-                      ),
-                      if (row.isManual)
-                        const Tooltip(
-                          message: 'Manually edited',
-                          child: Icon(Icons.edit, size: 16),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: row.scope == 'youth'
+                                ? Colors.purple.withValues(alpha: .10)
+                                : Colors.blue.withValues(alpha: .10),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            row.scopeLabel,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                         ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    row.tattoo.trim().isEmpty
-                        ? 'No tattoo / ear tag'
-                        : 'Tattoo / Ear #: ${row.tattoo.trim()}',
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  if (detailParts.isNotEmpty) ...[
-                    const SizedBox(height: 3),
-                    Text(
-                      detailParts.join(' • '),
-                      style: const TextStyle(color: Colors.black54),
+                        if (row.isManual)
+                          const Tooltip(
+                            message: 'Manually edited',
+                            child: Icon(Icons.edit, size: 16),
+                          ),
+                      ],
                     ),
+                    const SizedBox(height: 4),
+                    Text(
+                      row.tattoo.trim().isEmpty
+                          ? 'No tattoo / ear tag'
+                          : 'Tattoo / Ear #: ${row.tattoo.trim()}',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    if (detailParts.isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        detailParts.join(' • '),
+                        style: const TextStyle(color: AppColors.muted),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -659,147 +664,202 @@ class _AdminCoopNumbersScreenState extends State<AdminCoopNumbersScreen> {
     final filteredRows = _filteredRows;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Coop Numbers'),
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                widget.showName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-              ),
-              const SizedBox(height: 12),
-              if (_loading)
-                const Expanded(
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else ...[
-                _buildMessage(),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 10,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    const Text(
-                      'Numbering mode:',
-                      style: TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    SegmentedButton<String>(
-                      segments: const [
-                        ButtonSegment<String>(
-                          value: 'separate',
-                          label: Text('Separate Open / Youth'),
-                          icon: Icon(Icons.call_split),
-                        ),
-                        ButtonSegment<String>(
-                          value: 'combined',
-                          label: Text('Intermix Open / Youth'),
-                          icon: Icon(Icons.merge_type),
-                        ),
-                      ],
-                      selected: {_scopeMode},
-                      onSelectionChanged: _busy
-                          ? null
-                          : (selection) {
-                              setState(() => _scopeMode = selection.first);
-                            },
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: _busy
-                          ? null
-                          : () => _generate(overwrite: false),
-                      icon: const Icon(Icons.add_circle_outline),
-                      label: const Text('Generate Missing'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: _busy
-                          ? null
-                          : () => _generate(overwrite: true),
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Regenerate All'),
-                    ),
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.red,
-                      ),
-                      onPressed: _busy || _rows.isEmpty ? null : _clearAll,
-                      icon: const Icon(Icons.clear_all),
-                      label: const Text('Clear All'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _searchController,
-                  enabled: !_busy,
-                  decoration: InputDecoration(
-                    labelText:
-                        'Search coop number, breed, tattoo, class, variety, or show',
-                    prefixIcon: const Icon(Icons.search),
-                    suffixIcon: _searchController.text.isEmpty
-                        ? null
-                        : IconButton(
-                            tooltip: 'Clear search',
-                            onPressed: _searchController.clear,
-                            icon: const Icon(Icons.clear),
-                          ),
-                    border: const OutlineInputBorder(),
-                    isDense: true,
+      backgroundColor: AppColors.bg,
+      appBar: AppBar(title: const Text('Coop Numbers')),
+      body: AppTheme.gradientTextScope(
+        context,
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  widget.showName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: AppColors.headerForeground,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Text(
-                      '${filteredRows.length} of ${_rows.length} assignments',
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    const Spacer(),
-                    if (_busy)
-                      const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Expanded(
-                  child: filteredRows.isEmpty
-                      ? Center(
-                          child: Text(
-                            _rows.isEmpty
-                                ? 'No coop assignments yet. Use Generate Missing to create them.'
-                                : 'No assignments match your search.',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(color: Colors.black54),
-                          ),
-                        )
-                      : ListView.builder(
-                          itemCount: filteredRows.length,
-                          itemBuilder: (context, index) =>
-                              _buildAssignmentCard(filteredRows[index]),
-                        ),
-                ),
                 const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: FilledButton.icon(
-                    onPressed: _busy || _rows.isEmpty ? null : _save,
-                    icon: const Icon(Icons.save),
-                    label: const Text('Save Changes'),
+                if (_loading)
+                  const Expanded(
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else ...[
+                  _buildMessage(),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 10,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      const Text(
+                        'Numbering mode:',
+                        style: TextStyle(
+                          color: AppColors.headerForeground,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      SegmentedButton<String>(
+                        style: ButtonStyle(
+                          backgroundColor: WidgetStateProperty.resolveWith((
+                            states,
+                          ) {
+                            if (states.contains(WidgetState.selected)) {
+                              return AppColors.surface;
+                            }
+                            return Colors.transparent;
+                          }),
+                          foregroundColor: WidgetStateProperty.resolveWith((
+                            states,
+                          ) {
+                            if (states.contains(WidgetState.disabled)) {
+                              return AppColors.headerForeground.withValues(
+                                alpha: .42,
+                              );
+                            }
+                            if (states.contains(WidgetState.selected)) {
+                              return AppColors.text;
+                            }
+                            return AppColors.headerForeground;
+                          }),
+                          side: WidgetStatePropertyAll(
+                            BorderSide(
+                              color: AppColors.headerForeground.withValues(
+                                alpha: .55,
+                              ),
+                            ),
+                          ),
+                        ),
+                        segments: const [
+                          ButtonSegment<String>(
+                            value: 'separate',
+                            label: Text('Separate Open / Youth'),
+                            icon: Icon(Icons.call_split),
+                          ),
+                          ButtonSegment<String>(
+                            value: 'combined',
+                            label: Text('Intermix Open / Youth'),
+                            icon: Icon(Icons.merge_type),
+                          ),
+                        ],
+                        selected: {_scopeMode},
+                        onSelectionChanged: _busy
+                            ? null
+                            : (selection) {
+                                setState(() => _scopeMode = selection.first);
+                              },
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: _busy
+                            ? null
+                            : () => _generate(overwrite: false),
+                        icon: const Icon(Icons.add_circle_outline),
+                        label: const Text('Generate Missing'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: _busy
+                            ? null
+                            : () => _generate(overwrite: true),
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Regenerate All'),
+                      ),
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.red.shade100,
+                          disabledForegroundColor: AppColors.headerForeground
+                              .withValues(alpha: .35),
+                        ),
+                        onPressed: _busy || _rows.isEmpty ? null : _clearAll,
+                        icon: const Icon(Icons.clear_all),
+                        label: const Text('Clear All'),
+                      ),
+                    ],
                   ),
-                ),
+                  const SizedBox(height: 12),
+                  AppTheme.surfaceTextScope(
+                    context,
+                    child: TextField(
+                      controller: _searchController,
+                      enabled: !_busy,
+                      decoration: InputDecoration(
+                        labelText:
+                            'Search coop number, breed, tattoo, class, variety, or show',
+                        prefixIcon: const Icon(Icons.search),
+                        suffixIcon: _searchController.text.isEmpty
+                            ? null
+                            : IconButton(
+                                tooltip: 'Clear search',
+                                onPressed: _searchController.clear,
+                                icon: const Icon(Icons.clear),
+                              ),
+                        border: const OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Text(
+                        '${filteredRows.length} of ${_rows.length} assignments',
+                        style: const TextStyle(
+                          color: AppColors.headerForeground,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const Spacer(),
+                      if (_busy)
+                        const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: filteredRows.isEmpty
+                        ? Center(
+                            child: Text(
+                              _rows.isEmpty
+                                  ? 'No coop assignments yet. Use Generate Missing to create them.'
+                                  : 'No assignments match your search.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: AppColors.headerForeground.withValues(
+                                  alpha: .82,
+                                ),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          )
+                        : ListView.builder(
+                            itemCount: filteredRows.length,
+                            itemBuilder: (context, index) =>
+                                _buildAssignmentCard(filteredRows[index]),
+                          ),
+                  ),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        disabledBackgroundColor: AppColors.primaryButton
+                            .withValues(alpha: .35),
+                        disabledForegroundColor: AppColors.primaryButtonText
+                            .withValues(alpha: .45),
+                      ),
+                      onPressed: _busy || _rows.isEmpty ? null : _save,
+                      icon: const Icon(Icons.save),
+                      label: const Text('Save Changes'),
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),

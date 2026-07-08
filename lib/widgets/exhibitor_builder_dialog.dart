@@ -1,6 +1,7 @@
 // lib/widgets/exhibitor_builder_dialog.dart
 
 import 'package:flutter/material.dart';
+import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 final supabase = Supabase.instance.client;
@@ -8,14 +9,10 @@ final supabase = Supabase.instance.client;
 class ExhibitorBuilderDialog extends StatefulWidget {
   final String? exhibitorId;
 
-  const ExhibitorBuilderDialog({
-    super.key,
-    this.exhibitorId,
-  });
+  const ExhibitorBuilderDialog({super.key, this.exhibitorId});
 
   @override
-  State<ExhibitorBuilderDialog> createState() =>
-      _ExhibitorBuilderDialogState();
+  State<ExhibitorBuilderDialog> createState() => _ExhibitorBuilderDialogState();
 }
 
 class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
@@ -241,7 +238,8 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
       _groupMembers.where((m) => m.hasAnyValue).toList();
 
   Future<void> _pickGroupMemberBirthDate(_GroupMemberInput member) async {
-    final initial = member.birthDate ?? DateTime(DateTime.now().year - 10, 1, 1);
+    final initial =
+        member.birthDate ?? DateTime(DateTime.now().year - 10, 1, 1);
 
     final picked = await showDatePicker(
       context: context,
@@ -343,8 +341,8 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
 
       final first = (row['first_name'] ?? '').toString();
       final last = (row['last_name'] ?? '').toString();
-      final showing =
-          (row['showing_name'] ?? row['display_name'] ?? '').toString();
+      final showing = (row['showing_name'] ?? row['display_name'] ?? '')
+          .toString();
 
       _type = (row['type'] ?? 'adult').toString();
       _active = row['is_active'] == true;
@@ -462,8 +460,8 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
         }
 
         if (!_isYouthEligible(m.birthDate!)) {
-          final name =
-              ('${m.firstName.text.trim()} ${m.lastName.text.trim()}').trim();
+          final name = ('${m.firstName.text.trim()} ${m.lastName.text.trim()}')
+              .trim();
           return _fail(
             name.isEmpty
                 ? 'One group member is not youth-eligible based on birth date.'
@@ -553,7 +551,10 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
                     'arba_number': m.arbaNumber.text.trim().isEmpty
                         ? null
                         : m.arbaNumber.text.trim(),
-                    'birth_date': m.birthDate?.toIso8601String().substring(0, 10),
+                    'birth_date': m.birthDate?.toIso8601String().substring(
+                      0,
+                      10,
+                    ),
                   },
                 )
                 .toList()
@@ -579,10 +580,12 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
             ? null
             : _digitsOnlyPhone(_phone.text),
 
-        'address_line1':
-            _address1.text.trim().isEmpty ? null : _address1.text.trim(),
-        'address_line2':
-            _address2.text.trim().isEmpty ? null : _address2.text.trim(),
+        'address_line1': _address1.text.trim().isEmpty
+            ? null
+            : _address1.text.trim(),
+        'address_line2': _address2.text.trim().isEmpty
+            ? null
+            : _address2.text.trim(),
         'city': _city.text.trim().isEmpty ? null : _city.text.trim(),
         'state': _state.text.trim().isEmpty ? null : _state.text.trim(),
         'zip': _zip.text.trim().isEmpty ? null : _zip.text.trim(),
@@ -623,27 +626,34 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
     required String title,
     required List<Widget> children,
   }) {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: .05),
-            blurRadius: 10,
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 12),
-          ...children,
-        ],
+    return AppTheme.surfaceTextScope(
+      context,
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: .05),
+              blurRadius: 10,
+            ),
+          ],
+        ),
+        child: Builder(
+          builder: (context) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 12),
+                ...children,
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -696,30 +706,32 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
               border: OutlineInputBorder(),
             ),
           ),
-        if (_groupShowsAsYouth) ...[
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  member.birthDate == null
-                      ? 'Birth date: (not set)'
-                      : 'Birth date: ${member.birthDate!.toIso8601String().substring(0, 10)}',
+          if (_groupShowsAsYouth) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    member.birthDate == null
+                        ? 'Birth date: (not set)'
+                        : 'Birth date: ${member.birthDate!.toIso8601String().substring(0, 10)}',
+                  ),
                 ),
-              ),
-              TextButton(
-                onPressed: _saving ? null : () => _pickGroupMemberBirthDate(member),
-                child: const Text('Pick'),
-              ),
-              TextButton(
-                onPressed: _saving
-                    ? null
-                    : () => setState(() => member.birthDate = null),
-                child: const Text('Clear'),
-              ),
-            ],
-          ),
-        ],
+                TextButton(
+                  onPressed: _saving
+                      ? null
+                      : () => _pickGroupMemberBirthDate(member),
+                  child: const Text('Pick'),
+                ),
+                TextButton(
+                  onPressed: _saving
+                      ? null
+                      : () => setState(() => member.birthDate = null),
+                  child: const Text('Clear'),
+                ),
+              ],
+            ),
+          ],
           if (!isTrailingBlank && filledMembers.length > 1)
             Align(
               alignment: Alignment.centerRight,
@@ -769,8 +781,9 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
                         decoration: BoxDecoration(
                           color: Colors.red.withValues(alpha: .08),
                           borderRadius: BorderRadius.circular(12),
-                          border:
-                              Border.all(color: Colors.red.withValues(alpha: .25)),
+                          border: Border.all(
+                            color: Colors.red.withValues(alpha: .25),
+                          ),
                         ),
                         child: Text(
                           _msg!,
@@ -799,8 +812,9 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
                               child: Text('Group / Family'),
                             ),
                           ],
-                          onChanged:
-                              _saving ? null : (v) => _setType(v ?? 'adult'),
+                          onChanged: _saving
+                              ? null
+                              : (v) => _setType(v ?? 'adult'),
                           decoration: const InputDecoration(
                             labelText: 'Type',
                             border: OutlineInputBorder(),
@@ -822,8 +836,8 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
                             onChanged: _saving
                                 ? null
                                 : (v) => setState(() {
-                                      _groupShowsAsYouth = v;
-                                    }),
+                                    _groupShowsAsYouth = v;
+                                  }),
                           ),
                         if (!_isGroup) ...[
                           Row(
@@ -856,8 +870,8 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
                             _isGroup && _groupShowsAsYouth
                                 ? 'Each youth group/family member must have their own birth date.'
                                 : _isYouth
-                                    ? 'Birth date is required for Youth.'
-                                    : 'Birth date is only required for youth exhibitors. Youth groups require a birth date for each member.',
+                                ? 'Birth date is required for Youth.'
+                                : 'Birth date is only required for youth exhibitors. Youth groups require a birth date for each member.',
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                         ),
@@ -868,8 +882,9 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
                             'Inactive exhibitors won’t show in entry pickers.',
                           ),
                           value: _active,
-                          onChanged:
-                              _saving ? null : (v) => setState(() => _active = v),
+                          onChanged: _saving
+                              ? null
+                              : (v) => setState(() => _active = v),
                           contentPadding: EdgeInsets.zero,
                         ),
                       ],

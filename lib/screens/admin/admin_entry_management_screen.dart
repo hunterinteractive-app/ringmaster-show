@@ -749,16 +749,23 @@ class _AdminEntryManagementScreenState
           BoxShadow(color: Colors.black.withValues(alpha: .05), blurRadius: 12),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 14),
-          child,
-        ],
+      child: _surfaceTextScope(
+        context,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                color: AppColors.text,
+                fontSize: 17,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 14),
+            child,
+          ],
+        ),
       ),
     );
   }
@@ -948,148 +955,152 @@ class _AdminEntryManagementScreenState
                           ),
                         ],
                       ),
-                      child: ExpansionTile(
-                        initiallyExpanded: isExpanded,
-                        onExpansionChanged: (v) {
-                          setState(() {
-                            if (v) {
-                              _expandedExhibitorIds.add(exKey);
-                            } else {
-                              _expandedExhibitorIds.remove(exKey);
-                            }
-                          });
-                        },
-                        title: Row(
+                      child: _surfaceTextScope(
+                        context,
+                        child: ExpansionTile(
+                          initiallyExpanded: isExpanded,
+                          onExpansionChanged: (v) {
+                            setState(() {
+                              if (v) {
+                                _expandedExhibitorIds.add(exKey);
+                              } else {
+                                _expandedExhibitorIds.remove(exKey);
+                              }
+                            });
+                          },
+                          title: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  exhibitorName,
+                                  style: const TextStyle(
+                                    color: AppColors.text,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              if (hasExhibitor)
+                                TextButton.icon(
+                                  onPressed: () =>
+                                      _openEditExhibitor(exEntries.first),
+                                  icon: Icon(
+                                    exhibitorHasAccount
+                                        ? Icons.visibility
+                                        : Icons.edit,
+                                    size: 18,
+                                  ),
+                                  label: Text(
+                                    exhibitorHasAccount
+                                        ? 'View Exhibitor'
+                                        : 'Edit Exhibitor',
+                                  ),
+                                ),
+                            ],
+                          ),
+                          subtitle: Text(
+                            '${exEntries.length} entr${exEntries.length == 1 ? 'y' : 'ies'}',
+                          ),
                           children: [
-                            Expanded(
-                              child: Text(
-                                exhibitorName,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
+                            const Divider(height: 1),
+                            ...exEntries.map((e) {
+                              final tattoo = (e['tattoo'] ?? '')
+                                  .toString()
+                                  .trim()
+                                  .toUpperCase();
+                              final animalName = (e['animal_name'] ?? '')
+                                  .toString()
+                                  .trim();
+                              final breed = (e['breed'] ?? '').toString();
+                              final variety = (e['variety'] ?? '').toString();
+                              final furVariety = (e['fur_variety'] ?? '')
+                                  .toString();
+                              final notes = (e['notes'] ?? '').toString();
+                              final scratchedAt = e['scratched_at']?.toString();
+                              final isScratched =
+                                  scratchedAt != null && scratchedAt.isNotEmpty;
+
+                              final section = e['show_sections'];
+                              final letter =
+                                  (section is Map
+                                          ? (section['letter'] ?? '')
+                                          : '')
+                                      .toString();
+
+                              final titleLeft =
+                                  animalName.isNotEmpty && tattoo.isNotEmpty
+                                  ? '$animalName • $tattoo'
+                                  : animalName.isNotEmpty
+                                  ? animalName
+                                  : tattoo.isEmpty
+                                  ? '(no tattoo)'
+                                  : tattoo;
+
+                              final isFur = e['is_fur'] == true;
+
+                              final subtitle = [
+                                if (breed.isNotEmpty) 'Breed: $breed',
+                                if (variety.isNotEmpty) 'Variety: $variety',
+                                if (isFur)
+                                  furVariety.isNotEmpty
+                                      ? 'Fur/Wool: $furVariety'
+                                      : 'Fur/Wool',
+                                if (letter.isNotEmpty) 'Show: $letter',
+                                if (isScratched)
+                                  'SCRATCHED: ${_dateOnly(scratchedAt)}',
+                                if (notes.isNotEmpty) 'Notes: $notes',
+                              ].join(' • ');
+
+                              return ListTile(
+                                title: Text(
+                                  titleLeft,
+                                  style: TextStyle(
+                                    decoration: isScratched
+                                        ? TextDecoration.lineThrough
+                                        : null,
+                                  ),
                                 ),
-                              ),
-                            ),
-                            if (hasExhibitor)
-                              TextButton.icon(
-                                onPressed: () =>
-                                    _openEditExhibitor(exEntries.first),
-                                icon: Icon(
-                                  exhibitorHasAccount
-                                      ? Icons.visibility
-                                      : Icons.edit,
-                                  size: 18,
+                                subtitle: subtitle.isEmpty
+                                    ? null
+                                    : Text(subtitle),
+                                isThreeLine: subtitle.length > 80,
+                                trailing: PopupMenuButton<String>(
+                                  tooltip: AppSession.isSupportMode
+                                      ? 'Actions while viewing as another user'
+                                      : 'Actions',
+                                  onSelected: (v) {
+                                    if (v == 'edit') _openEdit(e);
+                                    if (v == 'move') _openMove(e);
+                                    if (v == 'scratch') {
+                                      _toggleScratch(e);
+                                    }
+                                    if (v == 'delete') _deleteEntry(e);
+                                  },
+                                  itemBuilder: (_) => [
+                                    const PopupMenuItem(
+                                      value: 'edit',
+                                      child: Text('Edit'),
+                                    ),
+                                    const PopupMenuItem(
+                                      value: 'move',
+                                      child: Text('Move Animal'),
+                                    ),
+                                    PopupMenuItem(
+                                      value: 'scratch',
+                                      child: Text(
+                                        isScratched ? 'Un-scratch' : 'Scratch',
+                                      ),
+                                    ),
+                                    const PopupMenuItem(
+                                      value: 'delete',
+                                      child: Text('Remove Entry'),
+                                    ),
+                                  ],
                                 ),
-                                label: Text(
-                                  exhibitorHasAccount
-                                      ? 'View Exhibitor'
-                                      : 'Edit Exhibitor',
-                                ),
-                              ),
+                                onTap: () => _openEdit(e),
+                              );
+                            }),
                           ],
                         ),
-                        subtitle: Text(
-                          '${exEntries.length} entr${exEntries.length == 1 ? 'y' : 'ies'}',
-                        ),
-                        children: [
-                          const Divider(height: 1),
-                          ...exEntries.map((e) {
-                            final tattoo = (e['tattoo'] ?? '')
-                                .toString()
-                                .trim()
-                                .toUpperCase();
-                            final animalName = (e['animal_name'] ?? '')
-                                .toString()
-                                .trim();
-                            final breed = (e['breed'] ?? '').toString();
-                            final variety = (e['variety'] ?? '').toString();
-                            final furVariety = (e['fur_variety'] ?? '')
-                                .toString();
-                            final notes = (e['notes'] ?? '').toString();
-                            final scratchedAt = e['scratched_at']?.toString();
-                            final isScratched =
-                                scratchedAt != null && scratchedAt.isNotEmpty;
-
-                            final section = e['show_sections'];
-                            final letter =
-                                (section is Map
-                                        ? (section['letter'] ?? '')
-                                        : '')
-                                    .toString();
-
-                            final titleLeft =
-                                animalName.isNotEmpty && tattoo.isNotEmpty
-                                ? '$animalName • $tattoo'
-                                : animalName.isNotEmpty
-                                ? animalName
-                                : tattoo.isEmpty
-                                ? '(no tattoo)'
-                                : tattoo;
-
-                            final isFur = e['is_fur'] == true;
-
-                            final subtitle = [
-                              if (breed.isNotEmpty) 'Breed: $breed',
-                              if (variety.isNotEmpty) 'Variety: $variety',
-                              if (isFur)
-                                furVariety.isNotEmpty
-                                    ? 'Fur/Wool: $furVariety'
-                                    : 'Fur/Wool',
-                              if (letter.isNotEmpty) 'Show: $letter',
-                              if (isScratched)
-                                'SCRATCHED: ${_dateOnly(scratchedAt)}',
-                              if (notes.isNotEmpty) 'Notes: $notes',
-                            ].join(' • ');
-
-                            return ListTile(
-                              title: Text(
-                                titleLeft,
-                                style: TextStyle(
-                                  decoration: isScratched
-                                      ? TextDecoration.lineThrough
-                                      : null,
-                                ),
-                              ),
-                              subtitle: subtitle.isEmpty
-                                  ? null
-                                  : Text(subtitle),
-                              isThreeLine: subtitle.length > 80,
-                              trailing: PopupMenuButton<String>(
-                                tooltip: AppSession.isSupportMode
-                                    ? 'Actions while viewing as another user'
-                                    : 'Actions',
-                                onSelected: (v) {
-                                  if (v == 'edit') _openEdit(e);
-                                  if (v == 'move') _openMove(e);
-                                  if (v == 'scratch') {
-                                    _toggleScratch(e);
-                                  }
-                                  if (v == 'delete') _deleteEntry(e);
-                                },
-                                itemBuilder: (_) => [
-                                  const PopupMenuItem(
-                                    value: 'edit',
-                                    child: Text('Edit'),
-                                  ),
-                                  const PopupMenuItem(
-                                    value: 'move',
-                                    child: Text('Move Animal'),
-                                  ),
-                                  PopupMenuItem(
-                                    value: 'scratch',
-                                    child: Text(
-                                      isScratched ? 'Un-scratch' : 'Scratch',
-                                    ),
-                                  ),
-                                  const PopupMenuItem(
-                                    value: 'delete',
-                                    child: Text('Remove Entry'),
-                                  ),
-                                ],
-                              ),
-                              onTap: () => _openEdit(e),
-                            );
-                          }),
-                        ],
                       ),
                     );
                   }),
@@ -1100,13 +1111,11 @@ class _AdminEntryManagementScreenState
 }
 
 Widget _themedBottomSheetShell(BuildContext context, {required Widget child}) {
+  final gradientTheme = AppTheme.onGradientTheme(Theme.of(context));
+
   return Container(
     decoration: const BoxDecoration(
-      gradient: LinearGradient(
-        colors: [AppColors.navy, AppColors.navyDark],
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-      ),
+      gradient: AppGradients.page,
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
     child: SafeArea(
@@ -1114,9 +1123,31 @@ Widget _themedBottomSheetShell(BuildContext context, {required Widget child}) {
       child: Container(
         margin: const EdgeInsets.only(top: 8),
         decoration: const BoxDecoration(
-          color: AppColors.bg,
+          color: Colors.transparent,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
+        child: Theme(
+          data: gradientTheme,
+          child: DefaultTextStyle.merge(
+            style: const TextStyle(color: AppColors.headerForeground),
+            child: IconTheme(
+              data: const IconThemeData(color: AppColors.headerForeground),
+              child: child,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+Widget _surfaceTextScope(BuildContext context, {required Widget child}) {
+  return Theme(
+    data: AppTheme.surfaceTheme(Theme.of(context)),
+    child: DefaultTextStyle.merge(
+      style: const TextStyle(color: AppColors.text),
+      child: IconTheme(
+        data: const IconThemeData(color: AppColors.text),
         child: child,
       ),
     ),
@@ -2168,131 +2199,139 @@ class _EditExhibitorSheetState extends State<_EditExhibitorSheet> {
                   ),
                 ),
               ),
-            TextField(
-              controller: _showingName,
-              enabled: !_saving && !widget.readOnly,
-              textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(
-                labelText: 'Showing Name',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _firstName,
+            _surfaceTextScope(
+              context,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextField(
+                    controller: _showingName,
                     enabled: !_saving && !widget.readOnly,
                     textCapitalization: TextCapitalization.words,
                     decoration: const InputDecoration(
-                      labelText: 'First Name',
+                      labelText: 'Showing Name',
                       border: OutlineInputBorder(),
                     ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: TextField(
-                    controller: _lastName,
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _firstName,
+                          enabled: !_saving && !widget.readOnly,
+                          textCapitalization: TextCapitalization.words,
+                          decoration: const InputDecoration(
+                            labelText: 'First Name',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          controller: _lastName,
+                          enabled: !_saving && !widget.readOnly,
+                          textCapitalization: TextCapitalization.words,
+                          decoration: const InputDecoration(
+                            labelText: 'Last Name',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _email,
+                    enabled: !_saving && !widget.readOnly,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'Email',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _phone,
+                    enabled: !_saving && !widget.readOnly,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Phone',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _arbaNumber,
+                    enabled: !_saving && !widget.readOnly,
+                    decoration: const InputDecoration(
+                      labelText: 'ARBA Number',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _addressLine1,
                     enabled: !_saving && !widget.readOnly,
                     textCapitalization: TextCapitalization.words,
                     decoration: const InputDecoration(
-                      labelText: 'Last Name',
+                      labelText: 'Address Line 1 *',
                       border: OutlineInputBorder(),
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _email,
-              enabled: !_saving && !widget.readOnly,
-              keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(
-                labelText: 'Email',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _phone,
-              enabled: !_saving && !widget.readOnly,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
-                labelText: 'Phone',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _arbaNumber,
-              enabled: !_saving && !widget.readOnly,
-              decoration: const InputDecoration(
-                labelText: 'ARBA Number',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _addressLine1,
-              enabled: !_saving && !widget.readOnly,
-              textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(
-                labelText: 'Address Line 1 *',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _addressLine2,
-              enabled: !_saving && !widget.readOnly,
-              textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(
-                labelText: 'Address Line 2',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _city,
-              enabled: !_saving && !widget.readOnly,
-              textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(
-                labelText: 'City *',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: TextField(
-                    controller: _state,
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _addressLine2,
                     enabled: !_saving && !widget.readOnly,
-                    textCapitalization: TextCapitalization.characters,
-                    inputFormatters: [UpperCaseTextFormatter()],
+                    textCapitalization: TextCapitalization.words,
                     decoration: const InputDecoration(
-                      labelText: 'State *',
+                      labelText: 'Address Line 2',
                       border: OutlineInputBorder(),
                     ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  flex: 3,
-                  child: TextField(
-                    controller: _zip,
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _city,
                     enabled: !_saving && !widget.readOnly,
+                    textCapitalization: TextCapitalization.words,
                     decoration: const InputDecoration(
-                      labelText: 'ZIP Code *',
+                      labelText: 'City *',
                       border: OutlineInputBorder(),
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        flex: 2,
+                        child: TextField(
+                          controller: _state,
+                          enabled: !_saving && !widget.readOnly,
+                          textCapitalization: TextCapitalization.characters,
+                          inputFormatters: [UpperCaseTextFormatter()],
+                          decoration: const InputDecoration(
+                            labelText: 'State *',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        flex: 3,
+                        child: TextField(
+                          controller: _zip,
+                          enabled: !_saving && !widget.readOnly,
+                          decoration: const InputDecoration(
+                            labelText: 'ZIP Code *',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 14),
             if (widget.readOnly)
@@ -3076,16 +3115,22 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.black.withValues(alpha: .08)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Selected Exhibitor Contact',
-            style: TextStyle(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 8),
-          ...rows,
-        ],
+      child: _surfaceTextScope(
+        context,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Selected Exhibitor Contact',
+              style: TextStyle(
+                color: AppColors.text,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            ...rows,
+          ],
+        ),
       ),
     );
   }
@@ -3162,16 +3207,22 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.black.withValues(alpha: .08)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Selected Animal Details',
-            style: TextStyle(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 8),
-          ...rows,
-        ],
+      child: _surfaceTextScope(
+        context,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Selected Animal Details',
+              style: TextStyle(
+                color: AppColors.text,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            ...rows,
+          ],
+        ),
       ),
     );
   }
@@ -4057,52 +4108,55 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: Colors.black12),
                     ),
-                    child: Column(
-                      children: [
-                        ...widget.sections.map((s) {
-                          final id = s['id'].toString();
-                          final checked = _selectedSectionIds.contains(id);
+                    child: _surfaceTextScope(
+                      context,
+                      child: Column(
+                        children: [
+                          ...widget.sections.map((s) {
+                            final id = s['id'].toString();
+                            final checked = _selectedSectionIds.contains(id);
 
-                          return CheckboxListTile(
-                            contentPadding: EdgeInsets.zero,
-                            dense: true,
-                            value: checked,
-                            title: Text(
-                              (s['display_name'] ?? s['letter']).toString(),
-                            ),
-                            onChanged: (_saving || AppSession.isSupportMode)
-                                ? null
-                                : (v) {
-                                    setState(() {
-                                      if (v == true) {
-                                        _selectedSectionIds.add(id);
-                                        _sectionId = id;
-                                      } else {
-                                        _selectedSectionIds.remove(id);
-                                        if (_sectionId == id) {
-                                          _sectionId =
-                                              _selectedSectionIds.isEmpty
-                                              ? null
-                                              : _selectedSectionIds.first;
+                            return CheckboxListTile(
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                              value: checked,
+                              title: Text(
+                                (s['display_name'] ?? s['letter']).toString(),
+                              ),
+                              onChanged: (_saving || AppSession.isSupportMode)
+                                  ? null
+                                  : (v) {
+                                      setState(() {
+                                        if (v == true) {
+                                          _selectedSectionIds.add(id);
+                                          _sectionId = id;
+                                        } else {
+                                          _selectedSectionIds.remove(id);
+                                          if (_sectionId == id) {
+                                            _sectionId =
+                                                _selectedSectionIds.isEmpty
+                                                ? null
+                                                : _selectedSectionIds.first;
+                                          }
                                         }
-                                      }
-                                      _msg = null;
-                                    });
-                                  },
-                          );
-                        }),
-                        if (_selectedSectionIds.isEmpty)
-                          const Align(
-                            alignment: Alignment.centerLeft,
-                            child: Padding(
-                              padding: EdgeInsets.only(top: 6),
-                              child: Text(
-                                'Select at least one section.',
-                                style: TextStyle(color: Colors.red),
+                                        _msg = null;
+                                      });
+                                    },
+                            );
+                          }),
+                          if (_selectedSectionIds.isEmpty)
+                            const Align(
+                              alignment: Alignment.centerLeft,
+                              child: Padding(
+                                padding: EdgeInsets.only(top: 6),
+                                child: Text(
+                                  'Select at least one section.',
+                                  style: TextStyle(color: Colors.red),
+                                ),
                               ),
                             ),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -4128,144 +4182,170 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                           },
                   ),
                   if (_addNewExhibitor) ...[
-                    TextField(
-                      controller: _showingName,
-                      onChanged: (value) {
-                        _showingNameWasManuallyEdited = value.trim().isNotEmpty;
+                    _surfaceTextScope(
+                      context,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          TextField(
+                            controller: _showingName,
+                            decoration: const InputDecoration(
+                              labelText: 'Showing Name',
+                              border: OutlineInputBorder(),
+                            ),
+                            onChanged: (value) {
+                              _showingNameWasManuallyEdited = value
+                                  .trim()
+                                  .isNotEmpty;
 
-                        if (!_showingNameWasManuallyEdited) {
-                          _autoFillShowingName();
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _firstName,
+                              if (!_showingNameWasManuallyEdited) {
+                                _autoFillShowingName();
+                              }
+                            },
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: _firstName,
+                                  enabled:
+                                      !_saving && !AppSession.isSupportMode,
+                                  decoration: const InputDecoration(
+                                    labelText: 'First Name',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: TextField(
+                                  controller: _lastName,
+                                  enabled:
+                                      !_saving && !AppSession.isSupportMode,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Last Name',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          TextField(
+                            controller: _email,
                             enabled: !_saving && !AppSession.isSupportMode,
                             decoration: const InputDecoration(
-                              labelText: 'First Name',
+                              labelText: 'Email',
                               border: OutlineInputBorder(),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: TextField(
-                            controller: _lastName,
+                          const SizedBox(height: 10),
+                          TextField(
+                            controller: _phone,
                             enabled: !_saving && !AppSession.isSupportMode,
                             decoration: const InputDecoration(
-                              labelText: 'Last Name',
+                              labelText: 'Phone',
                               border: OutlineInputBorder(),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _email,
-                      enabled: !_saving && !AppSession.isSupportMode,
-                      decoration: const InputDecoration(
-                        labelText: 'Email',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _phone,
-                      enabled: !_saving && !AppSession.isSupportMode,
-                      decoration: const InputDecoration(
-                        labelText: 'Phone',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    TextField(
-                      controller: _arbaNumber,
-                      enabled: !_saving && !AppSession.isSupportMode,
-                      decoration: const InputDecoration(
-                        labelText: 'ARBA Number',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _addressLine1,
-                      enabled: !_saving && !AppSession.isSupportMode,
-                      textCapitalization: TextCapitalization.words,
-                      decoration: const InputDecoration(
-                        labelText: 'Address Line 1 *',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _addressLine2,
-                      enabled: !_saving && !AppSession.isSupportMode,
-                      textCapitalization: TextCapitalization.words,
-                      decoration: const InputDecoration(
-                        labelText: 'Address Line 2',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _city,
-                      enabled: !_saving && !AppSession.isSupportMode,
-                      textCapitalization: TextCapitalization.words,
-                      decoration: const InputDecoration(
-                        labelText: 'City *',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          flex: 2,
-                          child: TextField(
-                            controller: _state,
+                          const SizedBox(height: 10),
+                          TextField(
+                            controller: _arbaNumber,
                             enabled: !_saving && !AppSession.isSupportMode,
-                            textCapitalization: TextCapitalization.characters,
-                            inputFormatters: [UpperCaseTextFormatter()],
                             decoration: const InputDecoration(
-                              labelText: 'State *',
+                              labelText: 'ARBA Number',
                               border: OutlineInputBorder(),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          flex: 3,
-                          child: TextField(
-                            controller: _zip,
+                          const SizedBox(height: 10),
+                          TextField(
+                            controller: _addressLine1,
                             enabled: !_saving && !AppSession.isSupportMode,
+                            textCapitalization: TextCapitalization.words,
                             decoration: const InputDecoration(
-                              labelText: 'ZIP Code *',
+                              labelText: 'Address Line 1 *',
                               border: OutlineInputBorder(),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    const SizedBox(height: 10),
-                    DropdownButtonFormField<String>(
-                      initialValue: _exhibitorType,
-                      decoration: const InputDecoration(
-                        labelText: 'Exhibitor Type',
-                        border: OutlineInputBorder(),
+                          const SizedBox(height: 10),
+                          TextField(
+                            controller: _addressLine2,
+                            enabled: !_saving && !AppSession.isSupportMode,
+                            textCapitalization: TextCapitalization.words,
+                            decoration: const InputDecoration(
+                              labelText: 'Address Line 2',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          TextField(
+                            controller: _city,
+                            enabled: !_saving && !AppSession.isSupportMode,
+                            textCapitalization: TextCapitalization.words,
+                            decoration: const InputDecoration(
+                              labelText: 'City *',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                flex: 2,
+                                child: TextField(
+                                  controller: _state,
+                                  enabled:
+                                      !_saving && !AppSession.isSupportMode,
+                                  textCapitalization:
+                                      TextCapitalization.characters,
+                                  inputFormatters: [UpperCaseTextFormatter()],
+                                  decoration: const InputDecoration(
+                                    labelText: 'State *',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                flex: 3,
+                                child: TextField(
+                                  controller: _zip,
+                                  enabled:
+                                      !_saving && !AppSession.isSupportMode,
+                                  decoration: const InputDecoration(
+                                    labelText: 'ZIP Code *',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          DropdownButtonFormField<String>(
+                            initialValue: _exhibitorType,
+                            decoration: const InputDecoration(
+                              labelText: 'Exhibitor Type',
+                              border: OutlineInputBorder(),
+                            ),
+                            items: const [
+                              DropdownMenuItem(
+                                value: 'adult',
+                                child: Text('Open'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'youth',
+                                child: Text('Youth'),
+                              ),
+                            ],
+                            onChanged: (_saving || AppSession.isSupportMode)
+                                ? null
+                                : (v) => setState(
+                                    () => _exhibitorType = v ?? 'adult',
+                                  ),
+                          ),
+                        ],
                       ),
-                      items: const [
-                        DropdownMenuItem(value: 'adult', child: Text('Open')),
-                        DropdownMenuItem(value: 'youth', child: Text('Youth')),
-                      ],
-                      onChanged: (_saving || AppSession.isSupportMode)
-                          ? null
-                          : (v) =>
-                                setState(() => _exhibitorType = v ?? 'adult'),
                     ),
                   ] else ...[
                     RawAutocomplete<Map<String, dynamic>>(
@@ -4316,6 +4396,11 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                                     textEditingController.text.trim().isEmpty
                                     ? 'Start typing to search exhibitors'
                                     : '${_filteredExhibitors(textEditingController.text).length} match${_filteredExhibitors(textEditingController.text).length == 1 ? '' : 'es'} found',
+                                helperStyle: TextStyle(
+                                  color: AppColors.headerForeground.withValues(
+                                    alpha: .82,
+                                  ),
+                                ),
                                 border: const OutlineInputBorder(),
                               ),
                               onChanged: (value) {
@@ -4342,45 +4427,48 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                           child: Material(
                             elevation: 6,
                             borderRadius: BorderRadius.circular(12),
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(
-                                maxHeight: 280,
-                                maxWidth: 620,
-                              ),
-                              child: ListView.separated(
-                                padding: EdgeInsets.zero,
-                                shrinkWrap: true,
-                                itemCount: optionList.length,
-                                separatorBuilder: (_, _) =>
-                                    const Divider(height: 1),
-                                itemBuilder: (context, index) {
-                                  final option = optionList[index];
-                                  final email = (option['email'] ?? '')
-                                      .toString()
-                                      .trim();
-                                  final phone = (option['phone'] ?? '')
-                                      .toString()
-                                      .trim();
-                                  final subtitle = [
-                                    email,
-                                    phone,
-                                  ].where((s) => s.isNotEmpty).join(' • ');
+                            child: _surfaceTextScope(
+                              context,
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  maxHeight: 280,
+                                  maxWidth: 620,
+                                ),
+                                child: ListView.separated(
+                                  padding: EdgeInsets.zero,
+                                  shrinkWrap: true,
+                                  itemCount: optionList.length,
+                                  separatorBuilder: (_, _) =>
+                                      const Divider(height: 1),
+                                  itemBuilder: (context, index) {
+                                    final option = optionList[index];
+                                    final email = (option['email'] ?? '')
+                                        .toString()
+                                        .trim();
+                                    final phone = (option['phone'] ?? '')
+                                        .toString()
+                                        .trim();
+                                    final subtitle = [
+                                      email,
+                                      phone,
+                                    ].where((s) => s.isNotEmpty).join(' • ');
 
-                                  return ListTile(
-                                    dense: true,
-                                    title: Text(
-                                      _exhibitorLabel(option),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    subtitle: subtitle.isEmpty
-                                        ? null
-                                        : Text(
-                                            subtitle,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                    onTap: () => onSelected(option),
-                                  );
-                                },
+                                    return ListTile(
+                                      dense: true,
+                                      title: Text(
+                                        _exhibitorLabel(option),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      subtitle: subtitle.isEmpty
+                                          ? null
+                                          : Text(
+                                              subtitle,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                      onTap: () => onSelected(option),
+                                    );
+                                  },
+                                ),
                               ),
                             ),
                           ),
@@ -4611,11 +4699,16 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     initialValue: _classValue,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Class / Age Override',
                       helperText:
                           'Use this when DOB is missing or when the show secretary needs to override the calculated class.',
-                      border: OutlineInputBorder(),
+                      helperStyle: TextStyle(
+                        color: AppColors.headerForeground.withValues(
+                          alpha: .82,
+                        ),
+                      ),
+                      border: const OutlineInputBorder(),
                     ),
                     items: const [
                       DropdownMenuItem(value: 'Senior', child: Text('Senior')),

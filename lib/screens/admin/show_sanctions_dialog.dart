@@ -1335,11 +1335,7 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
         ),
         child: Container(
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [AppColors.navy, AppColors.navyDark],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
+            gradient: AppGradients.page,
             borderRadius: BorderRadius.circular(24),
           ),
           child: Column(
@@ -1349,7 +1345,7 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                 child: Row(
                   children: [
                     Image.asset(
-                      'assets/images/ringmaster_show_logo.png',
+                      'assets/images/RingMaster_One_Show_Transparent.png',
                       height: 38,
                     ),
                     const SizedBox(width: 12),
@@ -1381,175 +1377,194 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                       top: Radius.circular(24),
                     ),
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                'Sections are pulled from this show only and sorted Open first, Youth last.',
-                                style: Theme.of(context).textTheme.bodyMedium,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            OutlinedButton.icon(
-                              onPressed: _saving
-                                  ? null
-                                  : () async {
-                                      await Navigator.of(context).push(
-                                        MaterialPageRoute(
-                                          builder: (_) =>
-                                              SanctionDirectoryScreen(
-                                                showId: widget.showId,
-                                              ),
-                                        ),
-                                      );
-
-                                      if (!mounted) return;
-                                      setState(() {
-                                        _loading = true;
-                                      });
-                                      await _loadAll();
-                                    },
-                              icon: const Icon(Icons.open_in_new),
-                              label: const Text('Open Sanction Directory'),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        _buildTabs(),
-                        const SizedBox(height: 8),
-                        _buildStatusLegend(),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _searchController,
-                          decoration: InputDecoration(
-                            prefixIcon: const Icon(Icons.search),
-                            hintText: 'Search clubs, breeds, or state...',
-                            filled: true,
-                            fillColor: Colors.white,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(
-                                color: Colors.grey.shade300,
-                              ),
-                            ),
-                            isDense: true,
-                          ),
-                          onChanged: (v) {
-                            setState(() {
-                              _searchText = v;
-                            });
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        if (_isReadOnly) ...[
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.amber.shade100,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.amber.shade300),
-                            ),
-                            child: Text(
-                              _isFinalized
-                                  ? 'This show has been finalized. Sanction numbers are view-only.'
-                                  : 'This show is locked. Sanction numbers are view-only.',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                        ],
-                        if (_msg != null) ...[
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: savedMessage
-                                  ? Colors.green.withValues(alpha: .08)
-                                  : Colors.red.withValues(alpha: .08),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: savedMessage
-                                    ? Colors.green.withValues(alpha: .25)
-                                    : Colors.red.withValues(alpha: .25),
-                              ),
-                            ),
-                            child: Text(
-                              _msg!,
-                              style: TextStyle(
-                                color: savedMessage ? Colors.green : Colors.red,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                        ],
-                        Expanded(
-                          child: _loading
-                              ? const Center(child: CircularProgressIndicator())
-                              : Container(
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(16),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withValues(
-                                          alpha: .05,
-                                        ),
-                                        blurRadius: 10,
-                                      ),
-                                    ],
-                                  ),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(16),
-                                    child: _buildSpreadsheet(),
+                  child: AppTheme.gradientTextScope(
+                    context,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Sections are pulled from this show only and sorted Open first, Youth last.',
+                                  style: TextStyle(
+                                    color: AppColors.headerForeground
+                                        .withValues(alpha: .9),
                                   ),
                                 ),
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton(
+                              ),
+                              const SizedBox(width: 12),
+                              OutlinedButton.icon(
                                 onPressed: _saving
                                     ? null
-                                    : () => Navigator.pop(context),
-                                child: const Text('Close'),
+                                    : () async {
+                                        await Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (_) =>
+                                                SanctionDirectoryScreen(
+                                                  showId: widget.showId,
+                                                ),
+                                          ),
+                                        );
+
+                                        if (!mounted) return;
+                                        setState(() {
+                                          _loading = true;
+                                        });
+                                        await _loadAll();
+                                      },
+                                icon: const Icon(Icons.open_in_new),
+                                label: const Text('Open Sanction Directory'),
                               ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: FilledButton(
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: AppColors.primaryButton,
-                                  foregroundColor: AppColors.primaryButtonText,
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 16,
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          _buildTabs(),
+                          const SizedBox(height: 8),
+                          _buildStatusLegend(),
+                          const SizedBox(height: 12),
+                          AppTheme.surfaceTextScope(
+                            context,
+                            child: TextField(
+                              controller: _searchController,
+                              decoration: InputDecoration(
+                                prefixIcon: const Icon(Icons.search),
+                                hintText: 'Search clubs, breeds, or state...',
+                                filled: true,
+                                fillColor: Colors.white,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(
+                                    color: Colors.grey.shade300,
                                   ),
                                 ),
-                                onPressed: (_saving || _isReadOnly)
-                                    ? null
-                                    : _saveAll,
-                                child: Text(
-                                  _saving
-                                      ? 'Saving…'
-                                      : _isReadOnly
-                                      ? 'View Only'
-                                      : 'Save',
+                                isDense: true,
+                              ),
+                              onChanged: (v) {
+                                setState(() {
+                                  _searchText = v;
+                                });
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          if (_isReadOnly) ...[
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.amber.shade100,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: Colors.amber.shade300,
+                                ),
+                              ),
+                              child: Text(
+                                _isFinalized
+                                    ? 'This show has been finalized. Sanction numbers are view-only.'
+                                    : 'This show is locked. Sanction numbers are view-only.',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                             ),
+                            const SizedBox(height: 12),
                           ],
-                        ),
-                      ],
+                          if (_msg != null) ...[
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: savedMessage
+                                    ? Colors.green.withValues(alpha: .08)
+                                    : Colors.red.withValues(alpha: .08),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: savedMessage
+                                      ? Colors.green.withValues(alpha: .25)
+                                      : Colors.red.withValues(alpha: .25),
+                                ),
+                              ),
+                              child: Text(
+                                _msg!,
+                                style: TextStyle(
+                                  color: savedMessage
+                                      ? Colors.green
+                                      : Colors.red,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+                          Expanded(
+                            child: _loading
+                                ? const Center(
+                                    child: CircularProgressIndicator(),
+                                  )
+                                : AppTheme.surfaceTextScope(
+                                    context,
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(16),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withValues(
+                                              alpha: .05,
+                                            ),
+                                            blurRadius: 10,
+                                          ),
+                                        ],
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(16),
+                                        child: _buildSpreadsheet(),
+                                      ),
+                                    ),
+                                  ),
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: _saving
+                                      ? null
+                                      : () => Navigator.pop(context),
+                                  child: const Text('Close'),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: FilledButton(
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: AppColors.primaryButton,
+                                    foregroundColor:
+                                        AppColors.primaryButtonText,
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 16,
+                                    ),
+                                  ),
+                                  onPressed: (_saving || _isReadOnly)
+                                      ? null
+                                      : _saveAll,
+                                  child: Text(
+                                    _saving
+                                        ? 'Saving…'
+                                        : _isReadOnly
+                                        ? 'View Only'
+                                        : 'Save',
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),

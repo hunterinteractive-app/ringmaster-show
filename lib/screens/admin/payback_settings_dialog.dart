@@ -3,13 +3,12 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../theme/app_theme.dart';
+
 class PaybackSettingsDialog extends StatefulWidget {
   final String showId;
 
-  const PaybackSettingsDialog({
-    super.key,
-    required this.showId,
-  });
+  const PaybackSettingsDialog({super.key, required this.showId});
 
   @override
   State<PaybackSettingsDialog> createState() => _PaybackSettingsDialogState();
@@ -52,9 +51,7 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
     try {
       final result = await _supabase.rpc(
         'get_show_payback_setup',
-        params: {
-          'p_show_id': widget.showId,
-        },
+        params: {'p_show_id': widget.showId},
       );
 
       final json = Map<String, dynamic>.from(result as Map);
@@ -147,8 +144,9 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
             final maxCompare = aMax.compareTo(bMax);
             if (maxCompare != 0) return maxCompare;
 
-            return _speciesSortRank(a.appliesToSpecies)
-                .compareTo(_speciesSortRank(b.appliesToSpecies));
+            return _speciesSortRank(
+              a.appliesToSpecies,
+            ).compareTo(_speciesSortRank(b.appliesToSpecies));
           });
       }
 
@@ -161,15 +159,18 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
         specialMap[sectionId]!.add(_SpecialMoneyRow.fromJson(rule));
       }
 
-
       if (!mounted) return;
 
       setState(() {
         _sections = sections;
-        final firstRealSection = sections.where((s) => s.id.isNotEmpty).toList();
-        final preferredExists = preferredSectionId != null &&
+        final firstRealSection = sections
+            .where((s) => s.id.isNotEmpty)
+            .toList();
+        final preferredExists =
+            preferredSectionId != null &&
             sections.any((s) => s.id == preferredSectionId);
-        final currentExists = _selectedSectionId != null &&
+        final currentExists =
+            _selectedSectionId != null &&
             sections.any((s) => s.id == _selectedSectionId);
 
         if (preferredExists) {
@@ -206,9 +207,7 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
     _classRows
       ..clear()
       ..addAll(
-        _normalizeClassPaybackRows(classSource)
-            .map((e) => e.copy())
-            .toList(),
+        _normalizeClassPaybackRows(classSource).map((e) => e.copy()).toList(),
       );
 
     final savedSpecialRows = _specialRowsBySection[_sectionKey];
@@ -223,11 +222,11 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
   }
 
   void _persistCurrentSectionRows() {
-    _classRowsBySection[_sectionKey] =
-        _classRows.map((e) => e.copy()).toList();
+    _classRowsBySection[_sectionKey] = _classRows.map((e) => e.copy()).toList();
 
-    _specialRowsBySection[_sectionKey] =
-        _specialRows.map((e) => e.copy()).toList();
+    _specialRowsBySection[_sectionKey] = _specialRows
+        .map((e) => e.copy())
+        .toList();
   }
 
   List<_ClassPaybackRow> _normalizeClassPaybackRows(
@@ -237,13 +236,15 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
     final byRange = <String, _ClassPaybackRow>{};
 
     for (final row in defaults) {
-      final key = '${row.appliesToSpecies ?? 'both'}:${row.minShown}:${row.maxShown ?? 'null'}';
+      final key =
+          '${row.appliesToSpecies ?? 'both'}:${row.minShown}:${row.maxShown ?? 'null'}';
       byRange[key] = row.copy();
     }
 
     for (final sourceRow in source) {
       for (final row in _expandClassPaybackRowForDisplay(sourceRow)) {
-        final key = '${row.appliesToSpecies ?? 'both'}:${row.minShown}:${row.maxShown ?? 'null'}';
+        final key =
+            '${row.appliesToSpecies ?? 'both'}:${row.minShown}:${row.maxShown ?? 'null'}';
         byRange[key] = row.copy();
       }
     }
@@ -258,8 +259,9 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
         final maxCompare = aMax.compareTo(bMax);
         if (maxCompare != 0) return maxCompare;
 
-        return _speciesSortRank(a.appliesToSpecies)
-            .compareTo(_speciesSortRank(b.appliesToSpecies));
+        return _speciesSortRank(
+          a.appliesToSpecies,
+        ).compareTo(_speciesSortRank(b.appliesToSpecies));
       });
 
     return rows;
@@ -388,9 +390,9 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
 
       setState(() => _saving = false);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Payback settings copied.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Payback settings copied.')));
     } catch (e) {
       if (!mounted) return;
 
@@ -412,8 +414,6 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
     });
   }
 
-
-
   String _moneyFromCents(int cents) {
     return (cents / 100).toStringAsFixed(2);
   }
@@ -426,51 +426,78 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
     return (parsed * 100).round();
   }
 
+  TextStyle get _onPurpleHeaderStyle => const TextStyle(
+    color: AppColors.headerForeground,
+    fontWeight: FontWeight.w800,
+  );
+
+  TextStyle get _onPurpleBodyStyle => TextStyle(
+    color: AppColors.headerForeground.withValues(alpha: .9),
+    fontWeight: FontWeight.w600,
+  );
+
+  Widget _surfaceTextScope({required Widget child}) {
+    return AppTheme.surfaceTextScope(context, child: child);
+  }
+
+  DataColumn _onPurpleDataColumn(String label) {
+    return DataColumn(label: Text(label, style: _onPurpleHeaderStyle));
+  }
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Payback Settings'),
-      content: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.90,
-          maxHeight: MediaQuery.of(context).size.height * 0.78,
-        ),
-        child: SizedBox(
-          width: 980,
-          height: 680,
-          child: _loading
-              ? const Center(child: CircularProgressIndicator())
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildSectionSelector(),
-                    const SizedBox(height: 16),
-                    Expanded(
-                      child: DefaultTabController(
-                        length: 2,
-                        child: Column(
-                          children: [
-                            const TabBar(
-                              tabs: [
-                                Tab(text: 'Class Payback Schedule'),
-                                Tab(text: 'Special Money'),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            Expanded(
-                              child: TabBarView(
-                                children: [
-                                  _buildClassScheduleTab(),
-                                  _buildSpecialMoneyTab(),
+      content: AppTheme.gradientTextScope(
+        context,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.of(context).size.width * 0.90,
+            maxHeight: MediaQuery.of(context).size.height * 0.78,
+          ),
+          child: SizedBox(
+            width: 980,
+            height: 680,
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildSectionSelector(),
+                      const SizedBox(height: 16),
+                      Expanded(
+                        child: DefaultTabController(
+                          length: 2,
+                          child: Column(
+                            children: [
+                              TabBar(
+                                labelColor: AppColors.headerForeground,
+                                unselectedLabelColor: AppColors.headerForeground
+                                    .withValues(alpha: .72),
+                                indicatorColor: AppColors.headerForeground,
+                                dividerColor: AppColors.headerForeground
+                                    .withValues(alpha: .3),
+                                tabs: const [
+                                  Tab(text: 'Class Payback Schedule'),
+                                  Tab(text: 'Special Money'),
                                 ],
                               ),
-                            ),
-                          ],
+                              const SizedBox(height: 12),
+                              Expanded(
+                                child: TabBarView(
+                                  children: [
+                                    _buildClassScheduleTab(),
+                                    _buildSpecialMoneyTab(),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+          ),
         ),
       ),
       actions: [
@@ -494,29 +521,35 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
   }
 
   Widget _buildSectionSelector() {
-
     return Row(
       children: [
         Expanded(
-          child: DropdownButtonFormField<String>(
-            value: _selectedSectionId ?? '',
-            decoration: const InputDecoration(
-              labelText: 'Show Letter',
-              border: OutlineInputBorder(),
-            ),
-            items: _sections
-                .map(
-                  (s) => DropdownMenuItem<String>(
-                    value: s.id,
-                    child: Text(s.label),
-                  ),
-                )
-                .toList(),
-            onChanged: _saving
-                ? null
-                : (value) => _changeSection(
+          child: _surfaceTextScope(
+            child: DropdownButtonFormField<String>(
+              initialValue: _selectedSectionId ?? '',
+              dropdownColor: AppColors.surface,
+              style: const TextStyle(
+                color: AppColors.text,
+                fontWeight: FontWeight.w700,
+              ),
+              decoration: const InputDecoration(
+                labelText: 'Show Letter',
+                border: OutlineInputBorder(),
+              ),
+              items: _sections
+                  .map(
+                    (s) => DropdownMenuItem<String>(
+                      value: s.id,
+                      child: Text(s.label),
+                    ),
+                  )
+                  .toList(),
+              onChanged: _saving
+                  ? null
+                  : (value) => _changeSection(
                       value == null || value.isEmpty ? null : value,
                     ),
+            ),
           ),
         ),
         const SizedBox(width: 12),
@@ -571,10 +604,10 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
     final maxCompare = aMax.compareTo(bMax);
     if (maxCompare != 0) return maxCompare;
 
-    return _speciesSortRank(a.appliesToSpecies)
-        .compareTo(_speciesSortRank(b.appliesToSpecies));
+    return _speciesSortRank(
+      a.appliesToSpecies,
+    ).compareTo(_speciesSortRank(b.appliesToSpecies));
   }
-
 
   int _speciesSortRank(String? species) {
     switch (species) {
@@ -610,9 +643,7 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
       }
 
       for (final row in _classRows) {
-        if (row.maxShown == null) {
-          row.maxShown = row.minShown;
-        }
+        row.maxShown ??= row.minShown;
       }
 
       for (final species in const ['rabbit', 'cavy']) {
@@ -683,8 +714,9 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Fill the payback amounts for each placement. Rabbit and cavy schedules can be different. The 6+ row applies when six or more are shown in the class.',
+          style: _onPurpleBodyStyle,
         ),
         const SizedBox(height: 8),
         Align(
@@ -708,13 +740,12 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
                 dataRowMaxHeight: 66,
                 columnSpacing: 8,
                 columns: [
-                  const DataColumn(label: Text('Species')),
-                  const DataColumn(label: Text('Shown')),
+                  _onPurpleDataColumn('Species'),
+                  _onPurpleDataColumn('Shown'),
                   ...List.generate(
                     placementColumnCount,
-                    (index) => DataColumn(
-                      label: Text(_placementHeaderLabel(index + 1)),
-                    ),
+                    (index) =>
+                        _onPurpleDataColumn(_placementHeaderLabel(index + 1)),
                   ),
                 ],
                 rows: rowsForDisplay.map((row) {
@@ -723,41 +754,56 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
                       DataCell(
                         SizedBox(
                           width: 112,
-                          child: DropdownButtonFormField<String>(
-                            value: row.appliesToSpecies == 'cavy'
-                                ? 'cavy'
-                                : 'rabbit',
-                            isExpanded: true,
-                            decoration: const InputDecoration(
-                              border: OutlineInputBorder(),
-                              isDense: true,
-                              contentPadding: EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 8,
+                          child: _surfaceTextScope(
+                            child: DropdownButtonFormField<String>(
+                              initialValue: row.appliesToSpecies == 'cavy'
+                                  ? 'cavy'
+                                  : 'rabbit',
+                              dropdownColor: AppColors.surface,
+                              style: const TextStyle(
+                                color: AppColors.text,
+                                fontWeight: FontWeight.w700,
                               ),
+                              isExpanded: true,
+                              decoration: const InputDecoration(
+                                border: OutlineInputBorder(),
+                                isDense: true,
+                                contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 8,
+                                ),
+                              ),
+                              items: const [
+                                DropdownMenuItem<String>(
+                                  value: 'rabbit',
+                                  child: Text(
+                                    'Rabbit',
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                DropdownMenuItem<String>(
+                                  value: 'cavy',
+                                  child: Text(
+                                    'Cavy',
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                              onChanged: (value) {
+                                if (value == null) return;
+                                setState(() {
+                                  if (_classRows.isEmpty) {
+                                    _classRows.addAll(
+                                      _defaultClassPaybackRows().map(
+                                        (e) => e.copy(),
+                                      ),
+                                    );
+                                  }
+                                  row.appliesToSpecies = value;
+                                  _ensureClassCounterpartRow(row);
+                                });
+                              },
                             ),
-                            items: const [
-                              DropdownMenuItem<String>(
-                                value: 'rabbit',
-                                child: Text('Rabbit', overflow: TextOverflow.ellipsis),
-                              ),
-                              DropdownMenuItem<String>(
-                                value: 'cavy',
-                                child: Text('Cavy', overflow: TextOverflow.ellipsis),
-                              ),
-                            ],
-                            onChanged: (value) {
-                              if (value == null) return;
-                              setState(() {
-                                if (_classRows.isEmpty) {
-                                  _classRows.addAll(
-                                    _defaultClassPaybackRows().map((e) => e.copy()),
-                                  );
-                                }
-                                row.appliesToSpecies = value;
-                                _ensureClassCounterpartRow(row);
-                              });
-                            },
                           ),
                         ),
                       ),
@@ -768,9 +814,9 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
                             row.maxShown == null
                                 ? '${row.minShown}+'
                                 : row.minShown == row.maxShown
-                                    ? row.minShown.toString()
-                                    : '${row.minShown}-${row.maxShown}',
-                            style: const TextStyle(fontWeight: FontWeight.w700),
+                                ? row.minShown.toString()
+                                : '${row.minShown}-${row.maxShown}',
+                            style: _onPurpleBodyStyle,
                           ),
                         ),
                       ),
@@ -781,40 +827,46 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
                         return DataCell(
                           SizedBox(
                             width: 78,
-                            child: TextFormField(
-                              key: ValueKey(
-                                'class-${row.appliesToSpecies ?? 'both'}-${row.minShown}-${row.maxShown}-$placement-${row.amountsByPlacement[placement] ?? 0}',
-                              ),
-                              enabled: enabled,
-                              initialValue: enabled
-                                  ? _moneyFromCents(
-                                      row.amountsByPlacement[placement] ?? 0,
-                                    )
-                                  : '',
-                              decoration: InputDecoration(
-                                prefixText: '\$',
-                                hintText: enabled ? '0.00' : '—',
-                                border: const OutlineInputBorder(),
-                                isDense: true,
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 10,
+                            child: _surfaceTextScope(
+                              child: TextFormField(
+                                key: ValueKey(
+                                  'class-${row.appliesToSpecies ?? 'both'}-${row.minShown}-${row.maxShown}-$placement-${row.amountsByPlacement[placement] ?? 0}',
                                 ),
+                                enabled: enabled,
+                                initialValue: enabled
+                                    ? _moneyFromCents(
+                                        row.amountsByPlacement[placement] ?? 0,
+                                      )
+                                    : '',
+                                style: const TextStyle(color: AppColors.text),
+                                decoration: InputDecoration(
+                                  prefixText: '\$',
+                                  hintText: enabled ? '0.00' : '—',
+                                  border: const OutlineInputBorder(),
+                                  isDense: true,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 10,
+                                  ),
+                                ),
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
+                                onChanged: (value) {
+                                  if (_classRows.isEmpty) {
+                                    setState(() {
+                                      _classRows.addAll(
+                                        _defaultClassPaybackRows().map(
+                                          (e) => e.copy(),
+                                        ),
+                                      );
+                                    });
+                                  }
+                                  row.amountsByPlacement[placement] =
+                                      _centsFromMoney(value);
+                                },
                               ),
-                              keyboardType: const TextInputType.numberWithOptions(
-                                decimal: true,
-                              ),
-                              onChanged: (value) {
-                                if (_classRows.isEmpty) {
-                                  setState(() {
-                                    _classRows.addAll(
-                                      _defaultClassPaybackRows().map((e) => e.copy()),
-                                    );
-                                  });
-                                }
-                                row.amountsByPlacement[placement] =
-                                    _centsFromMoney(value);
-                              },
                             ),
                           ),
                         );
@@ -831,13 +883,16 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
   }
 
   Widget _buildSpecialMoneyTab() {
-    final rows = _specialRows.isEmpty ? _defaultSpecialMoneyRows() : _specialRows;
+    final rows = _specialRows.isEmpty
+        ? _defaultSpecialMoneyRows()
+        : _specialRows;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Fill the special money amounts for each award. These are saved by the selected show letter above.',
+          style: _onPurpleBodyStyle,
         ),
         const SizedBox(height: 12),
         Expanded(
@@ -849,13 +904,13 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
                 dataRowMinHeight: 68,
                 dataRowMaxHeight: 78,
                 columnSpacing: 12,
-                columns: const [
-                  DataColumn(label: Text('Award')),
-                  DataColumn(label: Text('Label')),
-                  DataColumn(label: Text('Species')),
-                  DataColumn(label: Text('Amount')),
-                  DataColumn(label: Text('Enabled')),
-                  DataColumn(label: Text('Remove')),
+                columns: [
+                  _onPurpleDataColumn('Award'),
+                  _onPurpleDataColumn('Label'),
+                  _onPurpleDataColumn('Species'),
+                  _onPurpleDataColumn('Amount'),
+                  _onPurpleDataColumn('Enabled'),
+                  _onPurpleDataColumn('Remove'),
                 ],
                 rows: rows.asMap().entries.map((entry) {
                   final index = entry.key;
@@ -866,100 +921,121 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
                       DataCell(
                         SizedBox(
                           width: 180,
-                          child: TextFormField(
-                            key: ValueKey('special-code-$index-${row.awardCode}'),
-                            initialValue: row.awardCode,
-                            enabled: !row.isBuiltIn,
-                            decoration: const InputDecoration(
-                              hintText: 'BOB',
-                              border: OutlineInputBorder(),
-                              isDense: true,
+                          child: _surfaceTextScope(
+                            child: TextFormField(
+                              key: ValueKey(
+                                'special-code-$index-${row.awardCode}',
+                              ),
+                              initialValue: row.awardCode,
+                              enabled: !row.isBuiltIn,
+                              style: const TextStyle(color: AppColors.text),
+                              decoration: const InputDecoration(
+                                hintText: 'BOB',
+                                border: OutlineInputBorder(),
+                                isDense: true,
+                              ),
+                              textCapitalization: TextCapitalization.characters,
+                              onChanged: (value) {
+                                row.awardCode = value.trim().toUpperCase();
+                                _ensureSpecialRowTracked(row);
+                              },
                             ),
-                            textCapitalization: TextCapitalization.characters,
-                            onChanged: (value) {
-                              row.awardCode = value.trim().toUpperCase();
-                              _ensureSpecialRowTracked(row);
-                            },
                           ),
                         ),
                       ),
                       DataCell(
                         SizedBox(
                           width: 260,
-                          child: TextFormField(
-                            key: ValueKey('special-label-$index-${row.awardLabel}'),
-                            initialValue: row.awardLabel,
-                            enabled: !row.isBuiltIn,
-                            decoration: const InputDecoration(
-                              hintText: 'Best of Breed',
-                              border: OutlineInputBorder(),
-                              isDense: true,
+                          child: _surfaceTextScope(
+                            child: TextFormField(
+                              key: ValueKey(
+                                'special-label-$index-${row.awardLabel}',
+                              ),
+                              initialValue: row.awardLabel,
+                              enabled: !row.isBuiltIn,
+                              style: const TextStyle(color: AppColors.text),
+                              decoration: const InputDecoration(
+                                hintText: 'Best of Breed',
+                                border: OutlineInputBorder(),
+                                isDense: true,
+                              ),
+                              onChanged: (value) {
+                                row.awardLabel = value.trim();
+                                _ensureSpecialRowTracked(row);
+                              },
                             ),
-                            onChanged: (value) {
-                              row.awardLabel = value.trim();
-                              _ensureSpecialRowTracked(row);
-                            },
                           ),
                         ),
                       ),
                       DataCell(
                         SizedBox(
                           width: 130,
-                          child: DropdownButtonFormField<String?>(
-                            value: row.appliesToSpecies,
-                            decoration: const InputDecoration(
-                              border: OutlineInputBorder(),
-                              isDense: true,
+                          child: _surfaceTextScope(
+                            child: DropdownButtonFormField<String?>(
+                              initialValue: row.appliesToSpecies,
+                              dropdownColor: AppColors.surface,
+                              style: const TextStyle(
+                                color: AppColors.text,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              decoration: const InputDecoration(
+                                border: OutlineInputBorder(),
+                                isDense: true,
+                              ),
+                              items: const [
+                                DropdownMenuItem<String?>(
+                                  value: null,
+                                  child: Text('Both'),
+                                ),
+                                DropdownMenuItem<String?>(
+                                  value: 'rabbit',
+                                  child: Text('Rabbit'),
+                                ),
+                                DropdownMenuItem<String?>(
+                                  value: 'cavy',
+                                  child: Text('Cavy'),
+                                ),
+                              ],
+                              onChanged: row.isBuiltIn
+                                  ? null
+                                  : (value) {
+                                      setState(() {
+                                        row.appliesToSpecies = value;
+                                        _ensureSpecialRowTracked(row);
+                                      });
+                                    },
                             ),
-                            items: const [
-                              DropdownMenuItem<String?>(
-                                value: null,
-                                child: Text('Both'),
-                              ),
-                              DropdownMenuItem<String?>(
-                                value: 'rabbit',
-                                child: Text('Rabbit'),
-                              ),
-                              DropdownMenuItem<String?>(
-                                value: 'cavy',
-                                child: Text('Cavy'),
-                              ),
-                            ],
-                            onChanged: row.isBuiltIn
-                                ? null
-                                : (value) {
-                                    setState(() {
-                                      row.appliesToSpecies = value;
-                                      _ensureSpecialRowTracked(row);
-                                    });
-                                  },
                           ),
                         ),
                       ),
                       DataCell(
                         SizedBox(
                           width: 120,
-                          child: TextFormField(
-                            key: ValueKey(
-                              'special-amount-$index-${row.amountCents}',
+                          child: _surfaceTextScope(
+                            child: TextFormField(
+                              key: ValueKey(
+                                'special-amount-$index-${row.amountCents}',
+                              ),
+                              initialValue: _moneyFromCents(row.amountCents),
+                              style: const TextStyle(color: AppColors.text),
+                              decoration: const InputDecoration(
+                                prefixText: '\$',
+                                hintText: '0.00',
+                                border: OutlineInputBorder(),
+                                isDense: true,
+                              ),
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              onChanged: (value) {
+                                setState(() {
+                                  row.amountCents = _centsFromMoney(value);
+                                  row.isEnabled = row.amountCents > 0;
+                                  _ensureSpecialRowTracked(row);
+                                });
+                              },
                             ),
-                            initialValue: _moneyFromCents(row.amountCents),
-                            decoration: const InputDecoration(
-                              prefixText: '\$',
-                              hintText: '0.00',
-                              border: OutlineInputBorder(),
-                              isDense: true,
-                            ),
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                            onChanged: (value) {
-                              setState(() {
-                                row.amountCents = _centsFromMoney(value);
-                                row.isEnabled = row.amountCents > 0;
-                                _ensureSpecialRowTracked(row);
-                              });
-                            },
                           ),
                         ),
                       ),
@@ -1011,7 +1087,6 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
       _specialRows.add(row);
     }
   }
-
 }
 
 class _PaybackSection {
@@ -1031,11 +1106,11 @@ class _PaybackSection {
     return _PaybackSection(
       id: json['id'].toString(),
       label: (json['label'] ?? '').toString().trim().isNotEmpty
-        ? json['label'].toString()
-        : _buildSectionLabel(
-            json['kind']?.toString(),
-            json['letter']?.toString(),
-        ),
+          ? json['label'].toString()
+          : _buildSectionLabel(
+              json['kind']?.toString(),
+              json['letter']?.toString(),
+            ),
       kind: json['kind']?.toString(),
       letter: json['letter']?.toString(),
     );
@@ -1085,21 +1160,6 @@ class _ClassPaybackRow {
       amountsByPlacement: Map<int, int>.from(amountsByPlacement),
     );
   }
-
-  factory _ClassPaybackRow.fromJson(Map<String, dynamic> json) {
-    return _ClassPaybackRow(
-      appliesToSpecies: _normalizedClassSpecies(
-        json['applies_to_species']?.toString(),
-      ),
-      minShown: (json['min_shown'] as num?)?.toInt() ?? 1,
-      maxShown: (json['max_shown'] as num?)?.toInt(),
-      amountsByPlacement: {
-        (json['placement'] as num?)?.toInt() ?? 1:
-            (json['amount_cents'] as num?)?.toInt() ?? 0,
-      },
-    );
-  }
-
 
   List<Map<String, dynamic>> toRpcRows() {
     final rows = <Map<String, dynamic>>[];
@@ -1472,7 +1532,8 @@ List<_SpecialMoneyRow> _normalizeSpecialMoneyRows(
   final byKey = <String, _SpecialMoneyRow>{};
 
   for (final row in _defaultSpecialMoneyRows()) {
-    final key = '${row.appliesToSpecies ?? 'both'}:${row.awardCode.trim().toUpperCase()}';
+    final key =
+        '${row.appliesToSpecies ?? 'both'}:${row.awardCode.trim().toUpperCase()}';
     byKey[key] = row.copy();
   }
 
@@ -1484,27 +1545,28 @@ List<_SpecialMoneyRow> _normalizeSpecialMoneyRows(
       copy.isEnabled = false;
     }
 
-    final key = '${copy.appliesToSpecies ?? 'both'}:${copy.awardCode.trim().toUpperCase()}';
+    final key =
+        '${copy.appliesToSpecies ?? 'both'}:${copy.awardCode.trim().toUpperCase()}';
     byKey[key] = copy;
   }
 
   final rows = byKey.values.toList()
     ..sort((a, b) {
-      final speciesCompare = _specialMoneySpeciesSortRank(a.appliesToSpecies)
-          .compareTo(_specialMoneySpeciesSortRank(b.appliesToSpecies));
+      final speciesCompare = _specialMoneySpeciesSortRank(
+        a.appliesToSpecies,
+      ).compareTo(_specialMoneySpeciesSortRank(b.appliesToSpecies));
       if (speciesCompare != 0) return speciesCompare;
 
       final aCommercial = a.awardCode.startsWith('COMMERCIAL_');
       final bCommercial = b.awardCode.startsWith('COMMERCIAL_');
       if (aCommercial != bCommercial) return aCommercial ? 1 : -1;
 
-      return a.awardLabel.toLowerCase().compareTo(
-            b.awardLabel.toLowerCase(),
-          );
+      return a.awardLabel.toLowerCase().compareTo(b.awardLabel.toLowerCase());
     });
 
   return rows;
 }
+
 int _specialMoneySpeciesSortRank(String? species) {
   switch (species) {
     case 'rabbit':
@@ -1521,4 +1583,3 @@ String _normalizedClassSpecies(String? value) {
   if (normalized == 'cavy') return 'cavy';
   return 'rabbit';
 }
-

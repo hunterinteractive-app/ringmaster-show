@@ -1953,7 +1953,7 @@ class _ControlSheetsGeneratorSheetState
             FilledButton.icon(
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.header,
-                foregroundColor: AppColors.headerForeground,
+                foregroundColor: AppColors.headerText,
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
               onPressed: _building

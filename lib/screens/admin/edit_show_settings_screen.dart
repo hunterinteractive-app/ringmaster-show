@@ -1348,7 +1348,10 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
         title: Row(
           children: [
             const SizedBox(width: 12),
-            Image.asset('assets/images/ringmaster_show_logo.png', height: 42),
+            Image.asset(
+              'assets/images/RingMaster_One_Show_Transparent.png',
+              height: 42,
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
@@ -1395,13 +1398,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
         ],
       ),
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [AppColors.navy, AppColors.navyDark],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-        ),
+        decoration: const BoxDecoration(gradient: AppGradients.page),
         child: (_loading || _loadingPermissions)
             ? const Center(
                 child: CircularProgressIndicator(color: Colors.white),

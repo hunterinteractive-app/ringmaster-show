@@ -91,10 +91,10 @@ class RingMasterPageShell extends StatelessWidget {
     );
 
     final logoSize = isMobile
-        ? 48.0
+        ? 64.0
         : isTablet
-        ? 58.0
-        : 64.0;
+        ? 78.0
+        : 88.0;
 
     // Mobile header size
     final titleSize = isMobile
@@ -117,6 +117,13 @@ class RingMasterPageShell extends StatelessWidget {
     Widget resolvedBody = useScrollView
         ? SingleChildScrollView(padding: bodyPadding, child: body)
         : Padding(padding: bodyPadding, child: body);
+
+    if (backgroundColor == null) {
+      resolvedBody = Theme(
+        data: AppTheme.onGradientTheme(theme),
+        child: resolvedBody,
+      );
+    }
 
     final resolvedActions = <Widget>[
       ...(actions ?? const []),
@@ -369,9 +376,9 @@ class _MobileHeader extends StatelessWidget {
               ),
             if (canShowLogo)
               Padding(
-                padding: const EdgeInsets.only(right: 12),
+                padding: const EdgeInsets.only(right: 8),
                 child: SizedBox(
-                  width: logoSize,
+                  width: logoSize * 1.6,
                   height: logoSize,
                   child: FittedBox(fit: BoxFit.contain, child: logo),
                 ),
@@ -477,9 +484,9 @@ class _WideHeader extends StatelessWidget {
           ),
         if (logo != null)
           Padding(
-            padding: const EdgeInsets.only(right: 16),
+            padding: const EdgeInsets.only(right: 8),
             child: SizedBox(
-              width: logoSize,
+              width: logoSize * 1.6,
               height: logoSize,
               child: FittedBox(fit: BoxFit.contain, child: logo),
             ),
@@ -527,7 +534,8 @@ class _WideHeader extends StatelessWidget {
 }
 
 class _LimitedHeaderActions extends StatelessWidget {
-  static const int maxVisibleIcons = 3;
+  static const int maxVisibleIcons = 4;
+  static const double actionIconSize = 30;
 
   final List<Widget> actions;
   final Color foregroundColor;
@@ -583,7 +591,11 @@ class _HeaderOverflowMenu extends StatelessWidget {
 
     return PopupMenuButton<int>(
       tooltip: 'More',
-      icon: Icon(Icons.more_vert, color: foregroundColor),
+      icon: Icon(
+        Icons.more_vert,
+        color: foregroundColor,
+        size: _LimitedHeaderActions.actionIconSize,
+      ),
       onSelected: (index) => menuActions[index].onPressed?.call(),
       itemBuilder: (context) => [
         for (var index = 0; index < menuActions.length; index++)
@@ -593,7 +605,7 @@ class _HeaderOverflowMenu extends StatelessWidget {
             child: Row(
               children: [
                 IconTheme(
-                  data: IconThemeData(color: AppColors.text, size: 20),
+                  data: const IconThemeData(color: AppColors.text, size: 24),
                   child: menuActions[index].icon,
                 ),
                 const SizedBox(width: 12),
@@ -654,17 +666,25 @@ class _HeaderActionContainer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IconTheme(
-      data: IconThemeData(color: foregroundColor),
+      data: IconThemeData(
+        color: foregroundColor,
+        size: _LimitedHeaderActions.actionIconSize,
+      ),
       child: DefaultTextStyle(
         style: TextStyle(color: foregroundColor),
-        child: child,
+        child: IconButtonTheme(
+          data: IconButtonThemeData(
+            style: IconButton.styleFrom(
+              iconSize: _LimitedHeaderActions.actionIconSize,
+            ),
+          ),
+          child: child,
+        ),
       ),
     );
   }
 }
 
 Color _foregroundFor(Color background) {
-  return ThemeData.estimateBrightnessForColor(background) == Brightness.dark
-      ? AppColors.headerForeground
-      : AppColors.text;
+  return AppColors.headerText;
 }

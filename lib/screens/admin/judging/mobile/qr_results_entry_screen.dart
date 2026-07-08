@@ -584,7 +584,7 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
         backgroundColor: AppColors.bg,
         appBar: AppBar(
           backgroundColor: AppColors.header,
-          foregroundColor: AppColors.headerForeground,
+          foregroundColor: AppColors.headerText,
           title: const Text('QR Results Entry'),
         ),
         body: Center(
@@ -617,7 +617,7 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
         backgroundColor: AppColors.bg,
         appBar: AppBar(
           backgroundColor: AppColors.header,
-          foregroundColor: AppColors.headerForeground,
+          foregroundColor: AppColors.headerText,
           title: const Text('QR Results Entry'),
         ),
         body: const Center(
@@ -1081,7 +1081,7 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
       backgroundColor: AppColors.bg,
       appBar: AppBar(
         backgroundColor: AppColors.header,
-        foregroundColor: AppColors.headerForeground,
+        foregroundColor: AppColors.headerText,
         title: Text(title),
       ),
       body: ListView.builder(
@@ -1285,7 +1285,7 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
       backgroundColor: AppColors.bg,
       appBar: AppBar(
         backgroundColor: AppColors.header,
-        foregroundColor: AppColors.headerForeground,
+        foregroundColor: AppColors.headerText,
         title: const Text('QR Results Entry'),
       ),
       body: ListView(
@@ -1466,7 +1466,7 @@ class _QrWriterInfoScreenState extends State<_QrWriterInfoScreen> {
       backgroundColor: AppColors.bg,
       appBar: AppBar(
         backgroundColor: AppColors.header,
-        foregroundColor: AppColors.headerForeground,
+        foregroundColor: AppColors.headerText,
         title: const Text('QR Results Entry'),
       ),
       body: ListView(
