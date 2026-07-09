@@ -370,22 +370,15 @@ class ExhibitorByBreedReportLoader {
 
     final speciesByEntryId = <String, String>{};
 
-    if (missingSpeciesEntryIds.isNotEmpty) {
-      final entryRows = await repo.supabase
-          .from('entries')
-          .select('id, species')
-          .eq('show_id', showId)
-          .inFilter('id', missingSpeciesEntryIds);
-
-      for (final raw in (entryRows as List)) {
-        final row = Map<String, dynamic>.from(raw as Map);
-        final entryId = (row['id'] ?? '').toString().trim();
-        final entrySpecies = _normalizeSpecies(
-          (row['species'] ?? '').toString(),
-        );
-        if (entryId.isNotEmpty && entrySpecies.isNotEmpty) {
-          speciesByEntryId[entryId] = entrySpecies;
-        }
+    final entryRows = await _loadEntrySpeciesRows(
+      showId,
+      missingSpeciesEntryIds,
+    );
+    for (final row in entryRows) {
+      final entryId = (row['id'] ?? '').toString().trim();
+      final entrySpecies = _normalizeSpecies((row['species'] ?? '').toString());
+      if (entryId.isNotEmpty && entrySpecies.isNotEmpty) {
+        speciesByEntryId[entryId] = entrySpecies;
       }
     }
 
@@ -400,6 +393,36 @@ class ExhibitorByBreedReportLoader {
 
       return resolvedSpecies == species;
     }).toList();
+  }
+
+  Future<List<Map<String, dynamic>>> _loadEntrySpeciesRows(
+    String showId,
+    List<String> entryIds,
+  ) async {
+    final ids = entryIds.toSet().where((id) => id.isNotEmpty).toList();
+    if (ids.isEmpty) return const <Map<String, dynamic>>[];
+
+    const chunkSize = 100;
+    final allRows = <Map<String, dynamic>>[];
+
+    for (var start = 0; start < ids.length; start += chunkSize) {
+      final end = start + chunkSize > ids.length
+          ? ids.length
+          : start + chunkSize;
+      final chunk = ids.sublist(start, end);
+
+      final entryRows = await repo.supabase
+          .from('entries')
+          .select('id, species')
+          .eq('show_id', showId)
+          .inFilter('id', chunk);
+
+      allRows.addAll(
+        (entryRows as List).map((raw) => Map<String, dynamic>.from(raw as Map)),
+      );
+    }
+
+    return allRows;
   }
 
   static bool _rowMatchesSpecies(Map<String, dynamic> row, String species) {

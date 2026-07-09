@@ -127,6 +127,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     'best_display_report',
   };
   static const int _stateClubSpeciesSplitVersion = 1;
+  static const int _entrySpeciesQueryChunkSize = 100;
 
   static const Set<String> _clubReportKeys = {
     ..._breedClubReportKeys,
@@ -832,22 +833,45 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     }
   }
 
+  Future<T> _loadCloseoutStep<T>(
+    String label,
+    Future<T> Function() action,
+  ) async {
+    try {
+      return await action();
+    } catch (e, st) {
+      Error.throwWithStackTrace(Exception('Failed loading $label: $e'), st);
+    }
+  }
+
   Future<void> _syncClubDeliveryMetadata({String? latestFinalizeRunId}) async {
-    await supabase.rpc(
-      'prepare_club_delivery_targets',
-      params: {'p_show_id': widget.showId},
+    await _loadCloseoutStep(
+      'club delivery targets',
+      () => supabase.rpc(
+        'prepare_club_delivery_targets',
+        params: {'p_show_id': widget.showId},
+      ),
     );
 
-    await _ensureCombinedCavyClubReportArtifacts(
-      latestFinalizeRunId: latestFinalizeRunId,
+    await _loadCloseoutStep(
+      'combined cavy club report artifacts',
+      () => _ensureCombinedCavyClubReportArtifacts(
+        latestFinalizeRunId: latestFinalizeRunId,
+      ),
     );
 
-    await _ensureStateClubSpeciesArtifacts(
-      latestFinalizeRunId: latestFinalizeRunId,
+    await _loadCloseoutStep(
+      'state club species artifact sync',
+      () => _ensureStateClubSpeciesArtifacts(
+        latestFinalizeRunId: latestFinalizeRunId,
+      ),
     );
 
-    await _ensureCombinedCavyClubReportArtifacts(
-      latestFinalizeRunId: latestFinalizeRunId,
+    await _loadCloseoutStep(
+      'combined cavy club report artifact refresh',
+      () => _ensureCombinedCavyClubReportArtifacts(
+        latestFinalizeRunId: latestFinalizeRunId,
+      ),
     );
   }
 
@@ -1264,23 +1288,50 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       if (entryId.isNotEmpty) missingSpeciesEntryIds.add(entryId);
     }
 
-    if (missingSpeciesEntryIds.isNotEmpty) {
+    final entryRows = await _loadEntrySpeciesRowsByIds(
+      missingSpeciesEntryIds.toList(),
+    );
+
+    for (final row in entryRows) {
+      final entrySpecies = _normalizeStateClubSpecies(
+        (row['species'] ?? '').toString(),
+      );
+      if (entrySpecies.isNotEmpty) species.add(entrySpecies);
+    }
+
+    return species;
+  }
+
+  Future<List<Map<String, dynamic>>> _loadEntrySpeciesRowsByIds(
+    List<String> entryIds,
+  ) async {
+    final ids = entryIds.toSet().where((id) => id.isNotEmpty).toList();
+    if (ids.isEmpty) return const <Map<String, dynamic>>[];
+
+    final allRows = <Map<String, dynamic>>[];
+
+    for (
+      var start = 0;
+      start < ids.length;
+      start += _entrySpeciesQueryChunkSize
+    ) {
+      final end = start + _entrySpeciesQueryChunkSize > ids.length
+          ? ids.length
+          : start + _entrySpeciesQueryChunkSize;
+      final chunk = ids.sublist(start, end);
+
       final entryRows = await supabase
           .from('entries')
           .select('id, species')
           .eq('show_id', widget.showId)
-          .inFilter('id', missingSpeciesEntryIds.toList());
+          .inFilter('id', chunk);
 
-      for (final raw in (entryRows as List)) {
-        final row = Map<String, dynamic>.from(raw as Map);
-        final entrySpecies = _normalizeStateClubSpecies(
-          (row['species'] ?? '').toString(),
-        );
-        if (entrySpecies.isNotEmpty) species.add(entrySpecies);
-      }
+      allRows.addAll(
+        (entryRows as List).map((raw) => Map<String, dynamic>.from(raw as Map)),
+      );
     }
 
-    return species;
+    return allRows;
   }
 
   Future<String> _loadSectionIdForScope(String scope, String showLetter) async {
