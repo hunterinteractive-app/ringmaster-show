@@ -11,6 +11,8 @@ class ReportRequest {
     this.species,
     this.scope,
     this.showLetter,
+    this.scopeLabel,
+    this.sectionIds,
     this.showName,
     this.showDate,
     this.sanctionNumber,
@@ -30,6 +32,8 @@ class ReportRequest {
   final String? species;
   final String? scope;
   final String? showLetter;
+  final String? scopeLabel;
+  final List<String>? sectionIds;
   final String? showName;
   final String? showDate;
   final String? sanctionNumber;
@@ -51,6 +55,8 @@ class ReportRequest {
       'species': species,
       'scope': scope,
       'showLetter': showLetter,
+      'scopeLabel': scopeLabel,
+      'sectionIds': sectionIds,
       'showName': showName,
       'showDate': showDate,
       'sanctionNumber': sanctionNumber,
@@ -71,6 +77,8 @@ class ReportRequest {
     String? species,
     String? scope,
     String? showLetter,
+    String? scopeLabel,
+    List<String>? sectionIds,
     String? showName,
     String? showDate,
     String? sanctionNumber,
@@ -89,6 +97,8 @@ class ReportRequest {
       species: species ?? this.species,
       scope: scope ?? this.scope,
       showLetter: showLetter ?? this.showLetter,
+      scopeLabel: scopeLabel ?? this.scopeLabel,
+      sectionIds: sectionIds ?? this.sectionIds,
       showName: showName ?? this.showName,
       showDate: showDate ?? this.showDate,
       sanctionNumber: sanctionNumber ?? this.sanctionNumber,

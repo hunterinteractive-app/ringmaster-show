@@ -502,8 +502,9 @@ class BreedResultsDetailReportPdf {
   bool _isFurWoolTextMatch(List<String> values) {
     for (final value in values) {
       final normalized = value.toLowerCase().trim();
-      if (normalized.contains('fur') || normalized.contains('wool'))
+      if (normalized.contains('fur') || normalized.contains('wool')) {
         return true;
+      }
     }
     return false;
   }
@@ -557,12 +558,14 @@ class BreedResultsDetailReportPdf {
               .toSet();
 
           for (final category in classCategories) {
-            final currentAnimals = animalsJudgedByCategory[category] ?? 0;
-            final currentExhibitors = exhibitorsJudgedByCategory[category] ?? 0;
-            if (classGroup.animalsJudged > currentAnimals) {
+            final currentAnimals = animalsJudgedByCategory[category];
+            final currentExhibitors = exhibitorsJudgedByCategory[category];
+            if (currentAnimals == null ||
+                classGroup.animalsJudged > currentAnimals) {
               animalsJudgedByCategory[category] = classGroup.animalsJudged;
             }
-            if (classGroup.exhibitorsJudged > currentExhibitors) {
+            if (currentExhibitors == null ||
+                classGroup.exhibitorsJudged > currentExhibitors) {
               exhibitorsJudgedByCategory[category] =
                   classGroup.exhibitorsJudged;
             }

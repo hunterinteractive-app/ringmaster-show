@@ -32,8 +32,9 @@ class ExhibitorReportLoader {
         .eq('is_enabled', true)
         .order('sort_order');
 
-    final enabledSections =
-        List<Map<String, dynamic>>.from(enabledSectionsRaw as List);
+    final enabledSections = List<Map<String, dynamic>>.from(
+      enabledSectionsRaw as List,
+    );
 
     final allEligibleRows = <Map<String, dynamic>>[];
     final rowList = <Map<String, dynamic>>[];
@@ -94,10 +95,13 @@ class ExhibitorReportLoader {
     final awardsByEntryId = await _loadAwardsByEntryId(showId, entryIds);
     final judgeNamesByRef = await _loadJudgeNamesByShowJudgeId(judgeRefs);
     final contextByEntryId = _buildEntryContextByShow(allEligibleRows);
-    final displayPlacementByEntryId =
-        _buildDisplayPlacementByEntryId(allEligibleRows);
-    final pointsByEntryId =
-        await _loadAnimalSweepstakesPointsByEntryId(showId, entryIds);
+    final displayPlacementByEntryId = _buildDisplayPlacementByEntryId(
+      allEligibleRows,
+    );
+    final pointsByEntryId = await _loadAnimalSweepstakesPointsByEntryId(
+      showId,
+      entryIds,
+    );
 
     final showName = _str(show['name']);
     final showDate = _formatShowDateRange(show['start_date'], show['end_date']);
@@ -122,16 +126,19 @@ class ExhibitorReportLoader {
       final letterCompare = aLetter.compareTo(bLetter);
       if (letterCompare != 0) return letterCompare;
 
-      final breedCompare =
-          _str(a['breed_name']).compareTo(_str(b['breed_name']));
+      final breedCompare = _str(
+        a['breed_name'],
+      ).compareTo(_str(b['breed_name']));
       if (breedCompare != 0) return breedCompare;
 
-      final varietyCompare =
-          _str(a['variety_name']).compareTo(_str(b['variety_name']));
+      final varietyCompare = _str(
+        a['variety_name'],
+      ).compareTo(_str(b['variety_name']));
       if (varietyCompare != 0) return varietyCompare;
 
-      final classCompare =
-          _str(a['class_name']).compareTo(_str(b['class_name']));
+      final classCompare = _str(
+        a['class_name'],
+      ).compareTo(_str(b['class_name']));
       if (classCompare != 0) return classCompare;
 
       final sexCompare = _str(a['sex']).compareTo(_str(b['sex']));
@@ -384,14 +391,29 @@ class ExhibitorReportLoader {
     if (entryIds.isEmpty) return {};
 
     try {
-      final rows = await repo.supabase
-          .from('entry_awards')
-          .select('entry_id, award_code')
-          .eq('show_id', showId)
-          .inFilter('entry_id', entryIds);
+      final ids = entryIds.toSet().where((id) => id.isNotEmpty).toList();
+      if (ids.isEmpty) return {};
+
+      const chunkSize = 100;
+      final rows = <Map<String, dynamic>>[];
+
+      for (var start = 0; start < ids.length; start += chunkSize) {
+        final end = start + chunkSize > ids.length
+            ? ids.length
+            : start + chunkSize;
+        final chunk = ids.sublist(start, end);
+
+        final chunkRows = await repo.supabase
+            .from('entry_awards')
+            .select('entry_id, award_code')
+            .eq('show_id', showId)
+            .inFilter('entry_id', chunk);
+
+        rows.addAll(List<Map<String, dynamic>>.from(chunkRows));
+      }
 
       final map = <String, Set<String>>{};
-      for (final row in List<Map<String, dynamic>>.from(rows)) {
+      for (final row in rows) {
         final entryId = _str(row['entry_id']);
         final awardCode = _str(row['award_code']);
         if (entryId.isEmpty || awardCode.isEmpty) continue;
@@ -461,16 +483,20 @@ class ExhibitorReportLoader {
     if (rawJudgeRefs.isEmpty) return {};
 
     try {
-      final refs =
-          rawJudgeRefs.where((e) => e.trim().isNotEmpty).toSet().toList();
+      final refs = rawJudgeRefs
+          .where((e) => e.trim().isNotEmpty)
+          .toSet()
+          .toList();
+      if (refs.isEmpty) return {};
 
-      final directJudgeRows = await repo.supabase
-          .from('judges')
-          .select('id, name, first_name, last_name')
-          .inFilter('id', refs);
+      final directJudgeRows = await _loadRowsByIds(
+        tableName: 'judges',
+        columns: 'id, name, first_name, last_name',
+        ids: refs,
+      );
 
       final directJudgeNameById = <String, String>{};
-      for (final row in List<Map<String, dynamic>>.from(directJudgeRows)) {
+      for (final row in directJudgeRows) {
         final judgeId = _str(row['id']);
         final judgeName = _firstNonEmpty([
           _str(row['name']),
@@ -484,18 +510,18 @@ class ExhibitorReportLoader {
         }
       }
 
-      final unresolvedRefs =
-          refs.where((ref) => !directJudgeNameById.containsKey(ref)).toList();
+      final unresolvedRefs = refs
+          .where((ref) => !directJudgeNameById.containsKey(ref))
+          .toList();
 
       final resolvedByRef = <String, String>{...directJudgeNameById};
 
       if (unresolvedRefs.isNotEmpty) {
-        final showJudgeRows = await repo.supabase
-            .from('show_judges')
-            .select('id, judge_id')
-            .inFilter('id', unresolvedRefs);
-
-        final showJudgeList = List<Map<String, dynamic>>.from(showJudgeRows);
+        final showJudgeList = await _loadRowsByIds(
+          tableName: 'show_judges',
+          columns: 'id, judge_id',
+          ids: unresolvedRefs,
+        );
 
         final fallbackJudgeIds = showJudgeList
             .map((e) => _str(e['judge_id']))
@@ -506,13 +532,13 @@ class ExhibitorReportLoader {
         final fallbackJudgeNameById = <String, String>{};
 
         if (fallbackJudgeIds.isNotEmpty) {
-          final fallbackJudgeRows = await repo.supabase
-              .from('judges')
-              .select('id, name, first_name, last_name')
-              .inFilter('id', fallbackJudgeIds);
+          final fallbackJudgeRows = await _loadRowsByIds(
+            tableName: 'judges',
+            columns: 'id, name, first_name, last_name',
+            ids: fallbackJudgeIds,
+          );
 
-          for (final row
-              in List<Map<String, dynamic>>.from(fallbackJudgeRows)) {
+          for (final row in fallbackJudgeRows) {
             final judgeId = _str(row['id']);
             final judgeName = _firstNonEmpty([
               _str(row['name']),
@@ -543,6 +569,34 @@ class ExhibitorReportLoader {
     } catch (_) {
       return {};
     }
+  }
+
+  Future<List<Map<String, dynamic>>> _loadRowsByIds({
+    required String tableName,
+    required String columns,
+    required List<String> ids,
+  }) async {
+    final filteredIds = ids.toSet().where((id) => id.isNotEmpty).toList();
+    if (filteredIds.isEmpty) return const <Map<String, dynamic>>[];
+
+    const chunkSize = 100;
+    final rows = <Map<String, dynamic>>[];
+
+    for (var start = 0; start < filteredIds.length; start += chunkSize) {
+      final end = start + chunkSize > filteredIds.length
+          ? filteredIds.length
+          : start + chunkSize;
+      final chunk = filteredIds.sublist(start, end);
+
+      final chunkRows = await repo.supabase
+          .from(tableName)
+          .select(columns)
+          .inFilter('id', chunk);
+
+      rows.addAll(List<Map<String, dynamic>>.from(chunkRows));
+    }
+
+    return rows;
   }
 
   int _toInt(dynamic value) {
@@ -604,8 +658,8 @@ class ExhibitorReportLoader {
 
       if (entryId.isEmpty || sectionId.isEmpty || showLetter.isEmpty) continue;
 
-      final scopedRows = judgedRowsBySection[sectionId] ??
-          const <Map<String, dynamic>>[];
+      final scopedRows =
+          judgedRowsBySection[sectionId] ?? const <Map<String, dynamic>>[];
 
       final breed = _str(row['breed_name']);
       final variety = _str(row['variety_name']);
@@ -621,16 +675,18 @@ class ExhibitorReportLoader {
           .toSet()
           .length;
 
-      final breedRows =
-          scopedRows.where((e) => _str(e['breed_name']) == breed).toList();
+      final breedRows = scopedRows
+          .where((e) => _str(e['breed_name']) == breed)
+          .toList();
       final breedAnimals = breedRows.length;
       final breedExhibitors = breedRows
           .map((e) => _str(e['exhibitor_id']))
           .where((e) => e.isNotEmpty)
           .toSet()
           .length;
-      final breedSameSexAnimals =
-          breedRows.where((e) => _str(e['sex']) == sex).length;
+      final breedSameSexAnimals = breedRows
+          .where((e) => _str(e['sex']) == sex)
+          .length;
 
       final varietyRows = scopedRows.where((e) {
         return _str(e['breed_name']) == breed &&
@@ -642,8 +698,9 @@ class ExhibitorReportLoader {
           .where((e) => e.isNotEmpty)
           .toSet()
           .length;
-      final varietySameSexAnimals =
-          varietyRows.where((e) => _str(e['sex']) == sex).length;
+      final varietySameSexAnimals = varietyRows
+          .where((e) => _str(e['sex']) == sex)
+          .length;
 
       final groupRows = usesGroupAwards && groupName.isNotEmpty
           ? scopedRows.where((e) {
@@ -657,8 +714,9 @@ class ExhibitorReportLoader {
           .where((e) => e.isNotEmpty)
           .toSet()
           .length;
-      final groupSameSexAnimals =
-          groupRows.where((e) => _str(e['sex']) == sex).length;
+      final groupSameSexAnimals = groupRows
+          .where((e) => _str(e['sex']) == sex)
+          .length;
 
       final classRows = scopedRows.where((e) {
         return _str(e['breed_name']) == breed &&
@@ -702,9 +760,7 @@ class ExhibitorReportLoader {
     final status = _str(row['result_status']).toLowerCase();
     final dqReason = _str(row['disqualified_reason']).toLowerCase();
 
-    if (status == 'no show' ||
-        status == 'no_show' ||
-        status == 'noshow') {
+    if (status == 'no show' || status == 'no_show' || status == 'noshow') {
       return false;
     }
 
@@ -800,32 +856,34 @@ class ExhibitorReportLoader {
       return aIndex.compareTo(bIndex);
     });
 
-    return normalized.map((award) {
-      switch (award) {
-        case 'BEST_IN_SHOW':
-          return 'Best In Show';
-        case 'RESERVE_IN_SHOW':
-          return 'Reserve In Show';
-        case '1RIS':
-        case '1ST_RIS':
-        case 'FIRST_RIS':
-        case '1ST_RESERVE_IN_SHOW':
-        case 'FIRST_RESERVE_IN_SHOW':
-          return '1st Reserve In Show';
-        case '2RIS':
-        case '2ND_RIS':
-        case 'SECOND_RIS':
-        case '2ND_RESERVE_IN_SHOW':
-        case 'SECOND_RESERVE_IN_SHOW':
-          return '2nd Reserve In Show';
-        case 'BEST_6_CLASS':
-          return 'Best 6-Class';
-        case 'BEST_4_CLASS':
-          return 'Best 4-Class';
-        default:
-          return cavyAwardLabels[award] ?? award;
-      }
-    }).join(', ');
+    return normalized
+        .map((award) {
+          switch (award) {
+            case 'BEST_IN_SHOW':
+              return 'Best In Show';
+            case 'RESERVE_IN_SHOW':
+              return 'Reserve In Show';
+            case '1RIS':
+            case '1ST_RIS':
+            case 'FIRST_RIS':
+            case '1ST_RESERVE_IN_SHOW':
+            case 'FIRST_RESERVE_IN_SHOW':
+              return '1st Reserve In Show';
+            case '2RIS':
+            case '2ND_RIS':
+            case 'SECOND_RIS':
+            case '2ND_RESERVE_IN_SHOW':
+            case 'SECOND_RESERVE_IN_SHOW':
+              return '2nd Reserve In Show';
+            case 'BEST_6_CLASS':
+              return 'Best 6-Class';
+            case 'BEST_4_CLASS':
+              return 'Best 4-Class';
+            default:
+              return cavyAwardLabels[award] ?? award;
+          }
+        })
+        .join(', ');
   }
 
   String _formatShowDateRange(dynamic startDate, dynamic endDate) {
@@ -872,9 +930,7 @@ class _ExhibitorAddress {
     required this.cityStateZip,
   });
 
-  const _ExhibitorAddress.empty()
-      : addressLines = '',
-        cityStateZip = '';
+  const _ExhibitorAddress.empty() : addressLines = '', cityStateZip = '';
 
   bool get hasAnyAddress =>
       addressLines.trim().isNotEmpty || cityStateZip.trim().isNotEmpty;

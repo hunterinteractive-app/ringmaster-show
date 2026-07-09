@@ -1,5 +1,7 @@
 // lib/screens/admin/closeout/services/closeout_runner.dart
 
+import 'package:flutter/foundation.dart';
+
 import '../models/base/report_request.dart';
 import 'report_engine.dart';
 import 'report_upload_service.dart';
@@ -20,6 +22,8 @@ class CloseoutRunner {
     String? species,
     String? scope,
     String? showLetter,
+    String? scopeLabel,
+    List<String>? sectionIds,
     String? showName,
     String? showDate,
     String? sanctionNumber,
@@ -41,6 +45,8 @@ class CloseoutRunner {
       species: resolvedSpecies,
       scope: scope,
       showLetter: showLetter,
+      scopeLabel: scopeLabel,
+      sectionIds: sectionIds,
       showName: showName,
       showDate: showDate,
       sanctionNumber: sanctionNumber,
@@ -51,7 +57,16 @@ class CloseoutRunner {
     );
 
     try {
+      debugPrint(
+        '[CloseoutRunner] Generating $reportName artifact=$artifactId '
+        'show=$showId scopeLabel=${scopeLabel ?? ''} '
+        'sectionIds=${sectionIds?.join(',') ?? ''}',
+      );
       final file = await engine.generate(request);
+      debugPrint(
+        '[CloseoutRunner] Built $reportName artifact=$artifactId '
+        'file=${file.fileName} bytes=${file.bytes.length}',
+      );
 
       final storagePath = await uploadService.upload(
         showId: showId,
@@ -65,7 +80,14 @@ class CloseoutRunner {
         storagePath: storagePath,
         file: file,
       );
+      debugPrint(
+        '[CloseoutRunner] Generated $reportName artifact=$artifactId '
+        'storagePath=$storagePath',
+      );
     } catch (e) {
+      debugPrint(
+        '[CloseoutRunner] Failed $reportName artifact=$artifactId: $e',
+      );
       await uploadService.markFailed(artifactId: artifactId, error: e);
       rethrow;
     }

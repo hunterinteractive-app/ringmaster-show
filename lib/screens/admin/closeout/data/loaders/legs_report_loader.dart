@@ -423,12 +423,13 @@ class LegsReportLoader {
 
       // First pass:
       // report_entry_base_v.judged_by_show_judge_id may already equal judges.id
-      final directJudgeRows = await repo.supabase
-          .from('judges')
-          .select('id, name, first_name, last_name')
-          .inFilter('id', refs);
+      final directJudgeRows = await _loadRowsByIds(
+        tableName: 'judges',
+        columns: 'id, name, first_name, last_name',
+        ids: refs,
+      );
 
-      for (final row in List<Map<String, dynamic>>.from(directJudgeRows)) {
+      for (final row in directJudgeRows) {
         final judgeId = _str(row['id']);
         final judgeName = _firstNonEmpty([
           _str(row['name']),
@@ -450,12 +451,11 @@ class LegsReportLoader {
           .toList();
 
       if (unresolvedRefs.isNotEmpty) {
-        final showJudgeRows = await repo.supabase
-            .from('show_judges')
-            .select('id, judge_id')
-            .inFilter('id', unresolvedRefs);
-
-        final showJudgeList = List<Map<String, dynamic>>.from(showJudgeRows);
+        final showJudgeList = await _loadRowsByIds(
+          tableName: 'show_judges',
+          columns: 'id, judge_id',
+          ids: unresolvedRefs,
+        );
 
         final fallbackJudgeIds = showJudgeList
             .map((e) => _str(e['judge_id']))
@@ -464,15 +464,14 @@ class LegsReportLoader {
             .toList();
 
         if (fallbackJudgeIds.isNotEmpty) {
-          final fallbackJudgeRows = await repo.supabase
-              .from('judges')
-              .select('id, name, first_name, last_name')
-              .inFilter('id', fallbackJudgeIds);
+          final fallbackJudgeRows = await _loadRowsByIds(
+            tableName: 'judges',
+            columns: 'id, name, first_name, last_name',
+            ids: fallbackJudgeIds,
+          );
 
           final fallbackJudgeNameById = <String, String>{};
-          for (final row in List<Map<String, dynamic>>.from(
-            fallbackJudgeRows,
-          )) {
+          for (final row in fallbackJudgeRows) {
             final judgeId = _str(row['id']);
             final judgeName = _firstNonEmpty([
               _str(row['name']),
@@ -503,6 +502,34 @@ class LegsReportLoader {
     } catch (_) {
       return {};
     }
+  }
+
+  Future<List<Map<String, dynamic>>> _loadRowsByIds({
+    required String tableName,
+    required String columns,
+    required List<String> ids,
+  }) async {
+    final filteredIds = ids.toSet().where((id) => id.isNotEmpty).toList();
+    if (filteredIds.isEmpty) return const <Map<String, dynamic>>[];
+
+    const chunkSize = 100;
+    final rows = <Map<String, dynamic>>[];
+
+    for (var start = 0; start < filteredIds.length; start += chunkSize) {
+      final end = start + chunkSize > filteredIds.length
+          ? filteredIds.length
+          : start + chunkSize;
+      final chunk = filteredIds.sublist(start, end);
+
+      final chunkRows = await repo.supabase
+          .from(tableName)
+          .select(columns)
+          .inFilter('id', chunk);
+
+      rows.addAll(List<Map<String, dynamic>>.from(chunkRows));
+    }
+
+    return rows;
   }
 
   Future<Map<String, _EntryLegContext>> _loadShownEntryContext(

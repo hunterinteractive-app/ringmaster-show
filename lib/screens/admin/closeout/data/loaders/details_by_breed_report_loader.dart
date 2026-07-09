@@ -524,23 +524,31 @@ class DetailsByBreedReportLoader {
       if (unresolvedIds.isEmpty) return;
 
       try {
-        final response = await repo.supabase
-            .from(tableName)
-            .select()
-            .inFilter('id', unresolvedIds);
+        const chunkSize = 100;
+        for (var start = 0; start < unresolvedIds.length; start += chunkSize) {
+          final end = start + chunkSize > unresolvedIds.length
+              ? unresolvedIds.length
+              : start + chunkSize;
+          final chunk = unresolvedIds.sublist(start, end);
 
-        for (final raw in (response as List)) {
-          final row = Map<String, dynamic>.from(raw as Map);
-          final judgeId = _text(row, [
-            'id',
-            'judge_id',
-            'arba_judge_id',
-          ]).trim();
-          if (judgeId.isEmpty) continue;
+          final response = await repo.supabase
+              .from(tableName)
+              .select()
+              .inFilter('id', chunk);
 
-          final name = _judgeNameFromRow(row);
-          if (name.isNotEmpty) {
-            result[judgeId] = name;
+          for (final raw in (response as List)) {
+            final row = Map<String, dynamic>.from(raw as Map);
+            final judgeId = _text(row, [
+              'id',
+              'judge_id',
+              'arba_judge_id',
+            ]).trim();
+            if (judgeId.isEmpty) continue;
+
+            final name = _judgeNameFromRow(row);
+            if (name.isNotEmpty) {
+              result[judgeId] = name;
+            }
           }
         }
       } catch (_) {

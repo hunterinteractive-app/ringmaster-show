@@ -211,15 +211,19 @@ class BreedResultsDetailReportLoader {
     var rows = (sectionRows as List)
         .map((e) => Map<String, dynamic>.from(e as Map))
         .toList();
+    rows = await _withEntryJudgingState(showId, rows);
     rows = _filterRowsBySpecies(rows, species);
 
     final overallRows = breedName.isEmpty
         ? rows
         : _filterRowsBySpecies(
-            await _loadOverallResultRows(
-              showId: showId,
-              scope: scope,
-              showLetter: showLetter,
+            await _withEntryJudgingState(
+              showId,
+              await _loadOverallResultRows(
+                showId: showId,
+                scope: scope,
+                showLetter: showLetter,
+              ),
             ),
             species,
           );
@@ -314,6 +318,59 @@ class BreedResultsDetailReportLoader {
       ),
       noResultsFound: false,
     );
+  }
+
+  Future<List<Map<String, dynamic>>> _withEntryJudgingState(
+    String showId,
+    List<Map<String, dynamic>> rows,
+  ) async {
+    final entryIds = rows
+        .map(
+          (row) => _firstNonEmpty([_safe(row['entry_id']), _safe(row['id'])]),
+        )
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+
+    if (entryIds.isEmpty) return rows;
+
+    final entriesById = <String, Map<String, dynamic>>{};
+    const chunkSize = 100;
+
+    for (var start = 0; start < entryIds.length; start += chunkSize) {
+      final end = start + chunkSize > entryIds.length
+          ? entryIds.length
+          : start + chunkSize;
+      final chunk = entryIds.sublist(start, end);
+
+      final entryRows = await repo.supabase
+          .from('entries')
+          .select('id, scratched_at, status, is_shown')
+          .eq('show_id', showId)
+          .inFilter('id', chunk);
+
+      for (final raw in entryRows as List) {
+        final entry = Map<String, dynamic>.from(raw as Map);
+        final id = _safe(entry['id']);
+        if (id.isNotEmpty) entriesById[id] = entry;
+      }
+    }
+
+    return rows.map((row) {
+      final entryId = _firstNonEmpty([
+        _safe(row['entry_id']),
+        _safe(row['id']),
+      ]);
+      final entry = entriesById[entryId];
+      if (entry == null) return row;
+
+      return {
+        ...row,
+        'entry_scratched_at': entry['scratched_at'],
+        'entry_status': entry['status'],
+        'entry_is_shown': entry['is_shown'],
+      };
+    }).toList();
   }
 
   List<VarietySection> _buildVarieties({
@@ -469,7 +526,7 @@ class BreedResultsDetailReportLoader {
         })
         .toList();
 
-    final judgedRows = rows.where(_wasFurOrWoolJudged).toList();
+    final judgedRows = rows.where(_isCountableJudgedEntry).toList();
 
     return ClassSection(
       className: '',
@@ -544,9 +601,9 @@ class BreedResultsDetailReportLoader {
           })
           .toList();
 
-      final animalsJudged = classRows.where((r) => _wasJudged(r)).length;
-      final exhibitorsJudged = classRows
-          .where((r) => _wasJudged(r))
+      final judgedRows = classRows.where(_isCountableJudgedEntry).toList();
+      final animalsJudged = judgedRows.length;
+      final exhibitorsJudged = judgedRows
           .map((r) => _safe(r['exhibitor_id']))
           .where((e) => e.isNotEmpty)
           .toSet()
@@ -645,7 +702,7 @@ class BreedResultsDetailReportLoader {
     List<Map<String, dynamic>> overallRows = const [],
   }) {
     _JudgedCount countFor(Iterable<Map<String, dynamic>> source) {
-      final judged = source.where((r) => _wasJudged(r)).toList();
+      final judged = source.where(_isCountableJudgedEntry).toList();
       return _JudgedCount(
         animals: judged.length,
         exhibitors: judged
@@ -1020,55 +1077,55 @@ class BreedResultsDetailReportLoader {
     }
   }
 
-  bool _wasJudged(Map<String, dynamic> row) {
-    final isShown = row['is_shown'];
-    final isDisqualified = row['is_disqualified'];
+  bool _isCountableJudgedEntry(Map<String, dynamic> row) {
+    if (_safe(row['scratched_at']).isNotEmpty) return false;
+    if (_safe(row['entry_scratched_at']).isNotEmpty) return false;
+    if (_isExplicitFalse(row['is_shown'])) return false;
+    if (_isExplicitFalse(row['entry_is_shown'])) return false;
 
-    if (row['scratched_at'] != null) return false;
-    if (isShown == false) return false;
-    if (isDisqualified == true) return false;
-
-    final status = _firstNonEmpty([
+    final statuses = [
+      _safe(row['fur_result_status']),
       _safe(row['result_status']),
       _safe(row['status']),
-    ]).toLowerCase();
-    final dqReason = _safe(row['disqualified_reason']).toLowerCase();
-    final combined = '$status $dqReason';
-
-    if (combined.contains('no show')) return false;
-    if (combined.contains('wrong')) return false;
-    if (combined.contains('overweight')) return false;
-    if (combined.contains('scratch')) return false;
-    if (combined.contains('disqualified')) return false;
+      _safe(row['entry_status']),
+    ];
+    if (statuses.any(_isNoShowStatus)) return false;
+    if (statuses.any(_isScratchedStatus)) return false;
 
     return true;
+  }
+
+  bool _isExplicitFalse(Object? value) {
+    if (value == false) return true;
+    if (value is! String) return false;
+
+    final normalized = value.trim().toLowerCase();
+    return normalized == 'false' ||
+        normalized == 'f' ||
+        normalized == '0' ||
+        normalized == 'no';
+  }
+
+  bool _isNoShowStatus(String value) {
+    final normalized = value.toLowerCase().replaceAll(
+      RegExp(r'[^a-z0-9]+'),
+      '',
+    );
+    return normalized == 'noshow' || normalized == 'notshown';
+  }
+
+  bool _isScratchedStatus(String value) {
+    final normalized = value.toLowerCase().replaceAll(
+      RegExp(r'[^a-z0-9]+'),
+      '',
+    );
+    return normalized == 'scratched' || normalized == 'scratch';
   }
 
   int _furPlacementNumber(Map<String, dynamic> row) {
     final furPlacement = _placementNumber(row['fur_placement']);
     if (furPlacement != 999) return furPlacement;
     return _placementNumber(row['placement']);
-  }
-
-  bool _wasFurOrWoolJudged(Map<String, dynamic> row) {
-    if (!_isFurOrWoolRow(row)) return _wasJudged(row);
-    if (row['scratched_at'] != null) return false;
-    if (row['is_disqualified'] == true) return false;
-
-    final status = _firstNonEmpty([
-      _safe(row['fur_result_status']),
-      _safe(row['result_status']),
-      _safe(row['status']),
-    ]).toLowerCase();
-    final dqReason = _safe(row['disqualified_reason']).toLowerCase();
-    final combined = '$status $dqReason';
-
-    if (combined.contains('no show')) return false;
-    if (combined.contains('scratch')) return false;
-    if (combined.contains('overweight')) return false;
-    if (combined.contains('disqualified')) return false;
-
-    return _furPlacementNumber(row) != 999 || row['is_shown'] != false;
   }
 
   int _placementNumber(Object? value) {

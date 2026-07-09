@@ -1,6 +1,7 @@
 // lib/screens/admin/closeout/registry/report_registry.dart
 
 import '../data/loaders/arba_report_loader.dart';
+import '../data/loaders/breed_judged_totals_report_loader.dart';
 import '../data/loaders/breed_results_detail_report_loader.dart';
 import '../data/loaders/details_by_breed_report_loader.dart';
 import '../data/loaders/exhibitor_by_breed_report_loader.dart';
@@ -25,12 +26,14 @@ import '../models/exhibitor/exhibitor_report_data.dart';
 import '../models/exhibitor/best_display_report_data.dart';
 import '../models/exhibitor/ribbon_payout_report_data.dart';
 import '../models/exhibitor/payback_report_data.dart';
+import '../models/judge/breed_judged_totals_report_data.dart';
 import '../models/judge/judge_report_data.dart';
 import '../models/legs/legs_certificate_data.dart';
 import '../models/paid/paid_exhibitor_report_data.dart';
 import '../models/unpaid/unpaid_balances_report_data.dart';
 
 import '../pdf/builders/arba_report_pdf.dart';
+import '../pdf/builders/breed_judged_totals_report_pdf.dart';
 import '../pdf/builders/breed_results_detail_report_pdf.dart';
 import '../pdf/builders/details_by_breed_report_pdf.dart';
 import '../pdf/builders/exhibitor_by_breed_report_pdf.dart';
@@ -77,6 +80,8 @@ class ReportRegistry {
     required PaybackReportPdfBuilder paybackReportBuilder,
     required JudgeReportLoader judgeReportLoader,
     required JudgeReportPdfBuilder judgeReportBuilder,
+    required BreedJudgedTotalsReportLoader breedJudgedTotalsReportLoader,
+    required BreedJudgedTotalsReportPdfBuilder breedJudgedTotalsReportBuilder,
     required BestDisplayReportLoader bestDisplayReportLoader,
     required BestDisplayReportPdfBuilder bestDisplayReportBuilder,
   }) : definitions = {
@@ -208,6 +213,16 @@ class ReportRegistry {
             ),
             builder: (data, req) async =>
                 await judgeReportBuilder.buildFile(data as JudgeReportData, req),
+          ),
+          'breed_judged_totals_report': ReportDefinition(
+            reportName: 'breed_judged_totals_report',
+            outputType: 'pdf',
+            loader: (req) async => await breedJudgedTotalsReportLoader.load(req),
+            builder: (data, req) async =>
+                await breedJudgedTotalsReportBuilder.buildFile(
+                  data as BreedJudgedTotalsReportData,
+                  req,
+                ),
           ),
           'best_display_report': ReportDefinition(
             reportName: 'best_display_report',

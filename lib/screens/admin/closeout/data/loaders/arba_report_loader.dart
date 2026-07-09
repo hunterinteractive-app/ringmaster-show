@@ -310,14 +310,26 @@ class ArbaReportLoader {
 
       if (judgeIds.isEmpty) return const [];
 
-      final judgeRows = await repo.supabase
-          .from('judges')
-          .select(
-            'id, name, display_name, first_name, last_name, arba_judge_number',
-          )
-          .inFilter('id', judgeIds);
+      final judgeRows = <Map<String, dynamic>>[];
+      const chunkSize = 100;
 
-      return List<Map<String, dynamic>>.from(judgeRows)
+      for (var start = 0; start < judgeIds.length; start += chunkSize) {
+        final end = start + chunkSize > judgeIds.length
+            ? judgeIds.length
+            : start + chunkSize;
+        final chunk = judgeIds.sublist(start, end);
+
+        final rows = await repo.supabase
+            .from('judges')
+            .select(
+              'id, name, display_name, first_name, last_name, arba_judge_number',
+            )
+            .inFilter('id', chunk);
+
+        judgeRows.addAll(List<Map<String, dynamic>>.from(rows));
+      }
+
+      return judgeRows
           .map((j) {
             final name = _firstNonEmpty([
               _str(j['display_name']),

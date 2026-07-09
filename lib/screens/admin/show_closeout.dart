@@ -31,12 +31,14 @@ import 'closeout/data/loaders/paid_exhibitor_report_loader.dart';
 import 'closeout/data/loaders/entered_exhibitors_contact_report_loader.dart';
 import 'closeout/data/loaders/ribbon_payout_report_loader.dart';
 import 'closeout/data/loaders/judge_report_loader.dart';
+import 'closeout/data/loaders/breed_judged_totals_report_loader.dart';
 import 'closeout/data/loaders/best_display_report_loader.dart';
 import 'closeout/data/loaders/payback_report_loader.dart';
 import 'closeout/data/loaders/details_by_breed_report_loader.dart';
 import 'closeout/data/loaders/exhibitor_by_breed_report_loader.dart';
 
 import 'closeout/pdf/builders/judge_report_pdf.dart';
+import 'closeout/pdf/builders/breed_judged_totals_report_pdf.dart';
 import 'closeout/pdf/builders/best_display_report_pdf.dart';
 import 'closeout/pdf/builders/legs_report_pdf.dart';
 import 'closeout/pdf/builders/exhibitor_report_pdf.dart';
@@ -101,11 +103,16 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   final Set<String> _customCloseoutSectionIds = {};
 
   bool _loading = true;
+  bool _loadingReports = false;
+  bool _reportsLoaded = false;
+  bool _reportsSectionOpen = false;
   bool _generatingReport = false;
   String? _error;
+  String? _reportsError;
   Uint8List? _reportLogoBytes;
 
   CloseoutDashboard? _dashboard;
+  Map<String, List<String>> _cachedReportNamesByGroup = const {};
   LegsReportPdfBuilder? _legsBuilder;
   ExhibitorReportPdfBuilder? _exhibitorBuilder;
   UnpaidBalancesReportPdfBuilder? _unpaidBalancesBuilder;
@@ -155,6 +162,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     'cavy_points',
     'commercial_points',
     'judge_report',
+    'breed_judged_totals_report',
     'best_display_report',
     'finalized_show_report',
     'show_statistics',
@@ -643,19 +651,28 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     }
 
     try {
-      final rows = await supabase
-          .from('breeds')
-          .select('name, species')
-          .inFilter('name', names);
+      const chunkSize = 100;
 
-      for (final raw in (rows as List)) {
-        final row = Map<String, dynamic>.from(raw as Map);
-        final breedName = (row['name'] ?? '').toString().trim();
-        final species = normalizeClubReportSpecies(
-          (row['species'] ?? '').toString(),
-        );
-        if (breedName.isNotEmpty && species.isNotEmpty) {
-          output[breedName.toLowerCase()] = species;
+      for (var start = 0; start < names.length; start += chunkSize) {
+        final end = start + chunkSize > names.length
+            ? names.length
+            : start + chunkSize;
+        final chunk = names.sublist(start, end);
+
+        final rows = await supabase
+            .from('breeds')
+            .select('name, species')
+            .inFilter('name', chunk);
+
+        for (final raw in (rows as List)) {
+          final row = Map<String, dynamic>.from(raw as Map);
+          final breedName = (row['name'] ?? '').toString().trim();
+          final species = normalizeClubReportSpecies(
+            (row['species'] ?? '').toString(),
+          );
+          if (breedName.isNotEmpty && species.isNotEmpty) {
+            output[breedName.toLowerCase()] = species;
+          }
         }
       }
     } catch (_) {
@@ -838,9 +855,28 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     Future<T> Function() action,
   ) async {
     try {
-      return await action();
+      return await _timedCloseoutLoad(label, action);
     } catch (e, st) {
       Error.throwWithStackTrace(Exception('Failed loading $label: $e'), st);
+    }
+  }
+
+  Future<T> _timedCloseoutLoad<T>(
+    String label,
+    Future<T> Function() action,
+  ) async {
+    final stopwatch = Stopwatch()..start();
+    try {
+      final result = await action();
+      debugPrint(
+        '[Closeout:${widget.showId}] $label loaded in ${stopwatch.elapsedMilliseconds}ms',
+      );
+      return result;
+    } catch (e) {
+      debugPrint(
+        '[Closeout:${widget.showId}] $label failed after ${stopwatch.elapsedMilliseconds}ms: $e',
+      );
+      rethrow;
     }
   }
 
@@ -2148,30 +2184,261 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     );
   }
 
-  Future<void> _refreshDashboardOnly() async {
+  Future<CloseoutDashboard> _loadDashboardFromRpc() async {
+    final dashboardResp = await _timedCloseoutLoad(
+      'dashboard rpc',
+      () => supabase.rpc(
+        'get_show_closeout_dashboard',
+        params: {'p_show_id': widget.showId},
+      ),
+    );
+
+    return CloseoutDashboard.fromJson(
+      Map<String, dynamic>.from(dashboardResp as Map),
+    );
+  }
+
+  Future<CloseoutDashboard> _loadDashboardSummary() async {
     try {
-      var dashboardResp = await supabase.rpc(
-        'get_show_closeout_dashboard',
-        params: {'p_show_id': widget.showId},
+      final showRow = await _timedCloseoutLoad(
+        'show summary',
+        () => supabase
+            .from('shows')
+            .select('id,name')
+            .eq('id', widget.showId)
+            .maybeSingle(),
       );
 
-      var dashboardJson = Map<String, dynamic>.from(dashboardResp as Map);
-      var dashboard = CloseoutDashboard.fromJson(dashboardJson);
-
-      await _syncClubDeliveryMetadata(
-        latestFinalizeRunId: dashboard.latestFinalize.id,
+      final artifactRows = await _timedCloseoutLoad(
+        'report status summary',
+        () => supabase
+            .from('show_report_artifacts')
+            .select('artifact_status, generated_at, finalize_run_id')
+            .eq('show_id', widget.showId)
+            .eq('is_current', true),
       );
 
-      dashboardResp = await supabase.rpc(
-        'get_show_closeout_dashboard',
-        params: {'p_show_id': widget.showId},
-      );
-      dashboardJson = Map<String, dynamic>.from(dashboardResp);
-      dashboard = CloseoutDashboard.fromJson(dashboardJson);
+      Map<String, dynamic>? finalizeRow;
+      try {
+        finalizeRow = await _timedCloseoutLoad(
+          'latest finalize summary',
+          () => supabase
+              .from('show_finalize_runs')
+              .select('id, run_status, started_at, completed_at')
+              .eq('show_id', widget.showId)
+              .order('started_at', ascending: false)
+              .limit(1)
+              .maybeSingle(),
+        );
+      } catch (_) {
+        finalizeRow = null;
+      }
 
-      final readinessResp = await supabase.rpc(
-        'show_results_readiness',
-        params: {'p_show_id': widget.showId},
+      final artifacts = (artifactRows as List)
+          .map((raw) => Map<String, dynamic>.from(raw as Map))
+          .toList();
+      final generated = artifacts
+          .where((row) => (row['artifact_status'] ?? '') == 'generated')
+          .toList();
+      final stale = artifacts.any((row) {
+        final status = (row['artifact_status'] ?? '').toString();
+        return status == 'queued' || status == 'failed';
+      });
+      final generatedDates =
+          generated
+              .map((row) => DateTime.tryParse('${row['generated_at'] ?? ''}'))
+              .whereType<DateTime>()
+              .toList()
+            ..sort();
+      final lastGeneratedAt = generatedDates.isEmpty
+          ? null
+          : generatedDates.last.toUtc().toIso8601String();
+
+      final show = showRow == null
+          ? <String, dynamic>{'id': widget.showId, 'name': widget.showName}
+          : Map<String, dynamic>.from(showRow as Map);
+      final latestFinalize = finalizeRow == null
+          ? const <String, dynamic>{}
+          : Map<String, dynamic>.from(finalizeRow as Map);
+      final fallbackFinalizeRunId = artifacts
+          .map((row) => (row['finalize_run_id'] ?? '').toString().trim())
+          .firstWhere((id) => id.isNotEmpty, orElse: () => '');
+
+      final readiness = _dashboard?.resultsReadiness;
+
+      return CloseoutDashboard(
+        dashboard: DashboardEnvelope.fromJson({
+          'show_id': show['id'] ?? widget.showId,
+          'show_name': show['name'] ?? widget.showName,
+          'closeout': {
+            'sync_status': generated.isNotEmpty ? 'ready' : 'not_ready',
+            'is_points_stale': false,
+            'is_reports_stale': stale || generated.isEmpty,
+            'reports_generated_count': generated.length,
+            'finalized_at': latestFinalize['completed_at'],
+            'reports_generated_at': lastGeneratedAt,
+          },
+        }),
+        resultsReadiness: readiness ?? ResultsReadinessDto.fromJson(const {}),
+        latestFinalize: LatestFinalize.fromJson({
+          ...latestFinalize,
+          if ((latestFinalize['id'] ?? '').toString().trim().isEmpty &&
+              fallbackFinalizeRunId.isNotEmpty)
+            'id': fallbackFinalizeRunId,
+        }),
+        reports: _dashboard?.reports ?? const <ReportArtifactSummary>[],
+        deliveries: _dashboard?.deliveries ?? const <DeliveryRunSummary>[],
+        latestArchive: _dashboard?.latestArchive,
+      );
+    } catch (e) {
+      debugPrint(
+        '[Closeout:${widget.showId}] lightweight dashboard failed, falling back to dashboard rpc: $e',
+      );
+      final dashboard = await _loadDashboardFromRpc();
+      _reportsLoaded = true;
+      return dashboard;
+    }
+  }
+
+  Future<List<ReportArtifactSummary>> _loadReportArtifacts() async {
+    final rows = await _timedCloseoutLoad(
+      'report artifacts',
+      () => supabase
+          .from('show_report_artifacts')
+          .select('''
+            id,
+            finalize_run_id,
+            report_name,
+            artifact_status,
+            file_name,
+            storage_bucket,
+            storage_path,
+            generated_at,
+            is_current,
+            metadata
+          ''')
+          .eq('show_id', widget.showId)
+          .eq('is_current', true)
+          .order('report_name'),
+    );
+
+    return (rows as List)
+        .map(
+          (raw) =>
+              ReportArtifactSummary.fromJson(Map<String, dynamic>.from(raw)),
+        )
+        .toList();
+  }
+
+  Future<List<DeliveryRunSummary>> _loadDeliveryRuns() async {
+    try {
+      final rows = await _timedCloseoutLoad(
+        'delivery runs',
+        () => supabase
+            .from('show_report_deliveries')
+            .select('id, delivery_type, delivery_status')
+            .eq('show_id', widget.showId)
+            .order('created_at', ascending: false)
+            .limit(25),
+      );
+
+      return (rows as List)
+          .map(
+            (raw) =>
+                DeliveryRunSummary.fromJson(Map<String, dynamic>.from(raw)),
+          )
+          .toList();
+    } catch (_) {
+      return const <DeliveryRunSummary>[];
+    }
+  }
+
+  Future<ArchiveSummary?> _loadLatestArchive() async {
+    try {
+      final row = await _timedCloseoutLoad(
+        'latest archive',
+        () => supabase
+            .from('show_report_archives')
+            .select('id, archive_version, archive_status')
+            .eq('show_id', widget.showId)
+            .order('archive_version', ascending: false)
+            .limit(1)
+            .maybeSingle(),
+      );
+
+      return row == null
+          ? null
+          : ArchiveSummary.fromJson(Map<String, dynamic>.from(row as Map));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _ensureReportsLoaded({bool force = false}) async {
+    if (_loadingReports) return;
+    if (_reportsLoaded && !force) return;
+
+    setState(() {
+      _loadingReports = true;
+      _reportsError = null;
+    });
+
+    try {
+      final latestFinalizeRunId = _dashboard?.latestFinalize.id;
+      await _syncClubDeliveryMetadata(latestFinalizeRunId: latestFinalizeRunId);
+
+      final reports = await _loadReportArtifacts();
+      final deliveries = await _loadDeliveryRuns();
+      final latestArchive = await _loadLatestArchive();
+
+      if (!mounted) return;
+      setState(() {
+        if (_dashboard != null) {
+          final fallbackFinalizeRunId = reports
+              .map((report) => (report.finalizeRunId ?? '').trim())
+              .firstWhere((id) => id.isNotEmpty, orElse: () => '');
+          final latestFinalize =
+              _dashboard!.latestFinalize.id == null &&
+                  fallbackFinalizeRunId.isNotEmpty
+              ? LatestFinalize(id: fallbackFinalizeRunId)
+              : _dashboard!.latestFinalize;
+
+          _dashboard = CloseoutDashboard(
+            dashboard: _dashboard!.dashboard,
+            resultsReadiness: _dashboard!.resultsReadiness,
+            latestFinalize: latestFinalize,
+            reports: reports,
+            deliveries: deliveries,
+            latestArchive: latestArchive,
+          );
+        }
+        _reportsLoaded = true;
+        _rebuildReportCaches();
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _reportsError = e.toString();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingReports = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _refreshDashboardOnly({bool includeReports = false}) async {
+    try {
+      var dashboard = await _loadDashboardSummary();
+
+      final readinessResp = await _timedCloseoutLoad(
+        'results readiness refresh',
+        () => supabase.rpc(
+          'show_results_readiness',
+          params: {'p_show_id': widget.showId},
+        ),
       );
 
       final freshReadiness = ResultsReadinessDto.fromJson(
@@ -2190,6 +2457,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       if (!mounted) return;
       setState(() {
         _dashboard = dashboardWithFreshReadiness;
+        _rebuildReportCaches();
 
         _missingPlacementsLoaded = false;
         _missingPlacementItems = [];
@@ -2200,6 +2468,10 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         _duplicatePlacementsLoaded = false;
         _duplicatePlacementGroupItems = [];
       });
+
+      if (includeReports || _reportsLoaded) {
+        await _ensureReportsLoaded(force: true);
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -2212,7 +2484,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     required String previousFinalizeId,
   }) async {
     for (var attempt = 0; attempt < 10; attempt++) {
-      await _refreshDashboardOnly();
+      await _refreshDashboardOnly(includeReports: true);
 
       final latestId = _dashboard?.latestFinalize.id;
 
@@ -2225,7 +2497,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
       if (hasNewFinalize && hasCurrentReports) {
         await _syncClubDeliveryMetadata(latestFinalizeRunId: latestId);
-        await _refreshDashboardOnly();
+        await _refreshDashboardOnly(includeReports: true);
         return;
       }
 
@@ -2235,7 +2507,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     await _syncClubDeliveryMetadata(
       latestFinalizeRunId: _dashboard?.latestFinalize.id,
     );
-    await _refreshDashboardOnly();
+    await _refreshDashboardOnly(includeReports: true);
   }
 
   @override
@@ -2402,25 +2674,48 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       arbaLoader: arbaLoader,
       arbaBuilder: arbaBuilder,
       legsLoader: legsLoader,
-      legsBuilder: _legsBuilder!,
+      legsBuilder: _requiredReportDependency(
+        _legsBuilder,
+        'Legs report PDF builder',
+      ),
       exhibitorLoader: exhibitorLoader,
-      exhibitorBuilder: _exhibitorBuilder!,
+      exhibitorBuilder: _requiredReportDependency(
+        _exhibitorBuilder,
+        'Exhibitor report PDF builder',
+      ),
       sweepstakesLoader: sweepstakesLoader,
       sweepstakesBuilder: sweepstakesBuilder,
       breedResultsDetailReportLoader: breedResultsDetailReportLoader,
       breedResultsDetailReportBuilder: breedResultsDetailReportBuilder,
       unpaidBalancesLoader: unpaidBalancesLoader,
-      unpaidBalancesBuilder: _unpaidBalancesBuilder!,
+      unpaidBalancesBuilder: _requiredReportDependency(
+        _unpaidBalancesBuilder,
+        'Unpaid balances report PDF builder',
+      ),
       paidExhibitorReportLoader: paidExhibitorReportLoader,
-      paidExhibitorReportBuilder: _paidExhibitorReportBuilder!,
+      paidExhibitorReportBuilder: _requiredReportDependency(
+        _paidExhibitorReportBuilder,
+        'Paid exhibitor report PDF builder',
+      ),
       enteredExhibitorsContactLoader: enteredExhibitorsContactLoader,
-      enteredExhibitorsContactBuilder: _enteredExhibitorsContactBuilder!,
+      enteredExhibitorsContactBuilder: _requiredReportDependency(
+        _enteredExhibitorsContactBuilder,
+        'Entered exhibitors contact report PDF builder',
+      ),
       ribbonPayoutLoader: ribbonPayoutLoader,
-      ribbonPayoutBuilder: _ribbonPayoutBuilder!,
+      ribbonPayoutBuilder: _requiredReportDependency(
+        _ribbonPayoutBuilder,
+        'Ribbon payout report PDF builder',
+      ),
       paybackReportLoader: paybackReportLoader,
-      paybackReportBuilder: _paybackReportBuilder!,
+      paybackReportBuilder: _requiredReportDependency(
+        _paybackReportBuilder,
+        'Payback report PDF builder',
+      ),
       judgeReportLoader: JudgeReportLoader(),
       judgeReportBuilder: JudgeReportPdfBuilder(),
+      breedJudgedTotalsReportLoader: BreedJudgedTotalsReportLoader(),
+      breedJudgedTotalsReportBuilder: BreedJudgedTotalsReportPdfBuilder(),
       bestDisplayReportLoader: bestDisplayReportLoader,
       bestDisplayReportBuilder: bestDisplayReportBuilder,
       detailsByBreedReportLoader: detailsByBreedReportLoader,
@@ -2541,11 +2836,24 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
             isNationalShow: isNationalShow,
           );
         } else {
+          final isBreedJudgedTotalsReport =
+              artifact.reportName == 'breed_judged_totals_report';
+          final scopeLabel = _artifactMetaString(artifact, 'scope_label');
+          final sectionIds = _metadataSectionIds(artifact.metadata);
+
+          debugPrint(
+            '[Closeout:${widget.showId}] Generating queued report='
+            '${artifact.reportName} artifact=${artifact.id} '
+            'scopeLabel=${scopeLabel ?? ''} sectionIds=${sectionIds.join(',')}',
+          );
+
           await runner.generateSingleReport(
             showId: widget.showId,
             finalizeRunId: runId,
             reportName: artifact.reportName,
             artifactId: artifact.id,
+            scopeLabel: isBreedJudgedTotalsReport ? scopeLabel : null,
+            sectionIds: isBreedJudgedTotalsReport ? sectionIds : null,
             showName: widget.showName,
             showDate: showDate,
             sanctionNumber: sanctionNumber,
@@ -2746,6 +3054,13 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     _paybackReportBuilder ??= await PaybackReportPdfBuilder.fromAssets();
   }
 
+  T _requiredReportDependency<T>(T? value, String label) {
+    if (value == null) {
+      throw StateError('$label was not initialized before report generation.');
+    }
+    return value;
+  }
+
   Future<void> _sendAllExhibitorReports() async {
     if (await _blockedBySupportModeForEmailSend('Exhibitor')) return;
 
@@ -2758,7 +3073,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     });
 
     try {
-      await _loadData();
+      await _refreshDashboardOnly(includeReports: true);
 
       final exhibitors = await _loadExhibitorEmailTargets();
 
@@ -2916,11 +3231,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     });
 
     try {
-      await _loadData();
-      await _syncClubDeliveryMetadata(
-        latestFinalizeRunId: _dashboard?.latestFinalize.id,
-      );
-      await _loadData();
+      await _refreshDashboardOnly(includeReports: true);
 
       final clubs = await _loadClubEmailTargets();
 
@@ -3137,7 +3448,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     });
 
     try {
-      await _loadData();
+      await _refreshDashboardOnly(includeReports: true);
 
       final exhibitors = await _loadExhibitorEmailTargets();
 
@@ -3448,28 +3759,14 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     });
 
     try {
-      var dashboardResp = await supabase.rpc(
-        'get_show_closeout_dashboard',
-        params: {'p_show_id': widget.showId},
-      );
+      var dashboard = await _loadDashboardSummary();
 
-      var dashboardJson = Map<String, dynamic>.from(dashboardResp as Map);
-      var dashboard = CloseoutDashboard.fromJson(dashboardJson);
-
-      await _syncClubDeliveryMetadata(
-        latestFinalizeRunId: dashboard.latestFinalize.id,
-      );
-
-      dashboardResp = await supabase.rpc(
-        'get_show_closeout_dashboard',
-        params: {'p_show_id': widget.showId},
-      );
-      dashboardJson = Map<String, dynamic>.from(dashboardResp);
-      dashboard = CloseoutDashboard.fromJson(dashboardJson);
-
-      final readinessResp = await supabase.rpc(
-        'show_results_readiness',
-        params: {'p_show_id': widget.showId},
+      final readinessResp = await _timedCloseoutLoad(
+        'results readiness',
+        () => supabase.rpc(
+          'show_results_readiness',
+          params: {'p_show_id': widget.showId},
+        ),
       );
 
       final freshReadiness = ResultsReadinessDto.fromJson(
@@ -3485,20 +3782,12 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         latestArchive: dashboard.latestArchive,
       );
 
-      await _loadArbaDetails();
-      await _ensureLegsBuilder();
-      await _ensureExhibitorBuilder();
-      await _ensureUnpaidBalancesBuilder();
-      await _ensurePaidExhibitorReportBuilder();
-      await _ensureReportLogo();
-      await _ensureEnteredExhibitorsContactBuilder();
-      await _ensureRibbonPayoutBuilder();
-      await _ensurePaybackReportBuilder();
-      await _loadCloseoutScopes();
+      await _timedCloseoutLoad('ARBA closeout details', _loadArbaDetails);
 
       if (!mounted) return;
       setState(() {
         _dashboard = dashboardWithFreshReadiness;
+        _rebuildReportCaches();
 
         _missingPlacementsLoaded = false;
         _missingPlacementItems = [];
@@ -3509,6 +3798,11 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         _duplicatePlacementsLoaded = false;
         _duplicatePlacementGroupItems = [];
       });
+
+      unawaited(_loadCloseoutScopes());
+      if (_reportsLoaded) {
+        unawaited(_ensureReportsLoaded(force: true));
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -3595,6 +3889,11 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     Map<String, dynamic>? metadata,
   }) async {
     final finalizeRunId = _dashboard?.latestFinalize.id;
+    debugPrint(
+      '[Closeout:${widget.showId}] Creating manual artifact '
+      'report=$reportName finalizeRunId=${finalizeRunId ?? ''} '
+      'metadata=${metadata ?? <String, dynamic>{}}',
+    );
 
     final inserted = await supabase
         .from('show_report_artifacts')
@@ -3621,6 +3920,37 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         .single();
 
     return ReportArtifactSummary.fromJson(Map<String, dynamic>.from(inserted));
+  }
+
+  List<String> _metadataSectionIds(Map<String, dynamic> metadata) {
+    final raw = metadata['section_ids'];
+    if (raw is List) {
+      return raw
+          .map((value) => value?.toString().trim() ?? '')
+          .where((id) => id.isNotEmpty)
+          .toList();
+    }
+    return const <String>[];
+  }
+
+  Map<String, dynamic> _internalShowLevelReportMetadata(String reportName) {
+    if (reportName != 'breed_judged_totals_report') {
+      return const <String, dynamic>{};
+    }
+
+    if (_selectedCloseoutScopeIsEntireShow) {
+      return const <String, dynamic>{
+        'report_scope': 'show',
+        'internal_report': true,
+      };
+    }
+
+    return {
+      'report_scope': 'selected_sections',
+      'internal_report': true,
+      'scope_label': _selectedCloseoutScopeLabel,
+      'section_ids': _selectedCloseoutSectionIds,
+    };
   }
 
   String _formatShowDate(dynamic rawDate) {
@@ -3714,7 +4044,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       await _syncClubDeliveryMetadata(
         latestFinalizeRunId: _dashboard?.latestFinalize.id,
       );
-      await _refreshDashboardOnly();
+      await _refreshDashboardOnly(includeReports: true);
+    } else {
+      await _ensureReportsLoaded();
     }
 
     final artifacts = _currentArtifactsForReportGroup(reportName);
@@ -3743,7 +4075,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         },
       );
 
-      await _refreshDashboardOnly();
+      await _refreshDashboardOnly(includeReports: true);
 
       if (!mounted) return;
 
@@ -3790,6 +4122,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       if (!ready) return;
     }
 
+    await _ensureReportsLoaded();
+
     final isSectionScopedReport =
         reportName == 'sweepstakes_report' ||
         reportName == 'breed_results_detail_report' ||
@@ -3809,7 +4143,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         await _syncClubDeliveryMetadata(
           latestFinalizeRunId: _dashboard?.latestFinalize.id,
         );
-        await _refreshDashboardOnly();
+        await _refreshDashboardOnly(includeReports: true);
       }
 
       final scopedArtifacts = _currentArtifactsForReportGroup(reportName);
@@ -3859,7 +4193,31 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       await _ensureCombinedCavyClubReportArtifacts(
         latestFinalizeRunId: _dashboard?.latestFinalize.id,
       );
-      await _refreshDashboardOnly();
+      await _refreshDashboardOnly(includeReports: true);
+    }
+
+    final isBreedJudgedTotalsReport =
+        reportName == 'breed_judged_totals_report';
+    final internalReportMetadata = _internalShowLevelReportMetadata(reportName);
+    final selectedReportScopeLabel = isBreedJudgedTotalsReport
+        ? (internalReportMetadata['scope_label'] ?? '').toString().trim()
+        : '';
+    final selectedReportSectionIds = isBreedJudgedTotalsReport
+        ? _metadataSectionIds(internalReportMetadata)
+        : const <String>[];
+
+    if (isBreedJudgedTotalsReport &&
+        !_selectedCloseoutScopeIsEntireShow &&
+        selectedReportSectionIds.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Select at least one section for $_selectedCloseoutScopeLabel before generating this report.',
+          ),
+        ),
+      );
+      return;
     }
 
     try {
@@ -3876,6 +4234,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       await _ensureReportLogo();
       await _ensureEnteredExhibitorsContactBuilder();
       await _ensureRibbonPayoutBuilder();
+      await _ensurePaybackReportBuilder();
 
       final repository = CloseoutRepository(supabase);
       final arbaLoader = ArbaReportLoader(repository);
@@ -3914,9 +4273,15 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         arbaLoader: arbaLoader,
         arbaBuilder: arbaBuilder,
         legsLoader: legsLoader,
-        legsBuilder: _legsBuilder!,
+        legsBuilder: _requiredReportDependency(
+          _legsBuilder,
+          'Legs report PDF builder',
+        ),
         exhibitorLoader: exhibitorLoader,
-        exhibitorBuilder: _exhibitorBuilder!,
+        exhibitorBuilder: _requiredReportDependency(
+          _exhibitorBuilder,
+          'Exhibitor report PDF builder',
+        ),
         sweepstakesLoader: sweepstakesLoader,
         sweepstakesBuilder: sweepstakesBuilder,
         breedResultsDetailReportLoader: breedResultsDetailReportLoader,
@@ -3930,17 +4295,34 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           logoBytes: _reportLogoBytes,
         ),
         unpaidBalancesLoader: unpaidBalancesLoader,
-        unpaidBalancesBuilder: _unpaidBalancesBuilder!,
+        unpaidBalancesBuilder: _requiredReportDependency(
+          _unpaidBalancesBuilder,
+          'Unpaid balances report PDF builder',
+        ),
         paidExhibitorReportLoader: paidExhibitorReportLoader,
-        paidExhibitorReportBuilder: _paidExhibitorReportBuilder!,
+        paidExhibitorReportBuilder: _requiredReportDependency(
+          _paidExhibitorReportBuilder,
+          'Paid exhibitor report PDF builder',
+        ),
         enteredExhibitorsContactLoader: enteredExhibitorsContactLoader,
-        enteredExhibitorsContactBuilder: _enteredExhibitorsContactBuilder!,
+        enteredExhibitorsContactBuilder: _requiredReportDependency(
+          _enteredExhibitorsContactBuilder,
+          'Entered exhibitors contact report PDF builder',
+        ),
         ribbonPayoutLoader: ribbonPayoutLoader,
-        ribbonPayoutBuilder: _ribbonPayoutBuilder!,
+        ribbonPayoutBuilder: _requiredReportDependency(
+          _ribbonPayoutBuilder,
+          'Ribbon payout report PDF builder',
+        ),
         paybackReportLoader: paybackReportLoader,
-        paybackReportBuilder: _paybackReportBuilder!,
+        paybackReportBuilder: _requiredReportDependency(
+          _paybackReportBuilder,
+          'Payback report PDF builder',
+        ),
         judgeReportLoader: JudgeReportLoader(),
         judgeReportBuilder: JudgeReportPdfBuilder(),
+        breedJudgedTotalsReportLoader: BreedJudgedTotalsReportLoader(),
+        breedJudgedTotalsReportBuilder: BreedJudgedTotalsReportPdfBuilder(),
         bestDisplayReportLoader: BestDisplayReportLoader(),
         bestDisplayReportBuilder: BestDisplayReportPdfBuilder(),
       );
@@ -4005,6 +4387,19 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
               artScope == (scope ?? '').trim().toUpperCase() &&
               artLetter == (showLetter ?? '').trim().toUpperCase();
         }, orElse: () => null);
+      } else if (isBreedJudgedTotalsReport) {
+        artifact = reports.cast<ReportArtifactSummary?>().firstWhere((r) {
+          if (r == null) return false;
+          final artifactScopeLabel =
+              (_artifactMetaString(r, 'scope_label') ?? '').trim();
+
+          if (selectedReportScopeLabel.isEmpty) {
+            return artifactScopeLabel.isEmpty ||
+                artifactScopeLabel == 'Entire Show';
+          }
+
+          return artifactScopeLabel == selectedReportScopeLabel;
+        }, orElse: () => null);
       } else {
         artifact = reports.cast<ReportArtifactSummary?>().firstWhere(
           (r) => r != null,
@@ -4030,8 +4425,26 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                 'exhibitor_id': exhibitorId.trim(),
               if (exhibitorName != null && exhibitorName.trim().isNotEmpty)
                 'exhibitor_name': exhibitorName.trim(),
+              ...internalReportMetadata,
             },
           );
+
+      final artifactMetadataSectionIds = _metadataSectionIds(
+        resolvedArtifact.metadata,
+      );
+      final breedJudgedSectionIds = selectedReportSectionIds.isNotEmpty
+          ? selectedReportSectionIds
+          : artifactMetadataSectionIds;
+      final breedJudgedScopeLabel = selectedReportScopeLabel.isNotEmpty
+          ? selectedReportScopeLabel
+          : (_artifactMetaString(resolvedArtifact, 'scope_label') ?? '');
+
+      debugPrint(
+        '[Closeout:${widget.showId}] Generating report=$reportName '
+        'artifact=${resolvedArtifact.id} '
+        'scopeLabel=$breedJudgedScopeLabel '
+        'sectionIds=${breedJudgedSectionIds.join(',')}',
+      );
 
       await runner.generateSingleReport(
         showId: widget.showId,
@@ -4041,6 +4454,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         breedName: targetLoaderBreedName,
         species: _artifactMetaString(resolvedArtifact, 'species'),
         scope: scope,
+        scopeLabel: isBreedJudgedTotalsReport ? breedJudgedScopeLabel : null,
+        sectionIds: isBreedJudgedTotalsReport ? breedJudgedSectionIds : null,
         showName: widget.showName,
         showDate: showDate,
         sanctionNumber: sanctionNumber,
@@ -4050,7 +4465,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         isNationalShow: isNationalShow,
       );
 
-      await _refreshDashboardOnly();
+      await _refreshDashboardOnly(includeReports: true);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -4298,6 +4713,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     String? showLetter,
   }) async {
     try {
+      await _ensureReportsLoaded();
+
       final reports = _dashboard?.reports ?? const <ReportArtifactSummary>[];
 
       var matches = reports.where(
@@ -5192,6 +5609,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     if (await _blockedBySupportModeForEmailSend('Report')) return;
 
     try {
+      await _ensureReportsLoaded();
+
       var artifacts = (_dashboard?.reports ?? const <ReportArtifactSummary>[])
           .where((r) => r.reportName == reportName)
           .where(_artifactIsUsableCurrent);
@@ -5448,93 +5867,234 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         .toList();
   }
 
-  List<ReportArtifactSummary> _reportsForGroup(String groupKey) {
+  void _rebuildReportCaches() {
     final reports = _dashboard?.reports ?? const <ReportArtifactSummary>[];
+    final namesByGroup = <String, List<String>>{};
 
-    final filtered = switch (groupKey) {
-      'arba' =>
-        reports.where((r) => _arbaReportKeys.contains(r.reportName)).toList(),
-      'exhibitor' =>
-        reports
-            .where((r) => _exhibitorReportKeys.contains(r.reportName))
-            .toList(),
-      'club' =>
-        reports.where((r) => _clubReportKeys.contains(r.reportName)).toList(),
-      'other' => reports.where((r) {
-        return !_arbaReportKeys.contains(r.reportName) &&
-            !_exhibitorReportKeys.contains(r.reportName) &&
-            !_clubReportKeys.contains(r.reportName);
-      }).toList(),
-      _ => reports,
-    };
+    for (final groupKey in const ['arba', 'exhibitor', 'club', 'other']) {
+      final filtered = switch (groupKey) {
+        'arba' =>
+          reports.where((r) => _arbaReportKeys.contains(r.reportName)).toList(),
+        'exhibitor' =>
+          reports
+              .where((r) => _exhibitorReportKeys.contains(r.reportName))
+              .toList(),
+        'club' =>
+          reports.where((r) => _clubReportKeys.contains(r.reportName)).toList(),
+        'other' => reports.where((r) {
+          return !_arbaReportKeys.contains(r.reportName) &&
+              !_exhibitorReportKeys.contains(r.reportName) &&
+              !_clubReportKeys.contains(r.reportName);
+        }).toList(),
+        _ => reports,
+      };
 
-    final scoped = filtered.where((r) {
-      return _artifactMatchesSelectedScope(r);
-    }).toList();
+      final scoped = filtered.where(_artifactMatchesSelectedScope).toList()
+        ..sort(_compareReportsForDisplay);
 
-    scoped.sort((a, b) {
-      final aIndex = _reportDisplayOrder.indexOf(a.reportName);
-      final bIndex = _reportDisplayOrder.indexOf(b.reportName);
+      final names = scoped.map((r) => r.reportName).toSet().toList();
+      _addManualReportNames(groupKey, names);
+      names.sort(_compareReportNamesForDisplay);
+      namesByGroup[groupKey] = names;
+    }
 
-      if (aIndex == -1 && bIndex == -1) {
-        return _friendlyReportName(
-          a.reportName,
-        ).compareTo(_friendlyReportName(b.reportName));
-      }
-      if (aIndex == -1) return 1;
-      if (bIndex == -1) return -1;
-      return aIndex.compareTo(bIndex);
-    });
-
-    return scoped;
+    _cachedReportNamesByGroup = namesByGroup;
   }
 
-  List<String> _reportNamesForGroup(String groupKey) {
-    final reports = _reportsForGroup(groupKey);
-    final names = reports.map((r) => r.reportName).toSet().toList();
+  int _compareReportsForDisplay(
+    ReportArtifactSummary a,
+    ReportArtifactSummary b,
+  ) {
+    return _compareReportNamesForDisplay(a.reportName, b.reportName);
+  }
 
-    if (groupKey == 'arba') {
-      for (final name in _arbaReportKeys) {
-        if (!names.contains(name)) names.add(name);
-      }
-    } else if (groupKey == 'exhibitor') {
-      for (final name in _exhibitorReportKeys) {
-        if (!names.contains(name)) names.add(name);
-      }
-    } else if (groupKey == 'club') {
-      for (final name in _clubReportKeys) {
-        if (!names.contains(name)) names.add(name);
-      }
-    } else if (groupKey == 'other') {
-      const otherManualReports = <String>{
-        // Add here to include in Other Reports
+  int _compareReportNamesForDisplay(String a, String b) {
+    final aIndex = _reportDisplayOrder.indexOf(a);
+    final bIndex = _reportDisplayOrder.indexOf(b);
+
+    if (aIndex == -1 && bIndex == -1) {
+      return _friendlyReportName(a).compareTo(_friendlyReportName(b));
+    }
+    if (aIndex == -1) return 1;
+    if (bIndex == -1) return -1;
+    return aIndex.compareTo(bIndex);
+  }
+
+  void _addManualReportNames(String groupKey, List<String> names) {
+    final manualNames = switch (groupKey) {
+      'arba' => _arbaReportKeys,
+      'exhibitor' => _exhibitorReportKeys,
+      'club' => _clubReportKeys,
+      'other' => const <String>{
         'unpaid_balances_report',
         'paid_exhibitor_report',
         'entered_exhibitors_contact_report',
         'ribbon_payout_report',
         'judge_report',
+        'breed_judged_totals_report',
         'best_display_report',
         'payback_report',
-      };
+      },
+      _ => const <String>{},
+    };
 
-      for (final name in otherManualReports) {
-        if (!names.contains(name)) names.add(name);
-      }
+    for (final name in manualNames) {
+      if (!names.contains(name)) names.add(name);
     }
+  }
 
-    names.sort((a, b) {
-      final aIndex = _reportDisplayOrder.indexOf(a);
-      final bIndex = _reportDisplayOrder.indexOf(b);
+  List<String> _reportNamesForGroup(String groupKey) {
+    return _cachedReportNamesByGroup[groupKey] ?? const <String>[];
+  }
 
-      if (aIndex == -1 && bIndex == -1) {
-        return _friendlyReportName(a).compareTo(_friendlyReportName(b));
-      }
-      if (aIndex == -1) return 1;
-      if (bIndex == -1) return -1;
-      return aIndex.compareTo(bIndex);
-    });
+  Widget _buildReportActionsSection({
+    required bool reportsBlocked,
+    required String? reportsBlockedMessage,
+  }) {
+    return AppTheme.surfaceTextScope(
+      context,
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.muted.withValues(alpha: .18)),
+        ),
+        child: ExpansionTile(
+          initiallyExpanded: _reportsSectionOpen,
+          onExpansionChanged: (expanded) {
+            setState(() {
+              _reportsSectionOpen = expanded;
+            });
+            if (expanded) {
+              unawaited(_ensureReportsLoaded());
+            }
+          },
+          title: const Text('Reports'),
+          subtitle: Text(
+            _reportsLoaded
+                ? 'Generate, download, and distribute closeout reports.'
+                : 'Open to load generated reports and delivery history.',
+          ),
+          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          children: [
+            if (_loadingReports && !_reportsLoaded)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (_reportsError != null && !_reportsLoaded)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Failed loading reports: $_reportsError',
+                      style: const TextStyle(color: Colors.red),
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: () => _ensureReportsLoaded(force: true),
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              )
+            else if (!_reportsLoaded)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: OutlinedButton.icon(
+                  onPressed: () => _ensureReportsLoaded(),
+                  icon: const Icon(Icons.folder_open),
+                  label: const Text('Load Reports'),
+                ),
+              )
+            else
+              Column(
+                children: [
+                  if (_loadingReports) ...[
+                    const LinearProgressIndicator(minHeight: 2),
+                    const SizedBox(height: 12),
+                  ],
+                  _ReportActionsCard(
+                    key: ValueKey('report-actions-${widget.showId}'),
+                    showId: widget.showId,
+                    reports:
+                        _dashboard?.reports ?? const <ReportArtifactSummary>[],
+                    groupedReportNames: {
+                      'arba': _reportNamesForGroup('arba'),
+                      'exhibitor': _reportNamesForGroup('exhibitor'),
+                      'club': _reportNamesForGroup('club'),
+                      'other': _reportNamesForGroup('other'),
+                    },
+                    onGenerate:
+                        (
+                          reportName, {
+                          String? breedName,
+                          String? clubName,
+                          String? scope,
+                          String? showLetter,
+                          String? exhibitorId,
+                          String? exhibitorName,
+                        }) {
+                          final isSingleTarget =
+                              breedName != null ||
+                              clubName != null ||
+                              scope != null ||
+                              showLetter != null ||
+                              exhibitorId != null ||
+                              exhibitorName != null;
 
-    return names;
+                          if (!isSingleTarget && reportName == 'arba_report') {
+                            return _generateCurrentReportGroupByName(
+                              reportName,
+                            );
+                          }
+
+                          return _generateReportByName(
+                            reportName,
+                            breedName: breedName,
+                            clubName: clubName,
+                            scope: scope,
+                            showLetter: showLetter,
+                            exhibitorId: exhibitorId,
+                            exhibitorName: exhibitorName,
+                          );
+                        },
+                    onDownload:
+                        (
+                          reportName, {
+                          String? exhibitorId,
+                          String? breedName,
+                          String? clubName,
+                          String? scope,
+                          String? showLetter,
+                        }) => _downloadReportByName(
+                          reportName,
+                          exhibitorId: exhibitorId,
+                          breedName: breedName,
+                          clubName: clubName,
+                          scope: scope,
+                          showLetter: showLetter,
+                        ),
+                    onGenerateArtifact: _generateReportArtifact,
+                    onDownloadArtifact: _downloadReportArtifact,
+                    onEmail: _emailReportByName,
+                    onEmailThisLetter: _emailArtifactThisLetter,
+                    onEmailAllLetters: _emailArtifactAllLetters,
+                    loading: _generatingReport,
+                    reportsBlocked: reportsBlocked,
+                    reportsBlockedMessage: reportsBlockedMessage,
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -5635,6 +6195,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                     onChanged: (scope) {
                       setState(() {
                         _selectedCloseoutScope = scope;
+                        _rebuildReportCaches();
                       });
                     },
                     onCustomSectionChanged: (sectionId, selected) {
@@ -5644,6 +6205,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                         } else {
                           _customCloseoutSectionIds.remove(sectionId);
                         }
+                        _rebuildReportCaches();
                       });
                     },
                   ),
@@ -6061,72 +6623,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
                   const SizedBox(height: 16),
 
-                  _ReportActionsCard(
-                    showId: widget.showId,
-                    reports:
-                        _dashboard?.reports ?? const <ReportArtifactSummary>[],
-                    groupedReportNames: {
-                      'arba': _reportNamesForGroup('arba'),
-                      'exhibitor': _reportNamesForGroup('exhibitor'),
-                      'club': _reportNamesForGroup('club'),
-                      'other': _reportNamesForGroup('other'),
-                    },
-                    onGenerate:
-                        (
-                          reportName, {
-                          String? breedName,
-                          String? clubName,
-                          String? scope,
-                          String? showLetter,
-                          String? exhibitorId,
-                          String? exhibitorName,
-                        }) {
-                          final isSingleTarget =
-                              breedName != null ||
-                              clubName != null ||
-                              scope != null ||
-                              showLetter != null ||
-                              exhibitorId != null ||
-                              exhibitorName != null;
-
-                          if (!isSingleTarget && reportName == 'arba_report') {
-                            return _generateCurrentReportGroupByName(
-                              reportName,
-                            );
-                          }
-
-                          return _generateReportByName(
-                            reportName,
-                            breedName: breedName,
-                            clubName: clubName,
-                            scope: scope,
-                            showLetter: showLetter,
-                            exhibitorId: exhibitorId,
-                            exhibitorName: exhibitorName,
-                          );
-                        },
-                    onDownload:
-                        (
-                          reportName, {
-                          String? exhibitorId,
-                          String? breedName,
-                          String? clubName,
-                          String? scope,
-                          String? showLetter,
-                        }) => _downloadReportByName(
-                          reportName,
-                          exhibitorId: exhibitorId,
-                          breedName: breedName,
-                          clubName: clubName,
-                          scope: scope,
-                          showLetter: showLetter,
-                        ),
-                    onGenerateArtifact: _generateReportArtifact,
-                    onDownloadArtifact: _downloadReportArtifact,
-                    onEmail: _emailReportByName,
-                    onEmailThisLetter: _emailArtifactThisLetter,
-                    onEmailAllLetters: _emailArtifactAllLetters,
-                    loading: _generatingReport,
+                  _buildReportActionsSection(
                     reportsBlocked: reportsBlocked,
                     reportsBlockedMessage: reportsBlockedMessage,
                   ),
@@ -6495,6 +6992,7 @@ class _ReportActionsCard extends StatefulWidget {
   final String? reportsBlockedMessage;
 
   const _ReportActionsCard({
+    super.key,
     required this.showId,
     required this.reports,
     required this.groupedReportNames,
@@ -6968,14 +7466,27 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
       // Club reports must also include sanctioned breeds that had no entries
       // or no animals shown. Those breeds will not be returned by the results RPC.
       if (sectionIds.isNotEmpty) {
-        final sanctionRows = await supabase
-            .from('show_sanctions')
-            .select('breed_name, section_id')
-            .eq('show_id', widget.showId)
-            .inFilter('section_id', sectionIds);
-        final sanctionMaps = (sanctionRows as List)
-            .map((raw) => Map<String, dynamic>.from(raw as Map))
-            .toList();
+        final sanctionMaps = <Map<String, dynamic>>[];
+        const chunkSize = 100;
+
+        for (var start = 0; start < sectionIds.length; start += chunkSize) {
+          final end = start + chunkSize > sectionIds.length
+              ? sectionIds.length
+              : start + chunkSize;
+          final chunk = sectionIds.sublist(start, end);
+
+          final sanctionRows = await supabase
+              .from('show_sanctions')
+              .select('breed_name, section_id')
+              .eq('show_id', widget.showId)
+              .inFilter('section_id', chunk);
+
+          sanctionMaps.addAll(
+            (sanctionRows as List).map(
+              (raw) => Map<String, dynamic>.from(raw as Map),
+            ),
+          );
+        }
 
         for (final row in sanctionMaps) {
           final rawBreed = (row['breed_name'] ?? '').toString().trim();
@@ -7128,15 +7639,30 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
             .toList();
 
         if (sectionIds.isNotEmpty) {
-          final sanctionRows = await supabase
-              .from('show_sanctions')
-              .select('club_name, sanctioning_body, section_id')
-              .eq('show_id', widget.showId)
-              .inFilter('section_id', sectionIds)
-              .eq('sanctioning_body', 'STATE CLUB');
+          final sanctionRows = <Map<String, dynamic>>[];
+          const chunkSize = 100;
 
-          for (final raw in (sanctionRows as List)) {
-            final row = Map<String, dynamic>.from(raw as Map);
+          for (var start = 0; start < sectionIds.length; start += chunkSize) {
+            final end = start + chunkSize > sectionIds.length
+                ? sectionIds.length
+                : start + chunkSize;
+            final chunk = sectionIds.sublist(start, end);
+
+            final rows = await supabase
+                .from('show_sanctions')
+                .select('club_name, sanctioning_body, section_id')
+                .eq('show_id', widget.showId)
+                .inFilter('section_id', chunk)
+                .eq('sanctioning_body', 'STATE CLUB');
+
+            sanctionRows.addAll(
+              (rows as List).map(
+                (raw) => Map<String, dynamic>.from(raw as Map),
+              ),
+            );
+          }
+
+          for (final row in sanctionRows) {
             final clubName = (row['club_name'] ?? '').toString().trim();
             if (clubName.isNotEmpty) clubs.add(clubName);
           }
@@ -7197,9 +7723,24 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
       return;
     }
 
-    if (_selectedReportName == null || !reports.contains(_selectedReportName)) {
-      _selectedReportName = reports.first;
+    if (_selectedReportName != null && reports.contains(_selectedReportName)) {
+      return;
     }
+
+    String? matchingGroup;
+    for (final entry in widget.groupedReportNames.entries) {
+      if (entry.value.isNotEmpty && entry.value.contains(_selectedReportName)) {
+        matchingGroup = entry.key;
+        break;
+      }
+    }
+
+    if (matchingGroup != null) {
+      _selectedGroup = matchingGroup;
+      return;
+    }
+
+    _selectedReportName = reports.first;
   }
 
   Widget _buildArtifactActions({
@@ -8318,6 +8859,8 @@ String _friendlyReportName(String? key) {
       return 'ARBA Report';
     case 'judge_report':
       return 'Judge Report';
+    case 'breed_judged_totals_report':
+      return 'Breed Judged Totals Report';
     case 'finalized_show_report':
       return 'Finalized Show Report';
     case 'details_by_breed':

@@ -19,16 +19,16 @@ class CloseoutRepository {
     while (true) {
       final rows = orderColumn != null && orderColumn.isNotEmpty
           ? await supabase
-              .from(table)
-              .select(columns)
-              .eq(filterColumn, filterValue)
-              .order(orderColumn)
-              .range(from, from + pageSize - 1)
+                .from(table)
+                .select(columns)
+                .eq(filterColumn, filterValue)
+                .order(orderColumn)
+                .range(from, from + pageSize - 1)
           : await supabase
-              .from(table)
-              .select(columns)
-              .eq(filterColumn, filterValue)
-              .range(from, from + pageSize - 1);
+                .from(table)
+                .select(columns)
+                .eq(filterColumn, filterValue)
+                .range(from, from + pageSize - 1);
       final batch = List<Map<String, dynamic>>.from(rows);
       allRows.addAll(batch);
 
@@ -53,9 +53,7 @@ class CloseoutRepository {
         .single();
   }
 
-  Future<List<Map<String, dynamic>>> loadShowJudges(
-    String showId,
-  ) async {
+  Future<List<Map<String, dynamic>>> loadShowJudges(String showId) async {
     final rows = await supabase
         .from('show_judges')
         .select('judge_id,sort_order')
@@ -79,9 +77,7 @@ class CloseoutRepository {
   // NEW METHODS FOR UNPAID REPORT
   // ---------------------------
 
-  Future<Map<String, dynamic>?> loadShowFeeSettings(
-    String showId,
-  ) async {
+  Future<Map<String, dynamic>?> loadShowFeeSettings(String showId) async {
     final row = await supabase
         .from('show_fee_settings')
         .select(
@@ -109,12 +105,24 @@ class CloseoutRepository {
 
     if (sectionIds.isEmpty) return [];
 
-    final rows = await supabase
-        .from('show_section_fee_settings')
-        .select('section_id,fee_per_entry,fee_per_show,fur_fee')
-        .inFilter('section_id', sectionIds);
+    final allRows = <Map<String, dynamic>>[];
+    const chunkSize = 100;
 
-    return List<Map<String, dynamic>>.from(rows);
+    for (var start = 0; start < sectionIds.length; start += chunkSize) {
+      final end = start + chunkSize > sectionIds.length
+          ? sectionIds.length
+          : start + chunkSize;
+      final chunk = sectionIds.sublist(start, end);
+
+      final rows = await supabase
+          .from('show_section_fee_settings')
+          .select('section_id,fee_per_entry,fee_per_show,fur_fee')
+          .inFilter('section_id', chunk);
+
+      allRows.addAll(List<Map<String, dynamic>>.from(rows));
+    }
+
+    return allRows;
   }
 
   Future<List<Map<String, dynamic>>> loadShowExhibitorBalances(
@@ -129,15 +137,10 @@ class CloseoutRepository {
     const pageSize = 1000;
     final allRows = <Map<String, dynamic>>[];
 
-    for (var from = 0;; from += pageSize) {
+    for (var from = 0; ; from += pageSize) {
       final to = from + pageSize - 1;
       final rows = await supabase
-          .rpc(
-            'report_show_exhibitor_balances',
-            params: {
-              'p_show_id': showId,
-            },
-          )
+          .rpc('report_show_exhibitor_balances', params: {'p_show_id': showId})
           .range(from, to);
 
       final batch = List<Map<String, dynamic>>.from(rows);
@@ -149,9 +152,7 @@ class CloseoutRepository {
     return allRows;
   }
 
-  Future<List<Map<String, dynamic>>> loadShowSections(
-    String showId,
-  ) async {
+  Future<List<Map<String, dynamic>>> loadShowSections(String showId) async {
     return _selectAll(
       'show_sections',
       'id,display_name,kind,letter,sort_order,is_enabled',
@@ -167,7 +168,7 @@ class CloseoutRepository {
     const pageSize = 1000;
     final allRows = <Map<String, dynamic>>[];
 
-    for (var from = 0;; from += pageSize) {
+    for (var from = 0; ; from += pageSize) {
       final to = from + pageSize - 1;
       final rows = await supabase
           .rpc(
@@ -186,26 +187,29 @@ class CloseoutRepository {
       if (batch.length < pageSize) break;
     }
 
-    return allRows.map((row) {
-      final mapped = Map<String, dynamic>.from(row);
+    return allRows
+        .map((row) {
+          final mapped = Map<String, dynamic>.from(row);
 
-      // The check-in RPC uses entry_id. The unpaid balance builder expects id.
-      mapped['id'] ??= mapped['entry_id'];
+          // The check-in RPC uses entry_id. The unpaid balance builder expects id.
+          mapped['id'] ??= mapped['entry_id'];
 
-      // Keep these defaults so the existing balance-report filters/calculations
-      // can safely consume the RPC rows.
-      mapped['status'] ??= 'submitted';
-      mapped['is_test'] ??= false;
-      mapped['is_disqualified'] ??= false;
+          // Keep these defaults so the existing balance-report filters/calculations
+          // can safely consume the RPC rows.
+          mapped['status'] ??= 'submitted';
+          mapped['is_test'] ??= false;
+          mapped['is_disqualified'] ??= false;
 
-      return mapped;
-    }).where((row) {
-      final status = (row['status'] ?? '').toString().trim().toLowerCase();
-      final isTest = row['is_test'] == true;
-      final scratchedAt = row['scratched_at'];
+          return mapped;
+        })
+        .where((row) {
+          final status = (row['status'] ?? '').toString().trim().toLowerCase();
+          final isTest = row['is_test'] == true;
+          final scratchedAt = row['scratched_at'];
 
-      return !isTest && scratchedAt == null && status != 'scratched';
-    }).toList();
+          return !isTest && scratchedAt == null && status != 'scratched';
+        })
+        .toList();
   }
 
   Future<List<Map<String, dynamic>>> loadExhibitorsByIds(
