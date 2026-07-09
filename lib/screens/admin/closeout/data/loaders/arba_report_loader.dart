@@ -725,46 +725,53 @@ class ArbaReportLoader {
     String? sectionId,
   }) async {
     try {
-      final rows = await repo.supabase.rpc(
-        'report_results_entry_rows',
-        params: {
-          'p_show_id': showId,
-          'p_section_id': (sectionId != null && sectionId.trim().isNotEmpty)
-              ? sectionId.trim()
-              : null,
-          'p_show_letter': null,
-        },
-      );
-
       final normalizedSpecies = species.toLowerCase().trim();
       final targetSectionId = sectionId?.trim() ?? '';
 
-      final allRows = (rows as List)
+      var query = repo.supabase
+          .from('entries')
+          .select('''
+            id,
+            exhibitor_id,
+            species,
+            section_id,
+            breed,
+            variety,
+            fur_variety,
+            tattoo,
+            animal_name,
+            class_name,
+            sex,
+            is_shown,
+            scratched_at,
+            is_disqualified,
+            is_fur,
+            exhibitors!entries_exhibitor_id_fkey(
+              first_name,
+              last_name,
+              display_name,
+              showing_name,
+              address_line1,
+              address_line2,
+              city,
+              state,
+              zip
+            )
+          ''')
+          .eq('show_id', showId)
+          .eq('species', normalizedSpecies);
+
+      if (targetSectionId.isNotEmpty) {
+        query = query.eq('section_id', targetSectionId);
+      }
+
+      final rows = await query;
+
+      final entries = (rows as List)
           .map((e) => Map<String, dynamic>.from(e as Map))
-          .where((e) {
-            if (targetSectionId.isEmpty) return true;
-            return _str(e['section_id']) == targetSectionId;
-          })
+          .where(_arbaAwardEntryCounts)
+          .map(_normalizeArbaAwardEntry)
           .toList();
-
-      final allEntryIds = allRows
-          .map((e) => _str(e['entry_id']))
-          .where((e) => e.isNotEmpty)
-          .toSet()
-          .toList();
-
-      final speciesByEntryId = await _loadEntrySpeciesById(allEntryIds);
-
-      final entries = allRows.where((e) {
-        final entryId = _str(e['entry_id']);
-        final rowSpecies = _firstNonEmpty([
-          _str(e['species']),
-          _str(speciesByEntryId[entryId]),
-        ]).toLowerCase().trim();
-
-        if (rowSpecies.isEmpty) return normalizedSpecies == 'rabbit';
-        return rowSpecies == normalizedSpecies;
-      }).toList();
 
       final entryIds = entries
           .map((e) => _str(e['entry_id']))
@@ -837,37 +844,44 @@ class ArbaReportLoader {
     }
   }
 
-  Future<Map<String, String>> _loadEntrySpeciesById(
-    List<String> entryIds,
-  ) async {
-    final ids = entryIds.where((e) => e.trim().isNotEmpty).toSet().toList();
-    if (ids.isEmpty) return const {};
+  bool _arbaAwardEntryCounts(Map<String, dynamic> row) {
+    if (row['is_shown'] == false) return false;
+    if (_str(row['scratched_at']).isNotEmpty) return false;
+    if (row['is_disqualified'] == true) return false;
+    if (row['is_fur'] == true) return false;
+    return true;
+  }
 
-    final output = <String, String>{};
+  Map<String, dynamic> _normalizeArbaAwardEntry(Map<String, dynamic> row) {
+    final exhibitorRaw = row['exhibitors'];
+    final exhibitor = exhibitorRaw is Map
+        ? Map<String, dynamic>.from(exhibitorRaw)
+        : <String, dynamic>{};
+    final displayName = _firstNonEmpty([
+      _str(exhibitor['display_name']),
+      _str(exhibitor['showing_name']),
+      [
+        _str(exhibitor['first_name']),
+        _str(exhibitor['last_name']),
+      ].where((e) => e.isNotEmpty).join(' '),
+    ]);
 
-    try {
-      for (var i = 0; i < ids.length; i += 100) {
-        final chunk = ids.skip(i).take(100).toList();
-        final rows = await repo.supabase
-            .from('entries')
-            .select('id, species')
-            .inFilter('id', chunk);
-
-        for (final raw in rows as List) {
-          final row = Map<String, dynamic>.from(raw as Map);
-          final id = _str(row['id']);
-          final species = _str(row['species']).toLowerCase().trim();
-          if (id.isNotEmpty && species.isNotEmpty) {
-            output[id] = species;
-          }
-        }
-      }
-    } catch (e) {
-      // ignore: avoid_print
-      print('Failed loading ARBA entry species lookup: $e');
-    }
-
-    return output;
+    return {
+      ...row,
+      'entry_id': _str(row['id']),
+      'breed_name': _str(row['breed']),
+      'breed': _str(row['breed']),
+      'variety_name': _str(row['variety']),
+      'exhibitor_label': displayName,
+      'exhibitor_showing_name': displayName,
+      'exhibitor_first_name': _str(exhibitor['first_name']),
+      'exhibitor_last_name': _str(exhibitor['last_name']),
+      'exhibitor_address_line1': _str(exhibitor['address_line1']),
+      'exhibitor_address_line2': _str(exhibitor['address_line2']),
+      'exhibitor_city': _str(exhibitor['city']),
+      'exhibitor_state': _str(exhibitor['state']),
+      'exhibitor_zip': _str(exhibitor['zip']),
+    };
   }
 
   Future<String> _loadEntryCityState(

@@ -348,8 +348,8 @@ class ExhibitorByBreedReportLoader {
       return false;
     }
 
-    // Fur/wool is reported separately and must not inflate the regular animal count.
-    if (_bool(row['is_fur']) || _bool(row['is_wool'])) return false;
+    // Fur is reported separately and must not inflate the regular animal count.
+    if (_bool(row['is_fur'])) return false;
 
     return true;
   }

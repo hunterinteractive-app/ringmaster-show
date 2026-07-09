@@ -8,6 +8,7 @@ class SweepstakesReportData {
   final String ruleSource;
   final String verificationStatus;
   final String engineType;
+  final String species;
 
   final String arbaSanction;
   final String nationalClubSanction;
@@ -34,6 +35,7 @@ class SweepstakesReportData {
     required this.verificationStatus,
     required this.engineType,
     required this.rows,
+    this.species = '',
     this.arbaSanction = '',
     this.nationalClubSanction = '',
     this.breedSanctionNumber = '',

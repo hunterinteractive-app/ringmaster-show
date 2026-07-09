@@ -800,7 +800,7 @@ class DetailsByBreedReportLoader {
       return false;
     }
 
-    if (_bool(row['is_fur']) || _bool(row['is_wool'])) return false;
+    if (_bool(row['is_fur'])) return false;
     return true;
   }
 

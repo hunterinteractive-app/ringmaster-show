@@ -96,9 +96,7 @@ class SweepstakesReportPdf {
             ],
 
             if (isNoResults)
-              _buildNoResultsBox(
-                'No rabbits of this breed were shown in this Show.',
-              )
+              _buildNoResultsBox(_noResultsMessage(data))
             else ...[
               _buildResultsTable(
                 rows: section.rows,
@@ -139,6 +137,14 @@ class SweepstakesReportPdf {
       mimeType: 'application/pdf',
       bytes: bytes,
     );
+  }
+
+  String _noResultsMessage(SweepstakesReportData data) {
+    final species = data.species.trim().toLowerCase();
+    if (species == 'cavy' || data.breedName.trim().toLowerCase() == 'cavy') {
+      return 'No cavies were shown in this Show.';
+    }
+    return 'No rabbits of this breed were shown in this Show.';
   }
 
   String _buildFileName({

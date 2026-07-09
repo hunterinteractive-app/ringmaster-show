@@ -467,7 +467,7 @@ class CoopCardsReportLoader {
   }
 
   static bool _isFurOrWoolRow(Map<String, dynamic> row) {
-    if (_bool(row['is_fur']) || _bool(row['is_wool'])) return true;
+    if (_bool(row['is_fur'])) return true;
 
     final className = _safe(row, 'class_name').toLowerCase();
     return className.contains('fur') || className.contains('wool');

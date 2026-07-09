@@ -1,6 +1,7 @@
 import '../../models/base/report_request.dart';
 import '../../models/clubs/sweepstakes_report_data.dart';
 import '../closeout_repository.dart';
+import '../../utils/club_report_grouping.dart';
 
 class SweepstakesReportLoader {
   SweepstakesReportLoader(this.repo);
@@ -26,7 +27,12 @@ class SweepstakesReportLoader {
 
   Future<SweepstakesReportData> load(ReportRequest request) async {
     final showId = request.showId;
-    final breedName = (request.breedName ?? '').trim();
+    final requestedBreedName = (request.breedName ?? '').trim();
+    final species = normalizeClubReportSpecies(request.species);
+    final breedName = species == 'cavy' ? '' : requestedBreedName;
+    final reportBreedName = species == 'cavy'
+        ? cavyClubReportBreedName
+        : (breedName.isEmpty ? 'All Breeds' : breedName);
     final clubName = (request.clubName ?? '').trim();
     final scope = (request.scope ?? '').trim().toUpperCase();
     final showLetter = (request.showLetter ?? '').trim().toUpperCase();
@@ -41,6 +47,15 @@ class SweepstakesReportLoader {
 
     final showHeader = await _loadShowHeader(showId);
 
+    final speciesBreedNames = breedName.isEmpty && species.isNotEmpty
+        ? await _loadBreedNamesForSpecies(
+            showId: showId,
+            scope: scope,
+            showLetter: showLetter,
+            species: species,
+          )
+        : const <String>[];
+
     if (breedName.isNotEmpty) {
       await _recalculateSweepstakes(
         showId: showId,
@@ -48,6 +63,15 @@ class SweepstakesReportLoader {
         scope: scope,
         showLetter: showLetter,
       );
+    } else if (speciesBreedNames.isNotEmpty) {
+      for (final speciesBreedName in speciesBreedNames) {
+        await _recalculateSweepstakes(
+          showId: showId,
+          breedName: speciesBreedName,
+          scope: scope,
+          showLetter: showLetter,
+        );
+      }
     }
 
     final breedSanctionNumber = breedName.isEmpty
@@ -98,13 +122,22 @@ class SweepstakesReportLoader {
 
         if (breedName.isNotEmpty) {
           rowsQuery = rowsQuery.ilike('breed_name', breedName);
+        } else if (speciesBreedNames.isNotEmpty) {
+          rowsQuery = rowsQuery.inFilter('breed_name', speciesBreedNames);
+        } else if (species.isNotEmpty) {
+          rowsQuery = rowsQuery.eq('breed_name', '__NO_MATCH__');
         }
 
         final rowsResponse = await rowsQuery.order('rank', ascending: true);
 
-        final rows = (rowsResponse as List)
+        final rawRows = (rowsResponse as List)
             .map((e) => SweepstakesReportRow.fromMap(e as Map<String, dynamic>))
             .toList();
+        final rows = _normalizeRowsForReport(
+          rawRows,
+          species: species,
+          breedName: breedName,
+        );
 
         var headerQuery = repo.supabase
             .from('v_sweepstakes_pdf_rows')
@@ -115,6 +148,10 @@ class SweepstakesReportLoader {
 
         if (breedName.isNotEmpty) {
           headerQuery = headerQuery.ilike('breed_name', breedName);
+        } else if (speciesBreedNames.isNotEmpty) {
+          headerQuery = headerQuery.inFilter('breed_name', speciesBreedNames);
+        } else if (species.isNotEmpty) {
+          headerQuery = headerQuery.eq('breed_name', '__NO_MATCH__');
         }
 
         final headerResponse = await headerQuery.limit(1).maybeSingle();
@@ -122,7 +159,7 @@ class SweepstakesReportLoader {
         final header = headerResponse == null
             ? <String, dynamic>{
                 'show_id': showId,
-                'breed_name': breedName.isEmpty ? 'All Breeds' : breedName,
+                'breed_name': reportBreedName,
                 'scope': scope,
                 'show_letter': letter,
                 'rule_source': 'NO_RESULTS',
@@ -150,9 +187,10 @@ class SweepstakesReportLoader {
 
       return SweepstakesReportData(
         showId: showId,
-        breedName: breedName.isEmpty ? 'All Breeds' : breedName,
+        breedName: reportBreedName,
         scope: scope,
         showLetter: 'ALL',
+        species: species,
         isNationalShow: isNationalShow,
         topBreedRows: topBreedRows,
         ruleSource: sections.isNotEmpty
@@ -204,13 +242,22 @@ class SweepstakesReportLoader {
 
     if (breedName.isNotEmpty) {
       rowsQuery = rowsQuery.ilike('breed_name', breedName);
+    } else if (speciesBreedNames.isNotEmpty) {
+      rowsQuery = rowsQuery.inFilter('breed_name', speciesBreedNames);
+    } else if (species.isNotEmpty) {
+      rowsQuery = rowsQuery.eq('breed_name', '__NO_MATCH__');
     }
 
     final rowsResponse = await rowsQuery.order('rank', ascending: true);
 
-    final rows = (rowsResponse as List)
+    final rawRows = (rowsResponse as List)
         .map((e) => SweepstakesReportRow.fromMap(e as Map<String, dynamic>))
         .toList();
+    final rows = _normalizeRowsForReport(
+      rawRows,
+      species: species,
+      breedName: breedName,
+    );
 
     var headerQuery = repo.supabase
         .from('v_sweepstakes_pdf_rows')
@@ -221,6 +268,10 @@ class SweepstakesReportLoader {
 
     if (breedName.isNotEmpty) {
       headerQuery = headerQuery.ilike('breed_name', breedName);
+    } else if (speciesBreedNames.isNotEmpty) {
+      headerQuery = headerQuery.inFilter('breed_name', speciesBreedNames);
+    } else if (species.isNotEmpty) {
+      headerQuery = headerQuery.eq('breed_name', '__NO_MATCH__');
     }
 
     final headerResponse = await headerQuery.limit(1).maybeSingle();
@@ -228,7 +279,7 @@ class SweepstakesReportLoader {
     final header = headerResponse == null
         ? <String, dynamic>{
             'show_id': showId,
-            'breed_name': breedName.isEmpty ? 'All Breeds' : breedName,
+            'breed_name': reportBreedName,
             'scope': scope,
             'show_letter': showLetter,
             'rule_source': 'NO_RESULTS',
@@ -239,9 +290,7 @@ class SweepstakesReportLoader {
 
     return SweepstakesReportData(
       showId: (header['show_id'] ?? showId).toString(),
-      breedName: breedName.isEmpty
-          ? 'All Breeds'
-          : (header['breed_name'] ?? breedName).toString(),
+      breedName: reportBreedName,
       scope: (header['scope'] ?? scope).toString(),
       showLetter: (header['show_letter'] ?? showLetter).toString(),
       isNationalShow: isNationalShow,
@@ -250,6 +299,7 @@ class SweepstakesReportLoader {
       verificationStatus: (header['verification_status'] ?? 'VERIFIED')
           .toString(),
       engineType: (header['engine_type'] ?? 'NO_RESULTS').toString(),
+      species: species,
       arbaSanction: (header['arba_sanction_number'] ?? '').toString(),
       nationalClubSanction: (header['national_club_sanction_number'] ?? '')
           .toString(),
@@ -328,6 +378,82 @@ class SweepstakesReportLoader {
         'p_show_letter': showLetter,
       },
     );
+  }
+
+  Future<List<String>> _loadBreedNamesForSpecies({
+    required String showId,
+    required String scope,
+    required String showLetter,
+    required String species,
+  }) async {
+    final sectionQuery = repo.supabase
+        .from('show_sections')
+        .select('id, letter')
+        .eq('show_id', showId)
+        .eq('is_enabled', true)
+        .eq('kind', scope.toLowerCase());
+
+    final sectionResponse = showLetter == 'ALL'
+        ? await sectionQuery
+        : await sectionQuery.eq('letter', showLetter);
+
+    final sectionRows = (sectionResponse as List)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+
+    final breeds = <String>{};
+
+    for (final section in sectionRows) {
+      final sectionId = (section['id'] ?? '').toString().trim();
+      final letter = (section['letter'] ?? '').toString().trim().toUpperCase();
+      if (sectionId.isEmpty) continue;
+
+      final response = await repo.supabase.rpc(
+        'report_results_entry_rows',
+        params: {
+          'p_show_id': showId,
+          'p_section_id': sectionId,
+          'p_show_letter': showLetter == 'ALL' ? letter : showLetter,
+        },
+      );
+
+      for (final raw in (response as List)) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        final rowSpecies = normalizeClubReportSpecies(
+          (row['species'] ??
+                  row['animal_species'] ??
+                  row['entry_species'] ??
+                  '')
+              .toString(),
+        );
+        final breedName = (row['breed_name'] ?? row['breed'] ?? '')
+            .toString()
+            .trim();
+        final rowMatchesSpecies =
+            rowSpecies == species ||
+            (rowSpecies.isEmpty &&
+                species == 'cavy' &&
+                isKnownCavyBreed(breedName));
+        if (rowMatchesSpecies && breedName.isNotEmpty) {
+          breeds.add(breedName);
+        }
+      }
+    }
+
+    return breeds.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+  }
+
+  List<SweepstakesReportRow> _normalizeRowsForReport(
+    List<SweepstakesReportRow> rows, {
+    required String species,
+    required String breedName,
+  }) {
+    if (species != 'cavy' || breedName.isNotEmpty || rows.isEmpty) {
+      return rows;
+    }
+
+    return combineSweepstakesRowsByExhibitor(rows);
   }
 
   Future<List<SweepstakesTopBreedRow>> _loadTopBreedRows({
@@ -455,6 +581,85 @@ class SweepstakesReportLoader {
   String _firstNotEmpty(String first, String second) {
     final a = first.trim();
     return a.isNotEmpty ? a : second.trim();
+  }
+}
+
+List<SweepstakesReportRow> combineSweepstakesRowsByExhibitor(
+  List<SweepstakesReportRow> rows,
+) {
+  final byExhibitor = <String, _SweepstakesAccumulator>{};
+
+  for (final row in rows) {
+    final key = [
+      row.exhibitorName.trim().toLowerCase(),
+      row.exhibitorAddress.trim().toLowerCase(),
+    ].join('|');
+    final accumulator = byExhibitor.putIfAbsent(
+      key,
+      () => _SweepstakesAccumulator(
+        exhibitorName: row.exhibitorName,
+        exhibitorAddress: row.exhibitorAddress,
+      ),
+    );
+    accumulator.add(row);
+  }
+
+  final combined = byExhibitor.values.toList()
+    ..sort((a, b) {
+      final totalCmp = b.totalPoints.compareTo(a.totalPoints);
+      if (totalCmp != 0) return totalCmp;
+      return a.exhibitorName.toLowerCase().compareTo(
+        b.exhibitorName.toLowerCase(),
+      );
+    });
+
+  return [
+    for (var i = 0; i < combined.length; i++) combined[i].toRow(rank: i + 1),
+  ];
+}
+
+class _SweepstakesAccumulator {
+  _SweepstakesAccumulator({
+    required this.exhibitorName,
+    required this.exhibitorAddress,
+  });
+
+  final String exhibitorName;
+  final String exhibitorAddress;
+  double classPoints = 0;
+  double arbaClassPoints = 0;
+  double varietyPoints = 0;
+  double groupPoints = 0;
+  double bobPoints = 0;
+  double bisPoints = 0;
+  double furPoints = 0;
+  double totalPoints = 0;
+
+  void add(SweepstakesReportRow row) {
+    classPoints += row.classPoints;
+    arbaClassPoints += row.arbaClassPoints;
+    varietyPoints += row.varietyPoints;
+    groupPoints += row.groupPoints;
+    bobPoints += row.bobPoints;
+    bisPoints += row.bisPoints;
+    furPoints += row.furPoints;
+    totalPoints += row.totalPoints;
+  }
+
+  SweepstakesReportRow toRow({required int rank}) {
+    return SweepstakesReportRow(
+      rank: rank,
+      exhibitorName: exhibitorName,
+      exhibitorAddress: exhibitorAddress,
+      classPoints: classPoints,
+      arbaClassPoints: arbaClassPoints,
+      varietyPoints: varietyPoints,
+      groupPoints: groupPoints,
+      bobPoints: bobPoints,
+      bisPoints: bisPoints,
+      furPoints: furPoints,
+      totalPoints: totalPoints,
+    );
   }
 }
 

@@ -22,51 +22,53 @@ class LegsReportLoader {
     10: 'Wins Reserve in Show providing there are 5 or more animals exhibited by 3 or more exhibitors.',
   };
 
-    Future<List<LegsCertificateData>> load(ReportRequest request) async {
-      final showId = request.showId;
-      final requestedExhibitorId = _str(request.exhibitorId);
-      final requestedExhibitorName = _str(request.exhibitorName);
+  Future<List<LegsCertificateData>> load(ReportRequest request) async {
+    final showId = request.showId;
+    final requestedExhibitorId = _str(request.exhibitorId);
+    final requestedExhibitorName = _str(request.exhibitorName);
 
-      final show = await repo.loadShowBasics(showId);
-      final arbaDetails = await _loadArbaDetails(showId);
+    final show = await repo.loadShowBasics(showId);
+    final arbaDetails = await _loadArbaDetails(showId);
 
-      final showName = _str(show['name']);
-      final clubName = _firstNonEmpty([
-        _str(show['club_name']),
-        await _loadClubName(showId),
-      ]);
-      final sanctionNumbersBySection = await _loadSanctionNumbersBySection(showId);
-      final showDate = _tryParseDate(show['start_date']);
+    final showName = _str(show['name']);
+    final clubName = _firstNonEmpty([
+      _str(show['club_name']),
+      await _loadClubName(showId),
+    ]);
+    final sanctionNumbersBySection = await _loadSanctionNumbersBySection(
+      showId,
+    );
+    final showDate = _tryParseDate(show['start_date']);
 
-      final location = [
-        _str(show['location_name']),
-        _str(show['location_address']),
-      ].where((e) => e.isNotEmpty).join(', ');
+    final location = [
+      _str(show['location_name']),
+      _str(show['location_address']),
+    ].where((e) => e.isNotEmpty).join(', ');
 
-      final secretaryName = _firstNonEmpty([
-        _str(arbaDetails?['secretary_name']),
-        _str(show['secretary_name']),
-      ]);
+    final secretaryName = _firstNonEmpty([
+      _str(arbaDetails?['secretary_name']),
+      _str(show['secretary_name']),
+    ]);
 
-      final secretaryEmail = _firstNonEmpty([
-        _str(arbaDetails?['secretary_email']),
-        _str(show['secretary_email']),
-      ]);
+    final secretaryEmail = _firstNonEmpty([
+      _str(arbaDetails?['secretary_email']),
+      _str(show['secretary_email']),
+    ]);
 
-      final entryContext = await _loadShownEntryContext(showId);
-      if (entryContext.isEmpty) return const [];
+    final entryContext = await _loadShownEntryContext(showId);
+    if (entryContext.isEmpty) return const [];
 
-      final contextEntryIds = entryContext.keys
-          .where((id) => id.trim().isNotEmpty)
-          .toSet()
-          .toList();
+    final contextEntryIds = entryContext.keys
+        .where((id) => id.trim().isNotEmpty)
+        .toSet()
+        .toList();
 
-      final awards = <Map<String, dynamic>>[];
-      for (var i = 0; i < contextEntryIds.length; i += 100) {
-        final chunk = contextEntryIds.skip(i).take(100).toList();
-        final awardChunkRows = await repo.supabase
-            .from('entry_awards')
-            .select('''
+    final awards = <Map<String, dynamic>>[];
+    for (var i = 0; i < contextEntryIds.length; i += 100) {
+      final chunk = contextEntryIds.skip(i).take(100).toList();
+      final awardChunkRows = await repo.supabase
+          .from('entry_awards')
+          .select('''
               id,
               show_id,
               entry_id,
@@ -83,222 +85,220 @@ class LegsReportLoader {
                 is_shown
               )
             ''')
-            .inFilter('entry_id', chunk);
+          .inFilter('entry_id', chunk);
 
-        awards.addAll(List<Map<String, dynamic>>.from(awardChunkRows as List));
-      }
-
-      final judgeRefs = entryContext.values
-          .map((e) => e.showJudgeRowId)
-          .where((e) => e.isNotEmpty)
-          .toSet()
-          .toList();
-
-      final judgeNamesByRef = await _loadJudgeNamesByShowJudgeId(judgeRefs);
-
-      final candidates = <_LegCandidate>[];
-      
-
-      // Add synthetic FIRST-place leg checks because 1st place is stored on entries.placement,
-      // not usually in entry_awards.
-      for (final ctxEntry in entryContext.entries) {
-        final entryId = ctxEntry.key;
-        final ctx = ctxEntry.value;
-
-        if (requestedExhibitorId.isNotEmpty &&
-            ctx.exhibitorId != requestedExhibitorId) {
-          continue;
-        }
-
-        if (ctx.isDisqualified || ctx.placement != 1) continue;
-
-        final ruleMatch = _determineLegRule(
-          awardCode: 'FIRST',
-          ctx: ctx,
-        );
-
-        if (ruleMatch == null) continue;
-
-        // This candidate will be deduped against higher awards like BOB/BOV/BIS later.
-        candidates.add(
-          _LegCandidate(
-            priority: ruleMatch.priority,
-            dedupeKey: _legDedupeKey(ctx, entryId),
-            data: LegsCertificateData(
-              certificateId:
-                  'leg_${showId}_${ctx.sectionLetter}_${entryId}_r${ruleMatch.rule}_first',
-              showId: showId,
-              exhibitorId: ctx.exhibitorId,
-              exhibitorNumber: _safeShowExhibitorNumber(ctx),
-              exhibitorName: _safeExhibitorName(ctx),
-              ownerAddress: _formatOwnerAddress(ctx),
-              entryId: entryId,
-              earNumber: ctx.tattoo,
-              breed: ctx.breed,
-              variety: ctx.varietyDisplay,
-              className: ctx.className,
-              sex: ctx.sex,
-              showName: showName,
-              clubName: clubName.isNotEmpty ? clubName : showName,
-              sanctionNumber: _sanctionNumberForContext(ctx, sanctionNumbersBySection),
-              showDate: showDate,
-              location: location,
-              secretaryName: secretaryName,
-              secretaryEmail: secretaryEmail,
-              judgeName: judgeNamesByRef[ctx.showJudgeRowId] ?? 'Judge Not Available',
-              winCode: 'FIRST',
-              legRule: ruleMatch.rule,
-              legRuleDescription: legRuleDescriptions[ruleMatch.rule] ?? '',
-              animalsCount: ruleMatch.animalsCount,
-              exhibitorsCount: ruleMatch.exhibitorsCount,
-              barcodeValue:
-                  'RMLEG|show=$showId|section=${ctx.sectionLetter}|entry=$entryId|rule=${ruleMatch.rule}|ear=${ctx.tattoo}',
-              qrValue:
-                  'https://ringmasterone.com/verify/leg/leg_${showId}_${ctx.sectionLetter}_${entryId}_r${ruleMatch.rule}_first',
-            ),
-          ),
-        );
-      }
-
-      for (final row in awards) {
-        final rawAwardCode = _str(row['award_code']);
-        final awardCode = _normalizeAwardCode(rawAwardCode);
-
-        final entryRaw = row['entries'];
-        if (entryRaw is! Map) continue;
-
-        final entry = Map<String, dynamic>.from(entryRaw);
-
-        final species = _str(entry['species']).toLowerCase();
-        if (species != 'rabbit' && species != 'cavy') continue;
-        // Treat null as shown. Older rows may not have is_shown explicitly set,
-        // and report_results_entry_rows treats null as shown as well.
-        if (entry['is_shown'] == false) continue;
-
-        final entryId = _str(entry['id']);
-        final exhibitorId = _str(entry['exhibitor_id']);
-        if (entryId.isEmpty || exhibitorId.isEmpty) continue;
-
-        if (requestedExhibitorId.isNotEmpty && exhibitorId != requestedExhibitorId) {
-          continue;
-        }
-
-        final ctx = entryContext[entryId];
-        if (ctx == null || ctx.isDisqualified) continue;
-
-        final ruleMatch = _determineLegRule(
-          awardCode: awardCode,
-          ctx: ctx,
-        );
-        if (ruleMatch == null) continue;
-
-        final judgeName = _firstNonEmpty([
-          judgeNamesByRef[ctx.showJudgeRowId] ?? '',
-          'Judge Not Available',
-        ]);
-
-        final exhibitorName = _safeExhibitorName(ctx);
-
-        final ownerAddress = _formatOwnerAddress(ctx);
-
-        final earNumber = _firstNonEmpty([
-          _str(entry['tattoo']),
-          ctx.tattoo,
-        ]);
-
-        final exhibitorNumber = _safeShowExhibitorNumber(ctx);
-
-        final showLetter = ctx.sectionLetter.toUpperCase();
-
-        final certificateId =
-            'leg_${showId}_${showLetter}_${entryId}_r${ruleMatch.rule}_${awardCode.toLowerCase()}';
-
-        final barcodeValue =
-            'RMLEG|show=$showId|section=$showLetter|entry=$entryId|rule=${ruleMatch.rule}|ear=$earNumber';
-
-        final qrValue = 'https://ringmasterone.com/verify/leg/$certificateId';
-
-        candidates.add(
-          _LegCandidate(
-            priority: ruleMatch.priority,
-            dedupeKey: _legDedupeKey(ctx, entryId),
-            data: LegsCertificateData(
-              certificateId: certificateId,
-              showId: showId,
-              exhibitorId: exhibitorId,
-              exhibitorNumber: exhibitorNumber,
-              exhibitorName: exhibitorName,
-              ownerAddress: ownerAddress,
-              entryId: entryId,
-              earNumber: earNumber,
-              breed: _str(entry['breed']),
-              variety: ctx.varietyDisplay,
-              className: _str(entry['class_name']),
-              sex: _str(entry['sex']),
-              showName: showName,
-              clubName: clubName.isNotEmpty ? clubName : showName,
-              sanctionNumber: _sanctionNumberForContext(ctx, sanctionNumbersBySection),
-              showDate: showDate,
-              location: location,
-              secretaryName: secretaryName,
-              secretaryEmail: secretaryEmail,
-              judgeName: judgeName,
-              winCode: awardCode,
-              legRule: ruleMatch.rule,
-              legRuleDescription: legRuleDescriptions[ruleMatch.rule] ?? '',
-              animalsCount: ruleMatch.animalsCount,
-              exhibitorsCount: ruleMatch.exhibitorsCount,
-              barcodeValue: barcodeValue,
-              qrValue: qrValue,
-            ),
-          ),
-        );
-      }
-
-      // Keep only the best qualifying leg per exhibitor/animal/section.
-      // This prevents one animal from receiving separate certificates for BOB and RIS/BIS in the same show.
-      final bestByEntryAndShow = <String, _LegCandidate>{};
-      for (final candidate in candidates) {
-        final key = candidate.dedupeKey;
-        final existing = bestByEntryAndShow[key];
-        if (existing == null || candidate.priority < existing.priority) {
-          bestByEntryAndShow[key] = candidate;
-        }
-      }
-
-      var output = <LegsCertificateData>[
-        ...bestByEntryAndShow.values.map((e) => e.data),
-      ];
-
-      if (requestedExhibitorId.isEmpty && requestedExhibitorName.isNotEmpty) {
-        final targetName = requestedExhibitorName.toLowerCase();
-        output = output.where((row) {
-          return row.exhibitorName.toLowerCase() == targetName;
-        }).toList();
-      }
-
-      output.sort((a, b) {
-        final nameCompare = a.exhibitorName.compareTo(b.exhibitorName);
-        if (nameCompare != 0) return nameCompare;
-
-        final aShow = _sectionFromCertificateId(a.certificateId);
-        final bShow = _sectionFromCertificateId(b.certificateId);
-        final showCompare = aShow.compareTo(bShow);
-        if (showCompare != 0) return showCompare;
-
-        return a.earNumber.compareTo(b.earNumber);
-      });
-
-      final missingSanctionContexts = _missingArbaSanctionContexts(output);
-      if (missingSanctionContexts.isNotEmpty) {
-        throw Exception(
-          'Leg certificates are blocked until each section has an ARBA sanction number: '
-          '${missingSanctionContexts.join('; ')}.',
-        );
-      }
-
-      return output;
+      awards.addAll(List<Map<String, dynamic>>.from(awardChunkRows as List));
     }
+
+    final judgeRefs = entryContext.values
+        .map((e) => e.showJudgeRowId)
+        .where((e) => e.isNotEmpty)
+        .toSet()
+        .toList();
+
+    final judgeNamesByRef = await _loadJudgeNamesByShowJudgeId(judgeRefs);
+
+    final candidates = <_LegCandidate>[];
+
+    // Add synthetic FIRST-place leg checks because 1st place is stored on entries.placement,
+    // not usually in entry_awards.
+    for (final ctxEntry in entryContext.entries) {
+      final entryId = ctxEntry.key;
+      final ctx = ctxEntry.value;
+
+      if (requestedExhibitorId.isNotEmpty &&
+          ctx.exhibitorId != requestedExhibitorId) {
+        continue;
+      }
+
+      if (ctx.isDisqualified || ctx.placement != 1) continue;
+
+      final ruleMatch = _determineLegRule(awardCode: 'FIRST', ctx: ctx);
+
+      if (ruleMatch == null) continue;
+
+      // This candidate will be deduped against higher awards like BOB/BOV/BIS later.
+      candidates.add(
+        _LegCandidate(
+          priority: ruleMatch.priority,
+          dedupeKey: _legDedupeKey(ctx, entryId),
+          data: LegsCertificateData(
+            certificateId:
+                'leg_${showId}_${ctx.sectionLetter}_${entryId}_r${ruleMatch.rule}_first',
+            showId: showId,
+            exhibitorId: ctx.exhibitorId,
+            exhibitorNumber: _safeShowExhibitorNumber(ctx),
+            exhibitorName: _safeExhibitorName(ctx),
+            ownerAddress: _formatOwnerAddress(ctx),
+            entryId: entryId,
+            earNumber: ctx.tattoo,
+            breed: ctx.breed,
+            variety: ctx.varietyDisplay,
+            className: ctx.className,
+            sex: ctx.sex,
+            showName: showName,
+            clubName: clubName.isNotEmpty ? clubName : showName,
+            sanctionNumber: _sanctionNumberForContext(
+              ctx,
+              sanctionNumbersBySection,
+            ),
+            showDate: showDate,
+            location: location,
+            secretaryName: secretaryName,
+            secretaryEmail: secretaryEmail,
+            judgeName:
+                judgeNamesByRef[ctx.showJudgeRowId] ?? 'Judge Not Available',
+            winCode: 'FIRST',
+            legRule: ruleMatch.rule,
+            legRuleDescription: legRuleDescriptions[ruleMatch.rule] ?? '',
+            animalsCount: ruleMatch.animalsCount,
+            exhibitorsCount: ruleMatch.exhibitorsCount,
+            barcodeValue:
+                'RMLEG|show=$showId|section=${ctx.sectionLetter}|entry=$entryId|rule=${ruleMatch.rule}|ear=${ctx.tattoo}',
+            qrValue:
+                'https://ringmasterone.com/verify/leg/leg_${showId}_${ctx.sectionLetter}_${entryId}_r${ruleMatch.rule}_first',
+          ),
+        ),
+      );
+    }
+
+    for (final row in awards) {
+      final rawAwardCode = _str(row['award_code']);
+      final awardCode = _normalizeAwardCode(rawAwardCode);
+
+      final entryRaw = row['entries'];
+      if (entryRaw is! Map) continue;
+
+      final entry = Map<String, dynamic>.from(entryRaw);
+
+      final species = _str(entry['species']).toLowerCase();
+      if (species != 'rabbit' && species != 'cavy') continue;
+      // Treat null as shown. Older rows may not have is_shown explicitly set,
+      // and report_results_entry_rows treats null as shown as well.
+      if (entry['is_shown'] == false) continue;
+
+      final entryId = _str(entry['id']);
+      final exhibitorId = _str(entry['exhibitor_id']);
+      if (entryId.isEmpty || exhibitorId.isEmpty) continue;
+
+      if (requestedExhibitorId.isNotEmpty &&
+          exhibitorId != requestedExhibitorId) {
+        continue;
+      }
+
+      final ctx = entryContext[entryId];
+      if (ctx == null || ctx.isDisqualified) continue;
+
+      final ruleMatch = _determineLegRule(awardCode: awardCode, ctx: ctx);
+      if (ruleMatch == null) continue;
+
+      final judgeName = _firstNonEmpty([
+        judgeNamesByRef[ctx.showJudgeRowId] ?? '',
+        'Judge Not Available',
+      ]);
+
+      final exhibitorName = _safeExhibitorName(ctx);
+
+      final ownerAddress = _formatOwnerAddress(ctx);
+
+      final earNumber = _firstNonEmpty([_str(entry['tattoo']), ctx.tattoo]);
+
+      final exhibitorNumber = _safeShowExhibitorNumber(ctx);
+
+      final showLetter = ctx.sectionLetter.toUpperCase();
+
+      final certificateId =
+          'leg_${showId}_${showLetter}_${entryId}_r${ruleMatch.rule}_${awardCode.toLowerCase()}';
+
+      final barcodeValue =
+          'RMLEG|show=$showId|section=$showLetter|entry=$entryId|rule=${ruleMatch.rule}|ear=$earNumber';
+
+      final qrValue = 'https://ringmasterone.com/verify/leg/$certificateId';
+
+      candidates.add(
+        _LegCandidate(
+          priority: ruleMatch.priority,
+          dedupeKey: _legDedupeKey(ctx, entryId),
+          data: LegsCertificateData(
+            certificateId: certificateId,
+            showId: showId,
+            exhibitorId: exhibitorId,
+            exhibitorNumber: exhibitorNumber,
+            exhibitorName: exhibitorName,
+            ownerAddress: ownerAddress,
+            entryId: entryId,
+            earNumber: earNumber,
+            breed: _str(entry['breed']),
+            variety: ctx.varietyDisplay,
+            className: _str(entry['class_name']),
+            sex: _str(entry['sex']),
+            showName: showName,
+            clubName: clubName.isNotEmpty ? clubName : showName,
+            sanctionNumber: _sanctionNumberForContext(
+              ctx,
+              sanctionNumbersBySection,
+            ),
+            showDate: showDate,
+            location: location,
+            secretaryName: secretaryName,
+            secretaryEmail: secretaryEmail,
+            judgeName: judgeName,
+            winCode: awardCode,
+            legRule: ruleMatch.rule,
+            legRuleDescription: legRuleDescriptions[ruleMatch.rule] ?? '',
+            animalsCount: ruleMatch.animalsCount,
+            exhibitorsCount: ruleMatch.exhibitorsCount,
+            barcodeValue: barcodeValue,
+            qrValue: qrValue,
+          ),
+        ),
+      );
+    }
+
+    // Keep only the best qualifying leg per exhibitor/animal/section.
+    // This prevents one animal from receiving separate certificates for BOB and RIS/BIS in the same show.
+    final bestByEntryAndShow = <String, _LegCandidate>{};
+    for (final candidate in candidates) {
+      final key = candidate.dedupeKey;
+      final existing = bestByEntryAndShow[key];
+      if (existing == null || candidate.priority < existing.priority) {
+        bestByEntryAndShow[key] = candidate;
+      }
+    }
+
+    var output = <LegsCertificateData>[
+      ...bestByEntryAndShow.values.map((e) => e.data),
+    ];
+
+    if (requestedExhibitorId.isEmpty && requestedExhibitorName.isNotEmpty) {
+      final targetName = requestedExhibitorName.toLowerCase();
+      output = output.where((row) {
+        return row.exhibitorName.toLowerCase() == targetName;
+      }).toList();
+    }
+
+    output.sort((a, b) {
+      final nameCompare = a.exhibitorName.compareTo(b.exhibitorName);
+      if (nameCompare != 0) return nameCompare;
+
+      final aShow = _sectionFromCertificateId(a.certificateId);
+      final bShow = _sectionFromCertificateId(b.certificateId);
+      final showCompare = aShow.compareTo(bShow);
+      if (showCompare != 0) return showCompare;
+
+      return a.earNumber.compareTo(b.earNumber);
+    });
+
+    final missingSanctionContexts = _missingArbaSanctionContexts(output);
+    if (missingSanctionContexts.isNotEmpty) {
+      throw Exception(
+        'Leg certificates are blocked until each section has an ARBA sanction number: '
+        '${missingSanctionContexts.join('; ')}.',
+      );
+    }
+
+    return output;
+  }
 
   List<String> _missingArbaSanctionContexts(
     List<LegsCertificateData> certificates,
@@ -315,7 +315,9 @@ class LegsReportLoader {
           ? 'unknown ear'
           : certificate.earNumber.trim();
       final section = _sectionFromCertificateId(certificate.certificateId);
-      final sectionLabel = section.isEmpty ? 'unknown section' : 'Show $section';
+      final sectionLabel = section.isEmpty
+          ? 'unknown section'
+          : 'Show $section';
       contexts.add('$sectionLabel ($exhibitorName, $earNumber)');
     }
 
@@ -336,7 +338,9 @@ class LegsReportLoader {
     }
   }
 
-  Future<Map<String, String>> _loadSanctionNumbersBySection(String showId) async {
+  Future<Map<String, String>> _loadSanctionNumbersBySection(
+    String showId,
+  ) async {
     try {
       final rows = await repo.supabase
           .from('show_sanctions')
@@ -466,7 +470,9 @@ class LegsReportLoader {
               .inFilter('id', fallbackJudgeIds);
 
           final fallbackJudgeNameById = <String, String>{};
-          for (final row in List<Map<String, dynamic>>.from(fallbackJudgeRows)) {
+          for (final row in List<Map<String, dynamic>>.from(
+            fallbackJudgeRows,
+          )) {
             final judgeId = _str(row['id']);
             final judgeName = _firstNonEmpty([
               _str(row['name']),
@@ -527,7 +533,6 @@ class LegsReportLoader {
       for (final raw in (rows as List)) {
         final row = Map<String, dynamic>.from(raw as Map);
 
-
         final scratchedAt = _str(row['scratched_at']);
         final isShown = row['is_shown'] != false;
 
@@ -542,13 +547,12 @@ class LegsReportLoader {
         row['resolved_section_letter'] = showLetter;
         allRows.add(row);
       }
-
     }
 
-    // A regular entry may also be represented by a separate fur/wool result
+    // A regular entry may also be represented by a separate fur result
     // row. Count the animal only once for ARBA leg eligibility, preferring the
-    // regular row when both exist. Older/manual entries may have is_fur or
-    // is_wool set on the only row, so those rows must not be discarded.
+    // regular row when both exist. Older/manual entries may have is_fur set on
+    // the only row, so those rows must not be discarded.
     final dedupedRowsByAnimalAndSection = <String, Map<String, dynamic>>{};
 
     for (final row in allRows) {
@@ -569,10 +573,8 @@ class LegsReportLoader {
         continue;
       }
 
-      final existingIsFurOrWool =
-          existing['is_fur'] == true || existing['is_wool'] == true;
-      final currentIsFurOrWool =
-          row['is_fur'] == true || row['is_wool'] == true;
+      final existingIsFurOrWool = existing['is_fur'] == true;
+      final currentIsFurOrWool = row['is_fur'] == true;
 
       if (existingIsFurOrWool && !currentIsFurOrWool) {
         dedupedRowsByAnimalAndSection[dedupeKey] = row;
@@ -718,7 +720,6 @@ class LegsReportLoader {
           .toSet()
           .length;
 
-
       final normalizedClassName = className.trim().toLowerCase();
       final classRows = sameShowRows.where((e) {
         return _countsForClass(e) &&
@@ -813,6 +814,7 @@ class LegsReportLoader {
 
     return byEntryId;
   }
+
   String _normalizedDisqualificationType(Map<String, dynamic> row) {
     final combined = [
       _str(row['disqualified_reason']),
@@ -841,16 +843,12 @@ class LegsReportLoader {
 
   bool _countsForGroup(Map<String, dynamic> row) {
     final type = _normalizedDisqualificationType(row);
-    return type != 'no_show' &&
-        type != 'wrong_variety' &&
-        type != 'wrong_sex';
+    return type != 'no_show' && type != 'wrong_variety' && type != 'wrong_sex';
   }
 
   bool _countsForVariety(Map<String, dynamic> row) {
     final type = _normalizedDisqualificationType(row);
-    return type != 'no_show' &&
-        type != 'wrong_variety' &&
-        type != 'wrong_sex';
+    return type != 'no_show' && type != 'wrong_variety' && type != 'wrong_sex';
   }
 
   bool _countsForClass(Map<String, dynamic> row) {
@@ -863,10 +861,10 @@ class LegsReportLoader {
   }
 
   String _normalizeSex(String value) {
-    final compact = value
-        .trim()
-        .toUpperCase()
-        .replaceAll(RegExp(r'[^A-Z]+'), '');
+    final compact = value.trim().toUpperCase().replaceAll(
+      RegExp(r'[^A-Z]+'),
+      '',
+    );
 
     // Some RPC rows return combined values such as "Junior Doe",
     // "Senior Buck", or other labels containing the sex. Detect the
@@ -1019,10 +1017,10 @@ class LegsReportLoader {
   }
 
   String _normalizeAwardCode(String value) {
-    final compact = value
-        .trim()
-        .toUpperCase()
-        .replaceAll(RegExp(r'[^A-Z0-9]+'), '');
+    final compact = value.trim().toUpperCase().replaceAll(
+      RegExp(r'[^A-Z0-9]+'),
+      '',
+    );
 
     switch (compact) {
       case 'BOG':
@@ -1187,7 +1185,6 @@ class LegsReportLoader {
       );
     }
 
-
     return null;
   }
 
@@ -1202,18 +1199,14 @@ class LegsReportLoader {
     final animalKey = animalId.isNotEmpty
         ? animalId
         : animalFallbackKey.isNotEmpty
-            ? animalFallbackKey
-            : entryKey;
+        ? animalFallbackKey
+        : entryKey;
 
     final sectionKey = ctx.sectionId.trim().isNotEmpty
         ? ctx.sectionId.trim()
         : ctx.sectionLetter.trim().toUpperCase();
 
-    return [
-      ctx.exhibitorId.trim(),
-      animalKey,
-      sectionKey,
-    ].join('|');
+    return [ctx.exhibitorId.trim(), animalKey, sectionKey].join('|');
   }
 
   String _safeExhibitorName(_EntryLegContext ctx) {

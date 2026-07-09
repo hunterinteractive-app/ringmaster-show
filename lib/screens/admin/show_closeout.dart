@@ -16,6 +16,7 @@ import 'package:ringmaster_show/screens/admin/closeout/registry/report_registry.
 import 'package:ringmaster_show/screens/admin/closeout/services/closeout_runner.dart';
 import 'package:ringmaster_show/screens/admin/closeout/services/report_engine.dart';
 import 'package:ringmaster_show/screens/admin/closeout/services/report_upload_service.dart';
+import 'package:ringmaster_show/screens/admin/closeout/utils/club_report_grouping.dart';
 import 'package:ringmaster_show/services/report_email_service.dart';
 import 'package:ringmaster_show/services/app_session.dart';
 
@@ -362,7 +363,18 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       return false;
     }
 
-    return artifactBreed == target.breedName.trim().toLowerCase();
+    final targetBreed = displayBreedNameForClubReport(
+      reportName: artifact.reportName,
+      breedName: target.breedName,
+      species: target.species,
+    ).toLowerCase();
+
+    if (artifactSpecies == 'cavy' || targetSpecies == 'cavy') {
+      return artifactBreed == cavyClubReportBreedName.toLowerCase() &&
+          targetBreed == cavyClubReportBreedName.toLowerCase();
+    }
+
+    return artifactBreed == targetBreed;
   }
 
   Future<List<_ExhibitorEmailTarget>> _loadExhibitorEmailTargets() async {
@@ -489,11 +501,20 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       );
     }
 
+    final sanctionRows = (rows as List)
+        .map((raw) => Map<String, dynamic>.from(raw as Map))
+        .toList();
+    final speciesByBreedName = await _loadSpeciesByBreedName(
+      sanctionRows
+          .map((row) => (row['breed_name'] ?? '').toString().trim())
+          .where((breed) => breed.isNotEmpty)
+          .toSet()
+          .toList(),
+    );
+
     final out = <String, _ClubEmailTarget>{};
 
-    for (final raw in (rows as List)) {
-      final row = Map<String, dynamic>.from(raw as Map);
-
+    for (final row in sanctionRows) {
       final sanctioningBody = (row['sanctioning_body'] ?? '')
           .toString()
           .trim()
@@ -554,14 +575,20 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
       if (email.isEmpty) continue;
 
-      final species = sanctioningBody == 'STATE CLUB' ? 'combined' : '';
+      final species = sanctioningBody == 'STATE CLUB'
+          ? 'combined'
+          : _speciesForBreedName(breedName, speciesByBreedName);
+      final targetBreedName =
+          isCavyClubReportTarget(species: species, breedName: breedName)
+          ? cavyClubReportBreedName
+          : breedName;
       final key = sanctioningBody == 'STATE CLUB'
           ? '$sanctioningBody|$clubName|$scope|$showLetter|$species|$email'
-          : '$sanctioningBody|$clubName|$breedName|$scope|$showLetter|$email';
+          : '$sanctioningBody|$clubName|$targetBreedName|$scope|$showLetter|$email';
 
       out[key] = _ClubEmailTarget(
         clubName: clubName,
-        breedName: breedName,
+        breedName: targetBreedName,
         scope: scope,
         showLetter: showLetter,
         email: email,
@@ -594,6 +621,58 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       });
 
     return list;
+  }
+
+  Future<Map<String, String>> _loadSpeciesByBreedName(
+    List<String> breedNames,
+  ) async {
+    final names = breedNames
+        .map((breed) => breed.trim())
+        .where((breed) => breed.isNotEmpty)
+        .toSet()
+        .toList();
+    if (names.isEmpty) return const <String, String>{};
+
+    final output = <String, String>{};
+
+    for (final breed in names) {
+      if (isKnownCavyBreed(breed)) {
+        output[breed.toLowerCase()] = 'cavy';
+      }
+    }
+
+    try {
+      final rows = await supabase
+          .from('breeds')
+          .select('name, species')
+          .inFilter('name', names);
+
+      for (final raw in (rows as List)) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        final breedName = (row['name'] ?? '').toString().trim();
+        final species = normalizeClubReportSpecies(
+          (row['species'] ?? '').toString(),
+        );
+        if (breedName.isNotEmpty && species.isNotEmpty) {
+          output[breedName.toLowerCase()] = species;
+        }
+      }
+    } catch (_) {
+      // Fall back to the built-in cavy SOP list if the breed catalog is not
+      // available in this installation.
+    }
+
+    return output;
+  }
+
+  String _speciesForBreedName(
+    String breedName,
+    Map<String, String> speciesByBreedName,
+  ) {
+    final normalized = breedName.trim().toLowerCase();
+    final species = normalizeClubReportSpecies(speciesByBreedName[normalized]);
+    if (species.isNotEmpty) return species;
+    return isKnownCavyBreed(breedName) ? 'cavy' : '';
   }
 
   Future<String?> _loadArbaReportEmailTarget() async {
@@ -759,9 +838,146 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       params: {'p_show_id': widget.showId},
     );
 
+    await _ensureCombinedCavyClubReportArtifacts(
+      latestFinalizeRunId: latestFinalizeRunId,
+    );
+
     await _ensureStateClubSpeciesArtifacts(
       latestFinalizeRunId: latestFinalizeRunId,
     );
+
+    await _ensureCombinedCavyClubReportArtifacts(
+      latestFinalizeRunId: latestFinalizeRunId,
+    );
+  }
+
+  Future<void> _ensureCombinedCavyClubReportArtifacts({
+    String? latestFinalizeRunId,
+  }) async {
+    final rows = await supabase
+        .from('show_report_artifacts')
+        .select('id, finalize_run_id, report_name, artifact_status, metadata')
+        .eq('show_id', widget.showId)
+        .eq('is_current', true)
+        .inFilter('report_name', _clubReportKeys.toList());
+
+    final artifacts = (rows as List)
+        .map((raw) => Map<String, dynamic>.from(raw as Map))
+        .toList();
+
+    if (artifacts.isEmpty) return;
+
+    final grouped = <String, List<Map<String, dynamic>>>{};
+
+    for (final artifact in artifacts) {
+      final reportName = (artifact['report_name'] ?? '').toString();
+      final metadata = artifact['metadata'] is Map
+          ? Map<String, dynamic>.from(artifact['metadata'] as Map)
+          : <String, dynamic>{};
+      final key = cavyClubReportGroupKey(
+        reportName: reportName,
+        metadata: metadata,
+      );
+
+      if (key.isEmpty) continue;
+      grouped.putIfAbsent(key, () => []);
+      grouped[key]!.add(artifact);
+    }
+
+    for (final group in grouped.values) {
+      if (group.isEmpty) continue;
+
+      group.sort((a, b) {
+        final rankCmp = _cavyClubArtifactKeepRank(
+          a,
+        ).compareTo(_cavyClubArtifactKeepRank(b));
+        if (rankCmp != 0) return rankCmp;
+
+        return (a['id'] ?? '').toString().compareTo((b['id'] ?? '').toString());
+      });
+
+      final keep = group.first;
+      await _resetCombinedCavyClubReportArtifactIfNeeded(
+        keep,
+        latestFinalizeRunId: latestFinalizeRunId,
+      );
+
+      for (final duplicate in group.skip(1)) {
+        await supabase
+            .from('show_report_artifacts')
+            .update({
+              'is_current': false,
+              'superseded_at': DateTime.now().toUtc().toIso8601String(),
+            })
+            .eq('id', (duplicate['id'] ?? '').toString());
+      }
+    }
+  }
+
+  int _cavyClubArtifactKeepRank(Map<String, dynamic> artifact) {
+    final reportName = (artifact['report_name'] ?? '').toString();
+    final metadata = artifact['metadata'] is Map
+        ? Map<String, dynamic>.from(artifact['metadata'] as Map)
+        : <String, dynamic>{};
+    final normalized = isNormalizedCavyClubReportMetadata(
+      reportName: reportName,
+      metadata: metadata,
+    );
+    final status = (artifact['artifact_status'] ?? '').toString();
+
+    if (normalized && status == 'generated') return 0;
+    if (normalized && status == 'queued') return 1;
+    if (normalized) return 2;
+    if (status == 'generated') return 3;
+    return 4;
+  }
+
+  Future<void> _resetCombinedCavyClubReportArtifactIfNeeded(
+    Map<String, dynamic> artifact, {
+    String? latestFinalizeRunId,
+  }) async {
+    final artifactId = (artifact['id'] ?? '').toString();
+    if (artifactId.isEmpty) return;
+
+    final reportName = (artifact['report_name'] ?? '').toString();
+    final metadata = artifact['metadata'] is Map
+        ? Map<String, dynamic>.from(artifact['metadata'] as Map)
+        : <String, dynamic>{};
+    final normalizedMetadata = normalizedClubReportMetadata(
+      reportName: reportName,
+      metadata: metadata,
+    );
+
+    final isAlreadyNormalized = isNormalizedCavyClubReportMetadata(
+      reportName: reportName,
+      metadata: metadata,
+    );
+    final needsRegeneration = !isAlreadyNormalized;
+    final resolvedFinalizeRunId = _resolveStateClubFinalizeRunId(
+      source: artifact,
+      latestFinalizeRunId: latestFinalizeRunId,
+    );
+
+    await supabase
+        .from('show_report_artifacts')
+        .update({
+          if (resolvedFinalizeRunId != null)
+            'finalize_run_id': resolvedFinalizeRunId,
+          if (needsRegeneration) ...{
+            'artifact_status': 'queued',
+            'storage_bucket': null,
+            'storage_path': null,
+            'file_name': null,
+            'mime_type': null,
+            'file_size_bytes': null,
+            'generated_at': null,
+            'superseded_at': null,
+            'error_count': 0,
+            'warning_count': 0,
+          },
+          'metadata': normalizedMetadata,
+        })
+        .eq('id', artifactId);
   }
 
   Future<void> _ensureStateClubSpeciesArtifacts({
@@ -2218,8 +2434,13 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
             artifact.reportName == 'details_by_breed' ||
             artifact.reportName == 'exh_by_breed' ||
             artifact.reportName == 'best_display_report') {
-          final breedName = _artifactMetaString(artifact, 'breed_name');
+          final artifactBreedName = _artifactMetaString(artifact, 'breed_name');
           final species = _artifactMetaString(artifact, 'species');
+          final breedName = loaderBreedNameForClubReport(
+            reportName: artifact.reportName,
+            breedName: artifactBreedName,
+            species: species,
+          );
           final scope = _artifactMetaString(artifact, 'scope');
           final showLetter = _artifactMetaString(artifact, 'show_letter');
 
@@ -3392,8 +3613,18 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
       for (final rawResult in (results as List)) {
         final result = Map<String, dynamic>.from(rawResult as Map);
-        final breedName = (result['breed_name'] ?? '').toString().trim();
-        if (breedName.isEmpty) continue;
+        final rawBreedName = (result['breed_name'] ?? '').toString().trim();
+        if (rawBreedName.isEmpty) continue;
+        final species = normalizeClubReportSpecies(
+          (result['species'] ?? result['animal_species'] ?? '')
+              .toString()
+              .trim(),
+        );
+        final breedName = displayBreedNameForClubReport(
+          reportName: 'sweepstakes_report',
+          breedName: rawBreedName,
+          species: species,
+        );
 
         final key = '$breedName|$kind|$sectionLetter';
         if (seen.add(key)) {
@@ -3559,6 +3790,27 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       return;
     }
 
+    final targetSpecies = isCavyClubReportTarget(breedName: breedName)
+        ? 'cavy'
+        : '';
+    final targetDisplayBreedName = displayBreedNameForClubReport(
+      reportName: reportName,
+      breedName: breedName,
+      species: targetSpecies,
+    );
+    final targetLoaderBreedName = loaderBreedNameForClubReport(
+      reportName: reportName,
+      breedName: targetDisplayBreedName,
+      species: targetSpecies,
+    );
+
+    if (isBreedClubReportName(reportName) && targetSpecies == 'cavy') {
+      await _ensureCombinedCavyClubReportArtifacts(
+        latestFinalizeRunId: _dashboard?.latestFinalize.id,
+      );
+      await _refreshDashboardOnly();
+    }
+
     try {
       setState(() {
         _generatingReport = true;
@@ -3694,7 +3946,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
               reportName == 'best_display_report';
 
           final targetMatches = isBreedSpecific
-              ? breed == (breedName ?? '').trim().toLowerCase()
+              ? breed == targetDisplayBreedName.trim().toLowerCase()
               : !isClubSpecific ||
                     club == (clubName ?? '').trim().toLowerCase();
 
@@ -3714,8 +3966,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           await _createManualReportArtifact(
             reportName: reportName,
             metadata: {
-              if (breedName != null && breedName.trim().isNotEmpty)
-                'breed_name': breedName.trim(),
+              if (targetDisplayBreedName.trim().isNotEmpty)
+                'breed_name': targetDisplayBreedName.trim(),
+              if (targetSpecies.isNotEmpty) 'species': targetSpecies,
               if (clubName != null && clubName.trim().isNotEmpty)
                 'club_name': clubName.trim(),
               if (scope != null && scope.trim().isNotEmpty)
@@ -3734,7 +3987,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         finalizeRunId: _dashboard?.latestFinalize.id ?? 'manual-run',
         reportName: reportName,
         artifactId: resolvedArtifact.id,
-        breedName: breedName,
+        breedName: targetLoaderBreedName,
         species: _artifactMetaString(resolvedArtifact, 'species'),
         scope: scope,
         showName: widget.showName,
@@ -4063,6 +4316,15 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           reportName == 'details_by_breed' ||
           reportName == 'exh_by_breed' ||
           reportName == 'best_display_report') {
+        final targetSpecies = isCavyClubReportTarget(breedName: breedName)
+            ? 'cavy'
+            : '';
+        final targetBreedName = displayBreedNameForClubReport(
+          reportName: reportName,
+          breedName: breedName,
+          species: targetSpecies,
+        ).toLowerCase();
+
         matches = matches.where((r) {
           final artBreed = (r.metadata['breed_name'] ?? '')
               .toString()
@@ -4090,7 +4352,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
               reportName == 'best_display_report';
 
           final targetMatches = isBreedSpecific
-              ? artBreed == (breedName ?? '').trim().toLowerCase()
+              ? artBreed == targetBreedName
               : !isClubSpecific ||
                     artClub == (clubName ?? '').trim().toLowerCase();
 
@@ -4898,6 +5160,15 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           reportName == 'details_by_breed' ||
           reportName == 'exh_by_breed' ||
           reportName == 'best_display_report') {
+        final targetSpecies = isCavyClubReportTarget(breedName: breedName)
+            ? 'cavy'
+            : '';
+        final targetBreedName = displayBreedNameForClubReport(
+          reportName: reportName,
+          breedName: breedName,
+          species: targetSpecies,
+        ).toLowerCase();
+
         artifacts = artifacts.where((r) {
           final artifactBreed = (r.metadata['breed_name'] ?? '')
               .toString()
@@ -4920,7 +5191,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
               reportName == 'sweepstakes_report' ||
               reportName == 'breed_results_detail_report';
           final targetMatches = isBreedSpecific
-              ? artifactBreed == (breedName ?? '').trim().toLowerCase()
+              ? artifactBreed == targetBreedName
               : artifactClub == (clubName ?? '').trim().toLowerCase();
 
           return targetMatches &&
@@ -4997,6 +5268,14 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
       if (isClubReport) {
         final clubTargets = await _loadClubEmailTargets();
+        final targetSpecies = isCavyClubReportTarget(breedName: breedName)
+            ? 'cavy'
+            : '';
+        final targetBreedName = displayBreedNameForClubReport(
+          reportName: reportName,
+          breedName: breedName,
+          species: targetSpecies,
+        ).toLowerCase();
 
         final matchingTargets = clubTargets.where((target) {
           final matchesSection =
@@ -5019,8 +5298,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                     (clubName ?? '').trim().toLowerCase();
           }
 
-          return target.breedName.trim().toLowerCase() ==
-              (breedName ?? '').trim().toLowerCase();
+          return target.breedName.trim().toLowerCase() == targetBreedName;
         }).toList();
 
         if (matchingTargets.isEmpty) {
@@ -6263,6 +6541,21 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
             .toString()
             .trim()
             .toLowerCase();
+        final species = (r.metadata['species'] ?? '')
+            .toString()
+            .trim()
+            .toLowerCase();
+        final targetBreed = displayBreedNameForClubReport(
+          reportName: reportName,
+          breedName: _breedController.text.trim(),
+          species:
+              isCavyClubReportTarget(
+                species: species,
+                breedName: _breedController.text.trim(),
+              )
+              ? 'cavy'
+              : '',
+        ).toLowerCase();
         final scope = (r.metadata['scope'] ?? '')
             .toString()
             .trim()
@@ -6272,7 +6565,7 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
             .trim()
             .toUpperCase();
 
-        return breed == _breedController.text.trim().toLowerCase() &&
+        return breed == targetBreed &&
             scope == _selectedScope.trim().toUpperCase() &&
             letter == _selectedShowLetter.trim().toUpperCase();
       });
@@ -6606,7 +6899,15 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
 
         for (final rawRow in (rows as List)) {
           final row = Map<String, dynamic>.from(rawRow as Map);
-          final breed = (row['breed_name'] ?? '').toString().trim();
+          final rawBreed = (row['breed_name'] ?? '').toString().trim();
+          final species = normalizeClubReportSpecies(
+            (row['species'] ?? row['animal_species'] ?? '').toString(),
+          );
+          final breed = displayBreedNameForClubReport(
+            reportName: _selectedReportName ?? 'sweepstakes_report',
+            breedName: rawBreed,
+            species: species,
+          );
           if (breed.isNotEmpty) {
             breedSet.add(breed);
           }
@@ -6621,10 +6922,18 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
             .select('breed_name, section_id')
             .eq('show_id', widget.showId)
             .inFilter('section_id', sectionIds);
+        final sanctionMaps = (sanctionRows as List)
+            .map((raw) => Map<String, dynamic>.from(raw as Map))
+            .toList();
 
-        for (final rawRow in (sanctionRows as List)) {
-          final row = Map<String, dynamic>.from(rawRow as Map);
-          final breed = (row['breed_name'] ?? '').toString().trim();
+        for (final row in sanctionMaps) {
+          final rawBreed = (row['breed_name'] ?? '').toString().trim();
+          final species = isKnownCavyBreed(rawBreed) ? 'cavy' : '';
+          final breed = displayBreedNameForClubReport(
+            reportName: _selectedReportName ?? 'sweepstakes_report',
+            breedName: rawBreed,
+            species: species,
+          );
           if (breed.isNotEmpty) {
             breedSet.add(breed);
           }

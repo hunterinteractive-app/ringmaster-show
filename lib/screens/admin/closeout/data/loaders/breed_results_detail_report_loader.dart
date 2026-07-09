@@ -4,6 +4,7 @@ import 'package:ringmaster_show/utils/cavy/cavy_awards.dart';
 
 import '../../models/base/report_request.dart';
 import '../../models/clubs/breed_results_detail_report_data.dart';
+import '../../utils/club_report_grouping.dart';
 import '../closeout_repository.dart';
 
 class BreedResultsDetailReportLoader {
@@ -13,7 +14,9 @@ class BreedResultsDetailReportLoader {
 
   Future<BreedResultsDetailReportData> load(ReportRequest request) async {
     final showId = request.showId;
-    final breedName = (request.breedName ?? '').trim();
+    final requestedBreedName = (request.breedName ?? '').trim();
+    final species = normalizeClubReportSpecies(request.species);
+    final breedName = species == 'cavy' ? '' : requestedBreedName;
     final clubName = (request.clubName ?? '').trim();
     final scope = (request.scope ?? '').trim().toUpperCase();
     final showLetter = (request.showLetter ?? '').trim().toUpperCase();
@@ -32,7 +35,9 @@ class BreedResultsDetailReportLoader {
       scope: scope,
       showLetter: showLetter,
     );
-    final reportBreedLabel = breedName.isEmpty ? 'All Breeds' : breedName;
+    final reportBreedLabel = species == 'cavy'
+        ? cavyClubReportBreedName
+        : (breedName.isEmpty ? 'All Breeds' : breedName);
     if (scope.isEmpty) {
       throw Exception('Breed Results Detail Report requires scope.');
     }
@@ -74,6 +79,7 @@ class BreedResultsDetailReportLoader {
           breedName: breedName,
           scope: scope,
           showLetter: letter,
+          species: species,
         );
         sections.add(built);
       }
@@ -105,6 +111,7 @@ class BreedResultsDetailReportLoader {
       breedName: breedName,
       scope: scope,
       showLetter: showLetter,
+      species: species,
     );
 
     return BreedResultsDetailReportData(
@@ -183,6 +190,7 @@ class BreedResultsDetailReportLoader {
     required String breedName,
     required String scope,
     required String showLetter,
+    required String species,
   }) async {
     final sectionRows = breedName.isEmpty
         ? await _loadOverallResultRows(
@@ -200,16 +208,20 @@ class BreedResultsDetailReportLoader {
             },
           );
 
-    final rows = (sectionRows as List)
+    var rows = (sectionRows as List)
         .map((e) => Map<String, dynamic>.from(e as Map))
         .toList();
+    rows = _filterRowsBySpecies(rows, species);
 
     final overallRows = breedName.isEmpty
         ? rows
-        : await _loadOverallResultRows(
-            showId: showId,
-            scope: scope,
-            showLetter: showLetter,
+        : _filterRowsBySpecies(
+            await _loadOverallResultRows(
+              showId: showId,
+              scope: scope,
+              showLetter: showLetter,
+            ),
+            species,
           );
 
     final reportRows = breedName.isEmpty
@@ -248,7 +260,9 @@ class BreedResultsDetailReportLoader {
 
     final awardRows = (awardsResponse as List)
         .map((e) => Map<String, dynamic>.from(e as Map))
+        .where((row) => _rowMatchesSpecies(row, species))
         .toList();
+    final groupByBreed = species == 'cavy' && breedName.isEmpty;
 
     final judgeName = _deriveJudgeName(reportRows);
     final counts = _buildAwardCounts(reportRows, overallRows: overallRows);
@@ -278,16 +292,15 @@ class BreedResultsDetailReportLoader {
     for (final row in awardRows.where(
       (a) => _isVarietyAward(a['award_code']),
     )) {
-      final varietyName = _safe(
-        row['variety_name'],
-        fallback: 'Unspecified Variety',
+      final sectionName = breedResultsDetailTopSectionName(
+        row,
+        groupByBreed: groupByBreed,
       );
-      varietyAwardMap.putIfAbsent(varietyName, () => []);
-      varietyAwardMap[varietyName]!.add(
+      varietyAwardMap.putIfAbsent(sectionName, () => []);
+      varietyAwardMap[sectionName]!.add(
         _mapAwardRow(row, counts, resultRowsForAwardLookup, sweepstakesPoints),
       );
     }
-
 
     return BreedResultsDetailSection(
       showLetter: showLetter,
@@ -297,6 +310,7 @@ class BreedResultsDetailReportLoader {
         rows: reportRows,
         varietyAwardMap: varietyAwardMap,
         sweepstakesPoints: sweepstakesPoints,
+        groupByBreed: groupByBreed,
       ),
       noResultsFound: false,
     );
@@ -306,6 +320,7 @@ class BreedResultsDetailReportLoader {
     required List<Map<String, dynamic>> rows,
     required Map<String, List<BreedAward>> varietyAwardMap,
     required _SweepstakesPointsLookup sweepstakesPoints,
+    required bool groupByBreed,
   }) {
     final regularByVariety = <String, List<Map<String, dynamic>>>{};
     final furByCategory = <String, List<Map<String, dynamic>>>{};
@@ -320,12 +335,12 @@ class BreedResultsDetailReportLoader {
         continue;
       }
 
-      final varietyName = _safe(
-        row['variety_name'],
-        fallback: 'Unspecified Variety',
+      final sectionName = breedResultsDetailTopSectionName(
+        row,
+        groupByBreed: groupByBreed,
       );
-      regularByVariety.putIfAbsent(varietyName, () => []);
-      regularByVariety[varietyName]!.add(row);
+      regularByVariety.putIfAbsent(sectionName, () => []);
+      regularByVariety[sectionName]!.add(row);
     }
 
     final sections = <VarietySection>[];
@@ -398,10 +413,7 @@ class BreedResultsDetailReportLoader {
         sexLabels.map((sexLabel) {
           return SexSection(
             sexLabel: sexLabel,
-            classes: _buildClasses(
-              bySex[sexLabel]!,
-              sweepstakesPoints,
-            ),
+            classes: _buildClasses(bySex[sexLabel]!, sweepstakesPoints),
           );
         }),
       );
@@ -411,12 +423,7 @@ class BreedResultsDetailReportLoader {
       sections.add(
         SexSection(
           sexLabel: '',
-          classes: [
-            _buildFlatFurClass(
-              furRows,
-              sweepstakesPoints,
-            ),
-          ],
+          classes: [_buildFlatFurClass(furRows, sweepstakesPoints)],
         ),
       );
     }
@@ -555,7 +562,6 @@ class BreedResultsDetailReportLoader {
       );
     }).toList();
   }
-
 
   BreedAward _mapAwardRow(
     Map<String, dynamic> row,
@@ -961,18 +967,7 @@ class BreedResultsDetailReportLoader {
   }
 
   String _deriveSexLabel(Map<String, dynamic> row) {
-    final sex = _safe(row['sex']).toLowerCase();
-    final className = _safe(row['class_name']).toLowerCase();
-
-    if (sex.contains('buck') || sex == 'b' || className.contains('buck')) {
-      return 'Bucks';
-    }
-
-    if (sex.contains('doe') || sex == 'd' || className.contains('doe')) {
-      return 'Does';
-    }
-
-    return 'Unspecified Sex';
+    return breedResultsDetailSexLabel(row);
   }
 
   int _sexSort(String sexLabel) {
@@ -981,20 +976,17 @@ class BreedResultsDetailReportLoader {
         return 10;
       case 'Does':
         return 20;
+      case 'Boars':
+        return 10;
+      case 'Sows':
+        return 20;
       default:
         return 99;
     }
   }
 
   String _normalizeClassName(String raw) {
-    final r = raw.toLowerCase();
-    if (r.contains('senior') && r.contains('buck')) return 'Sr Bucks';
-    if (r.contains('senior') && r.contains('doe')) return 'Sr Does';
-    if (r.contains('intermediate') && r.contains('buck')) return 'Int Bucks';
-    if (r.contains('intermediate') && r.contains('doe')) return 'Int Does';
-    if (r.contains('junior') && r.contains('buck')) return 'Jr Bucks';
-    if (r.contains('junior') && r.contains('doe')) return 'Jr Does';
-    return raw;
+    return normalizeBreedResultsDetailClassName(raw);
   }
 
   int _classSort(String className) {
@@ -1010,6 +1002,18 @@ class BreedResultsDetailReportLoader {
       case 'Jr Bucks':
         return 50;
       case 'Jr Does':
+        return 60;
+      case 'Sr Boars':
+        return 10;
+      case 'Sr Sows':
+        return 20;
+      case 'Int Boars':
+        return 30;
+      case 'Int Sows':
+        return 40;
+      case 'Jr Boars':
+        return 50;
+      case 'Jr Sows':
         return 60;
       default:
         return 999;
@@ -1215,7 +1219,6 @@ class BreedResultsDetailReportLoader {
               variety,
               fur_variety,
               is_fur,
-              is_wool,
               class_name,
               sex,
               exhibitor_id,
@@ -1252,7 +1255,6 @@ class BreedResultsDetailReportLoader {
           'variety': _safe(entry['variety']),
           'fur_variety': _safe(entry['fur_variety']),
           'is_fur': entry['is_fur'],
-          'is_wool': entry['is_wool'],
           'class_name': _safe(entry['class_name']),
           'sex': _safe(entry['sex']),
           'exhibitor_id': _safe(entry['exhibitor_id']),
@@ -1296,7 +1298,7 @@ class BreedResultsDetailReportLoader {
   }
 
   bool _isFurOrWoolRow(Map<String, dynamic> row) {
-    if (row['is_fur'] == true || row['is_wool'] == true) return true;
+    if (row['is_fur'] == true) return true;
     if (_safe(row['fur_variety']).isNotEmpty) return true;
 
     final rowType = _firstNonEmpty([
@@ -1361,6 +1363,29 @@ class BreedResultsDetailReportLoader {
     }
 
     return allRows;
+  }
+
+  List<Map<String, dynamic>> _filterRowsBySpecies(
+    List<Map<String, dynamic>> rows,
+    String species,
+  ) {
+    if (species.isEmpty) return rows;
+    return rows.where((row) => _rowMatchesSpecies(row, species)).toList();
+  }
+
+  bool _rowMatchesSpecies(Map<String, dynamic> row, String species) {
+    if (species.isEmpty) return true;
+
+    final rowSpecies = normalizeClubReportSpecies(
+      _safe(row['species'] ?? row['animal_species'] ?? row['entry_species']),
+    );
+    if (rowSpecies.isNotEmpty) return rowSpecies == species;
+
+    if (species == 'cavy') {
+      return isKnownCavyBreed(_safe(row['breed_name'] ?? row['breed']));
+    }
+
+    return true;
   }
 
   List<Map<String, dynamic>> _mergeResultRows(
@@ -1431,8 +1456,8 @@ class BreedResultsDetailReportLoader {
       if (directPoints != 0) return directPoints;
     }
 
-    final preferredPoints = preferredAwardCode == null ||
-            preferredAwardCode.trim().isEmpty
+    final preferredPoints =
+        preferredAwardCode == null || preferredAwardCode.trim().isEmpty
         ? null
         : sweepstakesPoints.pointsFor(row, awardCode: preferredAwardCode);
     if (preferredPoints != null) return preferredPoints;
@@ -1467,7 +1492,6 @@ class BreedResultsDetailReportLoader {
       _safe(row['row_type']),
       _safe(row['result_row_type']),
       _safe(row['line_type']),
-      if (row['is_wool'] == true) 'wool',
       if (row['is_fur'] == true) 'fur',
       _safe(row['fur_variety']),
       _pointsCategoryLabel(row),
@@ -1584,21 +1608,21 @@ class _SweepstakesPointsLookup {
 
     if (exact.isNotEmpty) return _sumPoints(exact);
 
-        if (normalizedAwardCode.isNotEmpty) {
-          final awardMatches = candidates.where((row) {
-            return _rowAwardCode(row) == normalizedAwardCode;
-          }).toList();
-          if (awardMatches.isNotEmpty) return _sumPoints(awardMatches);
+    if (normalizedAwardCode.isNotEmpty) {
+      final awardMatches = candidates.where((row) {
+        return _rowAwardCode(row) == normalizedAwardCode;
+      }).toList();
+      if (awardMatches.isNotEmpty) return _sumPoints(awardMatches);
 
-          final inferredAwardMatches = candidates.where((row) {
-            return _awardTextLooksLike(row, normalizedAwardCode);
-          }).toList();
-          if (inferredAwardMatches.isNotEmpty) {
-            return _sumPoints(inferredAwardMatches);
-          }
+      final inferredAwardMatches = candidates.where((row) {
+        return _awardTextLooksLike(row, normalizedAwardCode);
+      }).toList();
+      if (inferredAwardMatches.isNotEmpty) {
+        return _sumPoints(inferredAwardMatches);
+      }
 
-          return null;
-        }
+      return null;
+    }
 
     if (normalizedPlacement.isNotEmpty) {
       final placementMatches = candidates.where((row) {
@@ -1687,23 +1711,27 @@ class _SweepstakesPointsLookup {
   }
 
   static double _points(Map<String, dynamic> row) {
-    return _toDoubleStatic(_firstNonEmptyStatic([
-      _safeStatic(row['points']),
-      _safeStatic(row['sweepstakes_points']),
-      _safeStatic(row['points_earned']),
-      _safeStatic(row['total_points']),
-    ]));
+    return _toDoubleStatic(
+      _firstNonEmptyStatic([
+        _safeStatic(row['points']),
+        _safeStatic(row['sweepstakes_points']),
+        _safeStatic(row['points_earned']),
+        _safeStatic(row['total_points']),
+      ]),
+    );
   }
 
   static bool _sameClassContext(
     Map<String, dynamic> sweepstakesRow,
     Map<String, dynamic> resultRow,
   ) {
-    final rowClass = _normalizeClassNameStatic(_firstNonEmptyStatic([
-      _safeStatic(sweepstakesRow['class_name']),
-      _safeStatic(sweepstakesRow['class']),
-      _safeStatic(sweepstakesRow['class_label']),
-    ]));
+    final rowClass = _normalizeClassNameStatic(
+      _firstNonEmptyStatic([
+        _safeStatic(sweepstakesRow['class_name']),
+        _safeStatic(sweepstakesRow['class']),
+        _safeStatic(sweepstakesRow['class_label']),
+      ]),
+    );
     final resultClass = _normalizeClassNameStatic(
       _safeStatic(resultRow['class_name']),
     );
@@ -1714,10 +1742,12 @@ class _SweepstakesPointsLookup {
       return false;
     }
 
-    final rowSex = _sexKeyStatic(_firstNonEmptyStatic([
-      _safeStatic(sweepstakesRow['sex']),
-      _safeStatic(sweepstakesRow['sex_label']),
-    ]));
+    final rowSex = _sexKeyStatic(
+      _firstNonEmptyStatic([
+        _safeStatic(sweepstakesRow['sex']),
+        _safeStatic(sweepstakesRow['sex_label']),
+      ]),
+    );
     final resultSex = _sexKeyStatic(_safeStatic(resultRow['sex']));
 
     if (rowSex.isNotEmpty && resultSex.isNotEmpty && rowSex != resultSex) {
@@ -1731,24 +1761,28 @@ class _SweepstakesPointsLookup {
     Map<String, dynamic> sweepstakesRow,
     Map<String, dynamic> resultRow,
   ) {
-    final rowCategory = _normalizePointsCategoryStatic(_firstNonEmptyStatic([
-      _safeStatic(sweepstakesRow['points_category']),
-      _safeStatic(sweepstakesRow['pointsCategory']),
-      _safeStatic(sweepstakesRow['points_category_name']),
-      _safeStatic(sweepstakesRow['sweepstakes_category']),
-      _safeStatic(sweepstakesRow['variety_name']),
-      _safeStatic(sweepstakesRow['variety']),
-      _safeStatic(sweepstakesRow['fur_variety']),
-    ]));
-    final resultCategory = _normalizePointsCategoryStatic(_firstNonEmptyStatic([
-      _safeStatic(resultRow['points_category']),
-      _safeStatic(resultRow['pointsCategory']),
-      _safeStatic(resultRow['points_category_name']),
-      _safeStatic(resultRow['sweepstakes_category']),
-      _safeStatic(resultRow['fur_variety']),
-      _safeStatic(resultRow['variety_name']),
-      _safeStatic(resultRow['variety']),
-    ]));
+    final rowCategory = _normalizePointsCategoryStatic(
+      _firstNonEmptyStatic([
+        _safeStatic(sweepstakesRow['points_category']),
+        _safeStatic(sweepstakesRow['pointsCategory']),
+        _safeStatic(sweepstakesRow['points_category_name']),
+        _safeStatic(sweepstakesRow['sweepstakes_category']),
+        _safeStatic(sweepstakesRow['variety_name']),
+        _safeStatic(sweepstakesRow['variety']),
+        _safeStatic(sweepstakesRow['fur_variety']),
+      ]),
+    );
+    final resultCategory = _normalizePointsCategoryStatic(
+      _firstNonEmptyStatic([
+        _safeStatic(resultRow['points_category']),
+        _safeStatic(resultRow['pointsCategory']),
+        _safeStatic(resultRow['points_category_name']),
+        _safeStatic(resultRow['sweepstakes_category']),
+        _safeStatic(resultRow['fur_variety']),
+        _safeStatic(resultRow['variety_name']),
+        _safeStatic(resultRow['variety']),
+      ]),
+    );
 
     if (rowCategory.isNotEmpty &&
         resultCategory.isNotEmpty &&
@@ -1760,21 +1794,23 @@ class _SweepstakesPointsLookup {
   }
 
   static String _rowAwardCode(Map<String, dynamic> row) {
-    return _awardCodeKeyStatic(_firstNonEmptyStatic([
-      _safeStatic(row['award_code']),
-      _safeStatic(row['points_source']),
-      _safeStatic(row['award']),
-      _safeStatic(row['award_type']),
-      _safeStatic(row['result_award_code']),
-      _safeStatic(row['sweepstakes_award_code']),
-      _safeStatic(row['sweepstakes_code']),
-      _safeStatic(row['points_code']),
-      _safeStatic(row['points_type']),
-      _safeStatic(row['category_code']),
-      _safeStatic(row['award_name']),
-      _safeStatic(row['points_reason']),
-      _safeStatic(row['reason']),
-    ]));
+    return _awardCodeKeyStatic(
+      _firstNonEmptyStatic([
+        _safeStatic(row['award_code']),
+        _safeStatic(row['points_source']),
+        _safeStatic(row['award']),
+        _safeStatic(row['award_type']),
+        _safeStatic(row['result_award_code']),
+        _safeStatic(row['sweepstakes_award_code']),
+        _safeStatic(row['sweepstakes_code']),
+        _safeStatic(row['points_code']),
+        _safeStatic(row['points_type']),
+        _safeStatic(row['category_code']),
+        _safeStatic(row['award_name']),
+        _safeStatic(row['points_reason']),
+        _safeStatic(row['reason']),
+      ]),
+    );
   }
 
   static String _rowPlacement(Map<String, dynamic> row) {
@@ -1793,14 +1829,7 @@ class _SweepstakesPointsLookup {
   }
 
   static String _normalizeClassNameStatic(String raw) {
-    final r = raw.toLowerCase();
-    if (r.contains('senior') && r.contains('buck')) return 'Sr Bucks';
-    if (r.contains('senior') && r.contains('doe')) return 'Sr Does';
-    if (r.contains('intermediate') && r.contains('buck')) return 'Int Bucks';
-    if (r.contains('intermediate') && r.contains('doe')) return 'Int Does';
-    if (r.contains('junior') && r.contains('buck')) return 'Jr Bucks';
-    if (r.contains('junior') && r.contains('doe')) return 'Jr Does';
-    return raw.trim();
+    return normalizeBreedResultsDetailClassName(raw);
   }
 
   static String _sexKeyStatic(String sex) {
@@ -1887,6 +1916,81 @@ class _SweepstakesPointsLookup {
     if (value is num) return value.toDouble();
     return double.tryParse((value ?? '').toString().trim()) ?? 0;
   }
+}
+
+String breedResultsDetailTopSectionName(
+  Map<String, dynamic> row, {
+  required bool groupByBreed,
+}) {
+  if (groupByBreed) {
+    final breedName = _detailFirstNonEmpty([
+      _detailSafe(row['breed_name']),
+      _detailSafe(row['breed']),
+    ]);
+    if (breedName.isNotEmpty) return breedName;
+    return 'Unspecified Breed';
+  }
+
+  return _detailSafe(row['variety_name'], fallback: 'Unspecified Variety');
+}
+
+String breedResultsDetailSexLabel(Map<String, dynamic> row) {
+  final sex = _detailSafe(row['sex']).toLowerCase();
+  final className = _detailSafe(row['class_name']).toLowerCase();
+
+  if (sex.contains('buck') || sex == 'b' || className.contains('buck')) {
+    return 'Bucks';
+  }
+
+  if (sex.contains('doe') || sex == 'd' || className.contains('doe')) {
+    return 'Does';
+  }
+
+  if (sex.contains('boar') ||
+      sex == 'm' ||
+      sex == 'male' ||
+      className.contains('boar')) {
+    return 'Boars';
+  }
+
+  if (sex.contains('sow') ||
+      sex == 'f' ||
+      sex == 'female' ||
+      className.contains('sow')) {
+    return 'Sows';
+  }
+
+  return 'Unspecified Sex';
+}
+
+String normalizeBreedResultsDetailClassName(String raw) {
+  final r = raw.toLowerCase();
+  if (r.contains('senior') && r.contains('buck')) return 'Sr Bucks';
+  if (r.contains('senior') && r.contains('doe')) return 'Sr Does';
+  if (r.contains('intermediate') && r.contains('buck')) return 'Int Bucks';
+  if (r.contains('intermediate') && r.contains('doe')) return 'Int Does';
+  if (r.contains('junior') && r.contains('buck')) return 'Jr Bucks';
+  if (r.contains('junior') && r.contains('doe')) return 'Jr Does';
+  if (r.contains('senior') && r.contains('boar')) return 'Sr Boars';
+  if (r.contains('senior') && r.contains('sow')) return 'Sr Sows';
+  if (r.contains('intermediate') && r.contains('boar')) return 'Int Boars';
+  if (r.contains('intermediate') && r.contains('sow')) return 'Int Sows';
+  if (r.contains('junior') && r.contains('boar')) return 'Jr Boars';
+  if (r.contains('junior') && r.contains('sow')) return 'Jr Sows';
+  return raw.trim();
+}
+
+String _detailFirstNonEmpty(List<String> values) {
+  for (final value in values) {
+    final trimmed = value.trim();
+    if (trimmed.isNotEmpty) return trimmed;
+  }
+  return '';
+}
+
+String _detailSafe(Object? value, {String fallback = ''}) {
+  final text = (value ?? '').toString().trim();
+  return text.isEmpty ? fallback : text;
 }
 
 class _JudgedCount {
