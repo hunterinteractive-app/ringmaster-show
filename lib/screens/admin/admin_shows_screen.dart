@@ -97,7 +97,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
         .from('shows')
         .select(
           'id,name,start_date,end_date,location_name,is_published,entry_open_at,entry_close_at,created_at,'
-          'is_locked,locked_at,finalized_at,owner_user_id',
+          'timezone,is_locked,locked_at,finalized_at,owner_user_id',
         );
 
     // If the previous screen already calculated allowed shows, trust that list.
@@ -318,15 +318,112 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
     }
   }
 
-  DateTime _showSortDate(Map<String, dynamic> show) {
-    final start = DateTime.tryParse((show['start_date'] ?? '').toString());
-    final created = DateTime.tryParse((show['created_at'] ?? '').toString());
-    return start ?? created ?? DateTime(1900);
+  DateTime _todayDateOnly() {
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, now.day);
   }
 
-  List<Map<String, dynamic>> _filteredAndSortedShows(
-    List<Map<String, dynamic>> shows,
+  DateTime? _showDateOnly(Map<String, dynamic> show, String key) {
+    final value = (show[key] ?? '').toString().trim();
+    if (value.isEmpty) return null;
+
+    final parsed = DateTime.tryParse(value);
+    if (parsed == null) return null;
+
+    return DateTime(parsed.year, parsed.month, parsed.day);
+  }
+
+  String _showName(Map<String, dynamic> show) {
+    return (show['name'] ?? '').toString().trim().toLowerCase();
+  }
+
+  bool _isCurrentShow(Map<String, dynamic> show, DateTime today) {
+    final start = _showDateOnly(show, 'start_date');
+    final end = _showDateOnly(show, 'end_date');
+    if (start == null || end == null) return false;
+
+    return !start.isAfter(today) && !end.isBefore(today);
+  }
+
+  bool _isUpcomingShow(Map<String, dynamic> show, DateTime today) {
+    final start = _showDateOnly(show, 'start_date');
+    return start != null && start.isAfter(today);
+  }
+
+  bool _isPastShow(Map<String, dynamic> show, DateTime today) {
+    final end = _showDateOnly(show, 'end_date');
+    return end != null && end.isBefore(today);
+  }
+
+  bool _isFinalizedShow(Map<String, dynamic> show) {
+    return (show['finalized_at'] ?? '').toString().trim().isNotEmpty;
+  }
+
+  bool _needsCloseout(Map<String, dynamic> show, DateTime today) {
+    return _isPastShow(show, today) && !_isFinalizedShow(show);
+  }
+
+  _ShowDashboardGroup _showDashboardGroup(
+    Map<String, dynamic> show,
+    DateTime today,
   ) {
+    if (_isFinalizedShow(show)) return _ShowDashboardGroup.completedLocked;
+    if (_needsCloseout(show, today)) return _ShowDashboardGroup.pastCloseout;
+    return _ShowDashboardGroup.activeUpcoming;
+  }
+
+  int _compareNullableDate(
+    DateTime? a,
+    DateTime? b, {
+    required bool descending,
+  }) {
+    if (a == null && b == null) return 0;
+    if (a == null) return 1;
+    if (b == null) return -1;
+
+    final cmp = a.compareTo(b);
+    return descending ? -cmp : cmp;
+  }
+
+  int _compareShowsWithinGroup(
+    Map<String, dynamic> a,
+    Map<String, dynamic> b,
+    _ShowDashboardGroup group,
+    DateTime today,
+  ) {
+    switch (group) {
+      case _ShowDashboardGroup.activeUpcoming:
+        final aCurrent = _isCurrentShow(a, today);
+        final bCurrent = _isCurrentShow(b, today);
+        if (aCurrent != bCurrent) return aCurrent ? -1 : 1;
+
+        final aUpcoming = _isUpcomingShow(a, today);
+        final bUpcoming = _isUpcomingShow(b, today);
+        if (aUpcoming != bUpcoming) return aUpcoming ? -1 : 1;
+
+        final startCmp = _compareNullableDate(
+          _showDateOnly(a, 'start_date'),
+          _showDateOnly(b, 'start_date'),
+          descending: false,
+        );
+        if (startCmp != 0) return startCmp;
+        break;
+
+      case _ShowDashboardGroup.pastCloseout:
+      case _ShowDashboardGroup.completedLocked:
+        final endCmp = _compareNullableDate(
+          _showDateOnly(a, 'end_date'),
+          _showDateOnly(b, 'end_date'),
+          descending: true,
+        );
+        if (endCmp != 0) return endCmp;
+        break;
+    }
+
+    return _showName(a).compareTo(_showName(b));
+  }
+
+  List<Map<String, dynamic>> _filteredShows(List<Map<String, dynamic>> shows) {
     final q = _searchController.text.trim().toLowerCase();
 
     final filtered = shows.where((s) {
@@ -347,21 +444,32 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
       return haystack.contains(q);
     }).toList();
 
-    filtered.sort((a, b) {
-      final dateCmp = _showSortDate(a).compareTo(_showSortDate(b));
-      if (dateCmp != 0) return dateCmp;
-
-      final nameA = (a['name'] ?? '').toString().toLowerCase();
-      final nameB = (b['name'] ?? '').toString().toLowerCase();
-      final nameCmp = nameA.compareTo(nameB);
-      if (nameCmp != 0) return nameCmp;
-
-      final locA = (a['location_name'] ?? '').toString().toLowerCase();
-      final locB = (b['location_name'] ?? '').toString().toLowerCase();
-      return locA.compareTo(locB);
-    });
-
     return filtered;
+  }
+
+  List<_ShowDashboardSection> _groupedShowSections(
+    List<Map<String, dynamic>> shows,
+  ) {
+    final today = _todayDateOnly();
+    final groups = <_ShowDashboardGroup, List<Map<String, dynamic>>>{
+      for (final group in _ShowDashboardGroup.values)
+        group: <Map<String, dynamic>>[],
+    };
+
+    for (final show in shows) {
+      groups[_showDashboardGroup(show, today)]!.add(show);
+    }
+
+    final sections = <_ShowDashboardSection>[];
+    for (final group in _ShowDashboardGroup.values) {
+      final groupShows = groups[group]!;
+      if (groupShows.isEmpty) continue;
+
+      groupShows.sort((a, b) => _compareShowsWithinGroup(a, b, group, today));
+      sections.add(_ShowDashboardSection(group: group, shows: groupShows));
+    }
+
+    return sections;
   }
 
   String _fmtDate(String? v) {
@@ -499,13 +607,108 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
     );
   }
 
+  Widget _buildSectionHeader(_ShowDashboardGroup group) {
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.sm, bottom: AppSpacing.sm),
+      child: Text(
+        group.label,
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+          color: AppColors.headerText,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildShowCard(Map<String, dynamic> show, _ShowEntryCounts counts) {
+    final showId = show['id'].toString();
+    final name = (show['name'] ?? '').toString();
+    final start = _fmtDate((show['start_date'] ?? '').toString());
+    final end = _fmtDate((show['end_date'] ?? '').toString());
+    final loc = (show['location_name'] ?? '').toString();
+    final published = show['is_published'] == true;
+    final isLocked = show['is_locked'] == true;
+    final isFinalized = _isFinalizedShow(show);
+
+    final openAt = _fmtTs(show['entry_open_at']?.toString());
+    final closeAt = _fmtTs(show['entry_close_at']?.toString());
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: RMCard(
+        onTap: () => _openEditShow(showId),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    name,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: AppColors.text,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.end,
+                  children: [
+                    RMBadge(
+                      text: published ? 'Published' : 'Draft',
+                      icon: published ? Icons.public : Icons.edit_note,
+                      success: published,
+                    ),
+                    if (isFinalized)
+                      const RMBadge(
+                        text: 'Finalized',
+                        icon: Icons.verified,
+                        success: true,
+                      )
+                    else if (isLocked)
+                      const RMBadge(text: 'Locked', icon: Icons.lock),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              '$start${end != '—' ? ' → $end' : ''} • $loc',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AppColors.muted),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                RMBadge(text: 'Open: $openAt', icon: Icons.lock_open),
+                RMBadge(
+                  text: 'Deadline: $closeAt',
+                  icon: Icons.event_available,
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            _buildShowCounts(counts),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<_AdminShowsPageData>(
       future: _pageFuture,
       builder: (context, snap) {
         final page = snap.data;
-        final shows = _filteredAndSortedShows(page?.shows ?? const []);
+        final shows = _filteredShows(page?.shows ?? const []);
+        final showSections = _groupedShowSections(shows);
 
         final license =
             page?.license ??
@@ -617,126 +820,19 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
                             )
                           else
                             Expanded(
-                              child: ListView.builder(
-                                itemCount: shows.length,
-                                itemBuilder: (context, i) {
-                                  final s = shows[i];
-
-                                  final showId = s['id'].toString();
-                                  final counts =
-                                      page!.entryCounts[showId] ??
-                                      _ShowEntryCounts();
-
-                                  final name = (s['name'] ?? '').toString();
-                                  final start = _fmtDate(
-                                    (s['start_date'] ?? '').toString(),
-                                  );
-                                  final end = _fmtDate(
-                                    (s['end_date'] ?? '').toString(),
-                                  );
-                                  final loc = (s['location_name'] ?? '')
-                                      .toString();
-                                  final published = s['is_published'] == true;
-                                  final isLocked = s['is_locked'] == true;
-                                  final finalizedAt = (s['finalized_at'] ?? '')
-                                      .toString();
-                                  final isFinalized = finalizedAt.isNotEmpty;
-
-                                  final openAt = _fmtTs(
-                                    s['entry_open_at']?.toString(),
-                                  );
-                                  final closeAt = _fmtTs(
-                                    s['entry_close_at']?.toString(),
-                                  );
-
-                                  return Padding(
-                                    padding: const EdgeInsets.only(
-                                      bottom: AppSpacing.md,
-                                    ),
-                                    child: RMCard(
-                                      onTap: () => _openEditShow(showId),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Expanded(
-                                                child: Text(
-                                                  name,
-                                                  style: Theme.of(context)
-                                                      .textTheme
-                                                      .titleMedium
-                                                      ?.copyWith(
-                                                        color: AppColors.text,
-                                                        fontWeight:
-                                                            FontWeight.w700,
-                                                      ),
-                                                ),
-                                              ),
-                                              Wrap(
-                                                spacing: 8,
-                                                runSpacing: 8,
-                                                alignment: WrapAlignment.end,
-                                                children: [
-                                                  RMBadge(
-                                                    text: published
-                                                        ? 'Published'
-                                                        : 'Draft',
-                                                    icon: published
-                                                        ? Icons.public
-                                                        : Icons.edit_note,
-                                                    success: published,
-                                                  ),
-                                                  if (isFinalized)
-                                                    const RMBadge(
-                                                      text: 'Finalized',
-                                                      icon: Icons.verified,
-                                                      success: true,
-                                                    )
-                                                  else if (isLocked)
-                                                    const RMBadge(
-                                                      text: 'Locked',
-                                                      icon: Icons.lock,
-                                                    ),
-                                                ],
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: AppSpacing.sm),
-                                          Text(
-                                            '$start${end != '—' ? ' → $end' : ''} • $loc',
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .bodySmall
-                                                ?.copyWith(
-                                                  color: AppColors.muted,
-                                                ),
-                                          ),
-                                          const SizedBox(height: AppSpacing.md),
-                                          Wrap(
-                                            spacing: AppSpacing.sm,
-                                            runSpacing: AppSpacing.sm,
-                                            children: [
-                                              RMBadge(
-                                                text: 'Open: $openAt',
-                                                icon: Icons.lock_open,
-                                              ),
-                                              RMBadge(
-                                                text: 'Deadline: $closeAt',
-                                                icon: Icons.event_available,
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: AppSpacing.md),
-                                          _buildShowCounts(counts),
-                                        ],
+                              child: ListView(
+                                children: [
+                                  for (final section in showSections) ...[
+                                    _buildSectionHeader(section.group),
+                                    for (final show in section.shows)
+                                      _buildShowCard(
+                                        show,
+                                        page!.entryCounts[show['id']
+                                                .toString()] ??
+                                            _ShowEntryCounts(),
                                       ),
-                                    ),
-                                  );
-                                },
+                                  ],
+                                ],
                               ),
                             ),
                         ],
@@ -1025,6 +1121,23 @@ class _TopBarAction extends StatelessWidget {
       ),
     );
   }
+}
+
+enum _ShowDashboardGroup {
+  activeUpcoming('Active & Upcoming'),
+  pastCloseout('Past / Closeout'),
+  completedLocked('Completed / Locked');
+
+  final String label;
+
+  const _ShowDashboardGroup(this.label);
+}
+
+class _ShowDashboardSection {
+  final _ShowDashboardGroup group;
+  final List<Map<String, dynamic>> shows;
+
+  const _ShowDashboardSection({required this.group, required this.shows});
 }
 
 class _AdminShowsPageData {
