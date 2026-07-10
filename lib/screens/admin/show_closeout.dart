@@ -4439,12 +4439,12 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           ? selectedReportScopeLabel
           : (_artifactMetaString(resolvedArtifact, 'scope_label') ?? '');
 
-      debugPrint(
+      /*debugPrint(
         '[Closeout:${widget.showId}] Generating report=$reportName '
         'artifact=${resolvedArtifact.id} '
         'scopeLabel=$breedJudgedScopeLabel '
         'sectionIds=${breedJudgedSectionIds.join(',')}',
-      );
+      );*/
 
       await runner.generateSingleReport(
         showId: widget.showId,

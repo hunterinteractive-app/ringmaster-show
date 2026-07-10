@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/breed_results_detail_report_loader.dart';
+import 'package:ringmaster_show/screens/admin/closeout/data/loaders/legs_report_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/sweepstakes_report_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/models/clubs/sweepstakes_report_data.dart';
 
@@ -85,6 +86,59 @@ void main() {
       );
       expect(normalizeBreedResultsDetailClassName('Senior Boar'), 'Sr Boars');
       expect(normalizeBreedResultsDetailClassName('Junior Sow'), 'Jr Sows');
+    });
+
+    test('uses cavy scoped exhibitor numbers for legs', () {
+      expect(
+        legExhibitorNumberFromResultRow({
+          'species': 'cavy',
+          'exhibitor_number': 'C12',
+        }, profileExhibitorNumber: '104'),
+        'C12',
+      );
+
+      expect(
+        legExhibitorNumberFromResultRow({
+          'species': 'cavy',
+        }, profileExhibitorNumber: '104'),
+        '',
+      );
+    });
+
+    test('scopes cavy show-level leg counts to cavy rows', () {
+      final cavyWinner = {
+        'breed_name': 'Peruvian',
+        'sex': 'Boar',
+        'entry_id': 'cavy-1',
+      };
+
+      expect(
+        legShowScopeMatchesResultRow(cavyWinner, {
+          'breed_name': 'American Satin',
+          'sex': 'Sow',
+          'entry_id': 'cavy-2',
+        }),
+        isTrue,
+      );
+
+      expect(
+        legShowScopeMatchesResultRow(cavyWinner, {
+          'species': 'rabbit',
+          'entry_id': 'rabbit-1',
+        }),
+        isFalse,
+      );
+    });
+
+    test('infers cavy species for leg counts when result species is blank', () {
+      expect(legSpeciesFromResultRow({'sex': 'Boar'}), 'cavy');
+      expect(
+        legSpeciesFromResultRow({'species': 'rabbit', 'sex': 'Sow'}),
+        'cavy',
+      );
+      expect(legSpeciesFromResultRow({'class_name': 'Senior Sow'}), 'cavy');
+      expect(legSpeciesFromResultRow({'breed_name': 'Peruvian'}), 'cavy');
+      expect(legSpeciesFromResultRow({'breed_name': 'Rex'}), '');
     });
   });
 }

@@ -2,7 +2,85 @@
 
 import '../../models/base/report_request.dart';
 import '../../models/legs/legs_certificate_data.dart';
+import '../../utils/club_report_grouping.dart';
 import '../closeout_repository.dart';
+
+String legExhibitorNumberFromResultRow(
+  Map<String, dynamic> row, {
+  String profileExhibitorNumber = '',
+}) {
+  final species = legSpeciesFromResultRow(row);
+
+  final scopedRowNumber = _legTextFromFirstKey(row, const [
+    'cavy_exhibitor_number',
+    'cavy_show_exhibitor_number',
+    'show_cavy_exhibitor_number',
+    'species_exhibitor_number',
+    'section_exhibitor_number',
+    'show_exhibitor_number',
+    'show_exhibitor_no',
+    'entry_exhibitor_number',
+    'exhibitor_no',
+    'exhibitor_num',
+    'exhibitor_number',
+    'exhibitor_code',
+  ]);
+
+  if (scopedRowNumber.isNotEmpty) return scopedRowNumber;
+
+  // For cavy legs, never fall back to the exhibitor profile number; that value
+  // can be the full-show exhibitor number instead of the cavy show number.
+  if (species == 'cavy') return '';
+
+  return profileExhibitorNumber.trim();
+}
+
+String legSpeciesFromResultRow(Map<String, dynamic> row) {
+  final sexOrClass = _legTextFromFirstKey(row, const [
+    'sex',
+    'class_name',
+    'class',
+  ]).toLowerCase();
+
+  if (sexOrClass.contains('boar') || sexOrClass.contains('sow')) {
+    return 'cavy';
+  }
+
+  final normalized = _legTextFromFirstKey(row, const [
+    'species',
+    'animal_species',
+    'entry_species',
+  ]).toLowerCase();
+
+  if (normalized == 'rabbit' || normalized == 'cavy') return normalized;
+
+  if (sexOrClass.contains('buck') || sexOrClass.contains('doe')) {
+    return 'rabbit';
+  }
+
+  final breedName = _legTextFromFirstKey(row, const ['breed_name', 'breed']);
+
+  return isKnownCavyBreed(breedName) ? 'cavy' : '';
+}
+
+bool legShowScopeMatchesResultRow(
+  Map<String, dynamic> targetRow,
+  Map<String, dynamic> candidateRow,
+) {
+  final targetSpecies = legSpeciesFromResultRow(targetRow);
+  if (targetSpecies.isEmpty) return true;
+
+  final candidateSpecies = legSpeciesFromResultRow(candidateRow);
+  return candidateSpecies == targetSpecies;
+}
+
+String _legTextFromFirstKey(Map<String, dynamic> row, List<String> keys) {
+  for (final key in keys) {
+    final value = row[key]?.toString().trim() ?? '';
+    if (value.isNotEmpty) return value;
+  }
+  return '';
+}
 
 class LegsReportLoader {
   LegsReportLoader(this.repo);
@@ -652,7 +730,9 @@ class LegsReportLoader {
         return _str(e['resolved_section_id']) == sectionId;
       }).toList();
 
-      final showCountRows = sameShowRows.where(_countsForShow).toList();
+      final showCountRows = sameShowRows.where((e) {
+        return legShowScopeMatchesResultRow(row, e) && _countsForShow(e);
+      }).toList();
       final showAnimals = showCountRows.length;
       final showExhibitors = showCountRows
           .map((e) => _str(e['exhibitor_id']))
@@ -784,10 +864,10 @@ class LegsReportLoader {
           exhibitorProfile?.showingName ?? '',
           _str(row['exhibitor_label']),
         ]),
-        exhibitorNumber: _firstNonEmpty([
-          exhibitorProfile?.exhibitorNumber ?? '',
-          _str(row['exhibitor_number']),
-        ]),
+        exhibitorNumber: legExhibitorNumberFromResultRow(
+          row,
+          profileExhibitorNumber: exhibitorProfile?.exhibitorNumber ?? '',
+        ),
         exhibitorShowingName: _firstNonEmpty([
           exhibitorProfile?.showingName ?? '',
           _str(row['exhibitor_showing_name']),
