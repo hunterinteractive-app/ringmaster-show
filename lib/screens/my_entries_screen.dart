@@ -1,4 +1,5 @@
 // lib/screens/my_entries_screen.dart
+// ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use
 
 import 'package:flutter/material.dart';
 import 'dart:convert';

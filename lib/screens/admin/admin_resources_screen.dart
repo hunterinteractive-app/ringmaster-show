@@ -1,5 +1,7 @@
 // lib/screens/admin/admin_resources_screen.dart
 
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -23,55 +25,68 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
   static const List<Map<String, dynamic>> _scribeGuides = [
     {
       'id': 'scribe-exhibitor-account-first-show',
-      'title': 'Creating Your RingMaster Show Account and Entering Your First Show',
-      'description': 'Guide for exhibitors creating an account, adding animals, entering a show, and completing checkout.',
+      'title':
+          'Creating Your RingMaster Show Account and Entering Your First Show',
+      'description':
+          'Guide for exhibitors creating an account, adding animals, entering a show, and completing checkout.',
       'category': 'Exhibitor Guide',
-      'file_url': 'https://scribehow.com/o/vr7q0-IrTfO8a62Y0VO4Wg/viewer/Creating_Your_RingMaster_Show_Account_and_Entering_Your_First_Show__CnLLYjeMQBuMcB7lxzsI8Q',
+      'file_url':
+          'https://scribehow.com/o/vr7q0-IrTfO8a62Y0VO4Wg/viewer/Creating_Your_RingMaster_Show_Account_and_Entering_Your_First_Show__CnLLYjeMQBuMcB7lxzsI8Q',
       'resource_type': 'scribe',
       'sort_order': 10,
     },
     {
       'id': 'scribe-create-new-show',
       'title': 'How to Create a New Show in RingMaster Show',
-      'description': 'Guide for show secretaries creating the basic show record before completing setup.',
+      'description':
+          'Guide for show secretaries creating the basic show record before completing setup.',
       'category': 'Show Secretary Setup',
-      'file_url': 'https://scribehow.com/o/vr7q0-IrTfO8a62Y0VO4Wg/viewer/How_to_Create_a_New_Show_in_RingMaster_Show__fr5D5Jg_TfOftdRZg_TojQ',
+      'file_url':
+          'https://scribehow.com/o/vr7q0-IrTfO8a62Y0VO4Wg/viewer/How_to_Create_a_New_Show_in_RingMaster_Show__fr5D5Jg_TfOftdRZg_TojQ',
       'resource_type': 'scribe',
       'sort_order': 20,
     },
     {
       'id': 'scribe-prepare-show-entries',
       'title': 'Preparing a Show for Entries: Settings, Fees, and Payments',
-      'description': 'Guide for reviewing show settings, fees, staff setup, judges, and connecting Stripe payments.',
+      'description':
+          'Guide for reviewing show settings, fees, staff setup, judges, and connecting Stripe payments.',
       'category': 'Show Secretary Setup',
-      'file_url': 'https://scribehow.com/o/vr7q0-IrTfO8a62Y0VO4Wg/viewer/Preparing_a_Show_for_Entries_Settings_Fees_and_Payments__aivMCQC2Sd-C9ZwNf6hZ5Q',
+      'file_url':
+          'https://scribehow.com/o/vr7q0-IrTfO8a62Y0VO4Wg/viewer/Preparing_a_Show_for_Entries_Settings_Fees_and_Payments__aivMCQC2Sd-C9ZwNf6hZ5Q',
       'resource_type': 'scribe',
       'sort_order': 30,
     },
     {
       'id': 'scribe-review-entries-print-materials',
       'title': 'Reviewing Entries and Preparing Show Materials',
-      'description': 'Pre-show guide for reviewing entries, adding manual entries, breed counts, coop numbers, and generating print materials.',
+      'description':
+          'Pre-show guide for reviewing entries, adding manual entries, breed counts, coop numbers, and generating print materials.',
       'category': 'Pre-Show Guide',
-      'file_url': 'https://scribehow.com/o/vr7q0-IrTfO8a62Y0VO4Wg/viewer/Reviewing_Entries_and_Preparing_Show_Materials__2mobhQgrSZySm1eqrNKq2g',
+      'file_url':
+          'https://scribehow.com/o/vr7q0-IrTfO8a62Y0VO4Wg/viewer/Reviewing_Entries_and_Preparing_Show_Materials__2mobhQgrSZySm1eqrNKq2g',
       'resource_type': 'scribe',
       'sort_order': 50,
     },
     {
       'id': 'scribe-closeout-after-show',
       'title': 'Closeout / After Show Guide',
-      'description': 'After-show guide for entering final results, closeout checks, generating reports, sending reports, and locking the show.',
+      'description':
+          'After-show guide for entering final results, closeout checks, generating reports, sending reports, and locking the show.',
       'category': 'After Show Guide',
-      'file_url': 'https://scribehow.com/o/vr7q0-IrTfO8a62Y0VO4Wg/viewer/Closeout__After_Show_Guide__8SEf6HRcSvi70sUQdAhfNg',
+      'file_url':
+          'https://scribehow.com/o/vr7q0-IrTfO8a62Y0VO4Wg/viewer/Closeout__After_Show_Guide__8SEf6HRcSvi70sUQdAhfNg',
       'resource_type': 'scribe',
       'sort_order': 60,
     },
     {
       'id': 'scribe-custom-varieties',
       'title': 'How to Add Custom Varieties to Your Show',
-      'description': 'Guide for show secretaries adding custom varieties that are not already available in the default list.',
+      'description':
+          'Guide for show secretaries adding custom varieties that are not already available in the default list.',
       'category': 'Show Secretary Setup',
-      'file_url': 'https://scribehow.com/o/vr7q0-IrTfO8a62Y0VO4Wg/viewer/How_to_Add_Custom_Varieties_to_Your_Show__kZ5VXAAlRvStkL533gyJoA',
+      'file_url':
+          'https://scribehow.com/o/vr7q0-IrTfO8a62Y0VO4Wg/viewer/How_to_Add_Custom_Varieties_to_Your_Show__kZ5VXAAlRvStkL533gyJoA',
       'resource_type': 'scribe',
       'sort_order': 40,
     },
@@ -100,21 +115,19 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
 
       final rows = (res as List).cast<Map<String, dynamic>>();
 
-      uploadedResources.addAll(rows.map((row) {
-        final storagePath = (row['storage_path'] ?? '').toString();
+      uploadedResources.addAll(
+        rows.map((row) {
+          final storagePath = (row['storage_path'] ?? '').toString();
 
-        final publicUrl = storagePath.isEmpty
-            ? ''
-            : supabase.storage
-                .from('secretary-resources')
-                .getPublicUrl(storagePath);
+          final publicUrl = storagePath.isEmpty
+              ? ''
+              : supabase.storage
+                    .from('secretary-resources')
+                    .getPublicUrl(storagePath);
 
-        return {
-          ...row,
-          'file_url': publicUrl,
-          'resource_type': 'file',
-        };
-      }));
+          return {...row, 'file_url': publicUrl, 'resource_type': 'file'};
+        }),
+      );
     } catch (error) {
       debugPrint('Unable to load uploaded secretary resources: $error');
     }
@@ -130,8 +143,8 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
       final sortCompare = aSort.compareTo(bSort);
       if (sortCompare != 0) return sortCompare;
       return (a['title'] ?? '').toString().compareTo(
-            (b['title'] ?? '').toString(),
-          );
+        (b['title'] ?? '').toString(),
+      );
     });
 
     return allResources;
@@ -147,10 +160,7 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
 
     final uri = Uri.parse(url);
 
-    final opened = await launchUrl(
-      uri,
-      mode: LaunchMode.externalApplication,
-    );
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
 
     if (!mounted) return;
 
@@ -172,14 +182,12 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
 
     showDialog(
       context: context,
-      builder: (dialogContext) => Dialog(
-        child: InteractiveViewer(
-          child: Image.network(imageUrl),
-        ),
-      ),
+      builder: (dialogContext) =>
+          Dialog(child: InteractiveViewer(child: Image.network(imageUrl))),
     );
   }
 
+  // ignore: unused_element
   void _showResourceDialog(Map<String, dynamic> item) {
     final title = (item['title'] ?? '').toString();
     final desc = (item['description'] ?? '').toString();
@@ -220,10 +228,9 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
                   const SizedBox(height: AppSpacing.md),
                   Text(
                     desc,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodyMedium
-                        ?.copyWith(color: AppColors.muted),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(color: AppColors.muted),
                   ),
                 ],
                 if (!isScribe && url.isNotEmpty) ...[
@@ -238,12 +245,13 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
                         url,
                         height: 260,
                         fit: BoxFit.contain,
-                        errorBuilder: (context, error, stackTrace) => const SizedBox(
-                          height: 180,
-                          child: Center(
-                            child: Icon(Icons.broken_image_outlined),
-                          ),
-                        ),
+                        errorBuilder: (context, error, stackTrace) =>
+                            const SizedBox(
+                              height: 180,
+                              child: Center(
+                                child: Icon(Icons.broken_image_outlined),
+                              ),
+                            ),
                       ),
                     ),
                   ),
@@ -305,10 +313,9 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
             children: [
               Text(
                 subtitle,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyMedium
-                    ?.copyWith(color: AppColors.muted),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: AppColors.muted),
               ),
               const SizedBox(height: AppSpacing.md),
               Expanded(
@@ -322,8 +329,8 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
                     final itemDesc = (item['description'] ?? '').toString();
                     final itemCategory = (item['category'] ?? '').toString();
                     final url = (item['file_url'] ?? '').toString();
-                    final resourceType =
-                        (item['resource_type'] ?? 'file').toString();
+                    final resourceType = (item['resource_type'] ?? 'file')
+                        .toString();
                     final isScribe = resourceType == 'scribe';
 
                     return Container(
@@ -357,18 +364,14 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
                             children: [
                               Text(
                                 itemTitle,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleSmall
+                                style: Theme.of(context).textTheme.titleSmall
                                     ?.copyWith(fontWeight: FontWeight.w700),
                               ),
                               if (itemDesc.isNotEmpty) ...[
                                 const SizedBox(height: 4),
                                 Text(
                                   itemDesc,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodySmall
+                                  style: Theme.of(context).textTheme.bodySmall
                                       ?.copyWith(color: AppColors.muted),
                                 ),
                               ],
@@ -394,9 +397,7 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
                               IconButton(
                                 tooltip: isScribe ? 'Open Guide' : 'Download',
                                 icon: Icon(
-                                  isScribe
-                                      ? Icons.open_in_new
-                                      : Icons.download,
+                                  isScribe ? Icons.open_in_new : Icons.download,
                                 ),
                                 onPressed: url.isEmpty
                                     ? null
@@ -490,18 +491,16 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
                 children: [
                   Text(
                     title,
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w700),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     subtitle,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: AppColors.muted),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: AppColors.muted),
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   Wrap(
@@ -510,7 +509,8 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
                     children: [
                       RMBadge(text: badge, icon: icon),
                       RMBadge(
-                        text: '${items.length} item${items.length == 1 ? '' : 's'}',
+                        text:
+                            '${items.length} item${items.length == 1 ? '' : 's'}',
                         icon: Icons.list_alt_outlined,
                       ),
                     ],
@@ -564,10 +564,14 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
 
           final items = snap.data ?? [];
           final guideItems = items
-              .where((item) => (item['resource_type'] ?? '').toString() == 'scribe')
+              .where(
+                (item) => (item['resource_type'] ?? '').toString() == 'scribe',
+              )
               .toList();
           final fileItems = items
-              .where((item) => (item['resource_type'] ?? '').toString() != 'scribe')
+              .where(
+                (item) => (item['resource_type'] ?? '').toString() != 'scribe',
+              )
               .toList();
           final logoItems = fileItems.where((item) {
             final category = (item['category'] ?? '').toString().toLowerCase();
@@ -593,7 +597,8 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
                     child: Center(
                       child: RMEmptyState(
                         title: 'No resources available',
-                        subtitle: 'There are no secretary resources available yet.',
+                        subtitle:
+                            'There are no secretary resources available yet.',
                         icon: Icons.perm_media_outlined,
                       ),
                     ),

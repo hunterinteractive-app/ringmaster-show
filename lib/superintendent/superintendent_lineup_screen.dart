@@ -1,4 +1,5 @@
 // lib/superintendent/superintendent_lineup_screen.dart
+// ignore_for_file: use_build_context_synchronously
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -571,8 +572,12 @@ class _SuperintendentLineupScreenState
                 .toString()
                 .trim()
                 .toLowerCase();
-        if (judgeId.isEmpty || breed.isEmpty || scope.isEmpty || letter.isEmpty)
+        if (judgeId.isEmpty ||
+            breed.isEmpty ||
+            scope.isEmpty ||
+            letter.isEmpty) {
           continue;
+        }
 
         final key = '$judgeId|$breed|$scope';
         judgeBreedLetters.putIfAbsent(key, () => <String>{}).add(letter);
@@ -598,8 +603,12 @@ class _SuperintendentLineupScreenState
                 .toString()
                 .trim()
                 .toLowerCase();
-        if (judgeId.isEmpty || breed.isEmpty || scope.isEmpty || letter.isEmpty)
+        if (judgeId.isEmpty ||
+            breed.isEmpty ||
+            scope.isEmpty ||
+            letter.isEmpty) {
           continue;
+        }
 
         final key = '$judgeId|$breed|$scope';
         row['duplicate_judge_breed'] =
@@ -834,14 +843,6 @@ class _SuperintendentLineupScreenState
             '')
         .toString()
         .trim();
-  }
-
-  String _judgeNameFromLineupJudge(Map<String, dynamic> judge) {
-    return (judge['judge_name'] ??
-            judge['display_name'] ??
-            judge['name'] ??
-            'Unknown Judge')
-        .toString();
   }
 
   List<Map<String, dynamic>> _autoBreedOptions(_LineupData data) {
@@ -1107,10 +1108,6 @@ class _SuperintendentLineupScreenState
         final projectedHours = hasSpeedRate
             ? projectedLoad / averageEntriesPerHour
             : projectedLoad.toDouble();
-        final currentHours = hasSpeedRate
-            ? currentLoad / averageEntriesPerHour
-            : currentLoad.toDouble();
-
         // Higher ratings reduce the score, making that judge more attractive.
         // The speed rate has the strongest effect through projectedHours.
         var score = projectedHours - (ratingAverage * 0.18);
@@ -1153,7 +1150,6 @@ class _SuperintendentLineupScreenState
       }
       // --- END: Load judge preferences ---
 
-      final tableCount = data.judges.length;
       final judgeLoads = <String, int>{};
       final judgeBreedScopes = <String, Set<String>>{};
       final sortOrderByTable = <String, int>{};
@@ -1570,9 +1566,6 @@ class _SummaryCards extends StatelessWidget {
       availableHead += _headCountForRow(row);
     }
 
-    final unassignedBreedRows = availableBreedKeys
-        .difference(assignedBreedKeys)
-        .length;
     final remainingHead = (availableHead - assignedHead).clamp(
       0,
       availableHead,
@@ -2845,8 +2838,9 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
     Map<String, dynamic> breed,
   ) {
     final judgeId = _currentJudgeId;
-    if (judgeId == null || judgeId.isEmpty)
+    if (judgeId == null || judgeId.isEmpty) {
       return const <Map<String, dynamic>>[];
+    }
 
     final targetBreed = (breed['breed'] ?? '').toString().trim().toLowerCase();
     final targetScope = _scopeLabelForRow(breed).toLowerCase();
@@ -3107,51 +3101,6 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
     Navigator.pop(context, _addedAny);
   }
 
-  Future<List<String>> _loadJudgeBreedConflicts(
-    Map<String, dynamic> breed,
-  ) async {
-    final judgeId = _currentJudgeId;
-    if (judgeId == null || judgeId.isEmpty) return const <String>[];
-
-    try {
-      final result = await supabase.rpc(
-        'validate_show_judge_breed_conflict',
-        params: {
-          'p_show_id': widget.showId,
-          'p_section_id': breed['section_id'],
-          'p_judge_id': judgeId,
-          'p_breed': breed['breed'],
-        },
-      );
-
-      if (result is! List) return const <String>[];
-
-      return result.map<String>((item) {
-        if (item is Map) {
-          final exhibitor =
-              (item['exhibitor_name'] ??
-                      item['display_name'] ??
-                      item['exhibitor_display_name'] ??
-                      'Unknown exhibitor')
-                  .toString();
-          final relationship =
-              (item['relationship'] ??
-                      item['conflict_type'] ??
-                      'entry conflict')
-                  .toString();
-          final scope = (item['scope'] ?? item['section_scope'] ?? '')
-              .toString();
-          final scopeLabel = scope.isEmpty ? '' : ' • $scope';
-          return '$exhibitor • $relationship$scopeLabel';
-        }
-
-        return item.toString();
-      }).toList();
-    } catch (_) {
-      return const <String>[];
-    }
-  }
-
   Future<bool> _confirmConflicts(
     Map<String, dynamic> breed,
     List<String> conflicts,
@@ -3360,7 +3309,8 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
                 child: ListView.separated(
                   shrinkWrap: true,
                   itemCount: options.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  separatorBuilder: (context, index) =>
+                      const Divider(height: 1),
                   itemBuilder: (context, index) {
                     final breed = options[index];
                     final scope = _scopeLabelForRow(breed);
@@ -3440,6 +3390,7 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
   }
 }
 
+// ignore: unused_element
 class _EmptyLineupCard extends StatelessWidget {
   const _EmptyLineupCard({required this.onAdd});
 

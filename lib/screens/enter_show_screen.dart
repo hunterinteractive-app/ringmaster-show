@@ -1,4 +1,5 @@
 // lib/screens/enter_show_screen.dart
+// ignore_for_file: deprecated_member_use, use_build_context_synchronously
 
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
@@ -2891,7 +2892,7 @@ class _MeatPenInput {
 }
 
 class _MeatPenDialog extends StatefulWidget {
-  const _MeatPenDialog({super.key});
+  const _MeatPenDialog();
 
   @override
   State<_MeatPenDialog> createState() => _MeatPenDialogState();
@@ -3228,7 +3229,6 @@ class _FocusOpenAutocomplete extends StatefulWidget {
   final Widget? suffixIcon;
 
   const _FocusOpenAutocomplete({
-    super.key,
     required this.textController,
     required this.focusNode,
     required this.labelText,
@@ -3239,7 +3239,9 @@ class _FocusOpenAutocomplete extends StatefulWidget {
     this.onSelected,
     this.enabled = true,
     this.readOnly = false,
+    // ignore: unused_element_parameter
     this.onFieldTap,
+    // ignore: unused_element_parameter
     this.suffixIcon,
   });
 

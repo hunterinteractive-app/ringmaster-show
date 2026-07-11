@@ -1,4 +1,5 @@
 // lib/services/help_report_service.dart
+// ignore_for_file: use_build_context_synchronously
 
 import 'dart:io' show Platform;
 
@@ -16,7 +17,8 @@ class HelpReportService {
 
   static const String _screenshotBucket = 'help-report-screenshots';
 
-  static final ScreenshotController screenshotController = ScreenshotController();
+  static final ScreenshotController screenshotController =
+      ScreenshotController();
   static final _supabase = Supabase.instance.client;
 
   static Future<void> submitReport({
@@ -100,15 +102,17 @@ class HelpReportService {
           .toLowerCase()
           .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
           .replaceAll(RegExp(r'^-+|-+$'), '');
-      final timestamp = DateTime.now()
-          .toUtc()
-          .toIso8601String()
-          .replaceAll(':', '-');
+      final timestamp = DateTime.now().toUtc().toIso8601String().replaceAll(
+        ':',
+        '-',
+      );
       final owner = userId == null || userId.isEmpty ? 'anonymous' : userId;
       final fileName = safePageTitle.isEmpty ? 'page' : safePageTitle;
       final path = '$owner/$timestamp-$fileName.png';
 
-      await _supabase.storage.from(_screenshotBucket).uploadBinary(
+      await _supabase.storage
+          .from(_screenshotBucket)
+          .uploadBinary(
             path,
             bytes,
             fileOptions: const FileOptions(
@@ -126,10 +130,7 @@ class HelpReportService {
         signedUrl = null;
       }
 
-      return _ScreenshotUploadResult(
-        path: path,
-        signedUrl: signedUrl,
-      );
+      return _ScreenshotUploadResult(path: path, signedUrl: signedUrl);
     } catch (e) {
       return _ScreenshotUploadResult(error: e.toString());
     }
@@ -223,9 +224,5 @@ class _ScreenshotUploadResult {
   final String? signedUrl;
   final String? error;
 
-  const _ScreenshotUploadResult({
-    this.path,
-    this.signedUrl,
-    this.error,
-  });
+  const _ScreenshotUploadResult({this.path, this.signedUrl, this.error});
 }

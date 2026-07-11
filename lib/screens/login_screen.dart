@@ -1,4 +1,5 @@
 // lib/screens/login_screen.dart
+// ignore_for_file: control_flow_in_finally
 
 import 'dart:async';
 
@@ -195,7 +196,7 @@ class _LoginScreenState extends State<LoginScreen>
         };
 
         await supabase.auth.verifyOTP(
-          tokenHash: tokenHash!.trim(),
+          tokenHash: tokenHash.trim(),
           type: otpType,
         );
       } else {

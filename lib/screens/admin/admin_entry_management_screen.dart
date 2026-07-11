@@ -1156,6 +1156,11 @@ Widget _surfaceTextScope(BuildContext context, {required Widget child}) {
 
 const _entrySheetDropdownTextStyle = TextStyle(color: AppColors.text);
 const _entrySheetDropdownSubtitleStyle = TextStyle(color: AppColors.muted);
+const _entrySheetInputLabelStyle = TextStyle(color: AppColors.muted);
+const _entrySheetFocusedInputLabelStyle = TextStyle(
+  color: AppColors.text,
+  fontWeight: FontWeight.w600,
+);
 
 class _EditEntrySheet extends StatefulWidget {
   final Map<String, dynamic> entry;
@@ -1749,8 +1754,11 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
             TextField(
               controller: _animalName,
               enabled: !_saving,
+              style: _entrySheetDropdownTextStyle,
               decoration: const InputDecoration(
                 labelText: 'Animal Name',
+                labelStyle: _entrySheetInputLabelStyle,
+                floatingLabelStyle: _entrySheetFocusedInputLabelStyle,
                 border: OutlineInputBorder(),
               ),
             ),
@@ -1760,8 +1768,11 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
               enabled: !_saving,
               textCapitalization: TextCapitalization.characters,
               inputFormatters: [UpperCaseTextFormatter()],
+              style: _entrySheetDropdownTextStyle,
               decoration: const InputDecoration(
                 labelText: 'Tattoo / Ear #',
+                labelStyle: _entrySheetInputLabelStyle,
+                floatingLabelStyle: _entrySheetFocusedInputLabelStyle,
                 border: OutlineInputBorder(),
               ),
             ),
@@ -1973,8 +1984,11 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
                 enabled: !_saving,
                 minLines: 2,
                 maxLines: 4,
+                style: _entrySheetDropdownTextStyle,
                 decoration: const InputDecoration(
                   labelText: 'Fur / Wool Notes',
+                  labelStyle: _entrySheetInputLabelStyle,
+                  floatingLabelStyle: _entrySheetFocusedInputLabelStyle,
                   border: OutlineInputBorder(),
                 ),
               ),
@@ -1985,8 +1999,11 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
               enabled: !_saving,
               minLines: 2,
               maxLines: 5,
+              style: _entrySheetDropdownTextStyle,
               decoration: const InputDecoration(
                 labelText: 'Notes',
+                labelStyle: _entrySheetInputLabelStyle,
+                floatingLabelStyle: _entrySheetFocusedInputLabelStyle,
                 border: OutlineInputBorder(),
               ),
             ),
@@ -4416,10 +4433,15 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                               controller: textEditingController,
                               focusNode: focusNode,
                               enabled: !_saving && !AppSession.isSupportMode,
+                              style: _entrySheetDropdownTextStyle,
                               decoration: InputDecoration(
                                 labelText: 'Exhibitor',
+                                labelStyle: _entrySheetInputLabelStyle,
+                                floatingLabelStyle:
+                                    _entrySheetFocusedInputLabelStyle,
                                 hintText:
                                     'Search by name, city, state, email, phone, or ARBA #',
+                                hintStyle: _entrySheetInputLabelStyle,
                                 prefixIcon: const Icon(Icons.search),
                                 suffixIcon:
                                     textEditingController.text.trim().isEmpty
@@ -4650,8 +4672,11 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                     TextField(
                       controller: _animalName,
                       enabled: !_saving && !AppSession.isSupportMode,
+                      style: _entrySheetDropdownTextStyle,
                       decoration: const InputDecoration(
                         labelText: 'Animal Name (optional)',
+                        labelStyle: _entrySheetInputLabelStyle,
+                        floatingLabelStyle: _entrySheetFocusedInputLabelStyle,
                         border: OutlineInputBorder(),
                       ),
                     ),
@@ -4661,8 +4686,11 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                       enabled: !_saving && !AppSession.isSupportMode,
                       textCapitalization: TextCapitalization.characters,
                       inputFormatters: [UpperCaseTextFormatter()],
+                      style: _entrySheetDropdownTextStyle,
                       decoration: const InputDecoration(
                         labelText: 'Tattoo',
+                        labelStyle: _entrySheetInputLabelStyle,
+                        floatingLabelStyle: _entrySheetFocusedInputLabelStyle,
                         border: OutlineInputBorder(),
                       ),
                     ),
@@ -4870,8 +4898,11 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                       enabled: !_saving && !AppSession.isSupportMode,
                       minLines: 2,
                       maxLines: 4,
+                      style: _entrySheetDropdownTextStyle,
                       decoration: const InputDecoration(
                         labelText: 'Fur / Wool Notes',
+                        labelStyle: _entrySheetInputLabelStyle,
+                        floatingLabelStyle: _entrySheetFocusedInputLabelStyle,
                         border: OutlineInputBorder(),
                       ),
                     ),
@@ -4919,8 +4950,11 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                     enabled: !_saving && !AppSession.isSupportMode,
                     minLines: 2,
                     maxLines: 4,
+                    style: _entrySheetDropdownTextStyle,
                     decoration: const InputDecoration(
                       labelText: 'Notes',
+                      labelStyle: _entrySheetInputLabelStyle,
+                      floatingLabelStyle: _entrySheetFocusedInputLabelStyle,
                       border: OutlineInputBorder(),
                     ),
                   ),

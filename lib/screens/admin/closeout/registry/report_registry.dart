@@ -3,6 +3,7 @@
 import '../data/loaders/arba_report_loader.dart';
 import '../data/loaders/breed_judged_totals_report_loader.dart';
 import '../data/loaders/breed_results_detail_report_loader.dart';
+import '../data/loaders/check_in_sheet_report_loader.dart';
 import '../data/loaders/details_by_breed_report_loader.dart';
 import '../data/loaders/exhibitor_by_breed_report_loader.dart';
 import '../data/loaders/entered_exhibitors_contact_report_loader.dart';
@@ -21,6 +22,7 @@ import '../models/clubs/breed_results_detail_report_data.dart';
 import '../models/clubs/details_by_breed_report_data.dart';
 import '../models/clubs/exhibitor_by_breed_report_data.dart';
 import '../models/clubs/sweepstakes_report_data.dart';
+import '../models/exhibitor/check_in_sheet_report_data.dart';
 import '../models/exhibitor/entered_exhibitors_contact_report_data.dart';
 import '../models/exhibitor/exhibitor_report_data.dart';
 import '../models/exhibitor/best_display_report_data.dart';
@@ -35,6 +37,7 @@ import '../models/unpaid/unpaid_balances_report_data.dart';
 import '../pdf/builders/arba_report_pdf.dart';
 import '../pdf/builders/breed_judged_totals_report_pdf.dart';
 import '../pdf/builders/breed_results_detail_report_pdf.dart';
+import '../pdf/builders/check_in_sheet_report_pdf.dart';
 import '../pdf/builders/details_by_breed_report_pdf.dart';
 import '../pdf/builders/exhibitor_by_breed_report_pdf.dart';
 import '../pdf/builders/entered_exhibitors_contact_report_pdf.dart';
@@ -58,6 +61,8 @@ class ReportRegistry {
     required ArbaReportPdfBuilder arbaBuilder,
     required LegsReportLoader legsLoader,
     required LegsReportPdfBuilder legsBuilder,
+    required CheckInSheetReportLoader checkInSheetLoader,
+    required CheckInSheetReportPdfBuilder checkInSheetBuilder,
     required ExhibitorReportLoader exhibitorLoader,
     required ExhibitorReportPdfBuilder exhibitorBuilder,
     required SweepstakesReportLoader sweepstakesLoader,
@@ -72,7 +77,8 @@ class ReportRegistry {
     required UnpaidBalancesReportPdfBuilder unpaidBalancesBuilder,
     required PaidExhibitorReportLoader paidExhibitorReportLoader,
     required PaidExhibitorReportPdfBuilder paidExhibitorReportBuilder,
-    required EnteredExhibitorsContactReportLoader enteredExhibitorsContactLoader,
+    required EnteredExhibitorsContactReportLoader
+    enteredExhibitorsContactLoader,
     required EnteredExhibitorsContactReportPdf enteredExhibitorsContactBuilder,
     required RibbonPayoutReportLoader ribbonPayoutLoader,
     required RibbonPayoutReportPdf ribbonPayoutBuilder,
@@ -85,156 +91,137 @@ class ReportRegistry {
     required BestDisplayReportLoader bestDisplayReportLoader,
     required BestDisplayReportPdfBuilder bestDisplayReportBuilder,
   }) : definitions = {
-          'arba_report': ReportDefinition(
-            reportName: 'arba_report',
-            outputType: 'pdf',
-            loader: (req) async => await arbaLoader.load(req),
-            builder: (data, req) async =>
-                await arbaBuilder.buildFile(data as ArbaReportData, req),
-          ),
-          'legs': ReportDefinition(
-            reportName: 'legs',
-            outputType: 'pdf',
-            loader: (req) async => await legsLoader.load(req),
-            builder: (data, req) async =>
-                await legsBuilder.buildFile(
-                  data as List<LegsCertificateData>,
-                  req,
-                ),
-          ),
-          'exhibitor_report': ReportDefinition(
-            reportName: 'exhibitor_report',
-            outputType: 'pdf',
-            loader: (req) async => await exhibitorLoader.load(req),
-            builder: (data, req) async =>
-                await exhibitorBuilder.buildFile(
-                  data as ExhibitorReportData,
-                  req,
-                ),
-          ),
-          'sweepstakes_report': ReportDefinition(
-            reportName: 'sweepstakes_report',
-            outputType: 'pdf',
-            loader: (req) async => await sweepstakesLoader.load(req),
-            builder: (data, req) async =>
-                await sweepstakesBuilder.buildFile(
-                  data as SweepstakesReportData,
-                  req,
-                ),
-          ),
-          'breed_results_detail_report': ReportDefinition(
-            reportName: 'breed_results_detail_report',
-            outputType: 'pdf',
-            loader: (req) async =>
-                await breedResultsDetailReportLoader.load(req),
-            builder: (data, req) async =>
-                await breedResultsDetailReportBuilder.buildFile(
-                  data as BreedResultsDetailReportData,
-                  req,
-                ),
-          ),
-          'details_by_breed': ReportDefinition(
-            reportName: 'details_by_breed',
-            outputType: 'pdf',
-            loader: (req) async => await detailsByBreedReportLoader.load(req),
-            builder: (data, req) async =>
-                await detailsByBreedReportBuilder.buildFile(
-                  data as DetailsByBreedReportData,
-                  req,
-                ),
-          ),
-          'exh_by_breed': ReportDefinition(
-            reportName: 'exh_by_breed',
-            outputType: 'pdf',
-            loader: (req) async => await exhibitorByBreedReportLoader.load(req),
-            builder: (data, req) async =>
-                await exhibitorByBreedReportBuilder.buildFile(
-                  data as ExhibitorByBreedReportData,
-                  req,
-                ),
-          ),
-          'unpaid_balances_report': ReportDefinition(
-            reportName: 'unpaid_balances_report',
-            outputType: 'pdf',
-            loader: (req) async => await unpaidBalancesLoader.load(req),
-            builder: (data, req) async =>
-                await unpaidBalancesBuilder.buildFile(
-                  data as UnpaidBalancesReportData,
-                  req,
-                ),
-          ),
-          'paid_exhibitor_report': ReportDefinition(
-            reportName: 'paid_exhibitor_report',
-            outputType: 'pdf',
-            loader: (req) async => await paidExhibitorReportLoader.load(req),
-            builder: (data, req) async =>
-                await paidExhibitorReportBuilder.buildFile(
-                  data as PaidExhibitorReportData,
-                  req,
-                ),
-          ),
-          'entered_exhibitors_contact_report': ReportDefinition(
-            reportName: 'entered_exhibitors_contact_report',
-            outputType: 'pdf',
-            loader: (req) async => await enteredExhibitorsContactLoader.load(req),
-            builder: (data, req) async =>
-                await enteredExhibitorsContactBuilder.buildFile(
-                  data as EnteredExhibitorsContactReportData,
-                  req,
-                ),
-          ),
-          'ribbon_payout_report': ReportDefinition(
-            reportName: 'ribbon_payout_report',
-            outputType: 'pdf',
-            loader: (req) async => await ribbonPayoutLoader.load(req),
-            builder: (data, req) async =>
-                await ribbonPayoutBuilder.buildFile(
-                  data as RibbonPayoutReportData,
-                  req,
-                ),
-          ),
-          'payback_report': ReportDefinition(
-            reportName: 'payback_report',
-            outputType: 'pdf',
-            loader: (req) async => await paybackReportLoader.load(
-              showId: req.showId,
-            ),
-            builder: (data, req) async =>
-                await paybackReportBuilder.buildFile(
-                  data as PaybackReportData,
-                  req,
-                ),
-          ),
-          'judge_report': ReportDefinition(
-            reportName: 'judge_report',
-            outputType: 'pdf',
-            loader: (req) async => await judgeReportLoader.load(
-              showId: req.showId,
-            ),
-            builder: (data, req) async =>
-                await judgeReportBuilder.buildFile(data as JudgeReportData, req),
-          ),
-          'breed_judged_totals_report': ReportDefinition(
-            reportName: 'breed_judged_totals_report',
-            outputType: 'pdf',
-            loader: (req) async => await breedJudgedTotalsReportLoader.load(req),
-            builder: (data, req) async =>
-                await breedJudgedTotalsReportBuilder.buildFile(
-                  data as BreedJudgedTotalsReportData,
-                  req,
-                ),
-          ),
-          'best_display_report': ReportDefinition(
-            reportName: 'best_display_report',
-            outputType: 'pdf',
-            loader: (req) async => await bestDisplayReportLoader.load(req),
-            builder: (data, req) async =>
-                await bestDisplayReportBuilder.buildFile(
-                  data as BestDisplayReportData,
-                  req,
-                ),
-          ),
-        };
+         'arba_report': ReportDefinition(
+           reportName: 'arba_report',
+           outputType: 'pdf',
+           loader: (req) async => await arbaLoader.load(req),
+           builder: (data, req) async =>
+               await arbaBuilder.buildFile(data as ArbaReportData, req),
+         ),
+         'legs': ReportDefinition(
+           reportName: 'legs',
+           outputType: 'pdf',
+           loader: (req) async => await legsLoader.load(req),
+           builder: (data, req) async => await legsBuilder.buildFile(
+             data as List<LegsCertificateData>,
+             req,
+           ),
+         ),
+         'checkin_sheet': ReportDefinition(
+           reportName: 'checkin_sheet',
+           outputType: 'pdf',
+           loader: (req) async => await checkInSheetLoader.load(req),
+           builder: (data, req) async => await checkInSheetBuilder.buildFile(
+             data as CheckInSheetReportData,
+             req,
+           ),
+         ),
+         'exhibitor_report': ReportDefinition(
+           reportName: 'exhibitor_report',
+           outputType: 'pdf',
+           loader: (req) async => await exhibitorLoader.load(req),
+           builder: (data, req) async => await exhibitorBuilder.buildFile(
+             data as ExhibitorReportData,
+             req,
+           ),
+         ),
+         'sweepstakes_report': ReportDefinition(
+           reportName: 'sweepstakes_report',
+           outputType: 'pdf',
+           loader: (req) async => await sweepstakesLoader.load(req),
+           builder: (data, req) async => await sweepstakesBuilder.buildFile(
+             data as SweepstakesReportData,
+             req,
+           ),
+         ),
+         'breed_results_detail_report': ReportDefinition(
+           reportName: 'breed_results_detail_report',
+           outputType: 'pdf',
+           loader: (req) async =>
+               await breedResultsDetailReportLoader.load(req),
+           builder: (data, req) async => await breedResultsDetailReportBuilder
+               .buildFile(data as BreedResultsDetailReportData, req),
+         ),
+         'details_by_breed': ReportDefinition(
+           reportName: 'details_by_breed',
+           outputType: 'pdf',
+           loader: (req) async => await detailsByBreedReportLoader.load(req),
+           builder: (data, req) async => await detailsByBreedReportBuilder
+               .buildFile(data as DetailsByBreedReportData, req),
+         ),
+         'exh_by_breed': ReportDefinition(
+           reportName: 'exh_by_breed',
+           outputType: 'pdf',
+           loader: (req) async => await exhibitorByBreedReportLoader.load(req),
+           builder: (data, req) async => await exhibitorByBreedReportBuilder
+               .buildFile(data as ExhibitorByBreedReportData, req),
+         ),
+         'unpaid_balances_report': ReportDefinition(
+           reportName: 'unpaid_balances_report',
+           outputType: 'pdf',
+           loader: (req) async => await unpaidBalancesLoader.load(req),
+           builder: (data, req) async => await unpaidBalancesBuilder.buildFile(
+             data as UnpaidBalancesReportData,
+             req,
+           ),
+         ),
+         'paid_exhibitor_report': ReportDefinition(
+           reportName: 'paid_exhibitor_report',
+           outputType: 'pdf',
+           loader: (req) async => await paidExhibitorReportLoader.load(req),
+           builder: (data, req) async => await paidExhibitorReportBuilder
+               .buildFile(data as PaidExhibitorReportData, req),
+         ),
+         'entered_exhibitors_contact_report': ReportDefinition(
+           reportName: 'entered_exhibitors_contact_report',
+           outputType: 'pdf',
+           loader: (req) async =>
+               await enteredExhibitorsContactLoader.load(req),
+           builder: (data, req) async => await enteredExhibitorsContactBuilder
+               .buildFile(data as EnteredExhibitorsContactReportData, req),
+         ),
+         'ribbon_payout_report': ReportDefinition(
+           reportName: 'ribbon_payout_report',
+           outputType: 'pdf',
+           loader: (req) async => await ribbonPayoutLoader.load(req),
+           builder: (data, req) async => await ribbonPayoutBuilder.buildFile(
+             data as RibbonPayoutReportData,
+             req,
+           ),
+         ),
+         'payback_report': ReportDefinition(
+           reportName: 'payback_report',
+           outputType: 'pdf',
+           loader: (req) async =>
+               await paybackReportLoader.load(showId: req.showId),
+           builder: (data, req) async => await paybackReportBuilder.buildFile(
+             data as PaybackReportData,
+             req,
+           ),
+         ),
+         'judge_report': ReportDefinition(
+           reportName: 'judge_report',
+           outputType: 'pdf',
+           loader: (req) async =>
+               await judgeReportLoader.load(showId: req.showId),
+           builder: (data, req) async =>
+               await judgeReportBuilder.buildFile(data as JudgeReportData, req),
+         ),
+         'breed_judged_totals_report': ReportDefinition(
+           reportName: 'breed_judged_totals_report',
+           outputType: 'pdf',
+           loader: (req) async => await breedJudgedTotalsReportLoader.load(req),
+           builder: (data, req) async => await breedJudgedTotalsReportBuilder
+               .buildFile(data as BreedJudgedTotalsReportData, req),
+         ),
+         'best_display_report': ReportDefinition(
+           reportName: 'best_display_report',
+           outputType: 'pdf',
+           loader: (req) async => await bestDisplayReportLoader.load(req),
+           builder: (data, req) async => await bestDisplayReportBuilder
+               .buildFile(data as BestDisplayReportData, req),
+         ),
+       };
 
   ReportDefinition get(String reportName) {
     final definition = definitions[reportName];

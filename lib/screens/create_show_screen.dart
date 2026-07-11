@@ -1,4 +1,5 @@
 // lib/screens/create_show_screen.dart
+// ignore_for_file: use_build_context_synchronously
 
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
@@ -264,7 +265,6 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
 
     return rows;
   }
-
 
   Future<Map<String, dynamic>> _createFirstClubForUser({
     required String userId,

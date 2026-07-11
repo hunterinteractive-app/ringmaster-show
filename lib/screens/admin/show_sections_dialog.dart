@@ -1,4 +1,5 @@
 // lib/screens/admin/show_sections_dialog.dart
+// ignore_for_file: deprecated_member_use
 
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';

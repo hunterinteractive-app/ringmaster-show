@@ -1,4 +1,5 @@
 //lib/screens/admin/results/admin_results_entry_screen.dart
+// ignore_for_file: use_build_context_synchronously
 
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
@@ -1577,8 +1578,9 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
       }
 
       if (lower.contains('senior') || lower.startsWith('sr')) return 'Senior';
-      if (lower.contains('intermediate') || lower.startsWith('int'))
+      if (lower.contains('intermediate') || lower.startsWith('int')) {
         return 'Intermediate';
+      }
       if (lower.contains('junior') || lower.startsWith('jr')) return 'Junior';
       if (lower.contains('open')) return 'Open';
       return s;
@@ -1777,20 +1779,8 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     );
   }
 
-  bool _hasResult(Map<String, dynamic> entry) {
-    return _entryHasBasicOutcome(entry);
-  }
-
   int _completedCount(List<Map<String, dynamic>> entries) {
     return _completionFor(entries).completedBasics;
-  }
-
-  bool _isComplete(List<Map<String, dynamic>> entries) {
-    return _completionFor(entries).status == _ResultScopeStatus.complete;
-  }
-
-  bool _isInProgress(List<Map<String, dynamic>> entries) {
-    return _completionFor(entries).status == _ResultScopeStatus.inProgress;
   }
 
   String _statusLabel(List<Map<String, dynamic>> entries) {
@@ -2945,7 +2935,6 @@ class _ResultsGroupScreen extends StatefulWidget {
 
 class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
   late List<Map<String, dynamic>> _entries;
-  late final List<String> _entryNavigationOrder;
   String? _msg;
   bool _savingJudge = false;
 
@@ -3035,20 +3024,8 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
     );
   }
 
-  bool _hasResult(Map<String, dynamic> entry) {
-    return _entryHasBasicOutcome(entry);
-  }
-
   int _completedCount(List<Map<String, dynamic>> entries) {
     return _completionFor(entries).completedBasics;
-  }
-
-  bool _isComplete(List<Map<String, dynamic>> entries) {
-    return _completionFor(entries).status == _ResultScopeStatus.complete;
-  }
-
-  bool _isInProgress(List<Map<String, dynamic>> entries) {
-    return _completionFor(entries).status == _ResultScopeStatus.inProgress;
   }
 
   String _statusLabel(List<Map<String, dynamic>> entries) {
@@ -3570,20 +3547,8 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
     );
   }
 
-  bool _hasResult(Map<String, dynamic> entry) {
-    return _entryHasBasicOutcome(entry);
-  }
-
   int _completedCount(List<Map<String, dynamic>> entries) {
     return _completionFor(entries).completedBasics;
-  }
-
-  bool _isComplete(List<Map<String, dynamic>> entries) {
-    return _completionFor(entries).status == _ResultScopeStatus.complete;
-  }
-
-  bool _isInProgress(List<Map<String, dynamic>> entries) {
-    return _completionFor(entries).status == _ResultScopeStatus.inProgress;
   }
 
   String _statusLabel(List<Map<String, dynamic>> entries) {
@@ -4071,31 +4036,6 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
     _entries = [...widget.entries];
   }
 
-  String _furWoolBucketLabel(Map<String, dynamic> e) {
-    final rawClass = (e['class_name'] ?? '').toString().trim();
-    final lowerClass = rawClass.toLowerCase();
-
-    if (lowerClass.startsWith('fur - ') ||
-        lowerClass.startsWith('commercial fur - ') ||
-        lowerClass.startsWith('wool - ')) {
-      return rawClass;
-    }
-
-    final rawVariety = (e['fur_variety'] ?? e['variety'] ?? '')
-        .toString()
-        .trim();
-
-    if (lowerClass.contains('wool')) {
-      return rawVariety.isNotEmpty ? 'Wool - $rawVariety' : 'Wool';
-    }
-
-    if (lowerClass.contains('fur')) {
-      return rawVariety.isNotEmpty ? 'Fur - $rawVariety' : 'Fur';
-    }
-
-    return rawVariety.isNotEmpty ? 'Fur/Wool - $rawVariety' : 'Fur/Wool';
-  }
-
   bool _isFurOrWoolEntry(Map<String, dynamic> row) {
     final value = row['is_fur'];
     if (value is bool) return value;
@@ -4118,8 +4058,9 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
     }
 
     if (lower.contains('senior') || lower.startsWith('sr')) return 'Senior';
-    if (lower.contains('intermediate') || lower.startsWith('int'))
+    if (lower.contains('intermediate') || lower.startsWith('int')) {
       return 'Intermediate';
+    }
     if (lower.contains('junior') || lower.startsWith('jr')) return 'Junior';
     if (lower.contains('open')) return 'Open';
     return s;
@@ -4340,20 +4281,8 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
     );
   }
 
-  bool _hasResult(Map<String, dynamic> entry) {
-    return _entryHasBasicOutcome(entry);
-  }
-
   int _completedCount(List<Map<String, dynamic>> entries) {
     return _completionFor(entries).completedBasics;
-  }
-
-  bool _isComplete(List<Map<String, dynamic>> entries) {
-    return _completionFor(entries).status == _ResultScopeStatus.complete;
-  }
-
-  bool _isInProgress(List<Map<String, dynamic>> entries) {
-    return _completionFor(entries).status == _ResultScopeStatus.inProgress;
   }
 
   String _statusLabel(List<Map<String, dynamic>> entries) {
@@ -4780,11 +4709,6 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
   String? _currentJudgeId;
   bool _didAutoOpenInitialEntry = false;
 
-  bool _allEntriesComplete() {
-    if (_entries.isEmpty) return false;
-    return _entries.every(_isEntryComplete);
-  }
-
   bool _isScratched(Map<String, dynamic> e) {
     return (e['scratched_at'] ?? '').toString().trim().isNotEmpty;
   }
@@ -5127,8 +5051,9 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
 
       if (widget.finalAwardMode != 'bis_1ris_2ris') return true;
       if (!awards.contains('BOB')) return true;
-      if (awards.contains('Best In Show') || awards.contains('BIS'))
+      if (awards.contains('Best In Show') || awards.contains('BIS')) {
         return true;
+      }
     }
 
     if (awards.contains('2RIS')) {
@@ -5143,8 +5068,9 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
 
       if (widget.finalAwardMode != 'bis_1ris_2ris') return true;
       if (!awards.contains('BOB')) return true;
-      if (awards.contains('Best In Show') || awards.contains('BIS'))
+      if (awards.contains('Best In Show') || awards.contains('BIS')) {
         return true;
+      }
     }
 
     return false;
@@ -5543,8 +5469,9 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
   void _openInitialEntryIfNeeded() {
     if (_didAutoOpenInitialEntry) return;
     if (widget.initialEntryIdToOpen == null ||
-        widget.initialEntryIdToOpen!.trim().isEmpty)
+        widget.initialEntryIdToOpen!.trim().isEmpty) {
       return;
+    }
 
     final index = _entries.indexWhere((e) {
       final id = (e['entry_id'] ?? e['id'] ?? '').toString().trim();
@@ -6962,8 +6889,9 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
         award: 'Best In Show',
         sameScope: sameSection,
       );
-      if (existing != null)
+      if (existing != null) {
         return 'Best In Show is already assigned in this section.';
+      }
       if (!_canUseAward('Best In Show')) {
         return widget.finalAwardMode == 'four_six_bis'
             ? 'Best In Show must come from Best 4-Class or Best 6-Class.'

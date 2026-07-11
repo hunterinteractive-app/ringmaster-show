@@ -1,4 +1,5 @@
 // lib/screens/admin/show_closeout.dart
+// ignore_for_file: deprecated_member_use, use_build_context_synchronously
 
 import 'dart:async';
 import 'dart:typed_data';
@@ -23,6 +24,7 @@ import 'package:ringmaster_show/services/app_session.dart';
 import 'results/admin_results_entry_screen.dart';
 
 import 'closeout/data/loaders/legs_report_loader.dart';
+import 'closeout/data/loaders/check_in_sheet_report_loader.dart';
 import 'closeout/data/loaders/exhibitor_report_loader.dart';
 import 'closeout/data/loaders/sweepstakes_report_loader.dart';
 import 'closeout/data/loaders/breed_results_detail_report_loader.dart';
@@ -41,6 +43,7 @@ import 'closeout/pdf/builders/judge_report_pdf.dart';
 import 'closeout/pdf/builders/breed_judged_totals_report_pdf.dart';
 import 'closeout/pdf/builders/best_display_report_pdf.dart';
 import 'closeout/pdf/builders/legs_report_pdf.dart';
+import 'closeout/pdf/builders/check_in_sheet_report_pdf.dart';
 import 'closeout/pdf/builders/exhibitor_report_pdf.dart';
 import 'closeout/pdf/builders/sweepstakes_report_pdf.dart';
 import 'closeout/pdf/builders/breed_results_detail_report_pdf.dart';
@@ -121,7 +124,11 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   RibbonPayoutReportPdf? _ribbonPayoutBuilder;
   PaybackReportPdfBuilder? _paybackReportBuilder;
 
-  static const Set<String> _exhibitorReportKeys = {'exhibitor_report', 'legs'};
+  static const Set<String> _exhibitorReportKeys = {
+    'exhibitor_report',
+    'legs',
+    'checkin_sheet',
+  };
 
   static const Set<String> _breedClubReportKeys = {
     'sweepstakes_report',
@@ -150,6 +157,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     'paid_exhibitor_report',
     'entered_exhibitors_contact_report',
     'legs',
+    'checkin_sheet',
     'newsletter_show_report',
     'ribbon_payout_report',
     'payback_report',
@@ -192,10 +200,12 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     return value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
   }
 
+  // ignore: unused_element
   String _fileNameOf(ReportArtifactSummary artifact) {
     return (artifact.fileName ?? '').trim();
   }
 
+  // ignore: unused_element
   String _artifactProgressSubtitle(ReportArtifactSummary artifact) {
     final exhibitorName = _artifactMetaString(artifact, 'exhibitor_name');
     if (exhibitorName != null) return exhibitorName;
@@ -216,6 +226,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     ].where((x) => x.trim().isNotEmpty).join(' • ');
   }
 
+  // ignore: unused_element
   String _artifactMatchText(ReportArtifactSummary artifact) {
     return _norm(
       [
@@ -347,8 +358,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
             .toUpperCase();
 
     if (artifactScope != target.scope.trim().toUpperCase()) return false;
-    if (artifactShowLetter != target.showLetter.trim().toUpperCase())
+    if (artifactShowLetter != target.showLetter.trim().toUpperCase()) {
       return false;
+    }
 
     // State clubs are section-wide, so they match all reports in that section.
     if (targetBody == 'STATE CLUB') {
@@ -2631,6 +2643,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     final sanctionNumber = await _loadArbaSanctionNumber(widget.showId);
 
     final legsLoader = LegsReportLoader(repository);
+    final checkInSheetLoader = CheckInSheetReportLoader(supabase);
+    final checkInSheetBuilder = CheckInSheetReportPdfBuilder();
     final exhibitorLoader = ExhibitorReportLoader(repository);
 
     final sweepstakesLoader = SweepstakesReportLoader(repository);
@@ -2678,6 +2692,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         _legsBuilder,
         'Legs report PDF builder',
       ),
+      checkInSheetLoader: checkInSheetLoader,
+      checkInSheetBuilder: checkInSheetBuilder,
       exhibitorLoader: exhibitorLoader,
       exhibitorBuilder: _requiredReportDependency(
         _exhibitorBuilder,
@@ -2813,6 +2829,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           );
         } else if (artifact.reportName == 'exhibitor_report' ||
             artifact.reportName == 'legs' ||
+            artifact.reportName == 'checkin_sheet' ||
             artifact.reportName == 'leg_report') {
           final exhibitorId = _artifactMetaString(artifact, 'exhibitor_id');
           final exhibitorName = _artifactMetaString(artifact, 'exhibitor_name');
@@ -2927,7 +2944,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
             _artifactMetaString(a, 'show_letter') != null;
       }
 
-      if (a.reportName == 'exhibitor_report') {
+      if (a.reportName == 'exhibitor_report' ||
+          a.reportName == 'checkin_sheet') {
         return _artifactMetaString(a, 'exhibitor_id') != null;
       }
 
@@ -2962,13 +2980,17 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       if (artifact.reportName.isEmpty) missing.add('reportName');
 
       if (artifact.reportName == 'arba_report') {
-        if (_artifactMetaString(artifact, 'scope') == null)
+        if (_artifactMetaString(artifact, 'scope') == null) {
           missing.add('metadata.scope');
-        if (_artifactMetaString(artifact, 'show_letter') == null)
+        }
+        if (_artifactMetaString(artifact, 'show_letter') == null) {
           missing.add('metadata.show_letter');
-      } else if (artifact.reportName == 'exhibitor_report') {
-        if (_artifactMetaString(artifact, 'exhibitor_id') == null)
+        }
+      } else if (artifact.reportName == 'exhibitor_report' ||
+          artifact.reportName == 'checkin_sheet') {
+        if (_artifactMetaString(artifact, 'exhibitor_id') == null) {
           missing.add('metadata.exhibitor_id');
+        }
       } else if (artifact.reportName == 'legs' ||
           artifact.reportName == 'leg_report') {
         if (_artifactMetaString(artifact, 'exhibitor_id') == null) {
@@ -3148,7 +3170,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
             allowLegs: true,
           );
           sentCount++;
-        } catch (e, st) {
+        } catch (e) {
           failedCount++;
 
           final errorText = e.toString().trim().isEmpty
@@ -3362,7 +3384,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
             message: message,
           );
           sentCount++;
-        } catch (e, st) {
+        } catch (e) {
           failedCount++;
         }
       }
@@ -3375,7 +3397,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           ),
         ),
       );
-    } catch (e, st) {
+    } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed sending club reports: $e')),
@@ -3437,6 +3459,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     return 'Reports are blocked until results are complete: ${parts.join(', ')}.';
   }
 
+  // ignore: unused_element
   Future<void> _sendAllLegsReports() async {
     if (await _blockedBySupportModeForEmailSend('Leg')) return;
 
@@ -3960,6 +3983,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     return '${parsed.month.toString().padLeft(2, '0')}-${parsed.day.toString().padLeft(2, '0')}-${parsed.year}';
   }
 
+  // ignore: unused_element
   Future<List<_ScopedReportTarget>> _loadScopedReportTargets() async {
     final targets = <_ScopedReportTarget>[];
 
@@ -4035,7 +4059,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
   Future<void> _generateCurrentReportGroupByName(String reportName) async {
     if (reportName != 'unpaid_balances_report' &&
-        reportName != 'paid_exhibitor_report') {
+        reportName != 'paid_exhibitor_report' &&
+        reportName != 'checkin_sheet') {
       final ready = await _ensureResultsReadyForReports();
       if (!ready) return;
     }
@@ -4117,7 +4142,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     String? exhibitorName,
   }) async {
     if (reportName != 'unpaid_balances_report' &&
-        reportName != 'paid_exhibitor_report') {
+        reportName != 'paid_exhibitor_report' &&
+        reportName != 'checkin_sheet') {
       final ready = await _ensureResultsReadyForReports();
       if (!ready) return;
     }
@@ -4245,6 +4271,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       final isNationalShow = showBasics['is_national_show'] == true;
 
       final legsLoader = LegsReportLoader(repository);
+      final checkInSheetLoader = CheckInSheetReportLoader(supabase);
+      final checkInSheetBuilder = CheckInSheetReportPdfBuilder();
       final exhibitorLoader = ExhibitorReportLoader(repository);
 
       final sweepstakesLoader = SweepstakesReportLoader(repository);
@@ -4277,6 +4305,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           _legsBuilder,
           'Legs report PDF builder',
         ),
+        checkInSheetLoader: checkInSheetLoader,
+        checkInSheetBuilder: checkInSheetBuilder,
         exhibitorLoader: exhibitorLoader,
         exhibitorBuilder: _requiredReportDependency(
           _exhibitorBuilder,
@@ -4342,7 +4372,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           .where((r) => r.isCurrent)
           .toList();
 
-      if (reportName == 'exhibitor_report' || reportName == 'legs') {
+      if (reportName == 'exhibitor_report' ||
+          reportName == 'legs' ||
+          reportName == 'checkin_sheet') {
         artifact = reports.cast<ReportArtifactSummary?>().firstWhere((r) {
           if (r == null) return false;
           final artExhibitorId = (_artifactMetaString(r, 'exhibitor_id') ?? '')
@@ -4655,7 +4687,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
   Future<void> _generateReportArtifact(ReportArtifactSummary artifact) async {
     if (artifact.reportName != 'unpaid_balances_report' &&
-        artifact.reportName != 'paid_exhibitor_report') {
+        artifact.reportName != 'paid_exhibitor_report' &&
+        artifact.reportName != 'checkin_sheet') {
       final ready = await _ensureResultsReadyForReports();
       if (!ready) return;
     }
@@ -4769,7 +4802,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         return;
       }
 
-      if ((reportName == 'exhibitor_report' || reportName == 'legs') &&
+      if ((reportName == 'exhibitor_report' ||
+              reportName == 'legs' ||
+              reportName == 'checkin_sheet') &&
           exhibitorId != null &&
           exhibitorId.trim().isNotEmpty) {
         matches = matches.where(
@@ -4905,6 +4940,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     return <String, dynamic>{};
   }
 
+  // ignore: unused_element
   Future<void> _sendReportArtifactEmail({
     required ReportArtifactSummary artifact,
     required String mode, // exhibitor, club, single
@@ -4961,6 +4997,23 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     final sourceLetter = _artifactShowLetter(sourceArtifact);
     return sourceLetter.isNotEmpty &&
         _artifactShowLetter(artifact) == sourceLetter;
+  }
+
+  bool _artifactMatchesExhibitorEmailScope(
+    ReportArtifactSummary artifact,
+    ReportArtifactSummary sourceArtifact,
+  ) {
+    final sourceScope = _artifactScope(sourceArtifact);
+    return sourceScope.isEmpty || _artifactScope(artifact) == sourceScope;
+  }
+
+  bool _artifactMatchesExhibitorEmailLetter(
+    ReportArtifactSummary artifact,
+    ReportArtifactSummary sourceArtifact,
+  ) {
+    final sourceLetter = _artifactShowLetter(sourceArtifact);
+    if (sourceLetter.isEmpty) return artifact.id == sourceArtifact.id;
+    return _artifactShowLetter(artifact) == sourceLetter;
   }
 
   int _letterEmailReportRank(String reportName) {
@@ -5033,17 +5086,20 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   List<ReportArtifactSummary> _allLetterExhibitorArtifactsFor({
     required ReportArtifactSummary sourceArtifact,
     required _ExhibitorEmailTarget exhibitor,
+    required bool includeReports,
+    required bool includeLegs,
   }) {
+    final reportNames = <String>{
+      if (includeReports) 'exhibitor_report',
+      if (includeLegs) 'legs',
+    };
     final artifacts =
         (_dashboard?.reports ?? const <ReportArtifactSummary>[]).where((
           artifact,
         ) {
-          if (artifact.reportName != 'exhibitor_report' &&
-              artifact.reportName != 'legs') {
-            return false;
-          }
+          if (!reportNames.contains(artifact.reportName)) return false;
           return _artifactIsUsableCurrent(artifact) &&
-              _artifactHasSameScope(artifact, sourceArtifact) &&
+              _artifactMatchesExhibitorEmailScope(artifact, sourceArtifact) &&
               _artifactMatchesExhibitor(artifact, exhibitor);
         }).toList()..sort(_compareEmailArtifacts);
 
@@ -5053,14 +5109,21 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   List<ReportArtifactSummary> _letterExhibitorArtifactsFor({
     required ReportArtifactSummary sourceArtifact,
     required _ExhibitorEmailTarget exhibitor,
+    required bool includeReports,
+    required bool includeLegs,
   }) {
     final artifacts =
         _allLetterExhibitorArtifactsFor(
               sourceArtifact: sourceArtifact,
               exhibitor: exhibitor,
+              includeReports: includeReports,
+              includeLegs: includeLegs,
             )
             .where(
-              (artifact) => _artifactHasSameLetter(artifact, sourceArtifact),
+              (artifact) => _artifactMatchesExhibitorEmailLetter(
+                artifact,
+                sourceArtifact,
+              ),
             )
             .toList()
           ..sort(_compareEmailArtifacts);
@@ -5308,6 +5371,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   Future<void> _sendExhibitorReportsForArtifactLetter({
     required ReportArtifactSummary sourceArtifact,
     required _ExhibitorEmailTarget exhibitor,
+    required bool includeReports,
+    required bool includeLegs,
   }) async {
     if (await _blockedBySupportModeForEmailSend('Exhibitor')) return;
 
@@ -5326,13 +5391,17 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       final artifacts = _letterExhibitorArtifactsFor(
         sourceArtifact: sourceArtifact,
         exhibitor: exhibitor,
+        includeReports: includeReports,
+        includeLegs: includeLegs,
       );
 
       if (artifacts.isEmpty) {
         _showCloseoutSnack(
-          const SnackBar(
+          SnackBar(
             content: Text(
-              'No generated exhibitor reports found for this letter.',
+              includeReports
+                  ? 'No generated exhibitor reports found for this letter.'
+                  : 'No generated exhibitor legs found for this letter.',
             ),
           ),
         );
@@ -5341,14 +5410,22 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
       final scope = _artifactScope(sourceArtifact);
       final showLetter = _artifactShowLetter(sourceArtifact);
+      final contentLabel = includeReports && includeLegs
+          ? 'Exhibitor Reports and Legs'
+          : includeLegs
+          ? 'Exhibitor Legs'
+          : 'Exhibitor Reports';
 
       await _sendExhibitorArtifactsEmail(
         artifacts: artifacts,
         to: exhibitor.email,
-        subject: '${widget.showName} - Exhibitor Reports - $scope $showLetter',
-        message:
-            'Attached are your exhibitor reports and any earned legs for ${widget.showName} - $scope $showLetter.',
-        allowLegs: true,
+        subject: '${widget.showName} - $contentLabel - $scope $showLetter',
+        message: includeLegs
+            ? includeReports
+                  ? 'Attached are your exhibitor reports and any earned legs for ${widget.showName} - $scope $showLetter.'
+                  : 'Attached are your earned legs for ${widget.showName} - $scope $showLetter.'
+            : 'Attached are your exhibitor reports for ${widget.showName} - $scope $showLetter.',
+        allowLegs: includeLegs,
       );
 
       if (!mounted) return;
@@ -5364,6 +5441,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   Future<void> _sendExhibitorReportsForAllLetters({
     required ReportArtifactSummary sourceArtifact,
     required _ExhibitorEmailTarget exhibitor,
+    required bool includeReports,
+    required bool includeLegs,
   }) async {
     if (await _blockedBySupportModeForEmailSend('Exhibitor')) return;
 
@@ -5382,13 +5461,17 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       final artifacts = _allLetterExhibitorArtifactsFor(
         sourceArtifact: sourceArtifact,
         exhibitor: exhibitor,
+        includeReports: includeReports,
+        includeLegs: includeLegs,
       );
 
       if (artifacts.isEmpty) {
         _showCloseoutSnack(
-          const SnackBar(
+          SnackBar(
             content: Text(
-              'No generated exhibitor reports found for all letters.',
+              includeReports
+                  ? 'No generated exhibitor reports found for all letters.'
+                  : 'No generated exhibitor legs found for all letters.',
             ),
           ),
         );
@@ -5403,14 +5486,22 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       );
       if (!confirmed) return;
       if (!mounted) return;
+      final contentLabel = includeReports && includeLegs
+          ? 'Exhibitor Reports and Legs'
+          : includeLegs
+          ? 'Exhibitor Legs'
+          : 'Exhibitor Reports';
 
       await _sendExhibitorArtifactsEmail(
         artifacts: artifacts,
         to: exhibitor.email,
-        subject: '${widget.showName} - Exhibitor Reports - All $scope Shows',
-        message:
-            'Attached are your exhibitor reports and any earned legs for all $scope show letters from ${widget.showName}.',
-        allowLegs: true,
+        subject: '${widget.showName} - $contentLabel - All $scope Shows',
+        message: includeLegs
+            ? includeReports
+                  ? 'Attached are your exhibitor reports and any earned legs for all $scope show letters from ${widget.showName}.'
+                  : 'Attached are your earned legs for all $scope show letters from ${widget.showName}.'
+            : 'Attached are your exhibitor reports for all $scope show letters from ${widget.showName}.',
+        allowLegs: includeLegs,
       );
 
       if (!mounted) return;
@@ -5529,12 +5620,67 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     }
   }
 
+  Future<void> _sendCheckInSheetForArtifact({
+    required ReportArtifactSummary sourceArtifact,
+    required _ExhibitorEmailTarget exhibitor,
+  }) async {
+    if (await _blockedBySupportModeForEmailSend('Check-In Sheet')) return;
+
+    try {
+      if (exhibitor.email.trim().isEmpty) {
+        _showCloseoutSnack(
+          const SnackBar(content: Text('No email found for this exhibitor.')),
+        );
+        return;
+      }
+
+      if (!_artifactIsUsableCurrent(sourceArtifact)) {
+        _showCloseoutSnack(
+          const SnackBar(
+            content: Text('No generated check-in sheet found to email.'),
+          ),
+        );
+        return;
+      }
+
+      await _sendClubArtifactsEmail(
+        artifacts: [sourceArtifact],
+        to: exhibitor.email,
+        subject: '${widget.showName} - Check-In Sheet',
+        message: 'Attached is your check-in sheet for ${widget.showName}.',
+      );
+
+      if (!mounted) return;
+      _showCloseoutSnack(
+        const SnackBar(content: Text('Check-In Sheet emailed.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      _showCloseoutSnack(SnackBar(content: Text('Email failed: $e')));
+    }
+  }
+
   Future<void> _emailArtifactThisLetter(
     ReportArtifactSummary sourceArtifact, {
     String? exhibitorId,
     String? exhibitorName,
     String? exhibitorEmail,
+    bool includeReports = true,
+    bool includeLegs = true,
   }) async {
+    if (sourceArtifact.reportName == 'checkin_sheet') {
+      final exhibitor = _exhibitorTargetForArtifact(
+        sourceArtifact,
+        exhibitorId: exhibitorId,
+        exhibitorName: exhibitorName,
+        exhibitorEmail: exhibitorEmail,
+      );
+      return _sendCheckInSheetForArtifact(
+        sourceArtifact: sourceArtifact,
+        exhibitor: exhibitor,
+      );
+    }
+
     if (sourceArtifact.reportName == 'exhibitor_report' ||
         sourceArtifact.reportName == 'legs') {
       return _sendExhibitorReportsForArtifactLetter(
@@ -5545,6 +5691,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           exhibitorName: exhibitorName,
           exhibitorEmail: exhibitorEmail,
         ),
+        includeReports: includeReports,
+        includeLegs: includeLegs,
       );
     }
 
@@ -5568,7 +5716,20 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     String? exhibitorId,
     String? exhibitorName,
     String? exhibitorEmail,
+    bool includeReports = true,
+    bool includeLegs = true,
   }) async {
+    if (sourceArtifact.reportName == 'checkin_sheet') {
+      return _emailArtifactThisLetter(
+        sourceArtifact,
+        exhibitorId: exhibitorId,
+        exhibitorName: exhibitorName,
+        exhibitorEmail: exhibitorEmail,
+        includeReports: includeReports,
+        includeLegs: includeLegs,
+      );
+    }
+
     if (sourceArtifact.reportName == 'exhibitor_report' ||
         sourceArtifact.reportName == 'legs') {
       return _sendExhibitorReportsForAllLetters(
@@ -5579,6 +5740,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           exhibitorName: exhibitorName,
           exhibitorEmail: exhibitorEmail,
         ),
+        includeReports: includeReports,
+        includeLegs: includeLegs,
       );
     }
 
@@ -5615,7 +5778,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           .where((r) => r.reportName == reportName)
           .where(_artifactIsUsableCurrent);
 
-      if ((reportName == 'exhibitor_report' || reportName == 'legs') &&
+      if ((reportName == 'exhibitor_report' ||
+              reportName == 'legs' ||
+              reportName == 'checkin_sheet') &&
           exhibitorId != null &&
           exhibitorId.trim().isNotEmpty) {
         artifacts = artifacts.where(
@@ -6356,8 +6521,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                                   >[])
                                               .where((r) => r.isCurrent)
                                               .where((r) {
-                                                if (_selectedCloseoutScopeIsEntireShow)
+                                                if (_selectedCloseoutScopeIsEntireShow) {
                                                   return true;
+                                                }
 
                                                 return (r.metadata['scope_label'] ??
                                                             '')
@@ -6977,6 +7143,8 @@ class _ReportActionsCard extends StatefulWidget {
     String? exhibitorId,
     String? exhibitorName,
     String? exhibitorEmail,
+    bool includeReports,
+    bool includeLegs,
   })
   onEmailThisLetter;
   final Future<void> Function(
@@ -6984,6 +7152,8 @@ class _ReportActionsCard extends StatefulWidget {
     String? exhibitorId,
     String? exhibitorName,
     String? exhibitorEmail,
+    bool includeReports,
+    bool includeLegs,
   })
   onEmailAllLetters;
   final bool loading;
@@ -7039,7 +7209,8 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
     super.initState();
 
     if (_selectedReportName == 'exhibitor_report' ||
-        _selectedReportName == 'legs') {
+        _selectedReportName == 'legs' ||
+        _selectedReportName == 'checkin_sheet') {
       unawaited(_loadExhibitors());
     }
 
@@ -7169,12 +7340,14 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
 
   bool get _selectedReportIgnoresResultsReadiness =>
       _selectedReportName == 'unpaid_balances_report' ||
-      _selectedReportName == 'paid_exhibitor_report';
+      _selectedReportName == 'paid_exhibitor_report' ||
+      _selectedReportName == 'checkin_sheet';
 
   bool get _selectedReportCanEmail {
     return _selectedReportName == 'arba_report' ||
         _selectedReportName == 'exhibitor_report' ||
         _selectedReportName == 'legs' ||
+        _selectedReportName == 'checkin_sheet' ||
         _selectedReportName == 'sweepstakes_report' ||
         _selectedReportName == 'breed_results_detail_report' ||
         _selectedReportName == 'details_by_breed' ||
@@ -7196,7 +7369,8 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
 
   bool get _selectedReportNeedsExhibitor =>
       _selectedReportName == 'exhibitor_report' ||
-      _selectedReportName == 'legs';
+      _selectedReportName == 'legs' ||
+      _selectedReportName == 'checkin_sheet';
 
   bool _artifactCanDownload(ReportArtifactSummary? artifact) {
     return artifact != null &&
@@ -7750,6 +7924,9 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
     final reportName = artifact?.reportName ?? _selectedReportName;
     final canDownload = _artifactCanDownload(artifact);
     final speciesLabel = stateClubSpeciesCard ? _speciesLabel(artifact) : '';
+    final isExhibitorReport = reportName == 'exhibitor_report';
+    final isLegsReport = reportName == 'legs';
+    final isCheckInSheet = reportName == 'checkin_sheet';
     final emailShowLetter =
         (artifact?.metadata['show_letter'] ?? _selectedShowLetter)
             .toString()
@@ -7759,15 +7936,33 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
         ? (emailShowLetter.isEmpty
               ? 'Email $speciesLabel Show'
               : 'Email $speciesLabel Show $emailShowLetter')
+        : isExhibitorReport
+        ? 'Email Exhibitor Reports'
+        : isLegsReport
+        ? 'Email Exhibitor Legs'
+        : isCheckInSheet
+        ? 'Email Check-In Sheet'
         : (emailShowLetter.isEmpty
               ? 'Email This Show'
               : 'Email Show $emailShowLetter');
     final emailAllShowsLabel = stateClubSpeciesCard
         ? 'Email $speciesLabel All Shows'
+        : isExhibitorReport || isLegsReport
+        ? 'Email Exhibitor Reports & Legs'
         : 'Email All Shows';
     final emailThisShowTooltip = emailShowLetter.isEmpty
         ? 'Sends reports for this show only.'
         : 'Sends reports for Show $emailShowLetter only.';
+    final emailExhibitorReportsTooltip = emailShowLetter.isEmpty
+        ? 'Sends exhibitor reports only.'
+        : 'Sends exhibitor reports only for Show $emailShowLetter.';
+    final emailExhibitorLegsTooltip = emailShowLetter.isEmpty
+        ? 'Sends exhibitor legs only.'
+        : 'Sends exhibitor legs only for Show $emailShowLetter.';
+    const emailCheckInSheetTooltip =
+        'Sends this exhibitor their check-in sheet.';
+    final emailExhibitorReportsAndLegsTooltip =
+        "Sends this exhibitor's reports and earned legs for all shows in one email.";
     final downloadLabel = stateClubSpeciesCard
         ? 'Download $speciesLabel'
         : 'Download';
@@ -7879,9 +8074,32 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
             icon: const Icon(Icons.email_outlined),
             label: const Text('Email to ARBA'),
           )
-        else ...[
+        else if (isCheckInSheet) ...[
           Tooltip(
-            message: emailThisShowTooltip,
+            message: emailCheckInSheetTooltip,
+            child: OutlinedButton.icon(
+              onPressed:
+                  _selectedReportCanEmail && canDownload && artifact != null
+                  ? () => widget.onEmailThisLetter(
+                      artifact,
+                      exhibitorId: _selectedExhibitorId,
+                      exhibitorName: _selectedExhibitorName,
+                      exhibitorEmail: _selectedExhibitorEmail,
+                      includeReports: false,
+                      includeLegs: false,
+                    )
+                  : null,
+              icon: const Icon(Icons.email_outlined),
+              label: Text(emailThisShowLabel),
+            ),
+          ),
+        ] else ...[
+          Tooltip(
+            message: isExhibitorReport
+                ? emailExhibitorReportsTooltip
+                : isLegsReport
+                ? emailExhibitorLegsTooltip
+                : emailThisShowTooltip,
             child: OutlinedButton.icon(
               onPressed:
                   _selectedReportCanEmail && canDownload && artifact != null
@@ -7896,6 +8114,8 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
                       exhibitorEmail: _selectedReportNeedsExhibitor
                           ? _selectedExhibitorEmail
                           : null,
+                      includeReports: !isLegsReport,
+                      includeLegs: isLegsReport,
                     )
                   : null,
               icon: const Icon(Icons.email_outlined),
@@ -7903,7 +8123,9 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
             ),
           ),
           Tooltip(
-            message: "Sends this target's reports for all shows in one email.",
+            message: isExhibitorReport || isLegsReport
+                ? emailExhibitorReportsAndLegsTooltip
+                : "Sends this target's reports for all shows in one email.",
             child: OutlinedButton.icon(
               onPressed:
                   _selectedReportCanEmail && canDownload && artifact != null
@@ -7918,6 +8140,8 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
                       exhibitorEmail: _selectedReportNeedsExhibitor
                           ? _selectedExhibitorEmail
                           : null,
+                      includeReports: true,
+                      includeLegs: true,
                     )
                   : null,
               icon: const Icon(Icons.mark_email_read_outlined),
@@ -8008,7 +8232,9 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
               _selectedGroup = value;
               _selectedReportName = nextReport;
 
-              if (nextReport != 'exhibitor_report' && nextReport != 'legs') {
+              if (nextReport != 'exhibitor_report' &&
+                  nextReport != 'legs' &&
+                  nextReport != 'checkin_sheet') {
                 _selectedExhibitorId = null;
                 _selectedExhibitorName = null;
                 _availableExhibitors = [];
@@ -8029,7 +8255,9 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
               await _loadClubsForStateClubReports();
             }
 
-            if (nextReport == 'exhibitor_report' || nextReport == 'legs') {
+            if (nextReport == 'exhibitor_report' ||
+                nextReport == 'legs' ||
+                nextReport == 'checkin_sheet') {
               await _loadExhibitors();
             }
           },
@@ -8067,7 +8295,9 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
                   setState(() {
                     _selectedReportName = value;
 
-                    if (value != 'exhibitor_report' && value != 'legs') {
+                    if (value != 'exhibitor_report' &&
+                        value != 'legs' &&
+                        value != 'checkin_sheet') {
                       _selectedExhibitorId = null;
                       _selectedExhibitorName = null;
                       _availableExhibitors = [];
@@ -8088,7 +8318,9 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
                     await _loadClubsForStateClubReports();
                   }
 
-                  if (value == 'exhibitor_report' || value == 'legs') {
+                  if (value == 'exhibitor_report' ||
+                      value == 'legs' ||
+                      value == 'checkin_sheet') {
                     await _loadExhibitors();
                   }
                 },

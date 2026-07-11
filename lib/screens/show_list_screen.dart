@@ -1,4 +1,5 @@
 // lib/screens/show_list_screen.dart
+// ignore_for_file: deprecated_member_use
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';

@@ -1,4 +1,5 @@
 // lib/screens/admin/edit_show_settings_screen.dart
+// ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use, use_build_context_synchronously
 
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
