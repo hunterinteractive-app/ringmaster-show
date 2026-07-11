@@ -88,6 +88,37 @@ void main() {
       expect(normalizeBreedResultsDetailClassName('Junior Sow'), 'Jr Sows');
     });
 
+    test('recognizes fur detail rows from canonical entry fields', () {
+      expect(
+        breedResultsDetailIsFurOrWoolRow({
+          'is_fur': 'true',
+          'class_name': 'Senior Doe',
+        }),
+        isTrue,
+      );
+      expect(
+        breedResultsDetailIsFurOrWoolRow({
+          'entry_is_fur': true,
+          'class_name': 'Senior Doe',
+        }),
+        isTrue,
+      );
+      expect(
+        breedResultsDetailIsFurOrWoolRow({
+          'entry_fur_variety': 'Colored',
+          'class_name': 'Senior Doe',
+        }),
+        isTrue,
+      );
+      expect(
+        breedResultsDetailIsFurOrWoolRow({
+          'is_fur': false,
+          'class_name': 'Senior Doe',
+        }),
+        isFalse,
+      );
+    });
+
     test('uses cavy scoped exhibitor numbers for legs', () {
       expect(
         legExhibitorNumberFromResultRow({

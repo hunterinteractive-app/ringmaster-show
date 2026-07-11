@@ -345,7 +345,9 @@ class BreedResultsDetailReportLoader {
 
       final entryRows = await repo.supabase
           .from('entries')
-          .select('id, scratched_at, status, is_shown')
+          .select(
+            'id, scratched_at, status, is_shown, is_fur, fur_variety, fur_placement',
+          )
           .eq('show_id', showId)
           .inFilter('id', chunk);
 
@@ -369,6 +371,9 @@ class BreedResultsDetailReportLoader {
         'entry_scratched_at': entry['scratched_at'],
         'entry_status': entry['status'],
         'entry_is_shown': entry['is_shown'],
+        'entry_is_fur': entry['is_fur'],
+        'entry_fur_variety': entry['fur_variety'],
+        'entry_fur_placement': entry['fur_placement'],
       };
     }).toList();
   }
@@ -713,31 +718,35 @@ class BreedResultsDetailReportLoader {
       );
     }
 
+    final regularRows = rows.where((row) => !_isFurOrWoolRow(row)).toList();
+    final regularOverallRows = overallRows
+        .where((row) => !_isFurOrWoolRow(row))
+        .toList();
     final counts = <String, _JudgedCount>{};
-    counts['BREED'] = countFor(rows);
-    if (overallRows.isNotEmpty) {
-      counts['OVERALL'] = countFor(overallRows);
+    counts['BREED'] = countFor(regularRows);
+    if (regularOverallRows.isNotEmpty) {
+      counts['OVERALL'] = countFor(regularOverallRows);
     } else {
       counts['OVERALL'] = counts['BREED'] ?? const _JudgedCount();
     }
 
-    final sexes = rows
+    final sexes = regularRows
         .map((r) => _sexKey(_safe(r['sex'])))
         .where((s) => s.isNotEmpty)
         .toSet();
 
     for (final sex in sexes) {
-      final sexRows = rows.where((r) => _sexKey(_safe(r['sex'])) == sex);
+      final sexRows = regularRows.where((r) => _sexKey(_safe(r['sex'])) == sex);
       counts['BREED_SEX::$sex'] = countFor(sexRows);
     }
 
-    final varieties = rows
+    final varieties = regularRows
         .map((r) => _safe(r['variety_name']))
         .where((v) => v.isNotEmpty)
         .toSet();
 
     for (final variety in varieties) {
-      final varietyRows = rows.where(
+      final varietyRows = regularRows.where(
         (r) => _safe(r['variety_name']) == variety,
       );
       counts['VARIETY::$variety'] = countFor(varietyRows);
@@ -755,13 +764,15 @@ class BreedResultsDetailReportLoader {
       }
     }
 
-    final groups = rows
+    final groups = regularRows
         .map((r) => _safe(r['group_name']))
         .where((g) => g.isNotEmpty)
         .toSet();
 
     for (final group in groups) {
-      final groupRows = rows.where((r) => _safe(r['group_name']) == group);
+      final groupRows = regularRows.where(
+        (r) => _safe(r['group_name']) == group,
+      );
       counts['GROUP::$group'] = countFor(groupRows);
 
       final groupSexes = groupRows
@@ -1125,6 +1136,8 @@ class BreedResultsDetailReportLoader {
   int _furPlacementNumber(Map<String, dynamic> row) {
     final furPlacement = _placementNumber(row['fur_placement']);
     if (furPlacement != 999) return furPlacement;
+    final entryFurPlacement = _placementNumber(row['entry_fur_placement']);
+    if (entryFurPlacement != 999) return entryFurPlacement;
     return _placementNumber(row['placement']);
   }
 
@@ -1355,16 +1368,7 @@ class BreedResultsDetailReportLoader {
   }
 
   bool _isFurOrWoolRow(Map<String, dynamic> row) {
-    if (row['is_fur'] == true) return true;
-    if (_safe(row['fur_variety']).isNotEmpty) return true;
-
-    final rowType = _firstNonEmpty([
-      _safe(row['row_type']),
-      _safe(row['result_row_type']),
-      _safe(row['line_type']),
-    ]).toLowerCase();
-
-    return rowType.contains('fur') || rowType.contains('wool');
+    return breedResultsDetailIsFurOrWoolRow(row);
   }
 
   bool _isPointsCategoryPlacementRow(Map<String, dynamic> row) {
@@ -1549,8 +1553,9 @@ class BreedResultsDetailReportLoader {
       _safe(row['row_type']),
       _safe(row['result_row_type']),
       _safe(row['line_type']),
-      if (row['is_fur'] == true) 'fur',
+      if (_bool(row['is_fur']) || _bool(row['entry_is_fur'])) 'fur',
       _safe(row['fur_variety']),
+      _safe(row['entry_fur_variety']),
       _pointsCategoryLabel(row),
     ]).toLowerCase();
 
@@ -1574,7 +1579,10 @@ class BreedResultsDetailReportLoader {
   }
 
   String _displayVarietyName(Map<String, dynamic> row) {
-    final furVariety = _safe(row['fur_variety']);
+    final furVariety = _firstNonEmpty([
+      _safe(row['fur_variety']),
+      _safe(row['entry_fur_variety']),
+    ]);
     if (furVariety.isNotEmpty) return furVariety;
 
     return _firstNonEmpty([_safe(row['variety_name']), _safe(row['variety'])]);
@@ -1589,7 +1597,10 @@ class BreedResultsDetailReportLoader {
     ]);
     if (explicit.isNotEmpty) return _normalizePointsCategory(explicit);
 
-    final furVariety = _safe(row['fur_variety']);
+    final furVariety = _firstNonEmpty([
+      _safe(row['fur_variety']),
+      _safe(row['entry_fur_variety']),
+    ]);
     if (furVariety.isNotEmpty) return _normalizePointsCategory(furVariety);
 
     final variety = _firstNonEmpty([
@@ -1623,6 +1634,10 @@ class BreedResultsDetailReportLoader {
   String _safe(Object? value, {String fallback = ''}) {
     final text = (value ?? '').toString().trim();
     return text.isEmpty ? fallback : text;
+  }
+
+  bool _bool(Object? value, {bool fallback = false}) {
+    return _detailBool(value, fallback: fallback);
   }
 }
 
@@ -2037,6 +2052,25 @@ String normalizeBreedResultsDetailClassName(String raw) {
   return raw.trim();
 }
 
+bool breedResultsDetailIsFurOrWoolRow(Map<String, dynamic> row) {
+  if (_detailBool(row['is_fur']) || _detailBool(row['entry_is_fur'])) {
+    return true;
+  }
+
+  if (_detailSafe(row['fur_variety']).isNotEmpty ||
+      _detailSafe(row['entry_fur_variety']).isNotEmpty) {
+    return true;
+  }
+
+  final rowType = _detailFirstNonEmpty([
+    _detailSafe(row['row_type']),
+    _detailSafe(row['result_row_type']),
+    _detailSafe(row['line_type']),
+  ]).toLowerCase();
+
+  return rowType.contains('fur') || rowType.contains('wool');
+}
+
 String _detailFirstNonEmpty(List<String> values) {
   for (final value in values) {
     final trimmed = value.trim();
@@ -2048,6 +2082,18 @@ String _detailFirstNonEmpty(List<String> values) {
 String _detailSafe(Object? value, {String fallback = ''}) {
   final text = (value ?? '').toString().trim();
   return text.isEmpty ? fallback : text;
+}
+
+bool _detailBool(Object? value, {bool fallback = false}) {
+  if (value is bool) return value;
+  final text = (value ?? '').toString().trim().toLowerCase();
+  if (text == 'true' || text == 't' || text == '1' || text == 'yes') {
+    return true;
+  }
+  if (text == 'false' || text == 'f' || text == '0' || text == 'no') {
+    return false;
+  }
+  return fallback;
 }
 
 class _JudgedCount {
