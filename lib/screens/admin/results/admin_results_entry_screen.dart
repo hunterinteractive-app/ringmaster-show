@@ -550,10 +550,7 @@ Color _resultScopeStatusColor(BuildContext context, _ResultScopeStatus status) {
   }
 }
 
-Color _resultScopeCardColor(
-  _ResultScopeStatus status,
-  Color statusColor,
-) {
+Color _resultScopeCardColor(_ResultScopeStatus status, Color statusColor) {
   return switch (status) {
     _ResultScopeStatus.needsAttention => const Color(0xFF70283B),
     _ResultScopeStatus.inProgress => const Color(0xFF66501E),
@@ -590,6 +587,15 @@ int _resultSortValue(Map<String, dynamic> row, String key) {
   final value = row[key];
   if (value is int) return value;
   return int.tryParse(value?.toString() ?? '') ?? 9999;
+}
+
+int _resultSortValueForRows(List<Map<String, dynamic>> rows, String key) {
+  var result = 9999;
+  for (final row in rows) {
+    final value = _resultSortValue(row, key);
+    if (value < result) result = value;
+  }
+  return result;
 }
 
 String _resultSortText(dynamic value) {
@@ -3648,29 +3654,25 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
     final grouped = _groupByVariety();
     final varieties = grouped.keys.toList()
       ..sort((a, b) {
-        int sortFor(String key) {
-          final rows = grouped[key] ?? const <Map<String, dynamic>>[];
-          if (rows.isEmpty) return 9999;
-          final raw = rows.first['variety_sort_order'];
-          if (raw is int) return raw;
-          return int.tryParse(raw?.toString() ?? '') ?? 9999;
-        }
-
-        // Force White, then Colored at top
-        if (a == 'White') return -1;
-        if (b == 'White') return 1;
-        if (a == 'Colored') return -1;
-        if (b == 'Colored') return 1;
+        final aRows = grouped[a] ?? const <Map<String, dynamic>>[];
+        final bRows = grouped[b] ?? const <Map<String, dynamic>>[];
 
         final aIsFur = a.trim().toLowerCase() == 'fur / wool';
         final bIsFur = b.trim().toLowerCase() == 'fur / wool';
 
         if (aIsFur != bIsFur) return aIsFur ? 1 : -1;
 
-        final bySort = sortFor(a).compareTo(sortFor(b));
+        // The RPC hydrates this from public.varieties.sort_order. Read the
+        // numeric value through the shared parser so values returned as either
+        // ints or strings sort identically. Inspect every row in the bucket so
+        // ordering does not depend on Map/RPC insertion order or rows.first.
+        final bySort = _resultSortValueForRows(
+          aRows,
+          'variety_sort_order',
+        ).compareTo(_resultSortValueForRows(bRows, 'variety_sort_order'));
         if (bySort != 0) return bySort;
 
-        return a.toLowerCase().compareTo(b.toLowerCase());
+        return _resultSortText(a).compareTo(_resultSortText(b));
       });
 
     return Scaffold(
@@ -4026,8 +4028,11 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
   int _labelSortKey(String label) {
     final lower = label.trim().toLowerCase();
 
-    if (lower == 'white') return 1000;
-    if (lower == 'colored' || lower == 'colour') return 1001;
+    // White-before-Colored is a Fur/Wool presentation rule only. This helper
+    // is invoked for buckets whose rows are all marked as fur; ordinary breed
+    // varieties are ordered separately by variety_sort_order.
+    if (lower == 'white') return 0;
+    if (lower == 'colored' || lower == 'colour') return 1;
 
     if (lower.startsWith('fur - ')) return 1000;
     if (lower.startsWith('commercial fur - ')) return 1001;
@@ -5380,10 +5385,10 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
       ).compareTo(intVal(b, 'group_sort_order'));
       if (byGroupSort != 0) return byGroupSort;
 
-      final byVarietySort = intVal(
+      final byVarietySort = _resultSortValue(
         a,
         'variety_sort_order',
-      ).compareTo(intVal(b, 'variety_sort_order'));
+      ).compareTo(_resultSortValue(b, 'variety_sort_order'));
       if (byVarietySort != 0) return byVarietySort;
 
       final byClassSex = classSexRank(a).compareTo(classSexRank(b));
