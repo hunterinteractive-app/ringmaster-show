@@ -319,7 +319,7 @@ bool _entryHasAnyResultOrAwardData(Map<String, dynamic> entry) {
 }
 
 String _entryScopeSectionId(Map<String, dynamic> entry) {
-  return (entry['section_id'] ?? '').toString().trim().toLowerCase();
+  return resultsSectionScopeForEntry(entry);
 }
 
 String _entryScopeBreed(Map<String, dynamic> entry) {
@@ -835,9 +835,15 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
       return al.compareTo(bl);
     });
 
-    _selectedSectionId ??= _sections.isEmpty
-        ? ''
-        : (_sections.first['id'] ?? '').toString();
+    final selectedIsEnabled = _sections.any(
+      (section) =>
+          (section['id'] ?? '').toString() == (_selectedSectionId ?? ''),
+    );
+    if (!selectedIsEnabled) {
+      _selectedSectionId = _sections.isEmpty
+          ? null
+          : (_sections.first['id'] ?? '').toString();
+    }
   }
 
   Future<void> _loadJudges() async {
@@ -1498,8 +1504,9 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
   }
 
   Future<void> _onChangeSection(String? value) async {
+    if (value == null || value.isEmpty) return;
     setState(() {
-      _selectedSectionId = value ?? '';
+      _selectedSectionId = value;
       _loading = true;
       _msg = null;
     });
@@ -1516,7 +1523,9 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     for (final e in items) {
       final breed = _breedDisplayNameForEntry(e);
       final species = _speciesDisplayNameForEntry(e);
-      final key = '${species.toLowerCase()}|${breed.toLowerCase()}';
+      final sectionScope = _entryScopeSectionId(e);
+      final key =
+          '$sectionScope|${species.toLowerCase()}|${breed.toLowerCase()}';
       out.putIfAbsent(key, () => <Map<String, dynamic>>[]);
       out[key]!.add(e);
     }
@@ -1775,8 +1784,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
       return (e['variety_name'] ?? '').toString().trim();
     }
 
-    String sectionId(Map<String, dynamic> e) =>
-        (e['section_id'] ?? '').toString().trim();
+    String sectionId(Map<String, dynamic> e) => _entryScopeSectionId(e);
     String species(Map<String, dynamic> e) =>
         _speciesDisplayNameForEntry(e).toLowerCase();
 
@@ -2540,7 +2548,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                         child: Column(
                           children: [
                             DropdownButtonFormField<String>(
-                              initialValue: _selectedSectionId ?? '',
+                              initialValue: _selectedSectionId,
                               style: const TextStyle(
                                 color: AppColors.text,
                                 fontWeight: FontWeight.w700,
@@ -2554,32 +2562,26 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                                   color: AppColors.muted,
                                 ),
                               ),
-                              items: [
-                                const DropdownMenuItem<String>(
-                                  value: '',
-                                  child: Text('All Sections'),
-                                ),
-                                ..._sections.map(
-                                  (s) => DropdownMenuItem<String>(
-                                    value: s['id']?.toString(),
-                                    child: Text(_sectionLabel(s)),
-                                  ),
-                                ),
-                              ],
-                              selectedItemBuilder: (context) => [
-                                const Text(
-                                  'All Sections',
-                                  style: _resultSurfaceDropdownStyle,
-                                ),
-                                ..._sections.map(
-                                  (s) => Text(
-                                    _sectionLabel(s),
-                                    style: _resultSurfaceDropdownStyle,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                              onChanged: _onChangeSection,
+                              items: _sections
+                                  .map(
+                                    (s) => DropdownMenuItem<String>(
+                                      value: s['id']?.toString(),
+                                      child: Text(_sectionLabel(s)),
+                                    ),
+                                  )
+                                  .toList(),
+                              selectedItemBuilder: (context) => _sections
+                                  .map(
+                                    (s) => Text(
+                                      _sectionLabel(s),
+                                      style: _resultSurfaceDropdownStyle,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: _sections.isEmpty
+                                  ? null
+                                  : _onChangeSection,
                             ),
                             const SizedBox(height: 14),
                             Container(
@@ -2685,7 +2687,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                             final sectionName =
                                 (_selectedSectionId == null ||
                                     _selectedSectionId!.isEmpty)
-                                ? 'All Sections'
+                                ? _sectionNameForEntry(breedEntries.first)
                                 : (() {
                                     final section = _sections.firstWhere(
                                       (s) =>
@@ -2746,7 +2748,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                                 subtitle: Padding(
                                   padding: const EdgeInsets.only(top: 6),
                                   child: Text(
-                                    '$completed/$count entered • ${_statusLabel(breedEntries)}\n$species • $flowLabel • ${_judgeSummary(breedEntries)}${breedSpecials.isEmpty ? '' : '\n$breedSpecials'}',
+                                    '$completed/$count entered • ${_statusLabel(breedEntries)}\n$sectionName • $species • $flowLabel • ${_judgeSummary(breedEntries)}${breedSpecials.isEmpty ? '' : '\n$breedSpecials'}',
                                     style: TextStyle(
                                       color: AppColors.headerForeground
                                           .withValues(alpha: .86),

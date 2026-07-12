@@ -48,6 +48,24 @@ void main() {
         resultsFinalAwardScopeKey({...rabbit, 'species': 'rabbit'}, '1RIS'),
       );
     });
+
+    test('uses show letter when a result row has no section id', () {
+      expect(resultsSectionScopeForEntry({'show_letter': 'Open A'}), 'open a');
+      expect(
+        resultsFinalAwardScopeKey({
+          'show_id': 'show-1',
+          'show_letter': 'Open A',
+          'species': 'Rabbit',
+        }, 'BIS'),
+        isNot(
+          resultsFinalAwardScopeKey({
+            'show_id': 'show-1',
+            'show_letter': 'Youth A',
+            'species': 'Rabbit',
+          }, 'BIS'),
+        ),
+      );
+    });
   });
 
   group('breed completion issues', () {

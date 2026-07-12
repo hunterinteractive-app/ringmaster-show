@@ -43,9 +43,23 @@ String resultsSpeciesLabel(Map<String, dynamic> entry) {
   };
 }
 
+String resultsSectionScopeForEntry(Map<String, dynamic> entry) {
+  for (final key in const [
+    'section_id',
+    'show_section_id',
+    'show_letter',
+    'section_letter',
+    'section_label',
+  ]) {
+    final value = (entry[key] ?? '').toString().trim().toLowerCase();
+    if (value.isNotEmpty) return value;
+  }
+  return '';
+}
+
 String resultsFinalAwardScopeKey(Map<String, dynamic> entry, String awardCode) {
   final showId = (entry['show_id'] ?? '').toString().trim().toLowerCase();
-  final sectionId = (entry['section_id'] ?? '').toString().trim().toLowerCase();
+  final sectionId = resultsSectionScopeForEntry(entry);
   final species = resultsSpeciesForEntry(entry);
   final award = awardCode.trim().toUpperCase();
   // Award remains the second component for existing issue-label extraction.
