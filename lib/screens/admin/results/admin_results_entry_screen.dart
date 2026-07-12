@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:ringmaster_show/services/show_lock_service.dart';
 import 'package:ringmaster_show/services/app_session.dart';
+import 'package:ringmaster_show/services/results_entry_validation.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -107,7 +108,7 @@ bool _isFurOrWoolEntry(Map<String, dynamic> row) {
 }
 
 bool _isCavyEntry(Map<String, dynamic> row) {
-  final species = (row['species'] ?? '').toString().trim().toLowerCase();
+  final species = resultsSpeciesForEntry(row);
 
   // Species remains the primary source of truth. Some RPC/result rows do not
   // include species, so fall back to cavy-only sex terminology. Do not fall
@@ -368,15 +369,6 @@ List<String> _entryAwardCodes(Map<String, dynamic> entry) {
       .toList();
 }
 
-int _awardCount(List<Map<String, dynamic>> entries, String awardCode) {
-  final target = _canonicalAwardCode(awardCode).toLowerCase();
-  return entries.where((entry) {
-    return _entryAwardCodes(
-      entry,
-    ).any((award) => _canonicalAwardCode(award).toLowerCase() == target);
-  }).length;
-}
-
 String _entryShortAnimalLabel(Map<String, dynamic> entry) {
   final coopNumber = (entry['coop_number'] ?? '').toString().trim();
   final animalName = (entry['animal_name'] ?? '').toString().trim();
@@ -423,20 +415,6 @@ String _specialsSummaryForEntries(
   return 'Specials: ${parts.join(' • ')}';
 }
 
-Map<String, List<Map<String, dynamic>>> _bucketEntries(
-  List<Map<String, dynamic>> entries,
-  String Function(Map<String, dynamic>) keyBuilder,
-) {
-  final buckets = <String, List<Map<String, dynamic>>>{};
-  for (final entry in entries) {
-    final key = keyBuilder(entry);
-    if (key.trim().isEmpty) continue;
-    buckets.putIfAbsent(key, () => <Map<String, dynamic>>[]);
-    buckets[key]!.add(entry);
-  }
-  return buckets;
-}
-
 String _entrySexKey(Map<String, dynamic> entry) {
   final sex = (entry['sex'] ?? '').toString().trim().toLowerCase();
   if (sex.contains('buck') || sex.contains('boar')) return 'male';
@@ -468,99 +446,6 @@ bool _entryIsEligibleForSpecialAward(Map<String, dynamic> entry) {
   return placement == '1';
 }
 
-Map<String, dynamic>? _singleAwardWinner(
-  List<Map<String, dynamic>> entries,
-  String awardCode,
-) {
-  final target = _canonicalAwardCode(awardCode).toLowerCase();
-  for (final entry in entries) {
-    final hasAward = _entryAwardCodes(
-      entry,
-    ).any((award) => _canonicalAwardCode(award).toLowerCase() == target);
-    if (hasAward) return entry;
-  }
-  return null;
-}
-
-bool _hasEligibleOppositeSexCandidate(
-  List<Map<String, dynamic>> entries,
-  Map<String, dynamic> winner,
-) {
-  final winnerId = (winner['entry_id'] ?? winner['id'] ?? '').toString().trim();
-  final winnerSex = _entrySexKey(winner);
-  if (winnerSex.isEmpty) return false;
-
-  for (final entry in entries) {
-    final entryId = (entry['entry_id'] ?? entry['id'] ?? '').toString().trim();
-    if (entryId.isNotEmpty && entryId == winnerId) continue;
-    if (!_entryIsEligibleForSpecialAward(entry)) continue;
-
-    final entrySex = _entrySexKey(entry);
-    if (entrySex.isNotEmpty && entrySex != winnerSex) return true;
-  }
-
-  return false;
-}
-
-bool _requiredAwardCountsAreValid({
-  required Iterable<List<Map<String, dynamic>>> buckets,
-  required List<String> awardCodes,
-  required bool enforceMissing,
-}) {
-  for (final bucket in buckets) {
-    if (bucket.isEmpty) continue;
-
-    for (final awardCode in awardCodes) {
-      final count = _awardCount(bucket, awardCode);
-
-      // Duplicate awards are always an error once they exist.
-      if (count > 1) return false;
-    }
-
-    if (!enforceMissing) continue;
-
-    final eligibleCandidates = bucket
-        .where(_entryIsEligibleForSpecialAward)
-        .toList();
-
-    // If every animal in the scope is DQ, No Show, Unworthy, scratched, or otherwise
-    // has no first-place animal, there is no special award to require.
-    if (eligibleCandidates.isEmpty) continue;
-
-    if (awardCodes.length >= 2) {
-      final primaryAward = awardCodes[0];
-      final oppositeAward = awardCodes[1];
-
-      final primaryCount = _awardCount(bucket, primaryAward);
-      if (primaryCount != 1) return false;
-
-      final primaryWinner = _singleAwardWinner(bucket, primaryAward);
-      if (primaryWinner == null) return false;
-
-      final oppositeCount = _awardCount(bucket, oppositeAward);
-      final hasOppositeCandidate = _hasEligibleOppositeSexCandidate(
-        eligibleCandidates,
-        primaryWinner,
-      );
-
-      // BOS/BOSV/BOSG is only required when there is an eligible opposite-sex animal.
-      if (hasOppositeCandidate && oppositeCount != 1) return false;
-
-      // If an opposite award exists when no opposite-sex candidate exists, it is still
-      // bad data and should flag red.
-      if (!hasOppositeCandidate && oppositeCount > 0) return false;
-
-      continue;
-    }
-
-    for (final awardCode in awardCodes) {
-      if (_awardCount(bucket, awardCode) != 1) return false;
-    }
-  }
-
-  return true;
-}
-
 _ResultScopeCompletion _resultCompletionForEntries(
   List<Map<String, dynamic>> entries, {
   required bool requireVarietyAwards,
@@ -580,74 +465,29 @@ _ResultScopeCompletion _resultCompletionForEntries(
   }
 
   final allBasicsComplete = totalBasics > 0 && completedBasics >= totalBasics;
-  // Only entries eligible for specials should be used when deciding whether
-  // BOV/BOSV, BOG/BOSG, or BOB/BOSB are required. Pre-Junior entries still
-  // count toward basic result completion, but they cannot force opposite-sex
-  // specials like BOSB.
-  final normalEntries = entries.where((entry) {
-    if (_isFurEntry(entry)) return false;
-    if (_isPreJuniorClassName((entry['class_name'] ?? '').toString())) {
-      return false;
-    }
-    return true;
-  }).toList();
+  final blockingIssues = buildBreedCompletionIssues(
+    entries: entries,
+    requireVarietyAwards: requireVarietyAwards,
+    requireGroupAwards: requireGroupAwards,
+    requireBreedAwards: requireBreedAwards,
+    hasBasicOutcome: _entryHasBasicOutcome,
+    isEligibleForSpecialAward: _entryIsEligibleForSpecialAward,
+    isExcludedFromSpecials: (entry) =>
+        _isFurEntry(entry) ||
+        _isPreJuniorClassName((entry['class_name'] ?? '').toString()),
+    awardCodes: _entryAwardCodes,
+    entryLabel: _entryShortAnimalLabel,
+    sectionId: _entryScopeSectionId,
+    breed: _entryScopeBreed,
+    variety: _entryScopeVariety,
+    group: _entryScopeGroup,
+    sex: _entrySexKey,
+  );
+  final hasAwardIssue = blockingIssues.any(
+    (issue) => issue.code != 'missing_basic_outcome',
+  );
 
-  bool awardCountsValid = true;
-
-  if (normalEntries.isNotEmpty && requireVarietyAwards) {
-    final varietyBuckets = _bucketEntries(normalEntries, (entry) {
-      final sectionId = _entryScopeSectionId(entry);
-      final breed = _entryScopeBreed(entry);
-      final variety = _entryScopeVariety(entry);
-      if (sectionId.isEmpty || breed.isEmpty || variety.isEmpty) return '';
-      return '$sectionId|$breed|$variety';
-    });
-
-    awardCountsValid =
-        awardCountsValid &&
-        _requiredAwardCountsAreValid(
-          buckets: varietyBuckets.values,
-          awardCodes: const ['BOV', 'BOSV'],
-          enforceMissing: allBasicsComplete,
-        );
-  }
-
-  if (normalEntries.isNotEmpty && requireGroupAwards) {
-    final groupBuckets = _bucketEntries(normalEntries, (entry) {
-      final sectionId = _entryScopeSectionId(entry);
-      final breed = _entryScopeBreed(entry);
-      final group = _entryScopeGroup(entry);
-      if (sectionId.isEmpty || breed.isEmpty || group.isEmpty) return '';
-      return '$sectionId|$breed|$group';
-    });
-
-    awardCountsValid =
-        awardCountsValid &&
-        _requiredAwardCountsAreValid(
-          buckets: groupBuckets.values,
-          awardCodes: const ['BOG', 'BOSG'],
-          enforceMissing: allBasicsComplete,
-        );
-  }
-
-  if (normalEntries.isNotEmpty && requireBreedAwards) {
-    final breedBuckets = _bucketEntries(normalEntries, (entry) {
-      final sectionId = _entryScopeSectionId(entry);
-      final breed = _entryScopeBreed(entry);
-      if (sectionId.isEmpty || breed.isEmpty) return '';
-      return '$sectionId|$breed';
-    });
-
-    awardCountsValid =
-        awardCountsValid &&
-        _requiredAwardCountsAreValid(
-          buckets: breedBuckets.values,
-          awardCodes: const ['BOB', 'BOSB'],
-          enforceMissing: allBasicsComplete,
-        );
-  }
-
-  if (!awardCountsValid) {
+  if (hasAwardIssue) {
     return _ResultScopeCompletion(
       status: _ResultScopeStatus.needsAttention,
       completedBasics: completedBasics,
@@ -708,6 +548,31 @@ Color _resultScopeStatusColor(BuildContext context, _ResultScopeStatus status) {
     case _ResultScopeStatus.notStarted:
       return colorScheme.onSurfaceVariant;
   }
+}
+
+Color _resultScopeCardColor(
+  _ResultScopeStatus status,
+  Color statusColor,
+) {
+  return switch (status) {
+    _ResultScopeStatus.needsAttention => const Color(0xFF70283B),
+    _ResultScopeStatus.inProgress => const Color(0xFF66501E),
+    _ => statusColor.withValues(alpha: 0.06),
+  };
+}
+
+BorderSide _resultScopeCardBorder(_ResultScopeStatus status) {
+  return switch (status) {
+    _ResultScopeStatus.needsAttention => BorderSide(
+      color: Colors.redAccent.withValues(alpha: .72),
+      width: 1.5,
+    ),
+    _ResultScopeStatus.inProgress => BorderSide(
+      color: Colors.amber.withValues(alpha: .68),
+      width: 1.5,
+    ),
+    _ => BorderSide.none,
+  };
 }
 
 String _dqReasonFromStatus(String status) {
@@ -1942,6 +1807,41 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     List<String> awards(Map<String, dynamic> e) =>
         ((e['_awards'] as List?) ?? const []).map((x) => x.toString()).toList();
 
+    // Breed cards and this dialog consume the same completion analysis. This
+    // guarantees that every issue withholding the green check is actionable
+    // here instead of being hidden in the card-status calculation.
+    for (final breedEntries in _groupByBreed(_entries).values) {
+      final sharedIssues = buildBreedCompletionIssues(
+        entries: breedEntries,
+        requireVarietyAwards: breedEntries.any(showsByVariety),
+        requireGroupAwards: breedEntries.any(showsByGroup),
+        requireBreedAwards: true,
+        hasBasicOutcome: _entryHasBasicOutcome,
+        isEligibleForSpecialAward: _entryIsEligibleForSpecialAward,
+        isExcludedFromSpecials: (entry) =>
+            _isFurEntry(entry) ||
+            _isPreJuniorClassName((entry['class_name'] ?? '').toString()),
+        awardCodes: _entryAwardCodes,
+        entryLabel: _entryLabel,
+        sectionId: _entryScopeSectionId,
+        breed: _entryScopeBreed,
+        variety: _entryScopeVariety,
+        group: _entryScopeGroup,
+        sex: _entrySexKey,
+      );
+      for (final shared in sharedIssues) {
+        issues.add(
+          makeIssue(
+            code: shared.code,
+            title: shared.title,
+            message: shared.message,
+            entry: shared.entry,
+            conflictsWith: shared.conflictsWith,
+          ),
+        );
+      }
+    }
+
     final awardBuckets = <String, List<Map<String, dynamic>>>{};
 
     for (final e in _entries) {
@@ -2031,11 +1931,14 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
             break;
           case 'Best 4-Class':
           case 'Best 6-Class':
+          case 'Best In Show':
           case 'BIS':
+          case 'RIS':
           case 'Reserve In Show':
           case '1RIS':
           case '2RIS':
-            final key = '${sectionId(e)}|$award';
+          case 'HM':
+            final key = resultsFinalAwardScopeKey(e, award);
             awardBuckets.putIfAbsent(key, () => <Map<String, dynamic>>[]);
             awardBuckets[key]!.add(e);
             break;
@@ -2049,12 +1952,25 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
         final second = bucket.value.length > 1 ? bucket.value[1] : null;
         final awardCode = bucket.key.split('|')[1];
 
+        // Breed-level duplicate awards were already emitted by the shared
+        // completion analyzer above.
+        if (const {
+          'BOV',
+          'BOSV',
+          'BOG',
+          'BOSG',
+          'BOB',
+          'BOSB',
+        }.contains(awardCode)) {
+          continue;
+        }
+        final speciesLabel = resultsSpeciesLabel(first);
         issues.add(
           makeIssue(
             code: 'duplicate_award',
-            title: 'Duplicate award winner',
+            title: 'Duplicate $speciesLabel final award winner',
             message:
-                '$awardCode is assigned to more than one animal: '
+                '$awardCode is assigned to more than one $speciesLabel: '
                 '${_entryLabel(first)}'
                 '${second != null ? ' and ${_entryLabel(second)}' : ''}.',
             entry: first,
@@ -2731,6 +2647,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                             );
                             final count = breedEntries.length;
                             final completed = _completedCount(breedEntries);
+                            final completion = _completionFor(breedEntries);
                             final statusColor = _statusColor(
                               context,
                               breedEntries,
@@ -2789,9 +2706,13 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                             return Card(
                               margin: const EdgeInsets.only(bottom: 12),
                               elevation: 0,
-                              color: statusColor.withValues(alpha: 0.06),
+                              color: _resultScopeCardColor(
+                                completion.status,
+                                statusColor,
+                              ),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(20),
+                                side: _resultScopeCardBorder(completion.status),
                               ),
                               child: ListTile(
                                 contentPadding: const EdgeInsets.fromLTRB(
@@ -3340,6 +3261,7 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
                   final groupEntries = grouped[groupName]!;
                   final count = groupEntries.length;
                   final completed = _completedCount(groupEntries);
+                  final completion = _completionFor(groupEntries);
                   final statusColor = _statusColor(context, groupEntries);
                   final groupSpecials = _specialsSummaryForEntries(
                     groupEntries,
@@ -3351,9 +3273,13 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
                   return Card(
                     margin: const EdgeInsets.only(bottom: 12),
                     elevation: 0,
-                    color: statusColor.withValues(alpha: 0.06),
+                    color: _resultScopeCardColor(
+                      completion.status,
+                      statusColor,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20),
+                      side: _resultScopeCardBorder(completion.status),
                     ),
                     child: ListTile(
                       contentPadding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
@@ -3812,6 +3738,7 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
                   final varietyEntries = grouped[variety]!;
                   final count = varietyEntries.length;
                   final completed = _completedCount(varietyEntries);
+                  final completion = _completionFor(varietyEntries);
                   final statusColor = _statusColor(context, varietyEntries);
                   final varietySpecials = _specialsSummaryForEntries(
                     varietyEntries,
@@ -3821,9 +3748,13 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
                   return Card(
                     margin: const EdgeInsets.only(bottom: 12),
                     elevation: 0,
-                    color: statusColor.withValues(alpha: 0.06),
+                    color: _resultScopeCardColor(
+                      completion.status,
+                      statusColor,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20),
+                      side: _resultScopeCardBorder(completion.status),
                     ),
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
@@ -4564,6 +4495,7 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
                   final classEntries = grouped[label]!;
                   final count = classEntries.length;
                   final completed = _completedCount(classEntries);
+                  final completion = _completionFor(classEntries);
                   final statusColor = _statusColor(context, classEntries);
                   final classSpecials =
                       _specialsSummaryForEntries(classEntries, const [
@@ -4590,9 +4522,13 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
                   return Card(
                     margin: const EdgeInsets.only(bottom: 12),
                     elevation: 0,
-                    color: statusColor.withValues(alpha: 0.06),
+                    color: _resultScopeCardColor(
+                      completion.status,
+                      statusColor,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20),
+                      side: _resultScopeCardBorder(completion.status),
                     ),
                     child: ListTile(
                       contentPadding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
