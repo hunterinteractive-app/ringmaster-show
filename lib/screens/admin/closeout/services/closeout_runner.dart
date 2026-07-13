@@ -71,6 +71,7 @@ class CloseoutRunner {
       final storagePath = await uploadService.upload(
         showId: showId,
         showName: showName ?? '',
+        finalizeRunId: finalizeRunId,
         artifactId: artifactId,
         file: file,
       );

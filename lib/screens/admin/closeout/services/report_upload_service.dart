@@ -11,6 +11,7 @@ class ReportUploadService {
   Future<String> upload({
     required String showId,
     required String showName,
+    required String finalizeRunId,
     required String artifactId,
     required ReportFileResult file,
   }) async {
@@ -22,20 +23,17 @@ class ReportUploadService {
         .replaceAll(RegExp(r'^_|_$'), '');
 
     final showFolder = safeShowName.isNotEmpty ? safeShowName : showId;
-    final versionFolder = _buildReportVersionFolder();
-
-    // Determine version number (V1, V2, etc.) based on existing files for today
-    final tempBase = 'shows/$showFolder/reports/versions/$versionFolder/';
-    final existing = await supabase.storage.from(bucket).list(path: tempBase);
-
-    final version = existing.length + 1;
-    final versionLabel = 'V$version';
-    final baseFolder =
-        'shows/$showFolder/reports/versions/${versionFolder}_$versionLabel/';
-
-    // Keep each generation in its own timestamped folder so older reports are preserved.
-    // Example:
-    // shows/my_show/reports/versions/2026-05-26_19-42-08/my_show_arba_report_open_c.pdf
+    // A finalize run is the immutable report version. Using its id guarantees
+    // every batch and retry for that run writes into the same folder.
+    final versionKey = finalizeRunId.trim();
+    if (versionKey.isEmpty) {
+      throw ArgumentError.value(
+        finalizeRunId,
+        'finalizeRunId',
+        'must not be empty',
+      );
+    }
+    final baseFolder = 'shows/$showFolder/reports/versions/$versionKey/';
     final filePrefix = safeShowName.isEmpty ? '' : '${safeShowName}_';
     final path = '$baseFolder$filePrefix${file.fileName}';
 
@@ -54,18 +52,6 @@ class ReportUploadService {
         );
 
     return path;
-  }
-
-  String _buildReportVersionFolder() {
-    final now = DateTime.now().toUtc();
-    final year = now.year.toString().padLeft(4, '0');
-    final month = now.month.toString().padLeft(2, '0');
-    final day = now.day.toString().padLeft(2, '0');
-    final hour = now.hour.toString().padLeft(2, '0');
-    final minute = now.minute.toString().padLeft(2, '0');
-    // final second = now.second.toString().padLeft(2, '0');
-
-    return '$year-$month-${day}_$hour-$minute';
   }
 
   Future<void> markGenerated({
