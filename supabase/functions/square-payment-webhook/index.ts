@@ -44,7 +44,10 @@ Deno.serve(async (request: Request) => {
   try {
     attempt = await findAttempt(providerPaymentId, orderId, referenceId);
     if (!attempt && providerPaymentId && eventMerchantId) {
-      const recovered = await recoverPayment(providerPaymentId, eventMerchantId);
+      const recovered = await recoverPayment(
+        providerPaymentId,
+        eventMerchantId,
+      );
       if (recovered) {
         payment = recovered;
         orderId = text(recovered.order_id);
@@ -68,14 +71,18 @@ Deno.serve(async (request: Request) => {
     claimed = recorded.claimed;
     if (!claimed) return response({ duplicate: true });
 
-    if (!["payment.updated", "order.updated"].includes(eventType) ||
-      !payment || !attempt || !providerPaymentId) {
+    if (
+      !["payment.updated", "order.updated"].includes(eventType) ||
+      !payment || !attempt || !providerPaymentId
+    ) {
       await updateEvent(eventId, "ignored", attempt, providerPaymentId);
       return response({ ignored: true });
     }
-    if (["failed", "cancelled", "expired", "superseded"].includes(
-      attempt.attempt_status,
-    )) {
+    if (
+      ["failed", "cancelled", "expired", "superseded"].includes(
+        attempt.attempt_status,
+      )
+    ) {
       await updateEvent(eventId, "ignored", attempt, providerPaymentId);
       return response({ ignored: true, terminal_attempt: true });
     }
@@ -150,7 +157,7 @@ type SavedAttempt = {
   show_id: string;
   cart_id: string;
   provider: string;
-  provider_attempt_id: string | null;
+  provider_order_id: string | null;
   provider_payment_id: string | null;
   expected_amount_cents: number;
   expected_currency: string;
@@ -160,7 +167,7 @@ type SavedAttempt = {
 };
 
 const attemptColumns =
-  "id,show_id,cart_id,provider,provider_attempt_id,provider_payment_id," +
+  "id,show_id,cart_id,provider,provider_order_id,provider_payment_id," +
   "expected_amount_cents,expected_currency,platform_fee_cents,attempt_status,metadata";
 
 async function findAttempt(
@@ -172,13 +179,15 @@ async function findAttempt(
     const result = await backend.from("show_payment_sessions")
       .select(attemptColumns).eq("provider", "square")
       .eq("provider_payment_id", paymentId).maybeSingle();
-    if (result.error) throw new Error("Unable to locate Square payment attempt.");
+    if (result.error) {
+      throw new Error("Unable to locate Square payment attempt.");
+    }
     if (result.data) return result.data as unknown as SavedAttempt;
   }
   if (orderId) {
     const result = await backend.from("show_payment_sessions")
       .select(attemptColumns).eq("provider", "square")
-      .eq("provider_attempt_id", orderId).maybeSingle();
+      .eq("provider_order_id", orderId).maybeSingle();
     if (result.error) throw new Error("Unable to locate Square order attempt.");
     if (result.data) return result.data as unknown as SavedAttempt;
   }
@@ -214,8 +223,8 @@ async function paymentForOrder(
   attempt: SavedAttempt,
   orderId: string | null,
 ): Promise<Record<string, unknown> | null> {
-  const exactOrderId = orderId ?? attempt.provider_attempt_id;
-  if (!exactOrderId || exactOrderId !== attempt.provider_attempt_id) return null;
+  const exactOrderId = orderId ?? attempt.provider_order_id;
+  if (!exactOrderId || exactOrderId !== attempt.provider_order_id) return null;
   const authorization = await loadSquareAuthorization(
     backend,
     attempt.show_id,
@@ -242,24 +251,30 @@ function validatePayment(
   attempt: SavedAttempt,
 ): void {
   if (attempt.provider !== "square") throw new Error("Provider mismatch.");
-  if (attempt.provider_attempt_id &&
-    text(payment.order_id) !== attempt.provider_attempt_id) {
+  if (
+    !attempt.provider_order_id ||
+    text(payment.order_id) !== attempt.provider_order_id
+  ) {
     throw new Error("Square order does not match the saved payment attempt.");
   }
   const amount = objectOrNull(payment.amount_money);
   if (!amount || Number(amount.amount) !== attempt.expected_amount_cents) {
     throw new Error("Square amount does not match the saved quote.");
   }
-  if (String(amount.currency ?? "").toLowerCase() !==
-    attempt.expected_currency.toLowerCase()) {
+  if (
+    String(amount.currency ?? "").toLowerCase() !==
+      attempt.expected_currency.toLowerCase()
+  ) {
     throw new Error("Square currency does not match the saved quote.");
   }
   const metadata = attempt.metadata ?? {};
   if (metadata.application_fee_sent_to_provider === true) {
     const appFee = objectOrNull(payment.app_fee_money);
-    if (!appFee || Number(appFee.amount) !== attempt.platform_fee_cents ||
+    if (
+      !appFee || Number(appFee.amount) !== attempt.platform_fee_cents ||
       String(appFee.currency ?? "").toLowerCase() !==
-        attempt.expected_currency.toLowerCase()) {
+        attempt.expected_currency.toLowerCase()
+    ) {
       throw new Error("Square application fee does not match the saved quote.");
     }
   }
@@ -273,10 +288,12 @@ async function validateMerchantAndLocation(
     .select("provider_account_id,provider_location_id")
     .eq("show_id", attempt.show_id).eq("provider", "square").maybeSingle();
   if (error || !data) throw new Error("Square account link is missing.");
-  if (String(payment.location_id ?? "") !==
+  if (
+    String(payment.location_id ?? "") !==
       String(data.provider_location_id ?? "") ||
     (payment.merchant_id && String(payment.merchant_id) !==
-      String(data.provider_account_id ?? ""))) {
+        String(data.provider_account_id ?? ""))
+  ) {
     throw new Error("Square merchant or location mismatch.");
   }
 }
@@ -317,15 +334,20 @@ async function updateEvent(
   });
 }
 
-async function validSignature(body: string, signature: string): Promise<boolean> {
+async function validSignature(
+  body: string,
+  signature: string,
+): Promise<boolean> {
   if (!signature) return false;
   const key = Deno.env.get("SQUARE_WEBHOOK_SIGNATURE_KEY")?.trim() ?? "";
   const url = Deno.env.get("SQUARE_WEBHOOK_URL")?.trim() ?? "";
   if (!key || !url) return false;
   let supplied: Uint8Array;
   try {
-    supplied = Uint8Array.from(atob(signature), (character) =>
-      character.charCodeAt(0));
+    supplied = Uint8Array.from(
+      atob(signature),
+      (character) => character.charCodeAt(0),
+    );
   } catch (_) {
     return false;
   }

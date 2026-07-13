@@ -1168,9 +1168,14 @@ class _CartScreenState extends State<CartScreen> {
                     ),
                   ),
                 if (_selectedOnlineProvider == 'square') ...[
-                  const SizedBox(height: 14),
-                  const Text(
-                    'You’ll be redirected to Square to securely enter your payment information.',
+                  const SizedBox(height: 10),
+                Text(
+                  'You’ll be redirected to Square to securely enter your payment information.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: const Color(0xFF162C48),
+                    fontWeight: FontWeight.w500,
+                    height: 1.35,
+                  ),
                   ),
                 ],
               ],

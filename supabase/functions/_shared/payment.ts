@@ -88,20 +88,34 @@ export async function attachProviderHostedCheckout(
     paymentSessionId: string;
     provider: PaymentProvider;
     providerSessionId: string;
-    providerAttemptId: string;
+    providerOrderId: string;
     checkoutUrl: string;
     providerMetadata?: Record<string, unknown>;
   },
 ): Promise<void> {
-  const { error } = await client.rpc("attach_provider_hosted_checkout", {
+  if (
+    !args.providerSessionId.trim() || !args.providerOrderId.trim() ||
+    !args.checkoutUrl.trim()
+  ) {
+    throw new Error("Hosted checkout link, order, and URL are required.");
+  }
+  const { data, error } = await client.rpc("attach_provider_hosted_checkout", {
     p_payment_session_id: args.paymentSessionId,
     p_provider: args.provider,
     p_provider_session_id: args.providerSessionId,
-    p_provider_attempt_id: args.providerAttemptId,
+    p_provider_order_id: args.providerOrderId,
     p_checkout_url: args.checkoutUrl,
     p_provider_metadata: args.providerMetadata ?? {},
   });
   if (error) throw new Error(error.message);
+  const attached = requireObject(data, "Hosted checkout attachment");
+  if (
+    attached.attached !== true ||
+    attached.provider_session_id !== args.providerSessionId ||
+    attached.provider_order_id !== args.providerOrderId
+  ) {
+    throw new Error("Hosted checkout identifiers were not persisted.");
+  }
 }
 
 export async function supersedeProviderCheckout(

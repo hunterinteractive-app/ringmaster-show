@@ -352,6 +352,7 @@ declare
   v_ctx payment_test_context%rowtype;
   v_session uuid := gen_random_uuid();
   v_claim jsonb;
+  v_attach jsonb;
 begin
   select * into v_ctx from payment_test_context;
   insert into public.show_payment_sessions (
@@ -380,7 +381,7 @@ begin
   exception when others then
     if sqlerrm = 'different client key unexpectedly claimed the attempt' then raise; end if;
   end;
-  perform public.attach_provider_hosted_checkout(
+  v_attach := public.attach_provider_hosted_checkout(
     v_session,
     'square',
     'square_link_test',
@@ -394,12 +395,49 @@ begin
   );
   perform pg_temp.assert_true((select
     provider_session_id = 'square_link_test'
-    and provider_attempt_id = 'square_order_test'
+    and provider_order_id = 'square_order_test'
+    and provider_attempt_id is null
     and checkout_url = 'https://square.link/u/test'
     and metadata ->> 'application_fee_test_limitation' =
       'square_sandbox_payment_link'
     from public.show_payment_sessions where id = v_session),
     'hosted checkout references were not attached');
+  perform pg_temp.assert_true(
+    v_attach ->> 'provider_order_id' = 'square_order_test',
+    'hosted checkout attachment did not return the Square order ID'
+  );
+  v_attach := public.attach_provider_hosted_checkout(
+    v_session,
+    'square',
+    'square_link_test',
+    'square_order_test',
+    'https://square.link/u/test',
+    '{}'::jsonb
+  );
+  perform pg_temp.assert_true((select
+    provider_session_id = 'square_link_test'
+    and provider_order_id = 'square_order_test'
+    from public.show_payment_sessions where id = v_session),
+    'idempotent hosted checkout attachment changed its identifiers');
+  perform pg_temp.assert_true(
+    v_attach ->> 'provider_order_id' = 'square_order_test',
+    'idempotent hosted checkout attachment returned a different order ID'
+  );
+  begin
+    perform public.attach_provider_hosted_checkout(
+      v_session,
+      'square',
+      'square_link_test',
+      null,
+      'https://square.link/u/test',
+      '{}'::jsonb
+    );
+    raise exception 'hosted checkout unexpectedly accepted a missing order ID';
+  exception when others then
+    if sqlerrm = 'hosted checkout unexpectedly accepted a missing order ID' then
+      raise;
+    end if;
+  end;
   perform public.set_provider_payment_state(
     v_session, 'square', 'square_payment_test', 'PENDING'
   );

@@ -5,10 +5,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class SquareHostedCheckout {
   const SquareHostedCheckout({
     required this.paymentSessionId,
+    required this.providerOrderId,
     required this.checkoutUrl,
   });
 
   final String paymentSessionId;
+  final String providerOrderId;
   final String checkoutUrl;
 }
 
@@ -51,6 +53,7 @@ class SquareCheckoutService {
     }
     return SquareHostedCheckout(
       paymentSessionId: _required(data, 'payment_session_id'),
+      providerOrderId: _required(data, 'provider_order_id'),
       checkoutUrl: _required(data, 'checkout_url'),
     );
   }

@@ -10,9 +10,9 @@ import {
 import { authenticatedUser, serviceClient } from "../_shared/supabase.ts";
 import { sha256 } from "../_shared/token_crypto.ts";
 import {
-  SquareRequestError,
   squareEnvironment,
   squareRequest,
+  SquareRequestError,
 } from "../_shared/square.ts";
 import { loadSquareAuthorization } from "../_shared/square_credentials.ts";
 
@@ -21,7 +21,7 @@ type ActiveAttempt = {
   id: string;
   provider: string;
   provider_session_id: string | null;
-  provider_attempt_id: string | null;
+  provider_order_id: string | null;
   checkout_url: string | null;
   attempt_status: string;
   metadata: Record<string, unknown> | null;
@@ -49,7 +49,9 @@ Deno.serve(async (request: Request) => {
     }
 
     const { data: cart, error: cartError } = await backend.from("entry_carts")
-      .select("show_id,user_id,status,payment_status,active_payment_session_id,selected_payment_timing,selected_payment_provider")
+      .select(
+        "show_id,user_id,status,payment_status,active_payment_session_id,selected_payment_timing,selected_payment_provider",
+      )
       .eq("id", cartId).maybeSingle();
     if (cartError || !cart || cart.user_id !== user.id) {
       throw new Error("You do not have access to this cart.");
@@ -65,19 +67,29 @@ Deno.serve(async (request: Request) => {
     const { data: settings, error: settingsError } = await backend
       .from("show_payment_settings").select("square_enabled")
       .eq("show_id", showId).maybeSingle();
-    if (showError || settingsError || !show ||
+    if (
+      showError || settingsError || !show ||
       !["online_only", "online_or_at_show"].includes(
         String(show.payment_timing_mode),
-      ) || settings?.square_enabled !== true) {
+      ) || settings?.square_enabled !== true
+    ) {
       throw new Error("Square online payment is not enabled for this show.");
     }
-    if (show.entry_close_at && Date.now() > Date.parse(String(show.entry_close_at))) {
+    if (
+      show.entry_close_at &&
+      Date.now() > Date.parse(String(show.entry_close_at))
+    ) {
       throw new Error("This show's entry deadline has passed.");
     }
-    if (cart.selected_payment_timing && cart.selected_payment_timing !== "online") {
+    if (
+      cart.selected_payment_timing && cart.selected_payment_timing !== "online"
+    ) {
       throw new Error("This cart is not set to pay online.");
     }
-    if (cart.selected_payment_provider && cart.selected_payment_provider !== "square") {
+    if (
+      cart.selected_payment_provider &&
+      cart.selected_payment_provider !== "square"
+    ) {
       throw new Error("This cart is assigned to a different payment provider.");
     }
     const authorization = await loadSquareAuthorization(backend, showId);
@@ -88,8 +100,15 @@ Deno.serve(async (request: Request) => {
 
     if (active?.provider === "square" && isUnresolved(active.attempt_status)) {
       const savedHash = String(active.metadata?.client_attempt_key_hash ?? "");
-      if (savedHash === clientKeyHash && active.checkout_url) {
-        return checkoutResponse(active.id, active.checkout_url);
+      if (
+        savedHash === clientKeyHash && active.checkout_url &&
+        active.provider_order_id
+      ) {
+        return checkoutResponse(
+          active.id,
+          active.checkout_url,
+          active.provider_order_id,
+        );
       }
       if (savedHash && savedHash !== clientKeyHash) {
         await retireHostedCheckout(active, authorization.accessToken);
@@ -120,12 +139,24 @@ Deno.serve(async (request: Request) => {
       throw new Error("This payment was already completed.");
     }
     if (attempt.checkout_url) {
-      return checkoutResponse(attempt.payment_session_id, attempt.checkout_url);
+      const reused = await loadActiveAttempt(attempt.payment_session_id);
+      if (!reused?.provider_order_id) {
+        throw new Error(
+          "The existing Square checkout is missing its order ID.",
+        );
+      }
+      return checkoutResponse(
+        attempt.payment_session_id,
+        attempt.checkout_url,
+        reused.provider_order_id,
+      );
     }
 
     const quote = attempt.quote;
-    if (quote.show_id !== showId ||
-      authorization.currency !== quote.currency.toLowerCase()) {
+    if (
+      quote.show_id !== showId ||
+      authorization.currency !== quote.currency.toLowerCase()
+    ) {
       throw new Error("The saved checkout currency does not match Square.");
     }
 
@@ -192,7 +223,7 @@ Deno.serve(async (request: Request) => {
       paymentSessionId: attempt.payment_session_id,
       provider: "square",
       providerSessionId: paymentLinkId,
-      providerAttemptId: orderId,
+      providerOrderId: orderId,
       checkoutUrl,
       providerMetadata: {
         checkout_type: "square_hosted_payment_link",
@@ -203,14 +234,13 @@ Deno.serve(async (request: Request) => {
         application_fee_sent_to_provider: production,
         ...(!production
           ? {
-            application_fee_test_limitation:
-              "square_sandbox_payment_link",
+            application_fee_test_limitation: "square_sandbox_payment_link",
           }
           : {}),
       },
     });
 
-    return checkoutResponse(attempt.payment_session_id, checkoutUrl);
+    return checkoutResponse(attempt.payment_session_id, checkoutUrl, orderId);
   } catch (error) {
     if (attempt && error instanceof SquareRequestError) {
       try {
@@ -234,7 +264,9 @@ Deno.serve(async (request: Request) => {
 
 async function loadActiveAttempt(id: string): Promise<ActiveAttempt | null> {
   const { data, error } = await serviceClient().from("show_payment_sessions")
-    .select("id,provider,provider_session_id,provider_attempt_id,checkout_url,attempt_status,metadata")
+    .select(
+      "id,provider,provider_session_id,provider_order_id,checkout_url,attempt_status,metadata",
+    )
     .eq("id", id).maybeSingle();
   if (error) throw new Error("Unable to load the active payment attempt.");
   return data as ActiveAttempt | null;
@@ -245,14 +277,16 @@ async function retireHostedCheckout(
   accessToken: string,
 ): Promise<void> {
   let deactivated = false;
-  if (active.provider_attempt_id) {
+  if (active.provider_order_id) {
     const orderData = await squareRequest(
-      `/v2/orders/${encodeURIComponent(active.provider_attempt_id)}`,
+      `/v2/orders/${encodeURIComponent(active.provider_order_id)}`,
       accessToken,
     );
     const order = requireObject(orderData.order, "Square order");
-    if (String(order.state ?? "") === "COMPLETED" ||
-      (Array.isArray(order.tenders) && order.tenders.length > 0)) {
+    if (
+      String(order.state ?? "") === "COMPLETED" ||
+      (Array.isArray(order.tenders) && order.tenders.length > 0)
+    ) {
       throw new Error(
         "The previous Square checkout is already processing. Refresh its status before trying again.",
       );
@@ -261,13 +295,17 @@ async function retireHostedCheckout(
   if (active.provider_session_id) {
     try {
       await squareRequest(
-        `/v2/online-checkout/payment-links/${encodeURIComponent(active.provider_session_id)}`,
+        `/v2/online-checkout/payment-links/${
+          encodeURIComponent(active.provider_session_id)
+        }`,
         accessToken,
         { method: "DELETE" },
       );
       deactivated = true;
     } catch (error) {
-      if (!(error instanceof SquareRequestError && error.code === "NOT_FOUND")) {
+      if (
+        !(error instanceof SquareRequestError && error.code === "NOT_FOUND")
+      ) {
         throw error;
       }
       deactivated = true;
@@ -286,7 +324,9 @@ function buildRedirectUrl(args: {
 }): string {
   const base = (Deno.env.get("RINGMASTER_APP_URL") ??
     Deno.env.get("APP_BASE_URL") ?? "").trim().replace(/\/$/, "");
-  if (!base) throw new Error("Missing server configuration: RINGMASTER_APP_URL.");
+  if (!base) {
+    throw new Error("Missing server configuration: RINGMASTER_APP_URL.");
+  }
   const query = new URLSearchParams({
     cart_id: args.cartId,
     payment_session_id: args.paymentSessionId,
@@ -294,10 +334,15 @@ function buildRedirectUrl(args: {
   return `${base}/#/square-payment-return?${query.toString()}`;
 }
 
-function checkoutResponse(paymentSessionId: string, checkoutUrl: string) {
+function checkoutResponse(
+  paymentSessionId: string,
+  checkoutUrl: string,
+  providerOrderId: string,
+) {
   return jsonResponse({
     payment_session_id: paymentSessionId,
     checkout_url: checkoutUrl,
+    provider_order_id: providerOrderId,
     provider: "square",
   });
 }
