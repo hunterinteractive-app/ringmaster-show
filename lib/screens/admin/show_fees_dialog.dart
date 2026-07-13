@@ -2,9 +2,13 @@
 
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:ringmaster_show/services/app_session.dart';
 import 'package:ringmaster_show/services/show_lock_service.dart';
 
+import '../../services/show_payment_configuration_service.dart';
+import '../../services/square_connect_service.dart';
 import '../../services/stripe_connect_service.dart';
 
 class ShowFeesDialog {
@@ -12,11 +16,18 @@ class ShowFeesDialog {
     BuildContext context, {
     required String showId,
     required String showName,
+    String? squareReturnStatus,
+    String? squareReturnMessage,
   }) async {
     await showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => _ShowFeesDialog(showId: showId, showName: showName),
+      builder: (_) => _ShowFeesDialog(
+        showId: showId,
+        showName: showName,
+        squareReturnStatus: squareReturnStatus,
+        squareReturnMessage: squareReturnMessage,
+      ),
     );
   }
 }
@@ -24,8 +35,15 @@ class ShowFeesDialog {
 class _ShowFeesDialog extends StatefulWidget {
   final String showId;
   final String showName;
+  final String? squareReturnStatus;
+  final String? squareReturnMessage;
 
-  const _ShowFeesDialog({required this.showId, required this.showName});
+  const _ShowFeesDialog({
+    required this.showId,
+    required this.showName,
+    this.squareReturnStatus,
+    this.squareReturnMessage,
+  });
 
   @override
   State<_ShowFeesDialog> createState() => _ShowFeesDialogState();
@@ -36,6 +54,9 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
   bool _saving = false;
   bool _connectingStripe = false;
   bool _loadingStripeStatus = false;
+  bool _connectingSquare = false;
+  bool _squareAuthorizationPending = false;
+  bool _loadingSquareStatus = false;
   String? _msg;
 
   bool _discountEnabled = false;
@@ -48,6 +69,18 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
   final _discountRequiredShows = TextEditingController();
 
   String _onlinePaymentFeeMode = 'club_absorbs';
+  String _paymentTimingMode = 'pay_at_show_only';
+  String? _defaultOnlineProvider;
+  final Map<String, bool> _providerEnabled = {
+    'stripe': false,
+    'square': false,
+    'paypal': false,
+  };
+  final Map<String, bool> _providerReady = {
+    'stripe': false,
+    'square': false,
+    'paypal': false,
+  };
   static const String _onlinePaymentFeeDisclosure =
       'This show charges an Online Payment Fee for electronic payments. This fee helps cover payment processing costs, payment provider charges, and online entry services.';
 
@@ -57,11 +90,22 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
 
   List<Map<String, dynamic>> _sections = [];
   Map<String, dynamic>? _stripeStatus;
+  Map<String, dynamic>? _squareStatus;
 
   bool _isLocked = false;
   bool _isFinalized = false;
 
-  bool get _isReadOnly => _isLocked || _isFinalized;
+  bool get _isReadOnly => _isLocked || _isFinalized || AppSession.isSupportMode;
+
+  bool get _onlinePaymentsSelected => _paymentTimingMode != 'pay_at_show_only';
+
+  List<String> get _enabledReadyProviders => _providerEnabled.keys
+      .where(
+        (provider) =>
+            _providerEnabled[provider] == true &&
+            _providerReady[provider] == true,
+      )
+      .toList();
 
   @override
   void initState() {
@@ -130,6 +174,8 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
       _onlinePaymentFeeMode = loadedOnlinePaymentFeeMode == 'pass_to_exhibitor'
           ? 'pass_to_exhibitor'
           : 'club_absorbs';
+
+      await _loadPaymentConfiguration();
 
       final feeRow = await StripeConnectService.supabase
           .from('show_fee_settings')
@@ -207,11 +253,22 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
       }
 
       await _loadStripeStatus(showErrorInBanner: false);
+      await _loadSquareStatus(showErrorInBanner: false);
+      await _loadPaymentConfiguration();
 
       if (!mounted) return;
       setState(() {
         _sections = sections;
         _loading = false;
+        if (widget.squareReturnStatus == 'success') {
+          _msg = 'Square connected and is ready for this show.';
+        } else if (widget.squareReturnStatus == 'location_required') {
+          _msg = 'Square connected. Select a Square location to finish setup.';
+        } else if (widget.squareReturnStatus == 'error') {
+          _msg = widget.squareReturnMessage?.trim().isNotEmpty == true
+              ? 'Square connection failed: ${widget.squareReturnMessage}'
+              : 'Square connection failed. Please try again.';
+        }
       });
     } catch (e) {
       if (!mounted) return;
@@ -219,6 +276,40 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
         _loading = false;
         _msg = 'Load failed: $e';
       });
+    }
+  }
+
+  Future<void> _loadPaymentConfiguration() async {
+    final configuration = await ShowPaymentConfigurationService.load(
+      widget.showId,
+    );
+
+    _paymentTimingMode = switch (configuration.paymentTimingMode) {
+      'online_only' => 'online_only',
+      'online_or_at_show' => 'online_or_at_show',
+      _ => 'pay_at_show_only',
+    };
+    _defaultOnlineProvider = configuration.defaultOnlineProvider;
+
+    for (final provider in _providerEnabled.keys) {
+      _providerEnabled[provider] = false;
+      _providerReady[provider] = false;
+    }
+    for (final provider in configuration.providers) {
+      if (!_providerEnabled.containsKey(provider.provider)) continue;
+      _providerEnabled[provider.provider] = provider.enabled;
+      _providerReady[provider.provider] = provider.ready;
+    }
+
+    _normalizeDefaultOnlineProvider();
+  }
+
+  void _normalizeDefaultOnlineProvider() {
+    final enabledProviders = _enabledReadyProviders;
+    if (enabledProviders.isEmpty) {
+      _defaultOnlineProvider = null;
+    } else if (!enabledProviders.contains(_defaultOnlineProvider)) {
+      _defaultOnlineProvider = enabledProviders.first;
     }
   }
 
@@ -258,9 +349,28 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
   bool _validate() {
     if (_isReadOnly) {
       setState(
-        () => _msg = _isFinalized
+        () => _msg = AppSession.isSupportMode
+            ? 'Support mode is read-only. Fees and payment settings cannot be changed.'
+            : _isFinalized
             ? 'This show has been finalized. Fees and payment settings can no longer be changed.'
             : 'This show is locked. Fees and payment settings can no longer be changed.',
+      );
+      return false;
+    }
+
+    if (_onlinePaymentsSelected && _enabledReadyProviders.isEmpty) {
+      setState(
+        () => _msg =
+            'Enable at least one ready online payment processor for this payment timing option.',
+      );
+      return false;
+    }
+
+    if (_onlinePaymentsSelected &&
+        !_enabledReadyProviders.contains(_defaultOnlineProvider)) {
+      setState(
+        () => _msg =
+            'Select an enabled, ready processor as the default online provider.',
       );
       return false;
     }
@@ -385,7 +495,9 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
   Future<void> _connectStripe() async {
     if (_isReadOnly) {
       setState(() {
-        _msg = _isFinalized
+        _msg = AppSession.isSupportMode
+            ? 'Support mode is read-only. Stripe setup cannot be changed.'
+            : _isFinalized
             ? 'This show has been finalized. Stripe setup can no longer be changed.'
             : 'This show is locked. Stripe setup can no longer be changed.';
       });
@@ -411,6 +523,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
 
       if (!mounted) return;
       setState(() {
+        _squareAuthorizationPending = true;
         _msg =
             'Stripe onboarding opened. After completing it, come back and click Refresh Stripe Status.';
       });
@@ -489,7 +602,9 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
   Future<void> _refreshStripeStatus() async {
     if (_isReadOnly) {
       setState(() {
-        _msg = _isFinalized
+        _msg = AppSession.isSupportMode
+            ? 'Support mode is read-only. Stripe status cannot be refreshed.'
+            : _isFinalized
             ? 'This show has been finalized. Stripe status is view-only.'
             : 'This show is locked. Stripe status is view-only.';
       });
@@ -505,6 +620,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
     try {
       await StripeConnectService.refreshAccountStatus(widget.showId);
       await _loadStripeStatus(showErrorInBanner: true);
+      await _loadPaymentConfiguration();
 
       if (!mounted) return;
       setState(() {
@@ -519,6 +635,206 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
     }
   }
 
+  Future<void> _connectSquare() async {
+    if (_isReadOnly) return;
+    setState(() {
+      _connectingSquare = true;
+      _msg = null;
+    });
+    try {
+      final url = await SquareConnectService.startConnection(widget.showId);
+      final launched = await launchUrl(
+        Uri.parse(url),
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched) throw Exception('Could not launch Square authorization.');
+      if (!mounted) return;
+      setState(() {
+        _msg =
+            'Square authorization opened. Complete it in the new window, then return here and refresh status.';
+      });
+    } catch (error) {
+      if (!mounted) return;
+      final message = 'Square connection failed: ${_friendlyError(error)}';
+      setState(() => _msg = message);
+      _showErrorSnack(message);
+    } finally {
+      if (mounted) setState(() => _connectingSquare = false);
+    }
+  }
+
+  Future<bool> _loadSquareStatus({bool showErrorInBanner = true}) async {
+    if (mounted) setState(() => _loadingSquareStatus = true);
+    try {
+      final status = await SquareConnectService.getStatus(widget.showId);
+      if (!mounted) return false;
+      setState(() {
+        _squareStatus = status;
+        _loadingSquareStatus = false;
+        _squareAuthorizationPending = false;
+      });
+      return true;
+    } catch (error) {
+      if (!mounted) return false;
+      setState(() {
+        _loadingSquareStatus = false;
+        if (showErrorInBanner) {
+          _msg = 'Square status refresh failed: ${_friendlyError(error)}';
+        }
+      });
+      return false;
+    }
+  }
+
+  Future<void> _refreshSquareStatus() async {
+    if (_isReadOnly) return;
+    setState(() {
+      _loadingSquareStatus = true;
+      _msg = null;
+    });
+    final loaded = await _loadSquareStatus(showErrorInBanner: true);
+    if (!loaded) return;
+    try {
+      await _loadPaymentConfiguration();
+      if (!mounted) return;
+      final reconnectRequired = _squareStatus?['reconnect_required'] == true;
+      setState(
+        () => _msg = reconnectRequired
+            ? 'Square authorization needs to be reconnected.'
+            : 'Square status refreshed.',
+      );
+    } catch (error) {
+      if (!mounted) return;
+      final message =
+          'Checkout options refresh failed: ${_friendlyError(error)}';
+      setState(() => _msg = message);
+      _showErrorSnack(message);
+    }
+  }
+
+  Future<void> _selectSquareLocation() async {
+    final rawLocations = _squareStatus?['available_locations'];
+    final locations = rawLocations is List
+        ? rawLocations
+              .whereType<Map>()
+              .map(
+                (location) => location.map(
+                  (key, value) => MapEntry(key.toString(), value),
+                ),
+              )
+              .toList()
+        : <Map<String, dynamic>>[];
+    if (locations.isEmpty || _isReadOnly) return;
+
+    final locationId = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Select Square Location'),
+        content: SizedBox(
+          width: 480,
+          child: RadioGroup<String>(
+            groupValue: (_squareStatus?['selected_location_id'] ?? '')
+                .toString(),
+            onChanged: (value) {
+              if (value != null) Navigator.pop(dialogContext, value);
+            },
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: locations
+                  .map(
+                    (location) => RadioListTile<String>(
+                      value: (location['id'] ?? '').toString(),
+                      title: Text(
+                        (location['name'] ?? 'Square location').toString(),
+                      ),
+                      subtitle: (location['address'] ?? '').toString().isEmpty
+                          ? null
+                          : Text(location['address'].toString()),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+    if (locationId == null || locationId.isEmpty) return;
+
+    setState(() => _loadingSquareStatus = true);
+    try {
+      await ShowLockService.assertShowUnlocked(widget.showId);
+      await SquareConnectService.selectLocation(
+        showId: widget.showId,
+        locationId: locationId,
+      );
+      await _loadSquareStatus(showErrorInBanner: true);
+      await _loadPaymentConfiguration();
+      if (!mounted) return;
+      setState(() => _msg = 'Square location saved. Square is ready.');
+    } catch (error) {
+      if (!mounted) return;
+      final message =
+          'Square location could not be saved: ${_friendlyError(error)}';
+      setState(() {
+        _loadingSquareStatus = false;
+        _msg = message;
+      });
+      _showErrorSnack(message);
+    }
+  }
+
+  Future<void> _disconnectSquare() async {
+    if (_isReadOnly) return;
+    final confirmed =
+        await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Disconnect Square?'),
+            content: const Text(
+              'Square will be disabled for this show and its stored authorization will be invalidated. Stripe and PayPal are not affected.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Disconnect'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!confirmed) return;
+
+    setState(() {
+      _connectingSquare = true;
+      _msg = null;
+    });
+    try {
+      await ShowLockService.assertShowUnlocked(widget.showId);
+      await SquareConnectService.disconnect(widget.showId);
+      await _loadSquareStatus(showErrorInBanner: false);
+      await _loadPaymentConfiguration();
+      if (!mounted) return;
+      setState(() => _msg = 'Square disconnected.');
+    } catch (error) {
+      if (!mounted) return;
+      final message = 'Square disconnect failed: ${_friendlyError(error)}';
+      setState(() => _msg = message);
+      _showErrorSnack(message);
+    } finally {
+      if (mounted) setState(() => _connectingSquare = false);
+    }
+  }
+
   Future<void> _save() async {
     if (!_validate()) return;
 
@@ -529,13 +845,22 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
 
     try {
       await ShowLockService.assertShowUnlocked(widget.showId);
+      await ShowPaymentConfigurationService.save(
+        showId: widget.showId,
+        paymentTimingMode: _paymentTimingMode,
+        stripeEnabled: _providerEnabled['stripe'] == true,
+        squareEnabled: _providerEnabled['square'] == true,
+        paypalEnabled: _providerEnabled['paypal'] == true,
+        defaultOnlineProvider: _onlinePaymentsSelected
+            ? _defaultOnlineProvider
+            : null,
+      );
       await StripeConnectService.supabase
           .from('shows')
           .update({
             'online_payment_fee_mode': _onlinePaymentFeeMode,
             'online_payment_fee_label': 'Online Payment Fee',
             'online_payment_fee_description': _onlinePaymentFeeDisclosure,
-            'online_payment_provider': 'stripe',
             'online_payment_fee_updated_at': DateTime.now()
                 .toUtc()
                 .toIso8601String(),
@@ -592,11 +917,36 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
       });
     } catch (e) {
       if (!mounted) return;
+      final message = 'Save failed: ${_friendlyError(e)}';
       setState(() {
         _saving = false;
-        _msg = 'Save failed: $e';
+        _msg = message;
       });
+      _showErrorSnack(message);
     }
+  }
+
+  String _friendlyError(Object error) {
+    if (error is PostgrestException) {
+      final details = (error.details ?? '').toString().trim();
+      if (details.isNotEmpty && details != error.message.trim()) {
+        return '${error.message.trim()} $details';
+      }
+      return error.message.trim();
+    }
+
+    return error
+        .toString()
+        .replaceFirst(RegExp(r'^(Exception|PostgrestException):\s*'), '')
+        .trim();
+  }
+
+  void _showErrorSnack(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: Colors.red.shade700),
+      );
   }
 
   Widget _section(
@@ -1154,6 +1504,336 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
     ], icon: Icons.receipt_long_outlined);
   }
 
+  Widget _buildPaymentTimingSection() {
+    final disabled = _saving || _isReadOnly;
+
+    return _section('Payment Timing', [
+      Text(
+        'Choose when exhibitors can pay for their entries.',
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
+      const SizedBox(height: 8),
+      RadioGroup<String>(
+        groupValue: _paymentTimingMode,
+        onChanged: (value) {
+          if (disabled || value == null) return;
+          setState(() => _paymentTimingMode = value);
+        },
+        child: Opacity(
+          opacity: disabled ? .65 : 1,
+          child: const Column(
+            children: [
+              RadioListTile<String>(
+                contentPadding: EdgeInsets.zero,
+                value: 'online_only',
+                title: Text(
+                  'Pay online only',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+              RadioListTile<String>(
+                contentPadding: EdgeInsets.zero,
+                value: 'pay_at_show_only',
+                title: Text(
+                  'Pay at show only',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+              RadioListTile<String>(
+                contentPadding: EdgeInsets.zero,
+                value: 'online_or_at_show',
+                title: Text(
+                  'Allow exhibitors to choose online or at show',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ], icon: Icons.schedule_outlined);
+  }
+
+  void _setProviderEnabled(String provider, bool enabled) {
+    setState(() {
+      _providerEnabled[provider] = enabled;
+      _normalizeDefaultOnlineProvider();
+    });
+  }
+
+  Widget _buildProviderEnableSwitch({
+    required String provider,
+    required String label,
+    bool onboardingAvailable = true,
+  }) {
+    final ready = _providerReady[provider] == true;
+    final enabled = _providerEnabled[provider] == true;
+    final canChange =
+        onboardingAvailable &&
+        _onlinePaymentsSelected &&
+        ready &&
+        !_saving &&
+        !_isReadOnly;
+
+    return SwitchListTile(
+      contentPadding: EdgeInsets.zero,
+      title: Text(
+        'Enable $label for this show',
+        style: const TextStyle(fontWeight: FontWeight.w600),
+      ),
+      subtitle: Text(
+        !_onlinePaymentsSelected
+            ? 'Choose an online payment timing option to enable processors.'
+            : !ready
+            ? '$label must be connected and ready before it can be enabled.'
+            : 'Exhibitors may use $label for online checkout.',
+      ),
+      value: enabled,
+      onChanged: canChange
+          ? (value) => _setProviderEnabled(provider, value)
+          : null,
+    );
+  }
+
+  Widget _buildPlaceholderProviderCard({
+    required String title,
+    required String status,
+    required String description,
+    required String provider,
+    required String actionLabel,
+    bool onboardingAvailable = true,
+  }) {
+    final ready = _providerReady[provider] == true;
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 16),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.navy.withValues(alpha: .035),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.navy.withValues(alpha: .12)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+                ),
+              ),
+              _buildStripeStatusPill(
+                text: status,
+                color: ready ? Colors.green : Colors.grey,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(description),
+          const SizedBox(height: 10),
+          _buildProviderEnableSwitch(
+            provider: provider,
+            label: title,
+            onboardingAvailable: onboardingAvailable,
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: null,
+              icon: const Icon(Icons.link_outlined),
+              label: Text(actionLabel),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSquareCard() {
+    final status = (_squareStatus?['status'] ?? 'not_connected').toString();
+    final connected = _squareStatus?['connected'] == true;
+    final ready = _squareStatus?['ready'] == true;
+    final locationRequired = status == 'location_required';
+    final reconnectRequired =
+        status == 'reconnect_required' || status == 'authorization_expired';
+    final statusLabel = (_connectingSquare || _squareAuthorizationPending)
+        ? 'Connecting'
+        : switch (status) {
+            'ready' => 'Ready',
+            'location_required' => 'Location selection required',
+            'authorization_expired' => 'Authorization expired',
+            'reconnect_required' => 'Reconnect required',
+            _ => 'Not connected',
+          };
+    final statusColor = ready
+        ? Colors.green
+        : reconnectRequired
+        ? Colors.red
+        : locationRequired
+        ? Colors.orange
+        : Colors.grey;
+    final merchantName = (_squareStatus?['merchant_name'] ?? '').toString();
+    final merchantId = (_squareStatus?['merchant_id'] ?? '').toString();
+    final locationName = (_squareStatus?['selected_location_name'] ?? '')
+        .toString();
+    final locationId = (_squareStatus?['selected_location_id'] ?? '')
+        .toString();
+    final busy = _saving || _connectingSquare || _loadingSquareStatus;
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 16),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.navy.withValues(alpha: .035),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.navy.withValues(alpha: .12)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Square',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+                ),
+              ),
+              _buildStripeStatusPill(text: statusLabel, color: statusColor),
+            ],
+          ),
+          if (_loadingSquareStatus) ...[
+            const SizedBox(height: 10),
+            const LinearProgressIndicator(),
+          ] else ...[
+            const SizedBox(height: 10),
+            Text(
+              connected
+                  ? 'Square merchant authorization is connected to this show.'
+                  : 'Connect the club’s Square merchant account to accept Square payments in a future checkout release.',
+            ),
+            if (connected) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                children: [
+                  _buildStripeStatusRow(
+                    'Merchant',
+                    merchantName.isNotEmpty ? merchantName : merchantId,
+                  ),
+                  _buildStripeStatusRow(
+                    'Location',
+                    locationName.isNotEmpty ? locationName : locationId,
+                  ),
+                ],
+              ),
+            ],
+          ],
+          _buildProviderEnableSwitch(provider: 'square', label: 'Square'),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              if (!connected || reconnectRequired)
+                FilledButton.icon(
+                  onPressed: (busy || _isReadOnly) ? null : _connectSquare,
+                  icon: const Icon(Icons.link_outlined),
+                  label: Text(
+                    reconnectRequired ? 'Reconnect Square' : 'Connect Square',
+                  ),
+                ),
+              if (locationRequired)
+                FilledButton.icon(
+                  onPressed: (busy || _isReadOnly)
+                      ? null
+                      : _selectSquareLocation,
+                  icon: const Icon(Icons.store_outlined),
+                  label: const Text('Select Location'),
+                ),
+              if (connected)
+                OutlinedButton.icon(
+                  onPressed: (busy || _isReadOnly)
+                      ? null
+                      : _refreshSquareStatus,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Refresh Status'),
+                ),
+              if (connected)
+                TextButton.icon(
+                  onPressed: (busy || _isReadOnly) ? null : _disconnectSquare,
+                  icon: const Icon(Icons.link_off_outlined),
+                  label: const Text('Disconnect'),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDefaultProviderControl() {
+    final enabledProviders = _enabledReadyProviders;
+    if (!_onlinePaymentsSelected || enabledProviders.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    if (enabledProviders.length == 1) {
+      return Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(top: 16),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.navy.withValues(alpha: .05),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          'Default online provider: ${_providerLabel(enabledProviders.first)}',
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: DropdownButtonFormField<String>(
+        initialValue: enabledProviders.contains(_defaultOnlineProvider)
+            ? _defaultOnlineProvider
+            : enabledProviders.first,
+        decoration: const InputDecoration(
+          labelText: 'Default online provider',
+          helperText:
+              'Used when checkout needs to choose a processor automatically.',
+          border: OutlineInputBorder(),
+        ),
+        items: enabledProviders
+            .map(
+              (provider) => DropdownMenuItem(
+                value: provider,
+                child: Text(_providerLabel(provider)),
+              ),
+            )
+            .toList(),
+        onChanged: (_saving || _isReadOnly)
+            ? null
+            : (value) => setState(() => _defaultOnlineProvider = value),
+      ),
+    );
+  }
+
+  String _providerLabel(String provider) => switch (provider) {
+    'stripe' => 'Stripe',
+    'square' => 'Square',
+    'paypal' => 'PayPal',
+    _ => provider,
+  };
+
   Widget _buildStripeSection() {
     final status = (_stripeStatus?['status'] ?? 'not_connected').toString();
     final color = _statusColor(status);
@@ -1182,7 +1862,19 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
     final isReady = status == 'ready';
     final needsSetup = connected && !isReady;
 
-    return _section('Online Payments', [
+    return _section('Online Payment Processors', [
+      Text(
+        'Connect processors and choose which ones exhibitors may use for this show.',
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
+      const SizedBox(height: 14),
+      Text(
+        'Stripe',
+        style: Theme.of(
+          context,
+        ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+      ),
+      const SizedBox(height: 8),
       Container(
         width: double.infinity,
         padding: const EdgeInsets.all(12),
@@ -1261,6 +1953,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
           ),
         ],
       ],
+      _buildProviderEnableSwitch(provider: 'stripe', label: 'Stripe'),
       const SizedBox(height: 14),
       LayoutBuilder(
         builder: (context, constraints) {
@@ -1320,6 +2013,17 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
           );
         },
       ),
+      _buildSquareCard(),
+      _buildPlaceholderProviderCard(
+        title: 'PayPal',
+        status: 'Coming soon',
+        description:
+            'PayPal onboarding is waiting for platform approval and cannot be enabled yet.',
+        provider: 'paypal',
+        actionLabel: 'Platform approval pending',
+        onboardingAvailable: false,
+      ),
+      _buildDefaultProviderControl(),
     ], icon: Icons.payments_outlined);
   }
 
@@ -1364,7 +2068,8 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
                     ),
                   ),
                   IconButton(
-                    onPressed: (_saving || _connectingStripe)
+                    onPressed:
+                        (_saving || _connectingStripe || _connectingSquare)
                         ? null
                         : () => Navigator.pop(context),
                     icon: const Icon(Icons.close, color: Colors.white),
@@ -1399,7 +2104,9 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
                                     ),
                                   ),
                                   child: Text(
-                                    _isFinalized
+                                    AppSession.isSupportMode
+                                        ? 'Support mode is read-only. Fees and payment settings cannot be changed.'
+                                        : _isFinalized
                                         ? 'This show has been finalized. Fees and payment settings are view-only.'
                                         : 'This show is locked. Fees and payment settings are view-only.',
                                     style: const TextStyle(
@@ -1440,6 +2147,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
                                     children: [
                                       _buildSectionFeesSection(),
                                       _buildDiscountSection(),
+                                      _buildPaymentTimingSection(),
                                       _buildOnlinePaymentFeeSection(),
                                       _buildStripeSection(),
                                     ],
@@ -1451,7 +2159,10 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
                                 children: [
                                   Expanded(
                                     child: OutlinedButton(
-                                      onPressed: (_saving || _connectingStripe)
+                                      onPressed:
+                                          (_saving ||
+                                              _connectingStripe ||
+                                              _connectingSquare)
                                           ? null
                                           : () => Navigator.pop(context),
                                       child: const Text('Close'),
@@ -1472,7 +2183,8 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
                                       onPressed:
                                           (_saving ||
                                               _isReadOnly ||
-                                              _connectingStripe)
+                                              _connectingStripe ||
+                                              _connectingSquare)
                                           ? null
                                           : _save,
                                       icon: const Icon(Icons.save_outlined),

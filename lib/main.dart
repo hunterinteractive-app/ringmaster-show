@@ -1,4 +1,4 @@
-// lib/main.dart 
+// lib/main.dart
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -8,6 +8,7 @@ import 'package:ringmaster_show/services/help_report_service.dart';
 
 import 'package:ringmaster_show/screens/admin/judging/mobile/qr_results_entry_screen.dart';
 import 'package:ringmaster_show/screens/admin/judging/mobile/table_qr_queue_screen.dart';
+import 'package:ringmaster_show/screens/admin/square_connect_return_screen.dart';
 
 import 'screens/login_screen.dart';
 import 'screens/show_list_screen.dart';
@@ -49,7 +50,8 @@ Uri? _qrUriFromBrowser() {
   }
 
   final path = Uri.base.path.trim();
-  if (path.endsWith('/qr-results-entry') || path.endsWith('/qr-table-results')) {
+  if (path.endsWith('/qr-results-entry') ||
+      path.endsWith('/qr-table-results')) {
     return Uri.base;
   }
 
@@ -68,13 +70,21 @@ bool _demoModeFromBrowser() {
   return path.endsWith('/demo');
 }
 
+Uri? _squareConnectUriFromBrowser() {
+  final fragment = Uri.base.fragment.trim();
+  if (fragment.isNotEmpty) {
+    final uri = Uri.parse(fragment);
+    if (uri.path == '/square-connect') return uri;
+  }
+  return Uri.base.path.endsWith('/square-connect') ? Uri.base : null;
+}
+
 Widget _qrScreenFromUri(Uri uri) {
   return QrResultsEntryScreen(
     showId: uri.queryParameters['showId'] ?? '',
     sectionId: uri.queryParameters['sectionId'] ?? '',
-    breedId: uri.queryParameters['breedId'] ??
-        uri.queryParameters['breed'] ??
-        '',
+    breedId:
+        uri.queryParameters['breedId'] ?? uri.queryParameters['breed'] ?? '',
     token: uri.queryParameters['token'] ?? '',
     varietyKey: uri.queryParameters['varietyKey'],
     groupKey: uri.queryParameters['groupKey'],
@@ -85,7 +95,8 @@ Widget _qrScreenFromUri(Uri uri) {
 Widget _tableQrScreenFromUri(Uri uri) {
   return TableQrQueueScreen(
     showId: uri.queryParameters['showId'] ?? '',
-    tableNumber: uri.queryParameters['table'] ??
+    tableNumber:
+        uri.queryParameters['table'] ??
         uri.queryParameters['tableNumber'] ??
         '',
     token: uri.queryParameters['token'] ?? '',
@@ -118,14 +129,16 @@ class MyApp extends StatelessWidget {
           }
 
           if (uri.path == '/qr-results-entry') {
-            return MaterialPageRoute(
-              builder: (_) => _qrScreenFromUri(uri),
-            );
+            return MaterialPageRoute(builder: (_) => _qrScreenFromUri(uri));
           }
 
           if (uri.path == '/demo') {
+            return MaterialPageRoute(builder: (_) => const DemoLoginScreen());
+          }
+
+          if (uri.path == '/square-connect') {
             return MaterialPageRoute(
-              builder: (_) => const DemoLoginScreen(),
+              builder: (_) => SquareConnectReturnScreen(uri: uri),
             );
           }
 
@@ -240,6 +253,7 @@ class _RootState extends State<Root> {
     final qrUri = initialQrUri ?? _qrUriFromBrowser();
     final session = supabase.auth.currentSession;
     final demoMode = initialDemoMode || _demoModeFromBrowser();
+    final squareConnectUri = _squareConnectUriFromBrowser();
 
     if (qrUri != null) {
       if (qrUri.path == '/qr-table-results') {
@@ -254,10 +268,12 @@ class _RootState extends State<Root> {
 
     if (session == null) return const LoginScreen();
 
+    if (squareConnectUri != null) {
+      return SquareConnectReturnScreen(uri: squareConnectUri);
+    }
+
     if (_loading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     if (_msg != null) {
@@ -270,10 +286,7 @@ class _RootState extends State<Root> {
               children: [
                 Text(_msg!, textAlign: TextAlign.center),
                 const SizedBox(height: 12),
-                FilledButton(
-                  onPressed: _refresh,
-                  child: const Text('Retry'),
-                ),
+                FilledButton(onPressed: _refresh, child: const Text('Retry')),
               ],
             ),
           ),
