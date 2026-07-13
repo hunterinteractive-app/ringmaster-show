@@ -98,6 +98,10 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   List<_DuplicatePlacementGroupItem> _duplicatePlacementGroupItems = [];
   bool _duplicatePlacementsLoaded = false;
 
+  bool _loadingDuplicateFinalAwards = false;
+  List<_DuplicateFinalAwardItem> _duplicateFinalAwardItems = [];
+  bool _duplicateFinalAwardsLoaded = false;
+
   List<_CloseoutSectionSummary> _closeoutSections = [];
   List<_CloseoutScope> _closeoutScopes = [];
   _CloseoutScope? _selectedCloseoutScope;
@@ -1556,6 +1560,31 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     }
   }
 
+  Future<List<Map<String, dynamic>>> _loadAllResultsEntryRows() async {
+    const pageSize = 1000;
+    final rows = <Map<String, dynamic>>[];
+    var from = 0;
+    while (true) {
+      final response = await supabase
+          .rpc(
+            'report_results_entry_rows',
+            params: {
+              'p_show_id': widget.showId,
+              'p_section_id': null,
+              'p_show_letter': null,
+            },
+          )
+          .range(from, from + pageSize - 1);
+      final page = (response as List)
+          .map((raw) => Map<String, dynamic>.from(raw as Map))
+          .toList();
+      rows.addAll(page);
+      if (page.length < pageSize) break;
+      from += pageSize;
+    }
+    return rows;
+  }
+
   Future<void> _loadMissingJudges() async {
     if (_loadingMissingJudges) return;
 
@@ -1564,72 +1593,82 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     });
 
     try {
-      final rows = await supabase.rpc(
-        'report_results_entry_rows',
-        params: {
-          'p_show_id': widget.showId,
-          'p_section_id': null,
-          'p_show_letter': null,
-        },
-      );
+      final rows = await _loadAllResultsEntryRows();
 
-      final items = <_MissingJudgeItem>[];
+      final itemsByEntryId = <String, _MissingJudgeItem>{};
 
-      for (final raw in (rows as List)) {
-        final row = Map<String, dynamic>.from(raw as Map);
+      for (final row in rows) {
+        final entryId = (row['entry_id'] ?? row['id'] ?? '').toString().trim();
+        if (entryId.isEmpty) continue;
 
+        // Results Entry displays and saves the hydrated result-row judge. Do
+        // not use entries.judged_by_show_judge_id here: legacy/result records
+        // can have a populated result judge while that entry column is null.
+        final judgeId = (row['judged_by_show_judge_id'] ?? '')
+            .toString()
+            .trim();
+        if (judgeId.isNotEmpty) continue;
+
+        // Scratched entries are complete without a judge in Results Entry.
         final scratchedAt = (row['scratched_at'] ?? '').toString().trim();
-        final isShown = row['is_shown'] != false;
-        final isDisqualified = row['is_disqualified'] == true;
         final status = (row['result_status'] ?? row['status'] ?? '')
             .toString()
             .trim()
             .toLowerCase();
-        final dqReason = (row['disqualified_reason'] ?? '')
-            .toString()
-            .trim()
-            .toLowerCase();
-        final combinedStatus = '$status $dqReason';
-        final excludedStatus =
-            combinedStatus.contains('no show') ||
-            combinedStatus.contains('scratch') ||
-            combinedStatus.contains('disqual') ||
-            combinedStatus.contains('wrong sex') ||
-            combinedStatus.contains('wrong variety') ||
-            combinedStatus.contains('wrong class') ||
-            combinedStatus.contains('overweight') ||
-            combinedStatus.contains('unworthy');
-        final judgeId = (row['judged_by_show_judge_id'] ?? '')
-            .toString()
-            .trim();
+        if (scratchedAt.isNotEmpty || status == 'scratched') continue;
 
-        final isEligible =
-            scratchedAt.isEmpty &&
-            isShown &&
-            !isDisqualified &&
-            !excludedStatus;
-
-        if (!isEligible) continue;
-        if (judgeId.isNotEmpty) continue;
-
-        items.add(
-          _MissingJudgeItem(
-            entryId: (row['entry_id'] ?? '').toString(),
-            sectionLabel: (row['section_label'] ?? 'Section').toString(),
-            breedName: (row['breed_name'] ?? '').toString(),
-            groupName: null,
-            varietyName: (row['variety_name'] ?? '').toString(),
-            className: (row['class_name'] ?? '').toString(),
-            sex: (row['sex'] ?? '').toString(),
-            tattoo: (row['tattoo'] ?? '').toString(),
-            exhibitorLabel: (row['exhibitor_label'] ?? '').toString(),
-          ),
+        itemsByEntryId[entryId] = _MissingJudgeItem(
+          entryId: entryId,
+          sectionLabel: (row['section_label'] ?? 'Section').toString(),
+          breedName: (row['breed'] ?? row['breed_name'] ?? '').toString(),
+          groupName: (row['group_name'] ?? '').toString().trim().isEmpty
+              ? null
+              : (row['group_name'] ?? '').toString(),
+          varietyName: (row['variety'] ?? row['variety_name'] ?? '').toString(),
+          className: (row['class_name'] ?? '').toString(),
+          sex: (row['sex'] ?? '').toString(),
+          tattoo: (row['tattoo'] ?? '').toString(),
+          exhibitorLabel: (row['exhibitor_label'] ?? '').toString(),
         );
       }
+
+      final items = itemsByEntryId.values.toList()
+        ..sort((a, b) {
+          final section = a.sectionLabel.compareTo(b.sectionLabel);
+          if (section != 0) return section;
+          final breed = a.breedName.compareTo(b.breedName);
+          if (breed != 0) return breed;
+          return a.tattoo.compareTo(b.tattoo);
+        });
 
       setState(() {
         _missingJudgeItems = items;
         _missingJudgesLoaded = true;
+        if (_dashboard != null) {
+          final current = _dashboard!.resultsReadiness;
+          final missingJudgeCount = items.length;
+          final corrected = ResultsReadinessDto(
+            ready:
+                current.missingPlacementCount == 0 &&
+                missingJudgeCount == 0 &&
+                current.duplicatePlacementGroupCount == 0 &&
+                current.missingFinalAwardCount == 0 &&
+                current.duplicateFinalAwardCount == 0,
+            missingPlacementCount: current.missingPlacementCount,
+            missingJudgeCount: missingJudgeCount,
+            duplicatePlacementGroupCount: current.duplicatePlacementGroupCount,
+            missingFinalAwardCount: current.missingFinalAwardCount,
+            duplicateFinalAwardCount: current.duplicateFinalAwardCount,
+          );
+          _dashboard = CloseoutDashboard(
+            dashboard: _dashboard!.dashboard,
+            resultsReadiness: corrected,
+            latestFinalize: _dashboard!.latestFinalize,
+            reports: _dashboard!.reports,
+            deliveries: _dashboard!.deliveries,
+            latestArchive: _dashboard!.latestArchive,
+          );
+        }
       });
     } finally {
       setState(() {
@@ -1861,6 +1900,154 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     }
   }
 
+  Future<void> _loadDuplicateFinalAwards() async {
+    if (_loadingDuplicateFinalAwards) return;
+    setState(() => _loadingDuplicateFinalAwards = true);
+
+    try {
+      final resultRows = await _loadAllResultsEntryRows();
+      final resultByEntryId = <String, Map<String, dynamic>>{};
+      for (final row in resultRows) {
+        final id = (row['entry_id'] ?? row['id'] ?? '').toString().trim();
+        if (id.isNotEmpty) resultByEntryId[id] = row;
+      }
+
+      const pageSize = 1000;
+      final awardRows = <Map<String, dynamic>>[];
+      var from = 0;
+      while (true) {
+        final response = await supabase
+            .from('entry_awards')
+            .select('entry_id,award_code')
+            .eq('show_id', widget.showId)
+            .range(from, from + pageSize - 1);
+        final page = (response as List)
+            .map((raw) => Map<String, dynamic>.from(raw as Map))
+            .toList();
+        awardRows.addAll(page);
+        if (page.length < pageSize) break;
+        from += pageSize;
+      }
+
+      String canonicalFinalAward(dynamic raw) {
+        final value = (raw ?? '').toString().trim().toUpperCase().replaceAll(
+          RegExp(r'[^A-Z0-9]'),
+          '',
+        );
+        return switch (value) {
+          'BESTINSHOW' || 'BIS' => 'BIS',
+          'RESERVEINSHOW' || 'RESERVEBESTINSHOW' || 'RIS' => 'RIS',
+          '1STRIS' || 'FIRSTRIS' || '1RIS' => '1RIS',
+          '2NDRIS' || 'SECONDRIS' || '2RIS' => '2RIS',
+          'HONORABLEMENTION' || 'HM' => 'HM',
+          'BEST4CLASS' || 'B4C' => 'Best 4-Class',
+          'BEST6CLASS' || 'B6C' => 'Best 6-Class',
+          _ => '',
+        };
+      }
+
+      String speciesFor(Map<String, dynamic> row) {
+        final explicit = (row['species'] ?? '').toString().trim().toLowerCase();
+        if (explicit == 'rabbit' || explicit == 'rabbits') return 'Rabbit';
+        if (explicit == 'cavy' || explicit == 'cavies') return 'Cavy';
+        final sex = (row['sex'] ?? '').toString().trim().toLowerCase();
+        if (sex.contains('boar') || sex.contains('sow')) return 'Cavy';
+        return 'Rabbit';
+      }
+
+      String sectionFor(Map<String, dynamic> row) {
+        final label = (row['section_label'] ?? '').toString().trim();
+        if (label.isNotEmpty) return label;
+        final kind = (row['section_kind'] ?? '').toString().trim();
+        final letter = (row['show_letter'] ?? '').toString().trim();
+        return [kind, letter].where((value) => value.isNotEmpty).join(' ');
+      }
+
+      final grouped = <String, Map<String, _DuplicateFinalAwardWinner>>{};
+      for (final raw in awardRows) {
+        final entryId = (raw['entry_id'] ?? '').toString().trim();
+        final awardCode = canonicalFinalAward(raw['award_code']);
+        final row = resultByEntryId[entryId];
+        if (entryId.isEmpty || awardCode.isEmpty || row == null) continue;
+
+        final sectionId = (row['section_id'] ?? row['show_letter'] ?? '')
+            .toString()
+            .trim()
+            .toLowerCase();
+        final species = speciesFor(row);
+        final key = '$sectionId|${species.toLowerCase()}|$awardCode';
+        grouped.putIfAbsent(key, () => {});
+        grouped[key]![entryId] = _DuplicateFinalAwardWinner(
+          entryId: entryId,
+          tattoo: (row['tattoo'] ?? '').toString().trim(),
+          animalName: (row['animal_name'] ?? '').toString().trim(),
+          breedName: (row['breed'] ?? row['breed_name'] ?? '')
+              .toString()
+              .trim(),
+          varietyName: (row['variety'] ?? row['variety_name'] ?? '')
+              .toString()
+              .trim(),
+        );
+      }
+
+      final items = <_DuplicateFinalAwardItem>[];
+      for (final entry in grouped.entries) {
+        final winners = entry.value.values.toList();
+        if (winners.length <= 1) continue;
+        final parts = entry.key.split('|');
+        final firstRow = resultByEntryId[winners.first.entryId]!;
+        items.add(
+          _DuplicateFinalAwardItem(
+            sectionLabel: sectionFor(firstRow),
+            species: parts[1] == 'cavy' ? 'Cavy' : 'Rabbit',
+            awardCode: parts[2],
+            winners: winners,
+          ),
+        );
+      }
+      items.sort((a, b) {
+        final section = a.sectionLabel.compareTo(b.sectionLabel);
+        if (section != 0) return section;
+        final species = a.species.compareTo(b.species);
+        if (species != 0) return species;
+        return a.awardCode.compareTo(b.awardCode);
+      });
+
+      if (!mounted) return;
+      setState(() {
+        _duplicateFinalAwardItems = items;
+        _duplicateFinalAwardsLoaded = true;
+        if (_dashboard != null) {
+          final current = _dashboard!.resultsReadiness;
+          final duplicateCount = items.length;
+          final corrected = ResultsReadinessDto(
+            ready:
+                current.missingPlacementCount == 0 &&
+                current.missingJudgeCount == 0 &&
+                current.duplicatePlacementGroupCount == 0 &&
+                current.missingFinalAwardCount == 0 &&
+                duplicateCount == 0,
+            missingPlacementCount: current.missingPlacementCount,
+            missingJudgeCount: current.missingJudgeCount,
+            duplicatePlacementGroupCount: current.duplicatePlacementGroupCount,
+            missingFinalAwardCount: current.missingFinalAwardCount,
+            duplicateFinalAwardCount: duplicateCount,
+          );
+          _dashboard = CloseoutDashboard(
+            dashboard: _dashboard!.dashboard,
+            resultsReadiness: corrected,
+            latestFinalize: _dashboard!.latestFinalize,
+            reports: _dashboard!.reports,
+            deliveries: _dashboard!.deliveries,
+            latestArchive: _dashboard!.latestArchive,
+          );
+        }
+      });
+    } finally {
+      if (mounted) setState(() => _loadingDuplicateFinalAwards = false);
+    }
+  }
+
   Future<void> _sendExhibitorArtifactsEmail({
     required List<ReportArtifactSummary> artifacts,
     required String to,
@@ -1930,6 +2117,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       _missingJudgeItems = [];
       _duplicatePlacementsLoaded = false;
       _duplicatePlacementGroupItems = [];
+      _duplicateFinalAwardsLoaded = false;
+      _duplicateFinalAwardItems = [];
     });
   }
 
@@ -2082,6 +2271,81 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                 onTap: firstEntryId.isEmpty
                     ? null
                     : () => _openResultsEntryFix(firstEntryId),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDuplicateFinalAwardsPanel() {
+    final count = _dashboard?.resultsReadiness.duplicateFinalAwardCount ?? 0;
+    if (count <= 0) return const SizedBox.shrink();
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.orange.withValues(alpha: .08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.orange.withValues(alpha: .22)),
+      ),
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        iconColor: AppColors.gold,
+        collapsedIconColor: AppColors.gold,
+        textColor: AppColors.gold,
+        collapsedTextColor: AppColors.gold,
+        leading: const Icon(Icons.emoji_events_outlined, color: AppColors.gold),
+        title: Text(
+          '$count duplicate final awards',
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+        subtitle: Text(
+          'Tap to view conflicting winners.',
+          style: TextStyle(color: AppColors.gold.withValues(alpha: .82)),
+        ),
+        onExpansionChanged: (expanded) async {
+          if (expanded && !_duplicateFinalAwardsLoaded) {
+            await _loadDuplicateFinalAwards();
+          }
+        },
+        children: [
+          if (_loadingDuplicateFinalAwards)
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_duplicateFinalAwardsLoaded &&
+              _duplicateFinalAwardItems.isEmpty)
+            const _CloseoutWarningDetailTile(
+              title: 'No duplicate final-award rows found.',
+              subtitle:
+                  'The blocker count and award details do not match. Refresh closeout and recheck the Results Validation dialog.',
+            )
+          else
+            ..._duplicateFinalAwardItems.map((item) {
+              final firstEntryId = item.winners.first.entryId;
+              return _CloseoutWarningDetailTile(
+                title:
+                    '${item.sectionLabel} • ${item.species} • ${item.awardCode}',
+                subtitle: item.winners
+                    .map(
+                      (winner) => [
+                        winner.tattoo.isEmpty ? '(No ear #)' : winner.tattoo,
+                        if (winner.animalName.isNotEmpty) winner.animalName,
+                        winner.breedName,
+                        if (winner.varietyName.isNotEmpty) winner.varietyName,
+                      ].where((value) => value.isNotEmpty).join(' • '),
+                    )
+                    .join('\n'),
+                trailing: TextButton.icon(
+                  icon: const Icon(Icons.build, size: 18),
+                  label: const Text('Fix'),
+                  onPressed: () => _openResultsEntryFix(firstEntryId),
+                ),
+                onTap: () => _openResultsEntryFix(firstEntryId),
               );
             }),
         ],
@@ -2479,7 +2743,16 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
         _duplicatePlacementsLoaded = false;
         _duplicatePlacementGroupItems = [];
+        _duplicateFinalAwardsLoaded = false;
+        _duplicateFinalAwardItems = [];
       });
+
+      if (freshReadiness.missingJudgeCount > 0) {
+        await _loadMissingJudges();
+      }
+      if (freshReadiness.duplicateFinalAwardCount > 0) {
+        await _loadDuplicateFinalAwards();
+      }
 
       if (includeReports || _reportsLoaded) {
         await _ensureReportsLoaded(force: true);
@@ -3593,42 +3866,50 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       }
     });
 
-    if (readiness.ready) return true;
+    if (readiness.missingJudgeCount > 0) {
+      await _loadMissingJudges();
+    }
+    if (readiness.duplicateFinalAwardCount > 0) {
+      await _loadDuplicateFinalAwards();
+    }
+
+    final effectiveReadiness = _dashboard?.resultsReadiness ?? readiness;
+    if (effectiveReadiness.ready) return true;
 
     final parts = <String>[];
 
-    if (readiness.missingPlacementCount > 0) {
+    if (effectiveReadiness.missingPlacementCount > 0) {
       parts.add(
-        '${readiness.missingPlacementCount} missing placement'
-        '${readiness.missingPlacementCount == 1 ? '' : 's'}',
+        '${effectiveReadiness.missingPlacementCount} missing placement'
+        '${effectiveReadiness.missingPlacementCount == 1 ? '' : 's'}',
       );
     }
 
-    if (readiness.missingJudgeCount > 0) {
+    if (effectiveReadiness.missingJudgeCount > 0) {
       parts.add(
-        '${readiness.missingJudgeCount} missing judge'
-        '${readiness.missingJudgeCount == 1 ? '' : 's'}',
+        '${effectiveReadiness.missingJudgeCount} missing judge'
+        '${effectiveReadiness.missingJudgeCount == 1 ? '' : 's'}',
       );
     }
 
-    if (readiness.duplicatePlacementGroupCount > 0) {
+    if (effectiveReadiness.duplicatePlacementGroupCount > 0) {
       parts.add(
-        '${readiness.duplicatePlacementGroupCount} duplicate placement group'
-        '${readiness.duplicatePlacementGroupCount == 1 ? '' : 's'}',
+        '${effectiveReadiness.duplicatePlacementGroupCount} duplicate placement group'
+        '${effectiveReadiness.duplicatePlacementGroupCount == 1 ? '' : 's'}',
       );
     }
 
-    if (readiness.missingFinalAwardCount > 0) {
+    if (effectiveReadiness.missingFinalAwardCount > 0) {
       parts.add(
-        '${readiness.missingFinalAwardCount} missing final award'
-        '${readiness.missingFinalAwardCount == 1 ? '' : 's'}',
+        '${effectiveReadiness.missingFinalAwardCount} missing final award'
+        '${effectiveReadiness.missingFinalAwardCount == 1 ? '' : 's'}',
       );
     }
 
-    if (readiness.duplicateFinalAwardCount > 0) {
+    if (effectiveReadiness.duplicateFinalAwardCount > 0) {
       parts.add(
-        '${readiness.duplicateFinalAwardCount} duplicate final award'
-        '${readiness.duplicateFinalAwardCount == 1 ? '' : 's'}',
+        '${effectiveReadiness.duplicateFinalAwardCount} duplicate final award'
+        '${effectiveReadiness.duplicateFinalAwardCount == 1 ? '' : 's'}',
       );
     }
 
@@ -3820,7 +4101,16 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
         _duplicatePlacementsLoaded = false;
         _duplicatePlacementGroupItems = [];
+        _duplicateFinalAwardsLoaded = false;
+        _duplicateFinalAwardItems = [];
       });
+
+      if (freshReadiness.missingJudgeCount > 0) {
+        await _loadMissingJudges();
+      }
+      if (freshReadiness.duplicateFinalAwardCount > 0) {
+        await _loadDuplicateFinalAwards();
+      }
 
       unawaited(_loadCloseoutScopes());
       if (_reportsLoaded) {
@@ -6410,6 +6700,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                     _buildMissingPlacementsPanel(),
                     _buildMissingJudgesPanel(),
                     _buildDuplicatePlacementGroupsPanel(),
+                    _buildDuplicateFinalAwardsPanel(),
                     const SizedBox(height: 16),
                   ],
 
@@ -9606,6 +9897,36 @@ class _DuplicatePlacementEntryItem {
     required this.entryId,
     required this.tattoo,
     required this.exhibitorLabel,
+  });
+}
+
+class _DuplicateFinalAwardItem {
+  final String sectionLabel;
+  final String species;
+  final String awardCode;
+  final List<_DuplicateFinalAwardWinner> winners;
+
+  const _DuplicateFinalAwardItem({
+    required this.sectionLabel,
+    required this.species,
+    required this.awardCode,
+    required this.winners,
+  });
+}
+
+class _DuplicateFinalAwardWinner {
+  final String entryId;
+  final String tattoo;
+  final String animalName;
+  final String breedName;
+  final String varietyName;
+
+  const _DuplicateFinalAwardWinner({
+    required this.entryId,
+    required this.tattoo,
+    required this.animalName,
+    required this.breedName,
+    required this.varietyName,
   });
 }
 
