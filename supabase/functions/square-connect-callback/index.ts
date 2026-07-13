@@ -3,6 +3,7 @@ import {
   serviceClient,
 } from "../_shared/supabase.ts";
 import {
+  normalizeSquareScopes,
   obtainSquareToken,
   publicMerchant,
   squareEnv,
@@ -89,6 +90,17 @@ Deno.serve(async (request: Request) => {
     if (!accessToken || !refreshToken || !merchantId || !expiresAt) {
       throw new Error("Square returned an incomplete authorization response.");
     }
+    const reportedScopes = normalizeSquareScopes(token.scopes ?? token.scope);
+    const grantedScopes = reportedScopes.length > 0
+      ? reportedScopes
+      : [...squareScopes];
+    const credentialMetadata = {
+      token_type: String(token.token_type ?? "bearer"),
+      short_lived: token.short_lived === true,
+      refresh_token_expires_at: token.refresh_token_expires_at
+        ? String(token.refresh_token_expires_at)
+        : null,
+    };
 
     const [merchantResponse, locationsResponse] = await Promise.all([
       squareGet(`/v2/merchants/${encodeURIComponent(merchantId)}`, accessToken),
@@ -97,13 +109,20 @@ Deno.serve(async (request: Request) => {
     const merchant = publicMerchant(merchantResponse);
     const locations = usableLocations(locationsResponse);
     const selectedLocation = locations.length === 1 ? locations[0] : null;
-    const status = selectedLocation ? "ready" : "location_required";
+    const paymentScopesReady = squareScopes.every((scope) =>
+      grantedScopes.includes(scope)
+    );
+    const status = !paymentScopesReady
+      ? "reconnect_required"
+      : selectedLocation
+      ? "ready"
+      : "location_required";
     const now = new Date().toISOString();
     const metadata = {
       merchant,
       locations,
       selected_location_name: selectedLocation?.name ?? null,
-      scopes: squareScopes,
+      scopes: grantedScopes,
     };
 
     const linkValues = {
@@ -133,7 +152,9 @@ Deno.serve(async (request: Request) => {
         provider: "square",
         access_token_encrypted: await encryptToken(accessToken),
         refresh_token_encrypted: await encryptToken(refreshToken),
+        granted_scopes: grantedScopes,
         token_expires_at: expiresAt,
+        credential_metadata: credentialMetadata,
         updated_at: now,
       },
       { onConflict: "payment_account_link_id,provider" },
@@ -151,7 +172,7 @@ Deno.serve(async (request: Request) => {
 
     return appRedirect(
       showId,
-      selectedLocation ? "success" : "location_required",
+      status === "ready" ? "success" : status,
     );
   } catch (error) {
     const message = error instanceof Error

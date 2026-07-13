@@ -5,8 +5,11 @@ import {
   serviceClient,
 } from "../_shared/supabase.ts";
 import {
+  normalizeSquareScopes,
   obtainSquareToken,
   publicMerchant,
+  requiredSquarePaymentScopes,
+  squareAuthorizationWasRevoked,
   squareGet,
   tokenStatus,
   usableLocations,
@@ -56,7 +59,7 @@ Deno.serve(async (request: Request) => {
     const { data: credential, error: credentialError } = await admin
       .from("payment_provider_credentials")
       .select(
-        "id,access_token_encrypted,refresh_token_encrypted,token_expires_at",
+        "id,access_token_encrypted,refresh_token_encrypted,granted_scopes,token_expires_at,credential_metadata",
       )
       .eq("payment_account_link_id", link.id).eq("provider", "square")
       .maybeSingle();
@@ -77,6 +80,7 @@ Deno.serve(async (request: Request) => {
     let accessToken = await decryptToken(
       String(credential.access_token_encrypted),
     );
+    let grantedScopes = normalizeSquareScopes(credential.granted_scopes);
     let expiresAt = String(
       credential.token_expires_at ?? link.authorization_expires_at ?? "",
     );
@@ -93,17 +97,37 @@ Deno.serve(async (request: Request) => {
       accessToken = String(refreshed.access_token ?? "");
       expiresAt = String(refreshed.expires_at ?? "");
       const nextRefreshToken = String(refreshed.refresh_token ?? refreshToken);
+      const refreshedScopes = normalizeSquareScopes(
+        refreshed.scopes ?? refreshed.scope,
+      );
+      if (refreshedScopes.length > 0) grantedScopes = refreshedScopes;
       if (!accessToken || !expiresAt) {
         throw new Error("Square authorization could not be refreshed.");
       }
-      const { error: refreshSaveError } = await admin.from(
-        "payment_provider_credentials",
-      ).update({
+      const existingCredentialMetadata = credential.credential_metadata &&
+          typeof credential.credential_metadata === "object"
+        ? credential.credential_metadata as Record<string, unknown>
+        : {};
+      const refreshValues: Record<string, unknown> = {
         access_token_encrypted: await encryptToken(accessToken),
         refresh_token_encrypted: await encryptToken(nextRefreshToken),
         token_expires_at: expiresAt,
+        credential_metadata: {
+          ...existingCredentialMetadata,
+          token_type: String(refreshed.token_type ?? "bearer"),
+          short_lived: refreshed.short_lived === true,
+          refresh_token_expires_at: refreshed.refresh_token_expires_at
+            ? String(refreshed.refresh_token_expires_at)
+            : existingCredentialMetadata.refresh_token_expires_at ?? null,
+        },
         updated_at: new Date().toISOString(),
-      }).eq("id", credential.id);
+      };
+      if (refreshedScopes.length > 0) {
+        refreshValues.granted_scopes = refreshedScopes;
+      }
+      const { error: refreshSaveError } = await admin.from(
+        "payment_provider_credentials",
+      ).update(refreshValues).eq("id", credential.id);
       if (refreshSaveError) {
         throw new Error("Refreshed Square credentials could not be secured.");
       }
@@ -122,16 +146,50 @@ Deno.serve(async (request: Request) => {
       location.id === selectedLocationId
     ) ?? null;
     const merchantId = String(merchant.id || link.provider_account_id || "");
-    const scopes = Array.isArray(authorization.scopes)
-      ? authorization.scopes.map(String)
-      : [];
-    const ready = Boolean(merchantId && selectedLocation);
-    const status = ready ? "ready" : "location_required";
+    const authorizationRevoked = squareAuthorizationWasRevoked(authorization);
+    const statusScopes = normalizeSquareScopes(
+      authorization.scopes ?? authorization.scope,
+    );
+    if (statusScopes.length > 0) grantedScopes = statusScopes;
+    const reportedExpiry = String(authorization.expires_at ?? "").trim();
+    if (reportedExpiry) expiresAt = reportedExpiry;
+
+    const credentialStatusValues: Record<string, unknown> = {};
+    if (authorizationRevoked) {
+      credentialStatusValues.granted_scopes = [];
+      grantedScopes = [];
+    } else if (statusScopes.length > 0) {
+      credentialStatusValues.granted_scopes = statusScopes;
+    }
+    if (reportedExpiry) {
+      credentialStatusValues.token_expires_at = expiresAt;
+    }
+    if (Object.keys(credentialStatusValues).length > 0) {
+      credentialStatusValues.updated_at = new Date().toISOString();
+      const { error: scopeUpdateError } = await admin.from(
+        "payment_provider_credentials",
+      ).update(credentialStatusValues).eq("id", credential.id);
+      if (scopeUpdateError) {
+        throw new Error("Unable to update Square authorization details.");
+      }
+    }
+    if (authorizationRevoked) {
+      throw new Error("Square authorization was revoked. Reconnect Square.");
+    }
+    const paymentScopesReady = requiredSquarePaymentScopes.every((scope) =>
+      grantedScopes.includes(scope)
+    );
+    const ready = Boolean(merchantId && selectedLocation && paymentScopesReady);
+    const status = !paymentScopesReady
+      ? "reconnect_required"
+      : ready
+      ? "ready"
+      : "location_required";
     const metadata = {
       merchant,
       locations,
       selected_location_name: selectedLocation?.name ?? null,
-      scopes,
+      scopes: grantedScopes,
     };
     const { error: updateError } = await admin.from(
       "show_payment_account_links",
@@ -155,9 +213,10 @@ Deno.serve(async (request: Request) => {
       selected_location_id: selectedLocation?.id ?? null,
       selected_location_name: selectedLocation?.name ?? null,
       available_locations: locations,
-      scopes,
+      scopes: grantedScopes,
       expiry: expiresAt,
-      reconnect_required: false,
+      reconnect_required: !paymentScopesReady,
+      payment_scopes_ready: paymentScopesReady,
     });
   } catch (error) {
     const expired = knownExpiry.length > 0 &&

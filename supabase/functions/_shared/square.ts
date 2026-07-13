@@ -1,11 +1,53 @@
 export const squareScopes = [
   "MERCHANT_PROFILE_READ",
   "PAYMENTS_WRITE",
+  "PAYMENTS_WRITE_ADDITIONAL_RECIPIENTS",
 ] as const;
 
-const environment = (Deno.env.get("SQUARE_ENVIRONMENT") ?? "sandbox")
+export const requiredSquarePaymentScopes = [...squareScopes];
+
+export function normalizeSquareScopes(value: unknown): string[] {
+  let rawScopes: unknown[];
+  if (Array.isArray(value)) {
+    rawScopes = value;
+  } else if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+    if (trimmed.startsWith("[")) {
+      try {
+        return normalizeSquareScopes(JSON.parse(trimmed));
+      } catch (_) {
+        // Fall through to the documented string representation.
+      }
+    }
+    rawScopes = trimmed.split(/[\s,]+/);
+  } else {
+    return [];
+  }
+
+  return [
+    ...new Set(
+      rawScopes
+        .flatMap((scope) =>
+          typeof scope === "string" ? scope.split(/[\s,]+/) : []
+        )
+        .map((scope) => scope.trim())
+        .filter(Boolean),
+    ),
+  ];
+}
+
+export function squareAuthorizationWasRevoked(
+  status: Record<string, unknown>,
+): boolean {
+  if (status.revoked === true) return true;
+  return [status.status, status.authorization_status, status.revocation_status]
+    .some((value) => String(value ?? "").toUpperCase() === "REVOKED");
+}
+
+export const squareEnvironment = (Deno.env.get("SQUARE_ENVIRONMENT") ?? "sandbox")
   .toLowerCase();
-export const squareConnectBase = environment === "production"
+export const squareConnectBase = squareEnvironment === "production"
   ? "https://connect.squareup.com"
   : "https://connect.squareupsandbox.com";
 export const squareApiVersion = Deno.env.get("SQUARE_API_VERSION")?.trim() ||
@@ -30,6 +72,45 @@ async function squareJson(
       ? String((errors[0] as Record<string, unknown>).detail ?? "")
       : "";
     throw new Error(detail || `Square request failed (${response.status}).`);
+  }
+  return data;
+}
+
+export class SquareRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code: string,
+  ) {
+    super(message);
+  }
+}
+
+export async function squareRequest(
+  path: string,
+  accessToken: string,
+  init: RequestInit = {},
+): Promise<Record<string, unknown>> {
+  const response = await fetch(`${squareConnectBase}${path}`, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+      "Square-Version": squareApiVersion,
+      ...(init.headers ?? {}),
+    },
+  });
+  const data = await response.json().catch(() => ({})) as Record<string, unknown>;
+  if (!response.ok) {
+    const first = Array.isArray(data.errors) && data.errors[0] &&
+        typeof data.errors[0] === "object"
+      ? data.errors[0] as Record<string, unknown>
+      : {};
+    throw new SquareRequestError(
+      String(first.detail ?? "Square could not process the payment."),
+      response.status,
+      String(first.code ?? "SQUARE_REQUEST_FAILED"),
+    );
   }
   return data;
 }
@@ -88,6 +169,8 @@ export type PublicLocation = {
   id: string;
   name: string;
   status: string;
+  merchantId?: string;
+  currency?: string;
   address?: string;
 };
 
@@ -120,6 +203,8 @@ export function usableLocations(
       id,
       name: String(location.name ?? "Square location"),
       status,
+      merchantId: String(location.merchant_id ?? ""),
+      currency: String(location.currency ?? "").toLowerCase(),
       ...(addressText ? { address: addressText } : {}),
     }];
   });

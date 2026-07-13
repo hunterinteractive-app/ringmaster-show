@@ -4,11 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:uuid/uuid.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
 import '../utils/date_time_utils.dart';
 import '../services/app_session.dart';
 import '../services/stripe_connect_service.dart';
+import '../services/show_payment_configuration_service.dart';
+import '../services/square_card_platform.dart';
+import '../services/square_checkout_service.dart';
 
 import 'my_entries_screen.dart';
 
@@ -35,6 +39,8 @@ class _CartScreenState extends State<CartScreen> {
   bool _confirming = false;
   bool _payingOnline = false;
   bool _handledStripeReturn = false;
+  bool _squareCardLoading = false;
+  bool _squareCardReady = false;
   String? _msg;
   String? _checkoutUrl;
 
@@ -44,6 +50,11 @@ class _CartScreenState extends State<CartScreen> {
   Map<String, dynamic>? _feeSettings;
   Map<String, Map<String, dynamic>> _sectionFeeBySectionId = {};
   Map<String, dynamic>? _stripeStatus;
+  ShowPaymentConfiguration? _paymentConfiguration;
+  SquareCheckoutConfig? _squareCheckoutConfig;
+  String _selectedPaymentTiming = 'at_show';
+  String? _selectedOnlineProvider;
+  String? _squareClientAttemptKey;
 
   static const double _ringMasterPlatformFeePercent = 0.02;
   static const double _stripeProcessingFeePercent = 0.029;
@@ -62,6 +73,12 @@ class _CartScreenState extends State<CartScreen> {
         _handleStripeReturnIfPresent();
       }
     });
+  }
+
+  @override
+  void dispose() {
+    SquareCardPlatform.instance.destroy();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -125,6 +142,9 @@ class _CartScreenState extends State<CartScreen> {
           .eq('cart_id', widget.cartId)
           .order('created_at');
 
+      final paymentConfiguration = await ShowPaymentConfigurationService.load(
+        widget.showId,
+      );
       Map<String, dynamic>? stripeStatus;
       try {
         stripeStatus = await StripeConnectService.getAccountStatus(
@@ -144,6 +164,20 @@ class _CartScreenState extends State<CartScreen> {
 
       await _loadExhibitorLabelsForCart(parsedItems);
 
+      final readyProviders = paymentConfiguration.providers
+          .where((provider) => provider.enabled && provider.ready)
+          .map((provider) => provider.provider)
+          .toList();
+      final preferred = paymentConfiguration.defaultOnlineProvider;
+      final selectedProvider = readyProviders.contains(preferred)
+          ? preferred
+          : (readyProviders.isEmpty ? null : readyProviders.first);
+      final selectedTiming = paymentConfiguration.requireOnlinePayment
+          ? 'online'
+          : paymentConfiguration.allowAtShow
+          ? 'at_show'
+          : 'online';
+
       if (!mounted) return;
       setState(() {
         _show = show;
@@ -151,9 +185,17 @@ class _CartScreenState extends State<CartScreen> {
         _sectionById = parsedSections;
         _items = parsedItems;
         _stripeStatus = stripeStatus;
+        _paymentConfiguration = paymentConfiguration;
+        _selectedOnlineProvider = selectedProvider;
+        _selectedPaymentTiming = selectedTiming;
+        _squareCardReady = false;
+        _squareCheckoutConfig = null;
         _sectionFeeBySectionId = parsedSectionFees;
         _loading = false;
       });
+      if (selectedTiming == 'online' && selectedProvider == 'square') {
+        await _initializeSquareCard();
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -336,7 +378,10 @@ class _CartScreenState extends State<CartScreen> {
     final showBalanceTotal = fee['total'] as double;
     final showBalanceTotalCents = _dollarsToCents(showBalanceTotal);
     final onlinePaymentFeeCents =
-        _stripeReady && _passesOnlinePaymentFeeToExhibitor
+        _selectedPaymentTiming == 'online' &&
+            _selectedOnlineProvider == 'stripe' &&
+            _stripeReady &&
+            _passesOnlinePaymentFeeToExhibitor
         ? _calculateOnlinePaymentFeeCentsFromBase(showBalanceTotalCents)
         : 0;
     final totalDueCents = showBalanceTotalCents + onlinePaymentFeeCents;
@@ -424,6 +469,81 @@ class _CartScreenState extends State<CartScreen> {
         _stripeStatus?['details_submitted'] == true;
   }
 
+  bool _providerReady(String provider) {
+    for (final option
+        in _paymentConfiguration?.providers ??
+            const <ShowPaymentProviderOption>[]) {
+      if (option.provider == provider) {
+        return option.enabled && option.ready;
+      }
+    }
+    return false;
+  }
+
+  Future<void> _selectPaymentTiming(String timing) async {
+    if (_payingOnline || _confirming) return;
+    setState(() {
+      _selectedPaymentTiming = timing;
+      _msg = null;
+    });
+    if (timing == 'online' && _selectedOnlineProvider == 'square') {
+      await _initializeSquareCard();
+    } else {
+      await SquareCardPlatform.instance.destroy();
+      if (mounted) setState(() => _squareCardReady = false);
+    }
+  }
+
+  Future<void> _selectOnlineProvider(String provider) async {
+    if (_payingOnline || !_providerReady(provider)) return;
+    await SquareCardPlatform.instance.destroy();
+    if (!mounted) return;
+    setState(() {
+      _selectedOnlineProvider = provider;
+      _squareCardReady = false;
+      _squareCheckoutConfig = null;
+      _msg = null;
+    });
+    if (provider == 'square' && _selectedPaymentTiming == 'online') {
+      await _initializeSquareCard();
+    }
+  }
+
+  Future<void> _initializeSquareCard() async {
+    if (!SquareCardPlatform.instance.isSupported) {
+      if (mounted) {
+        setState(
+          () => _msg =
+              'Square card payment is currently supported in the web app only.',
+        );
+      }
+      return;
+    }
+    setState(() {
+      _squareCardLoading = true;
+      _squareCardReady = false;
+      _msg = null;
+    });
+    try {
+      final config = await SquareCheckoutService.loadConfig(widget.showId);
+      final mountId = 'square-card-${widget.cartId}';
+      SquareCardPlatform.instance.prepare(mountId);
+      if (!mounted) return;
+      setState(() => _squareCheckoutConfig = config);
+      await WidgetsBinding.instance.endOfFrame;
+      await SquareCardPlatform.instance.initialize(
+        applicationId: config.applicationId,
+        locationId: config.locationId,
+        environment: config.environment,
+      );
+      if (mounted) setState(() => _squareCardReady = true);
+    } catch (e) {
+      if (mounted) setState(() => _msg = 'Square card setup failed: $e');
+    } finally {
+      if (mounted) setState(() => _squareCardLoading = false);
+    }
+  }
+
   bool get _canPayOnline {
     return !_loading &&
         !_payingOnline &&
@@ -431,7 +551,11 @@ class _CartScreenState extends State<CartScreen> {
         !AppSession.isSupportMode &&
         !_deadlinePassed() &&
         _items.isNotEmpty &&
-        _stripeReady;
+        _selectedPaymentTiming == 'online' &&
+        _selectedOnlineProvider != null &&
+        _providerReady(_selectedOnlineProvider!) &&
+        (_selectedOnlineProvider != 'stripe' || _stripeReady) &&
+        (_selectedOnlineProvider != 'square' || _squareCardReady);
   }
 
   Map<String, dynamic> _calculateFeesForItems(
@@ -854,11 +978,10 @@ class _CartScreenState extends State<CartScreen> {
       return;
     }
 
-    if (!_stripeReady) {
+    if (_selectedOnlineProvider == null ||
+        !_providerReady(_selectedOnlineProvider!)) {
       setState(() {
-        _msg = _stripeHasAccount
-            ? 'Online payment is not available yet. The club’s Stripe setup is incomplete.'
-            : 'Online payment is not available for this show yet. The club has not connected Stripe.';
+        _msg = 'The selected online payment processor is not available.';
       });
       return;
     }
@@ -870,6 +993,10 @@ class _CartScreenState extends State<CartScreen> {
     });
 
     try {
+      if (_selectedOnlineProvider == 'square') {
+        await _payWithSquare();
+        return;
+      }
       final checkoutUrl = await StripeConnectService.createCheckoutSession(
         widget.cartId,
       );
@@ -908,6 +1035,75 @@ class _CartScreenState extends State<CartScreen> {
         setState(() => _payingOnline = false);
       }
     }
+  }
+
+  Future<void> _payWithSquare() async {
+    if (!_squareCardReady) {
+      throw Exception('Square card fields are not ready.');
+    }
+    final sourceId = await SquareCardPlatform.instance.tokenize();
+    _squareClientAttemptKey ??= const Uuid().v4();
+    final result = await SquareCheckoutService.createPayment(
+      cartId: widget.cartId,
+      sourceId: sourceId,
+      clientAttemptKey: _squareClientAttemptKey!,
+    );
+    var finalized = result.finalized;
+    if (!finalized && result.pending) {
+      for (var attempt = 0; attempt < 6 && !finalized; attempt++) {
+        await Future<void>.delayed(const Duration(seconds: 1));
+        try {
+          finalized = await SquareCheckoutService.isFinalized(
+            result.paymentSessionId,
+          );
+        } catch (_) {
+          break;
+        }
+      }
+    }
+    if (!mounted) return;
+    if (!finalized) {
+      setState(() {
+        _msg =
+            'Square is still processing this payment. Do not submit again; this cart will update when payment completes.';
+      });
+      return;
+    }
+    _squareClientAttemptKey = null;
+    await _load();
+    if (!mounted) return;
+    await _showPaymentSuccess();
+  }
+
+  Future<void> _showPaymentSuccess() async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        title: const Text('Payment Successful'),
+        content: const Text(
+          'Your payment was received and your entries were submitted successfully.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.pop(context, true);
+            },
+            child: const Text('Back to Show'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const MyEntriesScreen()),
+              );
+            },
+            child: const Text('View My Entries'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _confirmDayOf() async {
@@ -1016,6 +1212,94 @@ class _CartScreenState extends State<CartScreen> {
     return parts.join(' • ');
   }
 
+  Widget _buildPaymentChoices() {
+    final config = _paymentConfiguration;
+    if (config == null) return const SizedBox.shrink();
+    final readyProviders = config.providers
+        .where((provider) => provider.enabled && provider.ready)
+        .toList();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Payment', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 10),
+              SegmentedButton<String>(
+                segments: [
+                  if (config.allowOnline)
+                    const ButtonSegment(
+                      value: 'online',
+                      label: Text('Pay online'),
+                      icon: Icon(Icons.credit_card),
+                    ),
+                  if (config.allowAtShow)
+                    const ButtonSegment(
+                      value: 'at_show',
+                      label: Text('Pay at show'),
+                      icon: Icon(Icons.storefront),
+                    ),
+                ],
+                selected: {_selectedPaymentTiming},
+                onSelectionChanged: _payingOnline
+                    ? null
+                    : (values) => _selectPaymentTiming(values.first),
+              ),
+              if (_selectedPaymentTiming == 'online') ...[
+                Text(
+                  'Payment processor',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    for (final provider in readyProviders)
+                      ChoiceChip(
+                        label: Text(
+                          provider.provider == 'square'
+                              ? 'Square'
+                              : provider.provider == 'stripe'
+                              ? 'Stripe'
+                              : provider.provider,
+                        ),
+                        selected: _selectedOnlineProvider == provider.provider,
+                        onSelected: _payingOnline
+                            ? null
+                            : (_) => _selectOnlineProvider(provider.provider),
+                      ),
+                  ],
+                ),
+                if (readyProviders.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 8),
+                    child: Text(
+                      'No online payment processor is currently ready.',
+                    ),
+                  ),
+                if (_selectedOnlineProvider == 'square') ...[
+                  const SizedBox(height: 14),
+                  if (_squareCheckoutConfig != null)
+                    SquareCardPlatform.instance.buildCardView(),
+                  if (_squareCardLoading) const LinearProgressIndicator(),
+                  if (!_squareCardLoading && !_squareCardReady)
+                    TextButton.icon(
+                      onPressed: _initializeSquareCard,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Reload Square card fields'),
+                    ),
+                ],
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final overallFee = _calculateFeesForItems(_items);
@@ -1112,6 +1396,7 @@ class _CartScreenState extends State<CartScreen> {
                       ),
                     ),
                   ),
+                _buildPaymentChoices(),
                 Padding(
                   padding: const EdgeInsets.all(16),
                   child: Container(
@@ -1230,13 +1515,16 @@ class _CartScreenState extends State<CartScreen> {
                               ),
                         const SizedBox(height: 14),
                         Text(
-                          _stripeReady
+                          _selectedPaymentTiming == 'online' &&
+                                  _selectedOnlineProvider != null &&
+                                  _providerReady(_selectedOnlineProvider!)
                               ? 'Online payment available'
-                              : (_stripeHasAccount
-                                    ? 'Online payment setup incomplete'
-                                    : 'Online payment not yet available for this show'),
+                              : 'Pay-at-show checkout selected',
                           style: TextStyle(
-                            color: _stripeReady
+                            color:
+                                _selectedPaymentTiming == 'online' &&
+                                    _selectedOnlineProvider != null &&
+                                    _providerReady(_selectedOnlineProvider!)
                                 ? Colors.green
                                 : Colors.orange.shade800,
                             fontWeight: FontWeight.w600,
@@ -1340,13 +1628,15 @@ class _CartScreenState extends State<CartScreen> {
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                   child: SizedBox(
                     width: double.infinity,
-                    child: _stripeReady
+                    child: _selectedPaymentTiming == 'online'
                         ? FilledButton.icon(
                             onPressed: _canPayOnline ? _payOnline : null,
                             icon: const Icon(Icons.credit_card),
                             label: Text(
                               _payingOnline
-                                  ? 'Opening Checkout…'
+                                  ? 'Processing…'
+                                  : _selectedOnlineProvider == 'square'
+                                  ? 'Pay Online with Square'
                                   : 'Pay ${_money(totalDue, currency: currency)} Online',
                             ),
                           )

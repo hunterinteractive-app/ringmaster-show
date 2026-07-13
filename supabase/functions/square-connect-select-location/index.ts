@@ -5,6 +5,10 @@ import {
   authenticatedUser,
   serviceClient,
 } from "../_shared/supabase.ts";
+import {
+  normalizeSquareScopes,
+  requiredSquarePaymentScopes,
+} from "../_shared/square.ts";
 
 Deno.serve(async (request: Request) => {
   const options = handleOptions(request);
@@ -55,6 +59,21 @@ Deno.serve(async (request: Request) => {
     }
     if (!String(link.provider_account_id ?? "")) {
       throw new Error("Square merchant identity is missing. Reconnect Square.");
+    }
+    const { data: credential, error: credentialError } = await admin
+      .from("payment_provider_credentials")
+      .select("granted_scopes")
+      .eq("payment_account_link_id", link.id)
+      .eq("provider", "square")
+      .maybeSingle();
+    const grantedScopes = normalizeSquareScopes(credential?.granted_scopes);
+    if (credentialError || !credential ||
+      !requiredSquarePaymentScopes.every((scope) =>
+        grantedScopes.includes(scope)
+      )) {
+      throw new Error(
+        "Reconnect Square to authorize RingMaster application fees.",
+      );
     }
 
     const { error: updateError } = await admin.from(
