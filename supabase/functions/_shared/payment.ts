@@ -82,6 +82,44 @@ export async function attachProviderSession(
   if (error) throw new Error(error.message);
 }
 
+export async function attachProviderHostedCheckout(
+  client: SupabaseClient,
+  args: {
+    paymentSessionId: string;
+    provider: PaymentProvider;
+    providerSessionId: string;
+    providerAttemptId: string;
+    checkoutUrl: string;
+    providerMetadata?: Record<string, unknown>;
+  },
+): Promise<void> {
+  const { error } = await client.rpc("attach_provider_hosted_checkout", {
+    p_payment_session_id: args.paymentSessionId,
+    p_provider: args.provider,
+    p_provider_session_id: args.providerSessionId,
+    p_provider_attempt_id: args.providerAttemptId,
+    p_checkout_url: args.checkoutUrl,
+    p_provider_metadata: args.providerMetadata ?? {},
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function supersedeProviderCheckout(
+  client: SupabaseClient,
+  args: {
+    paymentSessionId: string;
+    provider: PaymentProvider;
+    linkDeactivated: boolean;
+  },
+): Promise<void> {
+  const { error } = await client.rpc("supersede_provider_checkout", {
+    p_payment_session_id: args.paymentSessionId,
+    p_provider: args.provider,
+    p_link_deactivated: args.linkDeactivated,
+  });
+  if (error) throw new Error(error.message);
+}
+
 export async function claimPaymentAttemptClientKey(
   client: SupabaseClient,
   args: {

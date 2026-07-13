@@ -9,6 +9,7 @@ import 'package:ringmaster_show/services/help_report_service.dart';
 import 'package:ringmaster_show/screens/admin/judging/mobile/qr_results_entry_screen.dart';
 import 'package:ringmaster_show/screens/admin/judging/mobile/table_qr_queue_screen.dart';
 import 'package:ringmaster_show/screens/admin/square_connect_return_screen.dart';
+import 'package:ringmaster_show/screens/square_payment_return_screen.dart';
 
 import 'screens/login_screen.dart';
 import 'screens/show_list_screen.dart';
@@ -139,6 +140,12 @@ class MyApp extends StatelessWidget {
           if (uri.path == '/square-connect') {
             return MaterialPageRoute(
               builder: (_) => SquareConnectReturnScreen(uri: uri),
+            );
+          }
+
+          if (uri.path == '/square-payment-return') {
+            return MaterialPageRoute(
+              builder: (_) => SquarePaymentReturnScreen(uri: uri),
             );
           }
 

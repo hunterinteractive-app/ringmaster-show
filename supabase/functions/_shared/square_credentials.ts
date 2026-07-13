@@ -19,14 +19,16 @@ export type SquareAuthorization = {
 export async function loadSquareAuthorization(
   client: SupabaseClient,
   showId: string,
+  options: { requireReady?: boolean } = {},
 ): Promise<SquareAuthorization> {
+  const requireReady = options.requireReady ?? true;
   const { data: link, error: linkError } = await client
     .from("show_payment_account_links")
     .select("id,provider_account_id,provider_location_id,status")
     .eq("show_id", showId).eq("provider", "square").maybeSingle();
   if (linkError || !link || !link.provider_account_id ||
       !link.provider_location_id ||
-      !["ready", "connected", "active"].includes(String(link.status))) {
+      (requireReady && String(link.status) !== "ready")) {
     throw new Error("This show's Square account is not ready for payments.");
   }
 
@@ -42,7 +44,7 @@ export async function loadSquareAuthorization(
   const scopes = normalizeSquareScopes(credential.granted_scopes);
   if (!requiredSquarePaymentScopes.every((scope) => scopes.includes(scope))) {
     throw new Error(
-      "Square must be reconnected to authorize RingMaster application fees.",
+      "Square must be reconnected with the hosted checkout permissions.",
     );
   }
 

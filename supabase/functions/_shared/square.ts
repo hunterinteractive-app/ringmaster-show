@@ -1,7 +1,10 @@
 export const squareScopes = [
   "MERCHANT_PROFILE_READ",
+  "PAYMENTS_READ",
   "PAYMENTS_WRITE",
   "PAYMENTS_WRITE_ADDITIONAL_RECIPIENTS",
+  "ORDERS_READ",
+  "ORDERS_WRITE",
 ] as const;
 
 export const requiredSquarePaymentScopes = [...squareScopes];

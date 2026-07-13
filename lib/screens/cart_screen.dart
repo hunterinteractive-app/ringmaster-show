@@ -11,7 +11,6 @@ import '../utils/date_time_utils.dart';
 import '../services/app_session.dart';
 import '../services/stripe_connect_service.dart';
 import '../services/show_payment_configuration_service.dart';
-import '../services/square_card_platform.dart';
 import '../services/square_checkout_service.dart';
 
 import 'my_entries_screen.dart';
@@ -39,8 +38,6 @@ class _CartScreenState extends State<CartScreen> {
   bool _confirming = false;
   bool _payingOnline = false;
   bool _handledStripeReturn = false;
-  bool _squareCardLoading = false;
-  bool _squareCardReady = false;
   String? _msg;
   String? _checkoutUrl;
 
@@ -51,7 +48,6 @@ class _CartScreenState extends State<CartScreen> {
   Map<String, Map<String, dynamic>> _sectionFeeBySectionId = {};
   Map<String, dynamic>? _stripeStatus;
   ShowPaymentConfiguration? _paymentConfiguration;
-  SquareCheckoutConfig? _squareCheckoutConfig;
   String _selectedPaymentTiming = 'at_show';
   String? _selectedOnlineProvider;
   String? _squareClientAttemptKey;
@@ -73,12 +69,6 @@ class _CartScreenState extends State<CartScreen> {
         _handleStripeReturnIfPresent();
       }
     });
-  }
-
-  @override
-  void dispose() {
-    SquareCardPlatform.instance.destroy();
-    super.dispose();
   }
 
   Future<void> _load() async {
@@ -188,14 +178,9 @@ class _CartScreenState extends State<CartScreen> {
         _paymentConfiguration = paymentConfiguration;
         _selectedOnlineProvider = selectedProvider;
         _selectedPaymentTiming = selectedTiming;
-        _squareCardReady = false;
-        _squareCheckoutConfig = null;
         _sectionFeeBySectionId = parsedSectionFees;
         _loading = false;
       });
-      if (selectedTiming == 'online' && selectedProvider == 'square') {
-        await _initializeSquareCard();
-      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -486,62 +471,14 @@ class _CartScreenState extends State<CartScreen> {
       _selectedPaymentTiming = timing;
       _msg = null;
     });
-    if (timing == 'online' && _selectedOnlineProvider == 'square') {
-      await _initializeSquareCard();
-    } else {
-      await SquareCardPlatform.instance.destroy();
-      if (mounted) setState(() => _squareCardReady = false);
-    }
   }
 
   Future<void> _selectOnlineProvider(String provider) async {
     if (_payingOnline || !_providerReady(provider)) return;
-    await SquareCardPlatform.instance.destroy();
-    if (!mounted) return;
     setState(() {
       _selectedOnlineProvider = provider;
-      _squareCardReady = false;
-      _squareCheckoutConfig = null;
       _msg = null;
     });
-    if (provider == 'square' && _selectedPaymentTiming == 'online') {
-      await _initializeSquareCard();
-    }
-  }
-
-  Future<void> _initializeSquareCard() async {
-    if (!SquareCardPlatform.instance.isSupported) {
-      if (mounted) {
-        setState(
-          () => _msg =
-              'Square card payment is currently supported in the web app only.',
-        );
-      }
-      return;
-    }
-    setState(() {
-      _squareCardLoading = true;
-      _squareCardReady = false;
-      _msg = null;
-    });
-    try {
-      final config = await SquareCheckoutService.loadConfig(widget.showId);
-      final mountId = 'square-card-${widget.cartId}';
-      SquareCardPlatform.instance.prepare(mountId);
-      if (!mounted) return;
-      setState(() => _squareCheckoutConfig = config);
-      await WidgetsBinding.instance.endOfFrame;
-      await SquareCardPlatform.instance.initialize(
-        applicationId: config.applicationId,
-        locationId: config.locationId,
-        environment: config.environment,
-      );
-      if (mounted) setState(() => _squareCardReady = true);
-    } catch (e) {
-      if (mounted) setState(() => _msg = 'Square card setup failed: $e');
-    } finally {
-      if (mounted) setState(() => _squareCardLoading = false);
-    }
   }
 
   bool get _canPayOnline {
@@ -554,8 +491,7 @@ class _CartScreenState extends State<CartScreen> {
         _selectedPaymentTiming == 'online' &&
         _selectedOnlineProvider != null &&
         _providerReady(_selectedOnlineProvider!) &&
-        (_selectedOnlineProvider != 'stripe' || _stripeReady) &&
-        (_selectedOnlineProvider != 'square' || _squareCardReady);
+        (_selectedOnlineProvider != 'stripe' || _stripeReady);
   }
 
   Map<String, dynamic> _calculateFeesForItems(
@@ -1038,72 +974,23 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Future<void> _payWithSquare() async {
-    if (!_squareCardReady) {
-      throw Exception('Square card fields are not ready.');
-    }
-    final sourceId = await SquareCardPlatform.instance.tokenize();
     _squareClientAttemptKey ??= const Uuid().v4();
-    final result = await SquareCheckoutService.createPayment(
+    final checkout = await SquareCheckoutService.createHostedCheckout(
       cartId: widget.cartId,
-      sourceId: sourceId,
       clientAttemptKey: _squareClientAttemptKey!,
     );
-    var finalized = result.finalized;
-    if (!finalized && result.pending) {
-      for (var attempt = 0; attempt < 6 && !finalized; attempt++) {
-        await Future<void>.delayed(const Duration(seconds: 1));
-        try {
-          finalized = await SquareCheckoutService.isFinalized(
-            result.paymentSessionId,
-          );
-        } catch (_) {
-          break;
-        }
-      }
-    }
-    if (!mounted) return;
-    if (!finalized) {
-      setState(() {
-        _msg =
-            'Square is still processing this payment. Do not submit again; this cart will update when payment completes.';
-      });
-      return;
-    }
-    _squareClientAttemptKey = null;
-    await _load();
-    if (!mounted) return;
-    await _showPaymentSuccess();
-  }
-
-  Future<void> _showPaymentSuccess() async {
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        title: const Text('Payment Successful'),
-        content: const Text(
-          'Your payment was received and your entries were submitted successfully.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              Navigator.pop(context, true);
-            },
-            child: const Text('Back to Show'),
-          ),
-          FilledButton(
-            onPressed: () {
-              Navigator.pop(context);
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const MyEntriesScreen()),
-              );
-            },
-            child: const Text('View My Entries'),
-          ),
-        ],
-      ),
+    final launched = await launchUrl(
+      Uri.parse(checkout.checkoutUrl),
+      mode: LaunchMode.platformDefault,
+      webOnlyWindowName: '_self',
     );
+    if (!launched && mounted) {
+      setState(() {
+        _checkoutUrl = checkout.checkoutUrl;
+        _msg =
+            'Square Checkout could not open automatically. Tap Open Payment Page below to continue.';
+      });
+    }
   }
 
   Future<void> _confirmDayOf() async {
@@ -1282,15 +1169,9 @@ class _CartScreenState extends State<CartScreen> {
                   ),
                 if (_selectedOnlineProvider == 'square') ...[
                   const SizedBox(height: 14),
-                  if (_squareCheckoutConfig != null)
-                    SquareCardPlatform.instance.buildCardView(),
-                  if (_squareCardLoading) const LinearProgressIndicator(),
-                  if (!_squareCardLoading && !_squareCardReady)
-                    TextButton.icon(
-                      onPressed: _initializeSquareCard,
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Reload Square card fields'),
-                    ),
+                  const Text(
+                    'You’ll be redirected to Square to securely enter your payment information.',
+                  ),
                 ],
               ],
             ],
@@ -1636,7 +1517,7 @@ class _CartScreenState extends State<CartScreen> {
                               _payingOnline
                                   ? 'Processing…'
                                   : _selectedOnlineProvider == 'square'
-                                  ? 'Pay Online with Square'
+                                  ? 'Continue to Secure Square Checkout'
                                   : 'Pay ${_money(totalDue, currency: currency)} Online',
                             ),
                           )

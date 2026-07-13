@@ -380,6 +380,26 @@ begin
   exception when others then
     if sqlerrm = 'different client key unexpectedly claimed the attempt' then raise; end if;
   end;
+  perform public.attach_provider_hosted_checkout(
+    v_session,
+    'square',
+    'square_link_test',
+    'square_order_test',
+    'https://square.link/u/test',
+    jsonb_build_object(
+      'application_fee_requested_cents', 2,
+      'application_fee_sent_to_provider', false,
+      'application_fee_test_limitation', 'square_sandbox_payment_link'
+    )
+  );
+  perform pg_temp.assert_true((select
+    provider_session_id = 'square_link_test'
+    and provider_attempt_id = 'square_order_test'
+    and checkout_url = 'https://square.link/u/test'
+    and metadata ->> 'application_fee_test_limitation' =
+      'square_sandbox_payment_link'
+    from public.show_payment_sessions where id = v_session),
+    'hosted checkout references were not attached');
   perform public.set_provider_payment_state(
     v_session, 'square', 'square_payment_test', 'PENDING'
   );
