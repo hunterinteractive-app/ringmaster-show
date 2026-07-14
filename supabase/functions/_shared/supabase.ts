@@ -18,6 +18,23 @@ export function serviceClient(): SupabaseClient {
   );
 }
 
+export async function isServiceRoleRequest(request: Request): Promise<boolean> {
+  const authorization = request.headers.get("Authorization") ?? "";
+  const token = authorization.replace(/^Bearer\s+/i, "").trim();
+  const serviceRoleKey = requiredEnv("SUPABASE_SERVICE_ROLE_KEY");
+  const [providedHash, expectedHash] = await Promise.all([
+    crypto.subtle.digest("SHA-256", new TextEncoder().encode(token)),
+    crypto.subtle.digest("SHA-256", new TextEncoder().encode(serviceRoleKey)),
+  ]);
+  const provided = new Uint8Array(providedHash);
+  const expected = new Uint8Array(expectedHash);
+  let difference = 0;
+  for (let index = 0; index < expected.length; index++) {
+    difference |= provided[index] ^ expected[index];
+  }
+  return difference === 0;
+}
+
 export async function authenticatedUser(
   request: Request,
 ): Promise<{ user: User; client: SupabaseClient }> {

@@ -50,6 +50,7 @@ class _SquarePaymentReturnScreenState extends State<SquarePaymentReturnScreen> {
         latest = await SquareCheckoutService.loadAttemptStatus(
           cartId: _cartId,
           paymentSessionId: _paymentSessionId,
+          reconcileIfPending: attempt >= 3,
         );
         if (!latest.pending) break;
         await Future<void>.delayed(const Duration(seconds: 1));

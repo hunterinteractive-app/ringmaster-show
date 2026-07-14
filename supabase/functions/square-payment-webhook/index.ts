@@ -1,13 +1,18 @@
 import {
-  finalizePaidCart,
-  markPaymentAttemptTerminal,
   recordPaymentEvent,
   setPaymentEventStatus,
-  setProviderPaymentState,
 } from "../_shared/payment.ts";
 import { serviceClient } from "../_shared/supabase.ts";
 import { squareGet } from "../_shared/square.ts";
 import { loadSquareAuthorization } from "../_shared/square_credentials.ts";
+import {
+  findSquarePaymentAttempt,
+  reconcileSquarePayment,
+  retrieveSquarePaymentForAttempt,
+} from "../_shared/square_payment_reconciler.ts";
+import type {
+  SquarePaymentAttempt,
+} from "../_shared/square_payment_reconciler.ts";
 
 const backend = serviceClient();
 
@@ -38,11 +43,15 @@ Deno.serve(async (request: Request) => {
   let orderId = text(payment?.order_id) ?? extractOrderId(event);
   const referenceId = text(payment?.reference_id);
   const eventMerchantId = text(event.merchant_id);
-  let attempt: SavedAttempt | null = null;
+  let attempt: SquarePaymentAttempt | null = null;
   let claimed = false;
 
   try {
-    attempt = await findAttempt(providerPaymentId, orderId, referenceId);
+    attempt = await findSquarePaymentAttempt(backend, {
+      providerPaymentId,
+      providerOrderId: orderId,
+      paymentSessionId: isUuid(referenceId) ? referenceId : null,
+    });
     if (!attempt && providerPaymentId && eventMerchantId) {
       const recovered = await recoverPayment(
         providerPaymentId,
@@ -51,11 +60,15 @@ Deno.serve(async (request: Request) => {
       if (recovered) {
         payment = recovered;
         orderId = text(recovered.order_id);
-        attempt = await findAttempt(providerPaymentId, orderId, null);
+        attempt = await findSquarePaymentAttempt(backend, {
+          providerPaymentId,
+          providerOrderId: orderId,
+        });
       }
     }
     if (eventType === "order.updated" && attempt && !payment) {
-      payment = await paymentForOrder(attempt, orderId);
+      const lookup = await retrieveSquarePaymentForAttempt(backend, attempt);
+      payment = lookup?.payment ?? null;
       providerPaymentId = text(payment?.id);
     }
 
@@ -88,41 +101,11 @@ Deno.serve(async (request: Request) => {
     }
 
     await updateEvent(eventId, "processing", attempt, providerPaymentId);
-    validatePayment(payment, attempt);
-    await validateMerchantAndLocation(payment, attempt);
-    const status = String(payment.status ?? "").toUpperCase();
-    if (status === "COMPLETED") {
-      await setProviderPaymentState(backend, {
-        paymentSessionId: attempt.id,
-        provider: "square",
-        providerPaymentId,
-        providerStatus: "COMPLETED",
-      });
-      await finalizePaidCart(backend, {
-        cartId: attempt.cart_id,
-        paymentSessionId: attempt.id,
-        provider: "square",
-        providerPaymentId,
-        amountCents: attempt.expected_amount_cents,
-        currency: attempt.expected_currency,
-      });
-    } else if (status === "PENDING" || status === "APPROVED") {
-      await setProviderPaymentState(backend, {
-        paymentSessionId: attempt.id,
-        provider: "square",
-        providerPaymentId,
-        providerStatus: status as "PENDING" | "APPROVED",
-      });
-    } else if (status === "FAILED" || status === "CANCELED") {
-      await markPaymentAttemptTerminal(backend, {
-        paymentSessionId: attempt.id,
-        provider: "square",
-        status: status === "FAILED" ? "failed" : "cancelled",
-        failureCode: `square_${status.toLowerCase()}`,
-        failureMessage: `Square payment ${status.toLowerCase()}.`,
-        providerPaymentId,
-      });
-    } else {
+    const result = await reconcileSquarePayment(backend, {
+      attempt,
+      payment,
+    });
+    if (!result.processed) {
       await updateEvent(eventId, "ignored", attempt, providerPaymentId);
       return response({ ignored: true });
     }
@@ -152,53 +135,6 @@ Deno.serve(async (request: Request) => {
   }
 });
 
-type SavedAttempt = {
-  id: string;
-  show_id: string;
-  cart_id: string;
-  provider: string;
-  provider_order_id: string | null;
-  provider_payment_id: string | null;
-  expected_amount_cents: number;
-  expected_currency: string;
-  platform_fee_cents: number;
-  attempt_status: string;
-  metadata: Record<string, unknown> | null;
-};
-
-const attemptColumns =
-  "id,show_id,cart_id,provider,provider_order_id,provider_payment_id," +
-  "expected_amount_cents,expected_currency,platform_fee_cents,attempt_status,metadata";
-
-async function findAttempt(
-  paymentId: string | null,
-  orderId: string | null,
-  referenceId: string | null,
-): Promise<SavedAttempt | null> {
-  if (paymentId) {
-    const result = await backend.from("show_payment_sessions")
-      .select(attemptColumns).eq("provider", "square")
-      .eq("provider_payment_id", paymentId).maybeSingle();
-    if (result.error) {
-      throw new Error("Unable to locate Square payment attempt.");
-    }
-    if (result.data) return result.data as unknown as SavedAttempt;
-  }
-  if (orderId) {
-    const result = await backend.from("show_payment_sessions")
-      .select(attemptColumns).eq("provider", "square")
-      .eq("provider_order_id", orderId).maybeSingle();
-    if (result.error) throw new Error("Unable to locate Square order attempt.");
-    if (result.data) return result.data as unknown as SavedAttempt;
-  }
-  if (!isUuid(referenceId)) return null;
-  const result = await backend.from("show_payment_sessions")
-    .select(attemptColumns).eq("provider", "square")
-    .eq("id", referenceId).maybeSingle();
-  if (result.error) throw new Error("Unable to locate Square payment attempt.");
-  return result.data as unknown as SavedAttempt | null;
-}
-
 async function recoverPayment(
   paymentId: string,
   merchantId: string,
@@ -217,85 +153,6 @@ async function recoverPayment(
     authorization.accessToken,
   );
   return objectOrNull(result.payment);
-}
-
-async function paymentForOrder(
-  attempt: SavedAttempt,
-  orderId: string | null,
-): Promise<Record<string, unknown> | null> {
-  const exactOrderId = orderId ?? attempt.provider_order_id;
-  if (!exactOrderId || exactOrderId !== attempt.provider_order_id) return null;
-  const authorization = await loadSquareAuthorization(
-    backend,
-    attempt.show_id,
-    { requireReady: false },
-  );
-  const result = await squareGet(
-    `/v2/orders/${encodeURIComponent(exactOrderId)}`,
-    authorization.accessToken,
-  );
-  const order = objectOrNull(result.order);
-  const tenders = Array.isArray(order?.tenders) ? order.tenders : [];
-  const paymentId = tenders.map((tender) => objectOrNull(tender))
-    .map((tender) => text(tender?.payment_id)).find(Boolean);
-  if (!paymentId) return null;
-  const paymentResult = await squareGet(
-    `/v2/payments/${encodeURIComponent(paymentId)}`,
-    authorization.accessToken,
-  );
-  return objectOrNull(paymentResult.payment);
-}
-
-function validatePayment(
-  payment: Record<string, unknown>,
-  attempt: SavedAttempt,
-): void {
-  if (attempt.provider !== "square") throw new Error("Provider mismatch.");
-  if (
-    !attempt.provider_order_id ||
-    text(payment.order_id) !== attempt.provider_order_id
-  ) {
-    throw new Error("Square order does not match the saved payment attempt.");
-  }
-  const amount = objectOrNull(payment.amount_money);
-  if (!amount || Number(amount.amount) !== attempt.expected_amount_cents) {
-    throw new Error("Square amount does not match the saved quote.");
-  }
-  if (
-    String(amount.currency ?? "").toLowerCase() !==
-      attempt.expected_currency.toLowerCase()
-  ) {
-    throw new Error("Square currency does not match the saved quote.");
-  }
-  const metadata = attempt.metadata ?? {};
-  if (metadata.application_fee_sent_to_provider === true) {
-    const appFee = objectOrNull(payment.app_fee_money);
-    if (
-      !appFee || Number(appFee.amount) !== attempt.platform_fee_cents ||
-      String(appFee.currency ?? "").toLowerCase() !==
-        attempt.expected_currency.toLowerCase()
-    ) {
-      throw new Error("Square application fee does not match the saved quote.");
-    }
-  }
-}
-
-async function validateMerchantAndLocation(
-  payment: Record<string, unknown>,
-  attempt: SavedAttempt,
-): Promise<void> {
-  const { data, error } = await backend.from("show_payment_account_links")
-    .select("provider_account_id,provider_location_id")
-    .eq("show_id", attempt.show_id).eq("provider", "square").maybeSingle();
-  if (error || !data) throw new Error("Square account link is missing.");
-  if (
-    String(payment.location_id ?? "") !==
-      String(data.provider_location_id ?? "") ||
-    (payment.merchant_id && String(payment.merchant_id) !==
-        String(data.provider_account_id ?? ""))
-  ) {
-    throw new Error("Square merchant or location mismatch.");
-  }
 }
 
 function extractPayment(event: Record<string, unknown>) {
@@ -322,7 +179,7 @@ function text(value: unknown): string | null {
 async function updateEvent(
   eventId: string,
   status: "processing" | "processed" | "ignored",
-  attempt: SavedAttempt | null,
+  attempt: SquarePaymentAttempt | null,
   providerPaymentId: string | null,
 ) {
   await setPaymentEventStatus(backend, {

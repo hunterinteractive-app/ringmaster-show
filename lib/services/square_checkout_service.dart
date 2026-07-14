@@ -61,10 +61,12 @@ class SquareCheckoutService {
   static Future<SquarePaymentAttemptStatus> loadAttemptStatus({
     required String cartId,
     required String paymentSessionId,
+    bool reconcileIfPending = false,
   }) async {
     final data = await _invoke('square-payment-attempt-status', {
       'cart_id': cartId,
       'payment_session_id': paymentSessionId,
+      'reconcile_if_pending': reconcileIfPending,
     });
     final failure = (data['failure_message'] ?? '').toString().trim();
     final limitation = (data['application_fee_test_limitation'] ?? '')

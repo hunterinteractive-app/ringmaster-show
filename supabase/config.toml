@@ -9,3 +9,6 @@ verify_jwt = false
 
 [functions.square-payment-webhook]
 verify_jwt = false
+
+[functions.square-reconcile-payment]
+verify_jwt = true
