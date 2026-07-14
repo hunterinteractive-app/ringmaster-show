@@ -12,6 +12,8 @@ import 'package:url_launcher/url_launcher_string.dart';
 
 import 'package:ringmaster_show/screens/admin/closeout/data/closeout_repository.dart';
 import 'package:ringmaster_show/screens/admin/closeout/models/closeout_scope.dart';
+import 'package:ringmaster_show/screens/admin/closeout/models/closeout_scope_presentation.dart';
+import 'package:ringmaster_show/screens/admin/closeout/models/arba_report_presentation.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/arba_report_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/arba_report_pdf.dart';
 import 'package:ringmaster_show/screens/admin/closeout/registry/report_registry.dart';
@@ -19,8 +21,10 @@ import 'package:ringmaster_show/screens/admin/closeout/services/closeout_runner.
 import 'package:ringmaster_show/screens/admin/closeout/services/report_engine.dart';
 import 'package:ringmaster_show/screens/admin/closeout/services/report_upload_service.dart';
 import 'package:ringmaster_show/screens/admin/closeout/utils/club_report_grouping.dart';
+import 'package:ringmaster_show/screens/admin/closeout/widgets/closeout_scope_widgets.dart';
 import 'package:ringmaster_show/services/report_email_service.dart';
 import 'package:ringmaster_show/services/app_session.dart';
+import 'package:ringmaster_show/utils/file_download.dart';
 
 import 'results/admin_results_entry_screen.dart';
 
@@ -122,6 +126,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
   CloseoutDashboard? _dashboard;
   Map<String, List<String>> _cachedReportNamesByGroup = const {};
+  Map<String, String> _completedFinalizeRunIdsByScope = const {};
   LegsReportPdfBuilder? _legsBuilder;
   ExhibitorReportPdfBuilder? _exhibitorBuilder;
   UnpaidBalancesReportPdfBuilder? _unpaidBalancesBuilder;
@@ -200,6 +205,44 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         artifact.artifactStatus == 'generated' &&
         (artifact.storageBucket?.isNotEmpty == true) &&
         (artifact.storagePath?.isNotEmpty == true);
+  }
+
+  ArbaArtifactDescriptor _arbaArtifactDescriptor(
+    ReportArtifactSummary artifact,
+  ) {
+    return ArbaArtifactDescriptor(
+      id: artifact.id,
+      finalizeRunId: artifact.finalizeRunId ?? '',
+      reportName: artifact.reportName,
+      artifactStatus: artifact.artifactStatus,
+      storageBucket: artifact.storageBucket ?? '',
+      storagePath: artifact.storagePath ?? '',
+      isCurrent: artifact.isCurrent,
+      metadata: artifact.metadata,
+    );
+  }
+
+  List<ArbaReportSectionDescriptor> get _arbaSectionDescriptors =>
+      _closeoutSections
+          .map(
+            (section) => ArbaReportSectionDescriptor(
+              id: section.sectionId,
+              species: section.species.toSet(),
+              kind: section.kind,
+              letter: section.letter,
+              displayName: section.displayName,
+              isAllBreed: section.isAllBreed,
+              sortOrder: section.sortOrder,
+            ),
+          )
+          .toList();
+
+  String _arbaSectionName(ReportArtifactSummary artifact) {
+    final options = buildArbaReportOptions(
+      artifacts: [_arbaArtifactDescriptor(artifact)],
+      sections: _arbaSectionDescriptors,
+    );
+    return options.isEmpty ? 'Selected Section' : options.first.sectionName;
   }
 
   String _norm(String value) {
@@ -496,6 +539,32 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
   String get _selectedCloseoutScopeLabel {
     return _resolvedCloseoutScope.displayLabel;
+  }
+
+  String get _selectedCloseoutScopePrimarySummary {
+    return CloseoutScopePresentation.primarySummary(_resolvedCloseoutScope);
+  }
+
+  String get _selectedCloseoutScopeDetailSummary {
+    final selectedIds = _resolvedCloseoutScope.sectionIds;
+    final labels = _closeoutSections
+        .where((section) => selectedIds.contains(section.sectionId))
+        .map((section) => section.displayLabel)
+        .toList();
+    return labels.isEmpty ? 'No sections selected' : labels.join(', ');
+  }
+
+  String get _selectedCloseoutScopeTooltipLabel {
+    return CloseoutScopePresentation.tooltipLabel(_resolvedCloseoutScope);
+  }
+
+  bool get _selectedCloseoutScopeIsFinalized {
+    final scopeKey = _resolvedCloseoutScope.stableScopeKey;
+    return closeoutScopeHasCompletedRun(
+          selectedStableScopeKey: scopeKey,
+          completedRunIdsByScope: _completedFinalizeRunIdsByScope,
+        ) ||
+        _finalizeRunIdForSelectedScope.isNotEmpty;
   }
 
   ResolvedCloseoutScope get _resolvedCloseoutScope {
@@ -2547,7 +2616,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         'report status summary',
         () => supabase
             .from('show_report_artifacts')
-            .select('artifact_status, generated_at, finalize_run_id')
+            .select('artifact_status, generated_at, finalize_run_id, metadata')
             .eq('show_id', widget.showId)
             .eq('is_current', true),
       );
@@ -2571,6 +2640,17 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       final artifacts = (artifactRows as List)
           .map((raw) => Map<String, dynamic>.from(raw as Map))
           .toList();
+      final completedRunIdsByScope = <String, String>{};
+      for (final artifact in artifacts) {
+        if (artifact['metadata'] is! Map) continue;
+        final metadata = Map<String, dynamic>.from(artifact['metadata'] as Map);
+        final scopeKey = (metadata['scope_key'] ?? '').toString().trim();
+        final runId = (artifact['finalize_run_id'] ?? '').toString().trim();
+        if (scopeKey.isNotEmpty && runId.isNotEmpty) {
+          completedRunIdsByScope[scopeKey] = runId;
+        }
+      }
+      _completedFinalizeRunIdsByScope = completedRunIdsByScope;
       final generated = artifacts
           .where((row) => (row['artifact_status'] ?? '') == 'generated')
           .toList();
@@ -5313,11 +5393,25 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         return;
       }
 
-      final signedUrl = await supabase.storage
-          .from(artifact.storageBucket!)
-          .createSignedUrl(artifact.storagePath!, 60 * 5);
+      if (artifact.reportName == 'arba_report') {
+        final bytes = await supabase.storage
+            .from(artifact.storageBucket!)
+            .download(artifact.storagePath!);
+        await downloadFileBytes(
+          bytes,
+          fileName: arbaDownloadFileName(
+            showName: widget.showName,
+            sectionName: _arbaSectionName(artifact),
+          ),
+          mimeType: 'application/pdf',
+        );
+      } else {
+        final signedUrl = await supabase.storage
+            .from(artifact.storageBucket!)
+            .createSignedUrl(artifact.storagePath!, 60 * 5);
 
-      await launchUrlString(signedUrl, mode: LaunchMode.externalApplication);
+        await launchUrlString(signedUrl, mode: LaunchMode.externalApplication);
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -6170,7 +6264,23 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
       var artifacts = (_dashboard?.reports ?? const <ReportArtifactSummary>[])
           .where((r) => r.reportName == reportName)
-          .where(_artifactIsUsableCurrent);
+          .where(_artifactIsUsableCurrent)
+          .where(_artifactMatchesSelectedScope);
+
+      if (reportName == 'arba_report') {
+        final currentRunId = _finalizeRunIdForSelectedScope;
+        final selected = selectBundledArbaArtifacts(
+          artifacts: (_dashboard?.reports ?? const <ReportArtifactSummary>[])
+              .map(_arbaArtifactDescriptor),
+          finalizeRunId: currentRunId,
+          stableScopeKey: _resolvedCloseoutScope.stableScopeKey,
+          selectedSectionIds: _resolvedCloseoutScope.sectionIds,
+        );
+        final allowedIds = selected.map((artifact) => artifact.id).toSet();
+        artifacts = artifacts.where(
+          (artifact) => allowedIds.contains(artifact.id),
+        );
+      }
 
       if ((reportName == 'exhibitor_report' ||
               reportName == 'legs' ||
@@ -6229,16 +6339,23 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         });
       }
 
-      final list = artifacts.toList()
-        ..sort((a, b) {
-          final aDt =
-              DateTime.tryParse(a.generatedAt ?? '') ??
-              DateTime.fromMillisecondsSinceEpoch(0);
-          final bDt =
-              DateTime.tryParse(b.generatedAt ?? '') ??
-              DateTime.fromMillisecondsSinceEpoch(0);
-          return bDt.compareTo(aDt);
-        });
+      final seenArtifactIds = <String>{};
+      final seenStoragePaths = <String>{};
+      final list =
+          artifacts.where((artifact) {
+            final id = artifact.id.trim();
+            final path = (artifact.storagePath ?? '').trim();
+            if (id.isNotEmpty && !seenArtifactIds.add(id)) return false;
+            return path.isEmpty || seenStoragePaths.add(path);
+          }).toList()..sort((a, b) {
+            final aDt =
+                DateTime.tryParse(a.generatedAt ?? '') ??
+                DateTime.fromMillisecondsSinceEpoch(0);
+            final bDt =
+                DateTime.tryParse(b.generatedAt ?? '') ??
+                DateTime.fromMillisecondsSinceEpoch(0);
+            return bDt.compareTo(aDt);
+          });
 
       if (list.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -6266,6 +6383,33 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           );
           return;
         }
+
+        final scopeLabel = list.length == 1
+            ? _arbaSectionName(list.first)
+            : _selectedCloseoutScopePrimarySummary;
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Email all ARBA reports?'),
+            content: Text(
+              arbaEmailConfirmationText(
+                reportCount: list.length,
+                scopeLabel: scopeLabel,
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Email All'),
+              ),
+            ],
+          ),
+        );
+        if (confirmed != true) return;
 
         await _sendClubArtifactsEmail(
           artifacts: list,
@@ -6579,10 +6723,22 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                     const SizedBox(height: 12),
                   ],
                   _ReportActionsCard(
-                    key: ValueKey('report-actions-${widget.showId}'),
+                    key: ValueKey(
+                      'report-actions-${widget.showId}-${_resolvedCloseoutScope.stableScopeKey}',
+                    ),
                     showId: widget.showId,
                     reports:
-                        _dashboard?.reports ?? const <ReportArtifactSummary>[],
+                        (_dashboard?.reports ?? const <ReportArtifactSummary>[])
+                            .where((artifact) => artifact.isCurrent)
+                            .where(_artifactMatchesSelectedScope)
+                            .where(
+                              (artifact) =>
+                                  _finalizeRunIdForSelectedScope.isNotEmpty &&
+                                  artifact.finalizeRunId ==
+                                      _finalizeRunIdForSelectedScope,
+                            )
+                            .toList(),
+                    arbaSections: _arbaSectionDescriptors,
                     groupedReportNames: {
                       'arba': _reportNamesForGroup('arba'),
                       'exhibitor': _reportNamesForGroup('exhibitor'),
@@ -6660,6 +6816,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   Widget build(BuildContext context) {
     final reportsBlocked = !_resultsReadyForReports;
     final reportsBlockedMessage = _resultsReadinessMessage();
+    final selectedScopeFinalized = _selectedCloseoutScopeIsFinalized;
+    final tooltipScope = _selectedCloseoutScopeTooltipLabel;
 
     return Scaffold(
       appBar: AppBar(
@@ -6750,7 +6908,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                     scopes: _closeoutScopes,
                     sections: _closeoutSections,
                     selectedScope: _selectedCloseoutScope,
-                    scopeSummary: _selectedCloseoutScopeLabel,
+                    scopePrimarySummary: _selectedCloseoutScopePrimarySummary,
+                    scopeDetailSummary: _selectedCloseoutScopeDetailSummary,
                     customSectionIds: _customCloseoutSectionIds,
                     onChanged: (scope) {
                       setState(() {
@@ -6824,32 +6983,19 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                           color: AppColors.muted.withValues(alpha: .18),
                         ),
                       ),
-                      child: Wrap(
-                        spacing: 10,
-                        runSpacing: 10,
-                        children: [
-                          FilledButton.icon(
-                            style: FilledButton.styleFrom(
-                              backgroundColor: reportsBlocked
-                                  ? Colors.grey
-                                  : (_dashboard
-                                                ?.dashboard
-                                                .closeout
-                                                .isReportsStale ==
-                                            true
-                                        ? AppColors.gold
-                                        : Colors.green),
-                              foregroundColor: AppColors.text,
-                              disabledForegroundColor: AppColors.text
-                                  .withValues(alpha: .62),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 18,
-                                vertical: 14,
-                              ),
-                            ),
+                      child: CloseoutResponsiveActionArea(
+                        primaryActions: [
+                          CloseoutFinalizeActionButton(
+                            reportsBlocked: reportsBlocked,
+                            finalized: selectedScopeFinalized,
+                            reportsStale:
+                                _dashboard?.dashboard.closeout.isReportsStale ==
+                                true,
+                            tooltipScope: tooltipScope,
                             onPressed:
                                 (_isBusy ||
                                     reportsBlocked ||
+                                    selectedScopeFinalized ||
                                     _resolvedCloseoutScope.isEmpty)
                                 ? null
                                 : () async {
@@ -7018,20 +7164,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                       }
                                     }
                                   },
-                            icon: const Icon(Icons.auto_awesome),
-                            label: Text(
-                              reportsBlocked
-                                  ? 'Finish Results Before Finalize'
-                                  : (_dashboard
-                                                ?.dashboard
-                                                .closeout
-                                                .isReportsStale ==
-                                            true
-                                        ? (_selectedCloseoutScopeIsEntireShow
-                                              ? 'Finalize Show'
-                                              : 'Finalize $_selectedCloseoutScopeLabel')
-                                        : 'Finalize Show'),
-                            ),
                           ),
 
                           Builder(
@@ -7039,18 +7171,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                               final queuedRemaining =
                                   _queuedRemainingReportArtifacts();
 
-                              return OutlinedButton.icon(
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: AppColors.secondaryButton,
-                                  disabledForegroundColor: AppColors.muted
-                                      .withValues(alpha: .72),
-                                  side: BorderSide(
-                                    color: AppColors.secondaryButton.withValues(
-                                      alpha: .78,
-                                    ),
-                                    width: 1.4,
-                                  ),
-                                ),
+                              return CloseoutGenerateRemainingButton(
+                                count: queuedRemaining.length,
                                 onPressed: _isBusy || queuedRemaining.isEmpty
                                     ? null
                                     : () async {
@@ -7116,111 +7238,121 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                           }
                                         }
                                       },
-                                icon: const Icon(Icons.play_circle_outline),
-                                label: Text(
-                                  'Generate Remaining (${queuedRemaining.length})',
-                                ),
                               );
                             },
                           ),
 
-                          OutlinedButton.icon(
-                            onPressed: _isBusy || _resolvedCloseoutScope.isEmpty
-                                ? null
-                                : () async {
-                                    final confirmed =
+                          Tooltip(
+                            message: 'Regenerate all reports for $tooltipScope',
+                            child: OutlinedButton.icon(
+                              onPressed:
+                                  _isBusy || _resolvedCloseoutScope.isEmpty
+                                  ? null
+                                  : () async {
+                                      final confirmed =
+                                          await showDialog<bool>(
+                                            context: context,
+                                            builder: (context) => AlertDialog(
+                                              title: const Text(
+                                                'Regenerate All Reports?',
+                                              ),
+                                              content: Text(
+                                                'Regenerate all reports for $_selectedCloseoutScopeLabel?\n\n'
+                                                'Existing artifacts for this selection will be replaced. '
+                                                'Reports for other sections will not be changed.',
+                                              ),
+                                              actions: [
+                                                TextButton(
+                                                  onPressed: () =>
+                                                      Navigator.pop(
+                                                        context,
+                                                        false,
+                                                      ),
+                                                  child: const Text('Cancel'),
+                                                ),
+                                                FilledButton(
+                                                  onPressed: () =>
+                                                      Navigator.pop(
+                                                        context,
+                                                        true,
+                                                      ),
+                                                  child: const Text(
+                                                    'Regenerate All',
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ) ??
+                                          false;
+                                      if (!confirmed) return;
+                                      setState(() => _generatingReport = true);
+                                      try {
+                                        await _finalizeShow(regenerate: true);
+                                        final remaining =
+                                            await _loadRemainingArtifactsForCurrentRun();
+                                        if (!mounted || remaining.isEmpty) {
+                                          return;
+                                        }
                                         await showDialog<bool>(
                                           context: context,
-                                          builder: (context) => AlertDialog(
-                                            title: const Text(
-                                              'Regenerate All Reports?',
-                                            ),
-                                            content: Text(
-                                              'Regenerate all reports for $_selectedCloseoutScopeLabel?\n\n'
-                                              'Existing artifacts for this selection will be replaced. '
-                                              'Reports for other sections will not be changed.',
-                                            ),
-                                            actions: [
-                                              TextButton(
-                                                onPressed: () => Navigator.pop(
-                                                  context,
-                                                  false,
-                                                ),
-                                                child: const Text('Cancel'),
+                                          barrierDismissible: false,
+                                          builder: (context) =>
+                                              _GenerateAllReportsDialog(
+                                                artifacts: remaining,
+                                                scopeLabel:
+                                                    _selectedCloseoutScopeLabel,
+                                                onRun:
+                                                    (
+                                                      started,
+                                                      finished,
+                                                      failed,
+                                                    ) =>
+                                                        _runGenerateAllReportsLive(
+                                                          remaining,
+                                                          onStarted: started,
+                                                          onFinished: finished,
+                                                          onFailed: failed,
+                                                        ),
                                               ),
-                                              FilledButton(
-                                                onPressed: () => Navigator.pop(
-                                                  context,
-                                                  true,
-                                                ),
-                                                child: const Text(
-                                                  'Regenerate All',
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ) ??
-                                        false;
-                                    if (!confirmed) return;
-                                    setState(() => _generatingReport = true);
-                                    try {
-                                      await _finalizeShow(regenerate: true);
-                                      final remaining =
-                                          await _loadRemainingArtifactsForCurrentRun();
-                                      if (!mounted || remaining.isEmpty) return;
-                                      await showDialog<bool>(
-                                        context: context,
-                                        barrierDismissible: false,
-                                        builder: (context) =>
-                                            _GenerateAllReportsDialog(
-                                              artifacts: remaining,
-                                              scopeLabel:
-                                                  _selectedCloseoutScopeLabel,
-                                              onRun:
-                                                  (started, finished, failed) =>
-                                                      _runGenerateAllReportsLive(
-                                                        remaining,
-                                                        onStarted: started,
-                                                        onFinished: finished,
-                                                        onFailed: failed,
-                                                      ),
-                                            ),
-                                      );
-                                      await _refreshDashboardOnly(
-                                        includeReports: true,
-                                      );
-                                    } finally {
-                                      if (mounted) {
-                                        setState(
-                                          () => _generatingReport = false,
                                         );
+                                        await _refreshDashboardOnly(
+                                          includeReports: true,
+                                        );
+                                      } finally {
+                                        if (mounted) {
+                                          setState(
+                                            () => _generatingReport = false,
+                                          );
+                                        }
                                       }
-                                    }
-                                  },
-                            icon: const Icon(Icons.restart_alt),
-                            label: const Text('Regenerate All Reports'),
-                          ),
-
-                          OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.secondaryButton,
-                              disabledForegroundColor: AppColors.muted
-                                  .withValues(alpha: .72),
-                              side: BorderSide(
-                                color: AppColors.secondaryButton.withValues(
-                                  alpha: .78,
-                                ),
-                                width: 1.4,
-                              ),
+                                    },
+                              icon: const Icon(Icons.restart_alt),
+                              label: const Text('Regenerate All Reports'),
                             ),
-                            onPressed: _isBusy || _resolvedCloseoutScope.isEmpty
-                                ? null
-                                : _sendAllExhibitorReports,
-                            icon: const Icon(Icons.send_outlined),
-                            label: Text(
-                              _selectedCloseoutScopeIsEntireShow
-                                  ? 'Send All Exhibitor Reports'
-                                  : 'Send $_selectedCloseoutScopeLabel Exhibitor Reports',
+                          ),
+                        ],
+                        distributionActions: [
+                          Tooltip(
+                            message:
+                                'Send generated exhibitor reports for $tooltipScope',
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.secondaryButton,
+                                disabledForegroundColor: AppColors.muted
+                                    .withValues(alpha: .72),
+                                side: BorderSide(
+                                  color: AppColors.secondaryButton.withValues(
+                                    alpha: .78,
+                                  ),
+                                  width: 1.4,
+                                ),
+                              ),
+                              onPressed:
+                                  _isBusy || _resolvedCloseoutScope.isEmpty
+                                  ? null
+                                  : _sendAllExhibitorReports,
+                              icon: const Icon(Icons.send_outlined),
+                              label: const Text('Send Exhibitor Reports'),
                             ),
                           ),
                           /*
@@ -7230,26 +7362,27 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                   label: const Text('Send All Legs'),
                                 ),
                                 */
-                          OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.secondaryButton,
-                              disabledForegroundColor: AppColors.muted
-                                  .withValues(alpha: .72),
-                              side: BorderSide(
-                                color: AppColors.secondaryButton.withValues(
-                                  alpha: .78,
+                          Tooltip(
+                            message:
+                                'Send generated club reports for $tooltipScope',
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.secondaryButton,
+                                disabledForegroundColor: AppColors.muted
+                                    .withValues(alpha: .72),
+                                side: BorderSide(
+                                  color: AppColors.secondaryButton.withValues(
+                                    alpha: .78,
+                                  ),
+                                  width: 1.4,
                                 ),
-                                width: 1.4,
                               ),
-                            ),
-                            onPressed: _isBusy || _resolvedCloseoutScope.isEmpty
-                                ? null
-                                : _sendAllClubReports,
-                            icon: const Icon(Icons.group_outlined),
-                            label: Text(
-                              _selectedCloseoutScopeIsEntireShow
-                                  ? 'Send All Club Reports'
-                                  : 'Send $_selectedCloseoutScopeLabel Club Reports',
+                              onPressed:
+                                  _isBusy || _resolvedCloseoutScope.isEmpty
+                                  ? null
+                                  : _sendAllClubReports,
+                              icon: const Icon(Icons.group_outlined),
+                              label: const Text('Send Club Reports'),
                             ),
                           ),
                         ],
@@ -7574,6 +7707,7 @@ class _ArbaCloseoutCard extends StatelessWidget {
 
 class _ReportActionsCard extends StatefulWidget {
   final List<ReportArtifactSummary> reports;
+  final List<ArbaReportSectionDescriptor> arbaSections;
   final Map<String, List<String>> groupedReportNames;
   final Future<void> Function(
     String reportName, {
@@ -7635,6 +7769,7 @@ class _ReportActionsCard extends StatefulWidget {
     super.key,
     required this.showId,
     required this.reports,
+    required this.arbaSections,
     required this.groupedReportNames,
     required this.onGenerate,
     required this.onDownload,
@@ -7655,6 +7790,7 @@ class _ReportActionsCard extends StatefulWidget {
 class _ReportActionsCardState extends State<_ReportActionsCard> {
   String _selectedGroup = 'arba';
   String? _selectedReportName = 'arba_report';
+  String? _selectedArbaArtifactId;
   final TextEditingController _breedController = TextEditingController();
   final TextEditingController _clubController = TextEditingController();
   String _selectedScope = 'OPEN';
@@ -7703,6 +7839,22 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
 
   List<String> get _currentReports =>
       widget.groupedReportNames[_selectedGroup] ?? const [];
+
+  List<ArbaReportOption> get _arbaReportOptions => buildArbaReportOptions(
+    artifacts: widget.reports.map(
+      (artifact) => ArbaArtifactDescriptor(
+        id: artifact.id,
+        finalizeRunId: artifact.finalizeRunId ?? '',
+        reportName: artifact.reportName,
+        artifactStatus: artifact.artifactStatus,
+        storageBucket: artifact.storageBucket ?? '',
+        storagePath: artifact.storagePath ?? '',
+        isCurrent: artifact.isCurrent,
+        metadata: artifact.metadata,
+      ),
+    ),
+    sections: widget.arbaSections,
+  );
 
   bool get _selectedReportIsStateClub =>
       _selectedReportName == 'details_by_breed' ||
@@ -7805,6 +7957,17 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
 
   ReportArtifactSummary? get _selectedArtifact {
     final list = _selectedArtifacts;
+    if (_selectedReportName == 'arba_report') {
+      final selectedId = normalizedArbaSelection(
+        _selectedArbaArtifactId,
+        _arbaReportOptions,
+      );
+      if (selectedId == null) return null;
+      return list.cast<ReportArtifactSummary?>().firstWhere(
+        (artifact) => artifact?.id == selectedId,
+        orElse: () => null,
+      );
+    }
     return list.isEmpty ? null : list.first;
   }
 
@@ -8361,6 +8524,11 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
   void didUpdateWidget(covariant _ReportActionsCard oldWidget) {
     super.didUpdateWidget(oldWidget);
 
+    _selectedArbaArtifactId = normalizedArbaSelection(
+      _selectedArbaArtifactId,
+      _arbaReportOptions,
+    );
+
     final reports = _currentReports;
     if (reports.isEmpty) {
       _selectedReportName = null;
@@ -8504,7 +8672,8 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
         OutlinedButton.icon(
           onPressed: canDownload && reportName != null
               ? () async {
-                  if (stateClubSpeciesCard && artifact != null) {
+                  if ((stateClubSpeciesCard || reportName == 'arba_report') &&
+                      artifact != null) {
                     await widget.onDownloadArtifact(artifact);
                     return;
                   }
@@ -8536,13 +8705,19 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
           label: Text(downloadLabel),
         ),
         if (reportName == 'arba_report')
-          OutlinedButton.icon(
-            onPressed:
-                _selectedReportCanEmail && canDownload && reportName != null
-                ? () => widget.onEmail(reportName)
-                : null,
-            icon: const Icon(Icons.email_outlined),
-            label: const Text('Email to ARBA'),
+          Tooltip(
+            message:
+                'Emails all generated ARBA reports for the selected scope.',
+            child: OutlinedButton.icon(
+              onPressed:
+                  _selectedReportCanEmail &&
+                      _arbaReportOptions.isNotEmpty &&
+                      reportName != null
+                  ? () => widget.onEmail(reportName)
+                  : null,
+              icon: const Icon(Icons.email_outlined),
+              label: const Text('Email All to ARBA'),
+            ),
           )
         else if (isCheckInSheet) ...[
           Tooltip(
@@ -8658,11 +8833,24 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
     }
 
     final artifact = _selectedArtifact;
+    final isArba = _selectedReportName == 'arba_report';
+    final selectedArbaOption = isArba && artifact != null
+        ? _arbaReportOptions.cast<ArbaReportOption?>().firstWhere(
+            (option) => option?.artifactId == artifact.id,
+            orElse: () => null,
+          )
+        : null;
     return [
+      if (isArba && _arbaReportOptions.isEmpty) ...[
+        const Text('No generated ARBA reports are available for this scope.'),
+        const SizedBox(height: 12),
+      ],
       _ReportInfoTile(
-        reportName: _selectedReportName == null
-            ? '-'
-            : _friendlyReportName(_selectedReportName),
+        reportName:
+            selectedArbaOption?.label ??
+            (_selectedReportName == null
+                ? '-'
+                : _friendlyReportName(_selectedReportName)),
         status: artifact?.artifactStatus ?? 'not_generated',
         generatedAt: artifact?.generatedAt,
       ),
@@ -8701,6 +8889,9 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
             setState(() {
               _selectedGroup = value;
               _selectedReportName = nextReport;
+              _selectedArbaArtifactId = value == 'arba'
+                  ? normalizedArbaSelection(null, _arbaReportOptions)
+                  : null;
 
               if (nextReport != 'exhibitor_report' &&
                   nextReport != 'legs' &&
@@ -8733,68 +8924,87 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
           },
         ),
         const SizedBox(height: 12),
-        DropdownButtonFormField<String>(
-          initialValue: _currentReports.contains(_selectedReportName)
-              ? _selectedReportName
-              : (_currentReports.isNotEmpty ? _currentReports.first : null),
-          decoration: const InputDecoration(
-            labelText: 'Report',
-            border: OutlineInputBorder(),
-          ),
-          items: _currentReports.map((reportName) {
-            final count = reportName == 'arba_report'
-                ? widget.reports
-                      .where((r) => r.reportName == reportName)
-                      .where((r) => r.isCurrent)
-                      .where((r) => r.artifactStatus == 'generated')
-                      .length
-                : 0;
+        if (_selectedGroup == 'arba')
+          DropdownButtonFormField<String>(
+            key: const ValueKey('arba-report-dropdown'),
+            initialValue: normalizedArbaSelection(
+              _selectedArbaArtifactId,
+              _arbaReportOptions,
+            ),
+            decoration: const InputDecoration(
+              labelText: 'Report',
+              border: OutlineInputBorder(),
+            ),
+            items: _arbaReportOptions
+                .map(
+                  (option) => DropdownMenuItem<String>(
+                    value: option.artifactId,
+                    child: Text(option.label),
+                  ),
+                )
+                .toList(),
+            onChanged: _arbaReportOptions.isEmpty
+                ? null
+                : (artifactId) {
+                    setState(() {
+                      _selectedReportName = 'arba_report';
+                      _selectedArbaArtifactId = artifactId;
+                    });
+                  },
+          )
+        else
+          DropdownButtonFormField<String>(
+            initialValue: _currentReports.contains(_selectedReportName)
+                ? _selectedReportName
+                : (_currentReports.isNotEmpty ? _currentReports.first : null),
+            decoration: const InputDecoration(
+              labelText: 'Report',
+              border: OutlineInputBorder(),
+            ),
+            items: _currentReports
+                .map(
+                  (reportName) => DropdownMenuItem<String>(
+                    value: reportName,
+                    child: Text(_friendlyReportName(reportName)),
+                  ),
+                )
+                .toList(),
+            onChanged: _currentReports.isEmpty
+                ? null
+                : (value) async {
+                    setState(() {
+                      _selectedReportName = value;
 
-            return DropdownMenuItem<String>(
-              value: reportName,
-              child: Text(
-                count > 1
-                    ? '${_friendlyReportName(reportName)} ($count)'
-                    : _friendlyReportName(reportName),
-              ),
-            );
-          }).toList(),
-          onChanged: _currentReports.isEmpty
-              ? null
-              : (value) async {
-                  setState(() {
-                    _selectedReportName = value;
+                      if (value != 'exhibitor_report' &&
+                          value != 'legs' &&
+                          value != 'checkin_sheet') {
+                        _selectedExhibitorId = null;
+                        _selectedExhibitorName = null;
+                        _availableExhibitors = [];
+                        _selectedExhibitorEmail = null;
+                      }
+                    });
 
-                    if (value != 'exhibitor_report' &&
-                        value != 'legs' &&
-                        value != 'checkin_sheet') {
-                      _selectedExhibitorId = null;
-                      _selectedExhibitorName = null;
-                      _availableExhibitors = [];
-                      _selectedExhibitorEmail = null;
+                    if (value == 'sweepstakes_report' ||
+                        value == 'breed_results_detail_report') {
+                      await _loadShowLetters();
+                      await _loadBreedsForBreedScopedReports();
                     }
-                  });
 
-                  if (value == 'sweepstakes_report' ||
-                      value == 'breed_results_detail_report') {
-                    await _loadShowLetters();
-                    await _loadBreedsForBreedScopedReports();
-                  }
+                    if (value == 'details_by_breed' ||
+                        value == 'exh_by_breed' ||
+                        value == 'best_display_report') {
+                      await _loadShowLetters();
+                      await _loadClubsForStateClubReports();
+                    }
 
-                  if (value == 'details_by_breed' ||
-                      value == 'exh_by_breed' ||
-                      value == 'best_display_report') {
-                    await _loadShowLetters();
-                    await _loadClubsForStateClubReports();
-                  }
-
-                  if (value == 'exhibitor_report' ||
-                      value == 'legs' ||
-                      value == 'checkin_sheet') {
-                    await _loadExhibitors();
-                  }
-                },
-        ),
+                    if (value == 'exhibitor_report' ||
+                        value == 'legs' ||
+                        value == 'checkin_sheet') {
+                      await _loadExhibitors();
+                    }
+                  },
+          ),
 
         if (_selectedReportNeedsBreedScope) ...[
           const SizedBox(height: 12),
@@ -9827,15 +10037,12 @@ class _CustomSectionPicker extends StatelessWidget {
         ...sections.map((section) {
           final selected = selectedSectionIds.contains(section.sectionId);
 
-          return CheckboxListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            value: selected,
-            title: Text(section.displayLabel),
-            subtitle: Text(section.summaryLabel),
-            onChanged: (value) {
-              onChanged(section.sectionId, value == true);
-            },
+          return CloseoutSectionSelectionRow(
+            key: ValueKey('closeout-section-${section.sectionId}'),
+            selected: selected,
+            title: section.displayLabel,
+            subtitle: section.summaryLabel,
+            onChanged: (value) => onChanged(section.sectionId, value),
           );
         }),
       ],
@@ -9848,7 +10055,8 @@ class _CloseoutScopeCard extends StatelessWidget {
   final List<_CloseoutScope> scopes;
   final List<_CloseoutSectionSummary> sections;
   final _CloseoutScope? selectedScope;
-  final String scopeSummary;
+  final String scopePrimarySummary;
+  final String scopeDetailSummary;
   final ValueChanged<_CloseoutScope> onChanged;
   final Set<String> customSectionIds;
   final void Function(String sectionId, bool selected) onCustomSectionChanged;
@@ -9858,7 +10066,8 @@ class _CloseoutScopeCard extends StatelessWidget {
     required this.scopes,
     required this.sections,
     required this.selectedScope,
-    required this.scopeSummary,
+    required this.scopePrimarySummary,
+    required this.scopeDetailSummary,
     required this.onChanged,
     required this.customSectionIds,
     required this.onCustomSectionChanged,
@@ -9911,14 +10120,27 @@ class _CloseoutScopeCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    scopeSummary,
-                    style: Theme.of(context).textTheme.titleSmall,
+                  CloseoutScopeSummaryText(
+                    primaryLabel: scopePrimarySummary,
+                    detailLabel: scopeDetailSummary,
                   ),
                   const SizedBox(height: 4),
-                  Text(selectedScope!.description),
+                  Text(
+                    selectedScope!.description,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                   const SizedBox(height: 8),
                   if (selectedScope!.type != _CloseoutScopeType.entireShow) ...[
+                    Text(
+                      'Quick select',
+                      style: Theme.of(context).textTheme.labelLarge,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'These controls update the selected sections.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 8),
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
@@ -9987,16 +10209,27 @@ class _CloseoutScopeCard extends StatelessWidget {
         matches.every(
           (section) => customSectionIds.contains(section.sectionId),
         );
-    return FilterChip(
-      label: Text(label),
-      selected: selected,
-      onSelected: matches.isEmpty
-          ? null
-          : (value) {
-              for (final section in matches) {
-                onCustomSectionChanged(section.sectionId, value);
-              }
-            },
+    final selectedCount = matches
+        .where((section) => customSectionIds.contains(section.sectionId))
+        .length;
+    final partiallySelected = selectedCount > 0 && !selected;
+    return Semantics(
+      label: partiallySelected ? '$label, partially selected' : label,
+      child: FilterChip(
+        avatar: partiallySelected ? const Icon(Icons.remove, size: 16) : null,
+        label: Text(label),
+        selected: selected,
+        backgroundColor: partiallySelected
+            ? AppColors.gold.withValues(alpha: .14)
+            : null,
+        onSelected: matches.isEmpty
+            ? null
+            : (value) {
+                for (final section in matches) {
+                  onCustomSectionChanged(section.sectionId, value);
+                }
+              },
+      ),
     );
   }
 
@@ -10236,32 +10469,20 @@ class _CloseoutSectionSummary {
       breedScope.trim().toLowerCase() != 'all' || allowedBreedIds.isNotEmpty;
 
   String get displayLabel {
-    final kindLabel = kind.trim().isEmpty
-        ? 'Section'
-        : '${kind[0].toUpperCase()}${kind.substring(1)}';
-    final speciesLabel = species.length == 1
-        ? '${species.first[0].toUpperCase()}${species.first.substring(1)}'
-        : species.isEmpty
-        ? 'Unknown species'
-        : 'Rabbit and Cavy';
-    final sectionType = isAllBreed
-        ? 'All Breed'
-        : displayName.trim().isNotEmpty
-        ? displayName.trim()
-        : 'Specialty';
-    return '$speciesLabel • $kindLabel ${letter.trim().toUpperCase()} • $sectionType';
+    return CloseoutSectionPresentation.displayLabel(
+      kind: kind,
+      letter: letter,
+      isAllBreed: isAllBreed,
+      displayName: displayName,
+    );
   }
 
   String get summaryLabel {
-    final parts = <String>[
-      if (kind.trim().isNotEmpty) kind.toUpperCase(),
-      if (letter.trim().isNotEmpty) 'Show ${letter.toUpperCase()}',
-      if (breedScope.trim().isNotEmpty) breedScope,
-      if (species.isNotEmpty) species.join(', '),
-      '$entryCount entr${entryCount == 1 ? 'y' : 'ies'}',
-    ];
-
-    return parts.join(' • ');
+    return CloseoutSectionPresentation.summaryLabel(
+      species: species,
+      isSpecialty: isSpecialty,
+      entryCount: entryCount,
+    );
   }
 
   factory _CloseoutSectionSummary.fromJson(Map<String, dynamic> json) {

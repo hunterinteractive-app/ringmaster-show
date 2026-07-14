@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ringmaster_show/screens/admin/closeout/models/closeout_scope.dart';
+import 'package:ringmaster_show/screens/admin/closeout/models/closeout_scope_presentation.dart';
 
 void main() {
   const resolver = CloseoutScopeResolver();
@@ -45,6 +46,16 @@ void main() {
       isEnabled: true,
     ),
     CloseoutSection(
+      id: 'r-open-d',
+      kind: 'open',
+      letter: 'D',
+      displayName: 'Open D',
+      breedScope: 'all',
+      breedIds: {},
+      species: {'rabbit'},
+      isEnabled: true,
+    ),
+    CloseoutSection(
       id: 'c-open-a',
       kind: 'open',
       letter: 'A',
@@ -74,7 +85,14 @@ void main() {
       resolve(
         const CloseoutScopeSelection(kind: CloseoutScopeKind.entireShow),
       ).sectionIds,
-      {'r-open-a', 'r-youth-a', 'r-open-b', 'r-specialty', 'c-open-a'},
+      {
+        'r-open-a',
+        'r-youth-a',
+        'r-open-b',
+        'r-specialty',
+        'r-open-d',
+        'c-open-a',
+      },
     );
   });
 
@@ -85,7 +103,7 @@ void main() {
         resolve(
           const CloseoutScopeSelection(kind: CloseoutScopeKind.rabbits),
         ).sectionIds,
-        {'r-open-a', 'r-youth-a', 'r-open-b', 'r-specialty'},
+        {'r-open-a', 'r-youth-a', 'r-open-b', 'r-specialty', 'r-open-d'},
       );
       expect(
         resolve(
@@ -158,5 +176,66 @@ void main() {
     );
     expect(scope.matchesArtifactMetadata({'section_id': 'r-open-a'}), isTrue);
     expect(scope.matchesArtifactMetadata({}), isFalse);
+  });
+
+  test('five-section scope uses a compact presentation label', () {
+    final scope = resolve(
+      const CloseoutScopeSelection(kind: CloseoutScopeKind.rabbits),
+    );
+
+    expect(scope.sectionIds, hasLength(5));
+    expect(
+      CloseoutScopePresentation.compactLabel(scope),
+      'Rabbit • 5 sections',
+    );
+    expect(
+      scope.displayLabel,
+      allOf(contains('Open A'), contains('Open B'), contains('Open D')),
+    );
+  });
+
+  test('completion is isolated by stable scope key', () {
+    final rabbit = resolve(
+      const CloseoutScopeSelection(kind: CloseoutScopeKind.rabbits),
+    );
+    final cavy = resolve(
+      const CloseoutScopeSelection(kind: CloseoutScopeKind.cavies),
+    );
+    final completed = {rabbit.stableScopeKey: 'rabbit-run'};
+
+    expect(
+      closeoutScopeHasCompletedRun(
+        selectedStableScopeKey: rabbit.stableScopeKey,
+        completedRunIdsByScope: completed,
+      ),
+      isTrue,
+    );
+    expect(
+      closeoutScopeHasCompletedRun(
+        selectedStableScopeKey: cavy.stableScopeKey,
+        completedRunIdsByScope: completed,
+      ),
+      isFalse,
+    );
+  });
+
+  test('section presentation hides raw scope and species values', () {
+    expect(
+      CloseoutSectionPresentation.displayLabel(
+        kind: 'OPEN',
+        letter: 'a',
+        isAllBreed: true,
+        displayName: 'all',
+      ),
+      'Open A • All Breed',
+    );
+    expect(
+      CloseoutSectionPresentation.summaryLabel(
+        species: const ['rabbit'],
+        isSpecialty: false,
+        entryCount: 261,
+      ),
+      'Rabbit • 261 entries',
+    );
   });
 }
