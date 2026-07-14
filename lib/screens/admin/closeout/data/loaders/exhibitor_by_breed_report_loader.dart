@@ -20,7 +20,9 @@ class ExhibitorByBreedReportLoader {
     }
 
     final header = await _loadHeader(request.showId);
-    final sectionId = await _loadSectionId(request.showId, scope, showLetter);
+    final sectionId = (request.sectionId ?? '').trim().isNotEmpty
+        ? request.sectionId!.trim()
+        : await _loadSectionId(request.showId, scope, showLetter);
 
     final resultsResponse = await repo.supabase.rpc(
       'report_results_entry_rows',

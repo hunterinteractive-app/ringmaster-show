@@ -11,6 +11,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
 import 'package:ringmaster_show/screens/admin/closeout/data/closeout_repository.dart';
+import 'package:ringmaster_show/screens/admin/closeout/models/closeout_scope.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/arba_report_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/arba_report_pdf.dart';
 import 'package:ringmaster_show/screens/admin/closeout/registry/report_registry.dart';
@@ -302,7 +303,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   }
 
   List<ReportArtifactSummary> _queuedRemainingReportArtifacts() {
-    final currentRunId = (_dashboard?.latestFinalize.id ?? '').trim();
+    final currentRunId = _finalizeRunIdForSelectedScope;
     return (_dashboard?.reports ?? const <ReportArtifactSummary>[])
         .where((r) => r.isCurrent)
         .where(
@@ -311,19 +312,29 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         .where(
           (r) => r.artifactStatus == 'queued' || r.artifactStatus == 'failed',
         )
+        .where(_artifactMatchesSelectedScope)
         .toList();
   }
 
+  String get _finalizeRunIdForSelectedScope {
+    final matching = (_dashboard?.reports ?? const <ReportArtifactSummary>[])
+        .where((artifact) => artifact.isCurrent)
+        .where(_artifactMatchesSelectedScope)
+        .map((artifact) => (artifact.finalizeRunId ?? '').trim())
+        .where((id) => id.isNotEmpty)
+        .toList();
+    return matching.isEmpty ? '' : matching.first;
+  }
+
   bool _artifactMatchesSelectedScope(ReportArtifactSummary artifact) {
-    if (_selectedCloseoutScopeIsEntireShow) {
-      return true;
-    }
+    final resolved = _resolvedCloseoutScope;
+    final metadata = artifact.metadata;
+    if (resolved.matchesArtifactMetadata(metadata)) return true;
 
-    final artifactScope = (artifact.metadata['scope_label'] ?? '')
-        .toString()
-        .trim();
-
-    return artifactScope == _selectedCloseoutScopeLabel;
+    // Historical whole-show artifacts did not have section metadata. They are
+    // safe only for Entire Show; never attach them to a narrower selection.
+    final legacyScopeLabel = (metadata['scope_label'] ?? '').toString().trim();
+    return _selectedCloseoutScopeIsEntireShow && legacyScopeLabel.isEmpty;
   }
 
   bool _artifactMatchesExhibitor(
@@ -408,6 +419,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   }
 
   Future<List<_ExhibitorEmailTarget>> _loadExhibitorEmailTargets() async {
+    final sectionIds = _resolvedCloseoutScope.sectionIds.toList();
+    if (sectionIds.isEmpty) return const <_ExhibitorEmailTarget>[];
     final rows = await supabase
         .from('entries')
         .select('''
@@ -420,7 +433,10 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                   email
                 )
               ''')
-        .eq('show_id', widget.showId);
+        .eq('show_id', widget.showId)
+        .inFilter('section_id', sectionIds)
+        .eq('is_shown', true)
+        .isFilter('scratched_at', null);
 
     final out = <String, _ExhibitorEmailTarget>{};
 
@@ -459,6 +475,11 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         ),
       );
 
+    debugPrint(
+      '[CloseoutDelivery] type=exhibitor scope_key=${_resolvedCloseoutScope.stableScopeKey} '
+      'section_count=${sectionIds.length} target_count=${list.length}',
+    );
+
     return list;
   }
 
@@ -466,7 +487,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     final scope = _selectedCloseoutScope;
     if (scope == null) return const [];
 
-    if (scope.isCustom) {
+    if (!_selectedCloseoutScopeIsEntireShow) {
       return _customCloseoutSectionIds.toList();
     }
 
@@ -474,7 +495,38 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   }
 
   String get _selectedCloseoutScopeLabel {
-    return _selectedCloseoutScope?.label ?? 'Selected Scope';
+    return _resolvedCloseoutScope.displayLabel;
+  }
+
+  ResolvedCloseoutScope get _resolvedCloseoutScope {
+    final scope = _selectedCloseoutScope;
+    final kind = switch (scope?.type) {
+      _CloseoutScopeType.rabbits => CloseoutScopeKind.rabbits,
+      _CloseoutScopeType.cavies => CloseoutScopeKind.cavies,
+      _CloseoutScopeType.custom => CloseoutScopeKind.custom,
+      _ => CloseoutScopeKind.entireShow,
+    };
+    return const CloseoutScopeResolver().resolve(
+      showId: widget.showId,
+      sections: _closeoutSections.map(
+        (section) => CloseoutSection(
+          id: section.sectionId,
+          kind: section.kind,
+          letter: section.letter,
+          displayName: section.displayName,
+          breedScope: section.breedScope,
+          breedIds: section.allowedBreedIds.toSet(),
+          species: section.species.map((value) => value.toLowerCase()).toSet(),
+          isEnabled: section.isEnabled,
+        ),
+      ),
+      selection: CloseoutScopeSelection(
+        kind: kind,
+        sectionIds: kind == CloseoutScopeKind.entireShow
+            ? const <String>{}
+            : _customCloseoutSectionIds,
+      ),
+    );
   }
 
   bool get _selectedCloseoutScopeIsEntireShow {
@@ -483,6 +535,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   }
 
   Future<List<_ClubEmailTarget>> _loadClubEmailTargets() async {
+    final selectedSectionIds = _resolvedCloseoutScope.sectionIds.toList();
+    if (selectedSectionIds.isEmpty) return const <_ClubEmailTarget>[];
     final rows = await supabase
         .from('show_sanctions')
         .select('''
@@ -497,7 +551,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
               letter
             )
           ''')
-        .eq('show_id', widget.showId);
+        .eq('show_id', widget.showId)
+        .inFilter('section_id', selectedSectionIds);
 
     final stateClubContactRows = await supabase
         .from('state_club_report_contacts')
@@ -650,6 +705,11 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         return a.showLetter.compareTo(b.showLetter);
       });
 
+    debugPrint(
+      '[CloseoutDelivery] type=club scope_key=${_resolvedCloseoutScope.stableScopeKey} '
+      'section_count=${selectedSectionIds.length} target_count=${list.length}',
+    );
+
     return list;
   }
 
@@ -763,58 +823,36 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         ),
       ];
 
-      final rabbitAllBreed = enabledSections
-          .where((s) => s.isAllBreed && s.species.contains('rabbit'))
+      final rabbitSections = enabledSections
+          .where((s) => s.species.contains('rabbit'))
           .toList();
 
-      if (rabbitAllBreed.isNotEmpty) {
-        scopes.add(
-          _CloseoutScope(
-            type: _CloseoutScopeType.rabbitAllBreed,
-            label: 'Rabbit All Breed',
-            description:
-                '${rabbitAllBreed.length} all-breed rabbit section${rabbitAllBreed.length == 1 ? '' : 's'}.',
-            sectionIds: rabbitAllBreed.map((s) => s.sectionId).toList(),
-          ),
-        );
-      }
+      scopes.add(
+        _CloseoutScope(
+          type: _CloseoutScopeType.rabbits,
+          label: 'Rabbits',
+          description: 'Choose the exact rabbit sections to process.',
+          sectionIds: rabbitSections.map((s) => s.sectionId).toList(),
+        ),
+      );
 
-      final cavyAllBreed = enabledSections
-          .where((s) => s.isAllBreed && s.species.contains('cavy'))
+      final cavySections = enabledSections
+          .where((s) => s.species.contains('cavy'))
           .toList();
 
-      if (cavyAllBreed.isNotEmpty) {
-        scopes.add(
-          _CloseoutScope(
-            type: _CloseoutScopeType.cavyAllBreed,
-            label: 'Cavy All Breed',
-            description:
-                '${cavyAllBreed.length} all-breed cavy section${cavyAllBreed.length == 1 ? '' : 's'}.',
-            sectionIds: cavyAllBreed.map((s) => s.sectionId).toList(),
-          ),
-        );
-      }
-
-      final specialtySections = enabledSections
-          .where((s) => s.isSpecialty)
-          .toList();
-
-      if (specialtySections.isNotEmpty) {
-        scopes.add(
-          _CloseoutScope(
-            type: _CloseoutScopeType.specialty,
-            label: 'Single Breed / Specialty',
-            description:
-                '${specialtySections.length} limited-breed section${specialtySections.length == 1 ? '' : 's'}.',
-            sectionIds: specialtySections.map((s) => s.sectionId).toList(),
-          ),
-        );
-      }
+      scopes.add(
+        _CloseoutScope(
+          type: _CloseoutScopeType.cavies,
+          label: 'Cavies',
+          description: 'Choose the exact cavy sections to process.',
+          sectionIds: cavySections.map((s) => s.sectionId).toList(),
+        ),
+      );
 
       scopes.add(
         _CloseoutScope(
           type: _CloseoutScopeType.custom,
-          label: 'Custom Sections',
+          label: 'Custom',
           description: 'Choose exactly which sections to finalize or send.',
           sectionIds: const [],
         ),
@@ -836,6 +874,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         _selectedCloseoutScope = stillExists
             ? scopes.firstWhere((scope) => scope.type == currentType)
             : scopes.first;
+        if (_selectedCloseoutScopeIsEntireShow) {
+          _customCloseoutSectionIds.clear();
+        }
       });
     } catch (e) {
       if (!mounted) return;
@@ -846,6 +887,18 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
             type: _CloseoutScopeType.entireShow,
             label: 'Entire Show',
             description: 'Finalize and report all enabled sections.',
+            sectionIds: [],
+          ),
+          const _CloseoutScope(
+            type: _CloseoutScopeType.rabbits,
+            label: 'Rabbits',
+            description: 'Choose the exact rabbit sections to process.',
+            sectionIds: [],
+          ),
+          const _CloseoutScope(
+            type: _CloseoutScopeType.cavies,
+            label: 'Cavies',
+            description: 'Choose the exact cavy sections to process.',
             sectionIds: [],
           ),
           const _CloseoutScope(
@@ -2582,6 +2635,11 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   }
 
   Future<List<ReportArtifactSummary>> _loadReportArtifacts() async {
+    debugPrint(
+      '[CloseoutArtifacts] show_id=${widget.showId} '
+      'scope_key=${_resolvedCloseoutScope.stableScopeKey} '
+      'section_ids=${_resolvedCloseoutScope.sectionIds.toList()..sort()}',
+    );
     final rows = await _timedCloseoutLoad(
       'report artifacts',
       () => supabase
@@ -2775,21 +2833,26 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
       final currentRows = await supabase
           .from('show_report_artifacts')
-          .select('id, finalize_run_id, artifact_status')
+          .select('''
+            id, finalize_run_id, report_name, artifact_status, file_name,
+            storage_bucket, storage_path, generated_at, is_current, metadata
+          ''')
           .eq('show_id', widget.showId)
           .eq('is_current', true);
       final currentArtifacts = (currentRows as List)
-          .map((row) => Map<String, dynamic>.from(row as Map))
+          .map(
+            (row) => ReportArtifactSummary.fromJson(
+              Map<String, dynamic>.from(row as Map),
+            ),
+          )
+          .where(_artifactMatchesSelectedScope)
           .toList();
-      final dashboardRunId = (_dashboard?.latestFinalize.id ?? '').trim();
-      final existingRunId = dashboardRunId.isNotEmpty
-          ? dashboardRunId
-          : currentArtifacts
-                .map((row) => (row['finalize_run_id'] ?? '').toString().trim())
-                .firstWhere((id) => id.isNotEmpty, orElse: () => '');
+      final existingRunId = currentArtifacts
+          .map((artifact) => (artifact.finalizeRunId ?? '').trim())
+          .firstWhere((id) => id.isNotEmpty, orElse: () => '');
       final statusCounts = <String, int>{};
       for (final row in currentArtifacts) {
-        final status = (row['artifact_status'] ?? 'unknown').toString();
+        final status = row.artifactStatus;
         statusCounts[status] = (statusCounts[status] ?? 0) + 1;
       }
 
@@ -2813,15 +2876,19 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         'existing_finalize_run_id=$existingRunId action=$action reason=$reason '
         'current_artifacts=${currentArtifacts.length} status_counts=$statusCounts',
       );
+      debugPrint(
+        '[CloseoutScope] label=$_selectedCloseoutScopeLabel '
+        'scope_key=${_resolvedCloseoutScope.stableScopeKey} '
+        'section_ids=${_resolvedCloseoutScope.sectionIds.toList()..sort()}',
+      );
 
       final response = await supabase.functions.invoke(
         'run-closeout',
         body: {
           'show_id': widget.showId,
-          'section_ids': _selectedCloseoutScopeIsEntireShow
-              ? <String>[]
-              : selectedSectionIds,
+          'section_ids': _resolvedCloseoutScope.sectionIds.toList()..sort(),
           'scope_label': _selectedCloseoutScopeLabel,
+          'scope_key': _resolvedCloseoutScope.stableScopeKey,
           'action': regenerate ? 'regenerate' : 'finalize',
           'caller': regenerate ? 'regenerateAllReports' : 'finalizeShow',
         },
@@ -2848,7 +2915,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
   Future<List<ReportArtifactSummary>>
   _loadRemainingArtifactsForCurrentRun() async {
-    final runId = (_dashboard?.latestFinalize.id ?? '').trim();
+    final runId = _finalizeRunIdForSelectedScope;
     if (runId.isEmpty) return const <ReportArtifactSummary>[];
     final rows = await supabase
         .from('show_report_artifacts')
@@ -2872,6 +2939,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
             Map<String, dynamic>.from(row as Map),
           ),
         )
+        .where(_artifactMatchesSelectedScope)
         .toList();
   }
 
@@ -3040,6 +3108,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
     Future<void> runSingle(ReportArtifactSummary artifact) async {
       final key = artifactKey(artifact);
+      final artifactSectionIds = _metadataSectionIds(artifact.metadata);
+      final artifactSectionId = _artifactMetaString(artifact, 'section_id');
+      final artifactScopeLabel = _artifactMetaString(artifact, 'scope_label');
       onStarted(key);
 
       final runId =
@@ -3066,6 +3137,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
             artifactId: artifact.id,
             scope: scope,
             showLetter: showLetter,
+            scopeLabel: artifactScopeLabel,
+            sectionId: artifactSectionId,
+            sectionIds: artifactSectionIds,
             showName: widget.showName,
             showDate: showDate,
             sanctionNumber: sanctionNumber,
@@ -3102,6 +3176,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
             species: species,
             scope: scope,
             showLetter: showLetter,
+            scopeLabel: artifactScopeLabel,
+            sectionId: artifactSectionId,
+            sectionIds: artifactSectionIds,
             showName: widget.showName,
             showDate: showDate,
             sanctionNumber: sanctionNumber,
@@ -3127,21 +3204,19 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
             artifactId: artifact.id,
             exhibitorId: exhibitorId,
             exhibitorName: exhibitorName,
+            scopeLabel: artifactScopeLabel,
+            sectionId: artifactSectionId,
+            sectionIds: artifactSectionIds,
             showName: widget.showName,
             showDate: showDate,
             sanctionNumber: sanctionNumber,
             isNationalShow: isNationalShow,
           );
         } else {
-          final isBreedJudgedTotalsReport =
-              artifact.reportName == 'breed_judged_totals_report';
-          final scopeLabel = _artifactMetaString(artifact, 'scope_label');
-          final sectionIds = _metadataSectionIds(artifact.metadata);
-
           debugPrint(
             '[Closeout:${widget.showId}] Generating queued report='
             '${artifact.reportName} artifact=${artifact.id} '
-            'scopeLabel=${scopeLabel ?? ''} sectionIds=${sectionIds.join(',')}',
+            'scopeLabel=${artifactScopeLabel ?? ''} sectionIds=${artifactSectionIds.join(',')}',
           );
 
           await runner.generateSingleReport(
@@ -3149,8 +3224,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
             finalizeRunId: runId,
             reportName: artifact.reportName,
             artifactId: artifact.id,
-            scopeLabel: isBreedJudgedTotalsReport ? scopeLabel : null,
-            sectionIds: isBreedJudgedTotalsReport ? sectionIds : null,
+            scopeLabel: artifactScopeLabel,
+            sectionId: artifactSectionId,
+            sectionIds: artifactSectionIds,
             showName: widget.showName,
             showDate: showDate,
             sanctionNumber: sanctionNumber,
@@ -4215,6 +4291,15 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       'metadata=${metadata ?? <String, dynamic>{}}',
     );
 
+    final resolvedScope = _resolvedCloseoutScope;
+    final scopedMetadata = <String, dynamic>{
+      ...?metadata,
+      'scope_key': resolvedScope.stableScopeKey,
+      'scope_label': resolvedScope.displayLabel,
+      'section_ids': resolvedScope.sectionIds.toList()..sort(),
+      'species': resolvedScope.species.toList()..sort(),
+      'show_letters': resolvedScope.showLetters.toList()..sort(),
+    };
     final inserted = await supabase
         .from('show_report_artifacts')
         .insert({
@@ -4223,7 +4308,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           'report_name': reportName,
           'artifact_status': 'queued',
           'is_current': true,
-          'metadata': metadata ?? <String, dynamic>{},
+          'scope_key': resolvedScope.stableScopeKey,
+          'section_ids': resolvedScope.sectionIds.toList()..sort(),
+          'metadata': scopedMetadata,
         })
         .select('''
             id,
@@ -4667,6 +4754,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       final reports = (_dashboard?.reports ?? const <ReportArtifactSummary>[])
           .where((r) => r.reportName == reportName)
           .where((r) => r.isCurrent)
+          .where(_artifactMatchesSelectedScope)
           .toList();
 
       if (reportName == 'exhibitor_report' ||
@@ -4783,8 +4871,13 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         breedName: targetLoaderBreedName,
         species: _artifactMetaString(resolvedArtifact, 'species'),
         scope: scope,
-        scopeLabel: isBreedJudgedTotalsReport ? breedJudgedScopeLabel : null,
-        sectionIds: isBreedJudgedTotalsReport ? breedJudgedSectionIds : null,
+        scopeLabel: breedJudgedScopeLabel.trim().isNotEmpty
+            ? breedJudgedScopeLabel
+            : _selectedCloseoutScopeLabel,
+        sectionId: _artifactMetaString(resolvedArtifact, 'section_id'),
+        sectionIds: breedJudgedSectionIds.isNotEmpty
+            ? breedJudgedSectionIds
+            : (_resolvedCloseoutScope.sectionIds.toList()..sort()),
         showName: widget.showName,
         showDate: showDate,
         sanctionNumber: sanctionNumber,
@@ -5051,6 +5144,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
         (r) =>
             r.reportName == reportName &&
             r.isCurrent &&
+            _artifactMatchesSelectedScope(r) &&
             r.artifactStatus == 'generated' &&
             (r.storageBucket?.isNotEmpty == true) &&
             (r.storagePath?.isNotEmpty == true),
@@ -5201,6 +5295,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   }
 
   Future<void> _downloadReportArtifact(ReportArtifactSummary artifact) async {
+    if (!_artifactMatchesSelectedScope(artifact)) {
+      throw StateError('That report does not belong to the selected scope.');
+    }
     try {
       if (artifact.artifactStatus != 'generated' ||
           artifact.storageBucket?.isNotEmpty != true ||
@@ -6653,10 +6750,14 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                     scopes: _closeoutScopes,
                     sections: _closeoutSections,
                     selectedScope: _selectedCloseoutScope,
+                    scopeSummary: _selectedCloseoutScopeLabel,
                     customSectionIds: _customCloseoutSectionIds,
                     onChanged: (scope) {
                       setState(() {
                         _selectedCloseoutScope = scope;
+                        _customCloseoutSectionIds
+                          ..clear()
+                          ..addAll(scope.sectionIds);
                         _rebuildReportCaches();
                       });
                     },
@@ -6746,7 +6847,10 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                 vertical: 14,
                               ),
                             ),
-                            onPressed: (_isBusy || reportsBlocked)
+                            onPressed:
+                                (_isBusy ||
+                                    reportsBlocked ||
+                                    _resolvedCloseoutScope.isEmpty)
                                 ? null
                                 : () async {
                                     final confirmed =
@@ -6757,8 +6861,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                               title: const Text(
                                                 'Finalize & Generate Reports',
                                               ),
-                                              content: const Text(
-                                                'This will finalize the show and generate all closeout reports.\n\n'
+                                              content: Text(
+                                                'This will finalize and generate reports for $_selectedCloseoutScopeLabel.\n\n'
                                                 'By continuing, you confirm that all results — including any submitted via QR Code '
                                                 'have been reviewed for accuracy and completeness.\n\n'
                                                 'Once finalized, results can be emailed. Emails will not be sent automatically.',
@@ -6802,16 +6906,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                           .where(
                                             (r) => r.finalizeRunId == runId,
                                           )
-                                          .where((r) {
-                                            if (_selectedCloseoutScopeIsEntireShow) {
-                                              return true;
-                                            }
-
-                                            return (r.metadata['scope_label'] ??
-                                                        '')
-                                                    .toString() ==
-                                                _selectedCloseoutScopeLabel;
-                                          })
+                                          .where(_artifactMatchesSelectedScope)
                                           .where(
                                             (r) =>
                                                 r.artifactStatus == 'queued' ||
@@ -6853,6 +6948,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                         builder: (context) {
                                           return _GenerateAllReportsDialog(
                                             artifacts: artifactsToGenerate,
+                                            scopeLabel:
+                                                _selectedCloseoutScopeLabel,
                                             onRun:
                                                 (
                                                   onStarted,
@@ -6989,6 +7086,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                               return _GenerateAllReportsDialog(
                                                 artifacts:
                                                     latestQueuedRemaining,
+                                                scopeLabel:
+                                                    _selectedCloseoutScopeLabel,
                                                 onRun:
                                                     (
                                                       onStarted,
@@ -7026,7 +7125,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                           ),
 
                           OutlinedButton.icon(
-                            onPressed: _isBusy
+                            onPressed: _isBusy || _resolvedCloseoutScope.isEmpty
                                 ? null
                                 : () async {
                                     final confirmed =
@@ -7036,8 +7135,10 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                             title: const Text(
                                               'Regenerate All Reports?',
                                             ),
-                                            content: const Text(
-                                              'This intentionally creates a new report version and makes the current generated set historical.',
+                                            content: Text(
+                                              'Regenerate all reports for $_selectedCloseoutScopeLabel?\n\n'
+                                              'Existing artifacts for this selection will be replaced. '
+                                              'Reports for other sections will not be changed.',
                                             ),
                                             actions: [
                                               TextButton(
@@ -7073,6 +7174,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                         builder: (context) =>
                                             _GenerateAllReportsDialog(
                                               artifacts: remaining,
+                                              scopeLabel:
+                                                  _selectedCloseoutScopeLabel,
                                               onRun:
                                                   (started, finished, failed) =>
                                                       _runGenerateAllReportsLive(
@@ -7110,7 +7213,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                 width: 1.4,
                               ),
                             ),
-                            onPressed: _isBusy
+                            onPressed: _isBusy || _resolvedCloseoutScope.isEmpty
                                 ? null
                                 : _sendAllExhibitorReports,
                             icon: const Icon(Icons.send_outlined),
@@ -7139,7 +7242,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                 width: 1.4,
                               ),
                             ),
-                            onPressed: _isBusy ? null : _sendAllClubReports,
+                            onPressed: _isBusy || _resolvedCloseoutScope.isEmpty
+                                ? null
+                                : _sendAllClubReports,
                             icon: const Icon(Icons.group_outlined),
                             label: Text(
                               _selectedCloseoutScopeIsEntireShow
@@ -9094,6 +9199,7 @@ class _ErrorView extends StatelessWidget {
 
 class _GenerateAllReportsDialog extends StatefulWidget {
   final List<ReportArtifactSummary> artifacts;
+  final String scopeLabel;
   final Future<void> Function(
     void Function(String artifactKey) onStarted,
     void Function(String artifactKey) onFinished,
@@ -9103,6 +9209,7 @@ class _GenerateAllReportsDialog extends StatefulWidget {
 
   const _GenerateAllReportsDialog({
     required this.artifacts,
+    required this.scopeLabel,
     required this.onRun,
   });
 
@@ -9248,6 +9355,14 @@ class _GenerateAllReportsDialogState extends State<_GenerateAllReportsDialog> {
                 fontSize: 13,
                 color: warningText,
                 fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              widget.scopeLabel,
+              style: const TextStyle(
+                color: secondaryText,
+                fontWeight: FontWeight.w600,
               ),
             ),
             const SizedBox(height: 12),
@@ -9733,6 +9848,7 @@ class _CloseoutScopeCard extends StatelessWidget {
   final List<_CloseoutScope> scopes;
   final List<_CloseoutSectionSummary> sections;
   final _CloseoutScope? selectedScope;
+  final String scopeSummary;
   final ValueChanged<_CloseoutScope> onChanged;
   final Set<String> customSectionIds;
   final void Function(String sectionId, bool selected) onCustomSectionChanged;
@@ -9742,6 +9858,7 @@ class _CloseoutScopeCard extends StatelessWidget {
     required this.scopes,
     required this.sections,
     required this.selectedScope,
+    required this.scopeSummary,
     required this.onChanged,
     required this.customSectionIds,
     required this.onCustomSectionChanged,
@@ -9749,6 +9866,17 @@ class _CloseoutScopeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final selectableSections = sections
+        .where((s) => s.isEnabled)
+        .where(
+          (s) =>
+              selectedScope?.type == _CloseoutScopeType.custom ||
+              (selectedScope?.type == _CloseoutScopeType.rabbits &&
+                  s.species.contains('rabbit')) ||
+              (selectedScope?.type == _CloseoutScopeType.cavies &&
+                  s.species.contains('cavy')),
+        )
+        .toList();
     return _CloseoutSectionCard(
       title: 'Finalize Scope',
       subtitle:
@@ -9784,19 +9912,59 @@ class _CloseoutScopeCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    selectedScope!.label,
+                    scopeSummary,
                     style: Theme.of(context).textTheme.titleSmall,
                   ),
                   const SizedBox(height: 4),
                   Text(selectedScope!.description),
                   const SizedBox(height: 8),
-                  if (selectedScope!.isCustom)
+                  if (selectedScope!.type != _CloseoutScopeType.entireShow) ...[
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final kind in const ['open', 'youth'])
+                          _selectionFilter(
+                            label: kind == 'open' ? 'Open' : 'Youth',
+                            matching: selectableSections.where(
+                              (section) => section.kind.toLowerCase() == kind,
+                            ),
+                          ),
+                        for (final letter
+                            in selectableSections
+                                .map((section) => section.letter.toUpperCase())
+                                .where((value) => value.isNotEmpty)
+                                .toSet()
+                                .toList()
+                              ..sort())
+                          _selectionFilter(
+                            label: 'Show $letter',
+                            matching: selectableSections.where(
+                              (section) =>
+                                  section.letter.toUpperCase() == letter,
+                            ),
+                          ),
+                        _selectionFilter(
+                          label: 'All Breed',
+                          matching: selectableSections.where(
+                            (section) => section.isAllBreed,
+                          ),
+                        ),
+                        _selectionFilter(
+                          label: 'Specialty',
+                          matching: selectableSections.where(
+                            (section) => section.isSpecialty,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
                     _CustomSectionPicker(
-                      sections: sections.where((s) => s.isEnabled).toList(),
+                      sections: selectableSections,
                       selectedSectionIds: customSectionIds,
                       onChanged: onCustomSectionChanged,
-                    )
-                  else
+                    ),
+                  ] else
                     Text(
                       'Included sections: ${_sectionLabelsForScope(selectedScope!, sections).join(', ')}',
                       style: Theme.of(context).textTheme.bodySmall,
@@ -9806,6 +9974,29 @@ class _CloseoutScopeCard extends StatelessWidget {
             ),
         ],
       ],
+    );
+  }
+
+  Widget _selectionFilter({
+    required String label,
+    required Iterable<_CloseoutSectionSummary> matching,
+  }) {
+    final matches = matching.toList();
+    final selected =
+        matches.isNotEmpty &&
+        matches.every(
+          (section) => customSectionIds.contains(section.sectionId),
+        );
+    return FilterChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: matches.isEmpty
+          ? null
+          : (value) {
+              for (final section in matches) {
+                onCustomSectionChanged(section.sectionId, value);
+              }
+            },
     );
   }
 
@@ -9908,13 +10099,7 @@ class ArchiveSummary {
   }
 }
 
-enum _CloseoutScopeType {
-  entireShow,
-  rabbitAllBreed,
-  cavyAllBreed,
-  specialty,
-  custom,
-}
+enum _CloseoutScopeType { entireShow, rabbits, cavies, custom }
 
 class _MissingJudgeItem {
   final String entryId;
@@ -10051,13 +10236,20 @@ class _CloseoutSectionSummary {
       breedScope.trim().toLowerCase() != 'all' || allowedBreedIds.isNotEmpty;
 
   String get displayLabel {
-    if (displayName.trim().isNotEmpty) return displayName.trim();
-
     final kindLabel = kind.trim().isEmpty
         ? 'Section'
         : '${kind[0].toUpperCase()}${kind.substring(1)}';
-
-    return '$kindLabel ${letter.trim()}'.trim();
+    final speciesLabel = species.length == 1
+        ? '${species.first[0].toUpperCase()}${species.first.substring(1)}'
+        : species.isEmpty
+        ? 'Unknown species'
+        : 'Rabbit and Cavy';
+    final sectionType = isAllBreed
+        ? 'All Breed'
+        : displayName.trim().isNotEmpty
+        ? displayName.trim()
+        : 'Specialty';
+    return '$speciesLabel • $kindLabel ${letter.trim().toUpperCase()} • $sectionType';
   }
 
   String get summaryLabel {

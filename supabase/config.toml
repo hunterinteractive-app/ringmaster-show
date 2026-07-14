@@ -1,3 +1,6 @@
+[functions.run-closeout]
+verify_jwt = true
+
 [functions.square-connect-callback]
 verify_jwt = false
 

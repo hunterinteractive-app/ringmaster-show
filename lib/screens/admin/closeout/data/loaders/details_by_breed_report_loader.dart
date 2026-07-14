@@ -22,7 +22,9 @@ class DetailsByBreedReportLoader {
     }
 
     final header = await _loadHeader(request.showId, scope, showLetter);
-    final sectionId = await _loadSectionId(request.showId, scope, showLetter);
+    final sectionId = (request.sectionId ?? '').trim().isNotEmpty
+        ? request.sectionId!.trim()
+        : await _loadSectionId(request.showId, scope, showLetter);
 
     final response = await repo.supabase.rpc(
       'report_results_entry_rows',

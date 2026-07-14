@@ -32,9 +32,13 @@ class ExhibitorReportLoader {
         .eq('is_enabled', true)
         .order('sort_order');
 
-    final enabledSections = List<Map<String, dynamic>>.from(
-      enabledSectionsRaw as List,
-    );
+    final enabledSections =
+        List<Map<String, dynamic>>.from(enabledSectionsRaw as List)
+          ..removeWhere((section) {
+            final requested = request.sectionIds?.toSet() ?? const <String>{};
+            return requested.isNotEmpty &&
+                !requested.contains(_str(section['id']));
+          });
 
     final allEligibleRows = <Map<String, dynamic>>[];
     final rowList = <Map<String, dynamic>>[];
@@ -180,6 +184,8 @@ class ExhibitorReportLoader {
         sanctionNumber: request.sanctionNumber,
         exhibitorId: exhibitorId,
         exhibitorName: request.exhibitorName,
+        scopeLabel: request.scopeLabel,
+        sectionIds: request.sectionIds,
       ),
     );
 

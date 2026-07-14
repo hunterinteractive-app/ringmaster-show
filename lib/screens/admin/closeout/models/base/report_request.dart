@@ -12,6 +12,7 @@ class ReportRequest {
     this.scope,
     this.showLetter,
     this.scopeLabel,
+    this.sectionId,
     this.sectionIds,
     this.showName,
     this.showDate,
@@ -33,6 +34,7 @@ class ReportRequest {
   final String? scope;
   final String? showLetter;
   final String? scopeLabel;
+  final String? sectionId;
   final List<String>? sectionIds;
   final String? showName;
   final String? showDate;
@@ -56,6 +58,7 @@ class ReportRequest {
       'scope': scope,
       'showLetter': showLetter,
       'scopeLabel': scopeLabel,
+      'sectionId': sectionId,
       'sectionIds': sectionIds,
       'showName': showName,
       'showDate': showDate,
@@ -78,6 +81,7 @@ class ReportRequest {
     String? scope,
     String? showLetter,
     String? scopeLabel,
+    String? sectionId,
     List<String>? sectionIds,
     String? showName,
     String? showDate,
@@ -98,6 +102,7 @@ class ReportRequest {
       scope: scope ?? this.scope,
       showLetter: showLetter ?? this.showLetter,
       scopeLabel: scopeLabel ?? this.scopeLabel,
+      sectionId: sectionId ?? this.sectionId,
       sectionIds: sectionIds ?? this.sectionIds,
       showName: showName ?? this.showName,
       showDate: showDate ?? this.showDate,

@@ -133,7 +133,10 @@ class LegsReportLoader {
       _str(show['secretary_email']),
     ]);
 
-    final entryContext = await _loadShownEntryContext(showId);
+    final entryContext = await _loadShownEntryContext(
+      showId,
+      sectionIds: request.sectionIds,
+    );
     if (entryContext.isEmpty) return const [];
 
     final contextEntryIds = entryContext.keys
@@ -370,7 +373,7 @@ class LegsReportLoader {
     final missingSanctionContexts = _missingArbaSanctionContexts(output);
     if (missingSanctionContexts.isNotEmpty) {
       throw Exception(
-        'Leg certificates are blocked until each section has an ARBA sanction number: '
+        'Leg certificate not generated: selected section missing an ARBA sanction number: '
         '${missingSanctionContexts.join('; ')}.',
       );
     }
@@ -386,17 +389,17 @@ class LegsReportLoader {
     for (final certificate in certificates) {
       if (certificate.sanctionNumber.trim().isNotEmpty) continue;
 
-      final exhibitorName = certificate.exhibitorName.trim().isEmpty
-          ? 'Unknown exhibitor'
-          : certificate.exhibitorName.trim();
-      final earNumber = certificate.earNumber.trim().isEmpty
-          ? 'unknown ear'
-          : certificate.earNumber.trim();
       final section = _sectionFromCertificateId(certificate.certificateId);
       final sectionLabel = section.isEmpty
           ? 'unknown section'
           : 'Show $section';
-      contexts.add('$sectionLabel ($exhibitorName, $earNumber)');
+      final breed = certificate.breed.trim().isEmpty
+          ? 'selected breed'
+          : certificate.breed.trim();
+      final species = isKnownCavyBreed(breed) ? 'Cavy' : 'Rabbit';
+      contexts.add(
+        '$species $sectionLabel — $breed does not have an ARBA sanction number',
+      );
     }
 
     return contexts.toList()..sort();
@@ -611,8 +614,9 @@ class LegsReportLoader {
   }
 
   Future<Map<String, _EntryLegContext>> _loadShownEntryContext(
-    String showId,
-  ) async {
+    String showId, {
+    List<String>? sectionIds,
+  }) async {
     final sectionRows = await repo.supabase
         .from('show_sections')
         .select('id, letter, kind, sort_order')
@@ -624,6 +628,8 @@ class LegsReportLoader {
 
     for (final rawSection in List<Map<String, dynamic>>.from(sectionRows)) {
       final sectionId = _str(rawSection['id']);
+      final requested = sectionIds?.toSet() ?? const <String>{};
+      if (requested.isNotEmpty && !requested.contains(sectionId)) continue;
       final showLetter = _str(rawSection['letter']).toUpperCase();
 
       final rows = await repo.supabase.rpc(
