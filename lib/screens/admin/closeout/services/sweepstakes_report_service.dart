@@ -3,6 +3,7 @@
 import 'dart:typed_data';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/reporting_core/assets/flutter_report_asset_loader.dart';
 
 import '../data/closeout_repository.dart';
 import '../data/loaders/sweepstakes_report_loader.dart';
@@ -21,7 +22,9 @@ class SweepstakesReportService {
            SweepstakesReportLoader(
              repo ?? CloseoutRepository(Supabase.instance.client),
            ),
-       _pdfBuilder = pdfBuilder ?? SweepstakesReportPdf();
+       _pdfBuilder =
+           pdfBuilder ??
+           SweepstakesReportPdf(assets: const FlutterReportAssetLoader());
 
   final CloseoutRepository _repo;
   final SweepstakesReportLoader _loader;

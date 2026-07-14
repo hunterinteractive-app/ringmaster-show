@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
+import '../closeout/utils/breed_results_detail_order.dart';
 import 'print_pack_pdf_helpers.dart';
 
 final supabase = Supabase.instance.client;
@@ -714,17 +715,11 @@ class _ControlSheetsGeneratorSheetState
           }
 
           if (!aIsFurOrWool && !bIsFurOrWool) {
-            final groupSortCmp = _sortValue(
+            final catalogOrderCmp = compareRabbitVarietyJudgingOrder(
               aFirst,
-              'group_sort_order',
-            ).compareTo(_sortValue(bFirst, 'group_sort_order'));
-            if (groupSortCmp != 0) return groupSortCmp;
-
-            final varietySortCmp = _sortValue(
-              aFirst,
-              'variety_sort_order',
-            ).compareTo(_sortValue(bFirst, 'variety_sort_order'));
-            if (varietySortCmp != 0) return varietySortCmp;
+              bFirst,
+            );
+            if (catalogOrderCmp != 0) return catalogOrderCmp;
 
             final colorCmp = aColor.compareTo(bColor);
             if (colorCmp != 0) return colorCmp;

@@ -1,24 +1,21 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter/foundation.dart';
+import 'package:supabase/supabase.dart';
 
 import '../../models/base/report_request.dart';
 import '../../models/judge/breed_judged_totals_report_data.dart';
 
 class BreedJudgedTotalsReportLoader {
-  BreedJudgedTotalsReportLoader({SupabaseClient? supabase})
-    : _supabase = supabase ?? Supabase.instance.client;
+  BreedJudgedTotalsReportLoader({required SupabaseClient supabase})
+    : _supabase = supabase;
 
   final SupabaseClient _supabase;
 
   Future<BreedJudgedTotalsReportData> load(ReportRequest request) async {
-    debugPrint(
-      '[BreedJudgedTotalsReportLoader] load show=${request.showId} '
-      'scopeLabel=${request.scopeLabel ?? ''} '
-      'scope=${request.scope ?? ''} showLetter=${request.showLetter ?? ''} '
-      'sectionIds=${request.sectionIds?.join(',') ?? ''}',
-    );
     final show = await _loadShowInfo(request.showId);
-    final entryRows = await _loadAllJudgedEntryRows(request.showId);
+    final sectionIds = request.sectionIds ?? const <String>[];
+    if (sectionIds.isEmpty) {
+      throw StateError('Breed judged totals requires scoped section IDs.');
+    }
+    final entryRows = await _loadAllJudgedEntryRows(request.showId, sectionIds);
     final aggregation = aggregateBreedJudgedTotals(
       entryRows,
       scope: request.scope,
@@ -30,12 +27,6 @@ class BreedJudgedTotalsReportLoader {
       scope: request.scope,
       showLetter: request.showLetter,
       sectionIds: request.sectionIds,
-    );
-    debugPrint(
-      '[BreedJudgedTotalsReportLoader] rows=${entryRows.length} '
-      'breedRows=${aggregation.breedRows.length} '
-      'furRows=${aggregation.furRows.length} '
-      'showBreakdowns=${showBreakdowns.length}',
     );
 
     return BreedJudgedTotalsReportData(
@@ -79,6 +70,7 @@ class BreedJudgedTotalsReportLoader {
 
   Future<List<Map<String, dynamic>>> _loadAllJudgedEntryRows(
     String showId,
+    List<String> sectionIds,
   ) async {
     const pageSize = 1000;
     final allRows = <Map<String, dynamic>>[];
@@ -92,6 +84,7 @@ class BreedJudgedTotalsReportLoader {
             '*, show_sections(id, kind, letter, display_name, sort_order)',
           )
           .eq('show_id', showId)
+          .inFilter('section_id', sectionIds)
           .not('judged_by_show_judge_id', 'is', null)
           .filter('scratched_at', 'is', null)
           .order('id')

@@ -1,8 +1,9 @@
-import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart' show rootBundle;
+import 'dart:typed_data';
+
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:ringmaster_show/reporting_core/assets/report_asset_loader.dart';
 
 import '../../models/base/report_file_result.dart';
 import '../../models/base/report_request.dart';
@@ -10,24 +11,21 @@ import '../../models/judge/breed_judged_totals_report_data.dart';
 
 class BreedJudgedTotalsReportPdfBuilder {
   BreedJudgedTotalsReportPdfBuilder({
+    required ReportAssetLoader assets,
     DateFormat? dateFormat,
     DateFormat? dateTimeFormat,
-  }) : _dateFormat = dateFormat ?? DateFormat('MM/dd/yyyy'),
+  }) : _assets = assets,
+       _dateFormat = dateFormat ?? DateFormat('MM/dd/yyyy'),
        _dateTimeFormat = dateTimeFormat ?? DateFormat('MM/dd/yyyy h:mm a');
 
   final DateFormat _dateFormat;
   final DateFormat _dateTimeFormat;
+  final ReportAssetLoader _assets;
 
   Future<ReportFileResult> buildFile(
     BreedJudgedTotalsReportData data,
     ReportRequest request,
   ) async {
-    debugPrint(
-      '[BreedJudgedTotalsReportPdfBuilder] buildFile show=${data.show.showId} '
-      'scopeLabel=${data.scopeLabel} breedRows=${data.breedRows.length} '
-      'furRows=${data.furRows.length} '
-      'showBreakdowns=${data.showBreakdowns.length}',
-    );
     final bytes = await build(data);
     final safeShowName = data.show.showName
         .replaceAll(RegExp(r'[^A-Za-z0-9]+'), '_')
@@ -106,10 +104,10 @@ class BreedJudgedTotalsReportPdfBuilder {
 
   Future<_BreedJudgedTotalsReportFonts> _loadFonts() async {
     final regular = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSans-Regular.ttf'),
+      await _assets.loadByteData('assets/fonts/NotoSans-Regular.ttf'),
     );
     final bold = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSans-Bold.ttf'),
+      await _assets.loadByteData('assets/fonts/NotoSans-Bold.ttf'),
     );
 
     return _BreedJudgedTotalsReportFonts(regular: regular, bold: bold);

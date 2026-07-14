@@ -1,0 +1,7 @@
+.dart_tool
+.git
+build
+coverage
+test
+*.log
+**/.DS_Store

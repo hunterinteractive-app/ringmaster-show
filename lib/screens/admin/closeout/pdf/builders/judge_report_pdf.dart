@@ -3,8 +3,8 @@
 import 'dart:typed_data';
 
 import 'package:intl/intl.dart';
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:pdf/pdf.dart';
+import 'package:ringmaster_show/reporting_core/assets/report_asset_loader.dart';
 
 import 'package:pdf/widgets.dart' as pw;
 import '../../models/base/report_file_result.dart';
@@ -13,13 +13,16 @@ import '../../models/judge/judge_report_data.dart';
 
 class JudgeReportPdfBuilder {
   JudgeReportPdfBuilder({
+    required ReportAssetLoader assets,
     DateFormat? dateFormat,
     DateFormat? dateTimeFormat,
-  })  : _dateFormat = dateFormat ?? DateFormat('MM/dd/yyyy'),
-        _dateTimeFormat = dateTimeFormat ?? DateFormat('MM/dd/yyyy h:mm a');
+  }) : _assets = assets,
+       _dateFormat = dateFormat ?? DateFormat('MM/dd/yyyy'),
+       _dateTimeFormat = dateTimeFormat ?? DateFormat('MM/dd/yyyy h:mm a');
 
   final DateFormat _dateFormat;
   final DateFormat _dateTimeFormat;
+  final ReportAssetLoader _assets;
 
   Future<Uint8List> build(JudgeReportData data) async {
     final document = pw.Document(
@@ -68,16 +71,13 @@ class JudgeReportPdfBuilder {
 
   Future<_JudgeReportFonts> _loadFonts() async {
     final regular = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSans-Regular.ttf'),
+      await _assets.loadByteData('assets/fonts/NotoSans-Regular.ttf'),
     );
     final bold = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSans-Bold.ttf'),
+      await _assets.loadByteData('assets/fonts/NotoSans-Bold.ttf'),
     );
 
-    return _JudgeReportFonts(
-      regular: regular,
-      bold: bold,
-    );
+    return _JudgeReportFonts(regular: regular, bold: bold);
   }
 
   pw.PageTheme _pageTheme(_JudgeReportFonts fonts) {
@@ -189,27 +189,17 @@ class JudgeReportPdfBuilder {
         children: <pw.Widget>[
           pw.Text(
             value,
-            style: pw.TextStyle(
-              fontSize: 13,
-              fontWeight: pw.FontWeight.bold,
-            ),
+            style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold),
           ),
           pw.SizedBox(height: 2),
-          pw.Text(
-            label,
-            style: const pw.TextStyle(fontSize: 8),
-          ),
+          pw.Text(label, style: const pw.TextStyle(fontSize: 8)),
         ],
       ),
     );
   }
 
   pw.Widget _summaryDivider() {
-    return pw.Container(
-      width: 0.5,
-      height: 28,
-      color: PdfColors.grey400,
-    );
+    return pw.Container(width: 0.5, height: 28, color: PdfColors.grey400);
   }
 
   pw.Widget _buildJudgeOverviewTable(JudgeReportData data) {
@@ -218,10 +208,7 @@ class JudgeReportPdfBuilder {
       children: <pw.Widget>[
         pw.Text(
           'Judge Overview',
-          style: pw.TextStyle(
-            fontSize: 13,
-            fontWeight: pw.FontWeight.bold,
-          ),
+          style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold),
         ),
         pw.SizedBox(height: 6),
         pw.Table(
@@ -242,10 +229,7 @@ class JudgeReportPdfBuilder {
   }
 
   pw.TableRow _judgeOverviewHeaderRow() {
-    final style = pw.TextStyle(
-      fontSize: 8,
-      fontWeight: pw.FontWeight.bold,
-    );
+    final style = pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold);
 
     return pw.TableRow(
       decoration: const pw.BoxDecoration(color: PdfColors.grey300),
@@ -274,9 +258,7 @@ class JudgeReportPdfBuilder {
   List<pw.Widget> _buildJudgeSection(JudgeReportJudge judge) {
     const rowsPerChunk = 28;
     final summaryRows = _breedSummaryRows(judge.rows);
-    final widgets = <pw.Widget>[
-      _buildJudgeHeader(judge),
-    ];
+    final widgets = <pw.Widget>[_buildJudgeHeader(judge)];
 
     if (summaryRows.isEmpty) {
       widgets.add(
@@ -343,18 +325,12 @@ class JudgeReportPdfBuilder {
           pw.Expanded(
             child: pw.Text(
               judge.displayLabel,
-              style: pw.TextStyle(
-                fontSize: 11,
-                fontWeight: pw.FontWeight.bold,
-              ),
+              style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
             ),
           ),
           pw.Text(
             'Breed: ${judge.breedEntryCount}   Fur: ${judge.furEntryCount}   Total: ${judge.totalEntryCount}',
-            style: pw.TextStyle(
-              fontSize: 9,
-              fontWeight: pw.FontWeight.bold,
-            ),
+            style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
           ),
         ],
       ),
@@ -378,10 +354,7 @@ class JudgeReportPdfBuilder {
   }
 
   pw.TableRow _breedSummaryHeaderRow() {
-    final style = pw.TextStyle(
-      fontSize: 8,
-      fontWeight: pw.FontWeight.bold,
-    );
+    final style = pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold);
 
     return pw.TableRow(
       decoration: const pw.BoxDecoration(color: PdfColors.grey300),
@@ -411,11 +384,7 @@ class JudgeReportPdfBuilder {
     final grouped = <String, _JudgeBreedSummaryRow>{};
 
     for (final row in rows) {
-      final key = [
-        row.sectionLabel,
-        row.judgedAsLabel,
-        row.breed,
-      ].join('|');
+      final key = [row.sectionLabel, row.judgedAsLabel, row.breed].join('|');
 
       final existing = grouped[key];
       if (existing == null) {
@@ -509,7 +478,6 @@ class JudgeReportPdfBuilder {
     return '$formattedStart - $formattedEnd';
   }
 
-
   Future<ReportFileResult> buildFile(
     JudgeReportData data,
     dynamic request,
@@ -532,10 +500,7 @@ class JudgeReportPdfBuilder {
 }
 
 class _JudgeReportFonts {
-  const _JudgeReportFonts({
-    required this.regular,
-    required this.bold,
-  });
+  const _JudgeReportFonts({required this.regular, required this.bold});
 
   final pw.Font regular;
   final pw.Font bold;
@@ -554,9 +519,7 @@ class _JudgeBreedSummaryRow {
   final String breed;
   final int total;
 
-  _JudgeBreedSummaryRow copyWith({
-    int? total,
-  }) {
+  _JudgeBreedSummaryRow copyWith({int? total}) {
     return _JudgeBreedSummaryRow(
       sectionLabel: sectionLabel,
       judgedAsLabel: judgedAsLabel,

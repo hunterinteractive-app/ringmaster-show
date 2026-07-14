@@ -1,8 +1,8 @@
 import 'dart:typed_data';
 
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:ringmaster_show/reporting_core/assets/report_asset_loader.dart';
 
 import '../../models/base/report_file_result.dart';
 import '../../models/base/report_request.dart';
@@ -10,15 +10,16 @@ import '../../models/clubs/exhibitor_by_breed_report_data.dart';
 
 class ExhibitorByBreedReportPdf {
   final Uint8List? logoBytes;
+  final ReportAssetLoader assets;
 
-  ExhibitorByBreedReportPdf({this.logoBytes});
+  ExhibitorByBreedReportPdf({required this.assets, this.logoBytes});
 
   Future<pw.ThemeData> _theme() async {
     final regular = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSans-Regular.ttf'),
+      await assets.loadByteData('assets/fonts/NotoSans-Regular.ttf'),
     );
     final bold = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSans-Bold.ttf'),
+      await assets.loadByteData('assets/fonts/NotoSans-Bold.ttf'),
     );
     return pw.ThemeData.withFont(base: regular, bold: bold);
   }

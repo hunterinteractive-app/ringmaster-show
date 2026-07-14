@@ -15,7 +15,10 @@ class PaidExhibitorReportLoader {
     final showId = request.showId;
 
     final show = await repo.loadShowBasics(showId);
-    final balanceRows = await repo.loadShowExhibitorBalancesReport(showId);
+    final balanceRows = await repo.loadShowExhibitorBalancesReport(
+      showId,
+      sectionIds: request.sectionIds,
+    );
 
     final rows = <PaidExhibitorRow>[];
 
@@ -55,8 +58,7 @@ class PaidExhibitorReportLoader {
           subtotal: _centsToDollars(balance['subtotal_before_discount_cents']),
           showFee: _centsToDollars(balance['show_fee_subtotal_cents']),
           discount: _centsToDollars(balance['discount_cents']),
-          calculatedTotal:
-              _centsToDollars(balance['calculated_total_cents']),
+          calculatedTotal: _centsToDollars(balance['calculated_total_cents']),
           paidOnline: paidOnline,
           paidManual: paidManual,
           refunded: refunded,
@@ -68,38 +70,55 @@ class PaidExhibitorReportLoader {
 
     rows.sort(
       (a, b) => a.exhibitorName.toLowerCase().compareTo(
-            b.exhibitorName.toLowerCase(),
-          ),
+        b.exhibitorName.toLowerCase(),
+      ),
     );
 
     final totalExhibitors = rows.length;
     final totalEntries = rows.fold<int>(0, (sum, row) => sum + row.entryCount);
-    final totalFurEntries =
-        rows.fold<int>(0, (sum, row) => sum + row.furCount);
-    final grandSubtotal =
-        rows.fold<double>(0.0, (sum, row) => sum + row.subtotal);
-    final grandShowFee =
-        rows.fold<double>(0.0, (sum, row) => sum + row.showFee);
-    final grandDiscount =
-        rows.fold<double>(0.0, (sum, row) => sum + row.discount);
-    final grandCalculatedTotal =
-        rows.fold<double>(0.0, (sum, row) => sum + row.calculatedTotal);
-    final grandAmountPaid =
-        rows.fold<double>(0.0, (sum, row) => sum + row.amountPaid);
-    final grandPaidOnline =
-        rows.fold<double>(0.0, (sum, row) => sum + row.paidOnline);
-    final grandPaidManual =
-        rows.fold<double>(0.0, (sum, row) => sum + row.paidManual);
-    final grandRefunded =
-        rows.fold<double>(0.0, (sum, row) => sum + row.refunded);
-    final grandBalanceDue =
-        rows.fold<double>(0.0, (sum, row) => sum + row.balanceDue);
+    final totalFurEntries = rows.fold<int>(0, (sum, row) => sum + row.furCount);
+    final grandSubtotal = rows.fold<double>(
+      0.0,
+      (sum, row) => sum + row.subtotal,
+    );
+    final grandShowFee = rows.fold<double>(
+      0.0,
+      (sum, row) => sum + row.showFee,
+    );
+    final grandDiscount = rows.fold<double>(
+      0.0,
+      (sum, row) => sum + row.discount,
+    );
+    final grandCalculatedTotal = rows.fold<double>(
+      0.0,
+      (sum, row) => sum + row.calculatedTotal,
+    );
+    final grandAmountPaid = rows.fold<double>(
+      0.0,
+      (sum, row) => sum + row.amountPaid,
+    );
+    final grandPaidOnline = rows.fold<double>(
+      0.0,
+      (sum, row) => sum + row.paidOnline,
+    );
+    final grandPaidManual = rows.fold<double>(
+      0.0,
+      (sum, row) => sum + row.paidManual,
+    );
+    final grandRefunded = rows.fold<double>(
+      0.0,
+      (sum, row) => sum + row.refunded,
+    );
+    final grandBalanceDue = rows.fold<double>(
+      0.0,
+      (sum, row) => sum + row.balanceDue,
+    );
 
     final currency = balanceRows.isEmpty
         ? 'USD'
         : (_str(balanceRows.first['currency']).isEmpty
-            ? 'USD'
-            : _str(balanceRows.first['currency']).toUpperCase());
+              ? 'USD'
+              : _str(balanceRows.first['currency']).toUpperCase());
 
     return PaidExhibitorReportData(
       showName: _str(show['name']),
@@ -173,14 +192,14 @@ class PaidExhibitorReportLoader {
         .toList();
 
     parsedRows.sort((a, b) {
-      final kindCompare = _sectionKindRank(a.kind).compareTo(
-        _sectionKindRank(b.kind),
-      );
+      final kindCompare = _sectionKindRank(
+        a.kind,
+      ).compareTo(_sectionKindRank(b.kind));
       if (kindCompare != 0) return kindCompare;
 
       final letterCompare = a.letter.toUpperCase().compareTo(
-            b.letter.toUpperCase(),
-          );
+        b.letter.toUpperCase(),
+      );
       if (letterCompare != 0) return letterCompare;
 
       return a.label.toLowerCase().compareTo(b.label.toLowerCase());

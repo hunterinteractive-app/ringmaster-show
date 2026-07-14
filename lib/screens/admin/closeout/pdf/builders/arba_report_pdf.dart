@@ -1,25 +1,29 @@
 // lib/screens/admin/closeout/pdf/builders/arba_report_pdf.dart
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:ringmaster_show/reporting_core/assets/report_asset_loader.dart';
 
 import '../../models/arba/arba_report_data.dart';
 import '../../models/base/report_file_result.dart';
 import '../../models/base/report_request.dart';
 
 class ArbaReportPdfBuilder {
+  ArbaReportPdfBuilder({required ReportAssetLoader assets}) : _assets = assets;
+
+  final ReportAssetLoader _assets;
+
   Future<pw.ThemeData> _buildTheme() async {
     final base = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSans-Regular.ttf'),
+      await _assets.loadByteData('assets/fonts/NotoSans-Regular.ttf'),
     );
     final bold = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSans-Bold.ttf'),
+      await _assets.loadByteData('assets/fonts/NotoSans-Bold.ttf'),
     );
     final italic = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSans-Italic.ttf'),
+      await _assets.loadByteData('assets/fonts/NotoSans-Italic.ttf'),
     );
     final boldItalic = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSans-BoldItalic.ttf'),
+      await _assets.loadByteData('assets/fonts/NotoSans-BoldItalic.ttf'),
     );
 
     return pw.ThemeData.withFont(
@@ -59,25 +63,31 @@ class ArbaReportPdfBuilder {
     final secretaryAddress = _str(_tryGet(() => d.secretaryAddress));
 
     final superintendentName = _str(_tryGet(() => d.superintendentName));
-    final superintendentArbaNumber =
-        _str(_tryGet(() => d.superintendentArbaNumber));
+    final superintendentArbaNumber = _str(
+      _tryGet(() => d.superintendentArbaNumber),
+    );
 
     final superintendent = [
       superintendentName,
       superintendentArbaNumber,
     ].where((e) => e.isNotEmpty).join('\n');
 
-    final troubleReceivingSanctions =
-        _str(_tryGet(() => d.troubleReceivingSanctions), fallback: 'No');
+    final troubleReceivingSanctions = _str(
+      _tryGet(() => d.troubleReceivingSanctions),
+      fallback: 'No',
+    );
 
-    final troubleReceivingSanctionClubs =
-        _str(_tryGet(() => d.troubleReceivingSanctionClubs), fallback: 'N/A');
+    final troubleReceivingSanctionClubs = _str(
+      _tryGet(() => d.troubleReceivingSanctionClubs),
+      fallback: 'N/A',
+    );
 
-    final protestFiled =
-        _str(_tryGet(() => d.protestFiled), fallback: 'No');
+    final protestFiled = _str(_tryGet(() => d.protestFiled), fallback: 'No');
 
-    final protestReportFiled =
-        _str(_tryGet(() => d.protestReportFiled), fallback: 'N/A');
+    final protestReportFiled = _str(
+      _tryGet(() => d.protestReportFiled),
+      fallback: 'N/A',
+    );
 
     final ribbonsMailed =
         _fmtDate(_tryGet(() => d.ribbonsReportsMailedAt)) ?? '';
@@ -87,8 +97,7 @@ class ArbaReportPdfBuilder {
 
     final judges = _normalizeJudges(_tryGet(() => d.judges));
 
-    final filedDate =
-        _fmtDate(_tryGet(() => d.filedDate)) ?? printedDate;
+    final filedDate = _fmtDate(_tryGet(() => d.filedDate)) ?? printedDate;
 
     final signedBy = _str(_tryGet(() => d.signedBy));
 
@@ -218,10 +227,7 @@ class ArbaReportPdfBuilder {
           : 'arba_report_${scope.toLowerCase()}_${showLetter.toLowerCase()}.pdf',
       mimeType: 'application/pdf',
       bytes: bytes,
-      metadata: {
-        'scope': scope,
-        'show_letter': showLetter,
-      },
+      metadata: {'scope': scope, 'show_letter': showLetter},
     );
   }
 
@@ -295,10 +301,7 @@ class ArbaReportPdfBuilder {
             ),
           ),
           if (trailingText != null && trailingText.trim().isNotEmpty)
-            pw.Text(
-              trailingText,
-              style: const pw.TextStyle(fontSize: 9),
-            ),
+            pw.Text(trailingText, style: const pw.TextStyle(fontSize: 9)),
         ],
       ),
     );
@@ -346,8 +349,12 @@ class ArbaReportPdfBuilder {
         ),
         pw.TableRow(
           children: [
-            _valueCell(secretaryPhone.isEmpty ? 'Phone number' : secretaryPhone),
-            _valueCell(secretaryEmail.isEmpty ? 'Email address' : secretaryEmail),
+            _valueCell(
+              secretaryPhone.isEmpty ? 'Phone number' : secretaryPhone,
+            ),
+            _valueCell(
+              secretaryEmail.isEmpty ? 'Email address' : secretaryEmail,
+            ),
           ],
         ),
       ],
@@ -456,10 +463,7 @@ class ArbaReportPdfBuilder {
     required String value2,
   }) {
     return pw.TableRow(
-      children: [
-        _cellBlock(label1, value1),
-        _cellBlock(label2, value2),
-      ],
+      children: [_cellBlock(label1, value1), _cellBlock(label2, value2)],
     );
   }
 
@@ -473,7 +477,10 @@ class ArbaReportPdfBuilder {
             children: [
               pw.Text(
                 label,
-                style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold),
+                style: pw.TextStyle(
+                  fontSize: 7,
+                  fontWeight: pw.FontWeight.bold,
+                ),
               ),
               pw.SizedBox(height: 2),
               pw.Text(
@@ -539,12 +546,7 @@ class ArbaReportPdfBuilder {
           ],
         ),
         for (var i = 0; i < 6; i++)
-          pw.TableRow(
-            children: [
-              _valueCell(left[i]),
-              _valueCell(right[i]),
-            ],
-          ),
+          pw.TableRow(children: [_valueCell(left[i]), _valueCell(right[i])]),
       ],
     );
   }

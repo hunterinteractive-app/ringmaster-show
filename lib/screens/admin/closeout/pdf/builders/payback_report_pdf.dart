@@ -1,36 +1,29 @@
 // lib/screens/admin/closeout/pdf/builders/payback_report_pdf.dart
 
-import 'package:flutter/services.dart';
+import 'dart:typed_data';
+
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:ringmaster_show/reporting_core/assets/report_asset_loader.dart';
 
 import '../../models/exhibitor/payback_report_data.dart';
 import '../../models/base/report_file_result.dart';
 import '../../models/base/report_request.dart';
 
 class PaybackReportPdfBuilder {
-  final Uint8List? logoBytes;
+  final Uint8List logoBytes;
+  final ReportAssetLoader assets;
 
-  PaybackReportPdfBuilder({
-    this.logoBytes,
-  });
+  PaybackReportPdfBuilder({required this.assets, required this.logoBytes});
 
-  static Future<PaybackReportPdfBuilder> fromAssets() async {
-    Uint8List? logo;
-
-    try {
-      logo = (await rootBundle.load(
-        'assets/images/ringmaster_show_logo.png',
-      ))
-          .buffer
-          .asUint8List();
-    } catch (_) {
-      logo = null;
-    }
-
-    return PaybackReportPdfBuilder(
-      logoBytes: logo,
+  static Future<PaybackReportPdfBuilder> fromAssets(
+    ReportAssetLoader assets,
+  ) async {
+    final logo = await assets.loadBytes(
+      'assets/images/ringmaster_show_logo.png',
     );
+
+    return PaybackReportPdfBuilder(assets: assets, logoBytes: logo);
   }
 
   Future<ReportFileResult> buildFile(
@@ -58,21 +51,15 @@ class PaybackReportPdfBuilder {
 
   Future<Uint8List> build(PaybackReportData data) async {
     final regular = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSans-Regular.ttf'),
+      await assets.loadByteData('assets/fonts/NotoSans-Regular.ttf'),
     );
     final bold = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSans-Bold.ttf'),
+      await assets.loadByteData('assets/fonts/NotoSans-Bold.ttf'),
     );
 
-    final theme = pw.ThemeData.withFont(
-      base: regular,
-      bold: bold,
-    );
+    final theme = pw.ThemeData.withFont(base: regular, bold: bold);
 
-    final doc = pw.Document(
-      theme: theme,
-      compress: true,
-    );
+    final doc = pw.Document(theme: theme, compress: true);
 
     doc.addPage(
       pw.MultiPage(
@@ -133,16 +120,12 @@ class PaybackReportPdfBuilder {
     return pw.Row(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        if (logoBytes != null)
-          pw.Container(
-            width: 54,
-            height: 54,
-            margin: const pw.EdgeInsets.only(right: 12),
-            child: pw.Image(
-              pw.MemoryImage(logoBytes!),
-              fit: pw.BoxFit.contain,
-            ),
-          ),
+        pw.Container(
+          width: 54,
+          height: 54,
+          margin: const pw.EdgeInsets.only(right: 12),
+          child: pw.Image(pw.MemoryImage(logoBytes), fit: pw.BoxFit.contain),
+        ),
         pw.Expanded(
           child: pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -185,18 +168,12 @@ class PaybackReportPdfBuilder {
       decoration: pw.BoxDecoration(
         color: PdfColor.fromHex('#EEF3FF'),
         borderRadius: pw.BorderRadius.circular(8),
-        border: pw.Border.all(
-          color: PdfColor.fromHex('#1B356D'),
-          width: 0.7,
-        ),
+        border: pw.Border.all(color: PdfColor.fromHex('#1B356D'), width: 0.7),
       ),
       child: pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
-          _summaryItem(
-            'Grand Total Paybacks',
-            _money(data.grandTotalCents),
-          ),
+          _summaryItem('Grand Total Paybacks', _money(data.grandTotalCents)),
           _summaryItem(
             'Exhibitors Receiving Paybacks',
             data.totalExhibitors.toString(),
@@ -212,18 +189,12 @@ class PaybackReportPdfBuilder {
       children: [
         pw.Text(
           label,
-          style: const pw.TextStyle(
-            fontSize: 8,
-            color: PdfColors.grey700,
-          ),
+          style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
         ),
         pw.SizedBox(height: 2),
         pw.Text(
           value,
-          style: pw.TextStyle(
-            fontSize: 15,
-            fontWeight: pw.FontWeight.bold,
-          ),
+          style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold),
         ),
       ],
     );
@@ -248,18 +219,12 @@ class PaybackReportPdfBuilder {
     final widgets = <pw.Widget>[
       pw.Text(
         'Exhibitor Payback Overview',
-        style: pw.TextStyle(
-          fontSize: 16,
-          fontWeight: pw.FontWeight.bold,
-        ),
+        style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
       ),
       pw.SizedBox(height: 6),
       pw.Text(
         'Summary of each exhibitor and the total amount due before the detailed breakdown.',
-        style: const pw.TextStyle(
-          fontSize: 9,
-          color: PdfColors.grey700,
-        ),
+        style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
       ),
       pw.SizedBox(height: 20),
     ];
@@ -290,10 +255,7 @@ class PaybackReportPdfBuilder {
     required bool includeGrandTotal,
   }) {
     return pw.Table(
-      border: pw.TableBorder.all(
-        color: PdfColors.grey400,
-        width: 0.4,
-      ),
+      border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.4),
       columnWidths: const {
         0: pw.FixedColumnWidth(44),
         1: pw.FlexColumnWidth(2.2),
@@ -302,9 +264,7 @@ class PaybackReportPdfBuilder {
       },
       children: [
         pw.TableRow(
-          decoration: const pw.BoxDecoration(
-            color: PdfColors.grey200,
-          ),
+          decoration: const pw.BoxDecoration(color: PdfColors.grey200),
           children: [
             _headerCell('Exh #'),
             _headerCell('Exhibitor'),
@@ -315,9 +275,7 @@ class PaybackReportPdfBuilder {
         ...exhibitors.map(_buildOverviewRow),
         if (includeGrandTotal)
           pw.TableRow(
-            decoration: pw.BoxDecoration(
-              color: PdfColor.fromHex('#EEF3FF'),
-            ),
+            decoration: pw.BoxDecoration(color: PdfColor.fromHex('#EEF3FF')),
             children: [
               _headerCell(''),
               _headerCell('Grand Total'),
@@ -332,13 +290,17 @@ class PaybackReportPdfBuilder {
   pw.TableRow _buildOverviewRow(PaybackExhibitorSummary exhibitor) {
     return pw.TableRow(
       children: [
-        _bodyCell(exhibitor.exhibitorNumber.trim().isEmpty
-            ? '—'
-            : exhibitor.exhibitorNumber.trim()),
+        _bodyCell(
+          exhibitor.exhibitorNumber.trim().isEmpty
+              ? '—'
+              : exhibitor.exhibitorNumber.trim(),
+        ),
         _bodyCell(exhibitor.exhibitorName),
-        _bodyCell(exhibitor.mailingAddress.trim().isEmpty
-            ? '—'
-            : exhibitor.mailingAddress.trim()),
+        _bodyCell(
+          exhibitor.mailingAddress.trim().isEmpty
+              ? '—'
+              : exhibitor.mailingAddress.trim(),
+        ),
         _bodyCell(_money(exhibitor.totalCents), alignRight: true),
       ],
     );
@@ -397,17 +359,11 @@ class PaybackReportPdfBuilder {
             padding: const pw.EdgeInsets.only(bottom: 3),
             child: pw.Text(
               exhibitor.mailingAddress.trim(),
-              style: const pw.TextStyle(
-                fontSize: 7,
-                color: PdfColors.grey700,
-              ),
+              style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey700),
             ),
           ),
         pw.Container(
-          padding: const pw.EdgeInsets.symmetric(
-            horizontal: 8,
-            vertical: 6,
-          ),
+          padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           decoration: pw.BoxDecoration(
             color: PdfColor.fromHex('#1B356D'),
             borderRadius: const pw.BorderRadius.only(
@@ -453,10 +409,7 @@ class PaybackReportPdfBuilder {
 
   pw.Widget _buildRowsTable(List<PaybackBreakdownRow> rows) {
     return pw.Table(
-      border: pw.TableBorder.all(
-        color: PdfColors.grey400,
-        width: 0.4,
-      ),
+      border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.4),
       columnWidths: const {
         0: pw.FixedColumnWidth(44),
         1: pw.FixedColumnWidth(42),
@@ -468,9 +421,7 @@ class PaybackReportPdfBuilder {
       },
       children: [
         pw.TableRow(
-          decoration: const pw.BoxDecoration(
-            color: PdfColors.grey200,
-          ),
+          decoration: const pw.BoxDecoration(color: PdfColors.grey200),
           children: [
             _headerCell('Show'),
             _headerCell('Source'),
@@ -506,10 +457,7 @@ class PaybackReportPdfBuilder {
       child: pw.Text(
         text,
         textAlign: alignRight ? pw.TextAlign.right : pw.TextAlign.left,
-        style: pw.TextStyle(
-          fontSize: 7,
-          fontWeight: pw.FontWeight.bold,
-        ),
+        style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold),
       ),
     );
   }

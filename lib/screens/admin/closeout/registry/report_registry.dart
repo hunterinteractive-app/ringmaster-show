@@ -192,8 +192,7 @@ class ReportRegistry {
          'payback_report': ReportDefinition(
            reportName: 'payback_report',
            outputType: 'pdf',
-           loader: (req) async =>
-               await paybackReportLoader.load(showId: req.showId),
+           loader: (req) async => await paybackReportLoader.loadRequest(req),
            builder: (data, req) async => await paybackReportBuilder.buildFile(
              data as PaybackReportData,
              req,
@@ -202,8 +201,7 @@ class ReportRegistry {
          'judge_report': ReportDefinition(
            reportName: 'judge_report',
            outputType: 'pdf',
-           loader: (req) async =>
-               await judgeReportLoader.load(showId: req.showId),
+           loader: (req) async => await judgeReportLoader.load(req),
            builder: (data, req) async =>
                await judgeReportBuilder.buildFile(data as JudgeReportData, req),
          ),

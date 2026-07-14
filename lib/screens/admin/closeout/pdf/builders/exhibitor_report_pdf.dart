@@ -1,9 +1,10 @@
 // lib/screens/admin/closeout/pdf/builders/exhibitor_report_pdf.dart
 
+import 'dart:typed_data';
 
-import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:ringmaster_show/reporting_core/assets/report_asset_loader.dart';
 
 import '../../models/base/report_file_result.dart';
 import '../../models/base/report_request.dart';
@@ -11,33 +12,32 @@ import '../../models/exhibitor/exhibitor_report_data.dart';
 
 class ExhibitorReportPdfBuilder {
   final Uint8List logoBytes;
+  final ReportAssetLoader assets;
 
-  ExhibitorReportPdfBuilder({
-    required this.logoBytes,
-  });
+  ExhibitorReportPdfBuilder({required this.assets, required this.logoBytes});
 
-  static Future<ExhibitorReportPdfBuilder> fromAssets() async {
-    final logo = (await rootBundle.load('assets/images/ringmaster_show_logo.png'))
-        .buffer
-        .asUint8List();
-
-    return ExhibitorReportPdfBuilder(
-      logoBytes: logo,
+  static Future<ExhibitorReportPdfBuilder> fromAssets(
+    ReportAssetLoader assets,
+  ) async {
+    final logo = await assets.loadBytes(
+      'assets/images/ringmaster_show_logo.png',
     );
+
+    return ExhibitorReportPdfBuilder(assets: assets, logoBytes: logo);
   }
 
   Future<pw.ThemeData> _buildTheme() async {
     final regular = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSans-Regular.ttf'),
+      await assets.loadByteData('assets/fonts/NotoSans-Regular.ttf'),
     );
     final bold = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSans-Bold.ttf'),
+      await assets.loadByteData('assets/fonts/NotoSans-Bold.ttf'),
     );
     final italic = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSans-Italic.ttf'),
+      await assets.loadByteData('assets/fonts/NotoSans-Italic.ttf'),
     );
     final boldItalic = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSans-BoldItalic.ttf'),
+      await assets.loadByteData('assets/fonts/NotoSans-BoldItalic.ttf'),
     );
 
     return pw.ThemeData.withFont(
@@ -48,57 +48,53 @@ class ExhibitorReportPdfBuilder {
     );
   }
 
-    Future<ReportFileResult> buildFile(
-      ExhibitorReportData data,
-      ReportRequest request,
-    ) async {
-      final theme = await _buildTheme();
-      final pdf = pw.Document(theme: theme);
-      final logoImage = pw.MemoryImage(logoBytes);
+  Future<ReportFileResult> buildFile(
+    ExhibitorReportData data,
+    ReportRequest request,
+  ) async {
+    final theme = await _buildTheme();
+    final pdf = pw.Document(theme: theme);
+    final logoImage = pw.MemoryImage(logoBytes);
 
-      pdf.addPage(
-        pw.MultiPage(
-          pageFormat: PdfPageFormat.letter,
-          margin: const pw.EdgeInsets.fromLTRB(24, 24, 24, 34),
-          theme: theme,
-          header: (_) => _header(data, logoImage),
-          footer: (context) => _footer(context),
-          build: (_) => [
-            pw.SizedBox(height: 10),
-            _table(data.entries),
-          ],
-        ),
-      );
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.letter,
+        margin: const pw.EdgeInsets.fromLTRB(24, 24, 24, 34),
+        theme: theme,
+        header: (_) => _header(data, logoImage),
+        footer: (context) => _footer(context),
+        build: (_) => [pw.SizedBox(height: 10), _table(data.entries)],
+      ),
+    );
 
-      final bytes = await pdf.save();
+    final bytes = await pdf.save();
 
-      final rawName = (request.exhibitorName ?? data.exhibitorName).trim();
+    final rawName = (request.exhibitorName ?? data.exhibitorName).trim();
 
-      String cleanFilePart(String input) {
-        return input
-            // remove UUID / long id-like fragments
-            .replaceAll(RegExp(r'\b[0-9a-fA-F\-]{8,}\b'), '')
-            // remove invalid filename characters
-            .replaceAll(RegExp(r'[\\/:*?"<>|]'), '')
-            // collapse whitespace
-            .replaceAll(RegExp(r'\s+'), ' ')
-            .trim();
-      }
-
-      final cleanedShowName =
-          cleanFilePart(data.showName.isEmpty ? 'Show' : data.showName);
-      final cleanedName =
-          cleanFilePart(rawName.isEmpty ? 'Exhibitor' : rawName);
-
-      final fileName =
-          '$cleanedShowName - $cleanedName - Exhibitor Report.pdf';
-
-      return ReportFileResult(
-        fileName: fileName,
-        mimeType: 'application/pdf',
-        bytes: bytes,
-      );
+    String cleanFilePart(String input) {
+      return input
+          // remove UUID / long id-like fragments
+          .replaceAll(RegExp(r'\b[0-9a-fA-F\-]{8,}\b'), '')
+          // remove invalid filename characters
+          .replaceAll(RegExp(r'[\\/:*?"<>|]'), '')
+          // collapse whitespace
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
     }
+
+    final cleanedShowName = cleanFilePart(
+      data.showName.isEmpty ? 'Show' : data.showName,
+    );
+    final cleanedName = cleanFilePart(rawName.isEmpty ? 'Exhibitor' : rawName);
+
+    final fileName = '$cleanedShowName - $cleanedName - Exhibitor Report.pdf';
+
+    return ReportFileResult(
+      fileName: fileName,
+      mimeType: 'application/pdf',
+      bytes: bytes,
+    );
+  }
 
   pw.Widget _header(ExhibitorReportData e, pw.MemoryImage logoImage) {
     return pw.Column(
@@ -155,10 +151,7 @@ class ExhibitorReportPdfBuilder {
               alignment: pw.Alignment.topRight,
               child: pw.Padding(
                 padding: const pw.EdgeInsets.only(top: 4),
-                child: pw.Image(
-                  logoImage,
-                  fit: pw.BoxFit.contain,
-                ),
+                child: pw.Image(logoImage, fit: pw.BoxFit.contain),
               ),
             ),
           ],
@@ -172,10 +165,7 @@ class ExhibitorReportPdfBuilder {
   pw.Widget _table(List<ExhibitorEntryRow> rows) {
     return pw.TableHelper.fromTextArray(
       border: pw.TableBorder.all(color: PdfColors.grey700, width: 0.4),
-      headerStyle: pw.TextStyle(
-        fontWeight: pw.FontWeight.bold,
-        fontSize: 6.4,
-      ),
+      headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 6.4),
       cellStyle: const pw.TextStyle(fontSize: 6.3),
       cellAlignment: pw.Alignment.centerLeft,
       headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),

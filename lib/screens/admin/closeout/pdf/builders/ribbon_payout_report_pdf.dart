@@ -4,17 +4,23 @@ import 'dart:typed_data';
 
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:ringmaster_show/reporting_core/assets/report_asset_loader.dart';
+import 'package:ringmaster_show/reporting_core/pdf/report_pdf_theme.dart';
 
 import '../../models/base/report_file_result.dart';
 import '../../models/base/report_request.dart';
 import '../../models/exhibitor/ribbon_payout_report_data.dart';
 
 class RibbonPayoutReportPdf {
+  RibbonPayoutReportPdf({required this.assets});
+
+  final ReportAssetLoader assets;
+
   Future<ReportFileResult> buildFile(
     RibbonPayoutReportData data,
     ReportRequest req,
   ) async {
-    final pdf = pw.Document();
+    final pdf = pw.Document(theme: await buildReportPdfTheme(assets));
 
     int exhibitorNumberSortValue(String value) {
       final trimmed = value.trim();
@@ -22,7 +28,6 @@ class RibbonPayoutReportPdf {
       if (numeric != null) return numeric;
       return 999999;
     }
-
 
     String displayExhibitorNumber(String value) {
       final trimmed = value.trim();
@@ -51,7 +56,13 @@ class RibbonPayoutReportPdf {
 
       return showName
           .replaceAll(RegExp(r'\bshow\b', caseSensitive: false), '')
-          .replaceAll(RegExp(r'\bspring\b|\bsummer\b|\bfall\b|\bwinter\b', caseSensitive: false), '')
+          .replaceAll(
+            RegExp(
+              r'\bspring\b|\bsummer\b|\bfall\b|\bwinter\b',
+              caseSensitive: false,
+            ),
+            '',
+          )
           .replaceAll(RegExp(r'\b20\d{2}\b'), '')
           .replaceAll(RegExp(r'\s+'), ' ')
           .trim();
@@ -77,17 +88,17 @@ class RibbonPayoutReportPdf {
 
       final rows = [...section.rows]
         ..sort((a, b) {
-          final numCmp = exhibitorNumberSortValue(a.exhibitorNumber).compareTo(
-            exhibitorNumberSortValue(b.exhibitorNumber),
-          );
+          final numCmp = exhibitorNumberSortValue(
+            a.exhibitorNumber,
+          ).compareTo(exhibitorNumberSortValue(b.exhibitorNumber));
           if (numCmp != 0) return numCmp;
 
           final rawNumCmp = a.exhibitorNumber.compareTo(b.exhibitorNumber);
           if (rawNumCmp != 0) return rawNumCmp;
 
           return a.exhibitorName.toLowerCase().compareTo(
-                b.exhibitorName.toLowerCase(),
-              );
+            b.exhibitorName.toLowerCase(),
+          );
         });
 
       pdf.addPage(
@@ -97,17 +108,11 @@ class RibbonPayoutReportPdf {
           build: (context) => [
             pw.Text(
               'Ribbon Report',
-              style: pw.TextStyle(
-                fontSize: 18,
-                fontWeight: pw.FontWeight.bold,
-              ),
+              style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
             ),
             pw.SizedBox(height: 12),
             pw.Table(
-              border: pw.TableBorder.all(
-                color: PdfColors.grey500,
-                width: 0.75,
-              ),
+              border: pw.TableBorder.all(color: PdfColors.grey500, width: 0.75),
               columnWidths: const {
                 0: pw.FlexColumnWidth(1.2),
                 1: pw.FlexColumnWidth(1.2),
@@ -125,7 +130,10 @@ class RibbonPayoutReportPdf {
                   'Sponsoring Superintendent: ${data.sponsoringSuperintendent}',
                   'Classification: ${section.classification}',
                 ),
-                _infoRow('Show: ${section.showLetter}', 'Type: ${section.type}'),
+                _infoRow(
+                  'Show: ${section.showLetter}',
+                  'Type: ${section.type}',
+                ),
                 _infoRow(
                   'Specialty: ${section.specialty}',
                   'ARBA sanction: ${section.arbaSanction}',
@@ -134,10 +142,7 @@ class RibbonPayoutReportPdf {
             ),
             pw.SizedBox(height: 14),
             pw.TableHelper.fromTextArray(
-              border: pw.TableBorder.all(
-                color: PdfColors.grey500,
-                width: 0.75,
-              ),
+              border: pw.TableBorder.all(color: PdfColors.grey500, width: 0.75),
               headerDecoration: const pw.BoxDecoration(
                 color: PdfColors.grey300,
               ),

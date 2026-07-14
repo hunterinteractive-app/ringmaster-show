@@ -5,6 +5,7 @@ import 'package:ringmaster_show/utils/cavy/cavy_awards.dart';
 import '../../models/base/report_request.dart';
 import '../../models/clubs/breed_results_detail_report_data.dart';
 import '../../utils/club_report_grouping.dart';
+import '../../utils/breed_results_detail_order.dart';
 import '../closeout_repository.dart';
 
 class BreedResultsDetailReportLoader {
@@ -87,6 +88,7 @@ class BreedResultsDetailReportLoader {
       return BreedResultsDetailReportData(
         showId: showId,
         breedName: reportBreedLabel,
+        species: species,
         scope: scope,
         showLetter: 'ALL',
         judgeName: sections.isNotEmpty ? sections.first.judgeName : '',
@@ -117,6 +119,7 @@ class BreedResultsDetailReportLoader {
     return BreedResultsDetailReportData(
       showId: showId,
       breedName: reportBreedLabel,
+      species: species,
       scope: scope,
       showLetter: showLetter,
       judgeName: section.judgeName,
@@ -228,13 +231,20 @@ class BreedResultsDetailReportLoader {
             species,
           );
 
-    final reportRows = breedName.isEmpty
+    var reportRows = breedName.isEmpty
         ? rows
         : _mergeBreedRowsWithRelatedPointsRows(
             breedRows: rows,
             overallRows: overallRows,
             breedName: breedName,
           );
+
+    if (species == 'rabbit' && breedName.isNotEmpty) {
+      reportRows = await _withRabbitCatalogJudgingOrder(
+        breedName: breedName,
+        rows: reportRows,
+      );
+    }
 
     if (reportRows.isEmpty) {
       return BreedResultsDetailSection(
@@ -315,6 +325,7 @@ class BreedResultsDetailReportLoader {
         varietyAwardMap: varietyAwardMap,
         sweepstakesPoints: sweepstakesPoints,
         groupByBreed: groupByBreed,
+        useRabbitJudgingOrder: species == 'rabbit',
       ),
       noResultsFound: false,
     );
@@ -378,11 +389,79 @@ class BreedResultsDetailReportLoader {
     }).toList();
   }
 
+  Future<List<Map<String, dynamic>>> _withRabbitCatalogJudgingOrder({
+    required String breedName,
+    required List<Map<String, dynamic>> rows,
+  }) async {
+    final breed = await repo.supabase
+        .from('breeds')
+        .select('id')
+        .ilike('name', breedName.trim())
+        .eq('species', 'rabbit')
+        .maybeSingle();
+    final breedId = (breed?['id'] ?? '').toString().trim();
+    if (breedId.isEmpty) return rows;
+
+    final responses = await Future.wait([
+      repo.supabase
+          .from('variety_groups')
+          .select('id,sort_order')
+          .eq('breed_id', breedId),
+      repo.supabase
+          .from('varieties')
+          .select('name,sort_order,group_id')
+          .eq('breed_id', breedId)
+          .eq('is_active', true),
+    ]);
+
+    final groupOrders = <String, int>{};
+    for (final raw in responses[0] as List) {
+      final group = Map<String, dynamic>.from(raw as Map);
+      final id = _safe(group['id']);
+      if (id.isNotEmpty) {
+        groupOrders[id] = _sortMetadataValue(group['sort_order']);
+      }
+    }
+
+    final orderByVariety = <String, ({int group, int variety})>{};
+    for (final raw in responses[1] as List) {
+      final variety = Map<String, dynamic>.from(raw as Map);
+      final name = _safe(variety['name']).toLowerCase();
+      if (name.isEmpty) continue;
+      orderByVariety[name] = (
+        group: groupOrders[_safe(variety['group_id'])] ?? 9999,
+        variety: _sortMetadataValue(variety['sort_order']),
+      );
+    }
+
+    return rows
+        .map((row) {
+          final varietyName = _firstNonEmpty([
+            _safe(row['variety_name']),
+            _safe(row['variety']),
+          ]).toLowerCase();
+          final order = orderByVariety[varietyName];
+          if (order == null) return row;
+          return {
+            ...row,
+            'group_sort_order': order.group,
+            'variety_sort_order': order.variety,
+          };
+        })
+        .toList(growable: false);
+  }
+
+  int _sortMetadataValue(Object? value) {
+    if (value is int) return value;
+    return int.tryParse((value ?? '').toString().trim()) ?? 9999;
+  }
+
   List<VarietySection> _buildVarieties({
     required List<Map<String, dynamic>> rows,
     required Map<String, List<BreedAward>> varietyAwardMap,
     required _SweepstakesPointsLookup sweepstakesPoints,
     required bool groupByBreed,
+    required bool useRabbitJudgingOrder,
   }) {
     final regularByVariety = <String, List<Map<String, dynamic>>>{};
     final furByCategory = <String, List<Map<String, dynamic>>>{};
@@ -407,7 +486,17 @@ class BreedResultsDetailReportLoader {
 
     final sections = <VarietySection>[];
 
-    final regularVarietyNames = regularByVariety.keys.toList()..sort();
+    final regularVarietyNames = regularByVariety.keys.toList()
+      ..sort((a, b) {
+        if (!useRabbitJudgingOrder) return a.compareTo(b);
+        final aRows = regularByVariety[a]!;
+        final bRows = regularByVariety[b]!;
+        final order = compareRabbitVarietyJudgingOrder(
+          aRows.first,
+          bRows.first,
+        );
+        return order != 0 ? order : a.compareTo(b);
+      });
     for (final varietyName in regularVarietyNames) {
       sections.add(
         VarietySection(

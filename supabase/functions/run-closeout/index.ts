@@ -30,6 +30,8 @@ serve(async (req) => {
     const body = await req.json();
     const showId = String(body.show_id ?? "").trim();
     const scopeLabel = String(body.scope_label ?? "Selected Scope").trim();
+    const action = String(body.action ?? "finalize").trim();
+    const finalizeRunId = String(body.finalize_run_id ?? "").trim();
     const suppliedScopeKey = String(body.scope_key ?? "").trim();
     const sectionIds = Array.isArray(body.section_ids)
       ? Array.from(
@@ -62,11 +64,23 @@ serve(async (req) => {
       return json({ error: "You cannot finalize this show" }, 403);
     }
 
+    if (
+      !["finalize", "generate_remaining", "regenerate_all"].includes(action)
+    ) {
+      return json({ error: "Unsupported closeout action" }, 400);
+    }
+    if (action !== "finalize" && !finalizeRunId) {
+      return json(
+        { error: "finalize_run_id is required for this action" },
+        400,
+      );
+    }
+
     const { data: job, error: jobError } = await supabase.from("closeout_jobs")
       .insert({
         show_id: showId,
         status: "running",
-        step: "starting",
+        step: action,
         started_at: new Date().toISOString(),
       })
       .select("id").single();
@@ -75,18 +89,35 @@ serve(async (req) => {
 
     const updateStep = (step: string) =>
       supabase.from("closeout_jobs").update({ step }).eq("id", jobId!);
-    await updateStep(`finalizing ${scopeLabel}`);
+    await updateStep(`${action} ${scopeLabel}`);
 
-    const { data: finalizeRunId, error: finalizeError } = await supabase.rpc(
-      "finalize_show_scoped",
-      {
+    let result: Record<string, unknown>;
+    if (action === "finalize") {
+      const { data, error } = await supabase.rpc("finalize_show_scoped", {
         p_show_id: showId,
         p_section_ids: sectionIds,
         p_scope_label: scopeLabel,
         p_scope_key: stableScopeKey,
-      },
-    );
-    if (finalizeError) throw finalizeError;
+      });
+      if (error) throw error;
+      result = typeof data === "object" && data !== null
+        ? data as Record<string, unknown>
+        : { finalize_run_id: data };
+    } else {
+      const { data, error } = await supabase.rpc(
+        "requeue_closeout_render_tasks",
+        {
+          p_show_id: showId,
+          p_finalize_run_id: finalizeRunId,
+          p_scope_key: stableScopeKey,
+          p_regenerate_all: action === "regenerate_all",
+        },
+      );
+      if (error) throw error;
+      result = typeof data === "object" && data !== null
+        ? data as Record<string, unknown>
+        : {};
+    }
 
     await supabase.from("closeout_jobs").update({
       status: "complete",
@@ -97,16 +128,16 @@ serve(async (req) => {
     return json({
       ok: true,
       job_id: jobId,
-      finalize_run_id: finalizeRunId,
+      ...result,
       scope_key: stableScopeKey,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     if (jobId) {
       await supabase.from("closeout_jobs").update({
         status: "failed",
         step: "failed",
-        error_message: message,
+        error: message,
         finished_at: new Date().toISOString(),
       }).eq("id", jobId);
     }
@@ -114,6 +145,20 @@ serve(async (req) => {
     return json({ error: message }, 500);
   }
 });
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "object" && error !== null) {
+    const candidate = error as Record<string, unknown>;
+    if (typeof candidate.message === "string") return candidate.message;
+    try {
+      return JSON.stringify(candidate);
+    } catch (_) {
+      // Fall through to the safe generic conversion below.
+    }
+  }
+  return String(error);
+}
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {

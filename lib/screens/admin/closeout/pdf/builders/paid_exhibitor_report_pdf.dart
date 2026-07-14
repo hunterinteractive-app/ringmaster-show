@@ -1,8 +1,10 @@
 // lib/screens/admin/closeout/pdf/builders/paid_exhibitor_report_pdf.dart
 
-import 'package:flutter/services.dart';
+import 'dart:typed_data';
+
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:ringmaster_show/reporting_core/assets/report_asset_loader.dart';
 
 import '../../models/base/report_file_result.dart';
 import '../../models/base/report_request.dart';
@@ -10,33 +12,35 @@ import '../../models/paid/paid_exhibitor_report_data.dart';
 
 class PaidExhibitorReportPdfBuilder {
   final Uint8List logoBytes;
+  final ReportAssetLoader assets;
 
   PaidExhibitorReportPdfBuilder({
+    required this.assets,
     required this.logoBytes,
   });
 
-  static Future<PaidExhibitorReportPdfBuilder> fromAssets() async {
-    final logo = (await rootBundle.load('assets/images/ringmaster_show_logo.png'))
-        .buffer
-        .asUint8List();
-
-    return PaidExhibitorReportPdfBuilder(
-      logoBytes: logo,
+  static Future<PaidExhibitorReportPdfBuilder> fromAssets(
+    ReportAssetLoader assets,
+  ) async {
+    final logo = await assets.loadBytes(
+      'assets/images/ringmaster_show_logo.png',
     );
+
+    return PaidExhibitorReportPdfBuilder(assets: assets, logoBytes: logo);
   }
 
   Future<pw.ThemeData> _buildTheme() async {
     final regular = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSans-Regular.ttf'),
+      await assets.loadByteData('assets/fonts/NotoSans-Regular.ttf'),
     );
     final bold = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSans-Bold.ttf'),
+      await assets.loadByteData('assets/fonts/NotoSans-Bold.ttf'),
     );
     final italic = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSans-Italic.ttf'),
+      await assets.loadByteData('assets/fonts/NotoSans-Italic.ttf'),
     );
     final boldItalic = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSans-BoldItalic.ttf'),
+      await assets.loadByteData('assets/fonts/NotoSans-BoldItalic.ttf'),
     );
 
     return pw.ThemeData.withFont(
@@ -90,10 +94,7 @@ class PaidExhibitorReportPdfBuilder {
     );
   }
 
-  pw.Widget _header(
-    PaidExhibitorReportData data,
-    pw.MemoryImage logoImage,
-  ) {
+  pw.Widget _header(PaidExhibitorReportData data, pw.MemoryImage logoImage) {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
@@ -141,10 +142,7 @@ class PaidExhibitorReportPdfBuilder {
               width: 100,
               height: 100,
               alignment: pw.Alignment.topRight,
-              child: pw.Image(
-                logoImage,
-                fit: pw.BoxFit.contain,
-              ),
+              child: pw.Image(logoImage, fit: pw.BoxFit.contain),
             ),
           ],
         ),
@@ -159,10 +157,7 @@ class PaidExhibitorReportPdfBuilder {
       width: double.infinity,
       padding: const pw.EdgeInsets.all(18),
       decoration: pw.BoxDecoration(
-        border: pw.Border.all(
-          color: PdfColors.grey600,
-          width: 0.5,
-        ),
+        border: pw.Border.all(color: PdfColors.grey600, width: 0.5),
         borderRadius: pw.BorderRadius.circular(8),
       ),
       child: pw.Column(
@@ -170,10 +165,7 @@ class PaidExhibitorReportPdfBuilder {
         children: [
           pw.Text(
             'No paid exhibitor records were found for this show.',
-            style: pw.TextStyle(
-              fontSize: 10,
-              fontWeight: pw.FontWeight.bold,
-            ),
+            style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
           ),
           pw.SizedBox(height: 6),
           pw.Text(
@@ -187,10 +179,7 @@ class PaidExhibitorReportPdfBuilder {
 
   pw.Widget _table(PaidExhibitorReportData data) {
     return pw.Table(
-      border: pw.TableBorder.all(
-        color: PdfColors.grey700,
-        width: 0.4,
-      ),
+      border: pw.TableBorder.all(color: PdfColors.grey700, width: 0.4),
       columnWidths: const {
         0: pw.FlexColumnWidth(1.55), // Exhibitor
         1: pw.FlexColumnWidth(0.68), // Type
@@ -206,10 +195,7 @@ class PaidExhibitorReportPdfBuilder {
         11: pw.FlexColumnWidth(0.75), // Balance
         12: pw.FlexColumnWidth(0.65), // Status
       },
-      children: [
-        _headerRow(),
-        ...data.rows.map(_dataRow),
-      ],
+      children: [_headerRow(), ...data.rows.map(_dataRow)],
     );
   }
 
@@ -224,10 +210,7 @@ class PaidExhibitorReportPdfBuilder {
         color: PdfColors.grey300,
         child: pw.Text(
           text,
-          style: pw.TextStyle(
-            fontWeight: pw.FontWeight.bold,
-            fontSize: 6.5,
-          ),
+          style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 6.5),
         ),
       );
     }
@@ -255,17 +238,16 @@ class PaidExhibitorReportPdfBuilder {
     pw.Widget textCell(
       String text, {
       pw.Alignment alignment = pw.Alignment.centerLeft,
-      pw.EdgeInsets padding =
-          const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 5),
+      pw.EdgeInsets padding = const pw.EdgeInsets.symmetric(
+        horizontal: 4,
+        vertical: 5,
+      ),
       pw.TextStyle? style,
     }) {
       return pw.Container(
         alignment: alignment,
         padding: padding,
-        child: pw.Text(
-          text,
-          style: style ?? const pw.TextStyle(fontSize: 6.5),
-        ),
+        child: pw.Text(text, style: style ?? const pw.TextStyle(fontSize: 6.5)),
       );
     }
 
@@ -307,10 +289,7 @@ class PaidExhibitorReportPdfBuilder {
         textCell(
           _money(row.amountPaid, currency: null),
           alignment: pw.Alignment.centerRight,
-          style: pw.TextStyle(
-            fontSize: 6.5,
-            fontWeight: pw.FontWeight.bold,
-          ),
+          style: pw.TextStyle(fontSize: 6.5, fontWeight: pw.FontWeight.bold),
         ),
         textCell(
           row.balanceDue > 0 ? _money(row.balanceDue, currency: null) : '',
@@ -323,10 +302,7 @@ class PaidExhibitorReportPdfBuilder {
 
   pw.Widget _sectionsWidget(List<PaidSectionCountRow> sections) {
     if (sections.isEmpty) {
-      return pw.Text(
-        '',
-        style: const pw.TextStyle(fontSize: 6.5),
-      );
+      return pw.Text('', style: const pw.TextStyle(fontSize: 6.5));
     }
 
     if (sections.length <= 2) {
@@ -387,10 +363,7 @@ class PaidExhibitorReportPdfBuilder {
         width: 285,
         padding: const pw.EdgeInsets.all(8),
         decoration: pw.BoxDecoration(
-          border: pw.Border.all(
-            color: PdfColors.grey700,
-            width: 0.5,
-          ),
+          border: pw.Border.all(color: PdfColors.grey700, width: 0.5),
         ),
         child: pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,

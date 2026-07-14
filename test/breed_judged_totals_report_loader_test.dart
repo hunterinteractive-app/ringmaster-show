@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ringmaster_show/reporting_core/assets/flutter_report_asset_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/breed_judged_totals_report_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/models/judge/breed_judged_totals_report_data.dart';
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/breed_judged_totals_report_pdf.dart';
@@ -264,7 +265,9 @@ void main() {
         ],
       );
 
-      final bytes = await BreedJudgedTotalsReportPdfBuilder().build(data);
+      final bytes = await BreedJudgedTotalsReportPdfBuilder(
+        assets: const FlutterReportAssetLoader(),
+      ).build(data);
 
       expect(bytes, isNotEmpty);
     });

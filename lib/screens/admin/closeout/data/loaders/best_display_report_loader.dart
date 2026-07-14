@@ -1,6 +1,6 @@
 // lib/screens/admin/closeout/data/loaders/best_display_report_loader.dart
 
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase/supabase.dart';
 
 import '../../models/base/report_request.dart';
 import '../../models/exhibitor/best_display_report_data.dart';
@@ -8,8 +8,7 @@ import '../../models/exhibitor/best_display_report_data.dart';
 class BestDisplayReportLoader {
   final SupabaseClient supabase;
 
-  BestDisplayReportLoader({SupabaseClient? supabase})
-    : supabase = supabase ?? Supabase.instance.client;
+  BestDisplayReportLoader({required this.supabase});
 
   Future<BestDisplayReportData> load(ReportRequest request) async {
     final showId = request.showId.trim();

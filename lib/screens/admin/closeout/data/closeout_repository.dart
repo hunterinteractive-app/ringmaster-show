@@ -1,4 +1,4 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase/supabase.dart';
 
 class CloseoutRepository {
   CloseoutRepository(this.supabase);
@@ -132,15 +132,29 @@ class CloseoutRepository {
   }
 
   Future<List<Map<String, dynamic>>> loadShowExhibitorBalancesReport(
-    String showId,
-  ) async {
+    String showId, {
+    List<String>? sectionIds,
+    bool requireExactAllocation = true,
+  }) async {
+    final exactSectionIds = sectionIds ?? await _loadEnabledSectionIds(showId);
+    if (exactSectionIds.isEmpty) {
+      throw ArgumentError.value(
+        exactSectionIds,
+        'sectionIds',
+        'At least one enabled Closeout section is required.',
+      );
+    }
+
     const pageSize = 1000;
     final allRows = <Map<String, dynamic>>[];
 
     for (var from = 0; ; from += pageSize) {
       final to = from + pageSize - 1;
       final rows = await supabase
-          .rpc('report_show_exhibitor_balances', params: {'p_show_id': showId})
+          .rpc(
+            'report_show_exhibitor_balances_scoped',
+            params: {'p_show_id': showId, 'p_section_ids': exactSectionIds},
+          )
           .range(from, to);
 
       final batch = List<Map<String, dynamic>>.from(rows);
@@ -149,7 +163,34 @@ class CloseoutRepository {
       if (batch.length < pageSize) break;
     }
 
+    if (requireExactAllocation) {
+      final ambiguous = allRows.where(
+        (row) => row['payment_allocation_status'] == 'ambiguous',
+      );
+      if (ambiguous.isNotEmpty) {
+        throw ScopedBalanceAllocationException(
+          ambiguous
+              .map((row) => row['payment_allocation_ambiguity_reasons'])
+              .where((value) => value != null)
+              .toList(),
+        );
+      }
+    }
+
     return allRows;
+  }
+
+  Future<List<String>> _loadEnabledSectionIds(String showId) async {
+    final rows = await supabase
+        .from('show_sections')
+        .select('id')
+        .eq('show_id', showId)
+        .eq('is_enabled', true)
+        .order('id');
+    return List<Map<String, dynamic>>.from(rows)
+        .map((row) => row['id']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toList(growable: false);
   }
 
   Future<List<Map<String, dynamic>>> loadShowSections(String showId) async {
@@ -234,4 +275,15 @@ class CloseoutRepository {
 
     return allRows;
   }
+}
+
+final class ScopedBalanceAllocationException implements Exception {
+  const ScopedBalanceAllocationException(this.reasons);
+
+  final List<Object?> reasons;
+
+  @override
+  String toString() =>
+      'Financial payments or discounts are recorded only at the whole-show '
+      'level and cannot be allocated reliably to the selected sections.';
 }

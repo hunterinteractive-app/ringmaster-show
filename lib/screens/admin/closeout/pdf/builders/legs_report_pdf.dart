@@ -2,9 +2,9 @@
 
 import 'dart:typed_data';
 
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:ringmaster_show/reporting_core/assets/report_asset_loader.dart';
 
 import '../../models/base/report_file_result.dart';
 import '../../models/base/report_request.dart';
@@ -21,37 +21,37 @@ class LegsReportPdfBuilder {
   final pw.MemoryImage _ringMasterShowLogoImage;
   final pw.MemoryImage _grandChampionCertificateImage;
   final pw.MemoryImage _bestInShowCertificateImage;
+  final ReportAssetLoader assets;
 
   LegsReportPdfBuilder({
+    required this.assets,
     required this.arbaLogoBytes,
     required this.ringMasterShowLogoBytes,
     required this.grandChampionCertificateBytes,
     required this.bestInShowCertificateBytes,
-  })  : _arbaLogoImage = pw.MemoryImage(arbaLogoBytes),
-        _ringMasterShowLogoImage = pw.MemoryImage(ringMasterShowLogoBytes),
-        _grandChampionCertificateImage = pw.MemoryImage(grandChampionCertificateBytes),
-        _bestInShowCertificateImage = pw.MemoryImage(bestInShowCertificateBytes);
+  }) : _arbaLogoImage = pw.MemoryImage(arbaLogoBytes),
+       _ringMasterShowLogoImage = pw.MemoryImage(ringMasterShowLogoBytes),
+       _grandChampionCertificateImage = pw.MemoryImage(
+         grandChampionCertificateBytes,
+       ),
+       _bestInShowCertificateImage = pw.MemoryImage(bestInShowCertificateBytes);
 
-  static Future<LegsReportPdfBuilder> fromAssets() async {
-    final arbaLogoBytes = (await rootBundle.load('assets/images/arba_logo.png'))
-        .buffer
-        .asUint8List();
-    final ringMasterShowLogoBytes =
-      (await rootBundle.load('assets/images/ringmaster_show_logo.png'))
-          .buffer
-          .asUint8List();
-
-    final grandChampionCertificateBytes =
-        (await rootBundle.load('assets/images/Grand_Champion.png'))
-            .buffer
-            .asUint8List();
-
-    final bestInShowCertificateBytes =
-        (await rootBundle.load('assets/images/BIS_Award.png'))
-            .buffer
-            .asUint8List();
+  static Future<LegsReportPdfBuilder> fromAssets(
+    ReportAssetLoader assets,
+  ) async {
+    final arbaLogoBytes = await assets.loadBytes('assets/images/arba_logo.png');
+    final ringMasterShowLogoBytes = await assets.loadBytes(
+      'assets/images/ringmaster_show_logo.png',
+    );
+    final grandChampionCertificateBytes = await assets.loadBytes(
+      'assets/images/Grand_Champion.png',
+    );
+    final bestInShowCertificateBytes = await assets.loadBytes(
+      'assets/images/BIS_Award.png',
+    );
 
     return LegsReportPdfBuilder(
+      assets: assets,
       arbaLogoBytes: arbaLogoBytes,
       ringMasterShowLogoBytes: ringMasterShowLogoBytes,
       grandChampionCertificateBytes: grandChampionCertificateBytes,
@@ -94,16 +94,16 @@ class LegsReportPdfBuilder {
 
   Future<pw.ThemeData> _buildTheme() async {
     final regularFont = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSans-Regular.ttf'),
+      await assets.loadByteData('assets/fonts/NotoSans-Regular.ttf'),
     );
     final boldFont = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSans-Bold.ttf'),
+      await assets.loadByteData('assets/fonts/NotoSans-Bold.ttf'),
     );
     final italicFont = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSans-Italic.ttf'),
+      await assets.loadByteData('assets/fonts/NotoSans-Italic.ttf'),
     );
     final boldItalicFont = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSans-BoldItalic.ttf'),
+      await assets.loadByteData('assets/fonts/NotoSans-BoldItalic.ttf'),
     );
 
     return pw.ThemeData.withFont(
@@ -115,98 +115,94 @@ class LegsReportPdfBuilder {
   }
 
   Future<ReportFileResult> buildFile(
-      List<LegsCertificateData> data,
-      ReportRequest request,
-    ) async {
-      final theme = await _buildTheme();
-      final pdf = pw.Document(theme: theme);
+    List<LegsCertificateData> data,
+    ReportRequest request,
+  ) async {
+    final theme = await _buildTheme();
+    final pdf = pw.Document(theme: theme);
 
-      String cleanFilePart(String input) {
-        return input
-            .replaceAll(RegExp(r'[\\/:*?"<>|]'), '')
-            .replaceAll(RegExp(r'\s+'), ' ')
-            .trim();
-      }
-
-      final cleanedShowName = cleanFilePart(
-        (request.showName ?? '').trim().isEmpty ? 'Show' : (request.showName ?? '').trim(),
-      );
-
-      final cleanedExhibitorName = cleanFilePart(
-        (request.exhibitorName ?? '').trim().isEmpty
-            ? 'Exhibitor'
-            : (request.exhibitorName ?? '').trim(),
-      );
-
-      // Remove any UUID-like fragments from exhibitor name (sometimes passed in)
-      final cleanedExhibitorNameNoId = cleanedExhibitorName
-          .replaceAll(RegExp(r'\b[0-9a-fA-F\-]{8,}\b'), '')
+    String cleanFilePart(String input) {
+      return input
+          .replaceAll(RegExp(r'[\\/:*?"<>|]'), '')
           .replaceAll(RegExp(r'\s+'), ' ')
           .trim();
-
-      final fileName =
-          '$cleanedShowName - $cleanedExhibitorNameNoId - Legs.pdf';
-
-      if (data.isEmpty) {
-        pdf.addPage(
-          pw.Page(
-            pageFormat: PdfPageFormat.letter,
-            margin: const pw.EdgeInsets.all(24),
-            theme: theme,
-            build: (_) => pw.Center(
-              child: pw.Text('No leg certificates earned.'),
-            ),
-          ),
-        );
-      } else {
-        final sortedData = _sortCertificates(data);
-
-        for (final certificate in sortedData) {
-          pdf.addPage(
-            pw.MultiPage(
-              pageFormat: PdfPageFormat.letter,
-              margin: const pw.EdgeInsets.fromLTRB(22, 18, 22, 18),
-              theme: theme,
-              build: (_) {
-                return [
-                  _certificate(certificate),
-                  pw.SizedBox(height: 8),
-                  _cutLine(),
-                  pw.SizedBox(height: 8),
-                  _rulesAndRequiredArbaInfoBlock(),
-                  pw.SizedBox(height: 8),
-                  _requiredCertificateImagesBlock(),
-                ];
-              },
-            ),
-          );
-        }
-      }
-
-      final bytes = await pdf.save();
-
-      return ReportFileResult(
-        fileName: fileName,
-        mimeType: 'application/pdf',
-        bytes: bytes,
-      );
     }
 
-  List<LegsCertificateData> _sortCertificates(
-    List<LegsCertificateData> data,
-  ) {
-    return [...data]
-      ..sort((a, b) {
-        final exhibitorCompare = a.exhibitorName.compareTo(b.exhibitorName);
-        if (exhibitorCompare != 0) return exhibitorCompare;
+    final cleanedShowName = cleanFilePart(
+      (request.showName ?? '').trim().isEmpty
+          ? 'Show'
+          : (request.showName ?? '').trim(),
+    );
 
-        final numberCompare = a.exhibitorNumber.compareTo(b.exhibitorNumber);
-        if (numberCompare != 0) return numberCompare;
+    final cleanedExhibitorName = cleanFilePart(
+      (request.exhibitorName ?? '').trim().isEmpty
+          ? 'Exhibitor'
+          : (request.exhibitorName ?? '').trim(),
+    );
 
-        return a.earNumber.compareTo(b.earNumber);
-      });
+    // Remove any UUID-like fragments from exhibitor name (sometimes passed in)
+    final cleanedExhibitorNameNoId = cleanedExhibitorName
+        .replaceAll(RegExp(r'\b[0-9a-fA-F\-]{8,}\b'), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    final fileName = '$cleanedShowName - $cleanedExhibitorNameNoId - Legs.pdf';
+
+    if (data.isEmpty) {
+      pdf.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat.letter,
+          margin: const pw.EdgeInsets.all(24),
+          theme: theme,
+          build: (_) =>
+              pw.Center(child: pw.Text('No leg certificates earned.')),
+        ),
+      );
+    } else {
+      final sortedData = _sortCertificates(data);
+
+      for (final certificate in sortedData) {
+        pdf.addPage(
+          pw.MultiPage(
+            pageFormat: PdfPageFormat.letter,
+            margin: const pw.EdgeInsets.fromLTRB(22, 18, 22, 18),
+            theme: theme,
+            build: (_) {
+              return [
+                _certificate(certificate),
+                pw.SizedBox(height: 8),
+                _cutLine(),
+                pw.SizedBox(height: 8),
+                _rulesAndRequiredArbaInfoBlock(),
+                pw.SizedBox(height: 8),
+                _requiredCertificateImagesBlock(),
+              ];
+            },
+          ),
+        );
+      }
+    }
+
+    final bytes = await pdf.save();
+
+    return ReportFileResult(
+      fileName: fileName,
+      mimeType: 'application/pdf',
+      bytes: bytes,
+    );
   }
 
+  List<LegsCertificateData> _sortCertificates(List<LegsCertificateData> data) {
+    return [...data]..sort((a, b) {
+      final exhibitorCompare = a.exhibitorName.compareTo(b.exhibitorName);
+      if (exhibitorCompare != 0) return exhibitorCompare;
+
+      final numberCompare = a.exhibitorNumber.compareTo(b.exhibitorNumber);
+      if (numberCompare != 0) return numberCompare;
+
+      return a.earNumber.compareTo(b.earNumber);
+    });
+  }
 
   pw.Widget _certificate(LegsCertificateData d) {
     return pw.Container(
@@ -223,14 +219,9 @@ class LegsReportPdfBuilder {
           pw.Row(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              pw.SizedBox(
-                width: 182,
-                child: _leftInfo(d),
-              ),
+              pw.SizedBox(width: 182, child: _leftInfo(d)),
               pw.SizedBox(width: 8),
-              pw.Expanded(
-                child: _rightInfo(d),
-              ),
+              pw.Expanded(child: _rightInfo(d)),
             ],
           ),
           pw.SizedBox(height: 6),
@@ -248,10 +239,7 @@ class LegsReportPdfBuilder {
           width: 42,
           height: 42,
           alignment: pw.Alignment.center,
-          child: pw.Image(
-            _arbaLogoImage,
-            fit: pw.BoxFit.contain,
-          ),
+          child: pw.Image(_arbaLogoImage, fit: pw.BoxFit.contain),
         ),
         pw.SizedBox(width: 8),
         pw.Expanded(
@@ -291,10 +279,7 @@ class LegsReportPdfBuilder {
         pw.Row(
           children: [
             pw.Expanded(
-              child: _boxedMiniPair(
-                'EXH#',
-                _displayExhibitorNumber(d),
-              ),
+              child: _boxedMiniPair('EXH#', _displayExhibitorNumber(d)),
             ),
             pw.SizedBox(width: 4),
             pw.Expanded(child: _boxedMiniPair('EAR#', d.earNumber)),
@@ -329,10 +314,7 @@ class LegsReportPdfBuilder {
             .map(
               (line) => pw.Padding(
                 padding: const pw.EdgeInsets.only(bottom: 1.5),
-                child: pw.Text(
-                  line,
-                  style: const pw.TextStyle(fontSize: 9.5),
-                ),
+                child: pw.Text(line, style: const pw.TextStyle(fontSize: 9.5)),
               ),
             )
             .toList(),
@@ -356,10 +338,7 @@ class LegsReportPdfBuilder {
               width: 36,
               height: 36,
               alignment: pw.Alignment.center,
-              child: pw.Image(
-                _arbaLogoImage,
-                fit: pw.BoxFit.contain,
-              ),
+              child: pw.Image(_arbaLogoImage, fit: pw.BoxFit.contain),
             ),
             pw.SizedBox(width: 8),
             pw.Expanded(
@@ -452,10 +431,7 @@ class LegsReportPdfBuilder {
         children: [
           pw.Text(
             d.exhibitorName.isEmpty ? 'UNKNOWN EXHIBITOR' : d.exhibitorName,
-            style: pw.TextStyle(
-              fontSize: 9,
-              fontWeight: pw.FontWeight.bold,
-            ),
+            style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
           ),
           pw.SizedBox(height: 2),
           ..._buildAddressLines(d),
@@ -476,16 +452,14 @@ class LegsReportPdfBuilder {
       ];
     }
 
-    final parts = raw.split('\n')
+    final parts = raw
+        .split('\n')
         .map((e) => e.trim())
         .where((e) => e.isNotEmpty)
         .toList();
 
     return parts.map((line) {
-      return pw.Text(
-        line,
-        style: const pw.TextStyle(fontSize: 6.7),
-      );
+      return pw.Text(line, style: const pw.TextStyle(fontSize: 6.7));
     }).toList();
   }
 
@@ -569,14 +543,15 @@ class LegsReportPdfBuilder {
 
   String _sexCode(String value) {
     final lower = value.toLowerCase();
-    if (lower.startsWith('b') || lower.contains('buck') || lower.contains('boar')) {
+    if (lower.startsWith('b') ||
+        lower.contains('buck') ||
+        lower.contains('boar')) {
       return 'B';
     }
     if (lower.startsWith('d') || lower.contains('doe')) return 'D';
     if (lower.startsWith('s') || lower.contains('sow')) return 'D';
     return value.isEmpty ? 'Z' : value[0];
   }
-
 
   String _displayExhibitorNumber(LegsCertificateData d) {
     final showExhibitorNumber = d.exhibitorNumber.trim();
@@ -609,10 +584,7 @@ class LegsReportPdfBuilder {
             ),
           ),
           pw.Expanded(
-            child: pw.Text(
-              value,
-              style: const pw.TextStyle(fontSize: 8),
-            ),
+            child: pw.Text(value, style: const pw.TextStyle(fontSize: 8)),
           ),
         ],
       ),
@@ -632,7 +604,6 @@ class LegsReportPdfBuilder {
       ),
     );
   }
-
 
   pw.Widget _requiredCertificateImagesBlock() {
     return pw.Container(
@@ -683,10 +654,7 @@ class LegsReportPdfBuilder {
         pw.Container(
           height: 90,
           alignment: pw.Alignment.center,
-          child: pw.Image(
-            image,
-            fit: pw.BoxFit.contain,
-          ),
+          child: pw.Image(image, fit: pw.BoxFit.contain),
         ),
         pw.SizedBox(height: 1),
         pw.Text(
@@ -747,10 +715,7 @@ class LegsReportPdfBuilder {
           pw.SizedBox(height: 2),
           pw.Text(
             'A Leg of Grand Champion will be awarded to any rabbit or cavy that:',
-            style: pw.TextStyle(
-              fontSize: 7,
-              color: arbaBlue,
-            ),
+            style: pw.TextStyle(fontSize: 7, color: arbaBlue),
             textAlign: pw.TextAlign.center,
           ),
           pw.SizedBox(height: 3),
@@ -764,19 +729,13 @@ class LegsReportPdfBuilder {
                     width: 14,
                     child: pw.Text(
                       '${index + 1}.',
-                      style: pw.TextStyle(
-                        fontSize: 6.1,
-                        color: arbaBlue,
-                      ),
+                      style: pw.TextStyle(fontSize: 6.1, color: arbaBlue),
                     ),
                   ),
                   pw.Expanded(
                     child: pw.Text(
                       legRules[index],
-                      style: pw.TextStyle(
-                        fontSize: 6.1,
-                        color: arbaBlue,
-                      ),
+                      style: pw.TextStyle(fontSize: 6.1, color: arbaBlue),
                     ),
                   ),
                 ],
@@ -810,10 +769,7 @@ class LegsReportPdfBuilder {
             children: [
               pw.Text(
                 'Generated by ',
-                style: pw.TextStyle(
-                  fontSize: 5.5,
-                  color: arbaBlue,
-                ),
+                style: pw.TextStyle(fontSize: 5.5, color: arbaBlue),
               ),
               pw.SizedBox(width: 3),
               pw.Container(
@@ -863,10 +819,7 @@ class LegsReportPdfBuilder {
           ...lines.map(
             (line) => pw.Padding(
               padding: const pw.EdgeInsets.only(bottom: 1),
-              child: pw.Text(
-                line,
-                style: const pw.TextStyle(fontSize: 4.9),
-              ),
+              child: pw.Text(line, style: const pw.TextStyle(fontSize: 4.9)),
             ),
           ),
         ],
@@ -883,10 +836,7 @@ class LegsReportPdfBuilder {
             width: 30,
             child: pw.Text(
               '$label:',
-              style: pw.TextStyle(
-                fontSize: 7,
-                color: arbaBlue,
-              ),
+              style: pw.TextStyle(fontSize: 7, color: arbaBlue),
             ),
           ),
           pw.Expanded(
@@ -914,10 +864,7 @@ class LegsReportPdfBuilder {
             width: 42,
             child: pw.Text(
               '$label:',
-              style: pw.TextStyle(
-                fontSize: 6.7,
-                color: arbaBlue,
-              ),
+              style: pw.TextStyle(fontSize: 6.7, color: arbaBlue),
             ),
           ),
           pw.Expanded(

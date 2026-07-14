@@ -15,7 +15,10 @@ class UnpaidBalancesReportLoader {
     final showId = request.showId;
 
     final show = await repo.loadShowBasics(showId);
-    final balanceRows = await repo.loadShowExhibitorBalancesReport(showId);
+    final balanceRows = await repo.loadShowExhibitorBalancesReport(
+      showId,
+      sectionIds: request.sectionIds,
+    );
 
     final rows = <UnpaidBalanceRow>[];
 
@@ -46,20 +49,22 @@ class UnpaidBalancesReportLoader {
 
     rows.sort(
       (a, b) => a.exhibitorName.toLowerCase().compareTo(
-            b.exhibitorName.toLowerCase(),
-          ),
+        b.exhibitorName.toLowerCase(),
+      ),
     );
 
     final totalExhibitors = rows.length;
     final totalEntries = rows.fold<int>(0, (sum, row) => sum + row.entryCount);
-    final grandTotalDue =
-        rows.fold<double>(0.0, (sum, row) => sum + row.totalDue);
+    final grandTotalDue = rows.fold<double>(
+      0.0,
+      (sum, row) => sum + row.totalDue,
+    );
 
     final currency = balanceRows.isEmpty
         ? 'USD'
         : (_str(balanceRows.first['currency']).isEmpty
-            ? 'USD'
-            : _str(balanceRows.first['currency']).toUpperCase());
+              ? 'USD'
+              : _str(balanceRows.first['currency']).toUpperCase());
 
     return UnpaidBalancesReportData(
       showName: _str(show['name']),
@@ -119,26 +124,21 @@ class UnpaidBalancesReportLoader {
         .toList();
 
     parsedRows.sort((a, b) {
-      final kindCompare = _sectionKindRank(a.kind).compareTo(
-        _sectionKindRank(b.kind),
-      );
+      final kindCompare = _sectionKindRank(
+        a.kind,
+      ).compareTo(_sectionKindRank(b.kind));
       if (kindCompare != 0) return kindCompare;
 
       final letterCompare = a.letter.toUpperCase().compareTo(
-            b.letter.toUpperCase(),
-          );
+        b.letter.toUpperCase(),
+      );
       if (letterCompare != 0) return letterCompare;
 
       return a.label.toLowerCase().compareTo(b.label.toLowerCase());
     });
 
     return parsedRows
-        .map(
-          (row) => SectionCountRow(
-            label: row.label,
-            count: row.count,
-          ),
-        )
+        .map((row) => SectionCountRow(label: row.label, count: row.count))
         .toList();
   }
 

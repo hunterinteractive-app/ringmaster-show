@@ -363,11 +363,6 @@ class ExhibitorReportLoader {
         }
       }
 
-      // ignore: avoid_print
-      print(
-        'EXHIBITOR REPORT SWEEPSTAKES DEBUG loaded points for ${map.length} of ${uniqueEntryIds.length} entries in show $showId.',
-      );
-
       return map;
     } catch (e) {
       // ignore: avoid_print

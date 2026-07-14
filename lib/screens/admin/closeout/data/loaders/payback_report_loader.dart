@@ -1,15 +1,32 @@
 // lib/screens/admin/closeout/data/loaders/payback_report_loader.dart
 
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase/supabase.dart';
 
+import '../../models/base/report_request.dart';
 import '../../models/exhibitor/payback_report_data.dart';
 
 class PaybackReportLoader {
   final SupabaseClient supabase;
 
-  PaybackReportLoader({
-    SupabaseClient? supabase,
-  }) : supabase = supabase ?? Supabase.instance.client;
+  PaybackReportLoader({required this.supabase});
+
+  Future<PaybackReportData> loadRequest(ReportRequest request) async {
+    final sectionIds = request.sectionIds ?? const <String>[];
+    if (sectionIds.isEmpty) {
+      throw StateError('Payback report requires scoped section IDs.');
+    }
+    final show = await _loadShow(request.showId);
+    final rawRows = <Map<String, dynamic>>[];
+    for (final sectionId in sectionIds) {
+      rawRows.addAll(
+        await _loadPaybackRowsForSection(
+          showId: request.showId,
+          sectionId: sectionId,
+        ),
+      );
+    }
+    return _buildReport(show: show, showId: request.showId, rawRows: rawRows);
+  }
 
   Future<PaybackReportData> load({
     required String showId,
@@ -22,6 +39,14 @@ class PaybackReportLoader {
       sectionId: sectionId,
     );
 
+    return _buildReport(show: show, showId: showId, rawRows: rawRows);
+  }
+
+  PaybackReportData _buildReport({
+    required Map<String, dynamic> show,
+    required String showId,
+    required List<Map<String, dynamic>> rawRows,
+  }) {
     final breakdownRows = rawRows
         .map(PaybackBreakdownRow.fromJson)
         .where((row) => row.amountCents > 0)
@@ -60,11 +85,9 @@ class PaybackReportLoader {
       exhibitors.add(
         PaybackExhibitorSummary(
           exhibitorId: entry.key,
-          exhibitorNumber:
-              (matchingRaw['exhibitor_number'] ?? '').toString(),
-          exhibitorName:
-              (matchingRaw['exhibitor_name'] ?? 'Unknown Exhibitor')
-                  .toString(),
+          exhibitorNumber: (matchingRaw['exhibitor_number'] ?? '').toString(),
+          exhibitorName: (matchingRaw['exhibitor_name'] ?? 'Unknown Exhibitor')
+              .toString(),
           mailingAddress: _formatMailingAddress(matchingRaw),
           totalCents: total,
           rows: rowsForExhibitor,
@@ -73,9 +96,9 @@ class PaybackReportLoader {
     }
 
     exhibitors.sort((a, b) {
-      final nameCompare = a.exhibitorName
-          .toLowerCase()
-          .compareTo(b.exhibitorName.toLowerCase());
+      final nameCompare = a.exhibitorName.toLowerCase().compareTo(
+        b.exhibitorName.toLowerCase(),
+      );
       if (nameCompare != 0) return nameCompare;
 
       return a.exhibitorNumber.compareTo(b.exhibitorNumber);
@@ -101,10 +124,7 @@ class PaybackReportLoader {
     String? sectionId,
   }) async {
     if (sectionId != null && sectionId.trim().isNotEmpty) {
-      return _loadPaybackRowsForSection(
-        showId: showId,
-        sectionId: sectionId,
-      );
+      return _loadPaybackRowsForSection(showId: showId, sectionId: sectionId);
     }
 
     final sectionIds = await _loadEnabledSectionIds(showId);
@@ -127,10 +147,7 @@ class PaybackReportLoader {
   }) async {
     final rows = await supabase.rpc(
       'report_payback_rows',
-      params: {
-        'p_show_id': showId,
-        'p_section_id': sectionId,
-      },
+      params: {'p_show_id': showId, 'p_section_id': sectionId},
     );
 
     return (rows as List? ?? [])
@@ -157,9 +174,7 @@ class PaybackReportLoader {
   Future<Map<String, dynamic>> _loadShow(String showId) async {
     final result = await supabase
         .from('shows')
-        .select(
-          'id, name, start_date, end_date, location_name',
-        )
+        .select('id, name, start_date, end_date, location_name')
         .eq('id', showId)
         .maybeSingle();
 

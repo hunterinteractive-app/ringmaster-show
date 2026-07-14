@@ -1,4 +1,4 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase/supabase.dart';
 
 import '../../models/base/report_request.dart';
 import '../../models/exhibitor/check_in_sheet_report_data.dart';
@@ -24,7 +24,15 @@ class CheckInSheetReportLoader {
             .maybeSingle() ??
         <String, dynamic>{};
 
-    final entries = await _fetchEntries(request.showId, exhibitorId);
+    final sectionIds = request.sectionIds ?? const <String>[];
+    if (sectionIds.isEmpty) {
+      throw StateError('Check-in sheet requires scoped section IDs.');
+    }
+    final entries = await _fetchEntries(
+      request.showId,
+      exhibitorId,
+      sectionIds,
+    );
     if (entries.isEmpty) {
       throw StateError('No entries found for this exhibitor.');
     }
@@ -51,33 +59,36 @@ class CheckInSheetReportLoader {
   Future<List<Map<String, dynamic>>> _fetchEntries(
     String showId,
     String exhibitorId,
+    List<String> sectionIds,
   ) async {
     const pageSize = 1000;
     final list = <Map<String, dynamic>>[];
 
-    for (var from = 0; ; from += pageSize) {
-      final to = from + pageSize - 1;
-      final rows = await supabase
-          .rpc(
-            'report_checkin_entries',
-            params: {
-              'p_show_id': showId,
-              'p_section_id': null,
-              'p_include_scratched': false,
-            },
-          )
-          .range(from, to);
+    for (final sectionId in sectionIds) {
+      for (var from = 0; ; from += pageSize) {
+        final to = from + pageSize - 1;
+        final rows = await supabase
+            .rpc(
+              'report_checkin_entries',
+              params: {
+                'p_show_id': showId,
+                'p_section_id': sectionId,
+                'p_include_scratched': false,
+              },
+            )
+            .range(from, to);
 
-      final page = (rows as List)
-          .map((raw) => Map<String, dynamic>.from(raw as Map))
-          .where(
-            (row) =>
-                (row['exhibitor_id'] ?? '').toString().trim() == exhibitorId,
-          )
-          .toList();
+        final page = (rows as List)
+            .map((raw) => Map<String, dynamic>.from(raw as Map))
+            .where(
+              (row) =>
+                  (row['exhibitor_id'] ?? '').toString().trim() == exhibitorId,
+            )
+            .toList();
 
-      list.addAll(page);
-      if (rows.length < pageSize) break;
+        list.addAll(page);
+        if (rows.length < pageSize) break;
+      }
     }
 
     return list;

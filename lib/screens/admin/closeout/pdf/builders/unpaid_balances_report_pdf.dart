@@ -1,6 +1,8 @@
-import 'package:flutter/services.dart';
+import 'dart:typed_data';
+
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:ringmaster_show/reporting_core/assets/report_asset_loader.dart';
 
 import '../../models/base/report_file_result.dart';
 import '../../models/base/report_request.dart';
@@ -8,33 +10,35 @@ import '../../models/unpaid/unpaid_balances_report_data.dart';
 
 class UnpaidBalancesReportPdfBuilder {
   final Uint8List logoBytes;
+  final ReportAssetLoader assets;
 
   UnpaidBalancesReportPdfBuilder({
+    required this.assets,
     required this.logoBytes,
   });
 
-  static Future<UnpaidBalancesReportPdfBuilder> fromAssets() async {
-    final logo = (await rootBundle.load('assets/images/ringmaster_show_logo.png'))
-        .buffer
-        .asUint8List();
-
-    return UnpaidBalancesReportPdfBuilder(
-      logoBytes: logo,
+  static Future<UnpaidBalancesReportPdfBuilder> fromAssets(
+    ReportAssetLoader assets,
+  ) async {
+    final logo = await assets.loadBytes(
+      'assets/images/ringmaster_show_logo.png',
     );
+
+    return UnpaidBalancesReportPdfBuilder(assets: assets, logoBytes: logo);
   }
 
   Future<pw.ThemeData> _buildTheme() async {
     final regular = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSans-Regular.ttf'),
+      await assets.loadByteData('assets/fonts/NotoSans-Regular.ttf'),
     );
     final bold = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSans-Bold.ttf'),
+      await assets.loadByteData('assets/fonts/NotoSans-Bold.ttf'),
     );
     final italic = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSans-Italic.ttf'),
+      await assets.loadByteData('assets/fonts/NotoSans-Italic.ttf'),
     );
     final boldItalic = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSans-BoldItalic.ttf'),
+      await assets.loadByteData('assets/fonts/NotoSans-BoldItalic.ttf'),
     );
 
     return pw.ThemeData.withFont(
@@ -88,10 +92,7 @@ class UnpaidBalancesReportPdfBuilder {
     );
   }
 
-  pw.Widget _header(
-    UnpaidBalancesReportData data,
-    pw.MemoryImage logoImage,
-  ) {
+  pw.Widget _header(UnpaidBalancesReportData data, pw.MemoryImage logoImage) {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
@@ -139,10 +140,7 @@ class UnpaidBalancesReportPdfBuilder {
               width: 100,
               height: 100,
               alignment: pw.Alignment.topRight,
-              child: pw.Image(
-                logoImage,
-                fit: pw.BoxFit.contain,
-              ),
+              child: pw.Image(logoImage, fit: pw.BoxFit.contain),
             ),
           ],
         ),
@@ -157,10 +155,7 @@ class UnpaidBalancesReportPdfBuilder {
       width: double.infinity,
       padding: const pw.EdgeInsets.all(18),
       decoration: pw.BoxDecoration(
-        border: pw.Border.all(
-          color: PdfColors.grey600,
-          width: 0.5,
-        ),
+        border: pw.Border.all(color: PdfColors.grey600, width: 0.5),
         borderRadius: pw.BorderRadius.circular(8),
       ),
       child: pw.Column(
@@ -168,10 +163,7 @@ class UnpaidBalancesReportPdfBuilder {
         children: [
           pw.Text(
             'No unpaid exhibitor balances were found for this show.',
-            style: pw.TextStyle(
-              fontSize: 10,
-              fontWeight: pw.FontWeight.bold,
-            ),
+            style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
           ),
           pw.SizedBox(height: 6),
           pw.Text(
@@ -198,10 +190,7 @@ class UnpaidBalancesReportPdfBuilder {
       });
 
     return pw.Table(
-      border: pw.TableBorder.all(
-        color: PdfColors.grey700,
-        width: 0.4,
-      ),
+      border: pw.TableBorder.all(color: PdfColors.grey700, width: 0.4),
       columnWidths: const {
         0: pw.FlexColumnWidth(0.70), // Paid
         1: pw.FlexColumnWidth(1.65), // Exhibitor
@@ -214,25 +203,22 @@ class UnpaidBalancesReportPdfBuilder {
         8: pw.FlexColumnWidth(0.65), // Discount
         9: pw.FlexColumnWidth(0.82), // Balance Due
       },
-      children: [
-        _headerRow(),
-        ...rows.map(_dataRow),
-      ],
+      children: [_headerRow(), ...rows.map(_dataRow)],
     );
   }
 
   pw.TableRow _headerRow() {
-    pw.Widget cell(String text, {pw.Alignment alignment = pw.Alignment.centerLeft}) {
+    pw.Widget cell(
+      String text, {
+      pw.Alignment alignment = pw.Alignment.centerLeft,
+    }) {
       return pw.Container(
         alignment: alignment,
         padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 5),
         color: PdfColors.grey300,
         child: pw.Text(
           text,
-          style: pw.TextStyle(
-            fontWeight: pw.FontWeight.bold,
-            fontSize: 7,
-          ),
+          style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 7),
         ),
       );
     }
@@ -257,17 +243,16 @@ class UnpaidBalancesReportPdfBuilder {
     pw.Widget textCell(
       String text, {
       pw.Alignment alignment = pw.Alignment.centerLeft,
-      pw.EdgeInsets padding =
-          const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 5),
+      pw.EdgeInsets padding = const pw.EdgeInsets.symmetric(
+        horizontal: 4,
+        vertical: 5,
+      ),
       pw.TextStyle? style,
     }) {
       return pw.Container(
         alignment: alignment,
         padding: padding,
-        child: pw.Text(
-          text,
-          style: style ?? const pw.TextStyle(fontSize: 7),
-        ),
+        child: pw.Text(text, style: style ?? const pw.TextStyle(fontSize: 7)),
       );
     }
 
@@ -305,10 +290,7 @@ class UnpaidBalancesReportPdfBuilder {
         textCell(
           _money(row.totalDue, currency: null),
           alignment: pw.Alignment.centerRight,
-          style: pw.TextStyle(
-            fontSize: 7,
-            fontWeight: pw.FontWeight.bold,
-          ),
+          style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold),
         ),
       ],
     );
@@ -316,10 +298,7 @@ class UnpaidBalancesReportPdfBuilder {
 
   pw.Widget _sectionsWidget(List<SectionCountRow> sections) {
     if (sections.isEmpty) {
-      return pw.Text(
-        '',
-        style: pw.TextStyle(fontSize: 7),
-      );
+      return pw.Text('', style: pw.TextStyle(fontSize: 7));
     }
 
     if (sections.length <= 2) {
@@ -379,10 +358,7 @@ class UnpaidBalancesReportPdfBuilder {
         width: 10,
         height: 10,
         decoration: pw.BoxDecoration(
-          border: pw.Border.all(
-            color: PdfColors.black,
-            width: 0.8,
-          ),
+          border: pw.Border.all(color: PdfColors.black, width: 0.8),
         ),
       ),
     );
@@ -395,10 +371,7 @@ class UnpaidBalancesReportPdfBuilder {
         width: 260,
         padding: const pw.EdgeInsets.all(8),
         decoration: pw.BoxDecoration(
-          border: pw.Border.all(
-            color: PdfColors.grey700,
-            width: 0.5,
-          ),
+          border: pw.Border.all(color: PdfColors.grey700, width: 0.5),
         ),
         child: pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -484,11 +457,9 @@ class UnpaidBalancesReportPdfBuilder {
   }
 
   String _normalizeSortText(String value) {
-    return value
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
-        .trim();
+    return value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
   }
+
   String _money(double value, {String? currency}) {
     final sym = _currencySymbol(currency);
     return '$sym${value.toStringAsFixed(2)}';

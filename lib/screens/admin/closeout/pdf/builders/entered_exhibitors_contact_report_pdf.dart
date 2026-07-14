@@ -4,22 +4,30 @@ import 'dart:typed_data';
 
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:ringmaster_show/reporting_core/assets/report_asset_loader.dart';
+import 'package:ringmaster_show/reporting_core/pdf/report_pdf_theme.dart';
 
 import '../../models/base/report_file_result.dart';
 import '../../models/base/report_request.dart';
 import '../../models/exhibitor/entered_exhibitors_contact_report_data.dart';
 
 class EnteredExhibitorsContactReportPdf {
+  EnteredExhibitorsContactReportPdf({required this.assets});
+
+  final ReportAssetLoader assets;
+
   Future<ReportFileResult> buildFile(
     EnteredExhibitorsContactReportData data,
     ReportRequest req,
   ) async {
-    final pdf = pw.Document();
+    final pdf = pw.Document(theme: await buildReportPdfTheme(assets));
 
     final rows = [...data.rows]
-      ..sort((a, b) => a.exhibitorName
-          .toLowerCase()
-          .compareTo(b.exhibitorName.toLowerCase()));
+      ..sort(
+        (a, b) => a.exhibitorName.toLowerCase().compareTo(
+          b.exhibitorName.toLowerCase(),
+        ),
+      );
 
     pdf.addPage(
       pw.MultiPage(
@@ -28,35 +36,18 @@ class EnteredExhibitorsContactReportPdf {
         build: (context) => [
           pw.Text(
             'Entered Exhibitors Contact List',
-            style: pw.TextStyle(
-              fontSize: 18,
-              fontWeight: pw.FontWeight.bold,
-            ),
+            style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
           ),
           pw.SizedBox(height: 6),
           pw.Text(data.showName),
           pw.SizedBox(height: 16),
           pw.TableHelper.fromTextArray(
             headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-            headerDecoration: const pw.BoxDecoration(
-              color: PdfColors.grey300,
-            ),
+            headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
             cellAlignment: pw.Alignment.centerLeft,
-            headers: const [
-              'Exhibitor',
-              'Address',
-              'Email',
-              'Phone',
-            ],
+            headers: const ['Exhibitor', 'Address', 'Email', 'Phone'],
             data: rows
-                .map(
-                  (r) => [
-                    r.exhibitorName,
-                    r.address,
-                    r.email,
-                    r.phone,
-                  ],
-                )
+                .map((r) => [r.exhibitorName, r.address, r.email, r.phone])
                 .toList(),
           ),
         ],

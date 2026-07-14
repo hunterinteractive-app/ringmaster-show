@@ -1,12 +1,8 @@
 // lib/screens/admin/closeout/data/loaders/ribbon_payout_report_loader.dart
 
-import 'package:supabase_flutter/supabase_flutter.dart';
-
 import '../closeout_repository.dart';
 import '../../models/base/report_request.dart';
 import '../../models/exhibitor/ribbon_payout_report_data.dart';
-
-final supabase = Supabase.instance.client;
 
 class RibbonPayoutReportLoader {
   final CloseoutRepository repository;
@@ -15,20 +11,20 @@ class RibbonPayoutReportLoader {
 
   Future<List<Map<String, dynamic>>> _loadRowsPaged({
     required String showId,
-    String? showLetter,
+    required String sectionId,
   }) async {
     const pageSize = 1000;
     final allRows = <Map<String, dynamic>>[];
 
-    for (var from = 0;; from += pageSize) {
+    for (var from = 0; ; from += pageSize) {
       final to = from + pageSize - 1;
-      final page = await supabase
+      final page = await repository.supabase
           .rpc(
             'report_results_entry_rows',
             params: {
               'p_show_id': showId,
-              'p_section_id': null,
-              'p_show_letter': showLetter,
+              'p_section_id': sectionId,
+              'p_show_letter': null,
             },
           )
           .range(from, to);
@@ -63,7 +59,8 @@ class RibbonPayoutReportLoader {
           .trim()
           .toLowerCase();
       final combinedStatus = '$status $dqReason';
-      final excludedStatus = combinedStatus.contains('no show') ||
+      final excludedStatus =
+          combinedStatus.contains('no show') ||
           combinedStatus.contains('scratch') ||
           combinedStatus.contains('disqual') ||
           combinedStatus.contains('wrong sex') ||
@@ -90,18 +87,20 @@ class RibbonPayoutReportLoader {
 
       final exhibitorId = (row['exhibitor_id'] ?? '').toString().trim();
       final exhibitorLabel = (row['exhibitor_label'] ?? '').toString().trim();
-      final exhibitorNumber = (
-        row['exhibitor_number'] ??
-        row['exhibitor_no'] ??
-        row['exhibitor_num'] ??
-        row['entry_exhibitor_number'] ??
-        row['show_exhibitor_number'] ??
-        row['exhibitor_code'] ??
-        ''
-      ).toString().trim();
+      final exhibitorNumber =
+          (row['exhibitor_number'] ??
+                  row['exhibitor_no'] ??
+                  row['exhibitor_num'] ??
+                  row['entry_exhibitor_number'] ??
+                  row['show_exhibitor_number'] ??
+                  row['exhibitor_code'] ??
+                  '')
+              .toString()
+              .trim();
 
-      final exhibitorName =
-          exhibitorLabel.isNotEmpty ? exhibitorLabel : '(Unknown Exhibitor)';
+      final exhibitorName = exhibitorLabel.isNotEmpty
+          ? exhibitorLabel
+          : '(Unknown Exhibitor)';
 
       final key = exhibitorId.isNotEmpty ? exhibitorId : exhibitorName;
       final existing = map[key];
@@ -136,22 +135,21 @@ class RibbonPayoutReportLoader {
       return numeric ?? 999999;
     }
 
-    return map.values.toList()
-      ..sort((a, b) {
-        final numberCmp = exhibitorNumberSortValue(a.exhibitorNumber).compareTo(
-          exhibitorNumberSortValue(b.exhibitorNumber),
-        );
-        if (numberCmp != 0) return numberCmp;
-        return a.exhibitorName.toLowerCase().compareTo(
-              b.exhibitorName.toLowerCase(),
-            );
-      });
+    return map.values.toList()..sort((a, b) {
+      final numberCmp = exhibitorNumberSortValue(
+        a.exhibitorNumber,
+      ).compareTo(exhibitorNumberSortValue(b.exhibitorNumber));
+      if (numberCmp != 0) return numberCmp;
+      return a.exhibitorName.toLowerCase().compareTo(
+        b.exhibitorName.toLowerCase(),
+      );
+    });
   }
 
   Future<RibbonPayoutReportData> load(ReportRequest req) async {
     await repository.loadShowBasics(req.showId);
 
-    final sectionsRaw = await supabase
+    final sectionsRaw = await repository.supabase
         .from('show_sections')
         .select('id, letter, kind, sort_order, is_enabled')
         .eq('show_id', req.showId)
@@ -161,9 +159,17 @@ class RibbonPayoutReportLoader {
 
     final sections = (sectionsRaw as List)
         .map((raw) => Map<String, dynamic>.from(raw as Map))
+        .where(
+          (section) => (req.sectionIds ?? const <String>[]).contains(
+            (section['id'] ?? '').toString(),
+          ),
+        )
         .toList();
+    if (sections.isEmpty) {
+      throw StateError('Ribbon payout report requires scoped section IDs.');
+    }
 
-    final sanctionsRaw = await supabase
+    final sanctionsRaw = await repository.supabase
         .from('show_sanctions')
         .select('''
           club_name,
@@ -181,7 +187,7 @@ class RibbonPayoutReportLoader {
         .map((raw) => Map<String, dynamic>.from(raw as Map))
         .toList();
 
-    final arbaDetails = await supabase
+    final arbaDetails = await repository.supabase
         .from('show_arba_report_details')
         .select('''
           secretary_name,
@@ -191,12 +197,15 @@ class RibbonPayoutReportLoader {
         .eq('show_id', req.showId)
         .maybeSingle();
 
-    final secretaryName =
-        (arbaDetails?['secretary_name'] ?? '').toString().trim();
-    final secretaryEmail =
-        (arbaDetails?['secretary_email'] ?? '').toString().trim();
-    final superintendentName =
-        (arbaDetails?['superintendent_name'] ?? '').toString().trim();
+    final secretaryName = (arbaDetails?['secretary_name'] ?? '')
+        .toString()
+        .trim();
+    final secretaryEmail = (arbaDetails?['secretary_email'] ?? '')
+        .toString()
+        .trim();
+    final superintendentName = (arbaDetails?['superintendent_name'] ?? '')
+        .toString()
+        .trim();
 
     String sectionClassification(Map<String, dynamic> section) {
       final kind = (section['kind'] ?? '').toString().trim().toLowerCase();
@@ -215,7 +224,10 @@ class RibbonPayoutReportLoader {
     Map<String, dynamic>? sanctionForSection(Map<String, dynamic> section) {
       final sectionId = (section['id'] ?? '').toString();
       final sectionLetter = (section['letter'] ?? '').toString().trim();
-      final sectionKind = (section['kind'] ?? '').toString().trim().toLowerCase();
+      final sectionKind = (section['kind'] ?? '')
+          .toString()
+          .trim()
+          .toLowerCase();
 
       for (final sanction in sanctions) {
         final body = (sanction['sanctioning_body'] ?? '')
@@ -224,8 +236,9 @@ class RibbonPayoutReportLoader {
             .toUpperCase();
         if (body != 'ARBA') continue;
 
-        final sanctionSectionId =
-            (sanction['section_id'] ?? '').toString().trim();
+        final sanctionSectionId = (sanction['section_id'] ?? '')
+            .toString()
+            .trim();
         if (sanctionSectionId.isNotEmpty && sanctionSectionId == sectionId) {
           return sanction;
         }
@@ -242,10 +255,14 @@ class RibbonPayoutReportLoader {
         if (joinedSection is! Map) continue;
 
         final joined = Map<String, dynamic>.from(joinedSection);
-        final joinedLetter =
-            (joined['letter'] ?? '').toString().trim().toUpperCase();
-        final joinedKind =
-            (joined['kind'] ?? '').toString().trim().toLowerCase();
+        final joinedLetter = (joined['letter'] ?? '')
+            .toString()
+            .trim()
+            .toUpperCase();
+        final joinedKind = (joined['kind'] ?? '')
+            .toString()
+            .trim()
+            .toLowerCase();
 
         if (joinedLetter == sectionLetter.toUpperCase() &&
             joinedKind == sectionKind) {
@@ -270,9 +287,9 @@ class RibbonPayoutReportLoader {
         final sortCmp = sortA.compareTo(sortB);
         if (sortCmp != 0) return sortCmp;
 
-        return (a['letter'] ?? '')
-            .toString()
-            .compareTo((b['letter'] ?? '').toString());
+        return (a['letter'] ?? '').toString().compareTo(
+          (b['letter'] ?? '').toString(),
+        );
       });
 
     final sectionReports = <RibbonPayoutSectionData>[];
@@ -283,7 +300,7 @@ class RibbonPayoutReportLoader {
 
       final rowList = await _loadRowsPaged(
         showId: req.showId,
-        showLetter: letter,
+        sectionId: (section['id'] ?? '').toString(),
       );
       final resultRows = _buildRows(rowList);
       if (resultRows.isEmpty) continue;
@@ -292,20 +309,20 @@ class RibbonPayoutReportLoader {
 
       sectionReports.add(
         RibbonPayoutSectionData(
-          sponsoringClub:
-              (sanction?['club_name'] ?? '').toString().trim(),
+          sponsoringClub: (sanction?['club_name'] ?? '').toString().trim(),
           classification: sectionClassification(section),
           showLetter: letter,
           type: 'Non-national',
           specialty: 'No',
-          arbaSanction:
-              (sanction?['sanction_number'] ?? '').toString().trim(),
+          arbaSanction: (sanction?['sanction_number'] ?? '').toString().trim(),
           rows: resultRows,
         ),
       );
     }
 
-    final firstSection = sectionReports.isNotEmpty ? sectionReports.first : null;
+    final firstSection = sectionReports.isNotEmpty
+        ? sectionReports.first
+        : null;
 
     return RibbonPayoutReportData(
       showId: req.showId,

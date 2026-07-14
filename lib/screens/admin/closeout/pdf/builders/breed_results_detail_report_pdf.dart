@@ -2,31 +2,33 @@
 
 import 'dart:typed_data';
 
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:ringmaster_show/reporting_core/assets/report_asset_loader.dart';
 
 import '../../models/base/report_file_result.dart';
 import '../../models/base/report_request.dart';
 import '../../models/clubs/breed_results_detail_report_data.dart';
+import '../../utils/breed_results_detail_order.dart';
 
 class BreedResultsDetailReportPdf {
   final Uint8List? logoBytes;
+  final ReportAssetLoader assets;
 
-  BreedResultsDetailReportPdf({this.logoBytes});
+  BreedResultsDetailReportPdf({required this.assets, this.logoBytes});
 
   Future<pw.ThemeData> _buildTheme() async {
     final regular = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSans-Regular.ttf'),
+      await assets.loadByteData('assets/fonts/NotoSans-Regular.ttf'),
     );
     final bold = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSans-Bold.ttf'),
+      await assets.loadByteData('assets/fonts/NotoSans-Bold.ttf'),
     );
     final italic = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSans-Italic.ttf'),
+      await assets.loadByteData('assets/fonts/NotoSans-Italic.ttf'),
     );
     final boldItalic = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSans-BoldItalic.ttf'),
+      await assets.loadByteData('assets/fonts/NotoSans-BoldItalic.ttf'),
     );
 
     return pw.ThemeData.withFont(
@@ -101,6 +103,7 @@ class BreedResultsDetailReportPdf {
               ..._buildSections(
                 breedAwards: section.breedAwards,
                 varieties: section.varieties,
+                isRabbit: breedResultsDetailUsesRabbitClassLayout(data.species),
               ),
           ],
         ),
@@ -302,6 +305,7 @@ class BreedResultsDetailReportPdf {
   List<pw.Widget> _buildSections({
     required List<BreedAward> breedAwards,
     required List<VarietySection> varieties,
+    required bool isRabbit,
   }) {
     final widgets = <pw.Widget>[];
 
@@ -334,7 +338,7 @@ class BreedResultsDetailReportPdf {
         .toList();
 
     for (final variety in regularVarieties) {
-      widgets.addAll(_buildVarietySection(variety));
+      widgets.addAll(_buildVarietySection(variety, isRabbit: isRabbit));
     }
 
     if (furWoolVarieties.isNotEmpty) {
@@ -346,7 +350,10 @@ class BreedResultsDetailReportPdf {
     return widgets;
   }
 
-  List<pw.Widget> _buildVarietySection(VarietySection variety) {
+  List<pw.Widget> _buildVarietySection(
+    VarietySection variety, {
+    required bool isRabbit,
+  }) {
     final widgets = <pw.Widget>[];
 
     widgets.add(_varietyHeader(variety.varietyName));
@@ -356,13 +363,12 @@ class BreedResultsDetailReportPdf {
       widgets.add(pw.SizedBox(height: 8));
     }
 
-    for (final sexSection in variety.sexSections) {
-      widgets.add(_sexHeader(sexSection.sexLabel));
-
-      for (final classGroup in sexSection.classes) {
+    if (isRabbit) {
+      for (final block in rabbitBreedResultsClassBlocks(variety)) {
+        final classGroup = block.classSection;
         widgets.add(
           pw.Text(
-            '${classGroup.className} — ${classGroup.animalsJudged} animals / ${classGroup.exhibitorsJudged} exhibitors judged',
+            '${block.heading} — ${classGroup.animalsJudged} animals / ${classGroup.exhibitorsJudged} exhibitors judged',
             style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
           ),
         );
@@ -381,8 +387,31 @@ class BreedResultsDetailReportPdf {
 
         widgets.add(pw.SizedBox(height: 8));
       }
+    } else {
+      for (final sexSection in variety.sexSections) {
+        widgets.add(_sexHeader(sexSection.sexLabel));
 
-      widgets.add(pw.SizedBox(height: 6));
+        for (final classGroup in sexSection.classes) {
+          widgets.add(
+            pw.Text(
+              '${classGroup.className} — ${classGroup.animalsJudged} animals / ${classGroup.exhibitorsJudged} exhibitors judged',
+              style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+            ),
+          );
+          widgets.add(pw.SizedBox(height: 4));
+          widgets.add(
+            classGroup.rows.isEmpty
+                ? pw.Text(
+                    'No top 5 placements recorded.',
+                    style: const pw.TextStyle(fontSize: 8),
+                  )
+                : _buildPlacementTable(classGroup.rows),
+          );
+          widgets.add(pw.SizedBox(height: 8));
+        }
+
+        widgets.add(pw.SizedBox(height: 6));
+      }
     }
 
     widgets.add(pw.SizedBox(height: 8));

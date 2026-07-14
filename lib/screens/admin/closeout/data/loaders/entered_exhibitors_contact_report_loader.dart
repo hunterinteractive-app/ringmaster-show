@@ -1,6 +1,6 @@
 // lib/screens/admin/closeout/data/loaders/entered_exhibitors_contact_report_loader.dart
 
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase/supabase.dart';
 
 import '../../models/base/report_request.dart';
 import '../../models/exhibitor/entered_exhibitors_contact_report_data.dart';
@@ -11,6 +11,12 @@ class EnteredExhibitorsContactReportLoader {
   EnteredExhibitorsContactReportLoader(this.supabase);
 
   Future<EnteredExhibitorsContactReportData> load(ReportRequest req) async {
+    final sectionIds = req.sectionIds ?? const <String>[];
+    if (sectionIds.isEmpty) {
+      throw StateError(
+        'Entered exhibitors report requires scoped section IDs.',
+      );
+    }
     final rows = await supabase
         .from('entries')
         .select('''
@@ -29,7 +35,8 @@ class EnteredExhibitorsContactReportLoader {
             zip
           )
         ''')
-        .eq('show_id', req.showId);
+        .eq('show_id', req.showId)
+        .inFilter('section_id', sectionIds);
 
     final Map<String, EnteredExhibitorsContactRow> map = {};
 
@@ -50,10 +57,8 @@ class EnteredExhibitorsContactReportLoader {
           ? displayName
           : [firstName, lastName].where((x) => x.isNotEmpty).join(' ').trim();
 
-      final addressLine1 =
-          (exhibitor['address_line1'] ?? '').toString().trim();
-      final addressLine2 =
-          (exhibitor['address_line2'] ?? '').toString().trim();
+      final addressLine1 = (exhibitor['address_line1'] ?? '').toString().trim();
+      final addressLine2 = (exhibitor['address_line2'] ?? '').toString().trim();
       final city = (exhibitor['city'] ?? '').toString().trim();
       final state = (exhibitor['state'] ?? '').toString().trim();
       final zip = (exhibitor['zip'] ?? '').toString().trim();
@@ -68,10 +73,11 @@ class EnteredExhibitorsContactReportLoader {
       } else if (state.isNotEmpty && zip.isNotEmpty) {
         cityStateZip = '$state $zip';
       } else {
-        cityStateZip = [city, state, zip]
-            .where((x) => x.isNotEmpty)
-            .join(' ')
-            .trim();
+        cityStateZip = [
+          city,
+          state,
+          zip,
+        ].where((x) => x.isNotEmpty).join(' ').trim();
       }
 
       final fullAddress = <String>[
@@ -89,10 +95,11 @@ class EnteredExhibitorsContactReportLoader {
     }
 
     final sorted = map.values.toList()
-      ..sort((a, b) =>
-          a.exhibitorName.toLowerCase().compareTo(
-                b.exhibitorName.toLowerCase(),
-              ));
+      ..sort(
+        (a, b) => a.exhibitorName.toLowerCase().compareTo(
+          b.exhibitorName.toLowerCase(),
+        ),
+      );
 
     return EnteredExhibitorsContactReportData(
       showId: req.showId,

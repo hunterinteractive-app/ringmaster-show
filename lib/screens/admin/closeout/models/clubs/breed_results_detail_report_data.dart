@@ -3,6 +3,7 @@
 class BreedResultsDetailReportData {
   final String showId;
   final String breedName;
+  final String species;
   final String scope;
   final String showLetter;
   final String judgeName;
@@ -25,6 +26,7 @@ class BreedResultsDetailReportData {
   const BreedResultsDetailReportData({
     required this.showId,
     required this.breedName,
+    this.species = 'rabbit',
     required this.scope,
     required this.showLetter,
     required this.judgeName,

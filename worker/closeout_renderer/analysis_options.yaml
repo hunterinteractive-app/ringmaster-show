@@ -1,0 +1,15 @@
+include: package:lints/recommended.yaml
+
+analyzer:
+  exclude:
+    - lib/reporting_core/assets/flutter_report_asset_loader.dart
+    - lib/screens/admin/closeout/data/loaders/coop_cards_report_loader.dart
+    - lib/screens/admin/closeout/pdf/builders/coop_cards_report_pdf.dart
+    - lib/screens/admin/closeout/services/closeout_runner.dart
+    - lib/screens/admin/closeout/services/report_upload_service.dart
+    - lib/screens/admin/closeout/services/sweepstakes_report_service.dart
+    - lib/screens/admin/closeout/widgets/**
+
+linter:
+  rules:
+    use_null_aware_elements: false

@@ -5,6 +5,10 @@
 
 begin;
 
+-- supabase test db executes SQL suites through pg_prove, so emit a proper
+-- pgTAP plan/result while retaining the exception-based assertions below.
+select plan(1);
+
 create or replace function pg_temp.assert_true(value boolean, message text)
 returns void language plpgsql as $$
 begin
@@ -493,5 +497,7 @@ $$;
 --   select finalize_entry_cart_paid(:cart_id, :session_id, 'stripe',
 --     'pi_concurrent', :amount_cents, 'usd');
 -- Both return successfully; exactly one reports already_finalized=false.
+
+select pass('payment hardening regression contracts');
 
 rollback;

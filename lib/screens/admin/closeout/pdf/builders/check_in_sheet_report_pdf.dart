@@ -1,17 +1,22 @@
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:ringmaster_show/reporting_core/assets/report_asset_loader.dart';
+import 'package:ringmaster_show/reporting_core/pdf/report_pdf_theme.dart';
 
-import '../../../print_packs/print_pack_pdf_helpers.dart';
 import '../../models/base/report_file_result.dart';
 import '../../models/base/report_request.dart';
 import '../../models/exhibitor/check_in_sheet_report_data.dart';
 
 class CheckInSheetReportPdfBuilder {
+  CheckInSheetReportPdfBuilder({required this.assets});
+
+  final ReportAssetLoader assets;
+
   Future<ReportFileResult> buildFile(
     CheckInSheetReportData data,
     ReportRequest request,
   ) async {
-    final theme = await buildPrintPackPdfTheme();
+    final theme = await buildReportPdfTheme(assets);
     final doc = pw.Document(theme: theme);
     final entries = data.entries;
 

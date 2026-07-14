@@ -1,17 +1,22 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase/supabase.dart';
 
+import '../../models/base/report_request.dart';
 import '../../models/judge/judge_report_data.dart';
 
 class JudgeReportLoader {
-  JudgeReportLoader({SupabaseClient? supabase})
-      : _supabase = supabase ?? Supabase.instance.client;
+  JudgeReportLoader({required SupabaseClient supabase}) : _supabase = supabase;
 
   final SupabaseClient _supabase;
 
-  Future<JudgeReportData> load({required String showId}) async {
+  Future<JudgeReportData> load(ReportRequest request) async {
+    final showId = request.showId;
+    final sectionIds = request.sectionIds ?? const <String>[];
+    if (sectionIds.isEmpty) {
+      throw StateError('Judge report requires scoped section IDs.');
+    }
     final show = await _loadShowInfo(showId);
     final judgesById = await _loadJudges(showId);
-    final rowsByJudgeId = await _loadJudgedRows(showId);
+    final rowsByJudgeId = await _loadJudgedRows(showId, sectionIds);
 
     final judges = <JudgeReportJudge>[];
 
@@ -35,9 +40,8 @@ class JudgeReportLoader {
     }
 
     judges.sort(
-      (a, b) => a.displayName.toLowerCase().compareTo(
-            b.displayName.toLowerCase(),
-          ),
+      (a, b) =>
+          a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()),
     );
 
     return JudgeReportData(
@@ -148,8 +152,9 @@ class JudgeReportLoader {
 
   Future<Map<String, List<JudgeReportRow>>> _loadJudgedRows(
     String showId,
+    List<String> sectionIds,
   ) async {
-    final entryRows = await _loadAllJudgedEntryRows(showId);
+    final entryRows = await _loadAllJudgedEntryRows(showId, sectionIds);
 
     final entryIds = <String>[];
     final exhibitorIds = <String>[];
@@ -173,7 +178,9 @@ class JudgeReportLoader {
 
       final exhibitorId = _stringOrNull(row['exhibitor_id']);
 
-      result.putIfAbsent(judgeId, () => <JudgeReportRow>[]).add(
+      result
+          .putIfAbsent(judgeId, () => <JudgeReportRow>[])
+          .add(
             JudgeReportRow(
               entryId: entryId,
               sectionLabel: _sectionLabel(row['show_sections']),
@@ -206,17 +213,19 @@ class JudgeReportLoader {
 
   Future<List<Map<String, dynamic>>> _loadAllJudgedEntryRows(
     String showId,
+    List<String> sectionIds,
   ) async {
     const pageSize = 1000;
     final allRows = <Map<String, dynamic>>[];
 
-    for (var from = 0;; from += pageSize) {
+    for (var from = 0; ; from += pageSize) {
       final to = from + pageSize - 1;
 
       final page = await _supabase
           .from('entries')
           .select('*, show_sections(kind, letter, sort_order)')
           .eq('show_id', showId)
+          .inFilter('section_id', sectionIds)
           .not('judged_by_show_judge_id', 'is', null)
           .filter('scratched_at', 'is', null)
           .order('id')
@@ -278,12 +287,16 @@ class JudgeReportLoader {
     const chunkSize = 100;
 
     for (var start = 0; start < ids.length; start += chunkSize) {
-      final end = start + chunkSize > ids.length ? ids.length : start + chunkSize;
+      final end = start + chunkSize > ids.length
+          ? ids.length
+          : start + chunkSize;
       final chunk = ids.sublist(start, end);
 
       final rows = await _supabase
           .from('exhibitors')
-          .select('id, display_name, showing_name, first_name, last_name, email')
+          .select(
+            'id, display_name, showing_name, first_name, last_name, email',
+          )
           .inFilter('id', chunk);
 
       for (final raw in rows as List<dynamic>) {
@@ -325,7 +338,9 @@ class JudgeReportLoader {
     final variety = a.varietyLabel.compareTo(b.varietyLabel);
     if (variety != 0) return variety;
 
-    final classSort = _classRank(a.className).compareTo(_classRank(b.className));
+    final classSort = _classRank(
+      a.className,
+    ).compareTo(_classRank(b.className));
     if (classSort != 0) return classSort;
 
     final sexSort = _sexRank(a.sex).compareTo(_sexRank(b.sex));
@@ -375,10 +390,7 @@ class JudgeReportLoader {
     return '${_titleCase(kind)} $letter';
   }
 
-  String _exhibitorName(
-    Map<String, dynamic> row, {
-    String? fallbackName,
-  }) {
+  String _exhibitorName(Map<String, dynamic> row, {String? fallbackName}) {
     final directName = _firstNonEmpty([
       row['exhibitor_name'],
       row['display_name'],
