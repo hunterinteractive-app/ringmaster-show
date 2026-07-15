@@ -11,15 +11,38 @@ final class WorkerConfig {
     required this.dryRun,
     required this.port,
     required this.buildVersion,
+    this.dispatchConcurrency = 1,
+    this.dispatchMaxRounds = 1,
     this.supabaseUrl,
     this.serviceRoleKey,
     this.storageBucket,
     this.workToken,
+    this.workerBaseUrl,
   }) {
     if (!dryRun &&
         ((supabaseUrl ?? '').isEmpty || (serviceRoleKey ?? '').isEmpty)) {
       throw const FormatException(
         'SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required outside dry-run mode.',
+      );
+    }
+    _validateRange(
+      'DISPATCH_CONCURRENCY',
+      dispatchConcurrency,
+      minimum: 1,
+      maximum: 25,
+    );
+    _validateRange(
+      'DISPATCH_MAX_ROUNDS',
+      dispatchMaxRounds,
+      minimum: 1,
+      maximum: 5,
+    );
+    if (workerBaseUrl != null &&
+        (!workerBaseUrl!.hasScheme ||
+            !const {'http', 'https'}.contains(workerBaseUrl!.scheme) ||
+            workerBaseUrl!.host.isEmpty)) {
+      throw const FormatException(
+        'WORKER_BASE_URL must be an absolute HTTP or HTTPS URL.',
       );
     }
   }
@@ -47,6 +70,15 @@ final class WorkerConfig {
       storageBucket: _optional(environment['STORAGE_BUCKET']),
       assetRoot: Directory(environment['ASSET_ROOT'] ?? 'assets'),
       workToken: _optional(environment['WORK_TRIGGER_TOKEN']),
+      workerBaseUrl: _optionalUri(environment['WORKER_BASE_URL']),
+      dispatchConcurrency: _integer(
+        environment,
+        'DISPATCH_CONCURRENCY',
+        1,
+        1,
+        25,
+      ),
+      dispatchMaxRounds: _integer(environment, 'DISPATCH_MAX_ROUNDS', 1, 1, 5),
       continuous: continuous,
       dryRun: dryRun,
       port: _integer(environment, 'PORT', 8080, 1, 65535),
@@ -63,6 +95,9 @@ final class WorkerConfig {
   final String? storageBucket;
   final Directory assetRoot;
   final String? workToken;
+  final Uri? workerBaseUrl;
+  final int dispatchConcurrency;
+  final int dispatchMaxRounds;
   final bool continuous;
   final bool dryRun;
   final int port;
@@ -85,5 +120,26 @@ final class WorkerConfig {
   static String? _optional(String? value) {
     final trimmed = value?.trim() ?? '';
     return trimmed.isEmpty ? null : trimmed;
+  }
+
+  static Uri? _optionalUri(String? value) {
+    final normalized = _optional(value);
+    if (normalized == null) return null;
+    final uri = Uri.tryParse(normalized);
+    if (uri == null) {
+      throw const FormatException('WORKER_BASE_URL must be a valid URL.');
+    }
+    return uri;
+  }
+
+  static void _validateRange(
+    String name,
+    int value, {
+    required int minimum,
+    required int maximum,
+  }) {
+    if (value < minimum || value > maximum) {
+      throw FormatException('$name must be between $minimum and $maximum.');
+    }
   }
 }

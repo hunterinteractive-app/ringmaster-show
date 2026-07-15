@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -237,6 +238,265 @@ void main() {
       expect(response.statusCode, 200);
       expect(await response.readAsString(), contains('"completed":1'));
     });
+
+    test('dispatch rejects unauthenticated requests', () async {
+      final handler = buildWorkerHandler(
+        _worker(queue: _FakeQueue([])),
+        _config(workToken: 'token', workerBaseUrl: Uri.parse('https://worker')),
+        dispatcher: _FakeDispatcher(),
+      );
+
+      final response = await handler(
+        Request('POST', Uri.parse('http://x/dispatch')),
+      );
+
+      expect(response.statusCode, 403);
+    });
+
+    test('dispatch requires a configured worker base URL', () async {
+      final handler = buildWorkerHandler(
+        _worker(queue: _FakeQueue([])),
+        _config(workToken: 'token'),
+        dispatcher: _FakeDispatcher(),
+      );
+
+      final response = await handler(_dispatchRequest());
+
+      expect(response.statusCode, 503);
+      expect(await response.readAsString(), contains('WORKER_BASE_URL'));
+    });
+
+    test(
+      'dispatch invalid X-Work-Token does not fall back to bearer',
+      () async {
+        final handler = buildWorkerHandler(
+          _worker(queue: _FakeQueue([])),
+          _config(
+            workToken: 'token',
+            workerBaseUrl: Uri.parse('https://worker'),
+          ),
+          dispatcher: _FakeDispatcher(),
+        );
+
+        final response = await handler(
+          Request(
+            'POST',
+            Uri.parse('http://x/dispatch'),
+            headers: {'x-work-token': 'wrong', 'authorization': 'Bearer token'},
+          ),
+        );
+
+        expect(response.statusCode, 403);
+      },
+    );
+
+    test('dispatch accepts Authorization Bearer fallback', () async {
+      final dispatcher = _FakeDispatcher([
+        [_success(claimed: 0, remaining: 0)],
+      ]);
+      final handler = buildWorkerHandler(
+        _worker(queue: _FakeQueue([])),
+        _config(workToken: 'token', workerBaseUrl: Uri.parse('https://worker')),
+        dispatcher: dispatcher,
+      );
+
+      final response = await handler(
+        Request(
+          'POST',
+          Uri.parse('http://x/dispatch'),
+          headers: {'authorization': 'Bearer token'},
+        ),
+      );
+
+      expect(response.statusCode, 200);
+      expect(dispatcher.calls, 1);
+    });
+
+    test('dispatch concurrency is capped at 25 requests per round', () async {
+      expect(
+        () => _config(dispatchConcurrency: 26),
+        throwsA(isA<FormatException>()),
+      );
+      expect(
+        () => _config(dispatchMaxRounds: 6),
+        throwsA(isA<FormatException>()),
+      );
+      final dispatcher = _FakeDispatcher([
+        List.generate(25, (_) => _success(claimed: 0, remaining: 1)),
+      ]);
+      final handler = buildWorkerHandler(
+        _worker(queue: _FakeQueue([])),
+        _config(
+          workToken: 'token',
+          workerBaseUrl: Uri.parse('https://worker'),
+          dispatchConcurrency: 25,
+          dispatchMaxRounds: 5,
+        ),
+        dispatcher: dispatcher,
+      );
+
+      final response = await handler(_dispatchRequest());
+      final body = jsonDecode(await response.readAsString());
+
+      expect(response.statusCode, 200);
+      expect(dispatcher.requestCounts, [25]);
+      expect(body['requests'], 25);
+      expect(body['rounds'], 1);
+    });
+
+    test('dispatch stops early when every response claims zero', () async {
+      final dispatcher = _FakeDispatcher([
+        [
+          _success(claimed: 0, remaining: 7),
+          _success(claimed: 0, remaining: 7),
+        ],
+        [
+          _success(claimed: 1, remaining: 6),
+          _success(claimed: 1, remaining: 6),
+        ],
+      ]);
+      final handler = buildWorkerHandler(
+        _worker(queue: _FakeQueue([])),
+        _config(
+          workToken: 'token',
+          workerBaseUrl: Uri.parse('https://worker'),
+          dispatchConcurrency: 2,
+          dispatchMaxRounds: 5,
+        ),
+        dispatcher: dispatcher,
+      );
+
+      final response = await handler(_dispatchRequest());
+      final body = jsonDecode(await response.readAsString());
+
+      expect(dispatcher.calls, 1);
+      expect(body['rounds'], 1);
+      expect(body['requests'], 2);
+    });
+
+    test('dispatch aggregates successful work response summaries', () async {
+      final dispatcher = _FakeDispatcher([
+        [
+          _success(
+            claimed: 3,
+            completed: 2,
+            failed: 1,
+            recovered: 4,
+            remaining: 8,
+          ),
+          _success(
+            claimed: 2,
+            completed: 2,
+            failed: 0,
+            recovered: 1,
+            remaining: 0,
+          ),
+        ],
+        [_success(claimed: 99, remaining: 99)],
+      ]);
+      final handler = buildWorkerHandler(
+        _worker(queue: _FakeQueue([])),
+        _config(
+          workToken: 'token',
+          workerBaseUrl: Uri.parse('https://worker'),
+          dispatchConcurrency: 2,
+          dispatchMaxRounds: 3,
+        ),
+        dispatcher: dispatcher,
+      );
+
+      final response = await handler(_dispatchRequest());
+      final body = jsonDecode(await response.readAsString());
+
+      expect(body, {
+        'rounds': 1,
+        'requests': 2,
+        'claimed': 5,
+        'completed': 4,
+        'failed': 1,
+        'recovered': 5,
+        'remaining': 8,
+      });
+      expect(dispatcher.calls, 1);
+    });
+
+    test('dispatch tolerates partial request failures', () async {
+      final dispatcher = _FakeDispatcher([
+        [
+          WorkDispatchOutcome.failure(StateError('unavailable')),
+          _success(claimed: 2, completed: 1, failed: 1, remaining: 3),
+        ],
+      ]);
+      final handler = buildWorkerHandler(
+        _worker(queue: _FakeQueue([])),
+        _config(
+          workToken: 'token',
+          workerBaseUrl: Uri.parse('https://worker'),
+          dispatchConcurrency: 2,
+        ),
+        dispatcher: dispatcher,
+      );
+
+      final response = await handler(_dispatchRequest());
+      final body = jsonDecode(await response.readAsString());
+
+      expect(response.statusCode, 200);
+      expect(body['requests'], 2);
+      expect(body['claimed'], 2);
+      expect(body['completed'], 1);
+      expect(body['failed'], 1);
+    });
+
+    test(
+      'dispatch self-invocation targets only work with both tokens',
+      () async {
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        addTearDown(() => server.close(force: true));
+        final paths = <String>[];
+        String? applicationToken;
+        String? iamAuthorization;
+        final serverDone = Completer<void>();
+        server.listen((request) async {
+          paths.add(request.uri.path);
+          applicationToken = request.headers.value('x-work-token');
+          iamAuthorization = request.headers.value(
+            HttpHeaders.authorizationHeader,
+          );
+          await request.drain<void>();
+          request.response
+            ..statusCode = 200
+            ..headers.contentType = ContentType.json
+            ..write(jsonEncode(_result(claimed: 0, remaining: 0).toJson()));
+          await request.response.close();
+          serverDone.complete();
+        });
+        final baseUrl = Uri.parse('http://127.0.0.1:${server.port}');
+        final handler = buildWorkerHandler(
+          _worker(queue: _FakeQueue([])),
+          _config(workToken: 'app-token', workerBaseUrl: baseUrl),
+          dispatcher: CloudRunWorkRoundDispatcher(
+            identityTokenProvider: (audience) async {
+              expect(audience, baseUrl);
+              return 'google-identity-token';
+            },
+          ),
+        );
+
+        final response = await handler(
+          Request(
+            'POST',
+            Uri.parse('http://x/dispatch'),
+            headers: {'x-work-token': 'app-token'},
+          ),
+        );
+        await serverDone.future;
+
+        expect(response.statusCode, 200);
+        expect(paths, ['/work']);
+        expect(applicationToken, 'app-token');
+        expect(iamAuthorization, 'Bearer google-identity-token');
+      },
+    );
   });
 
   group('architecture', () {
@@ -342,7 +602,12 @@ CloseoutWorker _worker({
   log: log ?? StructuredLog(workerId: 'worker', sink: (_) {}),
 );
 
-WorkerConfig _config({String? workToken}) => WorkerConfig(
+WorkerConfig _config({
+  String? workToken,
+  Uri? workerBaseUrl,
+  int dispatchConcurrency = 1,
+  int dispatchMaxRounds = 1,
+}) => WorkerConfig(
   supabaseUrl: 'http://localhost',
   serviceRoleKey: 'service-role-secret',
   workerId: 'worker',
@@ -355,7 +620,70 @@ WorkerConfig _config({String? workToken}) => WorkerConfig(
   port: 8080,
   buildVersion: 'test-version',
   workToken: workToken,
+  workerBaseUrl: workerBaseUrl,
+  dispatchConcurrency: dispatchConcurrency,
+  dispatchMaxRounds: dispatchMaxRounds,
 );
+
+Request _dispatchRequest() => Request(
+  'POST',
+  Uri.parse('http://x/dispatch'),
+  headers: {'x-work-token': 'token'},
+);
+
+WorkResult _result({
+  int claimed = 0,
+  int completed = 0,
+  int failed = 0,
+  int recovered = 0,
+  int remaining = 0,
+}) => WorkResult(
+  claimed: claimed,
+  completed: completed,
+  failed: failed,
+  recovered: recovered,
+  remaining: remaining,
+);
+
+WorkDispatchOutcome _success({
+  int claimed = 0,
+  int completed = 0,
+  int failed = 0,
+  int recovered = 0,
+  int remaining = 0,
+}) => WorkDispatchOutcome.success(
+  _result(
+    claimed: claimed,
+    completed: completed,
+    failed: failed,
+    recovered: recovered,
+    remaining: remaining,
+  ),
+);
+
+final class _FakeDispatcher implements WorkRoundDispatcher {
+  _FakeDispatcher([this.rounds = const []]);
+
+  final List<List<WorkDispatchOutcome>> rounds;
+  int calls = 0;
+  final List<int> requestCounts = [];
+
+  @override
+  Future<List<WorkDispatchOutcome>> dispatchRound({
+    required Uri workerBaseUrl,
+    required String workToken,
+    required int requestCount,
+  }) async {
+    requestCounts.add(requestCount);
+    final index = calls++;
+    return index < rounds.length
+        ? rounds[index]
+        : List.generate(
+            requestCount,
+            (_) => _success(claimed: 0, remaining: 0),
+          );
+  }
+}
 
 Map<String, dynamic> _taskJson() => {
   'id': 'task-1',
