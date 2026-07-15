@@ -18,10 +18,7 @@ migrate_working_dir/
 *.iws
 .idea/
 
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
+.vscode/
 
 # Flutter/Dart/Pub related
 **/doc/api/
@@ -31,6 +28,7 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+build/
 /coverage/
 
 # Symbolication related
@@ -48,6 +46,7 @@ app.*.map.json
 
 # dependencies
 /node_modules
+node_modules/
 /.pnp
 .pnp.*
 .yarn/*
@@ -86,3 +85,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .env*.local
+
+# Local Supabase CLI/runtime state
+supabase/.temp/
+supabase/.branches/
+supabase/functions/node_modules/

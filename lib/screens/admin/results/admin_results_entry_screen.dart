@@ -8,6 +8,12 @@ import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:ringmaster_show/services/show_lock_service.dart';
 import 'package:ringmaster_show/services/app_session.dart';
 import 'package:ringmaster_show/services/results_entry_validation.dart';
+import 'package:ringmaster_show/services/results_award_configuration.dart';
+import 'package:ringmaster_show/services/results_group_resolution.dart';
+import 'package:ringmaster_show/services/results/results_rules.dart';
+import 'package:ringmaster_show/services/results/results_rules_router.dart';
+import 'package:ringmaster_show/services/results/rabbit_results_validation.dart';
+import 'package:ringmaster_show/services/results/cavy_results_validation.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -37,64 +43,6 @@ const List<String> kBestAgeAwardCodes = [
   'Best Senior',
 ];
 
-const List<String> cavyAwardCodes = [
-  'BJV',
-  'BIV',
-  'BSV',
-  'BJB',
-  'BIB',
-  'BSB',
-  'BOV',
-  'BOSV',
-  'BOB',
-  'BOSB',
-  'BIS',
-  'RIS',
-  '1RIS',
-  '2RIS',
-  'HM',
-];
-
-const Map<String, String> cavyAwardLabels = {
-  'BJV': 'Best Junior Variety',
-  'BIV': 'Best Intermediate Variety',
-  'BSV': 'Best Senior Variety',
-
-  'BJB': 'Best Junior of Breed',
-  'BIB': 'Best Intermediate of Breed',
-  'BSB': 'Best Senior of Breed',
-
-  'BOV': 'Best of Variety',
-  'BOSV': 'Best Opposite Sex of Variety',
-
-  'BOB': 'Best of Breed',
-  'BOSB': 'Best Opposite Sex of Breed',
-
-  'BIS': 'Best in Show',
-  'RIS': 'Reserve in Show',
-  '1RIS': '1st Reserve in Show',
-  '2RIS': '2nd Reserve in Show',
-  'HM': 'Honorable Mention',
-};
-
-const Map<String, String> awardDisplayLabels = {
-  'BOV': 'Best of Variety',
-  'BOSV': 'Best Opposite Sex of Variety',
-  'BOG': 'Best of Group',
-  'BOSG': 'Best Opposite Sex of Group',
-  'BOB': 'Best of Breed',
-  'BOSB': 'Best Opposite Sex of Breed',
-  'Best 4-Class': 'Best 4-Class',
-  'Best 6-Class': 'Best 6-Class',
-  'Best In Show': 'Best in Show',
-  'Reserve In Show': 'Reserve in Show',
-  'BIS': 'Best in Show',
-  'RIS': 'Reserve in Show',
-  '1RIS': '1st Reserve in Show',
-  '2RIS': '2nd Reserve in Show',
-  'HM': 'Honorable Mention',
-};
-
 bool _isFurEntry(Map<String, dynamic> row) {
   final value = row['is_fur'];
   if (value is bool) return value;
@@ -103,105 +51,21 @@ bool _isFurEntry(Map<String, dynamic> row) {
   return text == 'true' || text == 't' || text == '1' || text == 'yes';
 }
 
-bool _isFurOrWoolEntry(Map<String, dynamic> row) {
-  return _isFurEntry(row);
-}
-
 bool _isCavyEntry(Map<String, dynamic> row) {
-  final species = resultsSpeciesForEntry(row);
-
-  // Species remains the primary source of truth. Some RPC/result rows do not
-  // include species, so fall back to cavy-only sex terminology. Do not fall
-  // back to breed name because names such as American overlap with rabbits.
-  if (species == 'cavy') return true;
-  if (species == 'rabbit') return false;
-
-  final sex = (row['sex'] ?? '').toString().trim().toLowerCase();
-  if (sex.contains('boar') || sex.contains('sow')) return true;
-  if (sex.contains('buck') || sex.contains('doe')) return false;
-
-  return false;
+  return normalizeResultsSpeciesStrict(row['species']) == 'cavy';
 }
 
 String _awardDisplayLabel(String award, Map<String, dynamic> entry) {
   final code = _canonicalAwardCode(award);
-
-  if (_isCavyEntry(entry)) {
-    return cavyAwardLabels[code] ?? code;
+  try {
+    return rulesForEntry(entry).awardLabel(code);
+  } on UnsupportedResultsSpecies {
+    return code;
   }
-
-  return awardDisplayLabels[code] ?? code;
 }
 
 String _canonicalAwardCode(String award) {
-  final raw = award.trim();
-  final value = raw.toLowerCase();
-
-  if (value == 'best in show' || value == 'best in show rabbit') {
-    return 'Best In Show';
-  }
-  if (value == 'bis') return 'BIS';
-
-  if (value == 'reserve in show' ||
-      value == 'reserve best in show' ||
-      value == 'reserve in show rabbit') {
-    return 'Reserve In Show';
-  }
-  if (value == 'ris') return 'RIS';
-
-  if (value == '1ris' ||
-      value == '1st ris' ||
-      value == 'first ris' ||
-      value == '1st reserve in show' ||
-      value == 'first reserve in show') {
-    return '1RIS';
-  }
-
-  if (value == '2ris' ||
-      value == '2nd ris' ||
-      value == 'second ris' ||
-      value == '2nd reserve in show' ||
-      value == 'second reserve in show') {
-    return '2RIS';
-  }
-
-  if (value == 'bog' || value == 'best of group') return 'BOG';
-  if (value == 'bosg' ||
-      value == 'best opposite sex of group' ||
-      value == 'best opposite of group') {
-    return 'BOSG';
-  }
-
-  if (value == 'bov' || value == 'best of variety') return 'BOV';
-  if (value == 'bosv' ||
-      value == 'best opposite sex of variety' ||
-      value == 'best opposite of variety') {
-    return 'BOSV';
-  }
-
-  if (value == 'bob' || value == 'best of breed') return 'BOB';
-  if (value == 'bosb' ||
-      value == 'best opposite sex of breed' ||
-      value == 'best opposite of breed') {
-    return 'BOSB';
-  }
-
-  if (value == 'b4c' ||
-      value == 'best 4 class' ||
-      value == 'best 4-class' ||
-      value == 'best four class' ||
-      value == 'best four-class') {
-    return 'Best 4-Class';
-  }
-  if (value == 'b6c' ||
-      value == 'best 6 class' ||
-      value == 'best 6-class' ||
-      value == 'best six class' ||
-      value == 'best six-class') {
-    return 'Best 6-Class';
-  }
-
-  return raw;
+  return canonicalResultsAwardCode(award);
 }
 
 bool _awardListContains(List<String> awards, String award) {
@@ -323,43 +187,51 @@ String _entryScopeSectionId(Map<String, dynamic> entry) {
 }
 
 String _entryScopeBreed(Map<String, dynamic> entry) {
+  final breedId = (entry['breed_id'] ?? entry['breed_catalog_id'] ?? '')
+      .toString()
+      .trim();
+  if (breedId.isNotEmpty) return breedId.toLowerCase();
   final rawBreed = (entry['breed'] ?? '').toString().trim();
   if (rawBreed.isNotEmpty) return rawBreed.toLowerCase();
   return (entry['breed_name'] ?? '').toString().trim().toLowerCase();
 }
 
 String _entryScopeVariety(Map<String, dynamic> entry) {
+  final varietyId =
+      (entry['rabbit_variety_id'] ??
+              entry['variety_id'] ??
+              entry['breed_variety_id'] ??
+              '')
+          .toString()
+          .trim();
+  if (varietyId.isNotEmpty) return varietyId.toLowerCase();
   final rawVariety = (entry['variety'] ?? '').toString().trim();
   if (rawVariety.isNotEmpty) return rawVariety.toLowerCase();
   return (entry['variety_name'] ?? '').toString().trim().toLowerCase();
 }
 
 String _entryScopeGroup(Map<String, dynamic> entry) {
-  return (entry['group_name'] ??
-          entry['group_display_name'] ??
-          entry['group_label'] ??
-          entry['group'] ??
-          entry['group_code'] ??
-          '')
-      .toString()
-      .trim()
-      .toLowerCase();
+  try {
+    return rulesForEntry(entry).groupIdentity(entry).stableKey;
+  } on UnsupportedResultsSpecies {
+    return '';
+  }
+}
+
+String _entryGroupDisplayName(Map<String, dynamic> entry) {
+  try {
+    return rulesForEntry(entry).groupIdentity(entry).displayName;
+  } on UnsupportedResultsSpecies {
+    return '';
+  }
 }
 
 bool _entryUsesVarietyAwards(Map<String, dynamic> entry) {
-  final raw = entry['uses_variety_awards'];
-  return raw == true ||
-      raw.toString().trim().toLowerCase() == 'true' ||
-      raw.toString().trim().toLowerCase() == 't' ||
-      raw.toString().trim() == '1';
+  return resultsEntryBool(entry['uses_variety_awards']);
 }
 
 bool _entryUsesGroupAwards(Map<String, dynamic> entry) {
-  final raw = entry['uses_group_awards'];
-  return raw == true ||
-      raw.toString().trim().toLowerCase() == 'true' ||
-      raw.toString().trim().toLowerCase() == 't' ||
-      raw.toString().trim() == '1';
+  return resultsEntryBool(entry['uses_group_awards']);
 }
 
 List<String> _entryAwardCodes(Map<String, dynamic> entry) {
@@ -393,26 +265,14 @@ String _specialsSummaryForEntries(
   List<Map<String, dynamic>> entries,
   List<String> awardCodes,
 ) {
-  final parts = <String>[];
-
-  for (final awardCode in awardCodes) {
-    final target = _canonicalAwardCode(awardCode).toLowerCase();
-    final winners = entries.where((entry) {
-      return _entryAwardCodes(
-        entry,
-      ).any((award) => _canonicalAwardCode(award).toLowerCase() == target);
-    }).toList();
-
-    if (winners.isEmpty) continue;
-
-    final labels = winners.map(_entryShortAnimalLabel).toList();
-    parts.add(
-      '${_awardDisplayLabel(awardCode, winners.first)}: ${labels.join(', ')}',
-    );
+  if (entries.isEmpty) return '';
+  try {
+    return rulesForEntry(
+      entries.first,
+    ).buildSpecialsSummary(entries, awardCodes);
+  } on UnsupportedResultsSpecies {
+    return '';
   }
-
-  if (parts.isEmpty) return '';
-  return 'Specials: ${parts.join(' • ')}';
 }
 
 String _entrySexKey(Map<String, dynamic> entry) {
@@ -465,27 +325,52 @@ _ResultScopeCompletion _resultCompletionForEntries(
   }
 
   final allBasicsComplete = totalBasics > 0 && completedBasics >= totalBasics;
-  final blockingIssues = buildBreedCompletionIssues(
-    entries: entries,
-    requireVarietyAwards: requireVarietyAwards,
-    requireGroupAwards: requireGroupAwards,
-    requireBreedAwards: requireBreedAwards,
-    hasBasicOutcome: _entryHasBasicOutcome,
-    isEligibleForSpecialAward: _entryIsEligibleForSpecialAward,
-    isExcludedFromSpecials: (entry) =>
-        _isFurEntry(entry) ||
-        _isPreJuniorClassName((entry['class_name'] ?? '').toString()),
-    awardCodes: _entryAwardCodes,
-    entryLabel: _entryShortAnimalLabel,
-    sectionId: _entryScopeSectionId,
-    breed: _entryScopeBreed,
-    variety: _entryScopeVariety,
-    group: _entryScopeGroup,
-    sex: _entrySexKey,
-  );
-  final hasAwardIssue = blockingIssues.any(
-    (issue) => issue.code != 'missing_basic_outcome',
-  );
+  late final List<ResultsEntryBlockingIssue> blockingIssues;
+  var unsupportedSpecies = false;
+  try {
+    blockingIssues = switch (rulesForEntry(entries.first).species) {
+      ResultsSpecies.rabbit => validateRabbitResults(
+        entries: entries,
+        requireVarietyAwards: requireVarietyAwards,
+        requireGroupAwards: requireGroupAwards,
+        requireBreedAwards: requireBreedAwards,
+        hasBasicOutcome: _entryHasBasicOutcome,
+        isEligibleForSpecialAward: _entryIsEligibleForSpecialAward,
+        isExcludedFromSpecials: (entry) =>
+            _isFurEntry(entry) ||
+            _isPreJuniorClassName((entry['class_name'] ?? '').toString()),
+        awardCodes: _entryAwardCodes,
+        entryLabel: _entryShortAnimalLabel,
+        sectionId: _entryScopeSectionId,
+        breed: _entryScopeBreed,
+        variety: _entryScopeVariety,
+        group: _entryScopeGroup,
+        sex: _entrySexKey,
+      ),
+      ResultsSpecies.cavy => validateCavyResults(
+        entries: entries,
+        requireGroupAwards: requireGroupAwards,
+        requireBreedAwards: requireBreedAwards,
+        hasBasicOutcome: _entryHasBasicOutcome,
+        isEligibleForSpecialAward: _entryIsEligibleForSpecialAward,
+        isExcludedFromSpecials: (entry) =>
+            _isFurEntry(entry) ||
+            _isPreJuniorClassName((entry['class_name'] ?? '').toString()),
+        awardCodes: _entryAwardCodes,
+        entryLabel: _entryShortAnimalLabel,
+        sectionId: _entryScopeSectionId,
+        breed: _entryScopeBreed,
+        group: _entryScopeGroup,
+        sex: _entrySexKey,
+      ),
+    };
+  } on UnsupportedResultsSpecies {
+    blockingIssues = const [];
+    unsupportedSpecies = true;
+  }
+  final hasAwardIssue =
+      unsupportedSpecies ||
+      blockingIssues.any((issue) => issue.code != 'missing_basic_outcome');
 
   if (hasAwardIssue) {
     return _ResultScopeCompletion(
@@ -507,6 +392,41 @@ _ResultScopeCompletion _resultCompletionForEntries(
     status: _ResultScopeStatus.complete,
     completedBasics: completedBasics,
     totalBasics: totalBasics,
+  );
+}
+
+_ResultScopeCompletion _dataEntryCompletionForEntries(
+  List<Map<String, dynamic>> entries, {
+  int validationIssueCount = 0,
+}) {
+  final summary = buildResultsEntryStatusSummary(
+    entries: entries,
+    hasBasicOutcome: _entryHasBasicOutcome,
+    validationIssueCount: validationIssueCount,
+  );
+  final total = summary.total;
+  final completed = summary.completed;
+  final anyData = entries.any(_entryHasAnyResultOrAwardData);
+  if (entries.isEmpty || !anyData) {
+    return _ResultScopeCompletion(
+      status: _ResultScopeStatus.notStarted,
+      completedBasics: completed,
+      totalBasics: total,
+    );
+  }
+  if (completed < total) {
+    return _ResultScopeCompletion(
+      status: _ResultScopeStatus.inProgress,
+      completedBasics: completed,
+      totalBasics: total,
+    );
+  }
+  return _ResultScopeCompletion(
+    status: validationIssueCount > 0
+        ? _ResultScopeStatus.needsAttention
+        : _ResultScopeStatus.complete,
+    completedBasics: completed,
+    totalBasics: total,
   );
 }
 
@@ -550,16 +470,27 @@ Color _resultScopeStatusColor(BuildContext context, _ResultScopeStatus status) {
   }
 }
 
-Color _resultScopeCardColor(_ResultScopeStatus status, Color statusColor) {
+Color _resultScopeCardColor(
+  _ResultScopeStatus status,
+  Color statusColor, {
+  bool validationWarningIsAmber = false,
+}) {
   return switch (status) {
+    _ResultScopeStatus.needsAttention when validationWarningIsAmber =>
+      const Color(0xFF66501E),
     _ResultScopeStatus.needsAttention => const Color(0xFF70283B),
     _ResultScopeStatus.inProgress => const Color(0xFF66501E),
     _ => statusColor.withValues(alpha: 0.06),
   };
 }
 
-BorderSide _resultScopeCardBorder(_ResultScopeStatus status) {
+BorderSide _resultScopeCardBorder(
+  _ResultScopeStatus status, {
+  bool validationWarningIsAmber = false,
+}) {
   return switch (status) {
+    _ResultScopeStatus.needsAttention when validationWarningIsAmber =>
+      BorderSide(color: Colors.amber.withValues(alpha: .72), width: 1.5),
     _ResultScopeStatus.needsAttention => BorderSide(
       color: Colors.redAccent.withValues(alpha: .72),
       width: 1.5,
@@ -755,6 +686,11 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
   final Map<String, String> _breedClassSystems = {};
   final Map<String, bool> _breedUsesGroupAwards = {};
   final Map<String, bool> _breedUsesVarietyAwards = {};
+  final Map<String, bool> _breedUsesGroupAwardsById = {};
+  final Map<String, bool> _breedUsesVarietyAwardsById = {};
+  final Map<String, Map<String, dynamic>> _cavySopVarietyByBreedVariety = {};
+  final Map<String, Map<String, dynamic>> _rabbitVarietyByBreedAndName = {};
+  final Map<String, Map<String, dynamic>> _rabbitGroupById = {};
   String _finalAwardMode = kDefaultFinalAwardMode;
 
   @override
@@ -773,6 +709,8 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
       await _loadSections();
       await _loadJudges();
       await _loadBreedClassSystems();
+      await _loadRabbitCatalogStructure();
+      await _loadCavySopVarietyOrder();
       await _loadShowSettings();
       await _loadEntries();
 
@@ -951,8 +889,8 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
 
     if (byGroup && (issue.groupName ?? '').trim().isNotEmpty) {
       working = working.where((e) {
-        return (e['group_name'] ?? '').toString().trim().toLowerCase() ==
-            issue.groupName!.toLowerCase();
+        return normalizeResultsGroupKey(_entryGroupDisplayName(e)) ==
+            normalizeResultsGroupKey(issue.groupName);
       }).toList();
     }
 
@@ -1046,15 +984,18 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
   Future<void> _loadBreedClassSystems() async {
     final rows = await supabase
         .from('breeds')
-        .select('name,class_system,uses_group_awards,uses_variety_awards')
+        .select('id,name,class_system,uses_group_awards,uses_variety_awards')
         .eq('is_active', true);
 
     _breedClassSystems.clear();
     _breedUsesGroupAwards.clear();
     _breedUsesVarietyAwards.clear();
+    _breedUsesGroupAwardsById.clear();
+    _breedUsesVarietyAwardsById.clear();
 
     for (final row in (rows as List).cast<Map<String, dynamic>>()) {
       final name = (row['name'] ?? '').toString().trim().toLowerCase();
+      final breedId = (row['id'] ?? '').toString().trim();
       final classSystem = (row['class_system'] ?? 'four')
           .toString()
           .trim()
@@ -1065,7 +1006,118 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
         _breedUsesGroupAwards[name] = row['uses_group_awards'] == true;
         _breedUsesVarietyAwards[name] = row['uses_variety_awards'] == true;
       }
+      if (breedId.isNotEmpty) {
+        _breedUsesGroupAwardsById[breedId] = row['uses_group_awards'] == true;
+        _breedUsesVarietyAwardsById[breedId] =
+            row['uses_variety_awards'] == true;
+      }
     }
+  }
+
+  Future<void> _loadCavySopVarietyOrder() async {
+    _cavySopVarietyByBreedVariety.clear();
+    try {
+      final rows = await supabase
+          .from('cavy_sop_variety_order')
+          .select('id,breed_name,variety_name,variety_sort_order')
+          .order('breed_sort_order')
+          .order('variety_sort_order');
+
+      for (final raw in rows as List) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        final breed = (row['breed_name'] ?? '').toString().trim();
+        final variety = (row['variety_name'] ?? '').toString().trim();
+        if (breed.isEmpty || variety.isEmpty) continue;
+        _cavySopVarietyByBreedVariety['${normalizeResultsGroupKey(breed)}|${normalizeResultsGroupKey(variety)}'] =
+            row;
+      }
+    } catch (_) {
+      // SOP data controls ordering only. Results grouping must continue from
+      // the RPC row's established variety value when enrichment is unavailable.
+    }
+  }
+
+  Future<void> _loadRabbitCatalogStructure() async {
+    _rabbitVarietyByBreedAndName.clear();
+    _rabbitGroupById.clear();
+
+    final results = await Future.wait([
+      supabase
+          .from('variety_groups')
+          .select('id,breed_id,name,sort_order,is_active'),
+      supabase
+          .from('varieties')
+          .select('id,breed_id,name,group_id,sort_order,is_active'),
+    ]);
+
+    for (final raw in results[0] as List) {
+      final row = Map<String, dynamic>.from(raw as Map);
+      final id = (row['id'] ?? '').toString().trim();
+      if (id.isNotEmpty && row['is_active'] != false) {
+        _rabbitGroupById[id] = row;
+      }
+    }
+    for (final raw in results[1] as List) {
+      final row = Map<String, dynamic>.from(raw as Map);
+      if (row['is_active'] == false) continue;
+      final breedId = (row['breed_id'] ?? '').toString().trim();
+      final name = normalizeResultsRuleKey(row['name']);
+      if (breedId.isNotEmpty && name.isNotEmpty) {
+        _rabbitVarietyByBreedAndName['$breedId|$name'] = row;
+      }
+    }
+  }
+
+  void _attachRabbitCatalogMetadata(Map<String, dynamic> entry) {
+    if (normalizeResultsSpeciesStrict(entry['species']) != 'rabbit') return;
+    final breedId = (entry['breed_id'] ?? entry['breed_catalog_id'] ?? '')
+        .toString()
+        .trim();
+    final varietyName = resultsRuleText(entry, const [
+      'exact_variety_name',
+      'variety_name',
+      'variety',
+    ]);
+    final variety =
+        _rabbitVarietyByBreedAndName['$breedId|${normalizeResultsRuleKey(varietyName)}'];
+    if (variety == null) return;
+
+    entry['rabbit_variety_id'] = (variety['id'] ?? '').toString();
+    entry['rabbit_variety_name'] = (variety['name'] ?? varietyName).toString();
+    entry['variety_sort_order'] = variety['sort_order'];
+
+    final groupId = (variety['group_id'] ?? '').toString().trim();
+    final group = _rabbitGroupById[groupId];
+    if (group == null) return;
+    entry['rabbit_group_id'] = groupId;
+    entry['rabbit_group_name'] = (group['name'] ?? '').toString();
+    entry['group_sort_order'] = group['sort_order'];
+  }
+
+  void _attachCavySopVarietyMetadata(Map<String, dynamic> entry) {
+    if (!_isCavyEntry(entry)) return;
+    final breed = (entry['breed_name'] ?? entry['breed'] ?? '')
+        .toString()
+        .trim();
+    final variety =
+        (entry['exact_variety_name'] ??
+                entry['variety_name'] ??
+                entry['variety'] ??
+                '')
+            .toString()
+            .trim();
+    final row =
+        _cavySopVarietyByBreedVariety['${normalizeResultsGroupKey(breed)}|${normalizeResultsGroupKey(variety)}'];
+    if (row == null) return;
+
+    entry['cavy_sop_variety_id'] = (row['id'] ?? '').toString();
+    entry['cavy_sop_variety_name'] = (row['variety_name'] ?? variety)
+        .toString()
+        .trim();
+    entry['exact_variety_name'] = variety;
+    entry['exact_variety_id'] = (row['id'] ?? '').toString();
+    entry['group_sort_order'] = row['variety_sort_order'];
+    entry['variety_sort_order'] = row['variety_sort_order'];
   }
 
   Future<void> _loadShowSettings() async {
@@ -1126,21 +1178,26 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
             .toLowerCase();
 
     final animalIdByEntryId = <String, String>{};
+    final speciesByEntryId = <String, String>{};
     for (var i = 0; i < entryIds.length; i += 100) {
       final chunk = entryIds.skip(i).take(100).toList();
       if (chunk.isEmpty) continue;
 
       final sourceRows = await supabase
           .from('entries')
-          .select('id,animal_id')
+          .select('id,animal_id,species')
           .inFilter('id', chunk);
 
       for (final raw in sourceRows as List) {
         final row = Map<String, dynamic>.from(raw as Map);
         final entryId = (row['id'] ?? '').toString().trim();
         final animalId = (row['animal_id'] ?? '').toString().trim();
+        final species = normalizeResultsSpeciesStrict(row['species']);
         if (entryId.isNotEmpty && animalId.isNotEmpty) {
           animalIdByEntryId[entryId] = animalId;
+        }
+        if (entryId.isNotEmpty && species.isNotEmpty) {
+          speciesByEntryId[entryId] = species;
         }
       }
     }
@@ -1174,6 +1231,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
           .trim();
       final animalId = animalIdByEntryId[entryId] ?? '';
       entry['animal_id'] = animalId;
+      entry['species'] = speciesByEntryId[entryId] ?? '';
 
       final sectionId = (entry['section_id'] ?? '').toString().trim();
       final section = _sections.firstWhere(
@@ -1236,18 +1294,26 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
       e['animal_name'] ??= '';
 
       final breedKey = (e['breed'] ?? '').toString().trim().toLowerCase();
+      final breedId = (e['breed_id'] ?? e['breed_catalog_id'] ?? '')
+          .toString()
+          .trim();
 
       // Species is the source of truth for award flow. Some breed names overlap
       // between rabbits and cavies, such as American. Do not let cavy breed
       // settings force rabbit entries into group awards.
       if (breedKey.isNotEmpty) {
         if (_isCavyEntry(e)) {
-          e['uses_group_awards'] = _breedUsesGroupAwards.containsKey(breedKey)
+          e['uses_group_awards'] =
+              _breedUsesGroupAwardsById.containsKey(breedId)
+              ? _breedUsesGroupAwardsById[breedId]
+              : _breedUsesGroupAwards.containsKey(breedKey)
               ? _breedUsesGroupAwards[breedKey]
               : e['uses_group_awards'] == true;
 
           e['uses_variety_awards'] =
-              _breedUsesVarietyAwards.containsKey(breedKey)
+              _breedUsesVarietyAwardsById.containsKey(breedId)
+              ? _breedUsesVarietyAwardsById[breedId]
+              : _breedUsesVarietyAwards.containsKey(breedKey)
               ? _breedUsesVarietyAwards[breedKey]
               : e['uses_variety_awards'] == true;
         } else {
@@ -1259,6 +1325,9 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
           e['uses_variety_awards'] = _entryUsesVarietyAwards(e);
         }
       }
+
+      _attachCavySopVarietyMetadata(e);
+      _attachRabbitCatalogMetadata(e);
 
       final normalizedGroup =
           (e['group_name'] ??
@@ -1334,14 +1403,14 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
 
     List<Map<String, dynamic>> working = [...breedEntries];
 
-    final issueGroup = (target['group_name'] ?? '').toString().trim();
+    final issueGroup = _entryGroupDisplayName(target);
     final issueVariety = (target['variety'] ?? '').toString().trim();
     final classSexLabel = _classSexLabelFromEntry(target);
 
     if (byGroup && issueGroup.isNotEmpty) {
       working = working.where((e) {
-        return (e['group_name'] ?? '').toString().trim().toLowerCase() ==
-            issueGroup.toLowerCase();
+        return normalizeResultsGroupKey(_entryGroupDisplayName(e)) ==
+            normalizeResultsGroupKey(issueGroup);
       }).toList();
     }
 
@@ -1546,10 +1615,11 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
   }
 
   String _speciesDisplayNameForEntry(Map<String, dynamic> entry) {
-    final species = (entry['species'] ?? '').toString().trim().toLowerCase();
-    if (species == 'cavy') return 'Cavy';
-    if (species == 'rabbit') return 'Rabbit';
-    return _isCavyEntry(entry) ? 'Cavy' : 'Rabbit';
+    try {
+      return rulesForEntry(entry).speciesName;
+    } on UnsupportedResultsSpecies {
+      return 'Unsupported Species';
+    }
   }
 
   String _speciesDisplayNameForEntries(List<Map<String, dynamic>> entries) {
@@ -1560,61 +1630,27 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
   bool _showsByGroup(List<Map<String, dynamic>> entries) {
     final normalEntries = entries.where((e) => !_isFurEntry(e)).toList();
     if (normalEntries.isEmpty) return false;
-
-    final anyRabbitEntry = normalEntries.any((e) => !_isCavyEntry(e));
-
-    // For rabbits, trust the hydrated row/RPC value. Do not use the global
-    // breed-name map because names like American overlap with cavies, but do
-    // allow true rabbit group-award breeds like Harlequin and Jersey Wooly.
-    if (anyRabbitEntry) {
-      return normalEntries.any(
-        (e) => !_isCavyEntry(e) && _entryUsesGroupAwards(e),
-      );
-    }
-
-    final firstBreed = (normalEntries.first['breed'] ?? '').toString().trim();
-    final firstBreedName = (normalEntries.first['breed_name'] ?? '')
-        .toString()
-        .trim();
-
-    final breedName = (firstBreed.isNotEmpty ? firstBreed : firstBreedName)
-        .toLowerCase();
-
-    final breedSettingUsesGroups =
-        breedName.isNotEmpty && (_breedUsesGroupAwards[breedName] == true);
-
-    final rowUsesGroups = normalEntries.any(_entryUsesGroupAwards);
-
-    return breedSettingUsesGroups || rowUsesGroups;
+    return normalEntries.any((entry) {
+      try {
+        final rules = rulesForEntry(entry);
+        return rules.usesGroupLayer(entry);
+      } on UnsupportedResultsSpecies {
+        return false;
+      }
+    });
   }
 
   bool _showsByVariety(List<Map<String, dynamic>> entries) {
     final normalEntries = entries.where((e) => !_isFurEntry(e)).toList();
     if (normalEntries.isEmpty) return false;
-
-    final anyRabbitEntry = normalEntries.any((e) => !_isCavyEntry(e));
-
-    // For rabbits, trust the hydrated row/RPC value. Do not use the global
-    // breed-name map because names like American overlap with cavies.
-    if (anyRabbitEntry) {
-      return normalEntries.any(
-        (e) => !_isCavyEntry(e) && _entryUsesVarietyAwards(e),
-      );
-    }
-
-    final firstBreed = (normalEntries.first['breed'] ?? '').toString().trim();
-    final firstBreedName = (normalEntries.first['breed_name'] ?? '')
-        .toString()
-        .trim();
-    final breedName = (firstBreed.isNotEmpty ? firstBreed : firstBreedName)
-        .toLowerCase();
-
-    if (breedName.isNotEmpty &&
-        _breedUsesVarietyAwards.containsKey(breedName)) {
-      return _breedUsesVarietyAwards[breedName] == true;
-    }
-
-    return normalEntries.any(_entryUsesVarietyAwards);
+    return normalEntries.any((entry) {
+      try {
+        final rules = rulesForEntry(entry);
+        return rules.usesVarietyLayer(entry);
+      } on UnsupportedResultsSpecies {
+        return false;
+      }
+    });
   }
 
   String _judgeNameById(String? judgeId) {
@@ -1659,20 +1695,58 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     );
   }
 
-  int _completedCount(List<Map<String, dynamic>> entries) {
-    return _completionFor(entries).completedBasics;
+  List<_ValidationIssue> _issuesForEntries(
+    List<_ValidationIssue> issues,
+    List<Map<String, dynamic>> entries,
+  ) {
+    final entryIds = entries
+        .map(resultsEntryId)
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    return issues
+        .where((issue) {
+          return issue.code != 'missing_basic_outcome' &&
+              resultsIssueAppliesToEntries(issue.scoped, entries);
+        })
+        .map((issue) {
+          final primaryId = resultsEntryId(issue.entry);
+          final conflict = issue.conflictsWith;
+          final conflictId = conflict == null ? '' : resultsEntryId(conflict);
+          if (!entryIds.contains(primaryId) && entryIds.contains(conflictId)) {
+            final target = conflict!;
+            final rawBreed = (target['breed'] ?? '').toString().trim();
+            final rawVariety = (target['variety'] ?? '').toString().trim();
+            final rawVarietyName = (target['variety_name'] ?? '')
+                .toString()
+                .trim();
+            final rawGroup = _entryGroupDisplayName(target);
+            return issue.retarget(
+              target,
+              conflictsWith: issue.entry,
+              breed: rawBreed.isNotEmpty
+                  ? rawBreed
+                  : (target['breed_name'] ?? '').toString().trim(),
+              species: _speciesDisplayNameForEntry(target),
+              groupName: rawGroup.isEmpty ? null : rawGroup,
+              variety: rawVariety.isNotEmpty
+                  ? rawVariety
+                  : rawVarietyName.isEmpty
+                  ? null
+                  : rawVarietyName,
+              classSexLabel: _classSexLabelFromEntry(target),
+            );
+          }
+          return issue;
+        })
+        .toList();
   }
 
-  String _statusLabel(List<Map<String, dynamic>> entries) {
-    return _resultScopeStatusLabel(_completionFor(entries).status);
-  }
-
-  IconData _statusIcon(List<Map<String, dynamic>> entries) {
-    return _resultScopeStatusIcon(_completionFor(entries).status);
-  }
-
-  Color _statusColor(BuildContext context, List<Map<String, dynamic>> entries) {
-    return _resultScopeStatusColor(context, _completionFor(entries).status);
+  Future<List<_ValidationIssue>> _refreshIssuesForBreed(
+    List<Map<String, dynamic>> breedEntries,
+  ) async {
+    await _loadEntries();
+    final refreshed = _buildValidationIssues();
+    return _issuesForEntries(refreshed, breedEntries);
   }
 
   List<_ValidationIssue> _buildValidationIssues() {
@@ -1684,6 +1758,8 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
       required String message,
       required Map<String, dynamic> entry,
       Map<String, dynamic>? conflictsWith,
+      ResultsValidationIssueLevel level = ResultsValidationIssueLevel.entry,
+      String awardCode = '',
     }) {
       return _ValidationIssue(
         code: code,
@@ -1697,9 +1773,9 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
           return (entry['breed_name'] ?? '').toString().trim();
         })(),
         species: _speciesDisplayNameForEntry(entry),
-        groupName: (entry['group_name'] ?? '').toString().trim().isEmpty
+        groupName: _entryGroupDisplayName(entry).isEmpty
             ? null
-            : (entry['group_name'] ?? '').toString().trim(),
+            : _entryGroupDisplayName(entry),
         variety: (() {
           final rawVariety = (entry['variety'] ?? '').toString().trim();
           if (rawVariety.isNotEmpty) return rawVariety;
@@ -1709,6 +1785,8 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
           return rawVarietyName.isEmpty ? null : rawVarietyName;
         })(),
         classSexLabel: _classSexLabelFromEntry(entry),
+        level: level,
+        awardCode: awardCode,
       );
     }
 
@@ -1736,38 +1814,19 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     }
 
     bool showsByGroup(Map<String, dynamic> e) {
-      if (!_isCavyEntry(e)) {
-        return _entryUsesGroupAwards(e);
+      try {
+        return rulesForEntry(e).usesGroupLayer(e);
+      } on UnsupportedResultsSpecies {
+        return false;
       }
-
-      final thisBreedRaw = (e['breed'] ?? '').toString().trim();
-      final thisBreedName = (e['breed_name'] ?? '').toString().trim();
-      final thisBreed = (thisBreedRaw.isNotEmpty ? thisBreedRaw : thisBreedName)
-          .toLowerCase();
-
-      if (thisBreed.isEmpty) return false;
-      if (_entryUsesGroupAwards(e)) return true;
-      if (_breedUsesGroupAwards[thisBreed] == true) return true;
-
-      return false;
     }
 
     bool showsByVariety(Map<String, dynamic> e) {
-      if (!_isCavyEntry(e)) {
-        return _entryUsesVarietyAwards(e);
+      try {
+        return rulesForEntry(e).usesVarietyLayer(e);
+      } on UnsupportedResultsSpecies {
+        return false;
       }
-
-      final thisBreedRaw = (e['breed'] ?? '').toString().trim();
-      final thisBreedName = (e['breed_name'] ?? '').toString().trim();
-      final thisBreed = (thisBreedRaw.isNotEmpty ? thisBreedRaw : thisBreedName)
-          .toLowerCase();
-
-      if (thisBreed.isNotEmpty &&
-          _breedUsesVarietyAwards.containsKey(thisBreed)) {
-        return _breedUsesVarietyAwards[thisBreed] == true;
-      }
-
-      return _entryUsesVarietyAwards(e);
     }
 
     String sex(Map<String, dynamic> e) =>
@@ -1789,33 +1848,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
         _speciesDisplayNameForEntry(e).toLowerCase();
 
     String groupName(Map<String, dynamic> e) {
-      final explicitGroup =
-          (e['group_name'] ??
-                  e['group_display_name'] ??
-                  e['group_label'] ??
-                  e['group'] ??
-                  e['group_code'] ??
-                  '')
-              .toString()
-              .trim();
-
-      if (explicitGroup.isNotEmpty) return explicitGroup;
-
-      final breedKey = breed(e).toLowerCase();
-      final usesGroups = _isCavyEntry(e)
-          ? (_entryUsesGroupAwards(e) ||
-                _breedUsesGroupAwards[breedKey] == true)
-          : _entryUsesGroupAwards(e);
-      final usesVarieties = _isCavyEntry(e)
-          ? (_entryUsesVarietyAwards(e) ||
-                _breedUsesVarietyAwards[breedKey] == true)
-          : _entryUsesVarietyAwards(e);
-
-      if (usesGroups && !usesVarieties) {
-        return variety(e);
-      }
-
-      return '';
+      return _entryScopeGroup(e);
     }
 
     List<String> awards(Map<String, dynamic> e) =>
@@ -1825,24 +1858,57 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     // guarantees that every issue withholding the green check is actionable
     // here instead of being hidden in the card-status calculation.
     for (final breedEntries in _groupByBreed(_entries).values) {
-      final sharedIssues = buildBreedCompletionIssues(
-        entries: breedEntries,
-        requireVarietyAwards: breedEntries.any(showsByVariety),
-        requireGroupAwards: breedEntries.any(showsByGroup),
-        requireBreedAwards: true,
-        hasBasicOutcome: _entryHasBasicOutcome,
-        isEligibleForSpecialAward: _entryIsEligibleForSpecialAward,
-        isExcludedFromSpecials: (entry) =>
-            _isFurEntry(entry) ||
-            _isPreJuniorClassName((entry['class_name'] ?? '').toString()),
-        awardCodes: _entryAwardCodes,
-        entryLabel: _entryLabel,
-        sectionId: _entryScopeSectionId,
-        breed: _entryScopeBreed,
-        variety: _entryScopeVariety,
-        group: _entryScopeGroup,
-        sex: _entrySexKey,
-      );
+      if (breedEntries.isEmpty) continue;
+      late final ResultsRules rules;
+      try {
+        rules = rulesForEntry(breedEntries.first);
+      } on UnsupportedResultsSpecies catch (error) {
+        issues.add(
+          makeIssue(
+            code: 'unsupported_species',
+            title: 'Unsupported results species',
+            message: error.toString(),
+            entry: breedEntries.first,
+          ),
+        );
+        continue;
+      }
+      final sharedIssues = switch (rules.species) {
+        ResultsSpecies.rabbit => validateRabbitResults(
+          entries: breedEntries,
+          requireVarietyAwards: breedEntries.any(showsByVariety),
+          requireGroupAwards: breedEntries.any(showsByGroup),
+          requireBreedAwards: true,
+          hasBasicOutcome: _entryHasBasicOutcome,
+          isEligibleForSpecialAward: _entryIsEligibleForSpecialAward,
+          isExcludedFromSpecials: (entry) =>
+              _isFurEntry(entry) ||
+              _isPreJuniorClassName((entry['class_name'] ?? '').toString()),
+          awardCodes: _entryAwardCodes,
+          entryLabel: _entryLabel,
+          sectionId: _entryScopeSectionId,
+          breed: _entryScopeBreed,
+          variety: _entryScopeVariety,
+          group: _entryScopeGroup,
+          sex: _entrySexKey,
+        ),
+        ResultsSpecies.cavy => validateCavyResults(
+          entries: breedEntries,
+          requireGroupAwards: breedEntries.any(showsByGroup),
+          requireBreedAwards: true,
+          hasBasicOutcome: _entryHasBasicOutcome,
+          isEligibleForSpecialAward: _entryIsEligibleForSpecialAward,
+          isExcludedFromSpecials: (entry) =>
+              _isFurEntry(entry) ||
+              _isPreJuniorClassName((entry['class_name'] ?? '').toString()),
+          awardCodes: _entryAwardCodes,
+          entryLabel: _entryLabel,
+          sectionId: _entryScopeSectionId,
+          breed: _entryScopeBreed,
+          group: _entryScopeGroup,
+          sex: _entrySexKey,
+        ),
+      };
       for (final shared in sharedIssues) {
         issues.add(
           makeIssue(
@@ -1851,6 +1917,8 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
             message: shared.message,
             entry: shared.entry,
             conflictsWith: shared.conflictsWith,
+            level: shared.level,
+            awardCode: shared.awardCode,
           ),
         );
       }
@@ -1908,13 +1976,18 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
           case 'BOSG':
             final groupScope = groupName(e).toLowerCase();
             if (groupScope.isEmpty) {
+              final groupError = _isCavyEntry(e)
+                  ? unresolvedCavyGroupMessage(e)
+                  : 'The rabbit catalog group could not be resolved.';
               issues.add(
                 makeIssue(
                   code: 'missing_group_for_group_award',
                   title: 'Group award missing group',
                   message:
-                      '${_entryLabel(e)} has $award assigned but no group could be determined.',
+                      '$groupError $award is currently assigned to ${_entryLabel(e)}.',
                   entry: e,
+                  level: ResultsValidationIssueLevel.group,
+                  awardCode: award,
                 ),
               );
               break;
@@ -1989,6 +2062,8 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                 '${second != null ? ' and ${_entryLabel(second)}' : ''}.',
             entry: first,
             conflictsWith: second,
+            level: ResultsValidationIssueLevel.section,
+            awardCode: awardCode,
           ),
         );
       }
@@ -2000,36 +2075,28 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
       required String scopeLabel,
       required String Function(Map<String, dynamic>) scopeKey,
     }) {
-      final winByScope = <String, Map<String, dynamic>>{};
-      final oppByScope = <String, Map<String, dynamic>>{};
-
-      for (final e in _entries) {
-        if (_isFurEntry(e)) continue;
-
-        final a = awards(e);
-        final scope = scopeKey(e).trim();
-        if (scope.isEmpty) continue;
-        if (a.contains(winCode)) winByScope[scope] = e;
-        if (a.contains(oppCode)) oppByScope[scope] = e;
-      }
-
-      for (final scope in {...winByScope.keys, ...oppByScope.keys}) {
-        final w = winByScope[scope];
-        final o = oppByScope[scope];
-        if (w == null || o == null) continue;
-
-        if (sex(w).isNotEmpty && sex(w) == sex(o)) {
-          issues.add(
-            makeIssue(
-              code: 'opposite_sex',
-              title: '$winCode / $oppCode sex conflict',
-              message:
-                  '${_entryLabel(w)} and ${_entryLabel(o)} are both marked for $winCode / $oppCode in the same $scopeLabel, but are not opposite sex.',
-              entry: w,
-              conflictsWith: o,
-            ),
-          );
-        }
+      final shared = buildOppositeSexAwardIssues(
+        entries: _entries.where((entry) => !_isFurEntry(entry)).toList(),
+        winnerCode: winCode,
+        oppositeCode: oppCode,
+        scopeLabel: scopeLabel,
+        awardCodes: awards,
+        scopeKey: scopeKey,
+        sex: sex,
+        entryLabel: _entryLabel,
+      );
+      for (final issue in shared) {
+        issues.add(
+          makeIssue(
+            code: issue.code,
+            title: issue.title,
+            message: issue.message,
+            entry: issue.entry,
+            conflictsWith: issue.conflictsWith,
+            level: issue.level,
+            awardCode: issue.awardCode,
+          ),
+        );
       }
     }
 
@@ -2041,15 +2108,9 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
         final entryBreed = breed(e).toLowerCase();
         final entryVariety = variety(e).toLowerCase();
         if (entryBreed.isEmpty || entryVariety.isEmpty) return '';
-
-        // Cavies always validate BOV/BOSV within breed + variety. Some cavy rows
-        // may not have uses_variety_awards hydrated correctly, but BOV/BOSV should
-        // never be compared across different cavy breeds.
-        if (_isCavyEntry(e)) {
-          return '${sectionId(e)}|$entryBreed|$entryVariety';
+        if (!showsByVariety(e)) {
+          return '';
         }
-
-        if (!showsByVariety(e)) return '';
         return '${sectionId(e)}|$entryBreed|$entryVariety';
       },
     );
@@ -2059,8 +2120,12 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
       oppCode: 'BOSG',
       scopeLabel: 'group',
       scopeKey: (e) {
-        if (!showsByGroup(e)) return '';
-        return '${sectionId(e)}|${breed(e).toLowerCase()}|${groupName(e).toLowerCase()}';
+        if (!showsByGroup(e)) {
+          return '';
+        }
+        final groupScope = _entryScopeGroup(e);
+        if (groupScope.isEmpty) return '';
+        return '${sectionId(e)}|${_entryScopeBreed(e)}|$groupScope';
       },
     );
 
@@ -2076,8 +2141,6 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
 
       final a = awards(e);
       final breedLower = breed(e).toLowerCase();
-      final byGroup = showsByGroup(e);
-      final byVariety = showsByVariety(e);
       final supportsBestAgeAwards = _supportsBestAgeAwards(
         breedName: breed(e),
         isCavy: _isCavyEntry(e),
@@ -2108,36 +2171,37 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
       }
 
       if (a.contains('BOB') || a.contains('BOSB')) {
-        final isCavy = _isCavyEntry(e);
-
-        // Cavies do not use the rabbit BOG/BOSG step. Even when a cavy row has a
-        // group/display bucket such as Marked, BOB/BOSB should validate from
-        // BOV/BOSV. Rabbits that truly use group awards still validate from
-        // BOG/BOSG.
-        final eligible = isCavy
-            ? (a.contains('BOV') || a.contains('BOSV'))
-            : byGroup
-            ? (a.contains('BOG') || a.contains('BOSG'))
-            : byVariety
-            ? (a.contains('BOV') || a.contains('BOSV'))
-            : true;
+        ResultsRules rules;
+        try {
+          rules = rulesForEntry(e);
+        } on UnsupportedResultsSpecies catch (error) {
+          issues.add(
+            makeIssue(
+              code: 'unsupported_species',
+              title: 'Unsupported results species',
+              message: error.toString(),
+              entry: e,
+            ),
+          );
+          continue;
+        }
+        final breedAward = a.contains('BOB') ? 'BOB' : 'BOSB';
+        final sources = rules.sourceAwardsForBreedAward(e, breedAward);
+        final eligible =
+            sources.isEmpty || a.toSet().intersection(sources).isNotEmpty;
 
         if (!eligible) {
-          final requiredSource = isCavy
-              ? 'BOV/BOSV'
-              : byGroup
-              ? 'BOG/BOSG'
-              : byVariety
-              ? 'BOV/BOSV'
-              : 'as eligible for direct breed awards';
+          final requiredSource = sources.map(rules.awardLabel).join(' or ');
 
           issues.add(
             makeIssue(
               code: 'bob_source',
               title: 'Invalid breed award source',
               message:
-                  '${_entryLabel(e)} has BOB/BOSB but is not marked $requiredSource.',
+                  '${_entryLabel(e)} has BOB/BOSB but is not marked as $requiredSource.',
               entry: e,
+              level: ResultsValidationIssueLevel.breed,
+              awardCode: a.contains('BOB') ? 'BOB' : 'BOSB',
             ),
           );
         }
@@ -2155,6 +2219,8 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
               message:
                   '${_entryLabel(e)} has Best 4-Class but is not marked BOB.',
               entry: e,
+              level: ResultsValidationIssueLevel.section,
+              awardCode: 'Best 4-Class',
             ),
           );
         }
@@ -2166,6 +2232,8 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
               message:
                   '${_entryLabel(e)} has Best 4-Class but breed is not 4-class.',
               entry: e,
+              level: ResultsValidationIssueLevel.section,
+              awardCode: 'Best 4-Class',
             ),
           );
         }
@@ -2180,6 +2248,8 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
               message:
                   '${_entryLabel(e)} has Best 6-Class but is not marked BOB.',
               entry: e,
+              level: ResultsValidationIssueLevel.section,
+              awardCode: 'Best 6-Class',
             ),
           );
         }
@@ -2191,12 +2261,15 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
               message:
                   '${_entryLabel(e)} has Best 6-Class but breed is not 6-class.',
               entry: e,
+              level: ResultsValidationIssueLevel.section,
+              awardCode: 'Best 6-Class',
             ),
           );
         }
       }
 
-      if (_finalAwardMode == 'four_six_bis' &&
+      if (_isCavyEntry(e) &&
+          _finalAwardMode == 'four_six_bis' &&
           _awardListContains(a, 'Best In Show')) {
         if (!(_awardListContains(a, 'Best 4-Class') ||
             _awardListContains(a, 'Best 6-Class'))) {
@@ -2207,6 +2280,8 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
               message:
                   '${_entryLabel(e)} has Best In Show but is not Best 4-Class or Best 6-Class.',
               entry: e,
+              level: ResultsValidationIssueLevel.section,
+              awardCode: 'Best In Show',
             ),
           );
         }
@@ -2222,6 +2297,8 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
             message:
                 '${_entryLabel(e)} cannot be both Best In Show and Reserve In Show.',
             entry: e,
+            level: ResultsValidationIssueLevel.section,
+            awardCode: 'BIS/RIS',
           ),
         );
       }
@@ -2244,6 +2321,8 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
               message:
                   '${_entryLabel(e)} cannot receive more than one of Best In Show, 1st Reserve in Show, or 2nd Reserve in Show.',
               entry: e,
+              level: ResultsValidationIssueLevel.section,
+              awardCode: 'BIS/1RIS/2RIS',
             ),
           );
         }
@@ -2264,7 +2343,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     final rawVarietyName = (e['variety_name'] ?? '').toString().trim();
     final variety = rawVariety.isNotEmpty ? rawVariety : rawVarietyName;
 
-    final groupName = (e['group_name'] ?? '').toString().trim();
+    final groupName = _entryGroupDisplayName(e);
 
     final animalLabel = animalName.isNotEmpty && tattoo.isNotEmpty
         ? '$animalName • $tattoo'
@@ -2281,7 +2360,10 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
       animalLabel,
       breed,
       if (groupName.isNotEmpty) groupName,
-      if (variety.isNotEmpty) variety,
+      if (variety.isNotEmpty &&
+          normalizeResultsGroupKey(variety) !=
+              normalizeResultsGroupKey(groupName))
+        variety,
     ].join(' • ');
   }
 
@@ -2654,12 +2736,28 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                               breedEntries,
                             );
                             final count = breedEntries.length;
-                            final completed = _completedCount(breedEntries);
-                            final completion = _completionFor(breedEntries);
-                            final statusColor = _statusColor(
-                              context,
+                            final breedIssues = _issuesForEntries(
+                              issues,
                               breedEntries,
                             );
+                            final isCavy = breedEntries.any(_isCavyEntry);
+                            final completion = isCavy
+                                ? _dataEntryCompletionForEntries(
+                                    breedEntries,
+                                    validationIssueCount: breedIssues.length,
+                                  )
+                                : _completionFor(breedEntries);
+                            final completed = completion.completedBasics;
+                            final statusColor = _resultScopeStatusColor(
+                              context,
+                              completion.status,
+                            );
+                            final displayStatusColor =
+                                isCavy &&
+                                    completion.status ==
+                                        _ResultScopeStatus.needsAttention
+                                ? Colors.amber.shade700
+                                : statusColor;
                             final breedSpecials =
                                 _specialsSummaryForEntries(breedEntries, const [
                                   'BOV',
@@ -2716,11 +2814,15 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                               elevation: 0,
                               color: _resultScopeCardColor(
                                 completion.status,
-                                statusColor,
+                                displayStatusColor,
+                                validationWarningIsAmber: isCavy,
                               ),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(20),
-                                side: _resultScopeCardBorder(completion.status),
+                                side: _resultScopeCardBorder(
+                                  completion.status,
+                                  validationWarningIsAmber: isCavy,
+                                ),
                               ),
                               child: ListTile(
                                 contentPadding: const EdgeInsets.fromLTRB(
@@ -2730,12 +2832,18 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                                   14,
                                 ),
                                 leading: CircleAvatar(
-                                  backgroundColor: statusColor.withValues(
-                                    alpha: 0.12,
-                                  ),
+                                  backgroundColor: displayStatusColor
+                                      .withValues(alpha: 0.12),
                                   child: Icon(
-                                    _statusIcon(breedEntries),
-                                    color: statusColor,
+                                    isCavy &&
+                                            completion.status ==
+                                                _ResultScopeStatus
+                                                    .needsAttention
+                                        ? Icons.warning_amber_rounded
+                                        : _resultScopeStatusIcon(
+                                            completion.status,
+                                          ),
+                                    color: displayStatusColor,
                                   ),
                                 ),
                                 title: Text(
@@ -2748,7 +2856,9 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                                 subtitle: Padding(
                                   padding: const EdgeInsets.only(top: 6),
                                   child: Text(
-                                    '$completed/$count entered • ${_statusLabel(breedEntries)}\n$sectionName • $species • $flowLabel • ${_judgeSummary(breedEntries)}${breedSpecials.isEmpty ? '' : '\n$breedSpecials'}',
+                                    '$completed/$count entered • ${completion.completedBasics == completion.totalBasics ? 'Results complete' : _resultScopeStatusLabel(completion.status)}'
+                                    '${breedIssues.isEmpty ? '' : '\n${breedIssues.length} award issue${breedIssues.length == 1 ? '' : 's'} need review'}'
+                                    '\n$sectionName • $species • $flowLabel • ${_judgeSummary(breedEntries)}${breedSpecials.isEmpty ? '' : '\n$breedSpecials'}',
                                     style: TextStyle(
                                       color: AppColors.headerForeground
                                           .withValues(alpha: .86),
@@ -2775,6 +2885,12 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                                           finalAwardMode: _finalAwardMode,
                                           showsByVariety: byVariety,
                                           isQrEntryMode: widget.isQrEntryMode,
+                                          initialValidationIssues: breedIssues,
+                                          refreshValidationIssues: () =>
+                                              _refreshIssuesForBreed(
+                                                breedEntries,
+                                              ),
+                                          fixValidationIssue: _jumpToIssue,
                                         ),
                                       ),
                                     );
@@ -2844,6 +2960,9 @@ class _ResultsGroupScreen extends StatefulWidget {
   final String finalAwardMode;
   final bool showsByVariety;
   final bool isQrEntryMode;
+  final List<_ValidationIssue> initialValidationIssues;
+  final Future<List<_ValidationIssue>> Function() refreshValidationIssues;
+  final Future<void> Function(_ValidationIssue) fixValidationIssue;
 
   const _ResultsGroupScreen({
     required this.showId,
@@ -2856,6 +2975,9 @@ class _ResultsGroupScreen extends StatefulWidget {
     required this.finalAwardMode,
     required this.showsByVariety,
     required this.isQrEntryMode,
+    required this.initialValidationIssues,
+    required this.refreshValidationIssues,
+    required this.fixValidationIssue,
   });
 
   @override
@@ -2864,6 +2986,7 @@ class _ResultsGroupScreen extends StatefulWidget {
 
 class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
   late List<Map<String, dynamic>> _entries;
+  late List<_ValidationIssue> _validationIssues;
   String? _msg;
   bool _savingJudge = false;
 
@@ -2871,44 +2994,33 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
   void initState() {
     super.initState();
     _entries = [...widget.entries];
+    _validationIssues = [...widget.initialValidationIssues];
   }
 
   Map<String, List<Map<String, dynamic>>> _groupByGroupName() {
     final out = <String, List<Map<String, dynamic>>>{};
-
-    for (final e in _entries) {
-      final isFur = _isFurEntry(e);
-      String groupName;
-
-      if (isFur) {
-        groupName = 'Fur / Wool';
-      } else {
-        groupName =
-            (e['group_name'] ??
-                    e['group_display_name'] ??
-                    e['group_label'] ??
-                    e['group'] ??
-                    e['group_code'] ??
-                    '')
-                .toString()
-                .trim();
-
-        if (groupName.isEmpty && widget.showsByVariety == false) {
-          groupName = (e['variety'] ?? e['variety_name'] ?? '')
-              .toString()
-              .trim();
-        }
-
-        if (groupName.isEmpty) {
-          groupName = '(No Group Assigned)';
-        }
-      }
-
-      out.putIfAbsent(groupName, () => <Map<String, dynamic>>[]);
-      out[groupName]!.add(e);
+    final normalEntries = _entries
+        .where((entry) => !_isFurEntry(entry))
+        .toList();
+    final rules = normalEntries.isEmpty
+        ? null
+        : rulesForEntry(normalEntries.first);
+    for (final group in rules?.buildGroupGroups(normalEntries) ?? const []) {
+      out[group.stableKey] = group.entries;
     }
-
+    final furEntries = _entries.where(_isFurEntry).toList();
+    if (furEntries.isNotEmpty) {
+      out['fur-wool'] = furEntries;
+    }
     return out;
+  }
+
+  String _groupDisplayName(List<Map<String, dynamic>> entries) {
+    if (entries.any(_isFurEntry)) return 'Fur / Wool';
+    if (entries.isEmpty) return '(No Group Assigned)';
+    return rulesForEntry(
+      entries.first,
+    ).groupIdentity(entries.first).displayName;
   }
 
   String _judgeNameById(String? judgeId) {
@@ -2944,12 +3056,16 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
   }
 
   // --- Completion/Status Highlighting Helpers ---
+  List<_ValidationIssue> _issuesForGroup(List<Map<String, dynamic>> entries) {
+    return _validationIssues
+        .where((issue) => resultsIssueAppliesToGroup(issue.scoped, entries))
+        .toList();
+  }
+
   _ResultScopeCompletion _completionFor(List<Map<String, dynamic>> entries) {
-    return _resultCompletionForEntries(
+    return _dataEntryCompletionForEntries(
       entries,
-      requireVarietyAwards: widget.showsByVariety,
-      requireGroupAwards: true,
-      requireBreedAwards: false,
+      validationIssueCount: _issuesForGroup(entries).length,
     );
   }
 
@@ -2962,11 +3078,28 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
   }
 
   IconData _statusIcon(List<Map<String, dynamic>> entries) {
-    return _resultScopeStatusIcon(_completionFor(entries).status);
+    final status = _completionFor(entries).status;
+    return status == _ResultScopeStatus.needsAttention
+        ? Icons.warning_amber_rounded
+        : _resultScopeStatusIcon(status);
   }
 
   Color _statusColor(BuildContext context, List<Map<String, dynamic>> entries) {
-    return _resultScopeStatusColor(context, _completionFor(entries).status);
+    final status = _completionFor(entries).status;
+    return status == _ResultScopeStatus.needsAttention
+        ? Colors.amber.shade700
+        : _resultScopeStatusColor(context, status);
+  }
+
+  Future<void> _refreshValidation() async {
+    final issues = await widget.refreshValidationIssues();
+    if (!mounted) return;
+    setState(() => _validationIssues = issues);
+  }
+
+  Future<void> _fixIssue(_ValidationIssue issue) async {
+    Navigator.of(context).pop();
+    await widget.fixValidationIssue(issue);
   }
 
   String? _singleJudgeId(List<Map<String, dynamic>> entries) {
@@ -3106,6 +3239,7 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
       }
 
       await _reloadEntries();
+      await _refreshValidation();
 
       if (!mounted) return;
 
@@ -3138,7 +3272,13 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
 
         final bySort = sortFor(a).compareTo(sortFor(b));
         if (bySort != 0) return bySort;
-        return a.toLowerCase().compareTo(b.toLowerCase());
+        return _groupDisplayName(
+          grouped[a] ?? const <Map<String, dynamic>>[],
+        ).toLowerCase().compareTo(
+          _groupDisplayName(
+            grouped[b] ?? const <Map<String, dynamic>>[],
+          ).toLowerCase(),
+        );
       }));
 
     return Scaffold(
@@ -3174,6 +3314,55 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
                           ),
                         ),
                         const SizedBox(height: 14),
+                        if (_validationIssues.isNotEmpty) ...[
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.amber.withValues(alpha: .10),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: Colors.amber.withValues(alpha: .35),
+                              ),
+                            ),
+                            child: ExpansionTile(
+                              leading: Icon(
+                                Icons.warning_amber_rounded,
+                                color: Colors.amber.shade800,
+                              ),
+                              title: const Text(
+                                'Validation issues found',
+                                style: TextStyle(fontWeight: FontWeight.w700),
+                              ),
+                              subtitle: Text(
+                                '${_validationIssues.length} ${widget.breed} award issue${_validationIssues.length == 1 ? '' : 's'} need review',
+                              ),
+                              children: _validationIssues.map((issue) {
+                                final sectionIssue =
+                                    issue.level ==
+                                    ResultsValidationIssueLevel.section;
+                                return ListTile(
+                                  title: Text(
+                                    sectionIssue
+                                        ? 'Section award conflict'
+                                        : issue.title,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  subtitle: Text(
+                                    sectionIssue
+                                        ? '${issue.title}\n${issue.message}'
+                                        : issue.message,
+                                  ),
+                                  trailing: TextButton(
+                                    onPressed: () => _fixIssue(issue),
+                                    child: const Text('Fix'),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                        ],
                         DropdownButtonFormField<String>(
                           initialValue: _singleJudgeId(_entries),
                           style: const TextStyle(
@@ -3265,11 +3454,13 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                 itemCount: groups.length,
                 itemBuilder: (context, i) {
-                  final groupName = groups[i];
-                  final groupEntries = grouped[groupName]!;
+                  final groupKey = groups[i];
+                  final groupEntries = grouped[groupKey]!;
+                  final groupName = _groupDisplayName(groupEntries);
                   final count = groupEntries.length;
                   final completed = _completedCount(groupEntries);
                   final completion = _completionFor(groupEntries);
+                  final groupIssues = _issuesForGroup(groupEntries);
                   final statusColor = _statusColor(context, groupEntries);
                   final groupSpecials = _specialsSummaryForEntries(
                     groupEntries,
@@ -3284,10 +3475,14 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
                     color: _resultScopeCardColor(
                       completion.status,
                       statusColor,
+                      validationWarningIsAmber: true,
                     ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20),
-                      side: _resultScopeCardBorder(completion.status),
+                      side: _resultScopeCardBorder(
+                        completion.status,
+                        validationWarningIsAmber: true,
+                      ),
                     ),
                     child: ListTile(
                       contentPadding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
@@ -3308,7 +3503,9 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
                       subtitle: Padding(
                         padding: const EdgeInsets.only(top: 6),
                         child: Text(
-                          '$completed/$count entered • ${_statusLabel(groupEntries)}\n${_judgeSummary(groupEntries)}${groupSpecials.isEmpty ? '' : '\n$groupSpecials'}',
+                          '$completed/$count entered • ${completion.completedBasics == completion.totalBasics ? 'Complete' : _statusLabel(groupEntries)}'
+                          '${groupIssues.isEmpty ? '' : '\n${groupIssues.length} award issue${groupIssues.length == 1 ? '' : 's'}'}'
+                          '\n${_judgeSummary(groupEntries)}${groupSpecials.isEmpty ? '' : '\n$groupSpecials'}',
                           style: TextStyle(
                             color: AppColors.headerForeground.withValues(
                               alpha: .86,
@@ -3365,6 +3562,7 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
                         }
 
                         await _reloadEntries();
+                        await _refreshValidation();
                       },
                     ),
                   );
@@ -3420,23 +3618,28 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
 
   Map<String, List<Map<String, dynamic>>> _groupByVariety() {
     final out = <String, List<Map<String, dynamic>>>{};
-
-    for (final e in _entries) {
-      String key;
-
-      if (_isFurEntry(e)) {
-        key = 'Fur / Wool';
-      } else {
-        key = (e['variety'] ?? '').toString().trim();
-      }
-
-      if (key.isEmpty) key = '(No Variety)';
-
-      out.putIfAbsent(key, () => <Map<String, dynamic>>[]);
-      out[key]!.add(e);
+    final normalEntries = _entries
+        .where((entry) => !_isFurEntry(entry))
+        .toList();
+    final rules = normalEntries.isEmpty
+        ? null
+        : rulesForEntry(normalEntries.first);
+    for (final group in rules?.buildVarietyGroups(normalEntries) ?? const []) {
+      out[group.stableKey] = group.entries;
     }
-
+    final furEntries = _entries.where(_isFurEntry).toList();
+    if (furEntries.isNotEmpty) {
+      out['fur-wool'] = furEntries;
+    }
     return out;
+  }
+
+  String _varietyDisplayName(List<Map<String, dynamic>> entries) {
+    if (entries.any(_isFurEntry)) return 'Fur / Wool';
+    if (entries.isEmpty) return '(No Variety Assigned)';
+    return rulesForEntry(
+      entries.first,
+    ).varietyIdentity(entries.first).displayName;
   }
 
   String _judgeNameById(String? judgeId) {
@@ -3659,8 +3862,8 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
         final aRows = grouped[a] ?? const <Map<String, dynamic>>[];
         final bRows = grouped[b] ?? const <Map<String, dynamic>>[];
 
-        final aIsFur = a.trim().toLowerCase() == 'fur / wool';
-        final bIsFur = b.trim().toLowerCase() == 'fur / wool';
+        final aIsFur = a == 'fur-wool';
+        final bIsFur = b == 'fur-wool';
 
         if (aIsFur != bIsFur) return aIsFur ? 1 : -1;
 
@@ -3674,7 +3877,9 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
         ).compareTo(_resultSortValueForRows(bRows, 'variety_sort_order'));
         if (bySort != 0) return bySort;
 
-        return _resultSortText(a).compareTo(_resultSortText(b));
+        return _resultSortText(
+          _varietyDisplayName(aRows),
+        ).compareTo(_resultSortText(_varietyDisplayName(bRows)));
       });
 
     return Scaffold(
@@ -3738,8 +3943,9 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                 itemCount: varieties.length,
                 itemBuilder: (context, i) {
-                  final variety = varieties[i];
-                  final varietyEntries = grouped[variety]!;
+                  final varietyKey = varieties[i];
+                  final varietyEntries = grouped[varietyKey]!;
+                  final variety = _varietyDisplayName(varietyEntries);
                   final count = varietyEntries.length;
                   final completed = _completedCount(varietyEntries);
                   final completion = _completionFor(varietyEntries);
@@ -3841,14 +4047,7 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
                                                           .trim() ==
                                                       '1';
                                               final groupName =
-                                                  (e['group_name'] ??
-                                                          e['group_display_name'] ??
-                                                          e['group_label'] ??
-                                                          e['group'] ??
-                                                          e['group_code'] ??
-                                                          '')
-                                                      .toString()
-                                                      .trim();
+                                                  _entryGroupDisplayName(e);
 
                                               return usesGroups &&
                                                   groupName.isNotEmpty;
@@ -4709,14 +4908,7 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
       (e['variety'] ?? '').toString().trim();
 
   String _entryGroupName(Map<String, dynamic> e) {
-    return (e['group_name'] ??
-            e['group_display_name'] ??
-            e['group_label'] ??
-            e['group'] ??
-            e['group_code'] ??
-            '')
-        .toString()
-        .trim();
+    return _entryScopeGroup(e);
   }
 
   String _entrySectionId(Map<String, dynamic> e) =>
@@ -6147,11 +6339,17 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
         .trim();
     _placement = currentPlacement.isEmpty ? null : currentPlacement;
 
-    _selectedAwards =
-        (((widget.entry['_awards'] as List?) ?? const [])
-                .map((x) => _canonicalAwardCode(x.toString()))
-                .where((x) => x.isNotEmpty))
-            .toSet();
+    try {
+      _selectedAwards = rulesForEntry(
+        widget.entry,
+      ).normalizeStoredAwards((widget.entry['_awards'] as List?) ?? const []);
+    } on UnsupportedResultsSpecies {
+      _selectedAwards =
+          (((widget.entry['_awards'] as List?) ?? const [])
+                  .map((x) => x.toString().trim())
+                  .where((x) => x.isNotEmpty))
+              .toSet();
+    }
   }
 
   @override
@@ -6168,18 +6366,23 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
 
   String _breed(Map<String, dynamic> e) => (e['breed'] ?? '').toString().trim();
 
+  String _breedScope(Map<String, dynamic> e) {
+    final id = (e['breed_id'] ?? e['breed_catalog_id'] ?? '').toString().trim();
+    return id.isNotEmpty ? id.toLowerCase() : _breed(e).toLowerCase();
+  }
+
   String _variety(Map<String, dynamic> e) =>
       (e['variety'] ?? '').toString().trim();
 
-  String _groupName(Map<String, dynamic> e) {
-    return (e['group_name'] ??
-            e['group_display_name'] ??
-            e['group_label'] ??
-            e['group'] ??
-            e['group_code'] ??
-            '')
+  String _varietyScope(Map<String, dynamic> e) {
+    final id = (e['variety_id'] ?? e['breed_variety_id'] ?? '')
         .toString()
         .trim();
+    return id.isNotEmpty ? id.toLowerCase() : _variety(e).toLowerCase();
+  }
+
+  String _groupName(Map<String, dynamic> e) {
+    return _entryScopeGroup(e);
   }
 
   String _entryId(Map<String, dynamic> e) =>
@@ -6293,91 +6496,37 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
     return widget.breedClassSystems[breedLower] ?? 'four';
   }
 
-  bool _breedUsesGroups() {
-    if (_isFurOrWoolResultRow()) return false;
-
-    if (widget.showsByGroup) return true;
-
-    final groupName = _groupName(widget.entry);
-    if (groupName.isNotEmpty && groupName != 'Fur / Wool') return true;
-
-    return widget.classEntries.any((e) {
-      if (_isFurOrWoolEntry(e)) return false;
-
-      final usesGroupsRaw = e['uses_group_awards'];
-      final usesGroups =
-          usesGroupsRaw == true ||
-          usesGroupsRaw.toString().trim().toLowerCase() == 'true' ||
-          usesGroupsRaw.toString().trim().toLowerCase() == 't' ||
-          usesGroupsRaw.toString().trim() == '1';
-
-      return usesGroups;
-    });
+  ResultsRules? get _resolvedRules {
+    try {
+      return rulesForEntry(widget.entry);
+    } on UnsupportedResultsSpecies {
+      return null;
+    }
   }
 
-  bool get _showsByVariety => widget.showsByVariety;
+  ResultsRules get _rules => rulesForEntry(widget.entry);
+
+  bool _breedUsesGroups() =>
+      !_isFurOrWoolResultRow() &&
+      _resolvedRules?.usesGroupLayer(widget.entry) == true;
+
+  bool get _showsByVariety =>
+      _resolvedRules?.usesVarietyLayer(widget.entry) == true;
 
   List<String> get _visibleAwardCodes {
     if (_isFurOrWoolResultRow()) {
       return const <String>[];
     }
+    final rules = _resolvedRules;
+    if (rules == null) return const <String>[];
 
-    if (_isCavyEntry(widget.entry)) {
-      final awards = <String>[
-        'BJV',
-        'BIV',
-        'BSV',
-        'BJB',
-        'BIB',
-        'BSB',
-        'BOV',
-        'BOSV',
-        'BOB',
-        'BOSB',
-      ];
-
-      if (widget.finalAwardMode == 'bis_1ris_2ris') {
-        awards.addAll(const ['BIS', '1RIS', '2RIS']);
-      } else {
-        awards.addAll(const ['BIS', 'RIS', 'HM']);
-      }
-
-      return awards;
-    }
-
-    final awards = <String>[];
-
-    if (_breedUsesGroups()) {
-      awards.addAll(const ['BOG', 'BOSG']);
-    }
-
-    if (_showsByVariety) {
-      awards.addAll(const ['BOV', 'BOSV']);
-    }
-
-    awards.addAll(const ['BOB', 'BOSB']);
-
-    if (_supportsBestAgeAwards(
-      breedName: _breed(widget.entry),
-      isCavy: _isCavyEntry(widget.entry),
-    )) {
-      awards.addAll(
-        kBestAgeAwardCodes.where((award) {
-          return _bestAgeAwardMatchesClass(
-            award: award,
-            className: (widget.entry['class_name'] ?? '').toString(),
-            classSystem: _classSystemForEntry(widget.entry),
-          );
-        }),
-      );
-    }
-
-    if (widget.finalAwardMode == 'bis_ris') {
-      awards.addAll(const ['Best In Show', 'Reserve In Show']);
-    } else if (widget.finalAwardMode == 'bis_1ris_2ris') {
-      awards.addAll(const ['Best In Show', '1RIS', '2RIS']);
-    } else {
-      awards.addAll(const ['Best 4-Class', 'Best 6-Class', 'Best In Show']);
+    final awards = rules.buildAwardOptions(
+      entry: widget.entry,
+      classSystem: _classSystemForEntry(widget.entry),
+      finalAwardMode: widget.finalAwardMode,
+    );
+    for (final stored in _selectedAwards) {
+      if (!awards.contains(stored)) awards.add(stored);
     }
 
     return awards;
@@ -6422,170 +6571,27 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
   }
 
   bool _canUseAward(String award) {
-    if (!_isEligibleForAwards(widget.entry)) return false;
-    if (!_placedFirst(widget.entry)) return false;
     if (_sameRabbitAlreadyHasConflictingStageAward(award)) return false;
-
-    final currentAwards = _selectedAwards;
-
-    if (_isCavyEntry(widget.entry)) {
-      switch (award) {
-        case 'BJV':
-          return (widget.entry['class_name'] ?? '')
-              .toString()
-              .toLowerCase()
-              .contains('junior');
-
-        case 'BIV':
-          return (widget.entry['class_name'] ?? '')
-              .toString()
-              .toLowerCase()
-              .contains('intermediate');
-
-        case 'BSV':
-          return (widget.entry['class_name'] ?? '')
-              .toString()
-              .toLowerCase()
-              .contains('senior');
-
-        case 'BJB':
-          return currentAwards.contains('BJV');
-
-        case 'BIB':
-          return currentAwards.contains('BIV');
-
-        case 'BSB':
-          return currentAwards.contains('BSV');
-
-        case 'BOV':
-        case 'BOSV':
-          return true;
-
-        case 'BOB':
-        case 'BOSB':
-          return currentAwards.contains('BOV') ||
-              currentAwards.contains('BOSV') ||
-              currentAwards.contains('BJB') ||
-              currentAwards.contains('BIB') ||
-              currentAwards.contains('BSB');
-
-        case 'BIS':
-          return currentAwards.contains('BOB');
-
-        case 'RIS':
-          return widget.finalAwardMode != 'bis_1ris_2ris' &&
-              currentAwards.contains('BOB') &&
-              !currentAwards.contains('BIS');
-
-        case '1RIS':
-          return widget.finalAwardMode == 'bis_1ris_2ris' &&
-              currentAwards.contains('BOB') &&
-              !currentAwards.contains('BIS') &&
-              !currentAwards.contains('2RIS');
-
-        case '2RIS':
-          return widget.finalAwardMode == 'bis_1ris_2ris' &&
-              currentAwards.contains('BOB') &&
-              !currentAwards.contains('BIS') &&
-              !currentAwards.contains('1RIS');
-
-        case 'HM':
-          return widget.finalAwardMode != 'bis_1ris_2ris' &&
-              currentAwards.contains('BOB') &&
-              !currentAwards.contains('BIS') &&
-              !currentAwards.contains('RIS');
-      }
-
-      return false;
-    }
-
-    switch (award) {
-      case 'BOV':
-      case 'BOSV':
-        return _showsByVariety;
-
-      case 'BOG':
-      case 'BOSG':
-        if (!_breedUsesGroups()) return false;
-
-        // If this breed also uses variety awards, group awards should only
-        // become available after the rabbit has already won at variety level.
-        if (_showsByVariety) {
-          return currentAwards.contains('BOV') ||
-              currentAwards.contains('BOSV');
-        }
-        return true;
-
-      case 'BOB':
-      case 'BOSB':
-        if (_breedUsesGroups()) {
-          return currentAwards.contains('BOG') ||
-              currentAwards.contains('BOSG');
-        }
-        if (_showsByVariety) {
-          return currentAwards.contains('BOV') ||
-              currentAwards.contains('BOSV');
-        }
-        return true;
-
-      case 'Best Junior':
-      case 'Best Senior':
-      case 'Best Intermediate':
-        return _supportsBestAgeAwards(
-              breedName: _breed(widget.entry),
-              isCavy: _isCavyEntry(widget.entry),
-            ) &&
-            _bestAgeAwardMatchesClass(
-              award: award,
-              className: (widget.entry['class_name'] ?? '').toString(),
-              classSystem: _classSystemForEntry(widget.entry),
-            );
-
-      case 'Best 4-Class':
-        return _classSystemForEntry(widget.entry) == 'four' &&
-            currentAwards.contains('BOB');
-
-      case 'Best 6-Class':
-        return _classSystemForEntry(widget.entry) == 'six' &&
-            currentAwards.contains('BOB');
-
-      case 'Best In Show':
-        if (widget.finalAwardMode == 'four_six_bis') {
-          return currentAwards.contains('Best 4-Class') ||
-              currentAwards.contains('Best 6-Class');
-        }
-        return currentAwards.contains('BOB');
-
-      case 'Reserve In Show':
-        if (widget.finalAwardMode == 'bis_ris') {
-          return currentAwards.contains('BOB') &&
-              !currentAwards.contains('Best In Show');
-        }
-        return false;
-
-      case '1RIS':
-        if (widget.finalAwardMode == 'bis_1ris_2ris') {
-          return currentAwards.contains('BOB') &&
-              !currentAwards.contains('Best In Show') &&
-              !currentAwards.contains('2RIS');
-        }
-        return false;
-
-      case '2RIS':
-        if (widget.finalAwardMode == 'bis_1ris_2ris') {
-          return currentAwards.contains('BOB') &&
-              !currentAwards.contains('Best In Show') &&
-              !currentAwards.contains('1RIS');
-        }
-        return false;
-    }
-
-    return false;
+    return _rules.canUseAward(
+      entry: widget.entry,
+      award: award,
+      selectedAwards: _selectedAwards,
+      effectiveStatus: _effectiveStatusFor(widget.entry),
+      effectivePlacement: _effectivePlacementFor(widget.entry),
+      classSystem: _classSystemForEntry(widget.entry),
+      finalAwardMode: widget.finalAwardMode,
+    );
   }
 
   String? _validateAwards() {
+    final rules = _resolvedRules;
+    if (rules == null) {
+      return UnsupportedResultsSpecies(
+        (widget.entry['species'] ?? '').toString(),
+      ).toString();
+    }
     if (!_isEligibleForAwards(widget.entry) && _selectedAwards.isNotEmpty) {
-      return 'This rabbit cannot receive awards because it is scratched, disqualified, not shown, or unworthy of award.';
+      return 'This ${rules.speciesName.toLowerCase()} cannot receive awards because it is scratched, disqualified, not shown, or unworthy of award.';
     }
 
     if (_selectedAwards.isNotEmpty && !_placedFirst(widget.entry)) {
@@ -6594,26 +6600,32 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
           : 'Only first-place rabbits can receive awards.';
     }
 
+    final compatibility = rules.validateAwardSelection(
+      entry: widget.entry,
+      selectedAwards: _selectedAwards,
+    );
+    if (!compatibility.valid) return compatibility.message;
+
     bool sameVariety(Map<String, dynamic> e) =>
         _sectionId(e) == _sectionId(widget.entry) &&
-        _breed(e).toLowerCase() == _breed(widget.entry).toLowerCase() &&
-        _variety(e).toLowerCase() == _variety(widget.entry).toLowerCase();
+        _breedScope(e) == _breedScope(widget.entry) &&
+        _varietyScope(e) == _varietyScope(widget.entry);
 
     bool sameGroup(Map<String, dynamic> e) =>
         _sectionId(e) == _sectionId(widget.entry) &&
-        _breed(e).toLowerCase() == _breed(widget.entry).toLowerCase() &&
+        _breedScope(e) == _breedScope(widget.entry) &&
         _groupName(e).toLowerCase() == _groupName(widget.entry).toLowerCase();
 
     bool sameBreed(Map<String, dynamic> e) =>
         _sectionId(e) == _sectionId(widget.entry) &&
-        _breed(e).toLowerCase() == _breed(widget.entry).toLowerCase();
+        _breedScope(e) == _breedScope(widget.entry);
 
     bool sameSection(Map<String, dynamic> e) =>
         _sectionId(e) == _sectionId(widget.entry);
 
     if (_isCavyEntry(widget.entry)) {
       bool sameClassAge(Map<String, dynamic> e) =>
-          sameVariety(e) &&
+          sameGroup(e) &&
           (e['class_name'] ?? '').toString().trim().toLowerCase() ==
               (widget.entry['class_name'] ?? '')
                   .toString()
@@ -6622,11 +6634,16 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
 
       for (final award in _selectedAwards) {
         final sameScope = switch (award) {
-          'BJV' || 'BIV' || 'BSV' => sameClassAge,
-          'BJB' || 'BIB' || 'BSB' => sameBreed,
-          'BOV' || 'BOSV' => sameVariety,
+          'Best Junior' || 'Best Intermediate' || 'Best Senior' => sameClassAge,
+          'BOG' || 'BOSG' => sameGroup,
           'BOB' || 'BOSB' => sameBreed,
-          'BIS' || 'RIS' || 'HM' => sameSection,
+          'Best 4-Class' ||
+          'Best 6-Class' ||
+          'Best In Show' ||
+          'Reserve In Show' ||
+          '1RIS' ||
+          '2RIS' ||
+          'HM' => sameSection,
           _ => sameSection,
         };
 
@@ -6636,31 +6653,28 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
         );
 
         if (existing != null) {
-          return '${cavyAwardLabels[award] ?? award} is already assigned.';
+          return '${_rules.awardLabel(award)} is already assigned.';
         }
 
         if (!_canUseAward(award)) {
-          return '${cavyAwardLabels[award] ?? award} is not eligible for this cavy.';
+          return '${_rules.awardLabel(award)} is not eligible for this cavy.';
         }
       }
 
-      if (_hasAward('BOV')) {
-        final bosv = _winnerForAwardInScope(
-          award: 'BOSV',
-          sameScope: sameVariety,
+      if (_hasAward('BOG')) {
+        final bosg = _winnerForAwardInScope(
+          award: 'BOSG',
+          sameScope: sameGroup,
         );
-        if (!_isOppositeSexOf(bosv)) {
-          return 'BOV and BOSV must be opposite sex.';
+        if (!_isOppositeSexOf(bosg)) {
+          return 'Best of Group and Best Opposite Sex of Group must be opposite sex within the same cavy group.';
         }
       }
 
-      if (_hasAward('BOSV')) {
-        final bov = _winnerForAwardInScope(
-          award: 'BOV',
-          sameScope: sameVariety,
-        );
-        if (!_isOppositeSexOf(bov)) {
-          return 'BOV and BOSV must be opposite sex.';
+      if (_hasAward('BOSG')) {
+        final bog = _winnerForAwardInScope(award: 'BOG', sameScope: sameGroup);
+        if (!_isOppositeSexOf(bog)) {
+          return 'Best of Group and Best Opposite Sex of Group must be opposite sex within the same cavy group.';
         }
       }
 
@@ -6681,12 +6695,13 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
         }
       }
 
-      if (_hasAward('BIS') && (_hasAward('RIS') || _hasAward('HM'))) {
-        return 'The same cavy cannot be BIS, RIS, or Honorable Mention.';
+      if (_hasAward('Best In Show') &&
+          (_hasAward('Reserve In Show') || _hasAward('HM'))) {
+        return 'The same cavy cannot be Best in Show, Reserve in Show, or Honorable Mention.';
       }
 
-      if (_hasAward('RIS') && _hasAward('HM')) {
-        return 'The same cavy cannot be both RIS and Honorable Mention.';
+      if (_hasAward('Reserve In Show') && _hasAward('HM')) {
+        return 'The same cavy cannot be both Reserve in Show and Honorable Mention.';
       }
 
       return null;
@@ -6868,8 +6883,8 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
           : 'Only first-place rabbits can receive awards.';
     }
 
-    if (_isCavyEntry(widget.entry)) {
-      return '${cavyAwardLabels[award] ?? award} is not eligible right now.';
+    if (_rules.species == ResultsSpecies.cavy) {
+      return _rules.disabledAwardReason(entry: widget.entry, award: award);
     }
 
     if (_sameRabbitAlreadyHasConflictingStageAward(award)) {
@@ -7026,12 +7041,7 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
       final isFurOrWoolResult = _isFurOrWoolResultRow();
       final awardsToSave = isFurOrWoolResult
           ? <String>[]
-          : (_selectedAwards
-                .map((award) => _canonicalAwardCode(award))
-                .where((award) => award.trim().isNotEmpty)
-                .toSet()
-                .toList()
-              ..sort());
+          : (_rules.normalizeStoredAwards(_selectedAwards).toList()..sort());
 
       if (isFurOrWoolResult) {
         final updated = await supabase.rpc(
@@ -7159,7 +7169,7 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
     final animalName = (widget.entry['animal_name'] ?? '').toString().trim();
     final tattoo = (widget.entry['tattoo'] ?? '').toString().trim();
     final breed = (widget.entry['breed'] ?? '').toString();
-    final groupName = (widget.entry['group_name'] ?? '').toString();
+    final groupName = _entryGroupDisplayName(widget.entry);
     final variety = (widget.entry['variety'] ?? '').toString();
     final sex = (widget.entry['sex'] ?? '').toString();
     final className = (widget.entry['class_name'] ?? '').toString();
@@ -7450,6 +7460,8 @@ class _ValidationIssue {
   final String? groupName;
   final String? variety;
   final String classSexLabel;
+  final ResultsValidationIssueLevel level;
+  final String awardCode;
 
   const _ValidationIssue({
     required this.code,
@@ -7462,5 +7474,42 @@ class _ValidationIssue {
     required this.groupName,
     required this.variety,
     required this.classSexLabel,
+    required this.level,
+    required this.awardCode,
   });
+
+  ResultsEntryBlockingIssue get scoped => ResultsEntryBlockingIssue(
+    code: code,
+    title: title,
+    message: message,
+    entry: entry,
+    conflictsWith: conflictsWith,
+    level: level,
+    awardCode: awardCode,
+  );
+
+  _ValidationIssue retarget(
+    Map<String, dynamic> target, {
+    Map<String, dynamic>? conflictsWith,
+    required String breed,
+    required String species,
+    required String? groupName,
+    required String? variety,
+    required String classSexLabel,
+  }) {
+    return _ValidationIssue(
+      code: code,
+      title: title,
+      message: message,
+      entry: target,
+      conflictsWith: conflictsWith,
+      breed: breed,
+      species: species,
+      groupName: groupName,
+      variety: variety,
+      classSexLabel: classSexLabel,
+      level: level,
+      awardCode: awardCode,
+    );
+  }
 }

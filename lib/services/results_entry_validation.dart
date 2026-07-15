@@ -1,17 +1,127 @@
+import 'results/results_rules.dart';
+import 'results_group_resolution.dart';
+import 'results/rabbit_results_structure.dart';
+
+enum ResultsValidationIssueLevel { entry, variety, group, breed, section }
+
+class ResultsEntryStatusSummary {
+  final int completed;
+  final int total;
+  final int validationIssueCount;
+
+  const ResultsEntryStatusSummary({
+    required this.completed,
+    required this.total,
+    required this.validationIssueCount,
+  });
+
+  bool get dataEntryComplete => total > 0 && completed == total;
+  bool get needsAttention => dataEntryComplete && validationIssueCount > 0;
+  String get completionLabel => dataEntryComplete
+      ? 'Results complete'
+      : completed == 0
+      ? 'Not started'
+      : 'In progress';
+}
+
+ResultsEntryStatusSummary buildResultsEntryStatusSummary({
+  required List<Map<String, dynamic>> entries,
+  required bool Function(Map<String, dynamic>) hasBasicOutcome,
+  required int validationIssueCount,
+}) {
+  return ResultsEntryStatusSummary(
+    completed: entries.where(hasBasicOutcome).length,
+    total: entries.length,
+    validationIssueCount: validationIssueCount,
+  );
+}
+
+String resultsEntryId(Map<String, dynamic> entry) {
+  return (entry['entry_id'] ?? entry['id'] ?? '').toString().trim();
+}
+
+String resultsBreedScopeForEntry(Map<String, dynamic> entry) {
+  final id = (entry['breed_id'] ?? entry['breed_catalog_id'] ?? '')
+      .toString()
+      .trim();
+  if (id.isNotEmpty) return id.toLowerCase();
+  return (entry['breed'] ?? entry['breed_name'] ?? '')
+      .toString()
+      .trim()
+      .toLowerCase();
+}
+
+String resultsGroupScopeForEntry(Map<String, dynamic> entry) {
+  return switch (resultsSpeciesForEntry(entry)) {
+    'cavy' => resolveCavyGroup(entry).normalizedKey,
+    'rabbit' => resolveRabbitGroup(entry).stableKey,
+    _ => '',
+  };
+}
+
 class ResultsEntryBlockingIssue {
   final String code;
   final String title;
   final String message;
   final Map<String, dynamic> entry;
   final Map<String, dynamic>? conflictsWith;
+  final ResultsValidationIssueLevel level;
+  final String awardCode;
+  final String sectionId;
+  final String breedScope;
+  final String groupScope;
+  final Set<String> entryIds;
 
-  const ResultsEntryBlockingIssue({
+  ResultsEntryBlockingIssue({
     required this.code,
     required this.title,
     required this.message,
     required this.entry,
     this.conflictsWith,
-  });
+    this.level = ResultsValidationIssueLevel.entry,
+    this.awardCode = '',
+    String? sectionId,
+    String? breedScope,
+    String? groupScope,
+    Set<String>? entryIds,
+  }) : sectionId = sectionId ?? resultsSectionScopeForEntry(entry),
+       breedScope = breedScope ?? resultsBreedScopeForEntry(entry),
+       groupScope = groupScope ?? resultsGroupScopeForEntry(entry),
+       entryIds =
+           entryIds ??
+           {
+             resultsEntryId(entry),
+             if (conflictsWith != null) resultsEntryId(conflictsWith),
+           }.where((id) => id.isNotEmpty).toSet();
+}
+
+bool resultsIssueAppliesToEntries(
+  ResultsEntryBlockingIssue issue,
+  List<Map<String, dynamic>> entries,
+) {
+  if (entries.isEmpty) return false;
+  final ids = entries.map(resultsEntryId).where((id) => id.isNotEmpty).toSet();
+  if (issue.entryIds.intersection(ids).isNotEmpty) return true;
+
+  final breeds = entries.map(resultsBreedScopeForEntry).toSet();
+  final sections = entries.map(resultsSectionScopeForEntry).toSet();
+  return issue.level != ResultsValidationIssueLevel.section &&
+      issue.breedScope.isNotEmpty &&
+      breeds.contains(issue.breedScope) &&
+      (issue.sectionId.isEmpty || sections.contains(issue.sectionId));
+}
+
+bool resultsIssueAppliesToGroup(
+  ResultsEntryBlockingIssue issue,
+  List<Map<String, dynamic>> entries,
+) {
+  if (issue.level == ResultsValidationIssueLevel.breed ||
+      issue.level == ResultsValidationIssueLevel.section) {
+    return false;
+  }
+  if (!resultsIssueAppliesToEntries(issue, entries)) return false;
+  final groups = entries.map(resultsGroupScopeForEntry).toSet();
+  return issue.groupScope.isEmpty || groups.contains(issue.groupScope);
 }
 
 String normalizeResultsSpecies(Object? value) {
@@ -22,15 +132,7 @@ String normalizeResultsSpecies(Object? value) {
 }
 
 String resultsSpeciesForEntry(Map<String, dynamic> entry) {
-  final explicit = normalizeResultsSpecies(entry['species']);
-  if (explicit.isNotEmpty) return explicit;
-
-  // Some legacy result rows omit species. Sex terminology is reliable here;
-  // breed names are not (for example, American exists in both species).
-  final sex = (entry['sex'] ?? '').toString().trim().toLowerCase();
-  if (sex.contains('boar') || sex.contains('sow')) return 'cavy';
-  if (sex.contains('buck') || sex.contains('doe')) return 'rabbit';
-  return '';
+  return normalizeResultsSpeciesStrict(entry['species']);
 }
 
 String resultsSpeciesLabel(Map<String, dynamic> entry) {
@@ -66,171 +168,56 @@ String resultsFinalAwardScopeKey(Map<String, dynamic> entry, String awardCode) {
   return '$sectionId|$award|$species|$showId';
 }
 
-List<ResultsEntryBlockingIssue> buildBreedCompletionIssues({
+List<ResultsEntryBlockingIssue> buildOppositeSexAwardIssues({
   required List<Map<String, dynamic>> entries,
-  required bool requireVarietyAwards,
-  required bool requireGroupAwards,
-  required bool requireBreedAwards,
-  required bool Function(Map<String, dynamic>) hasBasicOutcome,
-  required bool Function(Map<String, dynamic>) isEligibleForSpecialAward,
-  required bool Function(Map<String, dynamic>) isExcludedFromSpecials,
+  required String winnerCode,
+  required String oppositeCode,
+  required String scopeLabel,
   required List<String> Function(Map<String, dynamic>) awardCodes,
-  required String Function(Map<String, dynamic>) entryLabel,
-  required String Function(Map<String, dynamic>) sectionId,
-  required String Function(Map<String, dynamic>) breed,
-  required String Function(Map<String, dynamic>) variety,
-  required String Function(Map<String, dynamic>) group,
+  required String Function(Map<String, dynamic>) scopeKey,
   required String Function(Map<String, dynamic>) sex,
+  required String Function(Map<String, dynamic>) entryLabel,
 }) {
-  final issues = <ResultsEntryBlockingIssue>[];
-  final allBasicsComplete =
-      entries.isNotEmpty && entries.every(hasBasicOutcome);
+  final winners = <String, Map<String, dynamic>>{};
+  final opposites = <String, Map<String, dynamic>>{};
 
-  for (final entry in entries.where((entry) => !hasBasicOutcome(entry))) {
+  for (final entry in entries) {
+    final scope = scopeKey(entry).trim().toLowerCase();
+    if (scope.isEmpty) continue;
+    final awards = awardCodes(
+      entry,
+    ).map((award) => award.trim().toUpperCase()).toSet();
+    if (awards.contains(winnerCode.toUpperCase())) winners[scope] = entry;
+    if (awards.contains(oppositeCode.toUpperCase())) opposites[scope] = entry;
+  }
+
+  final issues = <ResultsEntryBlockingIssue>[];
+  for (final scope in {...winners.keys, ...opposites.keys}) {
+    final winner = winners[scope];
+    final opposite = opposites[scope];
+    if (winner == null || opposite == null) continue;
+    final winnerSex = sex(winner).trim().toLowerCase();
+    final oppositeSex = sex(opposite).trim().toLowerCase();
+    if (winnerSex.isEmpty || oppositeSex.isEmpty || winnerSex != oppositeSex) {
+      continue;
+    }
     issues.add(
       ResultsEntryBlockingIssue(
-        code: 'missing_basic_outcome',
-        title: 'Incomplete placement or result',
+        code: 'opposite_sex',
+        title: '$winnerCode / $oppositeCode sex conflict',
         message:
-            '${entryLabel(entry)} needs a placement or a No Show, scratched, disqualified, or unworthy result.',
-        entry: entry,
+            '${entryLabel(winner)} and ${entryLabel(opposite)} are both marked for $winnerCode / $oppositeCode in the same $scopeLabel, but are not opposite sex.',
+        entry: winner,
+        conflictsWith: opposite,
+        level: switch (scopeLabel) {
+          'group' => ResultsValidationIssueLevel.group,
+          'variety' => ResultsValidationIssueLevel.variety,
+          'breed' => ResultsValidationIssueLevel.breed,
+          _ => ResultsValidationIssueLevel.entry,
+        },
+        awardCode: '$winnerCode/$oppositeCode',
       ),
     );
   }
-
-  final normalEntries = entries
-      .where((e) => !isExcludedFromSpecials(e))
-      .toList();
-
-  void validateBuckets({
-    required Iterable<List<Map<String, dynamic>>> buckets,
-    required List<String> requiredAwards,
-    required String scopeLabel,
-  }) {
-    for (final bucket in buckets) {
-      if (bucket.isEmpty) continue;
-      final eligible = bucket.where(isEligibleForSpecialAward).toList();
-
-      Map<String, dynamic>? winner(String award) {
-        for (final entry in bucket) {
-          if (awardCodes(entry).contains(award)) return entry;
-        }
-        return null;
-      }
-
-      for (final award in requiredAwards) {
-        final winners = bucket
-            .where((entry) => awardCodes(entry).contains(award))
-            .toList();
-        if (winners.length > 1) {
-          issues.add(
-            ResultsEntryBlockingIssue(
-              code: 'duplicate_${award.toLowerCase()}',
-              title: 'Duplicate $award winner',
-              message:
-                  '$award is assigned to more than one ${resultsSpeciesLabel(winners.first)} in this $scopeLabel: ${entryLabel(winners[0])} and ${entryLabel(winners[1])}.',
-              entry: winners.first,
-              conflictsWith: winners[1],
-            ),
-          );
-        }
-      }
-
-      if (!allBasicsComplete || eligible.isEmpty) continue;
-      final primary = requiredAwards.first;
-      final primaryWinner = winner(primary);
-      if (primaryWinner == null) {
-        issues.add(
-          ResultsEntryBlockingIssue(
-            code: 'missing_${primary.toLowerCase()}',
-            title: 'Missing $primary winner',
-            message:
-                'Select one eligible $primary winner for this ${resultsSpeciesLabel(bucket.first)} $scopeLabel.',
-            entry: eligible.first,
-          ),
-        );
-        continue;
-      }
-
-      if (requiredAwards.length < 2) continue;
-      final opposite = requiredAwards[1];
-      final primarySex = sex(primaryWinner);
-      final hasOppositeCandidate = eligible.any(
-        (entry) =>
-            !identical(entry, primaryWinner) &&
-            primarySex.isNotEmpty &&
-            sex(entry).isNotEmpty &&
-            sex(entry) != primarySex,
-      );
-      final oppositeWinner = winner(opposite);
-      if (hasOppositeCandidate && oppositeWinner == null) {
-        issues.add(
-          ResultsEntryBlockingIssue(
-            code: 'missing_${opposite.toLowerCase()}',
-            title: 'Missing $opposite winner',
-            message:
-                'Select the eligible opposite-sex $opposite winner for this ${resultsSpeciesLabel(bucket.first)} $scopeLabel.',
-            entry: eligible.firstWhere(
-              (entry) => sex(entry).isNotEmpty && sex(entry) != primarySex,
-            ),
-          ),
-        );
-      } else if (!hasOppositeCandidate && oppositeWinner != null) {
-        issues.add(
-          ResultsEntryBlockingIssue(
-            code: 'unexpected_${opposite.toLowerCase()}',
-            title: '$opposite has no eligible candidate',
-            message:
-                'Remove $opposite from ${entryLabel(oppositeWinner)} because this $scopeLabel has no eligible opposite-sex animal.',
-            entry: oppositeWinner,
-          ),
-        );
-      }
-    }
-  }
-
-  Map<String, List<Map<String, dynamic>>> buckets(
-    String Function(Map<String, dynamic>) scope,
-  ) {
-    final result = <String, List<Map<String, dynamic>>>{};
-    for (final entry in normalEntries) {
-      final key = scope(entry);
-      if (key.isEmpty) continue;
-      result.putIfAbsent(key, () => []).add(entry);
-    }
-    return result;
-  }
-
-  if (requireVarietyAwards) {
-    validateBuckets(
-      buckets: buckets((e) {
-        final values = [sectionId(e), breed(e), variety(e)];
-        return values.any((value) => value.isEmpty) ? '' : values.join('|');
-      }).values,
-      requiredAwards: const ['BOV', 'BOSV'],
-      scopeLabel: 'variety',
-    );
-  }
-  if (requireGroupAwards) {
-    validateBuckets(
-      buckets: buckets((e) {
-        final values = [sectionId(e), breed(e), group(e)];
-        return values.any((value) => value.isEmpty) ? '' : values.join('|');
-      }).values,
-      requiredAwards: const ['BOG', 'BOSG'],
-      scopeLabel: 'group',
-    );
-  }
-  if (requireBreedAwards) {
-    validateBuckets(
-      buckets: buckets((e) {
-        final values = [sectionId(e), breed(e)];
-        return values.any((value) => value.isEmpty) ? '' : values.join('|');
-      }).values,
-      requiredAwards: const ['BOB', 'BOSB'],
-      scopeLabel: 'breed',
-    );
-  }
-
   return issues;
 }
