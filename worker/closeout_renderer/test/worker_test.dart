@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:ringmaster_show/reporting_core/assets/report_asset_loader.dart';
 import 'package:ringmaster_show/reporting_core/assets/file_system_report_asset_loader.dart';
 import 'package:ringmaster_show/reporting_core/rendering/artifact_renderer.dart';
+import 'package:ringmaster_show/reporting_core/rendering/artifact_scope.dart';
 import 'package:ringmaster_show/reporting_core/rendering/closeout_worker.dart';
 import 'package:ringmaster_show/reporting_core/rendering/render_queue.dart';
 import 'package:ringmaster_show/reporting_core/rendering/render_task.dart';
@@ -53,6 +54,93 @@ void main() {
 
     test('accepts exact structured scope', () {
       expect(() => _artifact().validateFor(_task()), returnsNormally);
+    });
+
+    test('artifact keys differ across Open and Youth A/B/C sections', () {
+      final keys = <String>{};
+      for (final scope in ['OPEN', 'YOUTH']) {
+        for (final letter in ['A', 'B', 'C']) {
+          final section = '${scope.toLowerCase()}-$letter';
+          final metadata = _scopeMetadata(
+            sectionId: section,
+            scope: scope,
+            showLetter: letter,
+          );
+          keys.add(
+            ArtifactScope.canonicalKey(
+              showId: 'show-1',
+              reportName: 'arba_report',
+              sectionIds: [section],
+              metadata: metadata,
+            ),
+          );
+        }
+      }
+      expect(keys, hasLength(6));
+    });
+
+    test('species and report dimensions participate in artifact scope', () {
+      final rabbit = _scopeMetadata(species: 'rabbit', breedName: 'Dutch');
+      final cavy = _scopeMetadata(species: 'cavy', breedName: 'Dutch');
+      expect(
+        ArtifactScope.canonicalKey(
+          showId: 'show-1',
+          reportName: 'sweepstakes_report',
+          sectionIds: const ['section-1'],
+          metadata: rabbit,
+        ),
+        isNot(
+          ArtifactScope.canonicalKey(
+            showId: 'show-1',
+            reportName: 'sweepstakes_report',
+            sectionIds: const ['section-1'],
+            metadata: cavy,
+          ),
+        ),
+      );
+    });
+
+    test('run-wide reports accept the canonical selected section set', () {
+      final metadata = <String, dynamic>{
+        'run_scope_key': 'show-1:section-1,section-2',
+        'section_ids': ['section-1', 'section-2'],
+        'delivery_type': 'internal',
+      };
+      final key = ArtifactScope.canonicalKey(
+        showId: 'show-1',
+        reportName: 'judge_report',
+        sectionIds: const ['section-2', 'section-1'],
+        metadata: metadata,
+      );
+      metadata['scope_key'] = key;
+      expect(
+        ArtifactScope.validationError(
+          showId: 'show-1',
+          reportName: 'judge_report',
+          sectionIds: const ['section-1', 'section-2'],
+          scopeKey: key,
+          metadata: metadata,
+        ),
+        isNull,
+      );
+    });
+
+    test('worker rejects the former run-wide key on a section artifact', () {
+      final artifact = _artifact(scopeKey: 'show-1:section-1,section-2');
+      final task = RenderTask.fromJson({
+        ..._taskJson(),
+        'scope_key': 'show-1:section-1,section-2',
+      });
+      expect(
+        () => artifact.validateFor(task),
+        throwsA(
+          isA<RenderFailure>().having(
+            (failure) => failure.category,
+            'category',
+            'invalid_scope',
+          ),
+        ),
+      );
     });
   });
 
@@ -788,7 +876,7 @@ Map<String, dynamic> _taskJson() => {
   'report_artifact_id': 'artifact-1',
   'show_id': 'show-1',
   'finalize_run_id': 'run-1',
-  'scope_key': 'show-1:section-1',
+  'scope_key': _scopeKey(),
   'attempt_count': 1,
   'max_attempts': 3,
   'payload': {
@@ -800,24 +888,50 @@ Map<String, dynamic> _taskJson() => {
 
 RenderTask _task() => RenderTask.fromJson(_taskJson());
 
-RenderArtifact _artifact({
-  String scopeKey = 'show-1:section-1',
-}) => RenderArtifact(
-  id: 'artifact-1',
-  showId: 'show-1',
-  finalizeRunId: 'run-1',
-  scopeKey: scopeKey,
-  reportName: 'arba_report',
-  sectionIds: const ['section-1'],
-  metadata: {
-    'scope_key': scopeKey,
-    'section_ids': ['section-1'],
-  },
-  storageBucket: 'show-files',
-  storagePath:
-      'shows/show-1/reports/versions/run-1/artifacts/artifact-1/generation-1/report.pdf',
-  generation: 1,
-);
+RenderArtifact _artifact({String? scopeKey}) {
+  final metadata = _scopeMetadata();
+  final resolvedScopeKey = scopeKey ?? _scopeKey(metadata);
+  metadata['scope_key'] = resolvedScopeKey;
+  return RenderArtifact(
+    id: 'artifact-1',
+    showId: 'show-1',
+    finalizeRunId: 'run-1',
+    scopeKey: resolvedScopeKey,
+    reportName: 'arba_report',
+    sectionIds: const ['section-1'],
+    metadata: metadata,
+    storageBucket: 'show-files',
+    storagePath:
+        'shows/show-1/reports/versions/run-1/artifacts/artifact-1/generation-1/report.pdf',
+    generation: 1,
+  );
+}
+
+Map<String, dynamic> _scopeMetadata({
+  String sectionId = 'section-1',
+  String scope = 'OPEN',
+  String showLetter = 'A',
+  String? species,
+  String? breedName,
+}) => <String, dynamic>{
+  'run_scope_key': 'show-1:section-1,section-2',
+  'section_id': sectionId,
+  'section_ids': [sectionId],
+  'scope': scope,
+  'show_letter': showLetter,
+  if (species != null) 'species': species,
+  if (breedName != null) 'breed_name': breedName,
+};
+
+String _scopeKey([Map<String, dynamic>? source]) {
+  final metadata = source ?? _scopeMetadata();
+  return ArtifactScope.canonicalKey(
+    showId: 'show-1',
+    reportName: 'arba_report',
+    sectionIds: const ['section-1'],
+    metadata: metadata,
+  );
+}
 
 final class _FakeRenderer implements ArtifactRenderer {
   _FakeRenderer({this.error});

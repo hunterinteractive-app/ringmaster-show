@@ -149,10 +149,15 @@ class CloseoutGenerationProgressCard extends StatelessWidget {
                     : AppColors.secondaryButton,
               ),
               const SizedBox(width: 8),
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'Generating reports',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                  progress.isActive
+                      ? 'Generating reports'
+                      : 'Generation finished with ${progress.failed} failed report${progress.failed == 1 ? '' : 's'}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 16,
+                  ),
                 ),
               ),
             ],
@@ -185,13 +190,15 @@ class CloseoutGenerationProgressCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                OutlinedButton.icon(
-                  key: const ValueKey('closeout-retry-failed-button'),
-                  onPressed: onRetryFailed,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Retry Failed'),
-                ),
+                if (onRetryFailed != null) ...[
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    key: const ValueKey('closeout-retry-failed-button'),
+                    onPressed: onRetryFailed,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry Failed'),
+                  ),
+                ],
               ],
             ),
           ],

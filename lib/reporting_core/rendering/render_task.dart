@@ -1,3 +1,5 @@
+import 'artifact_scope.dart';
+
 final class RenderTask {
   const RenderTask({
     required this.id,
@@ -87,10 +89,18 @@ final class RenderArtifact {
         'The queued report no longer matches its artifact scope.',
       );
     }
-    if (sectionIds.isEmpty || metadata['scope_key'] != scopeKey) {
-      throw const RenderFailure.permanent(
+    final scopeError = ArtifactScope.validationError(
+      showId: showId,
+      reportName: reportName,
+      sectionIds: sectionIds,
+      scopeKey: scopeKey,
+      metadata: metadata,
+    );
+    if (scopeError != null) {
+      throw RenderFailure.permanent(
         'invalid_scope',
         'The report artifact has incomplete structured scope metadata.',
+        scopeError,
       );
     }
     if (task.payload['report_name']?.toString() != reportName ||

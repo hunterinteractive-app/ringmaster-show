@@ -12,6 +12,9 @@ void main() {
   final migration = File(
     'supabase/migrations/20260714055153_closeout_read_only_dashboard_and_render_queue.sql',
   ).readAsStringSync();
+  final artifactScopeMigration = File(
+    'supabase/migrations/20260715012121_fix_closeout_artifact_scope.sql',
+  ).readAsStringSync();
   final edgeFunction = File(
     'supabase/functions/run-closeout/index.ts',
   ).readAsStringSync();
@@ -114,8 +117,8 @@ void main() {
       'completion transition refreshes artifacts and announces completion',
       () {
         final observation = methodBody(
-          'bool _observeGenerationProgress(',
-          'void _announceGenerationComplete()',
+          'int? _observeGenerationProgress(',
+          'void _announceGenerationComplete(int failedCount)',
         );
         final refresh = methodBody(
           'Future<void> _refreshDashboardOnly',
@@ -127,14 +130,12 @@ void main() {
           contains("final generationKey = '\$scopeKey|\$runId'"),
         );
         expect(observation, contains('_observedActiveGeneration = true'));
-        expect(observation, contains('return counts.failed == 0'));
+        expect(observation, contains('return counts.failed'));
         expect(refresh, contains('_rebuildReportCaches()'));
-        expect(refresh, contains('_announceGenerationComplete()'));
+        expect(refresh, contains('_announceGenerationComplete'));
         expect(
           closeoutSource,
-          contains(
-            "const SnackBar(content: Text('Report generation complete.'))",
-          ),
+          contains('Generation finished with \$failedCount failed report'),
         );
       },
     );
@@ -222,14 +223,57 @@ void main() {
     });
 
     test('remaining and regenerate commands are exact-scope only', () {
-      expect(migration, contains('a.finalize_run_id = p_finalize_run_id'));
-      expect(migration, contains('a.scope_key = p_scope_key'));
-      expect(migration, contains('p_regenerate_all'));
       expect(
-        migration,
+        artifactScopeMigration,
+        contains('a.finalize_run_id = p_finalize_run_id'),
+      );
+      expect(artifactScopeMigration, contains('f.scope_key = p_scope_key'));
+      expect(artifactScopeMigration, contains('p_regenerate_all'));
+      expect(
+        artifactScopeMigration,
         contains("or (a.artifact_status in ('queued','failed')"),
       );
     });
+
+    test(
+      'artifact scope repair is canonical, bounded, and history preserving',
+      () {
+        expect(
+          artifactScopeMigration,
+          contains('resolve_closeout_artifact_scope'),
+        );
+        expect(artifactScopeMigration, contains('closeout_artifact_scope_key'));
+        expect(
+          artifactScopeMigration,
+          contains("'exhibitor_has_no_qualifying_entries'"),
+        );
+        expect(artifactScopeMigration, contains("artifact_status = 'failed'"));
+        expect(artifactScopeMigration, contains("'invalid_scope'"));
+        expect(
+          artifactScopeMigration,
+          contains('insert into public.show_report_artifacts'),
+        );
+        expect(artifactScopeMigration, isNot(contains('delete from')));
+      },
+    );
+
+    test(
+      'enqueue refuses noncanonical scope and prevents duplicate active tasks',
+      () {
+        expect(
+          artifactScopeMigration,
+          contains('a.scope_key = public.closeout_artifact_scope_key'),
+        );
+        expect(
+          artifactScopeMigration,
+          contains('on conflict (report_artifact_id, task_type)'),
+        );
+        expect(
+          artifactScopeMigration,
+          contains("a.metadata ->> 'scope_key' = a.scope_key"),
+        );
+      },
+    );
 
     test('dashboard uses aggregate counts and a bounded artifact page', () {
       expect(migration, contains('get_closeout_dashboard_scoped'));
@@ -243,13 +287,13 @@ void main() {
     });
 
     test('dashboard task counts are exact show, run, and scope only', () {
-      expect(migration, contains('q.show_id = p_show_id'));
+      expect(artifactScopeMigration, contains('q.show_id = p_show_id'));
       expect(
-        migration,
-        contains('join selected_run r on r.id = q.finalize_run_id'),
+        artifactScopeMigration,
+        contains('join current_artifacts a on a.id = q.report_artifact_id'),
       );
-      expect(migration, contains('q.scope_key = p_scope_key'));
-      expect(migration, contains('f.section_ids = p_section_ids'));
+      expect(artifactScopeMigration, contains('f.section_ids = p_section_ids'));
+      expect(artifactScopeMigration, contains("'retryable_failed'"));
     });
 
     test('historical data is never deleted or broadly backfilled', () {

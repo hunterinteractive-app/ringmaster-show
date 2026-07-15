@@ -2633,7 +2633,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         _rebuildReportCaches();
       });
       _scheduleDashboardPolling();
-      if (generationCompleted) _announceGenerationComplete();
+      if (generationCompleted != null) {
+        _announceGenerationComplete(generationCompleted);
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -2681,7 +2683,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       });
 
       _scheduleDashboardPolling();
-      if (generationCompleted) _announceGenerationComplete();
+      if (generationCompleted != null) {
+        _announceGenerationComplete(generationCompleted);
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -2744,7 +2748,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
     );
   }
 
-  bool _observeGenerationProgress(
+  int? _observeGenerationProgress(
     CloseoutDashboard dashboard,
     String scopeKey,
   ) {
@@ -2758,17 +2762,23 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
     final isActive = counts.queued > 0 || counts.running > 0;
     if (isActive) {
       _observedActiveGeneration = true;
-      return false;
+      return null;
     }
-    if (!_observedActiveGeneration) return false;
+    if (!_observedActiveGeneration) return null;
     _observedActiveGeneration = false;
-    return counts.failed == 0;
+    return counts.failed;
   }
 
-  void _announceGenerationComplete() {
+  void _announceGenerationComplete(int failedCount) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Report generation complete.')),
+      SnackBar(
+        content: Text(
+          failedCount == 0
+              ? 'Report generation complete.'
+              : 'Generation finished with $failedCount failed report${failedCount == 1 ? '' : 's'}',
+        ),
+      ),
     );
   }
 
@@ -4237,7 +4247,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       });
 
       _scheduleDashboardPolling();
-      if (generationCompleted) _announceGenerationComplete();
+      if (generationCompleted != null) {
+        _announceGenerationComplete(generationCompleted);
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -6879,7 +6891,10 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                   if (generationActive || generationProgress.hasFailures)
                     CloseoutGenerationProgressCard(
                       progress: generationProgress,
-                      onRetryFailed: _isBusy || generationActive
+                      onRetryFailed:
+                          _isBusy ||
+                              generationActive ||
+                              (_dashboard?.taskCounts.retryableFailed ?? 0) == 0
                           ? null
                           : _retryFailedReports,
                     ),
@@ -9741,6 +9756,7 @@ class CloseoutTaskCounts {
   final int running;
   final int failed;
   final int completed;
+  final int retryableFailed;
   final int remaining;
 
   const CloseoutTaskCounts({
@@ -9748,6 +9764,7 @@ class CloseoutTaskCounts {
     this.running = 0,
     this.failed = 0,
     this.completed = 0,
+    this.retryableFailed = 0,
     this.remaining = 0,
   });
 
@@ -9757,6 +9774,7 @@ class CloseoutTaskCounts {
       running: ((json['running'] ?? 0) as num).toInt(),
       failed: ((json['failed'] ?? 0) as num).toInt(),
       completed: ((json['completed'] ?? 0) as num).toInt(),
+      retryableFailed: ((json['retryable_failed'] ?? 0) as num).toInt(),
       remaining: ((json['remaining'] ?? 0) as num).toInt(),
     );
   }

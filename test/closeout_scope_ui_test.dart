@@ -136,6 +136,26 @@ void main() {
     expect(progress.hasFailures, isTrue);
   });
 
+  testWidgets(
+    'finished generation reports failures and hides unavailable retry',
+    (tester) async {
+      await tester.pumpWidget(
+        _host(
+          const CloseoutGenerationProgressCard(
+            progress: CloseoutGenerationProgress(completed: 7, failed: 3),
+          ),
+        ),
+      );
+
+      expect(
+        find.text('Generation finished with 3 failed reports'),
+        findsOneWidget,
+      );
+      expect(find.text('7 of 10 completed'), findsOneWidget);
+      expect(find.text('Retry Failed'), findsNothing);
+    },
+  );
+
   test('generation is complete only after all tasks complete', () {
     const progress = CloseoutGenerationProgress(completed: 588);
 
