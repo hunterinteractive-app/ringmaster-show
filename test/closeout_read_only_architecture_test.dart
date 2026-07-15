@@ -15,6 +15,12 @@ void main() {
   final artifactScopeMigration = File(
     'supabase/migrations/20260715012121_fix_closeout_artifact_scope.sql',
   ).readAsStringSync();
+  final generationStatusMigration = File(
+    'supabase/migrations/20260715031210_closeout_generation_status_timestamps.sql',
+  ).readAsStringSync();
+  final reviewReportMigration = File(
+    'supabase/migrations/20260715102607_closeout_review_report_details.sql',
+  ).readAsStringSync();
   final edgeFunction = File(
     'supabase/functions/run-closeout/index.ts',
   ).readAsStringSync();
@@ -346,6 +352,72 @@ void main() {
       );
       expect(artifactScopeMigration, contains('f.section_ids = p_section_ids'));
       expect(artifactScopeMigration, contains("'retryable_failed'"));
+    });
+
+    test(
+      'generation timestamps remain in the same scoped dashboard response',
+      () {
+        expect(
+          generationStatusMigration,
+          contains('create function public.get_closeout_dashboard_scoped'),
+        );
+        expect(generationStatusMigration, contains("'{task_counts}'"));
+        expect(generationStatusMigration, contains("'last_activity_at'"));
+        expect(generationStatusMigration, contains("'completed_at'"));
+        expect(generationStatusMigration, contains('a.is_current = true'));
+        expect(
+          generationStatusMigration,
+          contains('f.scope_key = p_scope_key'),
+        );
+        expect(
+          generationStatusMigration,
+          contains('f.section_ids = p_section_ids'),
+        );
+      },
+    );
+
+    test('applied generation timestamp migration has no review changes', () {
+      expect(generationStatusMigration, isNot(contains('review_reports')));
+      expect(generationStatusMigration, isNot(contains('review_rows as')));
+      expect(
+        generationStatusMigration,
+        contains('rename to get_closeout_dashboard_scoped_without_activity'),
+      );
+    });
+
+    test('review reports exclude historical runs, artifacts, and tasks', () {
+      expect(
+        reviewReportMigration,
+        contains('join selected_run r on r.id = a.finalize_run_id'),
+      );
+      expect(reviewReportMigration, contains("'{review_reports}'"));
+      expect(reviewReportMigration, contains("'review_group'"));
+      expect(reviewReportMigration, contains('a.is_current = true'));
+      expect(reviewReportMigration, contains('task.report_artifact_id = a.id'));
+      expect(
+        reviewReportMigration,
+        contains('order by task.created_at desc, task.id desc'),
+      );
+      expect(reviewReportMigration, contains("'retryable_failure'"));
+      expect(reviewReportMigration, contains("'non_retryable_failure'"));
+      expect(reviewReportMigration, contains("'missing'"));
+      expect(reviewReportMigration, contains("'active'"));
+    });
+
+    test('review action scrolls to its dedicated panel key', () {
+      expect(closeoutSource, contains('final GlobalKey _reviewPanelKey'));
+      expect(
+        closeoutSource,
+        contains('final reviewContext = _reviewPanelKey.currentContext'),
+      );
+      expect(closeoutSource, contains('Scrollable.ensureVisible('));
+      expect(closeoutSource, contains('reviewContext,'));
+      expect(
+        closeoutSource,
+        isNot(
+          contains('final reportsContext = _reportsSectionKey.currentContext'),
+        ),
+      );
     });
 
     test('historical data is never deleted or broadly backfilled', () {

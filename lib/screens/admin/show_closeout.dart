@@ -128,6 +128,12 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
   bool _dashboardRefreshPending = false;
   int _dashboardContextRevision = 0;
   late final CloseoutDashboardPoller _dashboardPoller;
+  final GlobalKey _reportsSectionKey = GlobalKey();
+  final GlobalKey _reviewPanelKey = GlobalKey();
+  bool _reviewPanelOpen = false;
+  final Map<String, String> _generationCountSignatures = {};
+  final Map<String, DateTime> _generationLastActivity = {};
+  final Map<String, DateTime> _generationCompletedAt = {};
   String? _dashboardScopeKey;
   AppLifecycleState _appLifecycleState = AppLifecycleState.resumed;
   String? _observedGenerationKey;
@@ -2780,12 +2786,38 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       return const CloseoutGenerationProgress();
     }
     final counts = _dashboard?.taskCounts ?? const CloseoutTaskCounts();
+    final generationKey = _currentGenerationKey;
+    final observedActivity = _generationLastActivity[generationKey];
+    final serverActivity = counts.lastActivityAt;
+    final lastActivity =
+        serverActivity == null ||
+            (observedActivity != null &&
+                observedActivity.isAfter(serverActivity))
+        ? observedActivity
+        : serverActivity;
+    final completedAt =
+        counts.completedAt ?? _generationCompletedAt[generationKey];
+    final isStalled =
+        counts.queued + counts.running > 0 &&
+        lastActivity != null &&
+        DateTime.now().toUtc().difference(lastActivity.toUtc()) >=
+            const Duration(minutes: 2);
     return CloseoutGenerationProgress(
       queued: counts.queued,
       running: counts.running,
       completed: counts.completed,
       failed: counts.failed,
+      remaining: counts.remaining,
+      lastActivityAt: lastActivity,
+      completedAt: completedAt,
+      isStalled: isStalled,
     );
+  }
+
+  String get _currentGenerationKey {
+    final scopeKey = _resolvedCloseoutScope.stableScopeKey;
+    final runId = (_dashboard?.latestFinalize.id ?? '').trim();
+    return '$scopeKey|$runId';
   }
 
   int? _observeGenerationProgress(
@@ -2799,10 +2831,33 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       _observedActiveGeneration = false;
     }
     final counts = dashboard.taskCounts;
+    final signature = <int>[
+      counts.queued,
+      counts.running,
+      counts.completed,
+      counts.failed,
+      counts.remaining,
+    ].join(':');
+    final serverActivity = counts.lastActivityAt;
+    if (_generationCountSignatures[generationKey] != signature) {
+      _generationCountSignatures[generationKey] = signature;
+      _generationLastActivity[generationKey] = DateTime.now();
+    } else if (serverActivity != null) {
+      final previous = _generationLastActivity[generationKey];
+      if (previous == null || serverActivity.isAfter(previous)) {
+        _generationLastActivity[generationKey] = serverActivity;
+      }
+    }
     final isActive = counts.queued > 0 || counts.running > 0;
     if (isActive) {
       _observedActiveGeneration = true;
       return null;
+    }
+    if (counts.completed + counts.failed > 0) {
+      _generationCompletedAt.putIfAbsent(
+        generationKey,
+        () => counts.completedAt ?? DateTime.now(),
+      );
     }
     if (!_observedActiveGeneration) return null;
     _observedActiveGeneration = false;
@@ -2828,6 +2883,48 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       active: counts != null && counts.queued + counts.running > 0,
       visible: _closeoutScreenIsVisible,
     );
+  }
+
+  void _viewReportsNeedingReview() {
+    setState(() {
+      _reportsSectionOpen = true;
+      _reviewPanelOpen = true;
+    });
+    unawaited(_ensureReportsLoaded());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final reviewContext = _reviewPanelKey.currentContext;
+      if (!mounted || reviewContext == null) return;
+      Scrollable.ensureVisible(
+        reviewContext,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    });
+  }
+
+  List<CloseoutReviewReport> get _reportsNeedingReview {
+    final finalizeRunId = _finalizeRunIdForSelectedScope;
+    return (_dashboard?.reviewReports ?? const <CloseoutReviewReport>[])
+        .where(
+          (report) =>
+              finalizeRunId.isNotEmpty && report.finalizeRunId == finalizeRunId,
+        )
+        .map((report) {
+          var sectionLabel = report.sectionLabel;
+          if (sectionLabel.isEmpty && report.sectionId.isNotEmpty) {
+            for (final section in _closeoutSections) {
+              if (section.sectionId == report.sectionId) {
+                sectionLabel = section.displayLabel;
+                break;
+              }
+            }
+          }
+          return report.withPresentation(
+            reportTitle: _friendlyReportName(report.reportName),
+            sectionLabel: sectionLabel,
+          );
+        })
+        .toList();
   }
 
   Future<int> _finalizeShow() async {
@@ -6681,6 +6778,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
     return AppTheme.surfaceTextScope(
       context,
       child: Container(
+        key: _reportsSectionKey,
         width: double.infinity,
         margin: const EdgeInsets.only(bottom: 16),
         decoration: BoxDecoration(
@@ -6689,6 +6787,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
           border: Border.all(color: AppColors.muted.withValues(alpha: .18)),
         ),
         child: ExpansionTile(
+          key: ValueKey('closeout-reports-section-$_reportsSectionOpen'),
           initiallyExpanded: _reportsSectionOpen,
           onExpansionChanged: (expanded) {
             setState(() {
@@ -6706,6 +6805,17 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
           ),
           childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
           children: [
+            if (_reportsNeedingReview.isNotEmpty)
+              Container(
+                key: _reviewPanelKey,
+                child: CloseoutReportsNeedingReviewPanel(
+                  reports: _reportsNeedingReview,
+                  initiallyExpanded: _reviewPanelOpen,
+                  onExpansionChanged: (expanded) {
+                    setState(() => _reviewPanelOpen = expanded);
+                  },
+                ),
+              ),
             if (_loadingReports && !_reportsLoaded)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 24),
@@ -6929,8 +7039,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                     },
                   ),
 
-                  if (generationActive || generationProgress.hasFailures)
-                    CloseoutGenerationProgressCard(
+                  if (generationProgress.total > 0 ||
+                      generationProgress.remaining > 0)
+                    CloseoutGenerationStatusBanner(
                       progress: generationProgress,
                       onRetryFailed:
                           _isBusy ||
@@ -6938,6 +7049,11 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                               (_dashboard?.taskCounts.retryableFailed ?? 0) == 0
                           ? null
                           : _retryFailedReports,
+                      onViewReportsNeedingReview:
+                          !generationActive &&
+                              generationProgress.needsReview > 0
+                          ? _viewReportsNeedingReview
+                          : null,
                     ),
 
                   if (reportsBlocked) ...[
@@ -9738,6 +9854,7 @@ class CloseoutDashboard {
   final ResultsReadinessDto resultsReadiness;
   final LatestFinalize latestFinalize;
   final List<ReportArtifactSummary> reports;
+  final List<CloseoutReviewReport> reviewReports;
   final List<DeliveryRunSummary> deliveries;
   final ArchiveSummary? latestArchive;
   final CloseoutTaskCounts taskCounts;
@@ -9748,6 +9865,7 @@ class CloseoutDashboard {
     required this.resultsReadiness,
     required this.latestFinalize,
     required this.reports,
+    this.reviewReports = const <CloseoutReviewReport>[],
     required this.deliveries,
     required this.latestArchive,
     this.taskCounts = const CloseoutTaskCounts(),
@@ -9770,6 +9888,11 @@ class CloseoutDashboard {
           (e) => Map<String, dynamic>.from(e as Map),
         ),
       ).map(ReportArtifactSummary.fromJson).toList(),
+      reviewReports: List<Map<String, dynamic>>.from(
+        (json['review_reports'] ?? const []).map(
+          (e) => Map<String, dynamic>.from(e as Map),
+        ),
+      ).map(CloseoutReviewReport.fromJson).toList(),
       deliveries: List<Map<String, dynamic>>.from(
         (json['deliveries'] ?? const []).map(
           (e) => Map<String, dynamic>.from(e as Map),
@@ -9799,6 +9922,8 @@ class CloseoutTaskCounts {
   final int completed;
   final int retryableFailed;
   final int remaining;
+  final DateTime? lastActivityAt;
+  final DateTime? completedAt;
 
   const CloseoutTaskCounts({
     this.queued = 0,
@@ -9807,6 +9932,8 @@ class CloseoutTaskCounts {
     this.completed = 0,
     this.retryableFailed = 0,
     this.remaining = 0,
+    this.lastActivityAt,
+    this.completedAt,
   });
 
   factory CloseoutTaskCounts.fromJson(Map<String, dynamic> json) {
@@ -9817,6 +9944,10 @@ class CloseoutTaskCounts {
       completed: ((json['completed'] ?? 0) as num).toInt(),
       retryableFailed: ((json['retryable_failed'] ?? 0) as num).toInt(),
       remaining: ((json['remaining'] ?? 0) as num).toInt(),
+      lastActivityAt: DateTime.tryParse(
+        (json['last_activity_at'] ?? '').toString(),
+      ),
+      completedAt: DateTime.tryParse((json['completed_at'] ?? '').toString()),
     );
   }
 }

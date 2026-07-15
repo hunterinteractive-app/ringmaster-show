@@ -10,6 +10,57 @@ Widget _host(Widget child) {
   );
 }
 
+Widget _scrollHost(Widget child) {
+  return MaterialApp(
+    home: Scaffold(body: SingleChildScrollView(child: child)),
+  );
+}
+
+const _reviewReports = <CloseoutReviewReport>[
+  CloseoutReviewReport(
+    artifactId: 'retryable-artifact',
+    finalizeRunId: 'run-1',
+    reportTitle: 'Exhibitor Report',
+    reportName: 'exhibitor_report',
+    sectionId: 'section-a',
+    sectionLabel: 'Rabbit Open A',
+    showLetter: 'A',
+    scope: 'OPEN',
+    species: 'rabbit',
+    exhibitorName: 'Alex Example',
+    breedName: 'Dutch',
+    artifactStatus: 'failed',
+    taskStatus: 'failed',
+    errorCategory: 'renderer_timeout',
+    errorMessage: 'The report renderer timed out.',
+    retryable: true,
+    attemptCount: 2,
+    maxAttempts: 5,
+    group: CloseoutReviewGroup.retryableFailure,
+  ),
+  CloseoutReviewReport(
+    artifactId: 'non-retryable-artifact',
+    finalizeRunId: 'run-1',
+    reportTitle: 'ARBA Report',
+    reportName: 'arba_report',
+    sectionId: 'section-b',
+    sectionLabel: 'Cavy Youth B',
+    showLetter: 'B',
+    scope: 'YOUTH',
+    species: 'cavy',
+    clubName: 'County Cavy Club',
+    sanctioningBody: 'ARBA',
+    artifactStatus: 'failed',
+    taskStatus: 'failed',
+    errorCategory: 'missing_sanction_number',
+    errorMessage: 'A sanction number is required for this report.',
+    retryable: false,
+    attemptCount: 5,
+    maxAttempts: 5,
+    group: CloseoutReviewGroup.nonRetryableFailure,
+  ),
+];
+
 void main() {
   testWidgets('completed scope disables Finalize and shows completed state', (
     tester,
@@ -83,16 +134,11 @@ void main() {
       completed: 112,
       failed: 5,
     );
-    var retryPressed = false;
-
     await tester.pumpWidget(
       _host(
         Column(
           children: [
-            CloseoutGenerationProgressCard(
-              progress: progress,
-              onRetryFailed: () => retryPressed = true,
-            ),
+            const CloseoutGenerationStatusBanner(progress: progress),
             const CloseoutGenerateRemainingButton(
               count: 476,
               progress: progress,
@@ -104,9 +150,10 @@ void main() {
     );
 
     expect(find.text('Generating reports'), findsOneWidget);
-    expect(find.text('112 of 588 completed'), findsOneWidget);
-    expect(find.text('463 waiting • 8 rendering • 5 failed'), findsOneWidget);
-    expect(find.text('5 reports failed to generate.'), findsOneWidget);
+    expect(
+      find.text('463 queued • 8 running • 112 completed • 5 failed'),
+      findsOneWidget,
+    );
     expect(find.text('Generating Reports — 112 of 588'), findsOneWidget);
     expect(
       tester
@@ -122,9 +169,6 @@ void main() {
           .value,
       closeTo(112 / 588, 0.0001),
     );
-
-    await tester.tap(find.text('Retry Failed'));
-    expect(retryPressed, isTrue);
   });
 
   test('failed tasks are excluded from completed progress', () {
@@ -141,17 +185,21 @@ void main() {
     (tester) async {
       await tester.pumpWidget(
         _host(
-          const CloseoutGenerationProgressCard(
-            progress: CloseoutGenerationProgress(completed: 7, failed: 3),
+          const CloseoutGenerationStatusBanner(
+            progress: CloseoutGenerationProgress(
+              completed: 7,
+              failed: 3,
+              remaining: 3,
+            ),
           ),
         ),
       );
 
       expect(
-        find.text('Generation finished with 3 failed reports'),
+        find.text('Report generation is complete. 3 reports need review.'),
         findsOneWidget,
       );
-      expect(find.text('7 of 10 completed'), findsOneWidget);
+      expect(find.text('7 generated • 3 failed • 3 remaining'), findsOneWidget);
       expect(find.text('Retry Failed'), findsNothing);
     },
   );
@@ -163,6 +211,160 @@ void main() {
     expect(progress.percentComplete, 1);
     expect(progress.isActive, isFalse);
     expect(progress.isComplete, isTrue);
+  });
+
+  testWidgets('waiting banner is distinct from active rendering', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _host(
+        const CloseoutGenerationStatusBanner(
+          progress: CloseoutGenerationProgress(queued: 12),
+        ),
+      ),
+    );
+
+    expect(
+      find.text('Reports are queued and waiting to begin.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('12 queued'), findsOneWidget);
+  });
+
+  testWidgets('complete banner shows generated total and timestamp', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _host(
+        CloseoutGenerationStatusBanner(
+          progress: CloseoutGenerationProgress(
+            completed: 12,
+            completedAt: DateTime.utc(2026, 7, 15, 12, 30),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Report generation is complete.'), findsOneWidget);
+    expect(find.text('12 reports generated.'), findsOneWidget);
+    expect(find.textContaining('Completed:'), findsOneWidget);
+  });
+
+  testWidgets('issues banner opens reports needing review', (tester) async {
+    var opened = false;
+    await tester.pumpWidget(
+      _host(
+        CloseoutGenerationStatusBanner(
+          progress: const CloseoutGenerationProgress(
+            completed: 9,
+            failed: 2,
+            remaining: 2,
+          ),
+          onViewReportsNeedingReview: () => opened = true,
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('View Reports Needing Review'));
+    expect(opened, isTrue);
+  });
+
+  testWidgets('banner action opens the dedicated review panel', (tester) async {
+    var reviewOpen = false;
+    await tester.pumpWidget(
+      StatefulBuilder(
+        builder: (context, setState) => _scrollHost(
+          Column(
+            children: [
+              CloseoutGenerationStatusBanner(
+                progress: const CloseoutGenerationProgress(
+                  completed: 7,
+                  failed: 2,
+                  remaining: 2,
+                ),
+                onViewReportsNeedingReview: () {
+                  setState(() => reviewOpen = true);
+                },
+              ),
+              CloseoutReportsNeedingReviewPanel(
+                reports: _reviewReports,
+                initiallyExpanded: reviewOpen,
+              ),
+              const ExpansionTile(
+                title: Text('Reports & Distribution'),
+                children: [Text('Normal report dropdown')],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('View Reports Needing Review'));
+    await tester.pumpAndSettle();
+
+    expect(reviewOpen, isTrue);
+    expect(
+      find.byKey(const ValueKey('closeout-reports-needing-review-panel')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('closeout-review-report-retryable-artifact')),
+      findsOneWidget,
+    );
+    expect(find.text('Normal report dropdown'), findsNothing);
+  });
+
+  testWidgets(
+    'review reports are grouped and show report identity and errors',
+    (tester) async {
+      await tester.pumpWidget(
+        _scrollHost(
+          const CloseoutReportsNeedingReviewPanel(
+            reports: _reviewReports,
+            initiallyExpanded: true,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Retryable failures'), findsOneWidget);
+      expect(find.text('Non-retryable failures'), findsOneWidget);
+      expect(find.text('Exhibitor Report'), findsOneWidget);
+      expect(find.text('exhibitor_report'), findsOneWidget);
+      expect(
+        find.text('Rabbit Open A • Show A • OPEN • rabbit'),
+        findsOneWidget,
+      );
+      expect(find.text('Exhibitor: Alex Example'), findsOneWidget);
+      expect(find.text('Breed: Dutch'), findsOneWidget);
+      expect(find.text('Error category: renderer_timeout'), findsOneWidget);
+      expect(find.text('The report renderer timed out.'), findsOneWidget);
+      expect(find.text('Club: County Cavy Club'), findsOneWidget);
+      expect(find.text('Sanctioning body: ARBA'), findsOneWidget);
+      expect(find.textContaining('Retryable: Yes'), findsOneWidget);
+      expect(find.textContaining('Retryable: No'), findsOneWidget);
+    },
+  );
+
+  testWidgets('stalled banner is non-alarming and prevents duplicate advice', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _host(
+        CloseoutGenerationStatusBanner(
+          progress: CloseoutGenerationProgress(
+            queued: 4,
+            isStalled: true,
+            lastActivityAt: DateTime.utc(2026, 7, 15, 12),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Report generation may be delayed'), findsOneWidget);
+    expect(find.textContaining('no need to queue them again'), findsOneWidget);
+    expect(find.textContaining('Last activity:'), findsOneWidget);
   });
 
   testWidgets('detailed summary retains every selected section label', (

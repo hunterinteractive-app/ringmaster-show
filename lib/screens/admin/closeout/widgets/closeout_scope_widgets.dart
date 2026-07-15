@@ -94,46 +94,92 @@ class CloseoutGenerationProgress {
   final int running;
   final int completed;
   final int failed;
+  final int remaining;
+  final DateTime? lastActivityAt;
+  final DateTime? completedAt;
+  final bool isStalled;
 
   const CloseoutGenerationProgress({
     this.queued = 0,
     this.running = 0,
     this.completed = 0,
     this.failed = 0,
+    this.remaining = 0,
+    this.lastActivityAt,
+    this.completedAt,
+    this.isStalled = false,
   });
 
   int get total => queued + running + completed + failed;
   bool get isActive => queued > 0 || running > 0;
   bool get hasFailures => failed > 0;
+  int get needsReview => failed > remaining ? failed : remaining;
+  bool get isWaitingToStart =>
+      queued > 0 && running == 0 && completed == 0 && failed == 0;
   bool get isComplete => total > 0 && !isActive && !hasFailures;
   double get percentComplete => total == 0 ? 0 : completed / total;
 }
 
-class CloseoutGenerationProgressCard extends StatelessWidget {
+class CloseoutGenerationStatusBanner extends StatelessWidget {
   final CloseoutGenerationProgress progress;
   final VoidCallback? onRetryFailed;
+  final VoidCallback? onViewReportsNeedingReview;
 
-  const CloseoutGenerationProgressCard({
+  const CloseoutGenerationStatusBanner({
     super.key,
     required this.progress,
     this.onRetryFailed,
+    this.onViewReportsNeedingReview,
   });
+
+  String _timestamp(BuildContext context, DateTime? value) {
+    if (value == null) return 'Not available';
+    final local = value.toLocal();
+    final material = MaterialLocalizations.of(context);
+    return '${material.formatShortDate(local)} at '
+        '${material.formatTimeOfDay(TimeOfDay.fromDateTime(local))}';
+  }
 
   @override
   Widget build(BuildContext context) {
+    final isCompleteWithIssues = !progress.isActive && progress.needsReview > 0;
+    final isComplete =
+        !progress.isActive && progress.total > 0 && progress.needsReview == 0;
+    final title = switch ((
+      progress.isStalled,
+      progress.isWaitingToStart,
+      isCompleteWithIssues,
+      isComplete,
+    )) {
+      (true, _, _, _) => 'Report generation may be delayed',
+      (_, true, _, _) => 'Reports are queued and waiting to begin.',
+      (_, _, true, _) =>
+        'Report generation is complete. ${progress.needsReview} report${progress.needsReview == 1 ? '' : 's'} need review.',
+      (_, _, _, true) => 'Report generation is complete.',
+      _ => 'Generating reports',
+    };
+    final bannerColor = progress.isStalled || isCompleteWithIssues
+        ? Colors.orange
+        : isComplete
+        ? Colors.green
+        : AppColors.secondaryButton;
+
     return Container(
-      key: const ValueKey('closeout-generation-progress-card'),
+      key: const ValueKey('closeout-generation-status-banner'),
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: progress.hasFailures
-              ? Colors.orange.withValues(alpha: .45)
-              : AppColors.secondaryButton.withValues(alpha: .25),
-        ),
+        border: Border.all(color: bannerColor.withValues(alpha: .55), width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: bannerColor.withValues(alpha: .10),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -141,49 +187,69 @@ class CloseoutGenerationProgressCard extends StatelessWidget {
           Row(
             children: [
               Icon(
-                progress.hasFailures
+                progress.isStalled || isCompleteWithIssues
                     ? Icons.warning_amber_rounded
+                    : isComplete
+                    ? Icons.check_circle_outline
+                    : progress.isWaitingToStart
+                    ? Icons.schedule
                     : Icons.cloud_sync_outlined,
-                color: progress.hasFailures
-                    ? Colors.orange
-                    : AppColors.secondaryButton,
+                color: bannerColor,
+                size: 28,
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  progress.isActive
-                      ? 'Generating reports'
-                      : 'Generation finished with ${progress.failed} failed report${progress.failed == 1 ? '' : 's'}',
+                  title,
                   style: const TextStyle(
                     fontWeight: FontWeight.w700,
-                    fontSize: 16,
+                    fontSize: 18,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          Text(
-            '${progress.completed} of ${progress.total} completed',
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 8),
-          LinearProgressIndicator(
-            value: progress.percentComplete.clamp(0.0, 1.0).toDouble(),
-            minHeight: 7,
-            borderRadius: BorderRadius.circular(99),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '${progress.queued} waiting • ${progress.running} rendering • ${progress.failed} failed',
-          ),
-          if (progress.hasFailures) ...[
+          if (progress.isActive) ...[
+            const SizedBox(height: 12),
+            Text(
+              '${progress.queued} queued • ${progress.running} running • '
+              '${progress.completed} completed • ${progress.failed} failed',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 10),
+            LinearProgressIndicator(
+              value: progress.total == 0
+                  ? null
+                  : progress.percentComplete.clamp(0.0, 1.0).toDouble(),
+              minHeight: 8,
+              borderRadius: BorderRadius.circular(99),
+            ),
+          ],
+          if (progress.isStalled) ...[
+            const SizedBox(height: 10),
+            Text(
+              'No recent progress was detected. The reports remain queued; '
+              'there is no need to queue them again.',
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Last activity: ${_timestamp(context, progress.lastActivityAt)}',
+            ),
+          ],
+          if (isComplete) ...[
+            const SizedBox(height: 10),
+            Text('${progress.completed} reports generated.'),
+            const SizedBox(height: 4),
+            Text('Completed: ${_timestamp(context, progress.completedAt)}'),
+          ],
+          if (isCompleteWithIssues) ...[
             const SizedBox(height: 10),
             Row(
               children: [
                 Expanded(
                   child: Text(
-                    '${progress.failed} report${progress.failed == 1 ? '' : 's'} failed to generate.',
+                    '${progress.completed} generated • ${progress.failed} failed • '
+                    '${progress.remaining} remaining',
                     style: const TextStyle(
                       color: Colors.orange,
                       fontWeight: FontWeight.w600,
@@ -201,7 +267,281 @@ class CloseoutGenerationProgressCard extends StatelessWidget {
                 ],
               ],
             ),
+            if (onViewReportsNeedingReview != null) ...[
+              const SizedBox(height: 10),
+              FilledButton.icon(
+                key: const ValueKey('closeout-view-reports-needing-review'),
+                onPressed: onViewReportsNeedingReview,
+                icon: const Icon(Icons.fact_check_outlined),
+                label: const Text('View Reports Needing Review'),
+              ),
+            ],
           ],
+        ],
+      ),
+    );
+  }
+}
+
+enum CloseoutReviewGroup {
+  retryableFailure,
+  nonRetryableFailure,
+  missing,
+  active,
+}
+
+class CloseoutReviewReport {
+  final String artifactId;
+  final String finalizeRunId;
+  final String reportTitle;
+  final String reportName;
+  final String sectionId;
+  final String sectionLabel;
+  final String showLetter;
+  final String scope;
+  final String species;
+  final String exhibitorName;
+  final String breedName;
+  final String clubName;
+  final String sanctioningBody;
+  final String artifactStatus;
+  final String taskStatus;
+  final String errorCategory;
+  final String errorMessage;
+  final bool retryable;
+  final int attemptCount;
+  final int maxAttempts;
+  final DateTime? lastAttemptedAt;
+  final CloseoutReviewGroup group;
+
+  const CloseoutReviewReport({
+    required this.artifactId,
+    required this.finalizeRunId,
+    required this.reportTitle,
+    required this.reportName,
+    this.sectionId = '',
+    this.sectionLabel = '',
+    this.showLetter = '',
+    this.scope = '',
+    this.species = '',
+    this.exhibitorName = '',
+    this.breedName = '',
+    this.clubName = '',
+    this.sanctioningBody = '',
+    required this.artifactStatus,
+    required this.taskStatus,
+    this.errorCategory = '',
+    this.errorMessage = '',
+    required this.retryable,
+    this.attemptCount = 0,
+    this.maxAttempts = 0,
+    this.lastAttemptedAt,
+    required this.group,
+  });
+
+  factory CloseoutReviewReport.fromJson(Map<String, dynamic> json) {
+    String text(String key) => (json[key] ?? '').toString().trim();
+    final group = switch (text('review_group')) {
+      'retryable_failure' => CloseoutReviewGroup.retryableFailure,
+      'non_retryable_failure' => CloseoutReviewGroup.nonRetryableFailure,
+      'active' => CloseoutReviewGroup.active,
+      _ => CloseoutReviewGroup.missing,
+    };
+    final reportName = text('report_name');
+    return CloseoutReviewReport(
+      artifactId: text('artifact_id'),
+      finalizeRunId: text('finalize_run_id'),
+      reportTitle: reportName,
+      reportName: reportName,
+      sectionId: text('section_id'),
+      sectionLabel: text('section_label'),
+      showLetter: text('show_letter'),
+      scope: text('scope'),
+      species: text('species'),
+      exhibitorName: text('exhibitor_name'),
+      breedName: text('breed_name'),
+      clubName: text('club_name'),
+      sanctioningBody: text('sanctioning_body'),
+      artifactStatus: text('artifact_status'),
+      taskStatus: text('task_status'),
+      errorCategory: text('error_category'),
+      errorMessage: text('error_message'),
+      retryable: json['retryable'] == true,
+      attemptCount: ((json['attempt_count'] ?? 0) as num).toInt(),
+      maxAttempts: ((json['max_attempts'] ?? 0) as num).toInt(),
+      lastAttemptedAt: DateTime.tryParse(text('last_attempted_at')),
+      group: group,
+    );
+  }
+
+  CloseoutReviewReport withPresentation({
+    required String reportTitle,
+    required String sectionLabel,
+  }) {
+    return CloseoutReviewReport(
+      artifactId: artifactId,
+      finalizeRunId: finalizeRunId,
+      reportTitle: reportTitle,
+      reportName: reportName,
+      sectionId: sectionId,
+      sectionLabel: sectionLabel,
+      showLetter: showLetter,
+      scope: scope,
+      species: species,
+      exhibitorName: exhibitorName,
+      breedName: breedName,
+      clubName: clubName,
+      sanctioningBody: sanctioningBody,
+      artifactStatus: artifactStatus,
+      taskStatus: taskStatus,
+      errorCategory: errorCategory,
+      errorMessage: errorMessage,
+      retryable: retryable,
+      attemptCount: attemptCount,
+      maxAttempts: maxAttempts,
+      lastAttemptedAt: lastAttemptedAt,
+      group: group,
+    );
+  }
+}
+
+class CloseoutReportsNeedingReviewPanel extends StatelessWidget {
+  final List<CloseoutReviewReport> reports;
+  final bool initiallyExpanded;
+  final ValueChanged<bool>? onExpansionChanged;
+
+  const CloseoutReportsNeedingReviewPanel({
+    super.key,
+    required this.reports,
+    required this.initiallyExpanded,
+    this.onExpansionChanged,
+  });
+
+  String _timestamp(BuildContext context, DateTime? value) {
+    if (value == null) return 'Not available';
+    final local = value.toLocal();
+    final material = MaterialLocalizations.of(context);
+    return '${material.formatShortDate(local)} at '
+        '${material.formatTimeOfDay(TimeOfDay.fromDateTime(local))}';
+  }
+
+  String _errorFor(CloseoutReviewReport report) {
+    if (report.errorMessage.isNotEmpty) return report.errorMessage;
+    if (report.group == CloseoutReviewGroup.missing) {
+      return 'No render task is available for this report.';
+    }
+    if (report.group == CloseoutReviewGroup.active) {
+      return 'This report is still waiting for generation to finish.';
+    }
+    return 'No additional failure details were provided.';
+  }
+
+  Widget _detail(String label, String value) {
+    if (value.trim().isEmpty) return const SizedBox.shrink();
+    return Text('$label: $value');
+  }
+
+  Widget _reportRow(BuildContext context, CloseoutReviewReport report) {
+    final identity = <String>[
+      if (report.sectionLabel.isNotEmpty) report.sectionLabel,
+      if (report.showLetter.isNotEmpty) 'Show ${report.showLetter}',
+      if (report.scope.isNotEmpty) report.scope,
+      if (report.species.isNotEmpty) report.species,
+    ].join(' • ');
+    return Container(
+      key: ValueKey('closeout-review-report-${report.artifactId}'),
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.muted.withValues(alpha: .25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            report.reportTitle,
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+          ),
+          const SizedBox(height: 2),
+          Text(report.reportName, style: const TextStyle(fontSize: 12)),
+          if (identity.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(identity, style: const TextStyle(fontWeight: FontWeight.w600)),
+          ],
+          _detail('Exhibitor', report.exhibitorName),
+          _detail('Breed', report.breedName),
+          _detail('Club', report.clubName),
+          _detail('Sanctioning body', report.sanctioningBody),
+          const SizedBox(height: 6),
+          Text(
+            'Artifact: ${report.artifactStatus} • Task: ${report.taskStatus} • '
+            'Retryable: ${report.retryable ? 'Yes' : 'No'}',
+          ),
+          if (report.errorCategory.isNotEmpty)
+            Text('Error category: ${report.errorCategory}'),
+          Text(_errorFor(report), style: const TextStyle(color: Colors.orange)),
+          const SizedBox(height: 4),
+          Text(
+            'Attempts: ${report.attemptCount}${report.maxAttempts > 0 ? ' of ${report.maxAttempts}' : ''} • '
+            'Last attempted: ${_timestamp(context, report.lastAttemptedAt)}',
+            style: const TextStyle(fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const groups = <(CloseoutReviewGroup, String)>[
+      (CloseoutReviewGroup.retryableFailure, 'Retryable failures'),
+      (CloseoutReviewGroup.nonRetryableFailure, 'Non-retryable failures'),
+      (CloseoutReviewGroup.missing, 'Missing reports'),
+      (CloseoutReviewGroup.active, 'Queued or running'),
+    ];
+    return Container(
+      key: const ValueKey('closeout-reports-needing-review-panel'),
+      margin: const EdgeInsets.only(top: 12, bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.orange.withValues(alpha: .06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.orange.withValues(alpha: .35)),
+      ),
+      child: ExpansionTile(
+        key: ValueKey('closeout-review-panel-$initiallyExpanded'),
+        initiallyExpanded: initiallyExpanded,
+        onExpansionChanged: onExpansionChanged,
+        leading: const Icon(Icons.fact_check_outlined, color: Colors.orange),
+        title: const Text(
+          'Reports Needing Review',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
+        subtitle: Text(
+          '${reports.length} report${reports.length == 1 ? '' : 's'}',
+        ),
+        childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        children: [
+          for (final entry in groups)
+            if (reports.any((report) => report.group == entry.$1)) ...[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 10, bottom: 8),
+                  child: Text(
+                    entry.$2,
+                    key: ValueKey('closeout-review-group-${entry.$1.name}'),
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+              for (final report in reports.where(
+                (report) => report.group == entry.$1,
+              ))
+                _reportRow(context, report),
+            ],
         ],
       ),
     );
