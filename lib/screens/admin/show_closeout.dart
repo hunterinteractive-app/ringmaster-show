@@ -19,6 +19,7 @@ import 'package:ringmaster_show/screens/admin/closeout/data/loaders/arba_report_
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/arba_report_pdf.dart';
 import 'package:ringmaster_show/screens/admin/closeout/registry/report_registry.dart';
 import 'package:ringmaster_show/screens/admin/closeout/services/closeout_runner.dart';
+import 'package:ringmaster_show/screens/admin/closeout/services/closeout_dashboard_poller.dart';
 import 'package:ringmaster_show/screens/admin/closeout/services/report_engine.dart';
 import 'package:ringmaster_show/screens/admin/closeout/services/report_upload_service.dart';
 import 'package:ringmaster_show/screens/admin/closeout/utils/club_report_grouping.dart';
@@ -124,7 +125,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
   bool _generatingReport = false;
   bool _finalizeOperationInFlight = false;
   bool _dashboardRefreshInFlight = false;
-  Timer? _dashboardPollTimer;
+  bool _dashboardRefreshPending = false;
+  int _dashboardContextRevision = 0;
+  late final CloseoutDashboardPoller _dashboardPoller;
   String? _dashboardScopeKey;
   AppLifecycleState _appLifecycleState = AppLifecycleState.resumed;
   String? _observedGenerationKey;
@@ -2572,8 +2575,10 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
     );
   }
 
-  Future<CloseoutDashboard> _loadDashboardSummary() async {
-    final resolved = _resolvedCloseoutScope;
+  Future<CloseoutDashboard> _loadDashboardSummary({
+    ResolvedCloseoutScope? requestedScope,
+  }) async {
+    final resolved = requestedScope ?? _resolvedCloseoutScope;
     final response = await supabase.rpc(
       'get_closeout_dashboard_scoped',
       params: {
@@ -2598,10 +2603,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         'Closeout dashboard returned counts for a different show, run, or scope.',
       );
     }
-    _completedFinalizeRunIdsByScope = runId.isEmpty
-        ? const <String, String>{}
-        : <String, String>{resolved.stableScopeKey: runId};
-    _reportsLoaded = true;
     return dashboard;
   }
 
@@ -2626,9 +2627,13 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         dashboard,
         requestedScopeKey,
       );
+      final runId = (dashboard.latestFinalize.id ?? '').trim();
       setState(() {
         _dashboard = dashboard;
         _dashboardScopeKey = requestedScopeKey;
+        _completedFinalizeRunIdsByScope = runId.isEmpty
+            ? const <String, String>{}
+            : <String, String>{requestedScopeKey: runId};
         _reportsLoaded = true;
         _rebuildReportCaches();
       });
@@ -2651,55 +2656,88 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
   }
 
   Future<void> _refreshDashboardOnly({bool includeReports = false}) async {
-    if (_dashboardRefreshInFlight) return;
-    _dashboardRefreshInFlight = true;
-    try {
-      final requestedScopeKey = _resolvedCloseoutScope.stableScopeKey;
-      final dashboard = await _loadDashboardSummary();
-
-      if (!mounted ||
-          requestedScopeKey != _resolvedCloseoutScope.stableScopeKey) {
-        return;
-      }
-      final generationCompleted = _observeGenerationProgress(
-        dashboard,
-        requestedScopeKey,
-      );
-      setState(() {
-        _dashboard = dashboard;
-        _dashboardScopeKey = requestedScopeKey;
-        _rebuildReportCaches();
-
-        _missingPlacementsLoaded = false;
-        _missingPlacementItems = [];
-
-        _missingJudgesLoaded = false;
-        _missingJudgeItems = [];
-
-        _duplicatePlacementsLoaded = false;
-        _duplicatePlacementGroupItems = [];
-        _duplicateFinalAwardsLoaded = false;
-        _duplicateFinalAwardItems = [];
-      });
-
-      _scheduleDashboardPolling();
-      if (generationCompleted != null) {
-        _announceGenerationComplete(generationCompleted);
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed refreshing reports: $e')));
-    } finally {
-      _dashboardRefreshInFlight = false;
+    if (_dashboardRefreshInFlight) {
+      _dashboardRefreshPending = true;
+      return;
     }
+
+    do {
+      _dashboardRefreshPending = false;
+      _dashboardRefreshInFlight = true;
+      final requestRevision = _dashboardContextRevision;
+      final requestedScope = _resolvedCloseoutScope;
+      final requestedScopeKey = requestedScope.stableScopeKey;
+      try {
+        final dashboard = await _loadDashboardSummary(
+          requestedScope: requestedScope,
+        );
+
+        if (!mounted) return;
+        if (requestRevision != _dashboardContextRevision ||
+            requestedScopeKey != _resolvedCloseoutScope.stableScopeKey) {
+          _dashboardRefreshPending = true;
+          continue;
+        }
+
+        final generationCompleted = _observeGenerationProgress(
+          dashboard,
+          requestedScopeKey,
+        );
+        final runId = (dashboard.latestFinalize.id ?? '').trim();
+        setState(() {
+          _dashboard = dashboard;
+          _dashboardScopeKey = requestedScopeKey;
+          _completedFinalizeRunIdsByScope = runId.isEmpty
+              ? const <String, String>{}
+              : <String, String>{requestedScopeKey: runId};
+          _reportsLoaded = true;
+          _rebuildReportCaches();
+
+          _missingPlacementsLoaded = false;
+          _missingPlacementItems = [];
+          _missingJudgesLoaded = false;
+          _missingJudgeItems = [];
+          _duplicatePlacementsLoaded = false;
+          _duplicatePlacementGroupItems = [];
+          _duplicateFinalAwardsLoaded = false;
+          _duplicateFinalAwardItems = [];
+        });
+
+        _scheduleDashboardPolling();
+        if (generationCompleted != null) {
+          _announceGenerationComplete(generationCompleted);
+        }
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed refreshing reports: $e')),
+        );
+      } finally {
+        _dashboardRefreshInFlight = false;
+      }
+    } while (_dashboardRefreshPending && mounted);
+  }
+
+  void _markDashboardContextChanged() {
+    _dashboardContextRevision++;
+    if (_dashboardRefreshInFlight) _dashboardRefreshPending = true;
   }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _dashboardPoller = CloseoutDashboardPoller(
+      onRefresh: () async {
+        if (!_closeoutScreenIsVisible ||
+            _loading ||
+            _loadingReports ||
+            _generatingReport) {
+          return;
+        }
+        await _refreshDashboardOnly(includeReports: true);
+      },
+    );
     _appLifecycleState =
         WidgetsBinding.instance.lifecycleState ?? AppLifecycleState.resumed;
     unawaited(_loadData());
@@ -2707,7 +2745,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
 
   @override
   void dispose() {
-    _dashboardPollTimer?.cancel();
+    _dashboardPoller.dispose();
     WidgetsBinding.instance.removeObserver(this);
     _secretaryNameController.dispose();
     _secretaryAddressController.dispose();
@@ -2723,7 +2761,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _appLifecycleState = state;
     if (state == AppLifecycleState.resumed) {
-      _scheduleDashboardPolling();
+      unawaited(_dashboardPoller.resumeAndRefresh());
+    } else {
+      _dashboardPoller.pause();
     }
   }
 
@@ -2784,22 +2824,10 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
 
   void _scheduleDashboardPolling() {
     final counts = _dashboard?.taskCounts;
-    if (counts == null || counts.queued + counts.running == 0) {
-      _dashboardPollTimer?.cancel();
-      _dashboardPollTimer = null;
-      return;
-    }
-    if (_dashboardPollTimer?.isActive == true) return;
-    _dashboardPollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
-      if (!_closeoutScreenIsVisible ||
-          _dashboardRefreshInFlight ||
-          _loading ||
-          _loadingReports ||
-          _generatingReport) {
-        return;
-      }
-      unawaited(_refreshDashboardOnly());
-    });
+    _dashboardPoller.update(
+      active: counts != null && counts.queued + counts.running > 0,
+      visible: _closeoutScreenIsVisible,
+    );
   }
 
   Future<int> _finalizeShow() async {
@@ -2827,6 +2855,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         );
       }
 
+      _markDashboardContextChanged();
       final response = await supabase.functions.invoke(
         'run-closeout',
         body: {
@@ -2873,6 +2902,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
     if (runId.isEmpty) {
       throw StateError('Finalize this scope before queuing report renders.');
     }
+    _markDashboardContextChanged();
     final response = await supabase.functions.invoke(
       'run-closeout',
       body: {
@@ -2914,6 +2944,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         ],
       ),
     );
+    if (!mounted) return;
+    await _refreshDashboardOnly(includeReports: true);
+    _scheduleDashboardPolling();
   }
 
   Future<void> _retryFailedReports() async {
@@ -2952,6 +2985,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
     if (runId.isEmpty) {
       throw StateError('Finalize this scope before queuing report renders.');
     }
+    _markDashboardContextChanged();
     await supabase.rpc(
       'requeue_closeout_artifacts',
       params: {
@@ -4229,9 +4263,14 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         dashboard,
         requestedScopeKey,
       );
+      final runId = (dashboard.latestFinalize.id ?? '').trim();
       setState(() {
         _dashboard = dashboard;
         _dashboardScopeKey = requestedScopeKey;
+        _completedFinalizeRunIdsByScope = runId.isEmpty
+            ? const <String, String>{}
+            : <String, String>{requestedScopeKey: runId};
+        _reportsLoaded = true;
         _rebuildReportCaches();
 
         _missingPlacementsLoaded = false;
@@ -6866,6 +6905,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                     scopeDetailSummary: _selectedCloseoutScopeDetailSummary,
                     customSectionIds: _customCloseoutSectionIds,
                     onChanged: (scope) {
+                      _markDashboardContextChanged();
                       setState(() {
                         _selectedCloseoutScope = scope;
                         _customCloseoutSectionIds
@@ -6876,6 +6916,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                       unawaited(_refreshDashboardOnly());
                     },
                     onCustomSectionChanged: (sectionId, selected) {
+                      _markDashboardContextChanged();
                       setState(() {
                         if (selected) {
                           _customCloseoutSectionIds.add(sectionId);

@@ -38,7 +38,7 @@ void main() {
         'Future<void> _saveArbaDetails()',
       );
 
-      expect(body, contains('_loadDashboardSummary()'));
+      expect(body, contains('_loadDashboardSummary('));
       expect(body, isNot(contains('.insert(')));
       expect(body, isNot(contains('.update(')));
       expect(body, isNot(contains('functions.invoke')));
@@ -53,7 +53,7 @@ void main() {
         '@override\n  void initState()',
       );
 
-      expect(body, contains('_loadDashboardSummary()'));
+      expect(body, contains('_loadDashboardSummary('));
       expect(body, isNot(contains('show_results_readiness')));
       expect(body, isNot(contains('_ensureReportsLoaded')));
       expect(body, isNot(contains('.insert(')));
@@ -62,7 +62,7 @@ void main() {
 
     test('dashboard query is scoped, bounded, and has no storage calls', () {
       final body = methodBody(
-        'Future<CloseoutDashboard> _loadDashboardSummary()',
+        'Future<CloseoutDashboard> _loadDashboardSummary({',
         'Future<void> _ensureReportsLoaded',
       );
 
@@ -92,17 +92,69 @@ void main() {
         'void _scheduleDashboardPolling()',
         'Future<int> _finalizeShow',
       );
-      expect(body, contains('counts.queued + counts.running == 0'));
-      expect(body, contains('Timer.periodic(const Duration(seconds: 3)'));
+      expect(body, contains('counts.queued + counts.running > 0'));
+      expect(body, contains('_dashboardPoller.update'));
       expect(body, contains('_closeoutScreenIsVisible'));
-      expect(body, contains('_dashboardRefreshInFlight'));
-      expect(body, contains('_loadingReports'));
-      expect(body, contains('_dashboardPollTimer?.cancel()'));
+      expect(closeoutSource, contains('_dashboardRefreshPending'));
+      expect(closeoutSource, contains('_dashboardRefreshInFlight'));
+      expect(closeoutSource, contains('_dashboardPoller.dispose()'));
+    });
+
+    test(
+      'queue confirmation refreshes the parent dashboard before polling',
+      () {
+        final body = methodBody(
+          'Future<void> _showReportsQueuedDialog',
+          'Future<void> _retryFailedReports',
+        );
+        expect(body, contains('await showDialog<void>'));
+        expect(
+          body,
+          contains('await _refreshDashboardOnly(includeReports: true)'),
+        );
+        expect(body, contains('_scheduleDashboardPolling()'));
+      },
+    );
+
+    test(
+      'one refresh updates counts and the current artifact caches together',
+      () {
+        final body = methodBody(
+          'Future<void> _refreshDashboardOnly',
+          'void _markDashboardContextChanged()',
+        );
+        expect(body, contains('_dashboard = dashboard'));
+        expect(body, contains('_rebuildReportCaches()'));
+        expect(body, contains('_scheduleDashboardPolling()'));
+      },
+    );
+
+    test(
+      'stale scope responses are ignored and a replacement read is retained',
+      () {
+        final body = methodBody(
+          'Future<void> _refreshDashboardOnly',
+          'void _markDashboardContextChanged()',
+        );
+        expect(body, contains('requestRevision != _dashboardContextRevision'));
+        expect(body, contains('requestedScopeKey !='));
+        expect(body, contains('_dashboardRefreshPending = true'));
+        expect(body, contains('while (_dashboardRefreshPending && mounted)'));
+      },
+    );
+
+    test('visibility resume performs an immediate parent refresh', () {
+      final body = methodBody(
+        'void didChangeAppLifecycleState',
+        'bool get _closeoutScreenIsVisible',
+      );
+      expect(body, contains('_dashboardPoller.resumeAndRefresh()'));
+      expect(body, contains('_dashboardPoller.pause()'));
     });
 
     test('dashboard response is rejected unless show and scope match', () {
       final body = methodBody(
-        'Future<CloseoutDashboard> _loadDashboardSummary()',
+        'Future<CloseoutDashboard> _loadDashboardSummary({',
         'Future<void> _ensureReportsLoaded',
       );
 
