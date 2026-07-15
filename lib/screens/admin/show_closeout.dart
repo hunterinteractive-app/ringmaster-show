@@ -79,7 +79,8 @@ class ShowCloseoutPage extends StatefulWidget {
   State<ShowCloseoutPage> createState() => _ShowCloseoutPageState();
 }
 
-class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
+class _ShowCloseoutPageState extends State<ShowCloseoutPage>
+    with WidgetsBindingObserver {
   static const _reportAssets = FlutterReportAssetLoader();
   final _secretaryNameController = TextEditingController();
   final _secretaryAddressController = TextEditingController();
@@ -122,7 +123,12 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   bool _reportsSectionOpen = false;
   bool _generatingReport = false;
   bool _finalizeOperationInFlight = false;
+  bool _dashboardRefreshInFlight = false;
   Timer? _dashboardPollTimer;
+  String? _dashboardScopeKey;
+  AppLifecycleState _appLifecycleState = AppLifecycleState.resumed;
+  String? _observedGenerationKey;
+  bool _observedActiveGeneration = false;
   String? _error;
   String? _reportsError;
   Uint8List? _reportLogoBytes;
@@ -2582,6 +2588,16 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       Map<String, dynamic>.from(response as Map),
     );
     final runId = (dashboard.latestFinalize.id ?? '').trim();
+    final expectedSectionIds = resolved.sectionIds.toList()..sort();
+    final actualSectionIds = [...dashboard.latestFinalize.sectionIds]..sort();
+    if (dashboard.dashboard.showId != widget.showId ||
+        (runId.isNotEmpty &&
+            (dashboard.latestFinalize.scopeKey != resolved.stableScopeKey ||
+                !_sameStringList(actualSectionIds, expectedSectionIds)))) {
+      throw StateError(
+        'Closeout dashboard returned counts for a different show, run, or scope.',
+      );
+    }
     _completedFinalizeRunIdsByScope = runId.isEmpty
         ? const <String, String>{}
         : <String, String>{resolved.stableScopeKey: runId};
@@ -2599,15 +2615,25 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     });
 
     try {
+      final requestedScopeKey = _resolvedCloseoutScope.stableScopeKey;
       final dashboard = await _loadDashboardSummary();
 
-      if (!mounted) return;
+      if (!mounted ||
+          requestedScopeKey != _resolvedCloseoutScope.stableScopeKey) {
+        return;
+      }
+      final generationCompleted = _observeGenerationProgress(
+        dashboard,
+        requestedScopeKey,
+      );
       setState(() {
         _dashboard = dashboard;
+        _dashboardScopeKey = requestedScopeKey;
         _reportsLoaded = true;
         _rebuildReportCaches();
       });
       _scheduleDashboardPolling();
+      if (generationCompleted) _announceGenerationComplete();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -2623,6 +2649,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
   }
 
   Future<void> _refreshDashboardOnly({bool includeReports = false}) async {
+    if (_dashboardRefreshInFlight) return;
+    _dashboardRefreshInFlight = true;
     try {
       final requestedScopeKey = _resolvedCloseoutScope.stableScopeKey;
       final dashboard = await _loadDashboardSummary();
@@ -2631,8 +2659,13 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           requestedScopeKey != _resolvedCloseoutScope.stableScopeKey) {
         return;
       }
+      final generationCompleted = _observeGenerationProgress(
+        dashboard,
+        requestedScopeKey,
+      );
       setState(() {
         _dashboard = dashboard;
+        _dashboardScopeKey = requestedScopeKey;
         _rebuildReportCaches();
 
         _missingPlacementsLoaded = false;
@@ -2648,23 +2681,30 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       });
 
       _scheduleDashboardPolling();
+      if (generationCompleted) _announceGenerationComplete();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Failed refreshing reports: $e')));
+    } finally {
+      _dashboardRefreshInFlight = false;
     }
   }
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _appLifecycleState =
+        WidgetsBinding.instance.lifecycleState ?? AppLifecycleState.resumed;
     unawaited(_loadData());
   }
 
   @override
   void dispose() {
     _dashboardPollTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     _secretaryNameController.dispose();
     _secretaryAddressController.dispose();
     _secretaryEmailController.dispose();
@@ -2675,18 +2715,87 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _appLifecycleState = state;
+    if (state == AppLifecycleState.resumed) {
+      _scheduleDashboardPolling();
+    }
+  }
+
+  bool get _closeoutScreenIsVisible {
+    if (!mounted || _appLifecycleState != AppLifecycleState.resumed) {
+      return false;
+    }
+    return (ModalRoute.of(context)?.isCurrent ?? true) &&
+        TickerMode.of(context);
+  }
+
+  CloseoutGenerationProgress get _generationProgress {
+    if (_dashboardScopeKey != _resolvedCloseoutScope.stableScopeKey) {
+      return const CloseoutGenerationProgress();
+    }
+    final counts = _dashboard?.taskCounts ?? const CloseoutTaskCounts();
+    return CloseoutGenerationProgress(
+      queued: counts.queued,
+      running: counts.running,
+      completed: counts.completed,
+      failed: counts.failed,
+    );
+  }
+
+  bool _observeGenerationProgress(
+    CloseoutDashboard dashboard,
+    String scopeKey,
+  ) {
+    final runId = (dashboard.latestFinalize.id ?? '').trim();
+    final generationKey = '$scopeKey|$runId';
+    if (_observedGenerationKey != generationKey) {
+      _observedGenerationKey = generationKey;
+      _observedActiveGeneration = false;
+    }
+    final counts = dashboard.taskCounts;
+    final isActive = counts.queued > 0 || counts.running > 0;
+    if (isActive) {
+      _observedActiveGeneration = true;
+      return false;
+    }
+    if (!_observedActiveGeneration) return false;
+    _observedActiveGeneration = false;
+    return counts.failed == 0;
+  }
+
+  void _announceGenerationComplete() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Report generation complete.')),
+    );
+  }
+
   void _scheduleDashboardPolling() {
-    _dashboardPollTimer?.cancel();
     final counts = _dashboard?.taskCounts;
-    if (counts == null || counts.queued + counts.running == 0) return;
-    _dashboardPollTimer = Timer(const Duration(seconds: 5), () {
-      if (mounted && !_loading && !_generatingReport) {
-        unawaited(_refreshDashboardOnly());
+    if (counts == null || counts.queued + counts.running == 0) {
+      _dashboardPollTimer?.cancel();
+      _dashboardPollTimer = null;
+      return;
+    }
+    if (_dashboardPollTimer?.isActive == true) return;
+    _dashboardPollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (!_closeoutScreenIsVisible ||
+          _dashboardRefreshInFlight ||
+          _loading ||
+          _loadingReports ||
+          _generatingReport) {
+        return;
       }
+      unawaited(_refreshDashboardOnly());
     });
   }
 
-  Future<String> _finalizeShow({bool regenerate = false}) async {
+  Future<int> _finalizeShow() async {
+    if (_generationProgress.isActive) {
+      throw StateError('Reports are already being generated for this scope.');
+    }
     if (_finalizeOperationInFlight) {
       throw StateError(
         'A finalize operation is already running for this show.',
@@ -2694,14 +2803,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     }
     _finalizeOperationInFlight = true;
     try {
-      if (regenerate) {
-        final runId = _finalizeRunIdForSelectedScope;
-        if (runId.isEmpty) {
-          throw StateError('Finalize this scope before regenerating reports.');
-        }
-        await _queueScopedRenderTasks(action: 'regenerate_all');
-        return runId;
-      }
       final ready = await _ensureResultsReadyForReports();
 
       if (!ready) {
@@ -2743,45 +2844,21 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       if (resolvedRunId.isEmpty) {
         throw StateError('Closeout completed without a current finalize run.');
       }
+      _observedGenerationKey =
+          '${_resolvedCloseoutScope.stableScopeKey}|$resolvedRunId';
+      _observedActiveGeneration = true;
+      final queuedCount = ((responseData['new_tasks'] ?? 0) as num).toInt();
       await _refreshDashboardOnly();
-      return resolvedRunId;
+      return queuedCount;
     } finally {
       _finalizeOperationInFlight = false;
     }
   }
 
-  Future<List<ReportArtifactSummary>>
-  _loadRemainingArtifactsForCurrentRun() async {
-    final runId = _finalizeRunIdForSelectedScope;
-    if (runId.isEmpty) return const <ReportArtifactSummary>[];
-    final rows = await supabase
-        .from('show_report_artifacts')
-        .select('''
-          id, finalize_run_id, report_name, artifact_status, file_name,
-          storage_bucket, storage_path, generated_at, is_current, metadata
-        ''')
-        .eq('show_id', widget.showId)
-        .eq('finalize_run_id', runId)
-        .eq('scope_key', _resolvedCloseoutScope.stableScopeKey)
-        .eq('is_current', true)
-        .inFilter('artifact_status', const ['queued', 'failed'])
-        .order('report_name');
-    debugPrint(
-      '[CloseoutGenerateRemaining] caller=_loadRemainingArtifactsForCurrentRun '
-      'show_id=${widget.showId} existing_finalize_run_id=$runId '
-      'action=reused reason=status_reload_only remaining=${(rows as List).length}',
-    );
-    return rows
-        .map(
-          (row) => ReportArtifactSummary.fromJson(
-            Map<String, dynamic>.from(row as Map),
-          ),
-        )
-        .where(_artifactMatchesSelectedScope)
-        .toList();
-  }
-
   Future<int> _queueScopedRenderTasks({required String action}) async {
+    if (_generationProgress.isActive) {
+      throw StateError('Reports are already being generated for this scope.');
+    }
     final runId = _finalizeRunIdForSelectedScope;
     if (runId.isEmpty) {
       throw StateError('Finalize this scope before queuing report renders.');
@@ -2804,14 +2881,63 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       );
     }
     final data = _normalizeFunctionData(response.data);
+    _observedGenerationKey = '${_resolvedCloseoutScope.stableScopeKey}|$runId';
+    _observedActiveGeneration = true;
     await _refreshDashboardOnly();
     return ((data['queued_count'] ?? 0) as num).toInt();
+  }
+
+  Future<void> _showReportsQueuedDialog(int queuedCount) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reports queued'),
+        content: Text(
+          '$queuedCount report${queuedCount == 1 ? '' : 's'} queued for generation',
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Back to Closeout'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _retryFailedReports() async {
+    if (_generationProgress.isActive || _generatingReport) return;
+    setState(() => _generatingReport = true);
+    try {
+      final queued = await _queueScopedRenderTasks(
+        action: 'generate_remaining',
+      );
+      if (!mounted) return;
+      if (queued == 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No failed reports are retryable.')),
+        );
+        return;
+      }
+      await _showReportsQueuedDialog(queued);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to retry reports: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _generatingReport = false);
+    }
   }
 
   Future<void> _queueExistingArtifacts({
     String? reportName,
     String? artifactId,
   }) async {
+    if (_generationProgress.isActive) {
+      throw StateError('Reports are already being generated for this scope.');
+    }
     final runId = _finalizeRunIdForSelectedScope;
     if (runId.isEmpty) {
       throw StateError('Finalize this scope before queuing report renders.');
@@ -2849,7 +2975,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     return 3;
   }
 
-  Future<void> _runGenerateAllReportsLive(
+  Future<int> _runGenerateAllReportsLive(
     List<ReportArtifactSummary> artifacts, {
     required void Function(String artifactKey) onStarted,
     required void Function(String artifactKey) onFinished,
@@ -2859,10 +2985,13 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       onStarted('${artifact.reportName}::${artifact.id}');
     }
     try {
-      await _queueScopedRenderTasks(action: 'generate_remaining');
+      final queued = await _queueScopedRenderTasks(
+        action: 'generate_remaining',
+      );
       for (final artifact in artifacts) {
         onFinished('${artifact.reportName}::${artifact.id}');
       }
+      return queued;
     } catch (error) {
       for (final artifact in artifacts) {
         onFailed('${artifact.reportName}::${artifact.id}', error);
@@ -4078,12 +4207,21 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
     try {
       await _loadCloseoutScopes();
+      final requestedScopeKey = _resolvedCloseoutScope.stableScopeKey;
       final dashboard = await _loadDashboardSummary();
       await _loadArbaDetails();
 
-      if (!mounted) return;
+      if (!mounted ||
+          requestedScopeKey != _resolvedCloseoutScope.stableScopeKey) {
+        return;
+      }
+      final generationCompleted = _observeGenerationProgress(
+        dashboard,
+        requestedScopeKey,
+      );
       setState(() {
         _dashboard = dashboard;
+        _dashboardScopeKey = requestedScopeKey;
         _rebuildReportCaches();
 
         _missingPlacementsLoaded = false;
@@ -4099,6 +4237,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
       });
 
       _scheduleDashboardPolling();
+      if (generationCompleted) _announceGenerationComplete();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -4375,7 +4514,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     final failed = <String, Object>{};
 
     try {
-      await _runGenerateAllReportsLive(
+      final queuedCount = await _runGenerateAllReportsLive(
         artifacts,
         onStarted: started.add,
         onFinished: finished.add,
@@ -4388,7 +4527,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
 
       if (!mounted) return;
 
-      final generatedCount = finished.length;
       final failedCount = failed.length;
       final label = reportName.replaceAll('_', ' ');
 
@@ -4397,8 +4535,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           duration: const Duration(seconds: 8),
           content: Text(
             failedCount == 0
-                ? 'Generated $generatedCount $label report${generatedCount == 1 ? '' : 's'}.'
-                : 'Generated $generatedCount report${generatedCount == 1 ? '' : 's'}; $failedCount failed.',
+                ? '$queuedCount $label report${queuedCount == 1 ? '' : 's'} queued for generation.'
+                : '$queuedCount report${queuedCount == 1 ? '' : 's'} queued; $failedCount failed to queue.',
           ),
         ),
       );
@@ -4916,7 +5054,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     final failed = <String, Object>{};
 
     try {
-      await _runGenerateAllReportsLive(
+      final queuedCount = await _runGenerateAllReportsLive(
         artifactsToGenerate,
         onStarted: started.add,
         onFinished: finished.add,
@@ -4933,8 +5071,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
           duration: const Duration(seconds: 8),
           content: Text(
             failed.isEmpty
-                ? 'Generated ${finished.length} ${_friendlyReportName(reportName)} file${finished.length == 1 ? '' : 's'}.'
-                : 'Generated ${finished.length} file${finished.length == 1 ? '' : 's'}; ${failed.length} failed.',
+                ? '$queuedCount ${_friendlyReportName(reportName)} report${queuedCount == 1 ? '' : 's'} queued for generation.'
+                : '$queuedCount report${queuedCount == 1 ? '' : 's'} queued; ${failed.length} failed to queue.',
           ),
         ),
       );
@@ -6602,7 +6740,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                     onEmail: _emailReportByName,
                     onEmailThisLetter: _emailArtifactThisLetter,
                     onEmailAllLetters: _emailArtifactAllLetters,
-                    loading: _generatingReport,
+                    loading: _generatingReport || _generationProgress.isActive,
                     reportsBlocked: reportsBlocked,
                     reportsBlockedMessage: reportsBlockedMessage,
                   ),
@@ -6620,6 +6758,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
     final reportsBlockedMessage = _resultsReadinessMessage();
     final selectedScopeFinalized = _selectedCloseoutScopeIsFinalized;
     final tooltipScope = _selectedCloseoutScopeTooltipLabel;
+    final generationProgress = _generationProgress;
+    final generationActive = generationProgress.isActive;
 
     return Scaffold(
       appBar: AppBar(
@@ -6736,6 +6876,14 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                     },
                   ),
 
+                  if (generationActive || generationProgress.hasFailures)
+                    CloseoutGenerationProgressCard(
+                      progress: generationProgress,
+                      onRetryFailed: _isBusy || generationActive
+                          ? null
+                          : _retryFailedReports,
+                    ),
+
                   if (reportsBlocked) ...[
                     Container(
                       width: double.infinity,
@@ -6798,6 +6946,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                             tooltipScope: tooltipScope,
                             onPressed:
                                 (_isBusy ||
+                                    generationActive ||
                                     reportsBlocked ||
                                     selectedScopeFinalized ||
                                     _resolvedCloseoutScope.isEmpty)
@@ -6847,113 +6996,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                     });
 
                                     try {
-                                      final runId = await _finalizeShow();
-                                      final artifactsForRun =
-                                          await _loadRemainingArtifactsForCurrentRun();
-
-                                      final List<ReportArtifactSummary>
-                                      artifactsToGenerate = artifactsForRun
-                                          .where(
-                                            (r) => r.finalizeRunId == runId,
-                                          )
-                                          .where(_artifactMatchesSelectedScope)
-                                          .where(
-                                            (r) =>
-                                                r.artifactStatus == 'queued' ||
-                                                r.artifactStatus == 'failed',
-                                          )
-                                          .where(
-                                            (r) => {
-                                              'arba_report',
-                                              'exhibitor_report',
-                                              'legs',
-                                              'sweepstakes_report',
-                                              'breed_results_detail_report',
-                                              'details_by_breed',
-                                              'exh_by_breed',
-                                              'best_display_report',
-                                            }.contains(r.reportName),
-                                          )
-                                          .toList();
-
-                                      if (artifactsToGenerate.isEmpty) {
-                                        await _refreshDashboardOnly();
-                                        if (mounted) {
-                                          ScaffoldMessenger.of(
-                                            context,
-                                          ).showSnackBar(
-                                            const SnackBar(
-                                              content: Text(
-                                                'Finalize run is already complete. No reports need generation.',
-                                              ),
-                                            ),
-                                          );
-                                        }
-                                        return;
-                                      }
-
-                                      final generatedOk = await showDialog<bool>(
-                                        context: context,
-                                        barrierDismissible: false,
-                                        builder: (context) {
-                                          return _GenerateAllReportsDialog(
-                                            artifacts: artifactsToGenerate,
-                                            scopeLabel:
-                                                _selectedCloseoutScopeLabel,
-                                            onRun:
-                                                (
-                                                  onStarted,
-                                                  onFinished,
-                                                  onFailed,
-                                                ) {
-                                                  return _runGenerateAllReportsLive(
-                                                    artifactsToGenerate,
-                                                    onStarted: onStarted,
-                                                    onFinished: onFinished,
-                                                    onFailed: onFailed,
-                                                  );
-                                                },
-                                          );
-                                        },
-                                      );
-
-                                      if (generatedOk != true) {
-                                        throw Exception(
-                                          'Report generation was cancelled or did not finish cleanly.',
-                                        );
-                                      }
-
-                                      await _refreshDashboardOnly(
-                                        includeReports: true,
-                                      );
-
-                                      if (_dashboard
-                                                  ?.dashboard
-                                                  .closeout
-                                                  .isReportsStale ==
-                                              true &&
-                                          (_dashboard?.taskCounts.queued ??
-                                                  0) ==
-                                              0 &&
-                                          (_dashboard?.taskCounts.running ??
-                                                  0) ==
-                                              0) {
-                                        throw Exception(
-                                          'Reports are stale and no render tasks are active.',
-                                        );
-                                      }
-
+                                      final queued = await _finalizeShow();
                                       if (!mounted) return;
-
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        const SnackBar(
-                                          content: Text(
-                                            'Finalize completed and report rendering was queued. Emails were not sent.',
-                                          ),
-                                        ),
-                                      );
+                                      await _showReportsQueuedDialog(queued);
                                     } catch (e) {
                                       if (!mounted) return;
 
@@ -6981,64 +7026,41 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                               final queuedRemaining =
                                   _dashboard?.taskCounts.remaining ?? 0;
 
+                              if (!generationActive && queuedRemaining == 0) {
+                                return const SizedBox.shrink();
+                              }
+
                               return CloseoutGenerateRemainingButton(
                                 count: queuedRemaining,
-                                onPressed: _isBusy || queuedRemaining == 0
+                                progress: generationProgress,
+                                onPressed:
+                                    _isBusy ||
+                                        generationActive ||
+                                        queuedRemaining == 0
                                     ? null
                                     : () async {
                                         setState(() {
                                           _generatingReport = true;
                                         });
                                         try {
-                                          await _refreshDashboardOnly(
-                                            includeReports: true,
-                                          );
-                                          final latestQueuedRemaining =
-                                              await _loadRemainingArtifactsForCurrentRun();
-
-                                          if (latestQueuedRemaining.isEmpty) {
-                                            if (!context.mounted) return;
-                                            ScaffoldMessenger.of(
-                                              context,
-                                            ).showSnackBar(
-                                              const SnackBar(
-                                                content: Text(
-                                                  'No queued reports found.',
-                                                ),
-                                              ),
-                                            );
-                                            return;
-                                          }
-
-                                          if (!context.mounted) return;
-                                          await showDialog<bool>(
-                                            context: context,
-                                            barrierDismissible: false,
-                                            builder: (context) {
-                                              return _GenerateAllReportsDialog(
-                                                artifacts:
-                                                    latestQueuedRemaining,
-                                                scopeLabel:
-                                                    _selectedCloseoutScopeLabel,
-                                                onRun:
-                                                    (
-                                                      onStarted,
-                                                      onFinished,
-                                                      onFailed,
-                                                    ) {
-                                                      return _runGenerateAllReportsLive(
-                                                        latestQueuedRemaining,
-                                                        onStarted: onStarted,
-                                                        onFinished: onFinished,
-                                                        onFailed: onFailed,
-                                                      );
-                                                    },
+                                          final queued =
+                                              await _queueScopedRenderTasks(
+                                                action: 'generate_remaining',
                                               );
-                                            },
+                                          if (!context.mounted) return;
+                                          await _showReportsQueuedDialog(
+                                            queued,
                                           );
-
-                                          await _refreshDashboardOnly(
-                                            includeReports: true,
+                                        } catch (error) {
+                                          if (!context.mounted) return;
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                'Failed to queue reports: $error',
+                                              ),
+                                            ),
                                           );
                                         } finally {
                                           if (mounted) {
@@ -7056,7 +7078,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                             message: 'Regenerate all reports for $tooltipScope',
                             child: OutlinedButton.icon(
                               onPressed:
-                                  _isBusy || _resolvedCloseoutScope.isEmpty
+                                  _isBusy ||
+                                      generationActive ||
+                                      _resolvedCloseoutScope.isEmpty
                                   ? null
                                   : () async {
                                       final confirmed =
@@ -7097,36 +7121,22 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage> {
                                       if (!confirmed) return;
                                       setState(() => _generatingReport = true);
                                       try {
-                                        await _finalizeShow(regenerate: true);
-                                        final remaining =
-                                            await _loadRemainingArtifactsForCurrentRun();
-                                        if (!mounted || remaining.isEmpty) {
-                                          return;
-                                        }
-                                        await showDialog<bool>(
-                                          context: context,
-                                          barrierDismissible: false,
-                                          builder: (context) =>
-                                              _GenerateAllReportsDialog(
-                                                artifacts: remaining,
-                                                scopeLabel:
-                                                    _selectedCloseoutScopeLabel,
-                                                onRun:
-                                                    (
-                                                      started,
-                                                      finished,
-                                                      failed,
-                                                    ) =>
-                                                        _runGenerateAllReportsLive(
-                                                          remaining,
-                                                          onStarted: started,
-                                                          onFinished: finished,
-                                                          onFailed: failed,
-                                                        ),
-                                              ),
-                                        );
-                                        await _refreshDashboardOnly(
-                                          includeReports: true,
+                                        final queued =
+                                            await _queueScopedRenderTasks(
+                                              action: 'regenerate_all',
+                                            );
+                                        if (!mounted) return;
+                                        await _showReportsQueuedDialog(queued);
+                                      } catch (error) {
+                                        if (!mounted) return;
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              'Failed to regenerate reports: $error',
+                                            ),
+                                          ),
                                         );
                                       } finally {
                                         if (mounted) {
@@ -9217,6 +9227,9 @@ class _ErrorView extends StatelessWidget {
   }
 }
 
+// Kept for compatibility with older routes; current Closeout actions return to
+// the dashboard immediately after queueing.
+// ignore: unused_element
 class _GenerateAllReportsDialog extends StatefulWidget {
   final List<ReportArtifactSummary> artifacts;
   final String scopeLabel;
@@ -9353,14 +9366,13 @@ class _GenerateAllReportsDialogState extends State<_GenerateAllReportsDialog> {
     const primaryText = Colors.white;
     const secondaryText = Color(0xFFD8CCF4);
     const warningText = Color(0xFFFFB4AB);
-    const successText = Color(0xFF8BE28B);
     const queuedText = Color(0xFFC6B8E8);
 
     return AlertDialog(
       backgroundColor: dialogBackground,
       surfaceTintColor: Colors.transparent,
       title: const Text(
-        'Generating Reports',
+        'Reports queued',
         style: TextStyle(color: primaryText, fontWeight: FontWeight.w700),
       ),
       content: SizedBox(
@@ -9370,7 +9382,7 @@ class _GenerateAllReportsDialogState extends State<_GenerateAllReportsDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Please do not leave this window while reports are generating. This could take several minutes.',
+              'Reports will continue generating in the background.',
               style: TextStyle(
                 fontSize: 13,
                 color: warningText,
@@ -9393,7 +9405,7 @@ class _GenerateAllReportsDialogState extends State<_GenerateAllReportsDialog> {
             ),
             const SizedBox(height: 12),
             Text(
-              '${_completed.length + _failed.length} of ${widget.artifacts.length} reports processed',
+              '${widget.artifacts.length} reports queued for generation',
               style: const TextStyle(
                 color: primaryText,
                 fontWeight: FontWeight.w600,
@@ -9421,9 +9433,9 @@ class _GenerateAllReportsDialogState extends State<_GenerateAllReportsDialog> {
                     color = warningText;
                     status = 'Failed';
                   } else if (isDone) {
-                    icon = Icons.check_circle;
-                    color = successText;
-                    status = 'Done';
+                    icon = Icons.schedule;
+                    color = queuedText;
+                    status = 'Queued';
                   } else if (isRunning) {
                     icon = Icons.autorenew;
                     color = AppColors.gold;
@@ -9500,7 +9512,7 @@ class _GenerateAllReportsDialogState extends State<_GenerateAllReportsDialog> {
             foregroundColor: primaryText,
             disabledForegroundColor: secondaryText,
           ),
-          child: Text(_finished ? 'Close' : 'Working...'),
+          child: Text(_finished ? 'Back to Closeout' : 'Queueing...'),
         ),
       ],
     );
@@ -9568,6 +9580,14 @@ String _fmt(String? value) {
   return formatted == '(not set)' || formatted == '(invalid date)'
       ? '-'
       : formatted;
+}
+
+bool _sameStringList(List<String> left, List<String> right) {
+  if (left.length != right.length) return false;
+  for (var index = 0; index < left.length; index++) {
+    if (left[index] != right[index]) return false;
+  }
+  return true;
 }
 
 String _friendlyStatus(String status) {
@@ -9855,8 +9875,17 @@ class LatestFinalize {
   final String? runStatus;
   final String? startedAt;
   final String? completedAt;
+  final String? scopeKey;
+  final List<String> sectionIds;
 
-  LatestFinalize({this.id, this.runStatus, this.startedAt, this.completedAt});
+  LatestFinalize({
+    this.id,
+    this.runStatus,
+    this.startedAt,
+    this.completedAt,
+    this.scopeKey,
+    this.sectionIds = const [],
+  });
 
   factory LatestFinalize.fromJson(Map<String, dynamic> json) {
     return LatestFinalize(
@@ -9864,6 +9893,8 @@ class LatestFinalize {
       runStatus: json['run_status'] as String?,
       startedAt: json['started_at'] as String?,
       completedAt: json['completed_at'] as String?,
+      scopeKey: json['scope_key'] as String?,
+      sectionIds: List<String>.from(json['section_ids'] ?? const []),
     );
   }
 }

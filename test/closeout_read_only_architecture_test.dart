@@ -6,6 +6,9 @@ void main() {
   final closeoutSource = File(
     'lib/screens/admin/show_closeout.dart',
   ).readAsStringSync();
+  final closeoutWidgetsSource = File(
+    'lib/screens/admin/closeout/widgets/closeout_scope_widgets.dart',
+  ).readAsStringSync();
   final migration = File(
     'supabase/migrations/20260714055153_closeout_read_only_dashboard_and_render_queue.sql',
   ).readAsStringSync();
@@ -81,13 +84,92 @@ void main() {
       expect(body, isNot(contains('_runGenerateAllReportsLive')));
     });
 
-    test('page-load polling stops when no tasks are active', () {
+    test('polling is three-second, visibility-aware, and non-overlapping', () {
       final body = methodBody(
         'void _scheduleDashboardPolling()',
-        'Future<String> _finalizeShow',
+        'Future<int> _finalizeShow',
       );
       expect(body, contains('counts.queued + counts.running == 0'));
-      expect(body, contains('Duration(seconds: 5)'));
+      expect(body, contains('Timer.periodic(const Duration(seconds: 3)'));
+      expect(body, contains('_closeoutScreenIsVisible'));
+      expect(body, contains('_dashboardRefreshInFlight'));
+      expect(body, contains('_loadingReports'));
+      expect(body, contains('_dashboardPollTimer?.cancel()'));
+    });
+
+    test('dashboard response is rejected unless show and scope match', () {
+      final body = methodBody(
+        'Future<CloseoutDashboard> _loadDashboardSummary()',
+        'Future<void> _ensureReportsLoaded',
+      );
+
+      expect(body, contains('dashboard.dashboard.showId != widget.showId'));
+      expect(body, contains('dashboard.latestFinalize.scopeKey'));
+      expect(body, contains('dashboard.latestFinalize.sectionIds'));
+      expect(body, contains('_sameStringList'));
+      expect(closeoutSource, contains('_dashboardScopeKey'));
+    });
+
+    test(
+      'completion transition refreshes artifacts and announces completion',
+      () {
+        final observation = methodBody(
+          'bool _observeGenerationProgress(',
+          'void _announceGenerationComplete()',
+        );
+        final refresh = methodBody(
+          'Future<void> _refreshDashboardOnly',
+          '@override\n  void initState()',
+        );
+
+        expect(
+          observation,
+          contains("final generationKey = '\$scopeKey|\$runId'"),
+        );
+        expect(observation, contains('_observedActiveGeneration = true'));
+        expect(observation, contains('return counts.failed == 0'));
+        expect(refresh, contains('_rebuildReportCaches()'));
+        expect(refresh, contains('_announceGenerationComplete()'));
+        expect(
+          closeoutSource,
+          contains(
+            "const SnackBar(content: Text('Report generation complete.'))",
+          ),
+        );
+      },
+    );
+
+    test(
+      'queue commands are guarded against active work in the same scope',
+      () {
+        final queue = methodBody(
+          'Future<int> _queueScopedRenderTasks',
+          'Future<void> _showReportsQueuedDialog',
+        );
+        final finalize = methodBody(
+          'Future<int> _finalizeShow',
+          'Future<int> _queueScopedRenderTasks',
+        );
+        final artifactQueue = methodBody(
+          'Future<void> _queueExistingArtifacts',
+          'Duration _reportGenerationTimeoutFor',
+        );
+
+        for (final body in [queue, finalize, artifactQueue]) {
+          expect(body, contains('_generationProgress.isActive'));
+        }
+        expect(
+          closeoutWidgetsSource,
+          contains(
+            'Generating Reports — \${progress.completed} of \${progress.total}',
+          ),
+        );
+      },
+    );
+
+    test('queue completion language does not imply rendering finished', () {
+      expect(closeoutSource, contains('reports queued for generation'));
+      expect(closeoutSource, isNot(contains('reports processed')));
     });
   });
 
@@ -158,6 +240,16 @@ void main() {
         contains('least(coalesce(p_artifact_limit, 100), 200)'),
       );
       expect(migration, isNot(contains('storage.objects')));
+    });
+
+    test('dashboard task counts are exact show, run, and scope only', () {
+      expect(migration, contains('q.show_id = p_show_id'));
+      expect(
+        migration,
+        contains('join selected_run r on r.id = q.finalize_run_id'),
+      );
+      expect(migration, contains('q.scope_key = p_scope_key'));
+      expect(migration, contains('f.section_ids = p_section_ids'));
     });
 
     test('historical data is never deleted or broadly backfilled', () {

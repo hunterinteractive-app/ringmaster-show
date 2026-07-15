@@ -74,6 +74,77 @@ void main() {
     expect(find.text('Generate Remaining (0)'), findsOneWidget);
   });
 
+  testWidgets('active generation shows scoped progress and disables queueing', (
+    tester,
+  ) async {
+    const progress = CloseoutGenerationProgress(
+      queued: 463,
+      running: 8,
+      completed: 112,
+      failed: 5,
+    );
+    var retryPressed = false;
+
+    await tester.pumpWidget(
+      _host(
+        Column(
+          children: [
+            CloseoutGenerationProgressCard(
+              progress: progress,
+              onRetryFailed: () => retryPressed = true,
+            ),
+            const CloseoutGenerateRemainingButton(
+              count: 476,
+              progress: progress,
+              onPressed: null,
+            ),
+          ],
+        ),
+      ),
+    );
+
+    expect(find.text('Generating reports'), findsOneWidget);
+    expect(find.text('112 of 588 completed'), findsOneWidget);
+    expect(find.text('463 waiting • 8 rendering • 5 failed'), findsOneWidget);
+    expect(find.text('5 reports failed to generate.'), findsOneWidget);
+    expect(find.text('Generating Reports — 112 of 588'), findsOneWidget);
+    expect(
+      tester
+          .widget<OutlinedButton>(
+            find.byKey(const ValueKey('closeout-generate-remaining-button')),
+          )
+          .onPressed,
+      isNull,
+    );
+    expect(
+      tester
+          .widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator))
+          .value,
+      closeTo(112 / 588, 0.0001),
+    );
+
+    await tester.tap(find.text('Retry Failed'));
+    expect(retryPressed, isTrue);
+  });
+
+  test('failed tasks are excluded from completed progress', () {
+    const progress = CloseoutGenerationProgress(completed: 7, failed: 3);
+
+    expect(progress.total, 10);
+    expect(progress.percentComplete, 0.7);
+    expect(progress.isComplete, isFalse);
+    expect(progress.hasFailures, isTrue);
+  });
+
+  test('generation is complete only after all tasks complete', () {
+    const progress = CloseoutGenerationProgress(completed: 588);
+
+    expect(progress.total, 588);
+    expect(progress.percentComplete, 1);
+    expect(progress.isActive, isFalse);
+    expect(progress.isComplete, isTrue);
+  });
+
   testWidgets('detailed summary retains every selected section label', (
     tester,
   ) async {

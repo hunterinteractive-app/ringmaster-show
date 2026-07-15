@@ -54,11 +54,13 @@ class CloseoutFinalizeActionButton extends StatelessWidget {
 
 class CloseoutGenerateRemainingButton extends StatelessWidget {
   final int count;
+  final CloseoutGenerationProgress progress;
   final VoidCallback? onPressed;
 
   const CloseoutGenerateRemainingButton({
     super.key,
     required this.count,
+    this.progress = const CloseoutGenerationProgress(),
     required this.onPressed,
   });
 
@@ -75,8 +77,126 @@ class CloseoutGenerateRemainingButton extends StatelessWidget {
         ),
       ),
       onPressed: onPressed,
-      icon: const Icon(Icons.play_circle_outline),
-      label: Text('Generate Remaining ($count)'),
+      icon: Icon(
+        progress.isActive ? Icons.autorenew : Icons.play_circle_outline,
+      ),
+      label: Text(
+        progress.isActive
+            ? 'Generating Reports — ${progress.completed} of ${progress.total}'
+            : 'Generate Remaining ($count)',
+      ),
+    );
+  }
+}
+
+class CloseoutGenerationProgress {
+  final int queued;
+  final int running;
+  final int completed;
+  final int failed;
+
+  const CloseoutGenerationProgress({
+    this.queued = 0,
+    this.running = 0,
+    this.completed = 0,
+    this.failed = 0,
+  });
+
+  int get total => queued + running + completed + failed;
+  bool get isActive => queued > 0 || running > 0;
+  bool get hasFailures => failed > 0;
+  bool get isComplete => total > 0 && !isActive && !hasFailures;
+  double get percentComplete => total == 0 ? 0 : completed / total;
+}
+
+class CloseoutGenerationProgressCard extends StatelessWidget {
+  final CloseoutGenerationProgress progress;
+  final VoidCallback? onRetryFailed;
+
+  const CloseoutGenerationProgressCard({
+    super.key,
+    required this.progress,
+    this.onRetryFailed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey('closeout-generation-progress-card'),
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: progress.hasFailures
+              ? Colors.orange.withValues(alpha: .45)
+              : AppColors.secondaryButton.withValues(alpha: .25),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                progress.hasFailures
+                    ? Icons.warning_amber_rounded
+                    : Icons.cloud_sync_outlined,
+                color: progress.hasFailures
+                    ? Colors.orange
+                    : AppColors.secondaryButton,
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Generating reports',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '${progress.completed} of ${progress.total} completed',
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          LinearProgressIndicator(
+            value: progress.percentComplete.clamp(0.0, 1.0).toDouble(),
+            minHeight: 7,
+            borderRadius: BorderRadius.circular(99),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${progress.queued} waiting • ${progress.running} rendering • ${progress.failed} failed',
+          ),
+          if (progress.hasFailures) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '${progress.failed} report${progress.failed == 1 ? '' : 's'} failed to generate.',
+                    style: const TextStyle(
+                      color: Colors.orange,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  key: const ValueKey('closeout-retry-failed-button'),
+                  onPressed: onRetryFailed,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry Failed'),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
