@@ -24,6 +24,8 @@ cp "$repo_root/supabase/tests/payment_hardening.sql" \
   "$workdir/supabase/tests/payment_hardening.sql"
 cp "$repo_root/supabase/tests/closeout_scoped_financial_auth.sql" \
   "$workdir/supabase/tests/closeout_scoped_financial_auth.sql"
+cp "$repo_root/supabase/tests/closeout_repair_diagnostic_classification.sql" \
+  "$workdir/supabase/tests/closeout_repair_diagnostic_classification.sql"
 
 # This project ID guarantees different Docker resources from the linked
 # production checkout while retaining the CLI-generated local ports/keys.
