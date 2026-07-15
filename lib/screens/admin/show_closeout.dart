@@ -2623,6 +2623,44 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
     );
   }
 
+  Future<List<ReportArtifactSummary>> _loadPreFinalizeReportArtifacts() async {
+    const preFinalizeReportNames = <String>{
+      'unpaid_balances_report',
+      'paid_exhibitor_report',
+      'checkin_sheet',
+      'entered_exhibitors_contact_report',
+    };
+
+    final rows = await supabase
+        .from('show_report_artifacts')
+        .select('''
+          id,
+          finalize_run_id,
+          report_name,
+          artifact_status,
+          file_name,
+          storage_bucket,
+          storage_path,
+          generated_at,
+          is_current,
+          scope_key,
+          section_ids,
+          metadata
+        ''')
+        .eq('show_id', widget.showId)
+        .eq('is_current', true)
+        .inFilter('report_name', preFinalizeReportNames.toList())
+        .order('created_at', ascending: false);
+
+    return (rows as List)
+        .map(
+          (row) => ReportArtifactSummary.fromJson(
+            Map<String, dynamic>.from(row as Map),
+          ),
+        )
+        .toList();
+  }
+
   Future<CloseoutDashboard> _loadDashboardSummary({
     ResolvedCloseoutScope? requestedScope,
   }) async {
@@ -2651,7 +2689,39 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         'Closeout dashboard returned counts for a different show, run, or scope.',
       );
     }
-    return dashboard;
+    
+    final preFinalizeArtifacts = await _loadPreFinalizeReportArtifacts();
+
+      final artifactsById = <String, ReportArtifactSummary>{
+        for (final artifact in dashboard.reports) artifact.id: artifact,
+      };
+
+      for (final artifact in preFinalizeArtifacts) {
+        if (_artifactMatchesSelectedScope(artifact)) {
+          artifactsById[artifact.id] = artifact;
+        }
+      }
+
+      final mergedReports = artifactsById.values.toList()
+    ..sort((a, b) {
+      final aGenerated =
+          DateTime.tryParse(a.generatedAt ?? '') ??
+          DateTime.fromMillisecondsSinceEpoch(0);
+      final bGenerated =
+          DateTime.tryParse(b.generatedAt ?? '') ??
+          DateTime.fromMillisecondsSinceEpoch(0);
+
+      return bGenerated.compareTo(aGenerated);
+    });
+
+    return CloseoutDashboard(
+      dashboard: dashboard.dashboard,
+      resultsReadiness: dashboard.resultsReadiness,
+      latestFinalize: dashboard.latestFinalize,
+      reports: mergedReports,
+      deliveries: dashboard.deliveries,
+      latestArchive: dashboard.latestArchive,
+    );
   }
 
   Future<void> _ensureReportsLoaded({bool force = false}) async {
@@ -4553,6 +4623,13 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       'species': resolvedScope.species.toList()..sort(),
       'show_letters': resolvedScope.showLetters.toList()..sort(),
     };
+    await supabase
+        .from('show_report_artifacts')
+        .update({'is_current': false})
+        .eq('show_id', widget.showId)
+        .eq('report_name', reportName)
+        .eq('scope_key', resolvedScope.stableScopeKey)
+        .eq('is_current', true);
     final inserted = await supabase
         .from('show_report_artifacts')
         .insert({
@@ -4697,7 +4774,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
   Future<void> _generateCurrentReportGroupByName(String reportName) async {
     if (reportName != 'unpaid_balances_report' &&
         reportName != 'paid_exhibitor_report' &&
-        reportName != 'checkin_sheet') {
+        reportName != 'checkin_sheet' &&
+        reportName != 'entered_exhibitors_contact_report') {
       final ready = await _ensureResultsReadyForReports();
       if (!ready) return;
     }
@@ -4779,7 +4857,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
   }) async {
     if (reportName != 'unpaid_balances_report' &&
         reportName != 'paid_exhibitor_report' &&
-        reportName != 'checkin_sheet') {
+        reportName != 'checkin_sheet' &&
+        reportName != 'entered_exhibitors_contact_report') {
       final ready = await _ensureResultsReadyForReports();
       if (!ready) return;
     }
@@ -5377,20 +5456,58 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
     String? exhibitorId,
     String? exhibitorName,
   }) async {
-    setState(() => _generatingReport = true);
+    const preFinalizeReports = <String>{
+      'unpaid_balances_report',
+      'paid_exhibitor_report',
+      'checkin_sheet',
+      'entered_exhibitors_contact_report',
+    };
+
+    if (preFinalizeReports.contains(reportName)) {
+      await _generateReportByName(
+        reportName,
+        breedName: breedName,
+        clubName: clubName,
+        scope: scope,
+        showLetter: showLetter,
+        exhibitorId: exhibitorId,
+        exhibitorName: exhibitorName,
+      );
+      return;
+    }
+
+    setState(() {
+      _generatingReport = true;
+    });
+
     try {
       await _queueExistingArtifacts(reportName: reportName);
+
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${_friendlyReportName(reportName)} queued.')),
+        SnackBar(
+          content: Text(
+            '${_friendlyReportName(reportName)} queued.',
+          ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to queue report: $e')));
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to queue report: $e',
+          ),
+        ),
+      );
     } finally {
-      if (mounted) setState(() => _generatingReport = false);
+      if (mounted) {
+        setState(() {
+          _generatingReport = false;
+        });
+      }
     }
   }
 
@@ -6931,12 +7048,22 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                         (_dashboard?.reports ?? const <ReportArtifactSummary>[])
                             .where((artifact) => artifact.isCurrent)
                             .where(_artifactMatchesSelectedScope)
-                            .where(
-                              (artifact) =>
-                                  _finalizeRunIdForSelectedScope.isNotEmpty &&
+                            .where((artifact) {
+                              const preFinalizeReports = <String>{
+                                'unpaid_balances_report',
+                                'paid_exhibitor_report',
+                                'checkin_sheet',
+                                'entered_exhibitors_contact_report',
+                              };
+
+                              if (preFinalizeReports.contains(artifact.reportName)) {
+                                return true;
+                              }
+
+                              return _finalizeRunIdForSelectedScope.isNotEmpty &&
                                   artifact.finalizeRunId ==
-                                      _finalizeRunIdForSelectedScope,
-                            )
+                                      _finalizeRunIdForSelectedScope;
+                            })
                             .toList(),
                     arbaSections: _arbaSectionDescriptors,
                     groupedReportNames: {

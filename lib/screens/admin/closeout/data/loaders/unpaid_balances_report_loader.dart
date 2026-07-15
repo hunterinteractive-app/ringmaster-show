@@ -15,10 +15,10 @@ class UnpaidBalancesReportLoader {
     final showId = request.showId;
 
     final show = await repo.loadShowBasics(showId);
-    final balanceRows = await repo.loadShowExhibitorBalancesReport(
-      showId,
-      sectionIds: request.sectionIds,
-    );
+
+    // This is a whole-show operational report. Do not restrict the balance RPC
+    // to the currently selected Rabbit, Cavy, or custom Closeout scope.
+    final balanceRows = await repo.loadShowExhibitorBalancesReport(showId);
 
     final rows = <UnpaidBalanceRow>[];
 
@@ -31,17 +31,49 @@ class UnpaidBalancesReportLoader {
 
       rows.add(
         UnpaidBalanceRow(
+          balanceId: _str(balance['balance_id']),
           exhibitorId: _str(balance['exhibitor_id']),
+          exhibitorUserId: _str(balance['exhibitor_user_id']),
           exhibitorName: _resolveBalanceExhibitorName(balance),
-          exhibitorType: _str(balance['exhibitor_type']).isEmpty
-              ? ''
-              : _str(balance['exhibitor_type']),
+          exhibitorType: _str(balance['exhibitor_type']),
           phone: _str(balance['phone']),
+          email: _str(balance['email']),
+          addressLine1: _str(balance['address_line1']),
+          addressLine2: _str(balance['address_line2']),
+          city: _str(balance['city']),
+          state: _str(balance['state']),
+          zip: _str(balance['zip']),
+          arbaNumber: _str(balance['arba_number']),
+          paymentStatus: _str(balance['payment_status']).isEmpty
+              ? 'unpaid'
+              : _str(balance['payment_status']),
+          source: _str(balance['source']),
           sections: _sectionRowsFromBreakdown(balance['section_breakdown']),
           entryCount: _asInt(balance['entry_count']),
-          subtotal: _centsToDollars(balance['subtotal_before_discount_cents']),
-          showFee: _centsToDollars(balance['show_fee_subtotal_cents']),
+          furCount: _asInt(balance['fur_count']),
+          entriesSubtotal: _centsToDollars(
+            balance['entry_fee_subtotal_cents'],
+          ),
+          furSubtotal: _centsToDollars(
+            balance['fur_fee_subtotal_cents'],
+          ),
+          subtotal: _centsToDollars(
+            balance['subtotal_before_discount_cents'],
+          ),
+          showFee: _centsToDollars(
+            balance['show_fee_subtotal_cents'],
+          ),
           discount: _centsToDollars(balance['discount_cents']),
+          calculatedTotal: _centsToDollars(
+            balance['calculated_total_cents'],
+          ),
+          paidOnline: _centsToDollars(
+            balance['paid_online_cents'],
+          ),
+          paidManual: _centsToDollars(
+            balance['paid_manual_cents'],
+          ),
+          refunded: _centsToDollars(balance['refunded_cents']),
           totalDue: totalDue < 0 ? 0.0 : totalDue,
         ),
       );
@@ -54,9 +86,49 @@ class UnpaidBalancesReportLoader {
     );
 
     final totalExhibitors = rows.length;
-    final totalEntries = rows.fold<int>(0, (sum, row) => sum + row.entryCount);
+
+    final totalEntries = rows.fold<int>(
+      0,
+      (sum, row) => sum + row.entryCount,
+    );
+
+    final totalFurEntries = rows.fold<int>(
+      0,
+      (sum, row) => sum + row.furCount,
+    );
+
+    final grandSubtotal = rows.fold<double>(
+      0,
+      (sum, row) => sum + row.subtotal,
+    );
+
+    final grandShowFee = rows.fold<double>(
+      0,
+      (sum, row) => sum + row.showFee,
+    );
+
+    final grandDiscount = rows.fold<double>(
+      0,
+      (sum, row) => sum + row.discount,
+    );
+
+    final grandPaidOnline = rows.fold<double>(
+      0,
+      (sum, row) => sum + row.paidOnline,
+    );
+
+    final grandPaidManual = rows.fold<double>(
+      0,
+      (sum, row) => sum + row.paidManual,
+    );
+
+    final grandRefunded = rows.fold<double>(
+      0,
+      (sum, row) => sum + row.refunded,
+    );
+
     final grandTotalDue = rows.fold<double>(
-      0.0,
+      0,
       (sum, row) => sum + row.totalDue,
     );
 
@@ -68,15 +140,25 @@ class UnpaidBalancesReportLoader {
 
     return UnpaidBalancesReportData(
       showName: _str(show['name']),
-      showDate: _formatShowDateRange(show['start_date'], show['end_date']),
+      showDate: _formatShowDateRange(
+        show['start_date'],
+        show['end_date'],
+      ),
       showLocation: [
         _str(show['location_name']),
         _str(show['location_address']),
-      ].where((e) => e.isNotEmpty).join(', '),
+      ].where((value) => value.isNotEmpty).join(', '),
       currency: currency,
       rows: rows,
       totalExhibitors: totalExhibitors,
       totalEntries: totalEntries,
+      totalFurEntries: totalFurEntries,
+      grandSubtotal: grandSubtotal,
+      grandShowFee: grandShowFee,
+      grandDiscount: grandDiscount,
+      grandPaidOnline: grandPaidOnline,
+      grandPaidManual: grandPaidManual,
+      grandRefunded: grandRefunded,
       grandTotalDue: grandTotalDue,
     );
   }
@@ -115,7 +197,18 @@ class UnpaidBalancesReportLoader {
 
           return _ParsedSectionCountRow(
             label: label,
+            sectionId: _str(map['section_id']),
             count: _asInt(map['entry_count']),
+            furCount: _asInt(map['fur_count']),
+            entriesSubtotal: _centsToDollars(
+              map['entry_fee_subtotal_cents'],
+            ),
+            furSubtotal: _centsToDollars(
+              map['fur_fee_subtotal_cents'],
+            ),
+            showFee: _centsToDollars(
+              map['show_fee_subtotal_cents'],
+            ),
             kind: _str(map['kind']),
             letter: _str(map['letter']),
           );
@@ -138,7 +231,19 @@ class UnpaidBalancesReportLoader {
     });
 
     return parsedRows
-        .map((row) => SectionCountRow(label: row.label, count: row.count))
+        .map(
+          (row) => SectionCountRow(
+            label: row.label,
+            sectionId: row.sectionId,
+            kind: row.kind,
+            letter: row.letter,
+            count: row.count,
+            furCount: row.furCount,
+            entriesSubtotal: row.entriesSubtotal,
+            furSubtotal: row.furSubtotal,
+            showFee: row.showFee,
+          ),
+        )
         .toList();
   }
 
@@ -242,13 +347,23 @@ class UnpaidBalancesReportLoader {
 
 class _ParsedSectionCountRow {
   final String label;
+  final String sectionId;
   final int count;
+  final int furCount;
+  final double entriesSubtotal;
+  final double furSubtotal;
+  final double showFee;
   final String kind;
   final String letter;
 
   const _ParsedSectionCountRow({
     required this.label,
+    required this.sectionId,
     required this.count,
+    required this.furCount,
+    required this.entriesSubtotal,
+    required this.furSubtotal,
+    required this.showFee,
     required this.kind,
     required this.letter,
   });
