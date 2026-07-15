@@ -225,6 +225,48 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         (artifact.storagePath?.isNotEmpty == true);
   }
 
+  bool get _generationIsActive {
+    final taskCounts = _dashboard?.taskCounts;
+    if (taskCounts == null) return false;
+
+    return taskCounts.queued > 0 || taskCounts.running > 0;
+  }
+
+  bool get _generationHasBlockingFailures {
+    final taskCounts = _dashboard?.taskCounts;
+    if (taskCounts == null) return true;
+
+    return taskCounts.retryableFailed > 0 || taskCounts.remaining > 0;
+  }
+
+  bool get _canSendExhibitorReports {
+    if (_generationIsActive || _generationHasBlockingFailures) {
+      return false;
+    }
+
+    return (_dashboard?.reports ?? const <ReportArtifactSummary>[])
+        .where((artifact) => artifact.isCurrent)
+        .where(_artifactMatchesSelectedScope)
+        .where((artifact) {
+          return _exhibitorReportKeys.contains(artifact.reportName);
+        })
+        .any(_artifactIsUsableCurrent);
+  }
+
+  bool get _canSendClubReports {
+    if (_generationIsActive || _generationHasBlockingFailures) {
+      return false;
+    }
+
+    return (_dashboard?.reports ?? const <ReportArtifactSummary>[])
+        .where((artifact) => artifact.isCurrent)
+        .where(_artifactMatchesSelectedScope)
+        .where((artifact) {
+          return _clubReportKeys.contains(artifact.reportName);
+        })
+        .any(_artifactIsUsableCurrent);
+  }
+
   ArbaArtifactDescriptor _arbaArtifactDescriptor(
     ReportArtifactSummary artifact,
   ) {
@@ -3639,6 +3681,18 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
 
   Future<void> _sendAllExhibitorReports() async {
     if (await _blockedBySupportModeForEmailSend('Exhibitor')) return;
+    if (!_canSendExhibitorReports) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Exhibitor reports are still generating or need attention.',
+          ),
+        ),
+      );
+      return;
+    }
 
     final ready = await _ensureResultsReadyForReports();
     if (!ready) return;
@@ -3797,6 +3851,18 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
 
   Future<void> _sendAllClubReports() async {
     if (await _blockedBySupportModeForEmailSend('Club')) return;
+    if (!_canSendClubReports) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Club reports are still generating or need attention.',
+          ),
+        ),
+      );
+      return;
+    }
 
     final ready = await _ensureResultsReadyForReports();
     if (!ready) return;
@@ -7113,8 +7179,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                             reportsBlocked: reportsBlocked,
                             finalized: selectedScopeFinalized,
                             reportsStale:
-                                _dashboard?.dashboard.closeout.isReportsStale ==
-                                true,
+                                _dashboard?.dashboard.closeout.isReportsStale == true,
                             tooltipScope: tooltipScope,
                             onPressed:
                                 (_isBusy ||
@@ -7141,18 +7206,12 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                                               actions: [
                                                 TextButton(
                                                   onPressed: () =>
-                                                      Navigator.pop(
-                                                        context,
-                                                        false,
-                                                      ),
+                                                      Navigator.pop(context, false),
                                                   child: const Text('Cancel'),
                                                 ),
                                                 FilledButton(
                                                   onPressed: () =>
-                                                      Navigator.pop(
-                                                        context,
-                                                        true,
-                                                      ),
+                                                      Navigator.pop(context, true),
                                                   child: const Text('Finalize'),
                                                 ),
                                               ],
@@ -7174,9 +7233,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                                     } catch (e) {
                                       if (!mounted) return;
 
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
+                                      ScaffoldMessenger.of(context).showSnackBar(
                                         SnackBar(
                                           content: Text(
                                             'Finalize flow failed: $e',
@@ -7214,20 +7271,20 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                                         setState(() {
                                           _generatingReport = true;
                                         });
+
                                         try {
                                           final queued =
                                               await _queueScopedRenderTasks(
                                                 action: 'generate_remaining',
                                               );
+
                                           if (!context.mounted) return;
-                                          await _showReportsQueuedDialog(
-                                            queued,
-                                          );
+
+                                          await _showReportsQueuedDialog(queued);
                                         } catch (error) {
                                           if (!context.mounted) return;
-                                          ScaffoldMessenger.of(
-                                            context,
-                                          ).showSnackBar(
+
+                                          ScaffoldMessenger.of(context).showSnackBar(
                                             SnackBar(
                                               content: Text(
                                                 'Failed to queue reports: $error',
@@ -7270,18 +7327,12 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                                               actions: [
                                                 TextButton(
                                                   onPressed: () =>
-                                                      Navigator.pop(
-                                                        context,
-                                                        false,
-                                                      ),
+                                                      Navigator.pop(context, false),
                                                   child: const Text('Cancel'),
                                                 ),
                                                 FilledButton(
                                                   onPressed: () =>
-                                                      Navigator.pop(
-                                                        context,
-                                                        true,
-                                                      ),
+                                                      Navigator.pop(context, true),
                                                   child: const Text(
                                                     'Regenerate All',
                                                   ),
@@ -7290,20 +7341,26 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                                             ),
                                           ) ??
                                           false;
+
                                       if (!confirmed) return;
-                                      setState(() => _generatingReport = true);
+
+                                      setState(() {
+                                        _generatingReport = true;
+                                      });
+
                                       try {
                                         final queued =
                                             await _queueScopedRenderTasks(
                                               action: 'regenerate_all',
                                             );
+
                                         if (!mounted) return;
+
                                         await _showReportsQueuedDialog(queued);
                                       } catch (error) {
                                         if (!mounted) return;
-                                        ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
+
+                                        ScaffoldMessenger.of(context).showSnackBar(
                                           SnackBar(
                                             content: Text(
                                               'Failed to regenerate reports: $error',
@@ -7312,9 +7369,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                                         );
                                       } finally {
                                         if (mounted) {
-                                          setState(
-                                            () => _generatingReport = false,
-                                          );
+                                          setState(() {
+                                            _generatingReport = false;
+                                          });
                                         }
                                       }
                                     },
@@ -7323,58 +7380,107 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                             ),
                           ),
                         ],
+
                         distributionActions: [
                           Tooltip(
-                            message:
-                                'Send generated exhibitor reports for $tooltipScope',
+                            message: generationActive
+                                ? 'Exhibitor reports are still generating for $tooltipScope'
+                                : 'Send generated exhibitor reports for $tooltipScope',
                             child: OutlinedButton.icon(
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: AppColors.secondaryButton,
-                                disabledForegroundColor: AppColors.muted
-                                    .withValues(alpha: .72),
-                                side: BorderSide(
-                                  color: AppColors.secondaryButton.withValues(
-                                    alpha: .78,
-                                  ),
-                                  width: 1.4,
-                                ),
+                              style: ButtonStyle(
+                                backgroundColor:
+                                    WidgetStateProperty.resolveWith<Color>((states) {
+                                  return states.contains(WidgetState.disabled)
+                                      ? AppColors.muted.withValues(alpha: .28)
+                                      : Colors.green.shade700;
+                                }),
+                                foregroundColor:
+                                    WidgetStateProperty.resolveWith<Color>((states) {
+                                  return states.contains(WidgetState.disabled)
+                                      ? AppColors.muted.withValues(alpha: .72)
+                                      : Colors.white;
+                                }),
+                                side:
+                                    WidgetStateProperty.resolveWith<BorderSide>((states) {
+                                  final color =
+                                      states.contains(WidgetState.disabled)
+                                      ? AppColors.muted.withValues(alpha: .35)
+                                      : Colors.green.shade700;
+
+                                  return BorderSide(
+                                    color: color,
+                                    width: 1.4,
+                                  );
+                                }),
                               ),
                               onPressed:
-                                  _isBusy || _resolvedCloseoutScope.isEmpty
+                                  _isBusy ||
+                                      _resolvedCloseoutScope.isEmpty ||
+                                      !_canSendExhibitorReports
                                   ? null
                                   : _sendAllExhibitorReports,
                               icon: const Icon(Icons.send_outlined),
-                              label: const Text('Send Exhibitor Reports'),
+                              label: Text(
+                                generationActive
+                                    ? 'Exhibitor Reports Generating'
+                                    : 'Send Exhibitor Reports',
+                              ),
                             ),
                           ),
+
                           /*
-                                ElevatedButton.icon(
-                                  onPressed: _isBusy || _isSupportMode ? null : _sendAllLegsReports,
-                                  icon: const Icon(Icons.pets),
-                                  label: const Text('Send All Legs'),
-                                ),
-                                */
+                          ElevatedButton.icon(
+                            onPressed: _isBusy || _isSupportMode
+                                ? null
+                                : _sendAllLegsReports,
+                            icon: const Icon(Icons.pets),
+                            label: const Text('Send All Legs'),
+                          ),
+                          */
+
                           Tooltip(
-                            message:
-                                'Send generated club reports for $tooltipScope',
+                            message: generationActive
+                                ? 'Club reports are still generating for $tooltipScope'
+                                : 'Send generated club reports for $tooltipScope',
                             child: OutlinedButton.icon(
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: AppColors.secondaryButton,
-                                disabledForegroundColor: AppColors.muted
-                                    .withValues(alpha: .72),
-                                side: BorderSide(
-                                  color: AppColors.secondaryButton.withValues(
-                                    alpha: .78,
-                                  ),
-                                  width: 1.4,
-                                ),
+                              style: ButtonStyle(
+                                backgroundColor:
+                                    WidgetStateProperty.resolveWith<Color>((states) {
+                                  return states.contains(WidgetState.disabled)
+                                      ? AppColors.muted.withValues(alpha: .28)
+                                      : Colors.green.shade700;
+                                }),
+                                foregroundColor:
+                                    WidgetStateProperty.resolveWith<Color>((states) {
+                                  return states.contains(WidgetState.disabled)
+                                      ? AppColors.muted.withValues(alpha: .72)
+                                      : Colors.white;
+                                }),
+                                side:
+                                    WidgetStateProperty.resolveWith<BorderSide>((states) {
+                                  final color =
+                                      states.contains(WidgetState.disabled)
+                                      ? AppColors.muted.withValues(alpha: .35)
+                                      : Colors.green.shade700;
+
+                                  return BorderSide(
+                                    color: color,
+                                    width: 1.4,
+                                  );
+                                }),
                               ),
                               onPressed:
-                                  _isBusy || _resolvedCloseoutScope.isEmpty
+                                  _isBusy ||
+                                      _resolvedCloseoutScope.isEmpty ||
+                                      !_canSendClubReports
                                   ? null
                                   : _sendAllClubReports,
                               icon: const Icon(Icons.group_outlined),
-                              label: const Text('Send Club Reports'),
+                              label: Text(
+                                generationActive
+                                    ? 'Club Reports Generating'
+                                    : 'Send Club Reports',
+                              ),
                             ),
                           ),
                         ],
