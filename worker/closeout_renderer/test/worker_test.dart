@@ -188,7 +188,41 @@ void main() {
       expect(response.statusCode, 403);
     });
 
-    test('authorized work processes a bounded batch', () async {
+    test('valid X-Work-Token processes a bounded batch', () async {
+      final handler = buildWorkerHandler(
+        _worker(queue: _FakeQueue([_task()])),
+        _config(workToken: 'token'),
+      );
+      final response = await handler(
+        Request(
+          'POST',
+          Uri.parse('http://x/work'),
+          headers: {'x-work-token': 'token'},
+        ),
+      );
+      expect(response.statusCode, 200);
+      expect(await response.readAsString(), contains('"completed":1'));
+    });
+
+    test('invalid X-Work-Token returns 403 without bearer fallback', () async {
+      final handler = buildWorkerHandler(
+        _worker(queue: _FakeQueue([_task()])),
+        _config(workToken: 'token'),
+      );
+      final response = await handler(
+        Request(
+          'POST',
+          Uri.parse('http://x/work'),
+          headers: {
+            'x-work-token': 'wrong-token',
+            'authorization': 'Bearer token',
+          },
+        ),
+      );
+      expect(response.statusCode, 403);
+    });
+
+    test('Authorization Bearer still processes a bounded batch', () async {
       final handler = buildWorkerHandler(
         _worker(queue: _FakeQueue([_task()])),
         _config(workToken: 'token'),
@@ -278,7 +312,10 @@ void main() {
       ).readAsStringSync();
       expect(source, contains('report_show_exhibitor_balances_scoped'));
       expect(source, contains('unsupported_scoped_balance_report'));
-      expect(source, contains("row['payment_allocation_status'] == 'ambiguous'"));
+      expect(
+        source,
+        contains("row['payment_allocation_status'] == 'ambiguous'"),
+      );
     });
 
     test('scoped balance RPC is hardened and never granted to anon', () {

@@ -20,8 +20,10 @@ Handler buildWorkerHandler(CloseoutWorker worker, WorkerConfig config) {
     }
     if (request.method == 'POST' && request.url.path == 'work') {
       final expected = config.workToken;
-      if (expected == null ||
-          request.headers['authorization'] != 'Bearer $expected') {
+      final schedulerToken = request.headers['x-work-token'];
+      final supplied =
+          schedulerToken ?? _bearerToken(request.headers['authorization']);
+      if (expected == null || supplied != expected) {
         return Response.forbidden(
           jsonEncode({'error': 'internal authorization required'}),
           headers: {'content-type': 'application/json'},
@@ -39,4 +41,13 @@ Handler buildWorkerHandler(CloseoutWorker worker, WorkerConfig config) {
     }
     return Response.notFound(jsonEncode({'error': 'not found'}));
   };
+}
+
+String? _bearerToken(String? authorization) {
+  if (authorization == null) return null;
+  final match = RegExp(
+    r'^Bearer\s+(.+)$',
+    caseSensitive: false,
+  ).firstMatch(authorization.trim());
+  return match?.group(1);
 }
