@@ -21,6 +21,9 @@ void main() {
   final reviewReportMigration = File(
     'supabase/migrations/20260715102607_closeout_review_report_details.sql',
   ).readAsStringSync();
+  final finalFailureMigration = File(
+    'supabase/migrations/20260715104020_closeout_final_report_failures.sql',
+  ).readAsStringSync();
   final edgeFunction = File(
     'supabase/functions/run-closeout/index.ts',
   ).readAsStringSync();
@@ -233,6 +236,19 @@ void main() {
   });
 
   group('database manifest and queue contract', () {
+    test('review details retain latest task history behind artifact cause', () {
+      expect(finalFailureMigration, contains("'task_history_category'"));
+      expect(finalFailureMigration, contains("'task_history_message'"));
+      expect(finalFailureMigration, contains("then 'statement_timeout'"));
+      expect(finalFailureMigration, contains("then 'read_only_violation'"));
+      expect(finalFailureMigration, contains("task.failed_at"));
+      expect(finalFailureMigration, contains("task.id desc"));
+      expect(
+        finalFailureMigration,
+        contains("a.metadata ->> 'error_category' = 'invalid_scope'"),
+      );
+    });
+
     test('new manifests have unique artifact and task identities', () {
       expect(migration, contains('show_report_artifacts_run_identity_uidx'));
       expect(migration, contains('(finalize_run_id, artifact_key)'));

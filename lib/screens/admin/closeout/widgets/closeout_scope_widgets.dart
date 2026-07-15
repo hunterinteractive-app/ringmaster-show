@@ -308,6 +308,8 @@ class CloseoutReviewReport {
   final String taskStatus;
   final String errorCategory;
   final String errorMessage;
+  final String taskHistoryCategory;
+  final String taskHistoryMessage;
   final bool retryable;
   final int attemptCount;
   final int maxAttempts;
@@ -332,6 +334,8 @@ class CloseoutReviewReport {
     required this.taskStatus,
     this.errorCategory = '',
     this.errorMessage = '',
+    this.taskHistoryCategory = '',
+    this.taskHistoryMessage = '',
     required this.retryable,
     this.attemptCount = 0,
     this.maxAttempts = 0,
@@ -366,6 +370,8 @@ class CloseoutReviewReport {
       taskStatus: text('task_status'),
       errorCategory: text('error_category'),
       errorMessage: text('error_message'),
+      taskHistoryCategory: text('task_history_category'),
+      taskHistoryMessage: text('task_history_message'),
       retryable: json['retryable'] == true,
       attemptCount: ((json['attempt_count'] ?? 0) as num).toInt(),
       maxAttempts: ((json['max_attempts'] ?? 0) as num).toInt(),
@@ -396,6 +402,8 @@ class CloseoutReviewReport {
       taskStatus: taskStatus,
       errorCategory: errorCategory,
       errorMessage: errorMessage,
+      taskHistoryCategory: taskHistoryCategory,
+      taskHistoryMessage: taskHistoryMessage,
       retryable: retryable,
       attemptCount: attemptCount,
       maxAttempts: maxAttempts,
@@ -483,6 +491,16 @@ class CloseoutReportsNeedingReviewPanel extends StatelessWidget {
           if (report.errorCategory.isNotEmpty)
             Text('Error category: ${report.errorCategory}'),
           Text(_errorFor(report), style: const TextStyle(color: Colors.orange)),
+          if (report.taskHistoryCategory.isNotEmpty &&
+              (report.taskHistoryCategory != report.errorCategory ||
+                  report.taskHistoryMessage != report.errorMessage)) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Latest task history: ${report.taskHistoryCategory}'
+              '${report.taskHistoryMessage.isEmpty ? '' : ' — ${report.taskHistoryMessage}'}',
+              style: const TextStyle(fontSize: 12, color: AppColors.muted),
+            ),
+          ],
           const SizedBox(height: 4),
           Text(
             'Attempts: ${report.attemptCount}${report.maxAttempts > 0 ? ' of ${report.maxAttempts}' : ''} • '

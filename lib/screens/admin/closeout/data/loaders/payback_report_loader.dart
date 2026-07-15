@@ -1,14 +1,76 @@
 // lib/screens/admin/closeout/data/loaders/payback_report_loader.dart
 
+import 'dart:convert';
+import 'dart:developer' as developer;
+
 import 'package:supabase/supabase.dart';
 
 import '../../models/base/report_request.dart';
 import '../../models/exhibitor/payback_report_data.dart';
 
+typedef PaybackSectionRowsFetcher =
+    Future<List<Map<String, dynamic>>> Function(
+      String showId,
+      String sectionId,
+    );
+typedef PaybackTimingSink = void Function(Map<String, Object?> event);
+
+class PaybackSectionBatchLoader {
+  const PaybackSectionBatchLoader({required this.fetchRows, this.timingSink});
+
+  final PaybackSectionRowsFetcher fetchRows;
+  final PaybackTimingSink? timingSink;
+
+  Future<List<Map<String, dynamic>>> load({
+    required String showId,
+    required Iterable<String> sectionIds,
+  }) async {
+    final allRows = <Map<String, dynamic>>[];
+
+    // One exact section per request is the bounded unit. Keeping this
+    // sequential avoids competing statement-timeout queries in one worker.
+    for (final sectionId in sectionIds) {
+      final watch = Stopwatch()..start();
+      try {
+        final rows = await fetchRows(showId, sectionId);
+        allRows.addAll(rows);
+        watch.stop();
+        _log({
+          'event': 'payback_section_loaded',
+          'show_id': showId,
+          'section_id': sectionId,
+          'row_count': rows.length,
+          'duration_ms': watch.elapsedMilliseconds,
+        });
+      } catch (error) {
+        watch.stop();
+        _log({
+          'event': 'payback_section_load_failed',
+          'show_id': showId,
+          'section_id': sectionId,
+          'duration_ms': watch.elapsedMilliseconds,
+          'error_type': error.runtimeType.toString(),
+        });
+        rethrow;
+      }
+    }
+    return allRows;
+  }
+
+  void _log(Map<String, Object?> event) {
+    if (timingSink != null) {
+      timingSink!(event);
+      return;
+    }
+    developer.log(jsonEncode(event), name: 'closeout.payback');
+  }
+}
+
 class PaybackReportLoader {
   final SupabaseClient supabase;
+  final PaybackSectionBatchLoader? sectionBatchLoader;
 
-  PaybackReportLoader({required this.supabase});
+  PaybackReportLoader({required this.supabase, this.sectionBatchLoader});
 
   Future<PaybackReportData> loadRequest(ReportRequest request) async {
     final sectionIds = request.sectionIds ?? const <String>[];
@@ -16,15 +78,7 @@ class PaybackReportLoader {
       throw StateError('Payback report requires scoped section IDs.');
     }
     final show = await _loadShow(request.showId);
-    final rawRows = <Map<String, dynamic>>[];
-    for (final sectionId in sectionIds) {
-      rawRows.addAll(
-        await _loadPaybackRowsForSection(
-          showId: request.showId,
-          sectionId: sectionId,
-        ),
-      );
-    }
+    final rawRows = await _loadSections(request.showId, sectionIds);
     return _buildReport(show: show, showId: request.showId, rawRows: rawRows);
   }
 
@@ -53,13 +107,14 @@ class PaybackReportLoader {
         .toList();
 
     final grouped = <String, List<PaybackBreakdownRow>>{};
+    final rawByEntryId = <String, Map<String, dynamic>>{
+      for (final row in rawRows)
+        if ((row['entry_id'] ?? '').toString().isNotEmpty)
+          row['entry_id'].toString(): row,
+    };
 
     for (final row in breakdownRows) {
-      final exhibitorId = rawRows
-          .firstWhere(
-            (raw) => raw['entry_id']?.toString() == row.entryId,
-            orElse: () => const {},
-          )['exhibitor_id']
+      final exhibitorId = rawByEntryId[row.entryId]?['exhibitor_id']
           ?.toString();
 
       final key = exhibitorId ?? 'unknown:${row.entryId}';
@@ -72,10 +127,8 @@ class PaybackReportLoader {
     for (final entry in grouped.entries) {
       final rowsForExhibitor = entry.value;
 
-      final matchingRaw = rawRows.firstWhere(
-        (raw) => raw['entry_id']?.toString() == rowsForExhibitor.first.entryId,
-        orElse: () => const {},
-      );
+      final matchingRaw =
+          rawByEntryId[rowsForExhibitor.first.entryId] ?? const {};
 
       final total = rowsForExhibitor.fold<int>(
         0,
@@ -128,17 +181,20 @@ class PaybackReportLoader {
     }
 
     final sectionIds = await _loadEnabledSectionIds(showId);
-    final allRows = <Map<String, dynamic>>[];
+    return _loadSections(showId, sectionIds);
+  }
 
-    for (final currentSectionId in sectionIds) {
-      final sectionRows = await _loadPaybackRowsForSection(
-        showId: showId,
-        sectionId: currentSectionId,
-      );
-      allRows.addAll(sectionRows);
-    }
-
-    return allRows;
+  Future<List<Map<String, dynamic>>> _loadSections(
+    String showId,
+    Iterable<String> sectionIds,
+  ) {
+    final loader =
+        sectionBatchLoader ??
+        PaybackSectionBatchLoader(
+          fetchRows: (showId, sectionId) =>
+              _loadPaybackRowsForSection(showId: showId, sectionId: sectionId),
+        );
+    return loader.load(showId: showId, sectionIds: sectionIds);
   }
 
   Future<List<Map<String, dynamic>>> _loadPaybackRowsForSection({

@@ -33,6 +33,8 @@ const _reviewReports = <CloseoutReviewReport>[
     taskStatus: 'failed',
     errorCategory: 'renderer_timeout',
     errorMessage: 'The report renderer timed out.',
+    taskHistoryCategory: 'worker_lease_expired',
+    taskHistoryMessage: 'The worker lease expired after the render failed.',
     retryable: true,
     attemptCount: 2,
     maxAttempts: 5,
@@ -340,6 +342,10 @@ void main() {
       expect(find.text('Breed: Dutch'), findsOneWidget);
       expect(find.text('Error category: renderer_timeout'), findsOneWidget);
       expect(find.text('The report renderer timed out.'), findsOneWidget);
+      expect(
+        find.textContaining('Latest task history: worker_lease_expired'),
+        findsOneWidget,
+      );
       expect(find.text('Club: County Cavy Club'), findsOneWidget);
       expect(find.text('Sanctioning body: ARBA'), findsOneWidget);
       expect(find.textContaining('Retryable: Yes'), findsOneWidget);

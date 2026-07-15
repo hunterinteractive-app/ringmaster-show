@@ -766,13 +766,39 @@ void main() {
 
     test('scoped balance RPC is hardened and never granted to anon', () {
       final sql = File(
-        '../../supabase/migrations/20260714112117_closeout_scoped_financial_balances.sql',
+        '../../supabase/migrations/20260715104020_closeout_final_report_failures.sql',
       ).readAsStringSync();
       expect(sql, contains('security definer'));
       expect(sql, contains("set search_path = ''"));
       expect(sql, contains('from public, anon'));
       expect(sql, contains('to authenticated, service_role'));
       expect(sql, contains("then 'ambiguous'"));
+      final balanceStart = sql.indexOf(
+        'create or replace function public.report_show_exhibitor_balances_scoped',
+      );
+      final balanceEnd = sql.indexOf(
+        'comment on function public.report_show_exhibitor_balances_scoped',
+        balanceStart,
+      );
+      final balanceRpc = sql.substring(balanceStart, balanceEnd);
+      expect(balanceRpc, contains('from public.show_exhibitor_balances b'));
+      expect(balanceRpc, isNot(contains('report_show_exhibitor_balances(')));
+      expect(balanceRpc.toLowerCase(), isNot(contains('drop table')));
+      expect(balanceRpc.toLowerCase(), isNot(contains('create temp')));
+      expect(balanceRpc.toLowerCase(), isNot(contains('update ')));
+      expect(balanceRpc.toLowerCase(), isNot(contains('insert into')));
+    });
+
+    test('payback RPC pushes each section into best-display evaluation', () {
+      final sql = File(
+        '../../supabase/migrations/20260715104020_closeout_final_report_failures.sql',
+      ).readAsStringSync();
+      final paybackEnd = sql.indexOf('-- Balance validation');
+      final paybackRpc = sql.substring(0, paybackEnd);
+      expect(paybackRpc, contains('WITH requested_sections AS'));
+      expect(paybackRpc, contains('s.id = p_section_id'));
+      expect(paybackRpc, contains('p_scope := requested.scope'));
+      expect(paybackRpc, contains('p_show_letter := requested.show_letter'));
     });
   });
 }
