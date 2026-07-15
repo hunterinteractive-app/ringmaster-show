@@ -38,6 +38,10 @@ dispatcher plus the worker requests), and start with
 waves when work remains. With four concurrent renders per worker, 25 worker
 requests can process approximately 100 reports concurrently.
 
+Dispatch responses keep report-render `failed` counts separate from internal
+HTTP `request_failures`. `remaining` is the minimum successful global queue
+snapshot from the final observed round; it is never summed across workers.
+
 Required environment variables outside `--dry-run` are `SUPABASE_URL` and
 `SUPABASE_SERVICE_ROLE_KEY`. Optional variables are `WORKER_ID`,
 `TASK_BATCH_SIZE`, `POLL_INTERVAL_SECONDS`, `MAX_CONCURRENT_RENDERS`,

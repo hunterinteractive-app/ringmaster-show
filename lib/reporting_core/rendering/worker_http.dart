@@ -151,11 +151,13 @@ Future<Response> _dispatch(
 
   var rounds = 0;
   var requests = 0;
+  var requestFailures = 0;
+  var successfulRequests = 0;
   var claimed = 0;
   var completed = 0;
   var failed = 0;
   var recovered = 0;
-  var remaining = 0;
+  int? remaining;
 
   for (var round = 0; round < config.dispatchMaxRounds; round++) {
     rounds++;
@@ -165,36 +167,52 @@ Future<Response> _dispatch(
       requestCount: config.dispatchConcurrency,
     );
     requests += outcomes.length;
+    requestFailures += outcomes.where((outcome) => !outcome.isSuccess).length;
     final results = outcomes
         .where((outcome) => outcome.isSuccess)
         .map((outcome) => outcome.result!)
         .toList();
+    successfulRequests += results.length;
 
     for (final result in results) {
       claimed += result.claimed;
       completed += result.completed;
       failed += result.failed;
       recovered += result.recovered;
-      remaining += result.remaining;
     }
+    final roundRemaining = results.isEmpty
+        ? null
+        : results
+              .map((result) => result.remaining)
+              .reduce((left, right) => left < right ? left : right);
+    if (roundRemaining != null) remaining = roundRemaining;
 
     final allRequestsSucceeded = results.length == outcomes.length;
     final everyResponseClaimedZero =
         allRequestsSucceeded && results.every((result) => result.claimed == 0);
-    final remainingReachedZero = results.any((result) => result.remaining == 0);
-    if (results.isEmpty || everyResponseClaimedZero || remainingReachedZero) {
+    if (everyResponseClaimedZero || roundRemaining == 0) {
       break;
     }
+  }
+
+  if (successfulRequests == 0) {
+    return _jsonResponse(502, {
+      'rounds': rounds,
+      'requests': requests,
+      'request_failures': requestFailures,
+      'error': 'All dispatched work requests failed.',
+    });
   }
 
   return _jsonResponse(200, {
     'rounds': rounds,
     'requests': requests,
+    'request_failures': requestFailures,
     'claimed': claimed,
     'completed': completed,
     'failed': failed,
     'recovered': recovered,
-    'remaining': remaining,
+    'remaining': remaining!,
   });
 }
 

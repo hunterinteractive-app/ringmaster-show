@@ -411,20 +411,116 @@ void main() {
       expect(body, {
         'rounds': 1,
         'requests': 2,
+        'request_failures': 0,
         'claimed': 5,
         'completed': 4,
         'failed': 1,
         'recovered': 5,
-        'remaining': 8,
+        'remaining': 0,
       });
       expect(dispatcher.calls, 1);
+    });
+
+    test('dispatch does not sum global remaining snapshots', () async {
+      final dispatcher = _FakeDispatcher([
+        [
+          _success(claimed: 1, remaining: 8),
+          _success(claimed: 1, remaining: 5),
+        ],
+      ]);
+      final handler = buildWorkerHandler(
+        _worker(queue: _FakeQueue([])),
+        _config(
+          workToken: 'token',
+          workerBaseUrl: Uri.parse('https://worker'),
+          dispatchConcurrency: 2,
+        ),
+        dispatcher: dispatcher,
+      );
+
+      final response = await handler(_dispatchRequest());
+      final body = jsonDecode(await response.readAsString());
+
+      expect(response.statusCode, 200);
+      expect(body['remaining'], 5);
+      expect(body['remaining'], isNot(13));
+    });
+
+    test(
+      'dispatch reports the last round minimum remaining snapshot',
+      () async {
+        final dispatcher = _FakeDispatcher([
+          [
+            _success(claimed: 1, remaining: 9),
+            _success(claimed: 1, remaining: 7),
+          ],
+          [
+            _success(claimed: 1, remaining: 4),
+            _success(claimed: 1, remaining: 2),
+          ],
+        ]);
+        final handler = buildWorkerHandler(
+          _worker(queue: _FakeQueue([])),
+          _config(
+            workToken: 'token',
+            workerBaseUrl: Uri.parse('https://worker'),
+            dispatchConcurrency: 2,
+            dispatchMaxRounds: 2,
+          ),
+          dispatcher: dispatcher,
+        );
+
+        final response = await handler(_dispatchRequest());
+        final body = jsonDecode(await response.readAsString());
+
+        expect(response.statusCode, 200);
+        expect(body['rounds'], 2);
+        expect(body['requests'], 4);
+        expect(body['remaining'], 2);
+      },
+    );
+
+    test('dispatch returns 502 when every internal request fails', () async {
+      final dispatcher = _FakeDispatcher([
+        [
+          WorkDispatchOutcome.failure(StateError('first failure')),
+          WorkDispatchOutcome.failure(StateError('second failure')),
+        ],
+        [
+          WorkDispatchOutcome.failure(StateError('third failure')),
+          WorkDispatchOutcome.failure(StateError('fourth failure')),
+        ],
+      ]);
+      final handler = buildWorkerHandler(
+        _worker(queue: _FakeQueue([])),
+        _config(
+          workToken: 'token',
+          workerBaseUrl: Uri.parse('https://worker'),
+          dispatchConcurrency: 2,
+          dispatchMaxRounds: 2,
+        ),
+        dispatcher: dispatcher,
+      );
+
+      final response = await handler(_dispatchRequest());
+      final body = jsonDecode(await response.readAsString());
+
+      expect(response.statusCode, 502);
+      expect(body, {
+        'rounds': 2,
+        'requests': 4,
+        'request_failures': 4,
+        'error': 'All dispatched work requests failed.',
+      });
+      expect(body, isNot(contains('remaining')));
+      expect(body, isNot(contains('failed')));
     });
 
     test('dispatch tolerates partial request failures', () async {
       final dispatcher = _FakeDispatcher([
         [
           WorkDispatchOutcome.failure(StateError('unavailable')),
-          _success(claimed: 2, completed: 1, failed: 1, remaining: 3),
+          _success(claimed: 4, completed: 1, failed: 3, remaining: 3),
         ],
       ]);
       final handler = buildWorkerHandler(
@@ -442,9 +538,11 @@ void main() {
 
       expect(response.statusCode, 200);
       expect(body['requests'], 2);
-      expect(body['claimed'], 2);
+      expect(body['request_failures'], 1);
+      expect(body['claimed'], 4);
       expect(body['completed'], 1);
-      expect(body['failed'], 1);
+      expect(body['failed'], 3);
+      expect(body['remaining'], 3);
     });
 
     test(
