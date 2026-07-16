@@ -24,6 +24,9 @@ void main() {
   final finalFailureMigration = File(
     'supabase/migrations/20260715104020_closeout_final_report_failures.sql',
   ).readAsStringSync();
+  final artifactDashboardMigration = File(
+    'supabase/migrations/20260716014542_fix_closeout_dashboard_artifact_scope.sql',
+  ).readAsStringSync();
   final edgeFunction = File(
     'supabase/functions/run-closeout/index.ts',
   ).readAsStringSync();
@@ -78,7 +81,9 @@ void main() {
       expect(body, contains("'get_closeout_dashboard_scoped'"));
       expect(body, contains("'p_scope_key'"));
       expect(body, contains("'p_section_ids'"));
-      expect(body, contains("'p_artifact_limit': 100"));
+      expect(body, contains("'p_artifact_limit': pageSize"));
+      expect(body, contains('while (artifactPage.hasMore)'));
+      expect(body, contains('reportsById[artifact.id] = artifact'));
       expect(body, isNot(contains('.storage')));
       expect(body, isNot(contains('ReportLoader')));
       expect(body, isNot(contains('.insert(')));
@@ -235,6 +240,49 @@ void main() {
     });
   });
 
+  group('Closeout artifact status UI contract', () {
+    test('pagination merges every page by artifact ID', () {
+      final body = methodBody(
+        'Future<CloseoutDashboard> _loadDashboardSummary({',
+        'Future<void> _ensureReportsLoaded',
+      );
+      expect(body, contains('while (artifactPage.hasMore)'));
+      expect(body, contains('reportsById[artifact.id] = artifact'));
+      expect(body, contains('candidateOffset <= nextOffset'));
+    });
+
+    test('generated reports omit Generate while failures expose Retry', () {
+      final body = methodBody(
+        'Widget _buildArtifactActions({',
+        'List<Widget> _buildReportStatusAndActions()',
+      );
+      expect(
+        body,
+        contains('if (uiStatus != CloseoutReportUiStatus.generated)'),
+      );
+      expect(body, contains("CloseoutReportUiStatus.failed => 'Retry'"));
+      expect(
+        body,
+        contains("CloseoutReportUiStatus.generating => 'Generating'"),
+      );
+      expect(body, contains('canDownload'));
+      expect(body, contains('_selectedReportCanEmail'));
+    });
+
+    test('exhibitor choices come from scoped artifacts, not all entries', () {
+      final body = methodBody(
+        'Future<void> _loadExhibitors() async',
+        'Future<void> _loadBreedsForBreedScopedReports() async',
+      );
+      expect(body, contains('widget.reports.where'));
+      expect(body, contains('artifact.reportName == reportName'));
+      expect(body, contains('artifact.isCurrent'));
+      expect(body, isNot(contains(".from('entries')")));
+      expect(body, contains(".from('exhibitors')"));
+      expect(body, contains(".select('id, email')"));
+    });
+  });
+
   group('database manifest and queue contract', () {
     test('review details retain latest task history behind artifact cause', () {
       expect(finalFailureMigration, contains("'task_history_category'"));
@@ -358,6 +406,25 @@ void main() {
         contains('least(coalesce(p_artifact_limit, 100), 200)'),
       );
       expect(migration, isNot(contains('storage.objects')));
+    });
+
+    test('dashboard follows the selected run, not artifact scope keys', () {
+      expect(
+        artifactDashboardMigration,
+        contains('join selected_run r on r.id = a.finalize_run_id'),
+      );
+      expect(
+        artifactDashboardMigration,
+        isNot(contains('a.scope_key = p_scope_key')),
+      );
+      expect(
+        artifactDashboardMigration,
+        contains("'storage_path', a.storage_path"),
+      );
+      expect(
+        artifactDashboardMigration,
+        contains("'section_ids', to_jsonb(a.section_ids)"),
+      );
     });
 
     test('dashboard task counts are exact show, run, and scope only', () {

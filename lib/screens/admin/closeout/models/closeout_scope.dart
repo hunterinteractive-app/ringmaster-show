@@ -67,8 +67,11 @@ class ResolvedCloseoutScope {
   bool get isEmpty => sectionIds.isEmpty;
 
   bool matchesArtifactMetadata(Map<String, dynamic> metadata) {
+    final runScopeKey = (metadata['run_scope_key'] ?? '').toString().trim();
+    if (runScopeKey.isNotEmpty) return runScopeKey == stableScopeKey;
+
     final artifactKey = (metadata['scope_key'] ?? '').toString().trim();
-    if (artifactKey.isNotEmpty) return artifactKey == stableScopeKey;
+    if (artifactKey == stableScopeKey) return true;
 
     final rawIds = metadata['section_ids'];
     if (rawIds is List) {

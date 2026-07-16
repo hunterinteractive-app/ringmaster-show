@@ -14,6 +14,7 @@ import 'package:ringmaster_show/reporting_core/assets/flutter_report_asset_loade
 import 'package:ringmaster_show/screens/admin/closeout/data/closeout_repository.dart';
 import 'package:ringmaster_show/screens/admin/closeout/models/closeout_scope.dart';
 import 'package:ringmaster_show/screens/admin/closeout/models/closeout_scope_presentation.dart';
+import 'package:ringmaster_show/screens/admin/closeout/models/report_artifact_summary.dart';
 import 'package:ringmaster_show/screens/admin/closeout/models/arba_report_presentation.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/arba_report_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/arba_report_pdf.dart';
@@ -418,8 +419,35 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
   }
 
   bool _artifactMatchesSelectedScope(ReportArtifactSummary artifact) {
-    final resolved = _resolvedCloseoutScope;
-    final metadata = artifact.metadata;
+    return _artifactMatchesResolvedScope(
+      artifact,
+      _resolvedCloseoutScope,
+      runId: (_dashboard?.latestFinalize.id ?? '').trim(),
+    );
+  }
+
+  bool _artifactMatchesResolvedScope(
+    ReportArtifactSummary artifact,
+    ResolvedCloseoutScope resolved, {
+    String? runId,
+  }) {
+    final selectedRunId = runId?.trim() ?? '';
+    if (selectedRunId.isNotEmpty && artifact.finalizeRunId == selectedRunId) {
+      return true;
+    }
+
+    final metadata = <String, dynamic>{...artifact.metadata};
+    final runScopeKey = (metadata['run_scope_key'] ?? '').toString().trim();
+    if (runScopeKey.isNotEmpty) {
+      return runScopeKey == resolved.stableScopeKey;
+    }
+    if ((artifact.scopeKey ?? '').trim() == resolved.stableScopeKey) {
+      return true;
+    }
+    if (!metadata.containsKey('section_ids') &&
+        artifact.sectionIds.isNotEmpty) {
+      metadata['section_ids'] = artifact.sectionIds;
+    }
     if (resolved.matchesArtifactMetadata(metadata)) return true;
 
     // Historical whole-show artifacts did not have section metadata. They are
@@ -2635,17 +2663,21 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         .from('show_report_artifacts')
         .select('''
           id,
+          show_id,
           finalize_run_id,
           report_name,
           artifact_status,
-          file_name,
-          storage_bucket,
-          storage_path,
           generated_at,
           is_current,
           scope_key,
           section_ids,
-          metadata
+          metadata,
+          storage_bucket,
+          storage_path,
+          file_name,
+          error_count,
+          generation,
+          created_at
         ''')
         .eq('show_id', widget.showId)
         .eq('is_current', true)
@@ -2665,19 +2697,53 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
     ResolvedCloseoutScope? requestedScope,
   }) async {
     final resolved = requestedScope ?? _resolvedCloseoutScope;
-    final response = await supabase.rpc(
-      'get_closeout_dashboard_scoped',
-      params: {
-        'p_show_id': widget.showId,
-        'p_scope_key': resolved.stableScopeKey,
-        'p_section_ids': resolved.sectionIds.toList()..sort(),
-        'p_artifact_limit': 100,
-        'p_artifact_offset': 0,
-      },
-    );
-    final dashboard = CloseoutDashboard.fromJson(
-      Map<String, dynamic>.from(response as Map),
-    );
+    const pageSize = 200;
+
+    Future<CloseoutDashboard> loadPage(int offset) async {
+      final response = await supabase.rpc(
+        'get_closeout_dashboard_scoped',
+        params: {
+          'p_show_id': widget.showId,
+          'p_scope_key': resolved.stableScopeKey,
+          'p_section_ids': resolved.sectionIds.toList()..sort(),
+          'p_artifact_limit': pageSize,
+          'p_artifact_offset': offset,
+        },
+      );
+      return CloseoutDashboard.fromJson(
+        Map<String, dynamic>.from(response as Map),
+      );
+    }
+
+    var dashboard = await loadPage(0);
+    final reportsById = <String, ReportArtifactSummary>{
+      for (final artifact in dashboard.reports) artifact.id: artifact,
+    };
+    var artifactPage = dashboard.artifactPage;
+    var nextOffset = artifactPage.offset + artifactPage.limit;
+
+    while (artifactPage.hasMore) {
+      final nextPage = await loadPage(nextOffset);
+      if (nextPage.latestFinalize.id != dashboard.latestFinalize.id ||
+          nextPage.latestFinalize.scopeKey !=
+              dashboard.latestFinalize.scopeKey) {
+        throw StateError(
+          'Closeout dashboard changed finalize runs while loading report pages.',
+        );
+      }
+      for (final artifact in nextPage.reports) {
+        reportsById[artifact.id] = artifact;
+      }
+      artifactPage = nextPage.artifactPage;
+      final candidateOffset = artifactPage.offset + artifactPage.limit;
+      if (candidateOffset <= nextOffset) {
+        throw StateError(
+          'Closeout dashboard artifact pagination did not advance.',
+        );
+      }
+      nextOffset = candidateOffset;
+    }
+
     final runId = (dashboard.latestFinalize.id ?? '').trim();
     final expectedSectionIds = resolved.sectionIds.toList()..sort();
     final actualSectionIds = [...dashboard.latestFinalize.sectionIds]..sort();
@@ -2689,38 +2755,34 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         'Closeout dashboard returned counts for a different show, run, or scope.',
       );
     }
-    
+
     final preFinalizeArtifacts = await _loadPreFinalizeReportArtifacts();
-
-      final artifactsById = <String, ReportArtifactSummary>{
-        for (final artifact in dashboard.reports) artifact.id: artifact,
-      };
-
-      for (final artifact in preFinalizeArtifacts) {
-        if (_artifactMatchesSelectedScope(artifact)) {
-          artifactsById[artifact.id] = artifact;
-        }
+    for (final artifact in preFinalizeArtifacts) {
+      if (_artifactMatchesResolvedScope(artifact, resolved, runId: runId)) {
+        reportsById[artifact.id] = artifact;
       }
+    }
 
-      final mergedReports = artifactsById.values.toList()
-    ..sort((a, b) {
-      final aGenerated =
-          DateTime.tryParse(a.generatedAt ?? '') ??
-          DateTime.fromMillisecondsSinceEpoch(0);
-      final bGenerated =
-          DateTime.tryParse(b.generatedAt ?? '') ??
-          DateTime.fromMillisecondsSinceEpoch(0);
-
-      return bGenerated.compareTo(aGenerated);
-    });
+    final mergedReports = reportsById.values.toList()
+      ..sort(
+        (a, b) =>
+            compareCloseoutReportArtifacts(a, b, selectedFinalizeRunId: runId),
+      );
 
     return CloseoutDashboard(
       dashboard: dashboard.dashboard,
       resultsReadiness: dashboard.resultsReadiness,
       latestFinalize: dashboard.latestFinalize,
       reports: mergedReports,
+      reviewReports: dashboard.reviewReports,
       deliveries: dashboard.deliveries,
       latestArchive: dashboard.latestArchive,
+      taskCounts: dashboard.taskCounts,
+      artifactPage: CloseoutArtifactPage(
+        limit: pageSize,
+        offset: 0,
+        hasMore: false,
+      ),
     );
   }
 
@@ -3926,9 +3988,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Club reports are still generating or need attention.',
-          ),
+          content: Text('Club reports are still generating or need attention.'),
         ),
       );
       return;
@@ -5486,22 +5546,14 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '${_friendlyReportName(reportName)} queued.',
-          ),
-        ),
+        SnackBar(content: Text('${_friendlyReportName(reportName)} queued.')),
       );
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Failed to queue report: $e',
-          ),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to queue report: $e')));
     } finally {
       if (mounted) {
         setState(() {
@@ -6929,9 +6981,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
 
   void _addManualReportNames(String groupKey, List<String> names) {
     final manualNames = switch (groupKey) {
-      'arba' => _arbaReportKeys,
-      'exhibitor' => _exhibitorReportKeys,
-      'club' => _clubReportKeys,
+      'arba' || 'exhibitor' || 'club' => const <String>{},
       'other' => const <String>{
         'unpaid_balances_report',
         'paid_exhibitor_report',
@@ -6939,7 +6989,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         'ribbon_payout_report',
         'judge_report',
         'breed_judged_totals_report',
-        'best_display_report',
         'payback_report',
       },
       _ => const <String>{},
@@ -7044,6 +7093,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                       'report-actions-${widget.showId}-${_resolvedCloseoutScope.stableScopeKey}',
                     ),
                     showId: widget.showId,
+                    selectedFinalizeRunId: _finalizeRunIdForSelectedScope,
                     reports:
                         (_dashboard?.reports ?? const <ReportArtifactSummary>[])
                             .where((artifact) => artifact.isCurrent)
@@ -7056,11 +7106,14 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                                 'entered_exhibitors_contact_report',
                               };
 
-                              if (preFinalizeReports.contains(artifact.reportName)) {
+                              if (preFinalizeReports.contains(
+                                artifact.reportName,
+                              )) {
                                 return true;
                               }
 
-                              return _finalizeRunIdForSelectedScope.isNotEmpty &&
+                              return _finalizeRunIdForSelectedScope
+                                      .isNotEmpty &&
                                   artifact.finalizeRunId ==
                                       _finalizeRunIdForSelectedScope;
                             })
@@ -7306,7 +7359,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                             reportsBlocked: reportsBlocked,
                             finalized: selectedScopeFinalized,
                             reportsStale:
-                                _dashboard?.dashboard.closeout.isReportsStale == true,
+                                _dashboard?.dashboard.closeout.isReportsStale ==
+                                true,
                             tooltipScope: tooltipScope,
                             onPressed:
                                 (_isBusy ||
@@ -7333,12 +7387,18 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                                               actions: [
                                                 TextButton(
                                                   onPressed: () =>
-                                                      Navigator.pop(context, false),
+                                                      Navigator.pop(
+                                                        context,
+                                                        false,
+                                                      ),
                                                   child: const Text('Cancel'),
                                                 ),
                                                 FilledButton(
                                                   onPressed: () =>
-                                                      Navigator.pop(context, true),
+                                                      Navigator.pop(
+                                                        context,
+                                                        true,
+                                                      ),
                                                   child: const Text('Finalize'),
                                                 ),
                                               ],
@@ -7360,7 +7420,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                                     } catch (e) {
                                       if (!mounted) return;
 
-                                      ScaffoldMessenger.of(context).showSnackBar(
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
                                         SnackBar(
                                           content: Text(
                                             'Finalize flow failed: $e',
@@ -7407,11 +7469,15 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
 
                                           if (!context.mounted) return;
 
-                                          await _showReportsQueuedDialog(queued);
+                                          await _showReportsQueuedDialog(
+                                            queued,
+                                          );
                                         } catch (error) {
                                           if (!context.mounted) return;
 
-                                          ScaffoldMessenger.of(context).showSnackBar(
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
                                             SnackBar(
                                               content: Text(
                                                 'Failed to queue reports: $error',
@@ -7454,12 +7520,18 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                                               actions: [
                                                 TextButton(
                                                   onPressed: () =>
-                                                      Navigator.pop(context, false),
+                                                      Navigator.pop(
+                                                        context,
+                                                        false,
+                                                      ),
                                                   child: const Text('Cancel'),
                                                 ),
                                                 FilledButton(
                                                   onPressed: () =>
-                                                      Navigator.pop(context, true),
+                                                      Navigator.pop(
+                                                        context,
+                                                        true,
+                                                      ),
                                                   child: const Text(
                                                     'Regenerate All',
                                                   ),
@@ -7487,7 +7559,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                                       } catch (error) {
                                         if (!mounted) return;
 
-                                        ScaffoldMessenger.of(context).showSnackBar(
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
                                           SnackBar(
                                             content: Text(
                                               'Failed to regenerate reports: $error',
@@ -7516,29 +7590,47 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                             child: OutlinedButton.icon(
                               style: ButtonStyle(
                                 backgroundColor:
-                                    WidgetStateProperty.resolveWith<Color>((states) {
-                                  return states.contains(WidgetState.disabled)
-                                      ? AppColors.muted.withValues(alpha: .28)
-                                      : Colors.green.shade700;
-                                }),
+                                    WidgetStateProperty.resolveWith<Color>((
+                                      states,
+                                    ) {
+                                      return states.contains(
+                                            WidgetState.disabled,
+                                          )
+                                          ? AppColors.muted.withValues(
+                                              alpha: .28,
+                                            )
+                                          : Colors.green.shade700;
+                                    }),
                                 foregroundColor:
-                                    WidgetStateProperty.resolveWith<Color>((states) {
-                                  return states.contains(WidgetState.disabled)
-                                      ? AppColors.muted.withValues(alpha: .72)
-                                      : Colors.white;
-                                }),
+                                    WidgetStateProperty.resolveWith<Color>((
+                                      states,
+                                    ) {
+                                      return states.contains(
+                                            WidgetState.disabled,
+                                          )
+                                          ? AppColors.muted.withValues(
+                                              alpha: .72,
+                                            )
+                                          : Colors.white;
+                                    }),
                                 side:
-                                    WidgetStateProperty.resolveWith<BorderSide>((states) {
-                                  final color =
-                                      states.contains(WidgetState.disabled)
-                                      ? AppColors.muted.withValues(alpha: .35)
-                                      : Colors.green.shade700;
+                                    WidgetStateProperty.resolveWith<BorderSide>(
+                                      (states) {
+                                        final color =
+                                            states.contains(
+                                              WidgetState.disabled,
+                                            )
+                                            ? AppColors.muted.withValues(
+                                                alpha: .35,
+                                              )
+                                            : Colors.green.shade700;
 
-                                  return BorderSide(
-                                    color: color,
-                                    width: 1.4,
-                                  );
-                                }),
+                                        return BorderSide(
+                                          color: color,
+                                          width: 1.4,
+                                        );
+                                      },
+                                    ),
                               ),
                               onPressed:
                                   _isBusy ||
@@ -7564,7 +7656,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                             label: const Text('Send All Legs'),
                           ),
                           */
-
                           Tooltip(
                             message: generationActive
                                 ? 'Club reports are still generating for $tooltipScope'
@@ -7572,29 +7663,47 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                             child: OutlinedButton.icon(
                               style: ButtonStyle(
                                 backgroundColor:
-                                    WidgetStateProperty.resolveWith<Color>((states) {
-                                  return states.contains(WidgetState.disabled)
-                                      ? AppColors.muted.withValues(alpha: .28)
-                                      : Colors.green.shade700;
-                                }),
+                                    WidgetStateProperty.resolveWith<Color>((
+                                      states,
+                                    ) {
+                                      return states.contains(
+                                            WidgetState.disabled,
+                                          )
+                                          ? AppColors.muted.withValues(
+                                              alpha: .28,
+                                            )
+                                          : Colors.green.shade700;
+                                    }),
                                 foregroundColor:
-                                    WidgetStateProperty.resolveWith<Color>((states) {
-                                  return states.contains(WidgetState.disabled)
-                                      ? AppColors.muted.withValues(alpha: .72)
-                                      : Colors.white;
-                                }),
+                                    WidgetStateProperty.resolveWith<Color>((
+                                      states,
+                                    ) {
+                                      return states.contains(
+                                            WidgetState.disabled,
+                                          )
+                                          ? AppColors.muted.withValues(
+                                              alpha: .72,
+                                            )
+                                          : Colors.white;
+                                    }),
                                 side:
-                                    WidgetStateProperty.resolveWith<BorderSide>((states) {
-                                  final color =
-                                      states.contains(WidgetState.disabled)
-                                      ? AppColors.muted.withValues(alpha: .35)
-                                      : Colors.green.shade700;
+                                    WidgetStateProperty.resolveWith<BorderSide>(
+                                      (states) {
+                                        final color =
+                                            states.contains(
+                                              WidgetState.disabled,
+                                            )
+                                            ? AppColors.muted.withValues(
+                                                alpha: .35,
+                                              )
+                                            : Colors.green.shade700;
 
-                                  return BorderSide(
-                                    color: color,
-                                    width: 1.4,
-                                  );
-                                }),
+                                        return BorderSide(
+                                          color: color,
+                                          width: 1.4,
+                                        );
+                                      },
+                                    ),
                               ),
                               onPressed:
                                   _isBusy ||
@@ -7987,12 +8096,14 @@ class _ReportActionsCard extends StatefulWidget {
   onEmailAllLetters;
   final bool loading;
   final String showId;
+  final String selectedFinalizeRunId;
   final bool reportsBlocked;
   final String? reportsBlockedMessage;
 
   const _ReportActionsCard({
     super.key,
     required this.showId,
+    required this.selectedFinalizeRunId,
     required this.reports,
     required this.arbaSections,
     required this.groupedReportNames,
@@ -8027,6 +8138,7 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
   String? _selectedExhibitorEmail;
   List<_ExhibitorPickItem> _availableExhibitors = [];
   bool _loadingExhibitors = false;
+  bool _reloadExhibitorsAfterLoad = false;
 
   static const Map<String, String> _groupLabels = {
     'arba': 'ARBA Reports',
@@ -8090,92 +8202,37 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
     final reportName = _selectedReportName;
     if (reportName == null) return const <ReportArtifactSummary>[];
 
-    var matches = widget.reports
-        .where((r) => r.reportName == reportName)
-        .where((r) => r.isCurrent);
-
-    if (_selectedReportNeedsExhibitor && _selectedExhibitorId != null) {
-      matches = matches.where(
-        (r) =>
-            (r.metadata['exhibitor_id'] ?? '').toString().trim() ==
-            _selectedExhibitorId,
-      );
-    }
-
-    if (_selectedReportNeedsBreedScope) {
-      matches = matches.where((r) {
-        final breed = (r.metadata['breed_name'] ?? '')
-            .toString()
-            .trim()
-            .toLowerCase();
-        final species = (r.metadata['species'] ?? '')
-            .toString()
-            .trim()
-            .toLowerCase();
-        final targetBreed = displayBreedNameForClubReport(
-          reportName: reportName,
-          breedName: _breedController.text.trim(),
-          species:
-              isCavyClubReportTarget(
-                species: species,
-                breedName: _breedController.text.trim(),
-              )
-              ? 'cavy'
-              : '',
-        ).toLowerCase();
-        final scope = (r.metadata['scope'] ?? '')
-            .toString()
-            .trim()
-            .toUpperCase();
-        final letter = (r.metadata['show_letter'] ?? '')
-            .toString()
-            .trim()
-            .toUpperCase();
-
-        return breed == targetBreed &&
-            scope == _selectedScope.trim().toUpperCase() &&
-            letter == _selectedShowLetter.trim().toUpperCase();
-      });
-    }
-
-    if (_selectedReportNeedsClubScope) {
-      matches = matches.where((r) {
-        final club = (r.metadata['club_name'] ?? '')
-            .toString()
-            .trim()
-            .toLowerCase();
-        final scope = (r.metadata['scope'] ?? '')
-            .toString()
-            .trim()
-            .toUpperCase();
-        final letter = (r.metadata['show_letter'] ?? '')
-            .toString()
-            .trim()
-            .toUpperCase();
-
-        return club == _clubController.text.trim().toLowerCase() &&
-            scope == _selectedScope.trim().toUpperCase() &&
-            letter == _selectedShowLetter.trim().toUpperCase();
-      });
-    }
+    final matches = widget.reports.where(
+      (artifact) => closeoutArtifactMatchesReportTarget(
+        artifact,
+        reportName: reportName,
+        exhibitorId: _selectedReportNeedsExhibitor
+            ? _selectedExhibitorId
+            : null,
+        breedName: _selectedReportNeedsBreedScope
+            ? _breedController.text.trim()
+            : null,
+        clubName: _selectedReportNeedsClubScope
+            ? _clubController.text.trim()
+            : null,
+        scope: _selectedReportNeedsBreedScope || _selectedReportNeedsClubScope
+            ? _selectedScope
+            : null,
+        showLetter:
+            _selectedReportNeedsBreedScope || _selectedReportNeedsClubScope
+            ? _selectedShowLetter
+            : null,
+      ),
+    );
 
     final list = matches.toList()
-      ..sort((a, b) {
-        if (_selectedReportIsStateClub) {
-          final speciesCmp = _artifactSpeciesRank(
-            _artifactSpecies(a),
-          ).compareTo(_artifactSpeciesRank(_artifactSpecies(b)));
-          if (speciesCmp != 0) return speciesCmp;
-        }
-
-        final aDt =
-            DateTime.tryParse(a.generatedAt ?? '') ??
-            DateTime.fromMillisecondsSinceEpoch(0);
-        final bDt =
-            DateTime.tryParse(b.generatedAt ?? '') ??
-            DateTime.fromMillisecondsSinceEpoch(0);
-        return bDt.compareTo(aDt);
-      });
+      ..sort(
+        (a, b) => compareCloseoutReportArtifacts(
+          a,
+          b,
+          selectedFinalizeRunId: widget.selectedFinalizeRunId,
+        ),
+      );
 
     return list;
   }
@@ -8230,6 +8287,21 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
       _selectedReportName == 'legs' ||
       _selectedReportName == 'checkin_sheet';
 
+  bool get _selectedTargetIsApplicable {
+    if (_selectedReportName == null) return false;
+    if (_selectedReportNeedsExhibitor) return _selectedExhibitorId != null;
+    if (_selectedReportNeedsBreedScope) {
+      return _breedController.text.trim().isNotEmpty;
+    }
+    if (_selectedReportNeedsClubScope) {
+      return _clubController.text.trim().isNotEmpty;
+    }
+    if (_selectedReportName == 'arba_report') {
+      return _arbaReportOptions.isNotEmpty;
+    }
+    return true;
+  }
+
   bool _artifactCanDownload(ReportArtifactSummary? artifact) {
     return artifact != null &&
         artifact.artifactStatus == 'generated' &&
@@ -8244,12 +8316,6 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
         .toLowerCase();
     if (species == 'rabbit' || species == 'cavy') return species;
     return 'combined';
-  }
-
-  int _artifactSpeciesRank(String species) {
-    if (species == 'rabbit') return 0;
-    if (species == 'cavy') return 1;
-    return 2;
   }
 
   String _speciesLabel(ReportArtifactSummary? artifact) {
@@ -8270,53 +8336,51 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
   }
 
   Future<void> _loadExhibitors() async {
-    if (_loadingExhibitors) return;
+    if (_loadingExhibitors) {
+      _reloadExhibitorsAfterLoad = true;
+      return;
+    }
 
     setState(() {
       _loadingExhibitors = true;
     });
 
     try {
-      final rows = await supabase
-          .from('entries')
-          .select('''
-            exhibitor_id,
-            exhibitors!entries_exhibitor_id_fkey (
-              id,
-              display_name,
-              first_name,
-              last_name,
-              email
-            )
-          ''')
-          .eq('show_id', widget.showId);
-
       final map = <String, _ExhibitorPickItem>{};
-
-      for (final raw in (rows as List)) {
-        final row = Map<String, dynamic>.from(raw as Map);
-        final exhibitorId = (row['exhibitor_id'] ?? '').toString().trim();
-        final exhibitorRaw = row['exhibitors'];
-
-        if (exhibitorId.isEmpty || exhibitorRaw is! Map) continue;
-
-        final exhibitor = Map<String, dynamic>.from(exhibitorRaw);
-        final displayName = (exhibitor['display_name'] ?? '').toString().trim();
-        final first = (exhibitor['first_name'] ?? '').toString().trim();
-        final last = (exhibitor['last_name'] ?? '').toString().trim();
-        final email = (exhibitor['email'] ?? '').toString().trim();
-
-        final name = displayName.isNotEmpty
-            ? displayName
-            : [first, last].where((x) => x.isNotEmpty).join(' ').trim();
-
-        if (name.isEmpty) continue;
-
+      final reportName = _selectedReportName;
+      for (final artifact in widget.reports.where(
+        (artifact) => artifact.isCurrent && artifact.reportName == reportName,
+      )) {
+        final exhibitorId = (artifact.metadata['exhibitor_id'] ?? '')
+            .toString()
+            .trim();
+        final name = (artifact.metadata['exhibitor_name'] ?? '')
+            .toString()
+            .trim();
+        if (exhibitorId.isEmpty || name.isEmpty) continue;
         map[exhibitorId] = _ExhibitorPickItem(
           exhibitorId: exhibitorId,
           exhibitorName: name,
-          email: email,
+          email: (artifact.metadata['exhibitor_email'] ?? '').toString().trim(),
         );
+      }
+
+      if (map.isNotEmpty) {
+        final rows = await supabase
+            .from('exhibitors')
+            .select('id, email')
+            .inFilter('id', map.keys.toList());
+        for (final raw in (rows as List)) {
+          final row = Map<String, dynamic>.from(raw as Map);
+          final exhibitorId = (row['id'] ?? '').toString().trim();
+          final existing = map[exhibitorId];
+          if (existing == null) continue;
+          map[exhibitorId] = _ExhibitorPickItem(
+            exhibitorId: existing.exhibitorId,
+            exhibitorName: existing.exhibitorName,
+            email: (row['email'] ?? '').toString().trim(),
+          );
+        }
       }
 
       final list = map.values.toList()
@@ -8364,6 +8428,10 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
         setState(() {
           _loadingExhibitors = false;
         });
+        if (_reloadExhibitorsAfterLoad) {
+          _reloadExhibitorsAfterLoad = false;
+          unawaited(_loadExhibitors());
+        }
       }
     }
   }
@@ -8749,6 +8817,20 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
   void didUpdateWidget(covariant _ReportActionsCard oldWidget) {
     super.didUpdateWidget(oldWidget);
 
+    final artifactsChanged = !_sameArtifactSnapshot(
+      oldWidget.reports,
+      widget.reports,
+    );
+    if (artifactsChanged) {
+      if (_selectedReportNeedsExhibitor) unawaited(_loadExhibitors());
+      if (_selectedReportNeedsBreedScope) {
+        unawaited(_loadBreedsForBreedScopedReports());
+      }
+      if (_selectedReportNeedsClubScope) {
+        unawaited(_loadClubsForStateClubReports());
+      }
+    }
+
     _selectedArbaArtifactId = normalizedArbaSelection(
       _selectedArbaArtifactId,
       _arbaReportOptions,
@@ -8778,6 +8860,26 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
     }
 
     _selectedReportName = reports.first;
+  }
+
+  bool _sameArtifactSnapshot(
+    List<ReportArtifactSummary> left,
+    List<ReportArtifactSummary> right,
+  ) {
+    if (left.length != right.length) return false;
+    for (var index = 0; index < left.length; index++) {
+      final a = left[index];
+      final b = right[index];
+      if (a.id != b.id ||
+          a.reportName != b.reportName ||
+          a.artifactStatus != b.artifactStatus ||
+          a.generation != b.generation ||
+          a.generatedAt != b.generatedAt ||
+          a.isCurrent != b.isCurrent) {
+        return false;
+      }
+    }
+    return true;
   }
 
   Widget _buildArtifactActions({
@@ -8829,9 +8931,23 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
     final downloadLabel = stateClubSpeciesCard
         ? 'Download $speciesLabel'
         : 'Download';
+    final uiStatus = closeoutReportUiStatus(
+      artifact?.artifactStatus,
+      expected: _selectedTargetIsApplicable,
+    );
+    final workActive = uiStatus == CloseoutReportUiStatus.generating;
+    final generateLabel = switch (uiStatus) {
+      CloseoutReportUiStatus.generated => 'Regenerate',
+      CloseoutReportUiStatus.generating => 'Generating',
+      CloseoutReportUiStatus.failed => 'Retry',
+      CloseoutReportUiStatus.needsAttention => 'Generate',
+      CloseoutReportUiStatus.notApplicable => 'Not applicable',
+    };
 
     final canGenerate =
         !widget.loading &&
+        !workActive &&
+        uiStatus != CloseoutReportUiStatus.notApplicable &&
         !_selectedReportBlocked &&
         reportName != null &&
         (_selectedReportNeedsExhibitor ? _selectedExhibitorId != null : true) &&
@@ -8846,54 +8962,55 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
       spacing: 10,
       runSpacing: 10,
       children: [
-        FilledButton.icon(
-          style: FilledButton.styleFrom(
-            backgroundColor: AppColors.primaryButton,
-            foregroundColor: AppColors.primaryButtonText,
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-          ),
-          onPressed: canGenerate
-              ? () async {
-                  if (stateClubSpeciesCard && artifact != null) {
-                    await widget.onGenerateArtifact(artifact);
-                    return;
+        if (uiStatus != CloseoutReportUiStatus.generated)
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.primaryButton,
+              foregroundColor: AppColors.primaryButtonText,
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+            ),
+            onPressed: canGenerate
+                ? () async {
+                    if (stateClubSpeciesCard && artifact != null) {
+                      await widget.onGenerateArtifact(artifact);
+                      return;
+                    }
+                    await widget.onGenerate(
+                      reportName,
+                      breedName: _selectedReportNeedsBreedScope
+                          ? _breedController.text.trim()
+                          : null,
+                      clubName: _selectedReportNeedsClubScope
+                          ? _clubController.text.trim()
+                          : null,
+                      scope:
+                          _selectedReportNeedsBreedScope ||
+                              _selectedReportNeedsClubScope
+                          ? _selectedScope
+                          : null,
+                      showLetter:
+                          _selectedReportNeedsBreedScope ||
+                              _selectedReportNeedsClubScope
+                          ? _selectedShowLetter
+                          : null,
+                      exhibitorId: _selectedReportNeedsExhibitor
+                          ? _selectedExhibitorId
+                          : null,
+                      exhibitorName: _selectedReportNeedsExhibitor
+                          ? _selectedExhibitorName
+                          : null,
+                    );
                   }
-                  await widget.onGenerate(
-                    reportName,
-                    breedName: _selectedReportNeedsBreedScope
-                        ? _breedController.text.trim()
-                        : null,
-                    clubName: _selectedReportNeedsClubScope
-                        ? _clubController.text.trim()
-                        : null,
-                    scope:
-                        _selectedReportNeedsBreedScope ||
-                            _selectedReportNeedsClubScope
-                        ? _selectedScope
-                        : null,
-                    showLetter:
-                        _selectedReportNeedsBreedScope ||
-                            _selectedReportNeedsClubScope
-                        ? _selectedShowLetter
-                        : null,
-                    exhibitorId: _selectedReportNeedsExhibitor
-                        ? _selectedExhibitorId
-                        : null,
-                    exhibitorName: _selectedReportNeedsExhibitor
-                        ? _selectedExhibitorName
-                        : null,
-                  );
-                }
-              : null,
-          icon: widget.loading
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.picture_as_pdf),
-          label: Text(widget.loading ? 'Generating...' : 'Generate'),
-        ),
+                : null,
+            icon: widget.loading
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.picture_as_pdf),
+            label: Text(widget.loading ? 'Generating...' : generateLabel),
+          ),
         OutlinedButton.icon(
           onPressed: canDownload && reportName != null
               ? () async {
@@ -9032,7 +9149,12 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
             reportName: _selectedReportName == null
                 ? '-'
                 : _friendlyReportName(_selectedReportName),
-            status: 'not_generated',
+            status: closeoutReportStatusLabel(
+              closeoutReportUiStatus(
+                null,
+                expected: _selectedTargetIsApplicable,
+              ),
+            ),
             generatedAt: null,
           ),
           const SizedBox(height: 16),
@@ -9076,7 +9198,12 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
             (_selectedReportName == null
                 ? '-'
                 : _friendlyReportName(_selectedReportName)),
-        status: artifact?.artifactStatus ?? 'not_generated',
+        status: closeoutReportStatusLabel(
+          closeoutReportUiStatus(
+            artifact?.artifactStatus,
+            expected: _selectedTargetIsApplicable,
+          ),
+        ),
         generatedAt: artifact?.generatedAt,
       ),
       const SizedBox(height: 16),
@@ -9996,18 +10123,7 @@ bool _sameStringList(List<String> left, List<String> right) {
 }
 
 String _friendlyStatus(String status) {
-  switch (status) {
-    case 'generated':
-      return 'Generated';
-    case 'queued':
-      return 'Queued';
-    case 'failed':
-      return 'Failed';
-    case 'warning':
-      return 'Warning';
-    default:
-      return status.isEmpty ? '-' : status;
-  }
+  return closeoutReportStatusLabel(closeoutReportUiStatus(status));
 }
 
 String _friendlyReportName(String? key) {
@@ -10566,49 +10682,6 @@ class _CloseoutScopeCard extends StatelessWidget {
         .toList();
 
     return labels.isEmpty ? ['None'] : labels;
-  }
-}
-
-class ReportArtifactSummary {
-  final String id;
-  final String? finalizeRunId;
-  final String reportName;
-  final String artifactStatus;
-  final String? fileName;
-  final String? storageBucket;
-  final String? storagePath;
-  final String? generatedAt;
-  final bool isCurrent;
-  final Map<String, dynamic> metadata;
-
-  ReportArtifactSummary({
-    required this.id,
-    this.finalizeRunId,
-    required this.reportName,
-    required this.artifactStatus,
-    this.fileName,
-    this.storageBucket,
-    this.storagePath,
-    this.generatedAt,
-    required this.isCurrent,
-    required this.metadata,
-  });
-
-  factory ReportArtifactSummary.fromJson(Map<String, dynamic> json) {
-    return ReportArtifactSummary(
-      id: (json['id'] ?? '') as String,
-      finalizeRunId: json['finalize_run_id'] as String?,
-      reportName: (json['report_name'] ?? '') as String,
-      artifactStatus: (json['artifact_status'] ?? 'queued') as String,
-      fileName: json['file_name'] as String?,
-      storageBucket: json['storage_bucket'] as String?,
-      storagePath: json['storage_path'] as String?,
-      generatedAt: json['generated_at'] as String?,
-      isCurrent: (json['is_current'] ?? false) == true,
-      metadata: json['metadata'] is Map
-          ? Map<String, dynamic>.from(json['metadata'] as Map)
-          : <String, dynamic>{},
-    );
   }
 }
 
