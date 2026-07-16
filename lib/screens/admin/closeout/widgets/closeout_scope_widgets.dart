@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 
@@ -290,6 +291,74 @@ enum CloseoutReviewGroup {
   active,
 }
 
+class CloseoutFailureDisplay {
+  final String title;
+  final String message;
+
+  const CloseoutFailureDisplay({required this.title, required this.message});
+}
+
+CloseoutFailureDisplay closeoutFailureDisplay({
+  required String errorCategory,
+  String metadataLastError = '',
+  String metadataErrorMessage = '',
+  String taskErrorMessage = '',
+  String taskLastError = '',
+  String fallbackError = '',
+  String missingField = '',
+  String missingLabel = '',
+  String exhibitorName = '',
+}) {
+  final details = <String>[
+    metadataLastError,
+    metadataErrorMessage,
+    taskErrorMessage,
+    taskLastError,
+    fallbackError,
+  ].map((value) => value.trim()).where((value) => value.isNotEmpty).toList();
+  final searchable = details.join('\n');
+  final normalizedMissingField = missingField.trim().toLowerCase();
+  final isBestInShowAddress =
+      normalizedMissingField == 'best_in_show_exhibitor_address' ||
+      RegExp(
+        r'best\s+in\s+show(?:\s+rabbit)?\s+(?:owner|exhibitor)\s+(?:city\s*/\s*state|address)',
+        caseSensitive: false,
+      ).hasMatch(searchable) ||
+      RegExp(
+        r'best\s+in\s+show\s+exhibitor\s+address',
+        caseSensitive: false,
+      ).hasMatch(searchable);
+
+  if (isBestInShowAddress) {
+    final label = missingLabel.trim().isNotEmpty
+        ? missingLabel.trim()
+        : 'Best In Show Exhibitor Address';
+    final subject = exhibitorName.trim().isNotEmpty
+        ? exhibitorName.trim()
+        : 'The Best In Show exhibitor';
+    return CloseoutFailureDisplay(
+      title: 'Missing $label',
+      message: exhibitorName.trim().isEmpty
+          ? 'The Best In Show exhibitor is missing a city or state.'
+          : '$subject is missing city or state. '
+                'Update the exhibitor record, then regenerate this report.',
+    );
+  }
+
+  final fallback = details.isEmpty
+      ? 'No additional error details are available.'
+      : details.first.replaceFirst(
+          RegExp(r'^\s*exception\s*:\s*', caseSensitive: false),
+          '',
+        );
+  return CloseoutFailureDisplay(
+    title: 'The report could not be rendered',
+    message: fallback.isEmpty
+        ? 'No additional error details are available.'
+        : fallback,
+  );
+}
+
 class CloseoutReviewReport {
   final String artifactId;
   final String finalizeRunId;
@@ -308,6 +377,12 @@ class CloseoutReviewReport {
   final String taskStatus;
   final String errorCategory;
   final String errorMessage;
+  final String metadataLastError;
+  final String metadataErrorMessage;
+  final String taskErrorMessage;
+  final String taskLastError;
+  final String missingField;
+  final String missingLabel;
   final String taskHistoryCategory;
   final String taskHistoryMessage;
   final bool retryable;
@@ -334,6 +409,12 @@ class CloseoutReviewReport {
     required this.taskStatus,
     this.errorCategory = '',
     this.errorMessage = '',
+    this.metadataLastError = '',
+    this.metadataErrorMessage = '',
+    this.taskErrorMessage = '',
+    this.taskLastError = '',
+    this.missingField = '',
+    this.missingLabel = '',
     this.taskHistoryCategory = '',
     this.taskHistoryMessage = '',
     required this.retryable,
@@ -345,6 +426,10 @@ class CloseoutReviewReport {
 
   factory CloseoutReviewReport.fromJson(Map<String, dynamic> json) {
     String text(String key) => (json[key] ?? '').toString().trim();
+    final metadata = json['metadata'] is Map
+        ? Map<String, dynamic>.from(json['metadata'] as Map)
+        : const <String, dynamic>{};
+    String metadataText(String key) => (metadata[key] ?? '').toString().trim();
     final group = switch (text('review_group')) {
       'retryable_failure' => CloseoutReviewGroup.retryableFailure,
       'non_retryable_failure' => CloseoutReviewGroup.nonRetryableFailure,
@@ -352,24 +437,50 @@ class CloseoutReviewReport {
       _ => CloseoutReviewGroup.missing,
     };
     final reportName = text('report_name');
-    return CloseoutReviewReport(
+    final report = CloseoutReviewReport(
       artifactId: text('artifact_id'),
       finalizeRunId: text('finalize_run_id'),
       reportTitle: reportName,
       reportName: reportName,
       sectionId: text('section_id'),
-      sectionLabel: text('section_label'),
+      sectionLabel: metadataText('section_label').isNotEmpty
+          ? metadataText('section_label')
+          : text('section_label'),
       showLetter: text('show_letter'),
-      scope: text('scope'),
+      scope: metadataText('scope').isNotEmpty
+          ? metadataText('scope')
+          : text('scope'),
       species: text('species'),
-      exhibitorName: text('exhibitor_name'),
+      exhibitorName: metadataText('exhibitor_name').isNotEmpty
+          ? metadataText('exhibitor_name')
+          : text('exhibitor_name'),
       breedName: text('breed_name'),
       clubName: text('club_name'),
       sanctioningBody: text('sanctioning_body'),
       artifactStatus: text('artifact_status'),
       taskStatus: text('task_status'),
-      errorCategory: text('error_category'),
+      errorCategory: metadataText('error_category').isNotEmpty
+          ? metadataText('error_category')
+          : text('metadata_error_category').isNotEmpty
+          ? text('metadata_error_category')
+          : text('error_category'),
       errorMessage: text('error_message'),
+      metadataLastError: metadataText('last_error').isNotEmpty
+          ? metadataText('last_error')
+          : text('metadata_last_error'),
+      metadataErrorMessage: metadataText('error_message').isNotEmpty
+          ? metadataText('error_message')
+          : text('metadata_error_message'),
+      taskErrorMessage: text('task_error_message').isNotEmpty
+          ? text('task_error_message')
+          : text('task_history_message'),
+      taskLastError: text('task_last_error'),
+      missingField: metadataText('missing_field').isNotEmpty
+          ? metadataText('missing_field')
+          : text('missing_field'),
+      missingLabel: metadataText('missing_label').isNotEmpty
+          ? metadataText('missing_label')
+          : text('missing_label'),
       taskHistoryCategory: text('task_history_category'),
       taskHistoryMessage: text('task_history_message'),
       retryable: json['retryable'] == true,
@@ -378,6 +489,18 @@ class CloseoutReviewReport {
       lastAttemptedAt: DateTime.tryParse(text('last_attempted_at')),
       group: group,
     );
+    if (kDebugMode) {
+      debugPrint(
+        'CloseoutReviewReport failure sources '
+        'artifactId=${report.artifactId} '
+        'metadataLastError=${report.metadataLastError} '
+        'metadataErrorMessage=${report.metadataErrorMessage} '
+        'taskErrorMessage=${report.taskErrorMessage} '
+        'taskLastError=${report.taskLastError} '
+        'errorMessage=${report.errorMessage}',
+      );
+    }
+    return report;
   }
 
   CloseoutReviewReport withPresentation({
@@ -402,6 +525,12 @@ class CloseoutReviewReport {
       taskStatus: taskStatus,
       errorCategory: errorCategory,
       errorMessage: errorMessage,
+      metadataLastError: metadataLastError,
+      metadataErrorMessage: metadataErrorMessage,
+      taskErrorMessage: taskErrorMessage,
+      taskLastError: taskLastError,
+      missingField: missingField,
+      missingLabel: missingLabel,
       taskHistoryCategory: taskHistoryCategory,
       taskHistoryMessage: taskHistoryMessage,
       retryable: retryable,
@@ -433,15 +562,27 @@ class CloseoutReportsNeedingReviewPanel extends StatelessWidget {
         '${material.formatTimeOfDay(TimeOfDay.fromDateTime(local))}';
   }
 
-  String _errorFor(CloseoutReviewReport report) {
-    if (report.errorMessage.isNotEmpty) return report.errorMessage;
-    if (report.group == CloseoutReviewGroup.missing) {
-      return 'No render task is available for this report.';
-    }
-    if (report.group == CloseoutReviewGroup.active) {
-      return 'This report is still waiting for generation to finish.';
-    }
-    return 'No additional failure details were provided.';
+  CloseoutFailureDisplay _failureFor(CloseoutReviewReport report) {
+    final fallback = report.errorMessage.isNotEmpty
+        ? report.errorMessage
+        : switch (report.group) {
+            CloseoutReviewGroup.missing =>
+              'No render task is available for this report.',
+            CloseoutReviewGroup.active =>
+              'This report is still waiting for generation to finish.',
+            _ => '',
+          };
+    return closeoutFailureDisplay(
+      errorCategory: report.errorCategory,
+      metadataLastError: report.metadataLastError,
+      metadataErrorMessage: report.metadataErrorMessage,
+      taskErrorMessage: report.taskErrorMessage,
+      taskLastError: report.taskLastError,
+      fallbackError: fallback,
+      missingField: report.missingField,
+      missingLabel: report.missingLabel,
+      exhibitorName: report.exhibitorName,
+    );
   }
 
   Widget _detail(String label, String value) {
@@ -450,6 +591,17 @@ class CloseoutReportsNeedingReviewPanel extends StatelessWidget {
   }
 
   Widget _reportRow(BuildContext context, CloseoutReviewReport report) {
+    final failure = _failureFor(report);
+    final normalizedTitle = failure.title
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+        .trim();
+    final normalizedMessage = failure.message
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+        .trim();
+    final showFailureMessage =
+        normalizedMessage.isNotEmpty && normalizedMessage != normalizedTitle;
     final identity = <String>[
       if (report.sectionLabel.isNotEmpty) report.sectionLabel,
       if (report.showLetter.isNotEmpty) 'Show ${report.showLetter}',
@@ -490,14 +642,32 @@ class CloseoutReportsNeedingReviewPanel extends StatelessWidget {
           ),
           if (report.errorCategory.isNotEmpty)
             Text('Error category: ${report.errorCategory}'),
-          Text(_errorFor(report), style: const TextStyle(color: Colors.orange)),
-          if (report.taskHistoryCategory.isNotEmpty &&
-              (report.taskHistoryCategory != report.errorCategory ||
-                  report.taskHistoryMessage != report.errorMessage)) ...[
+          const SizedBox(height: 4),
+          Text(
+            failure.title,
+            style: const TextStyle(
+              color: Colors.orange,
+              fontWeight: FontWeight.w700,
+              fontSize: 16,
+              height: 1.3,
+            ),
+          ),
+          if (showFailureMessage) ...[
             const SizedBox(height: 4),
             Text(
-              'Latest task history: ${report.taskHistoryCategory}'
-              '${report.taskHistoryMessage.isEmpty ? '' : ' — ${report.taskHistoryMessage}'}',
+              failure.message,
+              style: const TextStyle(
+                color: Colors.orange,
+                fontSize: 15,
+                height: 1.35,
+              ),
+            ),
+          ],
+          if (report.taskHistoryCategory.isNotEmpty &&
+              report.taskHistoryCategory != report.errorCategory) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Latest task category: ${report.taskHistoryCategory}',
               style: const TextStyle(fontSize: 12, color: AppColors.muted),
             ),
           ],

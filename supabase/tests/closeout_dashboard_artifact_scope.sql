@@ -4,7 +4,7 @@
 create extension if not exists pgtap with schema extensions;
 
 begin;
-select plan(8);
+select plan(10);
 
 insert into public.show_finalize_runs (
   id, show_id, run_status, scope_key, scope_label, section_ids, summary,
@@ -43,7 +43,8 @@ select
   '20000000-0000-0000-0000-000000000004'::uuid,
   'f2000000-0000-0000-0000-000000000001'::uuid,
   'judge_report'::public.report_type,
-  'generated'::public.artifact_status,
+  case when i = 1 then 'failed'::public.artifact_status
+       else 'generated'::public.artifact_status end,
   jsonb_build_object(
     'run_scope_key', 'dashboard-selected-run',
     'section_id', '21000000-0000-0000-0000-000000000004',
@@ -53,7 +54,12 @@ select
     'scope', 'OPEN',
     'show_letter', 'A',
     'judge_id', format('judge-%s', i)
-  ),
+  ) || case when i = 1 then jsonb_build_object(
+    'error_category', 'render_error',
+    'error_message', 'The report could not be rendered.',
+    'last_error',
+      'Exception: ARBA report is blocked until required closeout data is complete: Best In Show Rabbit owner city/state.'
+  ) else '{}'::jsonb end,
   true,
   format('artifact-specific-scope-%s', i),
   array['21000000-0000-0000-0000-000000000004']::uuid[],
@@ -174,6 +180,19 @@ select is(
    where report ->> 'scope_key' = 'other-artifact-scope'),
   0,
   'other-run artifacts never leak into either page'
+);
+
+select is(
+  (select payload #>> '{review_reports,0,metadata_last_error}'
+   from dashboard_pages where page = 1),
+  'Exception: ARBA report is blocked until required closeout data is complete: Best In Show Rabbit owner city/state.',
+  'review payload exposes metadata last_error separately'
+);
+select is(
+  (select payload #>> '{review_reports,0,metadata_error_message}'
+   from dashboard_pages where page = 1),
+  'The report could not be rendered.',
+  'review payload exposes metadata error_message separately'
 );
 
 select * from finish();

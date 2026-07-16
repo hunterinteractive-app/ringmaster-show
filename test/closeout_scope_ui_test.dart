@@ -64,6 +64,179 @@ const _reviewReports = <CloseoutReviewReport>[
 ];
 
 void main() {
+  group('closeout failure display', () {
+    test('maps the current ARBA Best In Show address error', () {
+      final display = closeoutFailureDisplay(
+        errorCategory: 'render_error',
+        taskLastError:
+            'Exception: ARBA report is blocked until required closeout data is complete: Best In Show Rabbit owner city/state.',
+      );
+
+      expect(display.title, 'Missing Best In Show Exhibitor Address');
+      expect(
+        display.message,
+        'The Best In Show exhibitor is missing a city or state.',
+      );
+    });
+
+    test('matches Best In Show address wording case-insensitively', () {
+      final display = closeoutFailureDisplay(
+        errorCategory: 'render_error',
+        metadataLastError: 'BEST IN SHOW EXHIBITOR CITY/STATE is required',
+      );
+
+      expect(display.title, 'Missing Best In Show Exhibitor Address');
+    });
+
+    test('prefers structured missing field and label metadata', () {
+      final report = CloseoutReviewReport.fromJson({
+        'artifact_id': 'structured',
+        'finalize_run_id': 'run',
+        'report_name': 'arba_report',
+        'artifact_status': 'failed',
+        'task_status': 'failed',
+        'error_category': 'missing_required_closeout_data',
+        'retryable': false,
+        'review_group': 'non_retryable_failure',
+        'metadata': {
+          'missing_field': 'best_in_show_exhibitor_address',
+          'missing_label': 'Best In Show Exhibitor Address',
+        },
+      });
+      final display = closeoutFailureDisplay(
+        errorCategory: report.errorCategory,
+        missingField: report.missingField,
+        missingLabel: report.missingLabel,
+      );
+
+      expect(display.title, 'Missing Best In Show Exhibitor Address');
+    });
+
+    test('uses structured exhibitor name in the action message', () {
+      final report = CloseoutReviewReport.fromJson({
+        'artifact_id': 'named-structured',
+        'finalize_run_id': 'run',
+        'report_name': 'arba_report',
+        'artifact_status': 'failed',
+        'task_status': 'failed',
+        'error_category': 'missing_required_closeout_data',
+        'retryable': false,
+        'review_group': 'non_retryable_failure',
+        'metadata': {
+          'missing_field': 'best_in_show_exhibitor_address',
+          'missing_label': 'Best In Show Exhibitor Address',
+          'exhibitor_name': 'Brielle Parker',
+        },
+      });
+      final display = closeoutFailureDisplay(
+        errorCategory: report.errorCategory,
+        missingField: report.missingField,
+        missingLabel: report.missingLabel,
+        exhibitorName: report.exhibitorName,
+      );
+
+      expect(
+        display.message,
+        'Brielle Parker is missing city or state. '
+        'Update the exhibitor record, then regenerate this report.',
+      );
+    });
+
+    test('uses the most useful raw source for an unknown failure', () {
+      final display = closeoutFailureDisplay(
+        errorCategory: 'unknown',
+        metadataLastError: 'Specific metadata failure',
+        taskLastError: 'Less preferred task failure',
+      );
+
+      expect(display.title, 'The report could not be rendered');
+      expect(display.message, 'Specific metadata failure');
+    });
+
+    test('removes a leading Exception from fallback text', () {
+      final display = closeoutFailureDisplay(
+        errorCategory: 'render_error',
+        fallbackError: 'Exception: An unknown renderer failure occurred.',
+      );
+
+      expect(display.message, 'An unknown renderer failure occurred.');
+    });
+
+    testWidgets('actual ARBA review payload shows one actionable failure', (
+      tester,
+    ) async {
+      final report = CloseoutReviewReport.fromJson({
+        'report_name': 'arba_report',
+        'artifact_status': 'failed',
+        'task_status': 'failed',
+        'review_group': 'non_retryable_failure',
+        'retryable': false,
+        'metadata': {
+          'scope': 'YOUTH',
+          'section_label': 'Youth A',
+          'error_category': 'render_error',
+          'error_message': 'The report could not be rendered.',
+          'last_error':
+              'Exception: ARBA report is blocked until required closeout data is complete: Best In Show Rabbit owner city/state.',
+        },
+      });
+
+      expect(report.metadataLastError, contains('Best In Show Rabbit'));
+      expect(report.metadataErrorMessage, 'The report could not be rendered.');
+
+      await tester.pumpWidget(
+        _scrollHost(
+          CloseoutReportsNeedingReviewPanel(
+            reports: [report],
+            initiallyExpanded: true,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Missing Best In Show Exhibitor Address'),
+        findsOneWidget,
+      );
+      expect(
+        find.text('The Best In Show exhibitor is missing a city or state.'),
+        findsOneWidget,
+      );
+      final failureTitle = tester.widget<Text>(
+        find.text('Missing Best In Show Exhibitor Address'),
+      );
+      final failureMessage = tester.widget<Text>(
+        find.text('The Best In Show exhibitor is missing a city or state.'),
+      );
+      expect(failureTitle.style?.fontSize, 16);
+      expect(failureMessage.style?.fontSize, 15);
+      expect(find.text('The report could not be rendered.'), findsNothing);
+    });
+
+    test('parses flattened source-specific error fields', () {
+      final report = CloseoutReviewReport.fromJson({
+        'report_name': 'arba_report',
+        'artifact_status': 'failed',
+        'task_status': 'failed',
+        'review_group': 'non_retryable_failure',
+        'retryable': false,
+        'metadata_last_error': 'metadata detail',
+        'metadata_error_message': 'metadata message',
+        'metadata_error_category': 'render_error',
+        'task_error_message': 'task message',
+        'task_last_error': 'task detail',
+        'error_message': 'legacy fallback',
+      });
+
+      expect(report.metadataLastError, 'metadata detail');
+      expect(report.metadataErrorMessage, 'metadata message');
+      expect(report.errorCategory, 'render_error');
+      expect(report.taskErrorMessage, 'task message');
+      expect(report.taskLastError, 'task detail');
+      expect(report.errorMessage, 'legacy fallback');
+    });
+  });
+
   testWidgets('completed scope disables Finalize and shows completed state', (
     tester,
   ) async {
@@ -341,9 +514,10 @@ void main() {
       expect(find.text('Exhibitor: Alex Example'), findsOneWidget);
       expect(find.text('Breed: Dutch'), findsOneWidget);
       expect(find.text('Error category: renderer_timeout'), findsOneWidget);
+      expect(find.text('The report could not be rendered'), findsNWidgets(2));
       expect(find.text('The report renderer timed out.'), findsOneWidget);
       expect(
-        find.textContaining('Latest task history: worker_lease_expired'),
+        find.text('Latest task category: worker_lease_expired'),
         findsOneWidget,
       );
       expect(find.text('Club: County Cavy Club'), findsOneWidget);
