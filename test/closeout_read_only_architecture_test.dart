@@ -27,6 +27,9 @@ void main() {
   final artifactDashboardMigration = File(
     'supabase/migrations/20260716014542_fix_closeout_dashboard_artifact_scope.sql',
   ).readAsStringSync();
+  final artifactIdentityRepairMigration = File(
+    'supabase/migrations/20260716044748_fix_closeout_artifact_scope_duplicate_identity.sql',
+  ).readAsStringSync();
   final edgeFunction = File(
     'supabase/functions/run-closeout/index.ts',
   ).readAsStringSync();
@@ -376,6 +379,33 @@ void main() {
           contains('insert into public.show_report_artifacts'),
         );
         expect(artifactScopeMigration, isNot(contains('delete from')));
+      },
+    );
+
+    test(
+      'artifact scope repair preserves finalize-run identity uniqueness',
+      () {
+        expect(
+          artifactIdentityRepairMigration,
+          contains('if v_artifact.artifact_key = v_scope.artifact_key then'),
+        );
+        expect(
+          artifactIdentityRepairMigration,
+          contains('and a.artifact_key = v_scope.artifact_key'),
+        );
+        expect(
+          artifactIdentityRepairMigration,
+          isNot(contains('and a.is_current = true and a.id <>')),
+        );
+        expect(
+          artifactIdentityRepairMigration,
+          contains('if v_replacement_id is not null then'),
+        );
+        expect(
+          artifactIdentityRepairMigration,
+          contains('insert into public.show_report_artifacts'),
+        );
+        expect(artifactIdentityRepairMigration, isNot(contains('drop index')));
       },
     );
 
