@@ -90,12 +90,34 @@ class CloseoutGenerateRemainingButton extends StatelessWidget {
   }
 }
 
+Duration? estimateCloseoutTimeRemaining({
+  required int initialRemaining,
+  required int remaining,
+  required Duration elapsed,
+}) {
+  final processed = initialRemaining - remaining;
+  if (initialRemaining <= 0 ||
+      remaining <= 0 ||
+      processed <= 0 ||
+      elapsed < const Duration(seconds: 3)) {
+    return null;
+  }
+  final estimatedMilliseconds = (elapsed.inMilliseconds * remaining / processed)
+      .round();
+  return Duration(milliseconds: estimatedMilliseconds);
+}
+
 class CloseoutGenerationProgress {
   final int queued;
   final int running;
   final int completed;
   final int failed;
   final int remaining;
+  final int initialRemainingTotal;
+  final int reportTotal;
+  final int reportGenerated;
+  final int reportFailed;
+  final Duration? estimatedTimeRemaining;
   final DateTime? lastActivityAt;
   final DateTime? completedAt;
   final bool isStalled;
@@ -106,19 +128,47 @@ class CloseoutGenerationProgress {
     this.completed = 0,
     this.failed = 0,
     this.remaining = 0,
+    this.initialRemainingTotal = 0,
+    this.reportTotal = 0,
+    this.reportGenerated = 0,
+    this.reportFailed = 0,
+    this.estimatedTimeRemaining,
     this.lastActivityAt,
     this.completedAt,
     this.isStalled = false,
   });
 
   int get total => queued + running + completed + failed;
+  bool get hasPersistedReportCounts => reportTotal > 0;
+  int get reportPending =>
+      (reportTotal - reportGenerated - reportFailed).clamp(0, reportTotal);
   bool get isActive => queued > 0 || running > 0;
   bool get hasFailures => failed > 0;
   int get needsReview => failed > remaining ? failed : remaining;
   bool get isWaitingToStart =>
       queued > 0 && running == 0 && completed == 0 && failed == 0;
-  bool get isComplete => total > 0 && !isActive && !hasFailures;
+  bool get isWaitingToGenerate =>
+      total == 0 &&
+      (hasPersistedReportCounts ? reportPending > 0 : remaining > 0) &&
+      completed == 0 &&
+      failed == 0;
+  bool get isComplete =>
+      total > 0 && !isActive && !hasFailures && remaining == 0;
   double get percentComplete => total == 0 ? 0 : completed / total;
+  int get inferredProcessed => total == 0 && initialRemainingTotal > remaining
+      ? initialRemainingTotal - remaining
+      : 0;
+  double get displayedPercentComplete {
+    if (hasPersistedReportCounts) return reportGenerated / reportTotal;
+    if (total > 0) return !isActive ? 1 : percentComplete;
+    if (initialRemainingTotal <= 0) return 0;
+    return inferredProcessed / initialRemainingTotal;
+  }
+
+  int get displayedGenerated =>
+      hasPersistedReportCounts ? reportGenerated : inferredProcessed;
+  int get displayedRemaining =>
+      hasPersistedReportCounts ? reportPending : remaining;
 }
 
 class CloseoutGenerationStatusBanner extends StatelessWidget {
@@ -141,22 +191,38 @@ class CloseoutGenerationStatusBanner extends StatelessWidget {
         '${material.formatTimeOfDay(TimeOfDay.fromDateTime(local))}';
   }
 
+  String _estimatedTime(Duration value) {
+    if (value < const Duration(minutes: 1)) return 'Less than a minute';
+    final minutes = (value.inSeconds / 60).ceil();
+    if (minutes < 60) return 'About $minutes minutes';
+    final hours = minutes ~/ 60;
+    final remainingMinutes = minutes % 60;
+    if (remainingMinutes == 0) {
+      return 'About $hours hour${hours == 1 ? '' : 's'}';
+    }
+    return 'About $hours hr $remainingMinutes min';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isCompleteWithIssues = !progress.isActive && progress.needsReview > 0;
+    final isCompleteWithIssues =
+        !progress.isActive && progress.total > 0 && progress.needsReview > 0;
     final isComplete =
         !progress.isActive && progress.total > 0 && progress.needsReview == 0;
     final title = switch ((
       progress.isStalled,
+      progress.isWaitingToGenerate,
       progress.isWaitingToStart,
       isCompleteWithIssues,
       isComplete,
     )) {
-      (true, _, _, _) => 'Report generation may be delayed',
-      (_, true, _, _) => 'Reports are queued and waiting to begin.',
-      (_, _, true, _) =>
+      (true, _, _, _, _) => 'Report generation may be delayed',
+      (_, true, _, _, _) =>
+        '${progress.displayedRemaining} report${progress.displayedRemaining == 1 ? '' : 's'} waiting to be generated.',
+      (_, _, true, _, _) => 'Reports are queued and waiting to begin.',
+      (_, _, _, true, _) =>
         'Report generation is complete. ${progress.needsReview} report${progress.needsReview == 1 ? '' : 's'} need review.',
-      (_, _, _, true) => 'Report generation is complete.',
+      (_, _, _, _, true) => 'Report generation is complete.',
       _ => 'Generating reports',
     };
     final bannerColor = progress.isStalled || isCompleteWithIssues
@@ -192,7 +258,7 @@ class CloseoutGenerationStatusBanner extends StatelessWidget {
                     ? Icons.warning_amber_rounded
                     : isComplete
                     ? Icons.check_circle_outline
-                    : progress.isWaitingToStart
+                    : progress.isWaitingToStart || progress.isWaitingToGenerate
                     ? Icons.schedule
                     : Icons.cloud_sync_outlined,
                 color: bannerColor,
@@ -210,21 +276,62 @@ class CloseoutGenerationStatusBanner extends StatelessWidget {
               ),
             ],
           ),
-          if (progress.isActive) ...[
+          if (progress.total > 0 || progress.remaining > 0) ...[
             const SizedBox(height: 12),
-            Text(
-              '${progress.queued} queued • ${progress.running} running • '
-              '${progress.completed} completed • ${progress.failed} failed',
-              style: const TextStyle(fontWeight: FontWeight.w600),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Report generation progress',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                Text(
+                  '${(progress.displayedPercentComplete * 100).round()}%',
+                  key: const ValueKey('closeout-generation-percent'),
+                  style: TextStyle(
+                    color: bannerColor,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            LinearProgressIndicator(
+              key: const ValueKey('closeout-generation-progress-bar'),
+              value: progress.displayedPercentComplete
+                  .clamp(0.0, 1.0)
+                  .toDouble(),
+              minHeight: 10,
+              borderRadius: BorderRadius.circular(99),
+              color: bannerColor,
             ),
             const SizedBox(height: 10),
-            LinearProgressIndicator(
-              value: progress.total == 0
-                  ? null
-                  : progress.percentComplete.clamp(0.0, 1.0).toDouble(),
-              minHeight: 8,
-              borderRadius: BorderRadius.circular(99),
-            ),
+            if (progress.total == 0)
+              Text(
+                '${progress.displayedGenerated} '
+                '${progress.hasPersistedReportCounts ? 'generated' : 'processed'} • '
+                '${progress.displayedRemaining} remaining',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              )
+            else
+              Text(
+                '${progress.queued} queued • ${progress.running} running • '
+                '${progress.completed} completed • ${progress.failed} failed',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            if (progress.isWaitingToGenerate) ...[
+              const SizedBox(height: 6),
+              Text(
+                progress.estimatedTimeRemaining == null
+                    ? 'Estimating time remaining…'
+                    : 'Estimated time remaining: '
+                          '${_estimatedTime(progress.estimatedTimeRemaining!)}',
+                key: const ValueKey('closeout-generation-estimate'),
+                style: const TextStyle(color: AppColors.muted),
+              ),
+            ],
           ],
           if (progress.isStalled) ...[
             const SizedBox(height: 10),

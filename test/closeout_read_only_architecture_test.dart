@@ -110,6 +110,7 @@ void main() {
         'Future<int> _finalizeShow',
       );
       expect(body, contains('counts.queued + counts.running > 0'));
+      expect(body, contains('counts.remaining > 0'));
       expect(body, contains('_dashboardPoller.update'));
       expect(body, contains('_closeoutScreenIsVisible'));
       expect(closeoutSource, contains('_dashboardRefreshPending'));

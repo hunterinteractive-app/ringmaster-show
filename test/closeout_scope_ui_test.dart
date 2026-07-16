@@ -344,6 +344,7 @@ void main() {
           .value,
       closeTo(112 / 588, 0.0001),
     );
+    expect(find.text('19%'), findsOneWidget);
   });
 
   test('failed tasks are excluded from completed progress', () {
@@ -375,6 +376,15 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('7 generated • 3 failed • 3 remaining'), findsOneWidget);
+      expect(find.text('100%'), findsOneWidget);
+      expect(
+        tester
+            .widget<LinearProgressIndicator>(
+              find.byKey(const ValueKey('closeout-generation-progress-bar')),
+            )
+            .value,
+        1,
+      );
       expect(find.text('Retry Failed'), findsNothing);
     },
   );
@@ -406,6 +416,32 @@ void main() {
     expect(find.textContaining('12 queued'), findsOneWidget);
   });
 
+  testWidgets(
+    'remaining-only state stays pending and shows a zero-percent bar',
+    (tester) async {
+      await tester.pumpWidget(
+        _host(
+          const CloseoutGenerationStatusBanner(
+            progress: CloseoutGenerationProgress(remaining: 580),
+          ),
+        ),
+      );
+
+      expect(find.text('580 reports waiting to be generated.'), findsOneWidget);
+      expect(find.text('Report generation is complete.'), findsNothing);
+      expect(find.text('0%'), findsOneWidget);
+      expect(find.text('0 processed • 580 remaining'), findsOneWidget);
+      expect(
+        tester
+            .widget<LinearProgressIndicator>(
+              find.byKey(const ValueKey('closeout-generation-progress-bar')),
+            )
+            .value,
+        0,
+      );
+    },
+  );
+
   testWidgets('complete banner shows generated total and timestamp', (
     tester,
   ) async {
@@ -423,6 +459,85 @@ void main() {
     expect(find.text('Report generation is complete.'), findsOneWidget);
     expect(find.text('12 reports generated.'), findsOneWidget);
     expect(find.textContaining('Completed:'), findsOneWidget);
+    expect(find.text('100%'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('closeout-generation-progress-bar')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+    'remaining-only progress advances from its observed starting total',
+    (tester) async {
+      await tester.pumpWidget(
+        _host(
+          const CloseoutGenerationStatusBanner(
+            progress: CloseoutGenerationProgress(
+              remaining: 443,
+              initialRemainingTotal: 580,
+              estimatedTimeRemaining: Duration(minutes: 16),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('24%'), findsOneWidget);
+      expect(find.text('137 processed • 443 remaining'), findsOneWidget);
+      expect(
+        find.text('Estimated time remaining: About 16 minutes'),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<LinearProgressIndicator>(
+              find.byKey(const ValueKey('closeout-generation-progress-bar')),
+            )
+            .value,
+        closeTo(137 / 580, 0.0001),
+      );
+    },
+  );
+
+  testWidgets(
+    'persisted report counts preserve true progress after a page refresh',
+    (tester) async {
+      await tester.pumpWidget(
+        _host(
+          const CloseoutGenerationStatusBanner(
+            progress: CloseoutGenerationProgress(
+              remaining: 443,
+              reportTotal: 580,
+              reportGenerated: 137,
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('24%'), findsOneWidget);
+      expect(find.text('137 generated • 443 remaining'), findsOneWidget);
+    },
+  );
+
+  test('estimates remaining time from the observed processing rate', () {
+    final estimate = estimateCloseoutTimeRemaining(
+      initialRemaining: 580,
+      remaining: 443,
+      elapsed: const Duration(minutes: 5),
+    );
+
+    expect(estimate, isNotNull);
+    expect(
+      estimate!.inSeconds,
+      closeTo(const Duration(minutes: 16, seconds: 10).inSeconds, 1),
+    );
+    expect(
+      estimateCloseoutTimeRemaining(
+        initialRemaining: 580,
+        remaining: 580,
+        elapsed: const Duration(minutes: 1),
+      ),
+      isNull,
+    );
   });
 
   testWidgets('issues banner opens reports needing review', (tester) async {

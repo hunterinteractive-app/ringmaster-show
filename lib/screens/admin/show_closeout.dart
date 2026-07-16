@@ -135,6 +135,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
   final Map<String, String> _generationCountSignatures = {};
   final Map<String, DateTime> _generationLastActivity = {};
   final Map<String, DateTime> _generationCompletedAt = {};
+  final Map<String, int> _generationInitialRemaining = {};
+  final Map<String, DateTime> _generationEstimateStartedAt = {};
   String? _dashboardScopeKey;
   AppLifecycleState _appLifecycleState = AppLifecycleState.resumed;
   String? _observedGenerationKey;
@@ -1856,8 +1858,12 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
             resultsReadiness: corrected,
             latestFinalize: _dashboard!.latestFinalize,
             reports: _dashboard!.reports,
+            reviewReports: _dashboard!.reviewReports,
             deliveries: _dashboard!.deliveries,
             latestArchive: _dashboard!.latestArchive,
+            taskCounts: _dashboard!.taskCounts,
+            artifactCounts: _dashboard!.artifactCounts,
+            artifactPage: _dashboard!.artifactPage,
           );
         }
       });
@@ -2229,8 +2235,12 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
             resultsReadiness: corrected,
             latestFinalize: _dashboard!.latestFinalize,
             reports: _dashboard!.reports,
+            reviewReports: _dashboard!.reviewReports,
             deliveries: _dashboard!.deliveries,
             latestArchive: _dashboard!.latestArchive,
+            taskCounts: _dashboard!.taskCounts,
+            artifactCounts: _dashboard!.artifactCounts,
+            artifactPage: _dashboard!.artifactPage,
           );
         }
       });
@@ -2778,6 +2788,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       deliveries: dashboard.deliveries,
       latestArchive: dashboard.latestArchive,
       taskCounts: dashboard.taskCounts,
+      artifactCounts: dashboard.artifactCounts,
       artifactPage: CloseoutArtifactPage(
         limit: pageSize,
         offset: 0,
@@ -2960,6 +2971,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       return const CloseoutGenerationProgress();
     }
     final counts = _dashboard?.taskCounts ?? const CloseoutTaskCounts();
+    final artifactCounts =
+        _dashboard?.artifactCounts ?? const CloseoutArtifactCounts();
     final generationKey = _currentGenerationKey;
     final observedActivity = _generationLastActivity[generationKey];
     final serverActivity = counts.lastActivityAt;
@@ -2971,6 +2984,15 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         : serverActivity;
     final completedAt =
         counts.completedAt ?? _generationCompletedAt[generationKey];
+    final initialRemaining = _generationInitialRemaining[generationKey] ?? 0;
+    final estimateStartedAt = _generationEstimateStartedAt[generationKey];
+    final estimatedTimeRemaining = estimateCloseoutTimeRemaining(
+      initialRemaining: initialRemaining,
+      remaining: counts.remaining,
+      elapsed: estimateStartedAt == null
+          ? Duration.zero
+          : DateTime.now().difference(estimateStartedAt),
+    );
     final isStalled =
         counts.queued + counts.running > 0 &&
         lastActivity != null &&
@@ -2982,6 +3004,11 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       completed: counts.completed,
       failed: counts.failed,
       remaining: counts.remaining,
+      initialRemainingTotal: initialRemaining,
+      reportTotal: artifactCounts.total,
+      reportGenerated: artifactCounts.generated,
+      reportFailed: artifactCounts.failed,
+      estimatedTimeRemaining: estimatedTimeRemaining,
       lastActivityAt: lastActivity,
       completedAt: completedAt,
       isStalled: isStalled,
@@ -3005,6 +3032,15 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       _observedActiveGeneration = false;
     }
     final counts = dashboard.taskCounts;
+    if (counts.queued + counts.running + counts.completed + counts.failed ==
+            0 &&
+        counts.remaining > 0) {
+      final previousInitial = _generationInitialRemaining[generationKey] ?? 0;
+      if (counts.remaining > previousInitial) {
+        _generationInitialRemaining[generationKey] = counts.remaining;
+        _generationEstimateStartedAt[generationKey] = DateTime.now();
+      }
+    }
     final signature = <int>[
       counts.queued,
       counts.running,
@@ -3054,7 +3090,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
   void _scheduleDashboardPolling() {
     final counts = _dashboard?.taskCounts;
     _dashboardPoller.update(
-      active: counts != null && counts.queued + counts.running > 0,
+      active:
+          counts != null &&
+          (counts.queued + counts.running > 0 || counts.remaining > 0),
       visible: _closeoutScreenIsVisible,
     );
   }
@@ -4337,8 +4375,12 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
           resultsReadiness: readiness,
           latestFinalize: _dashboard!.latestFinalize,
           reports: _dashboard!.reports,
+          reviewReports: _dashboard!.reviewReports,
           deliveries: _dashboard!.deliveries,
           latestArchive: _dashboard!.latestArchive,
+          taskCounts: _dashboard!.taskCounts,
+          artifactCounts: _dashboard!.artifactCounts,
+          artifactPage: _dashboard!.artifactPage,
         );
       }
     });
@@ -10207,6 +10249,7 @@ class CloseoutDashboard {
   final List<DeliveryRunSummary> deliveries;
   final ArchiveSummary? latestArchive;
   final CloseoutTaskCounts taskCounts;
+  final CloseoutArtifactCounts artifactCounts;
   final CloseoutArtifactPage artifactPage;
 
   CloseoutDashboard({
@@ -10218,6 +10261,7 @@ class CloseoutDashboard {
     required this.deliveries,
     required this.latestArchive,
     this.taskCounts = const CloseoutTaskCounts(),
+    this.artifactCounts = const CloseoutArtifactCounts(),
     this.artifactPage = const CloseoutArtifactPage(),
   });
 
@@ -10257,9 +10301,35 @@ class CloseoutDashboard {
       taskCounts: CloseoutTaskCounts.fromJson(
         Map<String, dynamic>.from(json['task_counts'] ?? const {}),
       ),
+      artifactCounts: CloseoutArtifactCounts.fromJson(
+        Map<String, dynamic>.from(json['artifact_counts'] ?? const {}),
+      ),
       artifactPage: CloseoutArtifactPage.fromJson(
         Map<String, dynamic>.from(json['artifact_page'] ?? const {}),
       ),
+    );
+  }
+}
+
+class CloseoutArtifactCounts {
+  final int total;
+  final int generated;
+  final int queued;
+  final int failed;
+
+  const CloseoutArtifactCounts({
+    this.total = 0,
+    this.generated = 0,
+    this.queued = 0,
+    this.failed = 0,
+  });
+
+  factory CloseoutArtifactCounts.fromJson(Map<String, dynamic> json) {
+    return CloseoutArtifactCounts(
+      total: ((json['total'] ?? 0) as num).toInt(),
+      generated: ((json['generated'] ?? 0) as num).toInt(),
+      queued: ((json['queued'] ?? 0) as num).toInt(),
+      failed: ((json['failed'] ?? 0) as num).toInt(),
     );
   }
 }
