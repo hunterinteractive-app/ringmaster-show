@@ -39,6 +39,73 @@ export type RecordedPaymentEvent = {
   processing_status: string;
 };
 
+export type PaymentFeeQuote = {
+  baseTotalCents: number;
+  onlineFeeCents: number;
+  expectedAmountCents: number;
+  platformFeeCents: number;
+  platformFeeRate: number;
+  processingFeeRate: number;
+  processingFeeFixedCents: number;
+};
+
+export function calculatePaymentFeeQuote(args: {
+  baseTotalCents: number;
+  passFeeToExhibitor: boolean;
+  platformFeePercent: number;
+  processingFeePercent: number;
+  processingFeeFixedCents: number;
+}): PaymentFeeQuote {
+  const platformRate = normalizePercent(args.platformFeePercent);
+  const processingRate = normalizePercent(args.processingFeePercent);
+  const fixedCents = Math.max(Math.round(args.processingFeeFixedCents), 0);
+  const combinedRate = platformRate + processingRate;
+  if (args.baseTotalCents <= 0) {
+    throw new Error("Checkout total must be greater than zero.");
+  }
+  if (platformRate < 0 || processingRate < 0 || combinedRate >= 1) {
+    throw new Error("Payment fee configuration is invalid.");
+  }
+
+  let onlineFeeCents = 0;
+  if (args.passFeeToExhibitor) {
+    onlineFeeCents = Math.max(
+      Math.ceil(
+        (args.baseTotalCents + fixedCents) / (1 - combinedRate) -
+          args.baseTotalCents,
+      ),
+      0,
+    );
+    for (let i = 0; i < 10; i++) {
+      const total = args.baseTotalCents + onlineFeeCents;
+      const required = Math.round(total * platformRate) +
+        Math.ceil(total * processingRate + fixedCents);
+      if (onlineFeeCents >= required) break;
+      onlineFeeCents = required;
+    }
+  }
+
+  const expectedAmountCents = args.baseTotalCents + onlineFeeCents;
+  let platformFeeCents = Math.round(expectedAmountCents * platformRate);
+  if (platformFeeCents < 1 && platformRate > 0) platformFeeCents = 1;
+  if (platformFeeCents >= expectedAmountCents) {
+    throw new Error("Platform fee must be less than the charged amount.");
+  }
+  return {
+    baseTotalCents: args.baseTotalCents,
+    onlineFeeCents,
+    expectedAmountCents,
+    platformFeeCents,
+    platformFeeRate: platformRate,
+    processingFeeRate: processingRate,
+    processingFeeFixedCents: fixedCents,
+  };
+}
+
+function normalizePercent(value: number): number {
+  return value > 1 ? value / 100 : value;
+}
+
 export async function createPaymentQuoteAttempt(
   client: SupabaseClient,
   args: {

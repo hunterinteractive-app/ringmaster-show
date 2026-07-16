@@ -12,6 +12,7 @@ import '../services/app_session.dart';
 import '../services/stripe_connect_service.dart';
 import '../services/show_payment_configuration_service.dart';
 import '../services/square_checkout_service.dart';
+import '../services/payment_quote_preview_service.dart';
 
 import 'my_entries_screen.dart';
 
@@ -51,10 +52,9 @@ class _CartScreenState extends State<CartScreen> {
   String _selectedPaymentTiming = 'at_show';
   String? _selectedOnlineProvider;
   String? _squareClientAttemptKey;
-
-  static const double _ringMasterPlatformFeePercent = 0.02;
-  static const double _stripeProcessingFeePercent = 0.029;
-  static const int _stripeProcessingFixedCents = 30;
+  PaymentQuotePreview? _quotePreview;
+  bool _quotePreviewLoading = false;
+  String? _quotePreviewError;
   static const String _defaultOnlinePaymentFeeLabel = 'Online Payment Fee';
   static const String _defaultOnlinePaymentFeeDescription =
       'This show charges an Online Payment Fee for electronic payments. This fee helps cover payment processing costs, payment provider charges, and online entry services.';
@@ -181,6 +181,7 @@ class _CartScreenState extends State<CartScreen> {
         _sectionFeeBySectionId = parsedSectionFees;
         _loading = false;
       });
+      await _refreshQuotePreview();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -288,20 +289,8 @@ class _CartScreenState extends State<CartScreen> {
     return '$sym${v.toStringAsFixed(2)}';
   }
 
-  int _dollarsToCents(double amount) {
-    if (!amount.isFinite || amount <= 0) return 0;
-    return (amount * 100).round();
-  }
-
   double _centsToDollars(int cents) {
     return cents <= 0 ? 0.0 : cents / 100.0;
-  }
-
-  bool get _passesOnlinePaymentFeeToExhibitor {
-    return (_show?['online_payment_fee_mode'] ?? 'club_absorbs')
-            .toString()
-            .trim() ==
-        'pass_to_exhibitor';
   }
 
   String get _onlinePaymentFeeLabel {
@@ -316,69 +305,6 @@ class _CartScreenState extends State<CartScreen> {
     return description.isEmpty
         ? _defaultOnlinePaymentFeeDescription
         : description;
-  }
-
-  int _calculateOnlinePaymentFeeCentsFromBase(int baseAmountCents) {
-    if (baseAmountCents <= 0) return 0;
-
-    const combinedPercent =
-        _ringMasterPlatformFeePercent + _stripeProcessingFeePercent;
-
-    if (combinedPercent <= 0 && _stripeProcessingFixedCents <= 0) {
-      return 0;
-    }
-
-    if (combinedPercent >= 1) return 0;
-
-    var estimatedFeeCents =
-        ((baseAmountCents + _stripeProcessingFixedCents) /
-                    (1 - combinedPercent) -
-                baseAmountCents)
-            .ceil();
-
-    if (estimatedFeeCents < 0) estimatedFeeCents = 0;
-
-    for (var i = 0; i < 10; i++) {
-      final grossAmountCents = baseAmountCents + estimatedFeeCents;
-      final estimatedPlatformFeeCents =
-          (grossAmountCents * _ringMasterPlatformFeePercent).round();
-      final estimatedProcessingFeeCents =
-          (grossAmountCents * _stripeProcessingFeePercent +
-                  _stripeProcessingFixedCents)
-              .ceil();
-      final requiredFeeCents =
-          estimatedPlatformFeeCents + estimatedProcessingFeeCents;
-
-      if (estimatedFeeCents >= requiredFeeCents) {
-        return estimatedFeeCents;
-      }
-
-      estimatedFeeCents = requiredFeeCents;
-    }
-
-    return estimatedFeeCents;
-  }
-
-  Map<String, dynamic> _buildCheckoutFeePreview(Map<String, dynamic> fee) {
-    final showBalanceTotal = fee['total'] as double;
-    final showBalanceTotalCents = _dollarsToCents(showBalanceTotal);
-    final onlinePaymentFeeCents =
-        _selectedPaymentTiming == 'online' &&
-            _selectedOnlineProvider == 'stripe' &&
-            _stripeReady &&
-            _passesOnlinePaymentFeeToExhibitor
-        ? _calculateOnlinePaymentFeeCentsFromBase(showBalanceTotalCents)
-        : 0;
-    final totalDueCents = showBalanceTotalCents + onlinePaymentFeeCents;
-
-    return {
-      'show_balance_total_cents': showBalanceTotalCents,
-      'online_payment_fee_cents': onlinePaymentFeeCents,
-      'total_due_cents': totalDueCents,
-      'show_balance_total': _centsToDollars(showBalanceTotalCents),
-      'online_payment_fee': _centsToDollars(onlinePaymentFeeCents),
-      'total_due': _centsToDollars(totalDueCents),
-    };
   }
 
   String? _buildFurDisplay(Map<String, dynamic> it) {
@@ -471,6 +397,7 @@ class _CartScreenState extends State<CartScreen> {
       _selectedPaymentTiming = timing;
       _msg = null;
     });
+    await _refreshQuotePreview();
   }
 
   Future<void> _selectOnlineProvider(String provider) async {
@@ -479,6 +406,47 @@ class _CartScreenState extends State<CartScreen> {
       _selectedOnlineProvider = provider;
       _msg = null;
     });
+    await _refreshQuotePreview();
+  }
+
+  Future<void> _refreshQuotePreview() async {
+    final provider = _selectedOnlineProvider;
+    if (_selectedPaymentTiming != 'online' || provider == null) {
+      if (!mounted) return;
+      setState(() {
+        _quotePreview = null;
+        _quotePreviewLoading = false;
+        _quotePreviewError = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _quotePreviewLoading = true;
+      _quotePreviewError = null;
+      _quotePreview = null;
+    });
+    try {
+      final preview = await PaymentQuotePreview.load(
+        cartId: widget.cartId,
+        provider: provider,
+      );
+      if (!mounted ||
+          provider != _selectedOnlineProvider ||
+          _selectedPaymentTiming != 'online') {
+        return;
+      }
+      setState(() => _quotePreview = preview);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _quotePreviewError = error.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted && provider == _selectedOnlineProvider) {
+        setState(() => _quotePreviewLoading = false);
+      }
+    }
   }
 
   bool get _canPayOnline {
@@ -491,6 +459,9 @@ class _CartScreenState extends State<CartScreen> {
         _selectedPaymentTiming == 'online' &&
         _selectedOnlineProvider != null &&
         _providerReady(_selectedOnlineProvider!) &&
+        !_quotePreviewLoading &&
+        _quotePreviewError == null &&
+        _quotePreview?.provider == _selectedOnlineProvider &&
         (_selectedOnlineProvider != 'stripe' || _stripeReady);
   }
 
@@ -1169,13 +1140,13 @@ class _CartScreenState extends State<CartScreen> {
                   ),
                 if (_selectedOnlineProvider == 'square') ...[
                   const SizedBox(height: 10),
-                Text(
-                  'You’ll be redirected to Square to securely enter your payment information.',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF162C48),
-                    fontWeight: FontWeight.w500,
-                    height: 1.35,
-                  ),
+                  Text(
+                    'You’ll be redirected to Square to securely enter your payment information.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: const Color(0xFF162C48),
+                      fontWeight: FontWeight.w500,
+                      height: 1.35,
+                    ),
                   ),
                 ],
               ],
@@ -1190,9 +1161,12 @@ class _CartScreenState extends State<CartScreen> {
   Widget build(BuildContext context) {
     final overallFee = _calculateFeesForItems(_items);
     final currency = overallFee['currency'] as String;
-    final checkoutPreview = _buildCheckoutFeePreview(overallFee);
-    final onlinePaymentFee = checkoutPreview['online_payment_fee'] as double;
-    final totalDue = checkoutPreview['total_due'] as double;
+    final onlinePaymentFee = _selectedPaymentTiming == 'online'
+        ? _centsToDollars(_quotePreview?.onlineFeeCents ?? 0)
+        : 0.0;
+    final totalDue = _selectedPaymentTiming == 'online' && _quotePreview != null
+        ? _centsToDollars(_quotePreview!.amountDueCents)
+        : overallFee['total'] as double;
     final grouped = _groupItemsByExhibitor();
     final hasFeeConfig =
         _feeSettings != null && _sectionFeeBySectionId.isNotEmpty;
@@ -1360,11 +1334,29 @@ class _CartScreenState extends State<CartScreen> {
                                       '$_onlinePaymentFeeLabel: ${_money(onlinePaymentFee, currency: currency)}',
                                     ),
                                   ],
+                                  if (_quotePreviewLoading) ...[
+                                    const SizedBox(height: 8),
+                                    const LinearProgressIndicator(),
+                                    const SizedBox(height: 6),
+                                    const Text(
+                                      'Calculating online payment total…',
+                                    ),
+                                  ],
+                                  if (_quotePreviewError != null) ...[
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      _quotePreviewError!,
+                                      style: const TextStyle(
+                                        color: Colors.red,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
                                   const SizedBox(height: 8),
                                   Text(
-                                    onlinePaymentFee > 0
-                                        ? 'Total Due Today: ${_money(totalDue, currency: currency)}'
-                                        : 'Total: ${_money(overallFee['total'] as double, currency: currency)}',
+                                    _selectedPaymentTiming == 'online'
+                                        ? 'Total due online: ${_money(totalDue, currency: currency)}'
+                                        : 'Total due at show: ${_money(totalDue, currency: currency)}',
                                     style: Theme.of(context)
                                         .textTheme
                                         .titleSmall
