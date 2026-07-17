@@ -30,6 +30,9 @@ void main() {
   final artifactIdentityRepairMigration = File(
     'supabase/migrations/20260716044748_fix_closeout_artifact_scope_duplicate_identity.sql',
   ).readAsStringSync();
+  final paybackSpeciesMigration = File(
+    'supabase/migrations/20260717175551_fix_payback_schedule_species_matching.sql',
+  ).readAsStringSync();
   final edgeFunction = File(
     'supabase/functions/run-closeout/index.ts',
   ).readAsStringSync();
@@ -72,6 +75,23 @@ void main() {
       expect(generateBody, contains('finalizeRunId: finalizeRunId'));
     });
 
+    test('regeneration reuses the finalize-run artifact identity owner', () {
+      final createBody = methodBody(
+        'Future<ReportArtifactSummary> _createManualReportArtifact({',
+        'List<String> _metadataSectionIds(',
+      );
+      expect(createBody, contains("'closeout_artifact_identity'"));
+      expect(createBody, contains("'p_metadata': scopedMetadata"));
+      expect(createBody, contains(".eq('finalize_run_id', finalizeRunId)"));
+      expect(createBody, contains(".eq('report_name', reportName)"));
+      expect(createBody, contains('if (identityOwner != null)'));
+      expect(createBody, contains(".eq('id', identityOwner['id'])"));
+      expect(
+        createBody.indexOf('if (identityOwner != null)'),
+        lessThan(createBody.indexOf('.insert({')),
+      );
+    });
+
     test('Paybacks Generate creates or renders before queueing', () {
       final body = methodBody(
         'Future<void> _queueReportByName(',
@@ -86,6 +106,13 @@ void main() {
       expect(
         body.indexOf('return;', body.indexOf('await _generateReportByName(')),
         lessThan(body.indexOf('await _queueExistingArtifacts(')),
+      );
+    });
+
+    test('Paybacks only joins schedules for the entry species', () {
+      expect(
+        paybackSpeciesMigration,
+        contains('lower(trim(r.applies_to_species)) = se.species_key'),
       );
     });
 

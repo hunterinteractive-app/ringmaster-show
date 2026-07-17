@@ -4778,6 +4778,42 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       'species': resolvedScope.species.toList()..sort(),
       'show_letters': resolvedScope.showLetters.toList()..sort(),
     };
+    final artifactKey = (await supabase.rpc(
+      'closeout_artifact_identity',
+      params: {'p_report_name': reportName, 'p_metadata': scopedMetadata},
+    )).toString();
+    final identityOwners = await supabase
+        .from('show_report_artifacts')
+        .select('''
+            id,
+            finalize_run_id,
+            report_name,
+            artifact_status,
+            file_name,
+            storage_bucket,
+            storage_path,
+            generated_at,
+            is_current,
+            scope_key,
+            section_ids,
+            artifact_key,
+            generation,
+            metadata
+          ''')
+        .eq('show_id', widget.showId)
+        .eq('finalize_run_id', finalizeRunId)
+        .eq('report_name', reportName)
+        .limit(200);
+    Map<String, dynamic>? identityOwner;
+    for (final raw in identityOwners as List) {
+      final row = Map<String, dynamic>.from(raw as Map);
+      final rowArtifactKey = (row['artifact_key'] ?? '').toString();
+      if (rowArtifactKey == artifactKey) {
+        identityOwner = row;
+        break;
+      }
+    }
+
     await supabase
         .from('show_report_artifacts')
         .update({'is_current': false})
@@ -4785,6 +4821,37 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         .eq('report_name', reportName)
         .eq('scope_key', resolvedScope.stableScopeKey)
         .eq('is_current', true);
+
+    if (identityOwner != null) {
+      final reused = await supabase
+          .from('show_report_artifacts')
+          .update({
+            'artifact_status': 'queued',
+            'is_current': true,
+            'scope_key': resolvedScope.stableScopeKey,
+            'section_ids': resolvedScope.sectionIds.toList()..sort(),
+            'metadata': scopedMetadata,
+          })
+          .eq('id', identityOwner['id'])
+          .select('''
+              id,
+              finalize_run_id,
+              report_name,
+              artifact_status,
+              file_name,
+              storage_bucket,
+              storage_path,
+              generated_at,
+              is_current,
+              scope_key,
+              section_ids,
+              generation,
+              metadata
+            ''')
+          .single();
+      return ReportArtifactSummary.fromJson(Map<String, dynamic>.from(reused));
+    }
+
     final inserted = await supabase
         .from('show_report_artifacts')
         .insert({
@@ -4807,6 +4874,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
             storage_path,
             generated_at,
             is_current,
+            scope_key,
+            section_ids,
+            generation,
             metadata
           ''')
         .single();
