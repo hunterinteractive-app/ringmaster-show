@@ -3294,18 +3294,62 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
     if (runId.isEmpty) {
       throw StateError('Finalize this scope before queuing report renders.');
     }
+    final scopeKey = _resolvedCloseoutScope.stableScopeKey;
+    await _logArtifactQueueRequest(
+      finalizeRunId: runId,
+      scopeKey: scopeKey,
+      reportName: reportName,
+      artifactId: artifactId,
+    );
     _markDashboardContextChanged();
     await supabase.rpc(
       'requeue_closeout_artifacts',
       params: {
         'p_show_id': widget.showId,
         'p_finalize_run_id': runId,
-        'p_scope_key': _resolvedCloseoutScope.stableScopeKey,
+        'p_scope_key': scopeKey,
         'p_report_name': reportName,
         'p_artifact_id': artifactId,
       },
     );
     await _refreshDashboardOnly();
+  }
+
+  Future<void> _logArtifactQueueRequest({
+    required String finalizeRunId,
+    required String scopeKey,
+    String? reportName,
+    String? artifactId,
+  }) async {
+    debugPrint(
+      '[CloseoutQueue] request show=${widget.showId} '
+      'finalizeRun=$finalizeRunId scope=$scopeKey '
+      'report=${reportName ?? ''} artifact=${artifactId ?? ''}',
+    );
+    try {
+      final rows = await supabase
+          .from('show_report_artifacts')
+          .select(
+            'id,show_id,finalize_run_id,scope_key,report_name,'
+            'artifact_status,is_current,artifact_key,section_ids,metadata',
+          )
+          .eq('show_id', widget.showId)
+          .eq('finalize_run_id', finalizeRunId)
+          .eq('scope_key', scopeKey)
+          .eq('is_current', true)
+          .limit(200);
+      final candidates = (rows as List)
+          .map((row) => Map<String, dynamic>.from(row as Map))
+          .where(
+            (row) =>
+                (reportName == null || row['report_name'] == reportName) &&
+                (artifactId == null || row['id'] == artifactId),
+          )
+          .toList();
+      debugPrint('[CloseoutQueue] candidateArtifacts=$candidates');
+    } catch (error) {
+      debugPrint('[CloseoutQueue] candidate lookup failed: $error');
+    }
   }
 
   Duration _reportGenerationTimeoutFor(ReportArtifactSummary artifact) {
@@ -3519,10 +3563,14 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       final artifactScopeLabel = _artifactMetaString(artifact, 'scope_label');
       onStarted(key);
 
-      final runId =
-          artifact.finalizeRunId ??
-          _dashboard?.latestFinalize.id ??
-          'manual-run';
+      final runId = (artifact.finalizeRunId ?? '').trim().isNotEmpty
+          ? artifact.finalizeRunId!.trim()
+          : _finalizeRunIdForSelectedScope;
+      if (runId.isEmpty) {
+        throw StateError(
+          'Finalize this scope before generating report artifacts.',
+        );
+      }
 
       Future<void> generateAttempt() async {
         if (artifact.reportName == 'arba_report') {
@@ -4709,10 +4757,15 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
     required String reportName,
     Map<String, dynamic>? metadata,
   }) async {
-    final finalizeRunId = _dashboard?.latestFinalize.id;
+    final finalizeRunId = _finalizeRunIdForSelectedScope;
+    if (finalizeRunId.isEmpty) {
+      throw StateError(
+        'Finalize this scope before generating report artifacts.',
+      );
+    }
     debugPrint(
       '[Closeout:${widget.showId}] Creating manual artifact '
-      'report=$reportName finalizeRunId=${finalizeRunId ?? ''} '
+      'report=$reportName finalizeRunId=$finalizeRunId '
       'metadata=${metadata ?? <String, dynamic>{}}',
     );
 
@@ -5195,10 +5248,18 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       );
 
       ReportArtifactSummary? artifact;
+      final finalizeRunId = _finalizeRunIdForSelectedScope;
+      if (finalizeRunId.isEmpty) {
+        throw StateError(
+          'Finalize this scope before generating report artifacts.',
+        );
+      }
 
       final reports = (_dashboard?.reports ?? const <ReportArtifactSummary>[])
           .where((r) => r.reportName == reportName)
           .where((r) => r.isCurrent)
+          .where((r) => r.finalizeRunId == finalizeRunId)
+          .where((r) => r.scopeKey == _resolvedCloseoutScope.stableScopeKey)
           .where(_artifactMatchesSelectedScope)
           .toList();
 
@@ -5310,7 +5371,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
 
       await runner.generateSingleReport(
         showId: widget.showId,
-        finalizeRunId: _dashboard?.latestFinalize.id ?? 'manual-run',
+        finalizeRunId: finalizeRunId,
         reportName: reportName,
         artifactId: resolvedArtifact.id,
         breedName: targetLoaderBreedName,
@@ -5558,14 +5619,18 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
     String? exhibitorId,
     String? exhibitorName,
   }) async {
-    const preFinalizeReports = <String>{
+    const directGenerationReports = <String>{
       'unpaid_balances_report',
       'paid_exhibitor_report',
       'checkin_sheet',
       'entered_exhibitors_contact_report',
+      'payback_report',
+      'ribbon_payout_report',
+      'judge_report',
+      'breed_judged_totals_report',
     };
 
-    if (preFinalizeReports.contains(reportName)) {
+    if (directGenerationReports.contains(reportName)) {
       await _generateReportByName(
         reportName,
         breedName: breedName,

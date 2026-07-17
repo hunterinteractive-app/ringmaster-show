@@ -47,6 +47,68 @@ void main() {
   }
 
   group('read-only Closeout query path', () {
+    test('manual report generation retains canonical run identity', () {
+      expect(closeoutSource, isNot(contains("'manual-run'")));
+
+      final createBody = methodBody(
+        'Future<ReportArtifactSummary> _createManualReportArtifact({',
+        'List<String> _metadataSectionIds(',
+      );
+      expect(createBody, contains('_finalizeRunIdForSelectedScope'));
+      expect(createBody, contains("'finalize_run_id': finalizeRunId"));
+
+      final generateBody = methodBody(
+        'Future<void> _generateReportByName(',
+        'Future<void> _downloadReportByName(',
+      );
+      expect(
+        generateBody,
+        contains('.where((r) => r.finalizeRunId == finalizeRunId)'),
+      );
+      expect(
+        generateBody,
+        contains('r.scopeKey == _resolvedCloseoutScope.stableScopeKey'),
+      );
+      expect(generateBody, contains('finalizeRunId: finalizeRunId'));
+    });
+
+    test('Paybacks Generate creates or renders before queueing', () {
+      final body = methodBody(
+        'Future<void> _queueReportByName(',
+        'Future<void> _downloadReportByName(',
+      );
+      expect(body, contains("'payback_report'"));
+      expect(body, contains('await _generateReportByName('));
+      expect(
+        body.indexOf('await _generateReportByName('),
+        lessThan(body.indexOf('await _queueExistingArtifacts(')),
+      );
+      expect(
+        body.indexOf('return;', body.indexOf('await _generateReportByName(')),
+        lessThan(body.indexOf('await _queueExistingArtifacts(')),
+      );
+    });
+
+    for (final report in const <(String, String)>[
+      ('Ribbon Report', 'ribbon_payout_report'),
+      ('Judge Report', 'judge_report'),
+      ('Breed Judged Totals Report', 'breed_judged_totals_report'),
+    ]) {
+      test('${report.$1} Generate creates or renders before queueing', () {
+        final body = methodBody(
+          'Future<void> _queueReportByName(',
+          'Future<void> _downloadReportByName(',
+        );
+        expect(body, contains("'${report.$2}'"));
+        final generateIndex = body.indexOf('await _generateReportByName(');
+        final returnIndex = body.indexOf('return;', generateIndex);
+        final queueIndex = body.indexOf('await _queueExistingArtifacts(');
+        expect(generateIndex, isNonNegative);
+        expect(returnIndex, greaterThan(generateIndex));
+        expect(returnIndex, lessThan(queueIndex));
+      });
+    }
+
     test('initial load uses the scoped dashboard and performs no writes', () {
       final body = methodBody(
         'Future<void> _loadData()',
