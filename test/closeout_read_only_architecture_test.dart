@@ -255,14 +255,23 @@ void main() {
       expect(body, contains('candidateOffset <= nextOffset'));
     });
 
-    test('generated reports omit Generate while failures expose Retry', () {
+    test('only Other Reports can regenerate generated artifacts', () {
       final body = methodBody(
         'Widget _buildArtifactActions({',
         'List<Widget> _buildReportStatusAndActions()',
       );
       expect(
         body,
-        contains('if (uiStatus != CloseoutReportUiStatus.generated)'),
+        contains(
+          'if (uiStatus != CloseoutReportUiStatus.generated ||\n'
+          '            _selectedGroupAllowsRegeneration)',
+        ),
+      );
+      expect(
+        closeoutSource,
+        contains(
+          "bool get _selectedGroupAllowsRegeneration => _selectedGroup == 'other';",
+        ),
       );
       expect(body, contains("CloseoutReportUiStatus.failed => 'Retry'"));
       expect(

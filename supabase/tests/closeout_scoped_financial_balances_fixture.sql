@@ -62,6 +62,7 @@ create table public.show_exhibitor_balances (
   refunded_cents integer not null default 0,
   balance_due_cents integer not null default 0,
   payment_status text,
+  source text,
   section_breakdown jsonb not null default '[]'::jsonb
 );
 
@@ -86,17 +87,36 @@ insert into public.show_exhibitor_balances (
   id, show_id, exhibitor_id, entry_count, entries_subtotal_cents,
   show_fee_subtotal_cents, subtotal_before_discount_cents,
   calculated_total_cents, balance_due_cents, payment_status,
-  section_breakdown
+  source, section_breakdown
 ) values (
   '30000000-0000-0000-0000-000000000001',
   '10000000-0000-0000-0000-000000000001',
   '40000000-0000-0000-0000-000000000001',
-  2, 2000, 400, 2400, 2400, 2400, 'unpaid',
+  2, 2000, 400, 2400, 2400, 2400, 'unpaid', 'cart',
   jsonb_build_array(jsonb_build_object(
     'section_id', '20000000-0000-0000-0000-000000000001',
     'kind', 'open', 'letter', 'A', 'label', 'Rabbit Open A',
     'entry_count', 2, 'fur_count', 0,
     'entries_subtotal_cents', 2000, 'fur_subtotal_cents', 0,
+    'show_fee_cents', 400
+  ))
+);
+
+insert into public.show_exhibitor_balances (
+  id, show_id, exhibitor_id, entry_count, entries_subtotal_cents,
+  show_fee_subtotal_cents, subtotal_before_discount_cents,
+  calculated_total_cents, balance_due_cents, payment_status,
+  source, section_breakdown
+) values (
+  '30000000-0000-0000-0000-000000000002',
+  '10000000-0000-0000-0000-000000000001',
+  '40000000-0000-0000-0000-000000000001',
+  3, 3000, 400, 3400, 3400, 3400, 'unpaid', 'entries',
+  jsonb_build_array(jsonb_build_object(
+    'section_id', '20000000-0000-0000-0000-000000000001',
+    'kind', 'open', 'letter', 'A', 'label', 'Rabbit Open A',
+    'entry_count', 3, 'fur_count', 0,
+    'entries_subtotal_cents', 3000, 'fur_subtotal_cents', 0,
     'show_fee_cents', 400
   ))
 );

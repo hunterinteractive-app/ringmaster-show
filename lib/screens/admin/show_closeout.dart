@@ -8315,6 +8315,8 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
   bool get _selectedReportBlocked =>
       widget.reportsBlocked && !_selectedReportIgnoresResultsReadiness;
 
+  bool get _selectedGroupAllowsRegeneration => _selectedGroup == 'other';
+
   bool get _selectedReportNeedsBreedScope =>
       _selectedReportName == 'sweepstakes_report' ||
       _selectedReportName == 'breed_results_detail_report';
@@ -9004,7 +9006,8 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
       spacing: 10,
       runSpacing: 10,
       children: [
-        if (uiStatus != CloseoutReportUiStatus.generated)
+        if (uiStatus != CloseoutReportUiStatus.generated ||
+            _selectedGroupAllowsRegeneration)
           FilledButton.icon(
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.primaryButton,
