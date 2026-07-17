@@ -158,6 +158,22 @@ void main() {
       expect(arbaLoaderSource, isNot(contains('_loadGeneratedAt(')));
     });
 
+    test('state club sanction email remains a species-neutral fallback', () {
+      final body = methodBody(
+        'Future<List<_ClubEmailTarget>> _loadClubEmailTargets() async',
+        'Future<Map<String, String>> _loadSpeciesByBreedName(',
+      );
+      expect(body, contains('if (email.isEmpty) continue;'));
+      expect(
+        body,
+        contains(
+          "final species = sanctioningBody == 'STATE CLUB'\n"
+          "          ? 'combined'",
+        ),
+      );
+      expect(body, contains('species: contact.species'));
+    });
+
     for (final report in const <(String, String)>[
       ('Ribbon Report', 'ribbon_payout_report'),
       ('Judge Report', 'judge_report'),

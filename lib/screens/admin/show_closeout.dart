@@ -801,7 +801,11 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
               sanctioningBody: sanctioningBody,
             );
           }
-          continue;
+
+          // Keep the sanction email as a combined fallback for historical
+          // artifacts that predate species metadata. A species-specific
+          // contact still ranks ahead of this target when species is known.
+          if (email.isEmpty) continue;
         }
       }
 
