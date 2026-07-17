@@ -97,11 +97,7 @@ List<ArbaReportOption> buildArbaReportOptions({
       artifacts
           .where(
             (artifact) =>
-                artifact.reportName == 'arba_report' &&
-                artifact.isCurrent &&
-                artifact.artifactStatus == 'generated' &&
-                artifact.storageBucket.trim().isNotEmpty &&
-                artifact.storagePath.trim().isNotEmpty,
+                artifact.reportName == 'arba_report' && artifact.isCurrent,
           )
           .map((artifact) {
             final sectionId = (artifact.metadata['section_id'] ?? '')

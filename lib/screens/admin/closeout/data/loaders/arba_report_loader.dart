@@ -97,15 +97,9 @@ class ArbaReportLoader {
       _str(show['location_address']),
     ].where((e) => e.isNotEmpty).join(', ');
 
-    final ribbonsReportsMailedAt = await _loadGeneratedAt(
-      request.showId,
-      const ['exhibitor_report', 'legs'],
-    );
-
-    final sweepstakesReportsFiledAt = await _loadGeneratedAt(
-      request.showId,
-      const ['sweepstakes_report'],
-    );
+    final sentDates = await _loadCloseoutSentDates(request.showId);
+    final ribbonsReportsMailedAt = sentDates.exhibitorReportsSentAt;
+    final sweepstakesReportsFiledAt = sentDates.clubReportsSentAt;
 
     final judges = await _loadJudgeNamesFromEntries(
       request.showId,
@@ -673,31 +667,20 @@ class ArbaReportLoader {
     }
   }
 
-  Future<DateTime?> _loadGeneratedAt(
-    String showId,
-    List<String> reportNames,
-  ) async {
+  Future<_ArbaSentDates> _loadCloseoutSentDates(String showId) async {
     try {
-      final rows = await repo.supabase
-          .from('show_report_artifacts')
-          .select('report_name,generated_at,is_current,artifact_status')
+      final row = await repo.supabase
+          .from('show_closeout_state')
+          .select('exhibitor_emails_sent_at,club_reports_sent_at')
           .eq('show_id', showId)
-          .eq('is_current', true)
-          .eq('artifact_status', 'generated');
-
-      final list = List<Map<String, dynamic>>.from(rows);
-
-      for (final reportName in reportNames) {
-        for (final row in list) {
-          if (_str(row['report_name']) == reportName) {
-            final parsed = _tryParseDate(row['generated_at']);
-            if (parsed != null) return parsed;
-          }
-        }
-      }
-      return null;
+          .maybeSingle();
+      if (row == null) return const _ArbaSentDates();
+      return _ArbaSentDates(
+        exhibitorReportsSentAt: _tryParseDate(row['exhibitor_emails_sent_at']),
+        clubReportsSentAt: _tryParseDate(row['club_reports_sent_at']),
+      );
     } catch (_) {
-      return null;
+      return const _ArbaSentDates();
     }
   }
 
@@ -1078,6 +1061,13 @@ class ArbaReportLoader {
     if (value is DateTime) return value;
     return DateTime.tryParse(value.toString());
   }
+}
+
+class _ArbaSentDates {
+  final DateTime? exhibitorReportsSentAt;
+  final DateTime? clubReportsSentAt;
+
+  const _ArbaSentDates({this.exhibitorReportsSentAt, this.clubReportsSentAt});
 }
 
 class _ArbaArtifactContext {

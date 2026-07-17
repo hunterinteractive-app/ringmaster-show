@@ -9068,6 +9068,7 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
     final reportName = artifact?.reportName ?? _selectedReportName;
     final canDownload = _artifactCanDownload(artifact);
     final speciesLabel = stateClubSpeciesCard ? _speciesLabel(artifact) : '';
+    final isArbaReport = reportName == 'arba_report';
     final isExhibitorReport = reportName == 'exhibitor_report';
     final isLegsReport = reportName == 'legs';
     final isCheckInSheet = reportName == 'checkin_sheet';
@@ -9141,7 +9142,8 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
       spacing: 10,
       runSpacing: 10,
       children: [
-        if (uiStatus != CloseoutReportUiStatus.generated ||
+        if (isArbaReport ||
+            uiStatus != CloseoutReportUiStatus.generated ||
             _selectedGroupAllowsRegeneration)
           FilledButton.icon(
             style: FilledButton.styleFrom(
@@ -9369,7 +9371,7 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
         : null;
     return [
       if (isArba && _arbaReportOptions.isEmpty) ...[
-        const Text('No generated ARBA reports are available for this scope.'),
+        const Text('No ARBA report artifacts are available for this scope.'),
         const SizedBox(height: 12),
       ],
       _ReportInfoTile(

@@ -283,9 +283,21 @@ void main() {
     expect(normalizedArbaSelection('a', options), 'b');
   });
 
-  test('no generated artifacts yields empty options and no selection', () {
+  test('deferred artifact remains selectable for manual generation', () {
     final options = buildArbaReportOptions(
-      artifacts: [artifact('failed', 'r-open-a', status: 'failed')],
+      artifacts: [
+        artifact('deferred', 'r-open-a', status: 'warning', path: ''),
+      ],
+      sections: sections,
+    );
+
+    expect(options, hasLength(1));
+    expect(normalizedArbaSelection('old', options), 'deferred');
+  });
+
+  test('no current ARBA artifacts yields empty options and no selection', () {
+    final options = buildArbaReportOptions(
+      artifacts: [artifact('old', 'r-open-a', current: false)],
       sections: sections,
     );
 

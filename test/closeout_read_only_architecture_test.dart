@@ -9,6 +9,9 @@ void main() {
   final closeoutWidgetsSource = File(
     'lib/screens/admin/closeout/widgets/closeout_scope_widgets.dart',
   ).readAsStringSync();
+  final arbaLoaderSource = File(
+    'lib/screens/admin/closeout/data/loaders/arba_report_loader.dart',
+  ).readAsStringSync();
   final migration = File(
     'supabase/migrations/20260714055153_closeout_read_only_dashboard_and_render_queue.sql',
   ).readAsStringSync();
@@ -32,6 +35,12 @@ void main() {
   ).readAsStringSync();
   final paybackSpeciesMigration = File(
     'supabase/migrations/20260717175551_fix_payback_schedule_species_matching.sql',
+  ).readAsStringSync();
+  final deferredArbaMigration = File(
+    'supabase/migrations/20260717202959_defer_arba_until_report_delivery.sql',
+  ).readAsStringSync();
+  final deferredArbaProgressMigration = File(
+    'supabase/migrations/20260717204006_exclude_deferred_arba_from_closeout_progress.sql',
   ).readAsStringSync();
   final edgeFunction = File(
     'supabase/functions/run-closeout/index.ts',
@@ -114,6 +123,39 @@ void main() {
         paybackSpeciesMigration,
         contains('lower(trim(r.applies_to_species)) = se.species_key'),
       );
+    });
+
+    test('bulk generation defers ARBA until report delivery', () {
+      expect(
+        deferredArbaMigration,
+        contains("a.report_name <> 'arba_report'::public.report_type"),
+      );
+      expect(deferredArbaMigration, contains('deferred_until_report_delivery'));
+      expect(
+        deferredArbaMigration,
+        contains(
+          'enqueue_report_render_tasks(p_show_id, p_finalize_run_id, true)',
+        ),
+      );
+      expect(
+        deferredArbaProgressMigration,
+        contains("'deferred_until_report_delivery', true"),
+      );
+      expect(
+        deferredArbaProgressMigration,
+        contains("review.value ->> 'report_name' <> 'arba_report'"),
+      );
+      expect(
+        deferredArbaProgressMigration,
+        contains("#- '{by_report,arba_report}'"),
+      );
+    });
+
+    test('ARBA uses exhibitor and club sent dates, not generation dates', () {
+      expect(arbaLoaderSource, contains(".from('show_closeout_state')"));
+      expect(arbaLoaderSource, contains('exhibitor_emails_sent_at'));
+      expect(arbaLoaderSource, contains('club_reports_sent_at'));
+      expect(arbaLoaderSource, isNot(contains('_loadGeneratedAt(')));
     });
 
     for (final report in const <(String, String)>[
@@ -344,7 +386,7 @@ void main() {
       expect(body, contains('candidateOffset <= nextOffset'));
     });
 
-    test('only Other Reports can regenerate generated artifacts', () {
+    test('Other and ARBA reports can regenerate generated artifacts', () {
       final body = methodBody(
         'Widget _buildArtifactActions({',
         'List<Widget> _buildReportStatusAndActions()',
@@ -352,9 +394,14 @@ void main() {
       expect(
         body,
         contains(
-          'if (uiStatus != CloseoutReportUiStatus.generated ||\n'
+          'if (isArbaReport ||\n'
+          '            uiStatus != CloseoutReportUiStatus.generated ||\n'
           '            _selectedGroupAllowsRegeneration)',
         ),
+      );
+      expect(
+        body,
+        contains("final isArbaReport = reportName == 'arba_report';"),
       );
       expect(
         closeoutSource,
