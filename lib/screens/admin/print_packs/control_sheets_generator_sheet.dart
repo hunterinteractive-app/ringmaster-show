@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
+import 'package:ringmaster_show/utils/entry_class_name.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:pdf/pdf.dart';
@@ -151,13 +152,7 @@ class _ControlSheetsGeneratorSheetState
     if (l.contains('wool')) return 'Wool';
     if (l.contains('fur')) return 'Fur';
 
-    if (l.contains('senior')) return 'Senior';
-    if (l.contains('intermediate')) return 'Intermediate';
-    if (l.contains('pre junior') || l.contains('pre-junior')) {
-      return 'Pre Junior';
-    }
-    if (l.contains('junior')) return 'Junior';
-    return s;
+    return canonicalEntryClassName(s).replaceAll('Pre-Junior', 'Pre Junior');
   }
 
   bool _isFurOrWoolRow(Map<String, dynamic> row) {

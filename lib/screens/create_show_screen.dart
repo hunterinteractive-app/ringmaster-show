@@ -41,7 +41,7 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
   bool _loadingClubs = false;
 
   bool _hasLockedHostingClub = false;
-  bool _canSwitchHostingClub = false; // from license / multi-club entitlement
+  bool _canSwitchHostingClub = false; // from the Secretary License entitlement
 
   bool _saving = false;
   String? _msg;
@@ -472,7 +472,7 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
                                   border: const OutlineInputBorder(),
                                   helperText: _canSwitchHostingClub
                                       ? 'You can switch hosting clubs.'
-                                      : 'Locked to your account. Upgrade to Multi-Club Hosting to change this.',
+                                      : 'Locked to your account. A Secretary License is required to change this.',
                                 ),
                                 items: _clubs.map((club) {
                                   return DropdownMenuItem<String>(

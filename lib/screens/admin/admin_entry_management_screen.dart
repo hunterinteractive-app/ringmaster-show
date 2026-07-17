@@ -7,6 +7,7 @@ import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/services/show_lock_service.dart';
 import 'package:ringmaster_show/services/app_session.dart';
+import 'package:ringmaster_show/utils/entry_class_name.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -2489,7 +2490,7 @@ class _MoveEntrySheetState extends State<_MoveEntrySheet> {
             'section_id': _sectionId,
             'class_name': _className.text.trim().isEmpty
                 ? null
-                : _className.text.trim(),
+                : canonicalEntryClassName(_className.text),
             'updated_at': DateTime.now().toUtc().toIso8601String(),
           })
           .eq('id', entryId);

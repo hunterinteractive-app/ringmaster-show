@@ -84,8 +84,8 @@ class LicenseService {
   }
 
   static Future<bool> canSwitchHostingClub() async {
-    final snapshot = await loadCurrentUserLicense();
-    return snapshot.canChangeHostClub;
+    final result = await _supabase.rpc('has_active_secretary_license');
+    return result == true;
   }
 
   static Future<bool> canCreateShows() async {

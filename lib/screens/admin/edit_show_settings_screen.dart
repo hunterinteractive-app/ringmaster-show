@@ -1646,7 +1646,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                       ? 'No active clubs found. Add your first hosting club to continue.'
                                       : _canSwitchHostingClub
                                       ? 'Select a hosting club, add a new club, or manage your existing clubs.'
-                                      : 'Locked to your account. Upgrade to Multi-Club Hosting to change this.',
+                                      : 'Locked to your account. A Secretary License is required to change this.',
                                 ),
                                 items: [
                                   ..._clubs.map((club) {

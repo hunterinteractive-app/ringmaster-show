@@ -13,6 +13,7 @@ import 'package:ringmaster_show/screens/admin/entries_by_breed_section_table.dar
 import '../services/app_session.dart';
 import '../theme/app_theme.dart';
 import '../utils/date_time_utils.dart';
+import '../utils/entry_class_name.dart';
 import '../widgets/rm_widgets.dart';
 
 final supabase = Supabase.instance.client;
@@ -519,7 +520,7 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
 
     if (result == null) return;
 
-    final newClass = result.className.trim();
+    final newClass = canonicalEntryClassName(result.className);
     if (newClass.isEmpty) {
       setState(() => _msg = 'Class is required.');
       return;
@@ -2073,7 +2074,7 @@ class _EditEntryDialogV2State extends State<_EditEntryDialogV2> {
                 enabled: !_busy,
                 decoration: const InputDecoration(
                   labelText: 'Class (required)',
-                  hintText: 'Example: Jr Buck, Sr Doe, Int Buck, Open Sow',
+                  hintText: 'Example: Junior, Senior, or Intermediate',
                 ),
               ),
             ],
