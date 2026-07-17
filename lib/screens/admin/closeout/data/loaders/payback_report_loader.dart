@@ -15,6 +15,33 @@ typedef PaybackSectionRowsFetcher =
     );
 typedef PaybackTimingSink = void Function(Map<String, Object?> event);
 
+class PaybackSectionLoadException implements Exception {
+  const PaybackSectionLoadException({
+    required this.showId,
+    required this.sectionId,
+    required this.cause,
+  });
+
+  static const rpcName = 'report_payback_rows';
+
+  final String showId;
+  final String sectionId;
+  final Object cause;
+
+  @override
+  String toString() =>
+      'Payback RPC $rpcName failed for show=$showId section=$sectionId: $cause';
+}
+
+class PaybackSectionBatchLoadException implements Exception {
+  const PaybackSectionBatchLoadException(this.failures);
+
+  final List<PaybackSectionLoadException> failures;
+
+  @override
+  String toString() => failures.map((failure) => failure.toString()).join('\n');
+}
+
 class PaybackSectionBatchLoader {
   const PaybackSectionBatchLoader({required this.fetchRows, this.timingSink});
 
@@ -26,6 +53,7 @@ class PaybackSectionBatchLoader {
     required Iterable<String> sectionIds,
   }) async {
     final allRows = <Map<String, dynamic>>[];
+    final failures = <PaybackSectionLoadException>[];
 
     // One exact section per request is the bounded unit. Keeping this
     // sequential avoids competing statement-timeout queries in one worker.
@@ -51,8 +79,24 @@ class PaybackSectionBatchLoader {
           'duration_ms': watch.elapsedMilliseconds,
           'error_type': error.runtimeType.toString(),
         });
-        rethrow;
+        final failure = error is PaybackSectionLoadException
+            ? error
+            : PaybackSectionLoadException(
+                showId: showId,
+                sectionId: sectionId,
+                cause: error,
+              );
+        failures.add(failure);
+        _log({
+          'event': 'payback_section_load_continues',
+          'show_id': showId,
+          'section_id': sectionId,
+          'rpc_name': PaybackSectionLoadException.rpcName,
+        });
       }
+    }
+    if (failures.isNotEmpty) {
+      throw PaybackSectionBatchLoadException(failures);
     }
     return allRows;
   }
@@ -69,6 +113,8 @@ class PaybackSectionBatchLoader {
 class PaybackReportLoader {
   final SupabaseClient supabase;
   final PaybackSectionBatchLoader? sectionBatchLoader;
+  final _sectionRowCache = <String, List<Map<String, dynamic>>>{};
+  final _inFlightSectionLoads = <String, Future<List<Map<String, dynamic>>>>{};
 
   PaybackReportLoader({required this.supabase, this.sectionBatchLoader});
 
@@ -201,14 +247,45 @@ class PaybackReportLoader {
     required String showId,
     required String sectionId,
   }) async {
-    final rows = await supabase.rpc(
-      'report_payback_rows',
-      params: {'p_show_id': showId, 'p_section_id': sectionId},
-    );
+    final key = '$showId/$sectionId';
+    final cached = _sectionRowCache[key];
+    if (cached != null) return cached;
 
-    return (rows as List? ?? [])
-        .map((e) => Map<String, dynamic>.from(e as Map))
-        .toList();
+    final inFlight = _inFlightSectionLoads[key];
+    if (inFlight != null) return inFlight;
+
+    final request = _requestSectionRows(showId: showId, sectionId: sectionId);
+    _inFlightSectionLoads[key] = request;
+    try {
+      final rows = await request;
+      _sectionRowCache[key] = rows;
+      return rows;
+    } finally {
+      _inFlightSectionLoads.remove(key);
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _requestSectionRows({
+    required String showId,
+    required String sectionId,
+  }) async {
+    try {
+      final rows = await supabase.rpc(
+        PaybackSectionLoadException.rpcName,
+        params: {'p_show_id': showId, 'p_section_id': sectionId},
+      );
+      return (rows as List? ?? [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+    } catch (error) {
+      final failure = PaybackSectionLoadException(
+        showId: showId,
+        sectionId: sectionId,
+        cause: error,
+      );
+      developer.log(failure.toString(), name: 'closeout.payback', error: error);
+      throw failure;
+    }
   }
 
   Future<List<String>> _loadEnabledSectionIds(String showId) async {

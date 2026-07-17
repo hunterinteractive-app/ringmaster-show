@@ -54,4 +54,39 @@ void main() {
       expect(timingEvents[index]['duration_ms'], isA<int>());
     }
   });
+
+  test(
+    'failed section is identified while later sections still load',
+    () async {
+      final requestedSections = <String>[];
+      final loader = PaybackSectionBatchLoader(
+        fetchRows: (showId, sectionId) async {
+          requestedSections.add(sectionId);
+          if (sectionId == 'open-b') {
+            throw StateError('statement timeout');
+          }
+          return <Map<String, dynamic>>[];
+        },
+      );
+
+      await expectLater(
+        loader.load(
+          showId: 'pandemic-palooza-spring-2026',
+          sectionIds: const ['open-a', 'open-b', 'open-c'],
+        ),
+        throwsA(
+          isA<PaybackSectionBatchLoadException>().having(
+            (error) => error.failures.single.toString(),
+            'failure details',
+            contains(
+              'report_payback_rows failed for '
+              'show=pandemic-palooza-spring-2026 section=open-b',
+            ),
+          ),
+        ),
+      );
+
+      expect(requestedSections, ['open-a', 'open-b', 'open-c']);
+    },
+  );
 }
