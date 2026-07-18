@@ -1220,8 +1220,10 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
           ),
           const SizedBox(height: 12),
         ],
-        _buildHeaderCard(context),
-        const SizedBox(height: 16),
+        if (!_isExhibitorView) ...[
+          _buildHeaderCard(context),
+          const SizedBox(height: 16),
+        ],
         TextField(
           controller: _searchController,
           style: const TextStyle(color: Colors.black87),
@@ -1408,13 +1410,14 @@ class _SanctionDirectoryCard extends StatelessWidget {
     final hasLink = row.url.trim().isNotEmpty;
     final statusColor = status?.color;
     final hasPendingReport = pendingReport != null;
+    final showBrokenLinkReview = isSuperAdmin && hasPendingReport;
     final canClearRequest =
         !isExhibitorView &&
         showRequestButton &&
         (status == _SanctionDirectoryStatus.secretaryRequested ||
             status == _SanctionDirectoryStatus.exhibitorRequested);
 
-    final cardColor = hasPendingReport
+    final cardColor = showBrokenLinkReview
         ? Color.alphaBlend(
             Colors.red.withValues(alpha: .12),
             colorScheme.surface,
@@ -1431,10 +1434,10 @@ class _SanctionDirectoryCard extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
-          color: hasPendingReport
+          color: showBrokenLinkReview
               ? Colors.red.shade700
               : statusColor ?? Colors.transparent,
-          width: hasPendingReport || statusColor != null ? 1.4 : 0,
+          width: showBrokenLinkReview || statusColor != null ? 1.4 : 0,
         ),
       ),
       child: IconTheme(
@@ -1481,7 +1484,7 @@ class _SanctionDirectoryCard extends StatelessWidget {
                           const SizedBox(height: 6),
                           _DirectoryRequestStatusChip(status: status!),
                         ],
-                        if (hasPendingReport) ...[
+                        if (showBrokenLinkReview) ...[
                           const SizedBox(height: 6),
                           const _PendingReviewChip(),
                         ],
@@ -1546,7 +1549,7 @@ class _SanctionDirectoryCard extends StatelessWidget {
                         .toList(),
                   ),
                 ],
-                if (hasPendingReport) ...[
+                if (showBrokenLinkReview) ...[
                   const SizedBox(height: 12),
                   Container(
                     width: double.infinity,
@@ -1702,7 +1705,9 @@ class _SanctionDirectoryCard extends StatelessWidget {
                       icon: const Icon(Icons.flag_outlined),
                       label: Text(
                         hasPendingReport
-                            ? 'Report Pending Review'
+                            ? isSuperAdmin
+                                  ? 'Report Pending Review'
+                                  : 'Reported Broken'
                             : 'Report Broken Link',
                       ),
                     ),
