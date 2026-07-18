@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/screens/admin/admin_shows_screen.dart';
 import 'package:ringmaster_show/screens/admin/edit_show_settings_screen.dart';
 import 'package:ringmaster_show/screens/admin/entries_by_breed_section_table.dart';
+import 'package:ringmaster_show/screens/admin/show_sanctions_dialog.dart';
 
 import 'package:ringmaster_show/widgets/help_report_dialog.dart';
 import 'login_screen.dart';
@@ -33,6 +34,67 @@ import '../widgets/rm_widgets.dart';
 import '../widgets/rm_timezone_notice_banner.dart';
 
 final supabase = Supabase.instance.client;
+
+enum _ShowInformationChoice { breedCounts, sanctions }
+
+class _ShowInformationOption extends StatelessWidget {
+  const _ShowInformationOption({
+    required this.icon,
+    required this.title,
+    required this.description,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String description;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Material(
+      color: colorScheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: colorScheme.outlineVariant),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Icon(icon, color: colorScheme.primary, size: 28),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      description,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.chevron_right),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class ShowListScreen extends StatefulWidget {
   const ShowListScreen({
@@ -1163,6 +1225,66 @@ class _ShowListScreenState extends State<ShowListScreen> {
     );
   }
 
+  Future<void> _openBreedsAndSanctions(
+    BuildContext context,
+    String showId,
+    String showName,
+  ) async {
+    final selection = await showDialog<_ShowInformationChoice>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Breeds & Sanctions'),
+        content: SizedBox(
+          width: 440,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _ShowInformationOption(
+                icon: Icons.bar_chart,
+                title: 'Breed Counts',
+                description:
+                    'View current breed and exhibitor counts by show section.',
+                onTap: () => Navigator.of(
+                  dialogContext,
+                ).pop(_ShowInformationChoice.breedCounts),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              _ShowInformationOption(
+                icon: Icons.verified_outlined,
+                title: 'Sanction Information',
+                description:
+                    'View sanctioned breeds and clubs, ARBA numbers, and requested sanctions.',
+                onTap: () => Navigator.of(
+                  dialogContext,
+                ).pop(_ShowInformationChoice.sanctions),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+
+    if (!context.mounted || selection == null) return;
+    switch (selection) {
+      case _ShowInformationChoice.breedCounts:
+        _openBreedCounts(context, showId, showName);
+        break;
+      case _ShowInformationChoice.sanctions:
+        await ShowSanctionsDialog.openForExhibitor(
+          context,
+          showId: showId,
+          showName: showName,
+        );
+        break;
+    }
+  }
+
   void _openPastShowReports(BuildContext context) {
     Navigator.push(
       context,
@@ -1649,17 +1771,17 @@ class _ShowListScreenState extends State<ShowListScreen> {
                                               children: [
                                                 OutlinedButton.icon(
                                                   onPressed: () =>
-                                                      _openBreedCounts(
+                                                      _openBreedsAndSanctions(
                                                         context,
                                                         showId,
                                                         showName,
                                                       ),
                                                   icon: const Icon(
-                                                    Icons.bar_chart,
+                                                    Icons.fact_check_outlined,
                                                     size: 18,
                                                   ),
                                                   label: const Text(
-                                                    'Breed Counts',
+                                                    'Breeds & Sanctions',
                                                   ),
                                                 ),
                                                 OutlinedButton.icon(
