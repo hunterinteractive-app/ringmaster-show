@@ -42,6 +42,7 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
   bool _isFinalized = false;
 
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _spreadsheetScrollController = ScrollController();
   String _searchText = '';
 
   bool get _isReadOnly => _isLocked || _isFinalized;
@@ -71,6 +72,7 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
     }
 
     _searchController.dispose();
+    _spreadsheetScrollController.dispose();
 
     super.dispose();
   }
@@ -1026,8 +1028,10 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
     return LayoutBuilder(
       builder: (context, constraints) {
         return Scrollbar(
+          controller: _spreadsheetScrollController,
           thumbVisibility: true,
           child: SingleChildScrollView(
+            controller: _spreadsheetScrollController,
             scrollDirection: Axis.vertical,
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
