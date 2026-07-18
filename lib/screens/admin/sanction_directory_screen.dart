@@ -1220,10 +1220,6 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
           ),
           const SizedBox(height: 12),
         ],
-        if (_isSuperAdmin) ...[
-          _buildHeaderCard(context),
-          const SizedBox(height: 16),
-        ],
         TextField(
           controller: _searchController,
           style: const TextStyle(color: Colors.black87),
@@ -1329,50 +1325,6 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
           },
         );
       }).toList(),
-    );
-  }
-
-  Widget _buildHeaderCard(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final accent = colorScheme.primary;
-
-    return Card(
-      color: Colors.white.withValues(alpha: .06),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(Icons.verified_outlined, color: accent),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Sanction Directory',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: accent,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    _isSuperAdmin
-                        ? 'Super admin view for maintaining breed club sanction and sweepstakes links.'
-                        : _isExhibitorView
-                        ? 'Exhibitor view for opening sanction links, marking requests, and reporting broken links.'
-                        : 'Secretary view for finding sanction links, marking requests, and reporting broken links.',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.white.withValues(alpha: .88),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
