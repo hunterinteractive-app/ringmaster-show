@@ -33,6 +33,8 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
   List<_SanctionDirectoryRow> _rows = const [];
   List<_ShowSectionOption> _sections = const [];
   final Map<String, _SanctionDirectoryStatus> _statusByBreedClubId = {};
+  final Map<String, _LinkReport> _openReportByLinkId = {};
+  final Set<String> _reviewingLinkIds = {};
 
   @override
   void initState() {
@@ -65,6 +67,7 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
           _rows = const [];
           _sections = const [];
           _statusByBreedClubId.clear();
+          _openReportByLinkId.clear();
           _loading = false;
         });
         return;
@@ -77,6 +80,7 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
           _rows = const [];
           _sections = const [];
           _statusByBreedClubId.clear();
+          _openReportByLinkId.clear();
           _loading = false;
         });
         return;
@@ -195,6 +199,21 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
         return a.linkLabel.toLowerCase().compareTo(b.linkLabel.toLowerCase());
       });
 
+      final openReportByLinkId = <String, _LinkReport>{};
+      final reportRows = await _supabase
+          .from('breed_club_link_reports')
+          .select(
+            'id,sanction_link_id,report_reason,proposed_url,status,created_at',
+          )
+          .eq('status', 'open')
+          .order('created_at', ascending: false);
+      for (final raw in reportRows as List) {
+        if (raw is! Map) continue;
+        final report = _LinkReport.fromMap(Map<String, dynamic>.from(raw));
+        if (report.sanctionLinkId.isEmpty) continue;
+        openReportByLinkId.putIfAbsent(report.sanctionLinkId, () => report);
+      }
+
       setState(() {
         _hasAdminAccess = true;
         _rows = rows;
@@ -202,6 +221,9 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
         _statusByBreedClubId
           ..clear()
           ..addAll(statusByBreedClubId);
+        _openReportByLinkId
+          ..clear()
+          ..addAll(openReportByLinkId);
         _loading = false;
       });
     } catch (e) {
@@ -264,7 +286,9 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
         case _SanctionDirectoryFilter.linkChecked:
           return row.lastVerifiedAt != null;
         case _SanctionDirectoryFilter.linkNotCheckedOrBroken:
-          return row.lastVerifiedAt == null;
+          return row.lastVerifiedAt == null ||
+              (row.linkId != null &&
+                  _openReportByLinkId.containsKey(row.linkId));
       }
     }).toList();
   }
@@ -290,6 +314,92 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
 
   Future<void> _reportBrokenLink(_SanctionDirectoryRow row) async {
     final user = _supabase.auth.currentUser;
+    final proposedUrlController = TextEditingController();
+    var hasCorrectLink = false;
+
+    final submission = await showDialog<_BrokenLinkSubmission>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            return AlertDialog(
+              title: const Text('Report broken link'),
+              content: SizedBox(
+                width: 460,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      row.clubName,
+                      style: Theme.of(dialogContext).textTheme.titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 10),
+                    const Text('Do you have the correct replacement link?'),
+                    const SizedBox(height: 8),
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: hasCorrectLink,
+                      title: const Text('Yes, I have the correct link'),
+                      onChanged: (value) {
+                        setDialogState(() {
+                          hasCorrectLink = value == true;
+                          if (!hasCorrectLink) proposedUrlController.clear();
+                        });
+                      },
+                    ),
+                    if (hasCorrectLink) ...[
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: proposedUrlController,
+                        autofocus: true,
+                        keyboardType: TextInputType.url,
+                        decoration: const InputDecoration(
+                          labelText: 'Correct link',
+                          hintText: 'https://example.com/sanctions',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    final proposedUrl = proposedUrlController.text.trim();
+                    if (hasCorrectLink && !_isValidWebUrl(proposedUrl)) {
+                      ScaffoldMessenger.of(dialogContext).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Enter a complete http:// or https:// link.',
+                          ),
+                        ),
+                      );
+                      return;
+                    }
+                    Navigator.of(dialogContext).pop(
+                      _BrokenLinkSubmission(
+                        proposedUrl: hasCorrectLink ? proposedUrl : null,
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.flag_outlined),
+                  label: const Text('Submit for Review'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    proposedUrlController.dispose();
+    if (submission == null) return;
 
     try {
       await _supabase.from('breed_club_link_reports').insert({
@@ -297,17 +407,128 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
         'breed_club_id': row.clubId,
         'reported_by_user_id': user?.id,
         'report_reason': 'Broken or outdated sanction directory link',
+        'proposed_url': submission.proposedUrl,
         'status': 'open',
         'show_id': widget.showId,
       });
 
       if (mounted) {
-        _showSnack('Thanks. This link was flagged for review.');
+        _showSnack('This link is now pending review.');
       }
+      await _load();
     } catch (e) {
       if (mounted) {
         _showSnack('Could not report the link: $e');
       }
+    }
+  }
+
+  bool _isValidWebUrl(String value) {
+    final uri = Uri.tryParse(value.trim());
+    return uri != null &&
+        (uri.scheme == 'http' || uri.scheme == 'https') &&
+        uri.host.isNotEmpty;
+  }
+
+  Future<void> _approveLinkReport(
+    _SanctionDirectoryRow row,
+    _LinkReport report,
+  ) async {
+    final proposedUrl = report.proposedUrl.trim();
+    if (row.linkId == null || !_isValidWebUrl(proposedUrl)) {
+      _showSnack('This report does not include a valid replacement link.');
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Approve replacement link?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              row.clubName,
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 12),
+            const Text('Current link:'),
+            SelectableText(row.url),
+            const SizedBox(height: 12),
+            const Text('Proposed link:'),
+            SelectableText(proposedUrl),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            icon: const Icon(Icons.check),
+            label: const Text('Approve Change'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _reviewingLinkIds.add(row.linkId!));
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      final now = DateTime.now().toUtc().toIso8601String();
+      await _supabase
+          .from('breed_club_sanction_links')
+          .update({
+            'url': proposedUrl,
+            'last_verified_at': now,
+            'last_verified_by': userId,
+            'updated_at': now,
+          })
+          .eq('id', row.linkId!);
+      await _supabase
+          .from('breed_club_link_reports')
+          .update({
+            'status': 'approved',
+            'admin_notes': 'Replacement link approved from Sanction Directory.',
+            'resolved_at': now,
+            'resolved_by': userId,
+          })
+          .eq('id', report.id);
+      if (mounted) _showSnack('Replacement link approved and published.');
+      await _load();
+    } catch (e) {
+      if (mounted) _showSnack('Could not approve the link: $e');
+    } finally {
+      if (mounted) setState(() => _reviewingLinkIds.remove(row.linkId));
+    }
+  }
+
+  Future<void> _dismissLinkReport(
+    _SanctionDirectoryRow row,
+    _LinkReport report,
+  ) async {
+    if (row.linkId == null) return;
+    setState(() => _reviewingLinkIds.add(row.linkId!));
+    try {
+      final now = DateTime.now().toUtc().toIso8601String();
+      await _supabase
+          .from('breed_club_link_reports')
+          .update({
+            'status': 'dismissed',
+            'admin_notes': 'Report dismissed from Sanction Directory.',
+            'resolved_at': now,
+            'resolved_by': _supabase.auth.currentUser?.id,
+          })
+          .eq('id', report.id);
+      if (mounted) _showSnack('Broken-link report dismissed.');
+      await _load();
+    } catch (e) {
+      if (mounted) _showSnack('Could not dismiss the report: $e');
+    } finally {
+      if (mounted) setState(() => _reviewingLinkIds.remove(row.linkId));
     }
   }
 
@@ -758,10 +979,16 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
         const SizedBox(height: 16),
         TextField(
           controller: _searchController,
-          decoration: const InputDecoration(
-            prefixIcon: Icon(Icons.search),
+          style: const TextStyle(color: Colors.black87),
+          cursorColor: Colors.black87,
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: Colors.white,
+            prefixIcon: const Icon(Icons.search, color: Colors.black87),
             labelText: 'Search breed, club, state, or sanctioning body',
-            border: OutlineInputBorder(),
+            labelStyle: const TextStyle(color: Colors.black54),
+            floatingLabelStyle: const TextStyle(color: Colors.black87),
+            border: const OutlineInputBorder(),
           ),
         ),
         const SizedBox(height: 12),
@@ -793,17 +1020,30 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
                       const SizedBox(height: 10),
                   itemBuilder: (context, index) {
                     final row = rows[index];
+                    final report = row.linkId == null
+                        ? null
+                        : _openReportByLinkId[row.linkId];
                     return _SanctionDirectoryCard(
                       row: row,
+                      pendingReport: report,
                       status: _statusByBreedClubId[row.clubId],
                       showRequestButton:
                           widget.showId != null &&
                           widget.showId!.trim().isNotEmpty,
-                      isBusy: _markingRequested,
+                      isBusy:
+                          _markingRequested ||
+                          (row.linkId != null &&
+                              _reviewingLinkIds.contains(row.linkId)),
                       onOpen: () => _openUrl(row.url),
                       onMarkRequested: () => _markRequested(row),
                       onClearRequested: () => _clearRequested(row),
                       onReportBroken: () => _reportBrokenLink(row),
+                      onApproveReport: report == null
+                          ? null
+                          : () => _approveLinkReport(row, report),
+                      onDismissReport: report == null
+                          ? null
+                          : () => _dismissLinkReport(row, report),
                     );
                   },
                 ),
@@ -874,6 +1114,7 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
 class _SanctionDirectoryCard extends StatelessWidget {
   const _SanctionDirectoryCard({
     required this.row,
+    required this.pendingReport,
     required this.status,
     required this.showRequestButton,
     required this.isBusy,
@@ -881,9 +1122,12 @@ class _SanctionDirectoryCard extends StatelessWidget {
     required this.onMarkRequested,
     required this.onClearRequested,
     required this.onReportBroken,
+    required this.onApproveReport,
+    required this.onDismissReport,
   });
 
   final _SanctionDirectoryRow row;
+  final _LinkReport? pendingReport;
   final _SanctionDirectoryStatus? status;
   final bool showRequestButton;
   final bool isBusy;
@@ -891,6 +1135,8 @@ class _SanctionDirectoryCard extends StatelessWidget {
   final VoidCallback onMarkRequested;
   final VoidCallback onClearRequested;
   final VoidCallback onReportBroken;
+  final VoidCallback? onApproveReport;
+  final VoidCallback? onDismissReport;
 
   @override
   Widget build(BuildContext context) {
@@ -898,12 +1144,18 @@ class _SanctionDirectoryCard extends StatelessWidget {
     final onSurface = colorScheme.onSurface;
     final hasLink = row.url.trim().isNotEmpty;
     final statusColor = status?.color;
+    final hasPendingReport = pendingReport != null;
     final canClearRequest =
         showRequestButton &&
         (status == _SanctionDirectoryStatus.secretaryRequested ||
             status == _SanctionDirectoryStatus.exhibitorRequested);
 
-    final cardColor = statusColor == null
+    final cardColor = hasPendingReport
+        ? Color.alphaBlend(
+            Colors.red.withValues(alpha: .12),
+            colorScheme.surface,
+          )
+        : statusColor == null
         ? colorScheme.surface
         : Color.alphaBlend(
             statusColor.withValues(alpha: .14),
@@ -915,8 +1167,10 @@ class _SanctionDirectoryCard extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
-          color: statusColor ?? Colors.transparent,
-          width: statusColor == null ? 0 : 1.2,
+          color: hasPendingReport
+              ? Colors.red.shade700
+              : statusColor ?? Colors.transparent,
+          width: hasPendingReport || statusColor != null ? 1.4 : 0,
         ),
       ),
       child: IconTheme(
@@ -963,6 +1217,10 @@ class _SanctionDirectoryCard extends StatelessWidget {
                           const SizedBox(height: 6),
                           _DirectoryRequestStatusChip(status: status!),
                         ],
+                        if (hasPendingReport) ...[
+                          const SizedBox(height: 6),
+                          const _PendingReviewChip(),
+                        ],
                       ],
                     ),
                   ],
@@ -1006,6 +1264,42 @@ class _SanctionDirectoryCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(row.linkNotes),
                   ],
+                ],
+                if (hasPendingReport) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withValues(alpha: .08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.red.shade300),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Broken link reported — review required',
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(
+                                color: Colors.red.shade900,
+                                fontWeight: FontWeight.w800,
+                              ),
+                        ),
+                        if (pendingReport!.proposedUrl.trim().isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          const Text('Suggested replacement:'),
+                          SelectableText(
+                            pendingReport!.proposedUrl,
+                            style: TextStyle(color: Colors.red.shade900),
+                          ),
+                        ] else ...[
+                          const SizedBox(height: 6),
+                          const Text('No replacement link was supplied.'),
+                        ],
+                      ],
+                    ),
+                  ),
                 ],
                 const SizedBox(height: 14),
                 Wrap(
@@ -1066,12 +1360,38 @@ class _SanctionDirectoryCard extends StatelessWidget {
                         ),
                         side: BorderSide(color: colorScheme.primary),
                       ),
-                      onPressed: row.linkId == null || isBusy
+                      onPressed:
+                          row.linkId == null || isBusy || hasPendingReport
                           ? null
                           : onReportBroken,
                       icon: const Icon(Icons.flag_outlined),
-                      label: const Text('Report Broken Link'),
+                      label: Text(
+                        hasPendingReport
+                            ? 'Report Pending Review'
+                            : 'Report Broken Link',
+                      ),
                     ),
+                    if (hasPendingReport &&
+                        pendingReport!.proposedUrl.trim().isNotEmpty)
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green.shade700,
+                          foregroundColor: Colors.white,
+                        ),
+                        onPressed: isBusy ? null : onApproveReport,
+                        icon: const Icon(Icons.check_circle_outline),
+                        label: const Text('Approve New Link'),
+                      ),
+                    if (hasPendingReport)
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.red.shade800,
+                          side: BorderSide(color: Colors.red.shade700),
+                        ),
+                        onPressed: isBusy ? null : onDismissReport,
+                        icon: const Icon(Icons.close),
+                        label: const Text('Dismiss Report'),
+                      ),
                   ],
                 ),
               ],
@@ -1101,6 +1421,29 @@ class _DirectoryRequestStatusChip extends StatelessWidget {
         status.label,
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
           color: Colors.black87,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _PendingReviewChip extends StatelessWidget {
+  const _PendingReviewChip();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.red.shade100,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.red.shade700),
+      ),
+      child: Text(
+        'Broken link review',
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          color: Colors.red.shade900,
           fontWeight: FontWeight.w800,
         ),
       ),
@@ -1274,6 +1617,32 @@ class _SanctionDirectoryRow {
         .replaceAll('-', ' ')
         .replaceAll(RegExp(r'\s+'), ' ');
   }
+}
+
+class _LinkReport {
+  const _LinkReport({
+    required this.id,
+    required this.sanctionLinkId,
+    required this.proposedUrl,
+  });
+
+  final String id;
+  final String sanctionLinkId;
+  final String proposedUrl;
+
+  factory _LinkReport.fromMap(Map<String, dynamic> map) {
+    return _LinkReport(
+      id: (map['id'] ?? '').toString(),
+      sanctionLinkId: (map['sanction_link_id'] ?? '').toString(),
+      proposedUrl: (map['proposed_url'] ?? '').toString(),
+    );
+  }
+}
+
+class _BrokenLinkSubmission {
+  const _BrokenLinkSubmission({required this.proposedUrl});
+
+  final String? proposedUrl;
 }
 
 enum _SanctionDirectoryFilter {
