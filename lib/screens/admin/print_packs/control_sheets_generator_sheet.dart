@@ -1872,12 +1872,16 @@ class _ControlSheetsGeneratorSheetState
                   children: [
                     Text(
                       'Font Size Scale',
-                      style: Theme.of(context).textTheme.titleMedium,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.titleMedium?.copyWith(color: AppColors.text),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       'Adjust judging sheet text size for clubs that prefer larger print.',
-                      style: Theme.of(context).textTheme.bodySmall,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: AppColors.muted),
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -1905,7 +1909,9 @@ class _ControlSheetsGeneratorSheetState
                     const SizedBox(height: 2),
                     Text(
                       'Maximum rendered font size is capped at 16 pt.',
-                      style: Theme.of(context).textTheme.bodySmall,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: AppColors.muted),
                     ),
                   ],
                 ),

@@ -7,7 +7,6 @@ import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/services/show_lock_service.dart';
 import 'package:ringmaster_show/services/app_session.dart';
-import 'package:ringmaster_show/utils/entry_class_name.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -2441,21 +2440,11 @@ class _MoveEntrySheetState extends State<_MoveEntrySheet> {
   String? _msg;
 
   String? _sectionId;
-  late final TextEditingController _className;
 
   @override
   void initState() {
     super.initState();
     _sectionId = widget.entry['section_id']?.toString();
-    _className = TextEditingController(
-      text: (widget.entry['class_name'] ?? '').toString(),
-    );
-  }
-
-  @override
-  void dispose() {
-    _className.dispose();
-    super.dispose();
   }
 
   String _sectionLabel(Map<String, dynamic> s) {
@@ -2488,9 +2477,6 @@ class _MoveEntrySheetState extends State<_MoveEntrySheet> {
           .from('entries')
           .update({
             'section_id': _sectionId,
-            'class_name': _className.text.trim().isEmpty
-                ? null
-                : canonicalEntryClassName(_className.text),
             'updated_at': DateTime.now().toUtc().toIso8601String(),
           })
           .eq('id', entryId);
@@ -2559,18 +2545,6 @@ class _MoveEntrySheetState extends State<_MoveEntrySheet> {
                 onChanged: _saving
                     ? null
                     : (v) => setState(() => _sectionId = v),
-              ),
-            ),
-            const SizedBox(height: 12),
-            AppTheme.surfaceTextScope(
-              context,
-              child: TextField(
-                controller: _className,
-                enabled: !_saving,
-                decoration: const InputDecoration(
-                  labelText: 'Class',
-                  border: OutlineInputBorder(),
-                ),
               ),
             ),
             const SizedBox(height: 12),
