@@ -771,7 +771,9 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
           children: [
             Text(
               '${rows.length} of ${_rows.length} links / clubs',
-              style: Theme.of(context).textTheme.bodySmall,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Colors.white.withValues(alpha: .82),
+              ),
             ),
             const Spacer(),
             TextButton.icon(
@@ -829,16 +831,17 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
   }
 
   Widget _buildHeaderCard(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
+    final colorScheme = Theme.of(context).colorScheme;
+    final accent = colorScheme.primary;
 
     return Card(
-      color: primary.withValues(alpha: .06),
+      color: Colors.white.withValues(alpha: .06),
       child: Padding(
         padding: const EdgeInsets.all(18),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.verified_outlined, color: primary),
+            Icon(Icons.verified_outlined, color: accent),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -848,13 +851,15 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
                     'Sanction Directory',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.w800,
-                      color: primary,
+                      color: accent,
                     ),
                   ),
                   const SizedBox(height: 6),
                   Text(
                     'Admin view for maintaining breed club sanction and sweepstakes links before this is opened more broadly to show secretaries.',
-                    style: Theme.of(context).textTheme.bodyMedium,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.white.withValues(alpha: .88),
+                    ),
                   ),
                 ],
               ),
@@ -889,6 +894,8 @@ class _SanctionDirectoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final onSurface = colorScheme.onSurface;
     final hasLink = row.url.trim().isNotEmpty;
     final statusColor = status?.color;
     final canClearRequest =
@@ -896,8 +903,15 @@ class _SanctionDirectoryCard extends StatelessWidget {
         (status == _SanctionDirectoryStatus.secretaryRequested ||
             status == _SanctionDirectoryStatus.exhibitorRequested);
 
+    final cardColor = statusColor == null
+        ? colorScheme.surface
+        : Color.alphaBlend(
+            statusColor.withValues(alpha: .14),
+            colorScheme.surface,
+          );
+
     return Card(
-      color: statusColor?.withValues(alpha: .35),
+      color: cardColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
@@ -905,123 +919,164 @@ class _SanctionDirectoryCard extends StatelessWidget {
           width: statusColor == null ? 0 : 1.2,
         ),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      child: IconTheme(
+        data: IconThemeData(color: onSurface),
+        child: DefaultTextStyle.merge(
+          style: TextStyle(color: onSurface),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        row.breedName.isEmpty
-                            ? 'All Breeds / General Sanction'
-                            : row.breedName,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w800),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        row.clubName,
-                        style: Theme.of(context).textTheme.bodyLarge,
-                      ),
-                    ],
-                  ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _StatusChip(label: row.clubTypeLabel),
-                    if (status != null) ...[
-                      const SizedBox(height: 6),
-                      _DirectoryRequestStatusChip(status: status!),
-                    ],
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            row.breedName.isEmpty
+                                ? 'All Breeds / General Sanction'
+                                : row.breedName,
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(
+                                  color: onSurface,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            row.clubName,
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodyLarge?.copyWith(color: onSurface),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        _StatusChip(label: row.clubTypeLabel),
+                        if (status != null) ...[
+                          const SizedBox(height: 6),
+                          _DirectoryRequestStatusChip(status: status!),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    if (row.sanctioningBody.isNotEmpty)
+                      _InfoChip(
+                        icon: Icons.account_balance,
+                        label: row.sanctioningBody,
+                      ),
+                    if (row.stateCode.isNotEmpty)
+                      _InfoChip(
+                        icon: Icons.place_outlined,
+                        label: row.stateCode,
+                      ),
+                    if (row.linkType.isNotEmpty)
+                      _InfoChip(icon: Icons.link, label: row.linkType),
+                    _InfoChip(
+                      icon: row.lastVerifiedAt == null
+                          ? Icons.report_problem_outlined
+                          : Icons.fact_check_outlined,
+                      label: row.linkCheckedLabel,
+                    ),
+                  ],
+                ),
+                if (row.linkLabel.isNotEmpty || row.linkNotes.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  if (row.linkLabel.isNotEmpty)
+                    Text(
+                      row.linkLabel,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: onSurface,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  if (row.linkNotes.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(row.linkNotes),
+                  ],
+                ],
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: colorScheme.primary,
+                        foregroundColor: colorScheme.onPrimary,
+                        disabledBackgroundColor: onSurface.withValues(
+                          alpha: .12,
+                        ),
+                        disabledForegroundColor: onSurface.withValues(
+                          alpha: .48,
+                        ),
+                      ),
+                      onPressed: hasLink && !isBusy ? onOpen : null,
+                      icon: const Icon(Icons.open_in_new),
+                      label: const Text('Open Link'),
+                    ),
+                    Tooltip(
+                      message: !showRequestButton
+                          ? 'Open this directory from a show sanctions dialog to mark or remove a request.'
+                          : canClearRequest
+                          ? 'Remove the requested flag for this show.'
+                          : 'Mark this sanction as requested for this show.',
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: colorScheme.primary,
+                          disabledForegroundColor: onSurface.withValues(
+                            alpha: .48,
+                          ),
+                          side: BorderSide(color: colorScheme.primary),
+                        ),
+                        onPressed: !showRequestButton || isBusy
+                            ? null
+                            : canClearRequest
+                            ? onClearRequested
+                            : onMarkRequested,
+                        icon: Icon(
+                          canClearRequest
+                              ? Icons.remove_circle_outline
+                              : Icons.check_circle_outline,
+                        ),
+                        label: Text(
+                          canClearRequest
+                              ? 'Remove Requested'
+                              : 'Mark Requested',
+                        ),
+                      ),
+                    ),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: colorScheme.primary,
+                        disabledForegroundColor: onSurface.withValues(
+                          alpha: .48,
+                        ),
+                        side: BorderSide(color: colorScheme.primary),
+                      ),
+                      onPressed: row.linkId == null || isBusy
+                          ? null
+                          : onReportBroken,
+                      icon: const Icon(Icons.flag_outlined),
+                      label: const Text('Report Broken Link'),
+                    ),
                   ],
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                if (row.sanctioningBody.isNotEmpty)
-                  _InfoChip(
-                    icon: Icons.account_balance,
-                    label: row.sanctioningBody,
-                  ),
-                if (row.stateCode.isNotEmpty)
-                  _InfoChip(icon: Icons.place_outlined, label: row.stateCode),
-                if (row.linkType.isNotEmpty)
-                  _InfoChip(icon: Icons.link, label: row.linkType),
-                _InfoChip(
-                  icon: row.lastVerifiedAt == null
-                      ? Icons.report_problem_outlined
-                      : Icons.fact_check_outlined,
-                  label: row.linkCheckedLabel,
-                ),
-              ],
-            ),
-            if (row.linkLabel.isNotEmpty || row.linkNotes.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              if (row.linkLabel.isNotEmpty)
-                Text(
-                  row.linkLabel,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
-                ),
-              if (row.linkNotes.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Text(row.linkNotes),
-              ],
-            ],
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                ElevatedButton.icon(
-                  onPressed: hasLink && !isBusy ? onOpen : null,
-                  icon: const Icon(Icons.open_in_new),
-                  label: const Text('Open Link'),
-                ),
-                Tooltip(
-                  message: !showRequestButton
-                      ? 'Open this directory from a show sanctions dialog to mark or remove a request.'
-                      : canClearRequest
-                      ? 'Remove the requested flag for this show.'
-                      : 'Mark this sanction as requested for this show.',
-                  child: OutlinedButton.icon(
-                    onPressed: !showRequestButton || isBusy
-                        ? null
-                        : canClearRequest
-                        ? onClearRequested
-                        : onMarkRequested,
-                    icon: Icon(
-                      canClearRequest
-                          ? Icons.remove_circle_outline
-                          : Icons.check_circle_outline,
-                    ),
-                    label: Text(
-                      canClearRequest ? 'Remove Requested' : 'Mark Requested',
-                    ),
-                  ),
-                ),
-                OutlinedButton.icon(
-                  onPressed: row.linkId == null || isBusy
-                      ? null
-                      : onReportBroken,
-                  icon: const Icon(Icons.flag_outlined),
-                  label: const Text('Report Broken Link'),
-                ),
-              ],
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -1044,9 +1099,10 @@ class _DirectoryRequestStatusChip extends StatelessWidget {
       ),
       child: Text(
         status.label,
-        style: Theme.of(
-          context,
-        ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w800),
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          color: Colors.black87,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }
@@ -1059,12 +1115,16 @@ class _StatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
+    final colorScheme = Theme.of(context).colorScheme;
+    final primary = colorScheme.primary;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: primary.withValues(alpha: .09),
+        color: Color.alphaBlend(
+          primary.withValues(alpha: .10),
+          colorScheme.surface,
+        ),
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: primary.withValues(alpha: .18)),
       ),
@@ -1087,20 +1147,25 @@ class _InfoChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final foreground = colorScheme.onSurface;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Theme.of(
-          context,
-        ).colorScheme.surfaceContainerHighest.withValues(alpha: .65),
+        color: colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 15),
+          Icon(icon, size: 15, color: foreground),
           const SizedBox(width: 5),
-          Text(label, style: Theme.of(context).textTheme.labelMedium),
+          Text(
+            label,
+            style: Theme.of(
+              context,
+            ).textTheme.labelMedium?.copyWith(color: foreground),
+          ),
         ],
       ),
     );
