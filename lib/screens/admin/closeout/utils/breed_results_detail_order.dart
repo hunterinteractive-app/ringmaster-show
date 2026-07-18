@@ -3,6 +3,55 @@ import '../models/clubs/breed_results_detail_report_data.dart';
 bool breedResultsDetailUsesRabbitClassLayout(String species) =>
     species.trim().toLowerCase() == 'rabbit';
 
+const Map<String, int> _awardOrder = {
+  'BIS': 0,
+  'B4C': 1,
+  'B6C': 2,
+  'RIS': 3,
+  'RBIS': 3,
+  'HM': 4,
+  'BOB': 5,
+  'BOSB': 6,
+  'BOS': 6,
+  'BSB': 7,
+  'BIB': 8,
+  'BJB': 9,
+  'BOG': 10,
+  'BOSG': 11,
+  'BOV': 12,
+  'BOSV': 13,
+  'BSV': 14,
+  'BIV': 15,
+  'BJV': 16,
+};
+
+int breedResultsDetailAwardRank(String awardCode) =>
+    _awardOrder[awardCode.trim().toUpperCase()] ?? 999;
+
+int compareBreedResultsDetailAwards(BreedAward a, BreedAward b) {
+  final rank = breedResultsDetailAwardRank(
+    a.award,
+  ).compareTo(breedResultsDetailAwardRank(b.award));
+  if (rank != 0) return rank;
+
+  for (final pair in [
+    (a.breedName, b.breedName),
+    (a.variety, b.variety),
+    (a.className, b.className),
+    (a.sex, b.sex),
+    (a.animal, b.animal),
+  ]) {
+    final compared = pair.$1.trim().toLowerCase().compareTo(
+      pair.$2.trim().toLowerCase(),
+    );
+    if (compared != 0) return compared;
+  }
+  return 0;
+}
+
+int compareBreedResultsDetailSectionNames(String a, String b) =>
+    a.trim().toLowerCase().compareTo(b.trim().toLowerCase());
+
 int _orderValue(Object? value) {
   if (value is int) return value;
   return int.tryParse((value ?? '').toString().trim()) ?? 9999;

@@ -334,7 +334,6 @@ class BreedResultsDetailReportLoader {
         varietyAwardMap: varietyAwardMap,
         sweepstakesPoints: sweepstakesPoints,
         groupByBreed: groupByBreed,
-        useRabbitJudgingOrder: species == 'rabbit',
       ),
       noResultsFound: false,
     );
@@ -470,7 +469,6 @@ class BreedResultsDetailReportLoader {
     required Map<String, List<BreedAward>> varietyAwardMap,
     required _SweepstakesPointsLookup sweepstakesPoints,
     required bool groupByBreed,
-    required bool useRabbitJudgingOrder,
   }) {
     final regularByVariety = <String, List<Map<String, dynamic>>>{};
     final furByCategory = <String, List<Map<String, dynamic>>>{};
@@ -496,16 +494,7 @@ class BreedResultsDetailReportLoader {
     final sections = <VarietySection>[];
 
     final regularVarietyNames = regularByVariety.keys.toList()
-      ..sort((a, b) {
-        if (!useRabbitJudgingOrder) return a.compareTo(b);
-        final aRows = regularByVariety[a]!;
-        final bRows = regularByVariety[b]!;
-        final order = compareRabbitVarietyJudgingOrder(
-          aRows.first,
-          bRows.first,
-        );
-        return order != 0 ? order : a.compareTo(b);
-      });
+      ..sort(compareBreedResultsDetailSectionNames);
     for (final varietyName in regularVarietyNames) {
       sections.add(
         VarietySection(
@@ -520,16 +509,8 @@ class BreedResultsDetailReportLoader {
       );
     }
 
-    const preferredFurOrder = ['White', 'Colored', 'Uncategorized'];
     final furCategories = furByCategory.keys.toList()
-      ..sort((a, b) {
-        final aIndex = preferredFurOrder.indexOf(a);
-        final bIndex = preferredFurOrder.indexOf(b);
-        final aSort = aIndex == -1 ? 999 : aIndex;
-        final bSort = bIndex == -1 ? 999 : bIndex;
-        final cmp = aSort.compareTo(bSort);
-        return cmp != 0 ? cmp : a.compareTo(b);
-      });
+      ..sort(compareBreedResultsDetailSectionNames);
 
     for (final category in furCategories) {
       sections.add(

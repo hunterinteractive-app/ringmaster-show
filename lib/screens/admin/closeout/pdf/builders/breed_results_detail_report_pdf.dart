@@ -309,12 +309,12 @@ class BreedResultsDetailReportPdf {
   }) {
     final widgets = <pw.Widget>[];
 
-    final overallAwards = breedAwards
-        .where((a) => _isOverallAward(a.award))
-        .toList();
-    final breedOnlyAwards = breedAwards
-        .where((a) => !_isOverallAward(a.award))
-        .toList();
+    final overallAwards =
+        breedAwards.where((a) => _isOverallAward(a.award)).toList()
+          ..sort(compareBreedResultsDetailAwards);
+    final breedOnlyAwards =
+        breedAwards.where((a) => !_isOverallAward(a.award)).toList()
+          ..sort(compareBreedResultsDetailAwards);
 
     if (overallAwards.isNotEmpty) {
       widgets.add(_sectionTitle('Overall Show Awards'));
@@ -359,7 +359,11 @@ class BreedResultsDetailReportPdf {
     widgets.add(_varietyHeader(variety.varietyName));
 
     if (variety.awards.isNotEmpty) {
-      widgets.add(_buildAwardTable(variety.awards));
+      widgets.add(
+        _buildAwardTable(
+          [...variety.awards]..sort(compareBreedResultsDetailAwards),
+        ),
+      );
       widgets.add(pw.SizedBox(height: 8));
     }
 
@@ -761,17 +765,17 @@ class BreedResultsDetailReportPdf {
       case 'BSV':
         return 'Best Senior Variety';
       case 'BJB':
-        return 'Best Junior of Breed';
+        return 'Best Junior Breed';
       case 'BIB':
-        return 'Best Intermediate of Breed';
+        return 'Best Intermediate Breed';
       case 'BSB':
-        return 'Best Senior of Breed';
+        return 'Best Senior Breed';
       case 'BOV':
         return 'Best of Variety';
       case 'BOSV':
-        return 'Best Opposite Sex of Variety';
+        return 'Best Opposite Sex Variety';
       case 'BOB':
-        return 'Best of Breed';
+        return 'Best Of Breed';
       case 'BOSB':
         return 'Best Opposite Sex of Breed';
       case 'BIS':
@@ -780,15 +784,15 @@ class BreedResultsDetailReportPdf {
       case 'RBIS':
         return 'Reserve in Show';
       case 'B4C':
-        return 'Best 4-Class';
+        return 'Best 4 Class';
       case 'B6C':
-        return 'Best 6-Class';
+        return 'Best 6 Class';
       case 'BOG':
         return 'Best of Group';
       case 'BOSG':
         return 'Best Opposite Sex of Group';
       case 'HM':
-        return 'Honorable Mention';
+        return 'Honorable Mention / 2nd RIS';
       default:
         return code;
     }

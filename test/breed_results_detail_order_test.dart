@@ -85,57 +85,63 @@ void main() {
     expect(variety.awards.single, same(award));
   });
 
-  test('configured rabbit group and variety order beats alphabetic order', () {
-    final rows = [
-      {
-        'variety_name': 'Broken',
-        'group_sort_order': 60,
-        'variety_sort_order': 5,
-      },
-      {
-        'variety_name': 'Castor',
-        'group_sort_order': 30,
-        'variety_sort_order': 6,
-      },
-      {
-        'variety_name': 'Tortoise',
-        'group_sort_order': 20,
-        'variety_sort_order': 23,
-      },
-      {'variety_name': 'Blue', 'group_sort_order': 10, 'variety_sort_order': 3},
-      {
-        'variety_name': 'Black',
-        'group_sort_order': 10,
-        'variety_sort_order': 2,
-      },
-      {
-        'variety_name': 'Otter',
-        'group_sort_order': 40,
-        'variety_sort_order': 13,
-      },
-    ]..sort(compareRabbitVarietyJudgingOrder);
+  test('breed, group, and variety section names sort alphabetically', () {
+    final names = ['Tortoise', 'Castor', 'Blue', 'Black', 'Otter', 'Broken']
+      ..sort(compareBreedResultsDetailSectionNames);
 
-    expect(rows.map((row) => row['variety_name']), [
-      'Black',
-      'Blue',
-      'Tortoise',
-      'Castor',
-      'Otter',
-      'Broken',
+    expect(names, ['Black', 'Blue', 'Broken', 'Castor', 'Otter', 'Tortoise']);
+  });
+
+  test('show awards follow the standardized hierarchy', () {
+    BreedAward award(String code, {String breed = '', String variety = ''}) =>
+        BreedAward(
+          award: code,
+          animal: code,
+          breedName: breed,
+          variety: variety,
+          className: '',
+          exhibitorName: '',
+        );
+
+    final awards = [
+      award('BJV'),
+      award('BOSG'),
+      award('BOB', breed: 'Teddy'),
+      award('HM'),
+      award('BIS'),
+      award('BOV', variety: 'White'),
+      award('B4C'),
+      award('RIS'),
+      award('BOSB'),
+      award('BSB'),
+      award('BIB'),
+      award('BJB'),
+      award('BOG'),
+      award('BOSV'),
+      award('BSV'),
+      award('BIV'),
+      award('B6C'),
+    ]..sort(compareBreedResultsDetailAwards);
+
+    expect(awards.map((award) => award.award), [
+      'BIS',
+      'B4C',
+      'B6C',
+      'RIS',
+      'HM',
+      'BOB',
+      'BOSB',
+      'BSB',
+      'BIB',
+      'BJB',
+      'BOG',
+      'BOSG',
+      'BOV',
+      'BOSV',
+      'BSV',
+      'BIV',
+      'BJV',
     ]);
-    expect(
-      rows.map((row) => row['variety_name']),
-      isNot(
-        orderedEquals([
-          'Black',
-          'Blue',
-          'Broken',
-          'Castor',
-          'Otter',
-          'Tortoise',
-        ]),
-      ),
-    );
   });
 
   test('cavy reports retain their existing sex-section layout branch', () {
