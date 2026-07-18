@@ -158,6 +158,15 @@ void main() {
         routingMigration,
         contains("calculation_version = 'cavy-fixed-v1'"),
       );
+
+      final lockingMigration = File(
+        'supabase/migrations/20260718231946_serialize_cavy_sweepstakes_recalculation.sql',
+      ).readAsStringSync();
+      expect(lockingMigration, contains('pg_advisory_xact_lock'));
+      expect(
+        lockingMigration,
+        contains('calculate_cavy_sweepstakes_for_section_unlocked'),
+      );
     });
 
     test('regeneration reuses the finalize-run artifact identity owner', () {
