@@ -203,7 +203,7 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
       final reportRows = await _supabase
           .from('breed_club_link_reports')
           .select(
-            'id,sanction_link_id,report_reason,proposed_url,status,created_at',
+            'id,sanction_link_id,reported_by_name,reported_by_email,report_reason,proposed_url,status,created_at',
           )
           .eq('status', 'open')
           .order('created_at', ascending: false);
@@ -281,14 +281,15 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
           return row.isNationalBreedClub;
         case _SanctionDirectoryFilter.stateClubs:
           return row.isStateClub;
+        case _SanctionDirectoryFilter.stateBreedClubs:
+          return row.isStateBreedClub;
         case _SanctionDirectoryFilter.missingLink:
           return row.url.trim().isEmpty;
         case _SanctionDirectoryFilter.linkChecked:
           return row.lastVerifiedAt != null;
-        case _SanctionDirectoryFilter.linkNotCheckedOrBroken:
-          return row.lastVerifiedAt == null ||
-              (row.linkId != null &&
-                  _openReportByLinkId.containsKey(row.linkId));
+        case _SanctionDirectoryFilter.reportedBroken:
+          return row.linkId != null &&
+              _openReportByLinkId.containsKey(row.linkId);
       }
     }).toList();
   }
@@ -309,6 +310,126 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
     final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!opened && mounted) {
       _showSnack('Could not open the link.');
+    }
+  }
+
+  Future<void> _editLink(_SanctionDirectoryRow row) async {
+    final linkId = row.linkId;
+    if (linkId == null || linkId.isEmpty) {
+      _showSnack('This club does not have an editable link record.');
+      return;
+    }
+
+    final typeController = TextEditingController(text: row.linkType);
+    final labelController = TextEditingController(text: row.linkLabel);
+    final urlController = TextEditingController(text: row.url);
+    final notesController = TextEditingController(text: row.linkNotes);
+
+    final changes = await showDialog<_EditedLink>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Edit sanction link'),
+        content: SizedBox(
+          width: 500,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  row.clubName,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                _DirectoryEditField(
+                  controller: typeController,
+                  label: 'Link type',
+                  hint: 'checkout, sanction_request, sanction_info…',
+                ),
+                const SizedBox(height: 12),
+                _DirectoryEditField(
+                  controller: labelController,
+                  label: 'Button / link label',
+                ),
+                const SizedBox(height: 12),
+                _DirectoryEditField(
+                  controller: urlController,
+                  label: 'URL',
+                  hint: 'https://example.com/sanctions',
+                  keyboardType: TextInputType.url,
+                ),
+                const SizedBox(height: 12),
+                _DirectoryEditField(
+                  controller: notesController,
+                  label: 'Secretary notes',
+                  maxLines: 3,
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              final url = urlController.text.trim();
+              if (!_isValidWebUrl(url)) {
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
+                  const SnackBar(
+                    content: Text('Enter a complete http:// or https:// link.'),
+                  ),
+                );
+                return;
+              }
+              Navigator.of(dialogContext).pop(
+                _EditedLink(
+                  linkType: typeController.text.trim(),
+                  label: labelController.text.trim(),
+                  url: url,
+                  notes: notesController.text.trim(),
+                ),
+              );
+            },
+            icon: const Icon(Icons.save_outlined),
+            label: const Text('Save Link'),
+          ),
+        ],
+      ),
+    );
+
+    typeController.dispose();
+    labelController.dispose();
+    urlController.dispose();
+    notesController.dispose();
+    if (changes == null) return;
+
+    setState(() => _reviewingLinkIds.add(linkId));
+    try {
+      final now = DateTime.now().toUtc().toIso8601String();
+      await _supabase
+          .from('breed_club_sanction_links')
+          .update({
+            'link_type': changes.linkType,
+            'label': changes.label,
+            'url': changes.url,
+            'notes': changes.notes.isEmpty ? null : changes.notes,
+            'last_verified_at': now,
+            'last_verified_by': _supabase.auth.currentUser?.id,
+            'updated_at': now,
+          })
+          .eq('id', linkId);
+      if (mounted) _showSnack('Sanction link updated.');
+      await _load();
+    } catch (e) {
+      if (mounted) _showSnack('Could not update the link: $e');
+    } finally {
+      if (mounted) setState(() => _reviewingLinkIds.remove(linkId));
     }
   }
 
@@ -425,6 +546,8 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
         'sanction_link_id': row.linkId,
         'breed_club_id': row.clubId,
         'reported_by_user_id': user?.id,
+        'reported_by_name': _firstUserName(user),
+        'reported_by_email': user?.email,
         'report_reason': 'Broken or outdated sanction directory link',
         'proposed_url': submission.proposedUrl,
         'status': 'open',
@@ -447,6 +570,15 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
     return uri != null &&
         (uri.scheme == 'http' || uri.scheme == 'https') &&
         uri.host.isNotEmpty;
+  }
+
+  String? _firstUserName(User? user) {
+    final metadata = user?.userMetadata;
+    for (final key in const ['full_name', 'display_name', 'name']) {
+      final value = (metadata?[key] ?? '').toString().trim();
+      if (value.isNotEmpty) return value;
+    }
+    return null;
   }
 
   Future<void> _approveLinkReport(
@@ -1084,6 +1216,7 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
                           (row.linkId != null &&
                               _reviewingLinkIds.contains(row.linkId)),
                       onOpen: () => _openUrl(row.url),
+                      onEdit: () => _editLink(row),
                       onMarkRequested: () => _markRequested(row),
                       onClearRequested: () => _clearRequested(row),
                       onReportBroken: () => _reportBrokenLink(row),
@@ -1168,6 +1301,7 @@ class _SanctionDirectoryCard extends StatelessWidget {
     required this.showRequestButton,
     required this.isBusy,
     required this.onOpen,
+    required this.onEdit,
     required this.onMarkRequested,
     required this.onClearRequested,
     required this.onReportBroken,
@@ -1181,6 +1315,7 @@ class _SanctionDirectoryCard extends StatelessWidget {
   final bool showRequestButton;
   final bool isBusy;
   final VoidCallback onOpen;
+  final VoidCallback onEdit;
   final VoidCallback onMarkRequested;
   final VoidCallback onClearRequested;
   final VoidCallback onReportBroken;
@@ -1335,9 +1470,39 @@ class _SanctionDirectoryCard extends StatelessWidget {
                                 fontWeight: FontWeight.w800,
                               ),
                         ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Reported by ${pendingReport!.reporterLabel} • ${pendingReport!.createdAtLabel}',
+                          style: TextStyle(color: Colors.red.shade900),
+                        ),
+                        if (pendingReport!.reportReason.trim().isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            pendingReport!.reportReason,
+                            style: TextStyle(color: Colors.red.shade900),
+                          ),
+                        ],
+                        const SizedBox(height: 8),
+                        Text(
+                          'Current link:',
+                          style: TextStyle(
+                            color: Colors.red.shade900,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        SelectableText(
+                          row.url,
+                          style: TextStyle(color: Colors.red.shade900),
+                        ),
                         if (pendingReport!.proposedUrl.trim().isNotEmpty) ...[
-                          const SizedBox(height: 6),
-                          const Text('Suggested replacement:'),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Suggested replacement:',
+                            style: TextStyle(
+                              color: Colors.red.shade900,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                           SelectableText(
                             pendingReport!.proposedUrl,
                             style: TextStyle(color: Colors.red.shade900),
@@ -1370,6 +1535,16 @@ class _SanctionDirectoryCard extends StatelessWidget {
                       icon: const Icon(Icons.open_in_new),
                       label: const Text('Open Link'),
                     ),
+                    if (!hasPendingReport)
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: colorScheme.primary,
+                          side: BorderSide(color: colorScheme.primary),
+                        ),
+                        onPressed: row.linkId == null || isBusy ? null : onEdit,
+                        icon: const Icon(Icons.edit_outlined),
+                        label: const Text('Edit Link'),
+                      ),
                     Tooltip(
                       message: !showRequestButton
                           ? 'Open this directory from a show sanctions dialog to mark or remove a request.'
@@ -1564,6 +1739,43 @@ class _InfoChip extends StatelessWidget {
   }
 }
 
+class _DirectoryEditField extends StatelessWidget {
+  const _DirectoryEditField({
+    required this.controller,
+    required this.label,
+    this.hint,
+    this.keyboardType,
+    this.maxLines = 1,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final String? hint;
+  final TextInputType? keyboardType;
+  final int maxLines;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      maxLines: maxLines,
+      style: const TextStyle(color: Colors.black87),
+      cursorColor: Colors.black87,
+      decoration: InputDecoration(
+        filled: true,
+        fillColor: Colors.white,
+        labelText: label,
+        hintText: hint,
+        labelStyle: const TextStyle(color: Colors.black54),
+        floatingLabelStyle: const TextStyle(color: Colors.black87),
+        hintStyle: const TextStyle(color: Colors.black45),
+        border: const OutlineInputBorder(),
+      ),
+    );
+  }
+}
+
 class _SanctionDirectoryRow {
   const _SanctionDirectoryRow({
     required this.clubId,
@@ -1605,8 +1817,14 @@ class _SanctionDirectoryRow {
     final type = _normalizeClubValue(clubType);
     final body = _normalizeClubValue(sanctioningBody);
 
-    return (type.contains('state') && type.contains('club')) ||
-        (body.contains('state') && body.contains('club'));
+    return type == 'state club' || body == 'state club';
+  }
+
+  bool get isStateBreedClub {
+    final type = _normalizeClubValue(clubType);
+    final body = _normalizeClubValue(sanctioningBody);
+
+    return type == 'state breed club' || body == 'state breed club';
   }
 
   factory _SanctionDirectoryRow.fromClub({
@@ -1640,7 +1858,7 @@ class _SanctionDirectoryRow {
   }
 
   String get linkCheckedLabel {
-    if (lastVerifiedAt == null) return 'Link not checked/broken';
+    if (lastVerifiedAt == null) return 'Link not checked';
     final date = lastVerifiedAt!;
     return 'Link checked ${date.month}/${date.day}/${date.year}';
   }
@@ -1673,17 +1891,41 @@ class _LinkReport {
     required this.id,
     required this.sanctionLinkId,
     required this.proposedUrl,
+    required this.reportedByName,
+    required this.reportedByEmail,
+    required this.reportReason,
+    required this.createdAt,
   });
 
   final String id;
   final String sanctionLinkId;
   final String proposedUrl;
+  final String reportedByName;
+  final String reportedByEmail;
+  final String reportReason;
+  final DateTime? createdAt;
+
+  String get reporterLabel {
+    if (reportedByName.trim().isNotEmpty) return reportedByName.trim();
+    if (reportedByEmail.trim().isNotEmpty) return reportedByEmail.trim();
+    return 'Signed-in user';
+  }
+
+  String get createdAtLabel {
+    final date = createdAt;
+    if (date == null) return 'Date unavailable';
+    return '${date.month}/${date.day}/${date.year}';
+  }
 
   factory _LinkReport.fromMap(Map<String, dynamic> map) {
     return _LinkReport(
       id: (map['id'] ?? '').toString(),
       sanctionLinkId: (map['sanction_link_id'] ?? '').toString(),
       proposedUrl: (map['proposed_url'] ?? '').toString(),
+      reportedByName: (map['reported_by_name'] ?? '').toString(),
+      reportedByEmail: (map['reported_by_email'] ?? '').toString(),
+      reportReason: (map['report_reason'] ?? '').toString(),
+      createdAt: DateTime.tryParse((map['created_at'] ?? '').toString()),
     );
   }
 }
@@ -1694,13 +1936,28 @@ class _BrokenLinkSubmission {
   final String? proposedUrl;
 }
 
+class _EditedLink {
+  const _EditedLink({
+    required this.linkType,
+    required this.label,
+    required this.url,
+    required this.notes,
+  });
+
+  final String linkType;
+  final String label;
+  final String url;
+  final String notes;
+}
+
 enum _SanctionDirectoryFilter {
   all,
   nationalBreedClubs,
+  stateBreedClubs,
   stateClubs,
   missingLink,
   linkChecked,
-  linkNotCheckedOrBroken;
+  reportedBroken;
 
   String get label {
     switch (this) {
@@ -1708,14 +1965,16 @@ enum _SanctionDirectoryFilter {
         return 'All';
       case _SanctionDirectoryFilter.nationalBreedClubs:
         return 'National Breed Clubs';
+      case _SanctionDirectoryFilter.stateBreedClubs:
+        return 'State Breed Clubs';
       case _SanctionDirectoryFilter.stateClubs:
         return 'State Clubs';
       case _SanctionDirectoryFilter.missingLink:
         return 'Missing Link';
       case _SanctionDirectoryFilter.linkChecked:
         return 'Link checked';
-      case _SanctionDirectoryFilter.linkNotCheckedOrBroken:
-        return 'Link not checked/broken';
+      case _SanctionDirectoryFilter.reportedBroken:
+        return 'Reported Broken';
     }
   }
 }
