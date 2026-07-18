@@ -1220,7 +1220,7 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
           ),
           const SizedBox(height: 12),
         ],
-        if (!_isExhibitorView) ...[
+        if (_isSuperAdmin) ...[
           _buildHeaderCard(context),
           const SizedBox(height: 16),
         ],
@@ -1306,7 +1306,7 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
   }
 
   Widget _buildFilterChips() {
-    final filters = _isExhibitorView
+    final filters = !_isSuperAdmin
         ? _SanctionDirectoryFilter.values.where(
             (filter) =>
                 filter != _SanctionDirectoryFilter.missingLink &&
@@ -1518,7 +1518,7 @@ class _SanctionDirectoryCard extends StatelessWidget {
                       ),
                     if (isSuperAdmin && row.linkType.isNotEmpty)
                       _InfoChip(icon: Icons.link, label: row.linkType),
-                    if (!isExhibitorView)
+                    if (isSuperAdmin)
                       _InfoChip(
                         icon: row.lastVerifiedAt == null
                             ? Icons.report_problem_outlined
