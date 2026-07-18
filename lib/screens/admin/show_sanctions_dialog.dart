@@ -1421,7 +1421,7 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                                         await _loadAll();
                                       },
                                 icon: const Icon(Icons.open_in_new),
-                                label: const Text('Open Sanction Directory'),
+                                label: const Text('Find Sanction Links'),
                               ),
                             ],
                           ),
