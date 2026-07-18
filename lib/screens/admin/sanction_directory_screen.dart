@@ -1306,10 +1306,19 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
   }
 
   Widget _buildFilterChips() {
+    final filters = _isExhibitorView
+        ? _SanctionDirectoryFilter.values.where(
+            (filter) =>
+                filter != _SanctionDirectoryFilter.missingLink &&
+                filter != _SanctionDirectoryFilter.linkChecked &&
+                filter != _SanctionDirectoryFilter.reportedBroken,
+          )
+        : _SanctionDirectoryFilter.values;
+
     return Wrap(
       spacing: 8,
       runSpacing: 8,
-      children: _SanctionDirectoryFilter.values.map((filter) {
+      children: filters.map((filter) {
         return ChoiceChip(
           label: Text(filter.label),
           selected: _selectedFilter == filter,
@@ -1509,12 +1518,13 @@ class _SanctionDirectoryCard extends StatelessWidget {
                       ),
                     if (isSuperAdmin && row.linkType.isNotEmpty)
                       _InfoChip(icon: Icons.link, label: row.linkType),
-                    _InfoChip(
-                      icon: row.lastVerifiedAt == null
-                          ? Icons.report_problem_outlined
-                          : Icons.fact_check_outlined,
-                      label: row.linkCheckedLabel(showDate: isSuperAdmin),
-                    ),
+                    if (!isExhibitorView)
+                      _InfoChip(
+                        icon: row.lastVerifiedAt == null
+                            ? Icons.report_problem_outlined
+                            : Icons.fact_check_outlined,
+                        label: row.linkCheckedLabel(showDate: isSuperAdmin),
+                      ),
                   ],
                 ),
                 if (row.linkLabel.isNotEmpty || row.linkNotes.isNotEmpty) ...[
