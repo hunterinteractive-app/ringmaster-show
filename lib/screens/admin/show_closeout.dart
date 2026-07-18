@@ -5953,11 +5953,14 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
 
       final newest = list.first;
 
-      final signedUrl = await supabase.storage
+      final bytes = await supabase.storage
           .from(newest.storageBucket!)
-          .createSignedUrl(newest.storagePath!, 60 * 5);
-
-      await launchUrlString(signedUrl, mode: LaunchMode.externalApplication);
+          .download(newest.storagePath!);
+      await downloadFileBytes(
+        bytes,
+        fileName: _downloadFileNameForArtifact(newest),
+        mimeType: 'application/pdf',
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -5985,31 +5988,32 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         return;
       }
 
-      if (artifact.reportName == 'arba_report') {
-        final bytes = await supabase.storage
-            .from(artifact.storageBucket!)
-            .download(artifact.storagePath!);
-        await downloadFileBytes(
-          bytes,
-          fileName: arbaDownloadFileName(
-            showName: widget.showName,
-            sectionName: _arbaSectionName(artifact),
-          ),
-          mimeType: 'application/pdf',
-        );
-      } else {
-        final signedUrl = await supabase.storage
-            .from(artifact.storageBucket!)
-            .createSignedUrl(artifact.storagePath!, 60 * 5);
-
-        await launchUrlString(signedUrl, mode: LaunchMode.externalApplication);
-      }
+      final bytes = await supabase.storage
+          .from(artifact.storageBucket!)
+          .download(artifact.storagePath!);
+      await downloadFileBytes(
+        bytes,
+        fileName: _downloadFileNameForArtifact(artifact),
+        mimeType: 'application/pdf',
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Download failed: $e')));
     }
+  }
+
+  String _downloadFileNameForArtifact(ReportArtifactSummary artifact) {
+    if (artifact.reportName == 'arba_report') {
+      return arbaDownloadFileName(
+        showName: widget.showName,
+        sectionName: _arbaSectionName(artifact),
+      );
+    }
+    final storedName = (artifact.fileName ?? '').trim();
+    if (storedName.isNotEmpty) return storedName;
+    return '${_friendlyReportName(artifact.reportName)}.pdf';
   }
 
   Map<String, dynamic> _normalizeFunctionData(dynamic raw) {

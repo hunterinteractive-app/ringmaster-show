@@ -53,6 +53,15 @@ class BreedResultsDetailReportLoader {
         scope: scope,
         showLetter: showLetter,
       );
+    } else if (species == 'cavy') {
+      await repo.supabase.rpc(
+        'calculate_cavy_sweepstakes_for_section',
+        params: {
+          'p_show_id': showId,
+          'p_scope': scope,
+          'p_show_letter': showLetter,
+        },
+      );
     }
 
     if (showLetter == 'ALL') {
@@ -505,6 +514,7 @@ class BreedResultsDetailReportLoader {
           sexSections: _buildSexSections(
             regularByVariety[varietyName]!,
             sweepstakesPoints,
+            awardOnlyPoints: groupByBreed,
           ),
         ),
       );
@@ -529,6 +539,7 @@ class BreedResultsDetailReportLoader {
           sexSections: _buildSexSections(
             furByCategory[category]!,
             sweepstakesPoints,
+            awardOnlyPoints: groupByBreed,
           ),
         ),
       );
@@ -539,8 +550,9 @@ class BreedResultsDetailReportLoader {
 
   List<SexSection> _buildSexSections(
     List<Map<String, dynamic>> rows,
-    _SweepstakesPointsLookup sweepstakesPoints,
-  ) {
+    _SweepstakesPointsLookup sweepstakesPoints, {
+    required bool awardOnlyPoints,
+  }) {
     final furRows = rows.where(_isFurOrWoolRow).toList();
     final regularRows = rows.where((row) => !_isFurOrWoolRow(row)).toList();
     final sections = <SexSection>[];
@@ -564,7 +576,11 @@ class BreedResultsDetailReportLoader {
         sexLabels.map((sexLabel) {
           return SexSection(
             sexLabel: sexLabel,
-            classes: _buildClasses(bySex[sexLabel]!, sweepstakesPoints),
+            classes: _buildClasses(
+              bySex[sexLabel]!,
+              sweepstakesPoints,
+              awardOnlyPoints: awardOnlyPoints,
+            ),
           );
         }),
       );
@@ -574,7 +590,13 @@ class BreedResultsDetailReportLoader {
       sections.add(
         SexSection(
           sexLabel: '',
-          classes: [_buildFlatFurClass(furRows, sweepstakesPoints)],
+          classes: [
+            _buildFlatFurClass(
+              furRows,
+              sweepstakesPoints,
+              awardOnlyPoints: awardOnlyPoints,
+            ),
+          ],
         ),
       );
     }
@@ -584,8 +606,9 @@ class BreedResultsDetailReportLoader {
 
   ClassSection _buildFlatFurClass(
     List<Map<String, dynamic>> rows,
-    _SweepstakesPointsLookup sweepstakesPoints,
-  ) {
+    _SweepstakesPointsLookup sweepstakesPoints, {
+    required bool awardOnlyPoints,
+  }) {
     final sortedRows = [...rows]
       ..sort((a, b) {
         final aPlace = _furPlacementNumber(a);
@@ -611,11 +634,13 @@ class BreedResultsDetailReportLoader {
             sex: '',
             variety: _pointsCategoryLabel(row),
             pointsCategory: _pointsCategoryLabel(row),
-            pointsEarned: _pointsForRow(
-              row,
-              sweepstakesPoints,
-              placement: placeNum.toString(),
-            ),
+            pointsEarned: awardOnlyPoints
+                ? 0
+                : _pointsForRow(
+                    row,
+                    sweepstakesPoints,
+                    placement: placeNum.toString(),
+                  ),
           );
         })
         .toList();
@@ -638,8 +663,9 @@ class BreedResultsDetailReportLoader {
 
   List<ClassSection> _buildClasses(
     List<Map<String, dynamic>> rows,
-    _SweepstakesPointsLookup sweepstakesPoints,
-  ) {
+    _SweepstakesPointsLookup sweepstakesPoints, {
+    required bool awardOnlyPoints,
+  }) {
     final byClass = <String, List<Map<String, dynamic>>>{};
 
     for (final row in rows) {
@@ -686,11 +712,13 @@ class BreedResultsDetailReportLoader {
               sex: _safe(r['sex']),
               variety: _displayVarietyName(r),
               pointsCategory: _pointsCategoryLabel(r),
-              pointsEarned: _pointsForRow(
-                r,
-                sweepstakesPoints,
-                placement: placeNum.toString(),
-              ),
+              pointsEarned: awardOnlyPoints
+                  ? 0
+                  : _pointsForRow(
+                      r,
+                      sweepstakesPoints,
+                      placement: placeNum.toString(),
+                    ),
             );
           })
           .toList();

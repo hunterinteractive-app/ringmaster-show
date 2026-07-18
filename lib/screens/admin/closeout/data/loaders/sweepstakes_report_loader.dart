@@ -56,7 +56,13 @@ class SweepstakesReportLoader {
           )
         : const <String>[];
 
-    if (breedName.isNotEmpty) {
+    if (species == 'cavy') {
+      await _recalculateCavySweepstakes(
+        showId: showId,
+        scope: scope,
+        showLetter: showLetter,
+      );
+    } else if (breedName.isNotEmpty) {
       await _recalculateSweepstakes(
         showId: showId,
         breedName: breedName,
@@ -374,6 +380,21 @@ class SweepstakesReportLoader {
       params: {
         'p_show_id': showId,
         'p_breed_name': breedName,
+        'p_scope': scope,
+        'p_show_letter': showLetter,
+      },
+    );
+  }
+
+  Future<void> _recalculateCavySweepstakes({
+    required String showId,
+    required String scope,
+    required String showLetter,
+  }) async {
+    await repo.supabase.rpc(
+      'calculate_cavy_sweepstakes_for_section',
+      params: {
+        'p_show_id': showId,
         'p_scope': scope,
         'p_show_letter': showLetter,
       },

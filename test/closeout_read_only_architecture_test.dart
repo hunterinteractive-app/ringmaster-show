@@ -112,6 +112,35 @@ void main() {
       expect(migration, contains('get_closeout_dashboard_scoped_for_species'));
     });
 
+    test('cavy reports use fixed award scoring and stored download names', () {
+      final closeoutSource = File(
+        'lib/screens/admin/show_closeout.dart',
+      ).readAsStringSync();
+      final sweepstakesLoader = File(
+        'lib/screens/admin/closeout/data/loaders/sweepstakes_report_loader.dart',
+      ).readAsStringSync();
+      final detailLoader = File(
+        'lib/screens/admin/closeout/data/loaders/breed_results_detail_report_loader.dart',
+      ).readAsStringSync();
+      final migration = File(
+        'supabase/migrations/20260718230151_fix_cavy_sweepstakes_points_and_report_download_names.sql',
+      ).readAsStringSync();
+
+      expect(
+        sweepstakesLoader,
+        contains("'calculate_cavy_sweepstakes_for_section'"),
+      );
+      expect(
+        detailLoader,
+        contains("'calculate_cavy_sweepstakes_for_section'"),
+      );
+      expect(closeoutSource, contains('fileName: _downloadFileNameForArtifact'));
+      expect(migration, isNot(contains("when 'BOV' then 'BOV'")));
+      expect(migration, contains("when 'BOG' then 'BOV'"));
+      expect(migration, contains("'cavy-fixed-v1'"));
+      expect(migration, contains("cavy_award_points"));
+    });
+
     test('regeneration reuses the finalize-run artifact identity owner', () {
       final createBody = methodBody(
         'Future<ReportArtifactSummary> _createManualReportArtifact({',
