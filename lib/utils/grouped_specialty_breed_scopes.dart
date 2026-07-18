@@ -29,6 +29,7 @@ const groupedSpecialtyBreedScopes = <GroupedSpecialtyBreedScope>[
     label: 'Commercial Breed Specialty',
     catalogBreedNames: [
       'Californian',
+      'Mini Californian',
       'New Zealand',
       'Satin',
       'Silver Fox',
@@ -90,6 +91,17 @@ const groupedSpecialtyBreedScopes = <GroupedSpecialtyBreedScope>[
       'Flemish Giant',
       'Giant Chinchilla',
       'English Lop',
+    ],
+  ),
+  GroupedSpecialtyBreedScope(
+    value: 'grouped_lop',
+    label: 'Lop Group Specialty',
+    catalogBreedNames: [
+      'English Lop',
+      'French Lop',
+      'Mini Lop',
+      'Holland Lop',
+      'American Fuzzy Lop',
     ],
   ),
 ];
