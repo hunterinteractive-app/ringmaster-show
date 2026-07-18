@@ -35,6 +35,7 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
   List<_SanctionDirectoryRow> _rows = const [];
   List<_ShowSectionOption> _sections = const [];
   final Map<String, _SanctionDirectoryStatus> _statusByBreedClubId = {};
+  final Map<String, Set<String>> _requestedSectionsByBreedClubId = {};
   final Map<String, _LinkReport> _openReportByLinkId = {};
   final Set<String> _reviewingLinkIds = {};
 
@@ -70,6 +71,7 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
           _rows = const [];
           _sections = const [];
           _statusByBreedClubId.clear();
+          _requestedSectionsByBreedClubId.clear();
           _openReportByLinkId.clear();
           _loading = false;
         });
@@ -90,6 +92,7 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
           _rows = const [];
           _sections = const [];
           _statusByBreedClubId.clear();
+          _requestedSectionsByBreedClubId.clear();
           _openReportByLinkId.clear();
           _loading = false;
         });
@@ -124,11 +127,16 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
       }
 
       final statusByBreedClubId = <String, _SanctionDirectoryStatus>{};
+      final requestedSectionsByBreedClubId = <String, Set<String>>{};
       if (widget.showId != null && widget.showId!.trim().isNotEmpty) {
         final sanctionRows = await _supabase
             .from('show_sanctions')
-            .select('breed_club_id,request_status,sanction_number')
+            .select('breed_club_id,section_id,request_status,sanction_number')
             .eq('show_id', widget.showId!);
+
+        final sectionLabelById = {
+          for (final section in sections) section.id: section.label,
+        };
 
         for (final raw in sanctionRows as List) {
           if (raw is! Map) continue;
@@ -144,6 +152,16 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
           final current = statusByBreedClubId[breedClubId];
           if (current == null || status.priority > current.priority) {
             statusByBreedClubId[breedClubId] = status;
+          }
+
+          if (status == _SanctionDirectoryStatus.secretaryRequested) {
+            final sectionId = (map['section_id'] ?? '').toString().trim();
+            final sectionLabel = sectionLabelById[sectionId];
+            if (sectionLabel != null) {
+              requestedSectionsByBreedClubId
+                  .putIfAbsent(breedClubId, () => <String>{})
+                  .add(sectionLabel);
+            }
           }
         }
       }
@@ -232,6 +250,9 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
         _statusByBreedClubId
           ..clear()
           ..addAll(statusByBreedClubId);
+        _requestedSectionsByBreedClubId
+          ..clear()
+          ..addAll(requestedSectionsByBreedClubId);
         _openReportByLinkId
           ..clear()
           ..addAll(openReportByLinkId);
@@ -1220,6 +1241,9 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
                       isSuperAdmin: _isSuperAdmin,
                       pendingReport: report,
                       status: _statusByBreedClubId[row.clubId],
+                      requestedSections:
+                          _requestedSectionsByBreedClubId[row.clubId] ??
+                          const <String>{},
                       showRequestButton:
                           widget.showId != null &&
                           widget.showId!.trim().isNotEmpty,
@@ -1313,6 +1337,7 @@ class _SanctionDirectoryCard extends StatelessWidget {
     required this.isSuperAdmin,
     required this.pendingReport,
     required this.status,
+    required this.requestedSections,
     required this.showRequestButton,
     required this.isBusy,
     required this.onOpen,
@@ -1328,6 +1353,7 @@ class _SanctionDirectoryCard extends StatelessWidget {
   final bool isSuperAdmin;
   final _LinkReport? pendingReport;
   final _SanctionDirectoryStatus? status;
+  final Set<String> requestedSections;
   final bool showRequestButton;
   final bool isBusy;
   final VoidCallback onOpen;
@@ -1464,6 +1490,16 @@ class _SanctionDirectoryCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(row.linkNotes),
                   ],
+                ],
+                if (requestedSections.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: requestedSections
+                        .map((section) => _RequestedSectionChip(label: section))
+                        .toList(),
+                  ),
                 ],
                 if (hasPendingReport) ...[
                   const SizedBox(height: 12),
@@ -1665,6 +1701,31 @@ class _DirectoryRequestStatusChip extends StatelessWidget {
         status.label,
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
           color: Colors.black87,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _RequestedSectionChip extends StatelessWidget {
+  const _RequestedSectionChip({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.amber.shade200,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.amber.shade800),
+      ),
+      child: Text(
+        '$label requested',
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          color: Colors.brown.shade900,
           fontWeight: FontWeight.w800,
         ),
       ),
@@ -2079,7 +2140,7 @@ enum _SanctionDirectoryStatus {
   Color get color {
     switch (this) {
       case _SanctionDirectoryStatus.secretaryRequested:
-        return Colors.orange.shade100;
+        return Colors.amber.shade300;
       case _SanctionDirectoryStatus.exhibitorRequested:
         return Colors.blue.shade100;
       case _SanctionDirectoryStatus.received:
