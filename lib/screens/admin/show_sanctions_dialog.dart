@@ -777,10 +777,6 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
 
     var tabRows = _rows.where((r) => r.tabKind == tab).toList();
 
-    if (_isExhibitorView) {
-      tabRows = tabRows.where(_rowHasVisibleSanctionStatus).toList();
-    }
-
     final search = _searchText.trim().toLowerCase();
     if (search.isNotEmpty) {
       final normalizedSearch = _normName(search)
@@ -885,16 +881,6 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
     }
 
     return result;
-  }
-
-  bool _rowHasVisibleSanctionStatus(_SanctionRowModel row) {
-    if (row.rowType != _SanctionRowType.club) return false;
-    return _sections.any((section) {
-      if (!row.allowedSectionIds.contains(section.id)) return false;
-      final key = _cellKey(row.key, section.id);
-      return (_controllers[key]?.text.trim().isNotEmpty ?? false) ||
-          (_requestStatusByCellKey[key]?.trim().isNotEmpty ?? false);
-    });
   }
 
   Future<void> _saveAll() async {
@@ -1390,13 +1376,17 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
             'secretary_requested' => 'Requested',
             'exhibitor_requested' => 'Requested',
             'problem' => 'Problem',
-            _ => '',
+            _ => 'Not sanctioned',
           };
 
     return SizedBox(
       height: height,
       child: ColoredBox(
-        color: fillColor ?? Colors.transparent,
+        color:
+            fillColor ??
+            (label == 'Not sanctioned'
+                ? const Color(0xFFF3F4F6)
+                : Colors.transparent),
         child: Center(
           child: Text(
             label,
@@ -1713,6 +1703,10 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
         spacing: 10,
         runSpacing: 8,
         children: const [
+          _SanctionStatusLegendItem(
+            color: Color(0xFFF3F4F6),
+            label: 'Not sanctioned',
+          ),
           _SanctionStatusLegendItem(
             color: Color(0xFFC8E6C9),
             label: 'Sanctioned',
