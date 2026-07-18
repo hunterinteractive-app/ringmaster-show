@@ -134,11 +134,30 @@ void main() {
         detailLoader,
         contains("'calculate_cavy_sweepstakes_for_section'"),
       );
-      expect(closeoutSource, contains('fileName: _downloadFileNameForArtifact'));
+      expect(
+        closeoutSource,
+        contains('fileName: _downloadFileNameForArtifact'),
+      );
       expect(migration, isNot(contains("when 'BOV' then 'BOV'")));
       expect(migration, contains("when 'BOG' then 'BOV'"));
       expect(migration, contains("'cavy-fixed-v1'"));
       expect(migration, contains("cavy_award_points"));
+
+      final routingMigration = File(
+        'supabase/migrations/20260718231616_route_cavy_through_fixed_sweepstakes_calculator.sql',
+      ).readAsStringSync();
+      expect(
+        routingMigration,
+        contains('calculate_sweepstakes_for_breed_legacy'),
+      );
+      expect(
+        routingMigration,
+        contains('calculate_cavy_sweepstakes_for_section'),
+      );
+      expect(
+        routingMigration,
+        contains("calculation_version = 'cavy-fixed-v1'"),
+      );
     });
 
     test('regeneration reuses the finalize-run artifact identity owner', () {
