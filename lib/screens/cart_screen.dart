@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
 import '../utils/date_time_utils.dart';
+import '../utils/section_breed_scope.dart';
 import '../services/app_session.dart';
 import '../services/stripe_connect_service.dart';
 import '../services/show_payment_configuration_service.dart';
@@ -45,6 +46,7 @@ class _CartScreenState extends State<CartScreen> {
   List<Map<String, dynamic>> _items = [];
   Map<String, dynamic>? _show;
   Map<String, Map<String, dynamic>> _sectionById = {};
+  List<String> _breedScopeErrors = [];
   Map<String, dynamic>? _feeSettings;
   Map<String, Map<String, dynamic>> _sectionFeeBySectionId = {};
   Map<String, dynamic>? _stripeStatus;
@@ -103,11 +105,19 @@ class _CartScreenState extends State<CartScreen> {
 
       final sectionsRes = await supabase
           .from('show_sections')
-          .select('id,display_name,kind,letter,sort_order')
+          .select(
+            'id,display_name,kind,letter,sort_order,breed_scope,allowed_breed_ids',
+          )
           .eq('show_id', widget.showId)
           .order('sort_order');
 
       final sections = (sectionsRes as List).cast<Map<String, dynamic>>();
+      await attachAllowedBreedNames(
+        sections: sections,
+        loadBreeds: () async =>
+            ((await supabase.from('breeds').select('id,name')) as List)
+                .cast<Map<String, dynamic>>(),
+      );
       final sectionIds = sections
           .map((s) => s['id'].toString())
           .where((id) => id.isNotEmpty)
@@ -151,6 +161,20 @@ class _CartScreenState extends State<CartScreen> {
       };
 
       final parsedItems = (items as List).cast<Map<String, dynamic>>();
+      final breedScopeErrors = <String>[];
+      for (final item in parsedItems) {
+        final section = parsedSections[item['section_id']?.toString()];
+        if (section == null || sectionAllowsBreed(section, item['breed'])) {
+          continue;
+        }
+        final sectionLabel = (section['display_name'] ?? section['letter'])
+            .toString();
+        breedScopeErrors.add(
+          '${item['animal_name'] ?? item['tattoo'] ?? 'Animal'} (${item['breed']}) '
+          'cannot be entered in $sectionLabel. Allowed: '
+          '${sectionBreedScopeDescription(section)}.',
+        );
+      }
 
       await _loadExhibitorLabelsForCart(parsedItems);
 
@@ -174,6 +198,7 @@ class _CartScreenState extends State<CartScreen> {
         _feeSettings = fee;
         _sectionById = parsedSections;
         _items = parsedItems;
+        _breedScopeErrors = breedScopeErrors;
         _stripeStatus = stripeStatus;
         _paymentConfiguration = paymentConfiguration;
         _selectedOnlineProvider = selectedProvider;
@@ -851,6 +876,10 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Future<void> _payOnline() async {
+    if (_breedScopeErrors.isNotEmpty) {
+      setState(() => _msg = _breedScopeErrors.first);
+      return;
+    }
     if (AppSession.isSupportMode) {
       setState(() {
         _msg = 'Online payment is disabled while viewing in support mode.';
@@ -965,6 +994,10 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Future<void> _confirmDayOf() async {
+    if (_breedScopeErrors.isNotEmpty) {
+      setState(() => _msg = _breedScopeErrors.first);
+      return;
+    }
     if (_items.isEmpty) {
       setState(() => _msg = 'Your cart is empty.');
       return;

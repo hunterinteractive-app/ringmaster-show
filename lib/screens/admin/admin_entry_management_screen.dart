@@ -7,6 +7,7 @@ import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/services/show_lock_service.dart';
 import 'package:ringmaster_show/services/app_session.dart';
+import 'package:ringmaster_show/utils/section_breed_scope.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -209,12 +210,20 @@ class _AdminEntryManagementScreenState
   Future<void> _loadSections() async {
     final rows = await supabase
         .from('show_sections')
-        .select('id,letter,display_name,kind,is_enabled,sort_order')
+        .select(
+          'id,letter,display_name,kind,is_enabled,sort_order,breed_scope,allowed_breed_ids',
+        )
         .eq('show_id', widget.showId)
         .eq('is_enabled', true)
         .order('sort_order', ascending: true);
 
     _sections = (rows as List).cast<Map<String, dynamic>>();
+    await attachAllowedBreedNames(
+      sections: _sections,
+      loadBreeds: () async =>
+          ((await supabase.from('breeds').select('id,name')) as List)
+              .cast<Map<String, dynamic>>(),
+    );
 
     if (_selectedSectionId == null && _sections.isNotEmpty) {
       _selectedSectionId = _sections.first['id']?.toString();
@@ -2444,7 +2453,14 @@ class _MoveEntrySheetState extends State<_MoveEntrySheet> {
   @override
   void initState() {
     super.initState();
-    _sectionId = widget.entry['section_id']?.toString();
+    final currentId = widget.entry['section_id']?.toString();
+    final breed = widget.entry['breed'];
+    final current = widget.sections.where(
+      (section) => section['id']?.toString() == currentId,
+    );
+    _sectionId = current.isNotEmpty && sectionAllowsBreed(current.first, breed)
+        ? currentId
+        : null;
   }
 
   String _sectionLabel(Map<String, dynamic> s) {
@@ -2535,6 +2551,10 @@ class _MoveEntrySheetState extends State<_MoveEntrySheet> {
                   border: OutlineInputBorder(),
                 ),
                 items: widget.sections
+                    .where(
+                      (section) =>
+                          sectionAllowsBreed(section, widget.entry['breed']),
+                    )
                     .map(
                       (s) => DropdownMenuItem<String>(
                         value: s['id']?.toString(),
@@ -3837,6 +3857,15 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
       final entryBreed = _useLocalAnimal
           ? _breed.text.trim()
           : (_animal!['breed'] ?? '').toString().trim();
+      for (final sectionId in _selectedSectionIds) {
+        final section = _sectionById(sectionId);
+        if (!sectionAllowsBreed(section, entryBreed)) {
+          throw Exception(
+            '$entryBreed cannot be entered in ${_sectionDisplayLabelById(sectionId)}. '
+            'That section only accepts ${sectionBreedScopeDescription(section)}.',
+          );
+        }
+      }
       final entryVariety = await _canonicalEntryVarietyName(
         species: entrySpecies,
         breedName: entryBreed,

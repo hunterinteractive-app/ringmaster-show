@@ -10,6 +10,7 @@ import 'package:ringmaster_show/widgets/exhibitor_builder_dialog.dart';
 import 'package:ringmaster_show/utils/cavy/cavy_sop_order.dart';
 import 'package:ringmaster_show/widgets/animal_editor/open_animal_editor_dialog.dart';
 import 'package:ringmaster_show/services/app_session.dart';
+import 'package:ringmaster_show/utils/section_breed_scope.dart';
 
 import 'cart_screen.dart';
 
@@ -822,12 +823,18 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     final List rows = await supabase
         .from('show_sections')
         .select(
-          'id,kind,letter,display_name,sort_order,allow_meat_classes,breed_scope',
+          'id,kind,letter,display_name,sort_order,allow_meat_classes,breed_scope,allowed_breed_ids',
         )
         .eq('show_id', widget.showId)
         .eq('is_enabled', true);
 
     final sections = rows.cast<Map<String, dynamic>>();
+    await attachAllowedBreedNames(
+      sections: sections,
+      loadBreeds: () async =>
+          ((await supabase.from('breeds').select('id,name')) as List)
+              .cast<Map<String, dynamic>>(),
+    );
 
     int kindRank(String kind) {
       switch (kind.trim().toLowerCase()) {
@@ -1236,6 +1243,16 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
         errors.add(
           '$title is not eligible because "$breed" is not enabled for this show.',
         );
+      }
+
+      for (final sectionId in _selectedSectionIds) {
+        final section = _sectionById[sectionId];
+        if (section != null && !sectionAllowsBreed(section, breed)) {
+          errors.add(
+            '$title cannot be entered in ${_sectionLabelForId(sectionId)}. '
+            'That section only accepts ${sectionBreedScopeDescription(section)}.',
+          );
+        }
       }
 
       if (variety.isEmpty) {
