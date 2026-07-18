@@ -33,14 +33,21 @@ void main() {
     });
 
     test('restricted scope fails closed when configuration is empty', () {
-      expect(
-        sectionAllowsBreed({'breed_scope': 'single'}, 'Havana'),
-        isFalse,
-      );
+      expect(sectionAllowsBreed({'breed_scope': 'single'}, 'Havana'), isFalse);
       expect(
         sectionAllowsBreed({'breed_scope': 'unexpected'}, 'Havana'),
         isFalse,
       );
+    });
+
+    test('grouped specialty scope uses its configured breed list', () {
+      final section = {
+        'breed_scope': 'grouped_wool',
+        'allowed_breed_names': ['English Angora', 'Lionhead'],
+      };
+
+      expect(sectionAllowsBreed(section, 'Lionhead'), isTrue);
+      expect(sectionAllowsBreed(section, 'Dutch'), isFalse);
     });
   });
 }

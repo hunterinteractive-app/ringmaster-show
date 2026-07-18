@@ -16,7 +16,11 @@ bool sectionAllowsBreed(Map<String, dynamic> section, Object? breed) {
   if (scope == 'all' || scope == 'all_breed' || scope == 'meat_only') {
     return true;
   }
-  if (scope != 'single' && scope != 'limited') return false;
+  if (scope != 'single' &&
+      scope != 'limited' &&
+      !scope.startsWith('grouped_')) {
+    return false;
+  }
   final normalizedBreed = normalizeBreedName(breed);
   return normalizedBreed.isNotEmpty &&
       allowedBreedNamesForSection(section).contains(normalizedBreed);
@@ -36,7 +40,9 @@ Future<void> attachAllowedBreedNames({
         .toString()
         .trim()
         .toLowerCase();
-    return scope == 'single' || scope == 'limited';
+    return scope == 'single' ||
+        scope == 'limited' ||
+        scope.startsWith('grouped_');
   }).toList();
   if (restricted.isEmpty) return;
 

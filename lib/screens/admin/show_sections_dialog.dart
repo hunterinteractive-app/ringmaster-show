@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/services/show_lock_service.dart';
+import 'package:ringmaster_show/utils/grouped_specialty_breed_scopes.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -318,6 +319,16 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
           return false;
         }
       }
+
+      final groupedPreset = groupedSpecialtyBreedScopeForValue(s.breedScope);
+      if (groupedPreset != null &&
+          s.allowedBreedIds.length != groupedPreset.catalogBreedNames.length) {
+        setState(
+          () => _msg =
+              '${name.isEmpty ? "A section" : name} could not resolve every breed in ${groupedPreset.label}. Select the preset again or verify the breed catalog.',
+        );
+        return false;
+      }
     }
 
     return true;
@@ -539,11 +550,21 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
         border: OutlineInputBorder(),
         isDense: true,
       ),
-      items: const [
-        DropdownMenuItem(value: 'all', child: Text('All Breeds')),
-        DropdownMenuItem(value: 'single', child: Text('Single Breed')),
-        DropdownMenuItem(value: 'limited', child: Text('Selected Breeds')),
-        DropdownMenuItem(value: 'meat_only', child: Text('Meat Classes Only')),
+      items: [
+        const DropdownMenuItem(value: 'all', child: Text('All Breeds')),
+        const DropdownMenuItem(value: 'single', child: Text('Single Breed')),
+        const DropdownMenuItem(
+          value: 'limited',
+          child: Text('Selected Breeds'),
+        ),
+        const DropdownMenuItem(
+          value: 'meat_only',
+          child: Text('Meat Classes Only'),
+        ),
+        ...groupedSpecialtyBreedScopes.map(
+          (preset) =>
+              DropdownMenuItem(value: preset.value, child: Text(preset.label)),
+        ),
       ],
       onChanged: (_saving || _isReadOnly)
           ? null
@@ -559,6 +580,8 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
                 if (value == 'meat_only') {
                   s.allowedBreedIds = [];
                   s.allowMeatClasses = true; // force on
+                } else if (isGroupedSpecialtyBreedScope(value)) {
+                  _applyGroupedSpecialtyPreset(s, value);
                 }
               });
             },
@@ -581,6 +604,7 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
     }
 
     final labels = s.allowedBreedIds.map(_breedLabelFromId).toList();
+    final groupedPreset = groupedSpecialtyBreedScopeForValue(s.breedScope);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -598,30 +622,65 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
                     .toList(),
         ),
         const SizedBox(height: 8),
-        Row(
-          children: [
-            OutlinedButton.icon(
-              onPressed: (_saving || _isReadOnly)
-                  ? null
-                  : () => _pickBreedsForSection(s),
-              icon: const Icon(Icons.pets),
-              label: Text(
-                s.breedScope == 'single' ? 'Choose Breed' : 'Choose Breeds',
-              ),
-            ),
-            if (s.allowedBreedIds.isNotEmpty) ...[
-              const SizedBox(width: 8),
-              TextButton(
+        if (groupedPreset != null)
+          Text(
+            'ARBA grouped specialty preset • ${labels.length} breeds',
+            style: Theme.of(context).textTheme.bodySmall,
+          )
+        else
+          Row(
+            children: [
+              OutlinedButton.icon(
                 onPressed: (_saving || _isReadOnly)
                     ? null
-                    : () => setState(() => s.allowedBreedIds = []),
-                child: const Text('Clear'),
+                    : () => _pickBreedsForSection(s),
+                icon: const Icon(Icons.pets),
+                label: Text(
+                  s.breedScope == 'single' ? 'Choose Breed' : 'Choose Breeds',
+                ),
               ),
+              if (s.allowedBreedIds.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: (_saving || _isReadOnly)
+                      ? null
+                      : () => setState(() => s.allowedBreedIds = []),
+                  child: const Text('Clear'),
+                ),
+              ],
             ],
-          ],
-        ),
+          ),
       ],
     );
+  }
+
+  void _applyGroupedSpecialtyPreset(_EditableSection section, String value) {
+    final preset = groupedSpecialtyBreedScopeForValue(value);
+    if (preset == null) return;
+
+    final idsByName = <String, String>{
+      for (final breed in _breedOptions)
+        if ((breed['species'] ?? '').toString().trim().toLowerCase() ==
+            'rabbit')
+          (breed['name'] ?? '').toString().trim().toLowerCase():
+              (breed['id'] ?? '').toString(),
+    };
+    final missing = <String>[];
+    final ids = <String>[];
+    for (final name in preset.catalogBreedNames) {
+      final id = idsByName[name.toLowerCase()];
+      if (id == null || id.isEmpty) {
+        missing.add(name);
+      } else {
+        ids.add(id);
+      }
+    }
+
+    section.allowedBreedIds = ids;
+    section.allowMeatClasses = false;
+    _msg = missing.isEmpty
+        ? null
+        : 'Could not find these rabbit breeds: ${missing.join(', ')}.';
   }
 
   Widget _sectionCard(int index) {
