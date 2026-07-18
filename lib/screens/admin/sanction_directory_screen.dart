@@ -333,15 +333,27 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
                     Text(
                       row.clubName,
                       style: Theme.of(dialogContext).textTheme.titleSmall
-                          ?.copyWith(fontWeight: FontWeight.w800),
+                          ?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                          ),
                     ),
                     const SizedBox(height: 10),
-                    const Text('Do you have the correct replacement link?'),
+                    const Text(
+                      'Do you have the correct replacement link?',
+                      style: TextStyle(color: Colors.white),
+                    ),
                     const SizedBox(height: 8),
                     CheckboxListTile(
                       contentPadding: EdgeInsets.zero,
                       value: hasCorrectLink,
-                      title: const Text('Yes, I have the correct link'),
+                      activeColor: Colors.white,
+                      checkColor: Theme.of(dialogContext).colorScheme.primary,
+                      side: const BorderSide(color: Colors.white, width: 2),
+                      title: const Text(
+                        'Yes, I have the correct link',
+                        style: TextStyle(color: Colors.white),
+                      ),
                       onChanged: (value) {
                         setDialogState(() {
                           hasCorrectLink = value == true;
@@ -355,9 +367,16 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
                         controller: proposedUrlController,
                         autofocus: true,
                         keyboardType: TextInputType.url,
+                        style: const TextStyle(color: Colors.black87),
+                        cursorColor: Colors.black87,
                         decoration: const InputDecoration(
+                          filled: true,
+                          fillColor: Colors.white,
                           labelText: 'Correct link',
                           hintText: 'https://example.com/sanctions',
+                          labelStyle: TextStyle(color: Colors.black54),
+                          floatingLabelStyle: TextStyle(color: Colors.black87),
+                          hintStyle: TextStyle(color: Colors.black45),
                           border: OutlineInputBorder(),
                         ),
                       ),
