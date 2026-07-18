@@ -170,6 +170,15 @@ void main() {
         lockingMigration,
         contains('calculate_cavy_sweepstakes_for_section_unlocked'),
       );
+
+      final pdfViewMigration = File(
+        'supabase/migrations/20260718234217_include_cavy_sweepstakes_rows_in_pdf_view.sql',
+      ).readAsStringSync();
+      expect(pdfViewMigration, contains('with (security_invoker = true)'));
+      expect(
+        pdfViewMigration,
+        contains("in ('v2', 'cavy-fixed-v1')"),
+      );
     });
 
     test('regeneration reuses the finalize-run artifact identity owner', () {
