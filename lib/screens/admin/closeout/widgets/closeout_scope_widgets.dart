@@ -679,6 +679,45 @@ class CloseoutReviewReport {
   }
 }
 
+List<String> blockingArbaReviewSectionLabels({
+  required List<CloseoutReviewReport> reports,
+  required String finalizeRunId,
+}) {
+  final runId = finalizeRunId.trim();
+  if (runId.isEmpty) return const <String>[];
+
+  final labels =
+      reports
+          .where(
+            (report) =>
+                report.finalizeRunId == runId &&
+                report.reportName == 'arba_report',
+          )
+          .map((report) {
+            final sectionLabel = report.sectionLabel.trim();
+            if (sectionLabel.isNotEmpty) return sectionLabel;
+            final showLetter = report.showLetter.trim();
+            return showLetter.isEmpty ? 'an ARBA section' : 'Show $showLetter';
+          })
+          .toSet()
+          .toList()
+        ..sort(
+          (left, right) => left.toLowerCase().compareTo(right.toLowerCase()),
+        );
+  return labels;
+}
+
+String arbaEmailBlockedMessage(List<String> sectionLabels) {
+  final labels = sectionLabels
+      .where((label) => label.trim().isNotEmpty)
+      .toList();
+  if (labels.isEmpty) {
+    return 'Fix all ARBA reports under Reports Needing Review before emailing ARBA.';
+  }
+  return 'Fix the ARBA report${labels.length == 1 ? '' : 's'} for '
+      '${labels.join(', ')} under Reports Needing Review before emailing ARBA.';
+}
+
 class CloseoutReportsNeedingReviewPanel extends StatelessWidget {
   final List<CloseoutReviewReport> reports;
   final bool initiallyExpanded;

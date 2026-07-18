@@ -64,6 +64,58 @@ const _reviewReports = <CloseoutReviewReport>[
 ];
 
 void main() {
+  group('ARBA bulk email lock', () {
+    test('blocks only on ARBA review items for the selected finalize run', () {
+      final sections = blockingArbaReviewSectionLabels(
+        reports: _reviewReports,
+        finalizeRunId: 'run-1',
+      );
+
+      expect(sections, ['Cavy Youth B']);
+      expect(
+        arbaEmailBlockedMessage(sections),
+        'Fix the ARBA report for Cavy Youth B under Reports Needing Review '
+        'before emailing ARBA.',
+      );
+    });
+
+    test('unlocks after the selected run has no ARBA review items', () {
+      final sections = blockingArbaReviewSectionLabels(
+        reports: _reviewReports,
+        finalizeRunId: 'run-2',
+      );
+
+      expect(sections, isEmpty);
+    });
+
+    test('lists each affected section once in secretary-friendly order', () {
+      final duplicate = _reviewReports.last.withPresentation(
+        reportTitle: 'ARBA Report',
+        sectionLabel: 'Cavy Youth B',
+      );
+      final openA = CloseoutReviewReport(
+        artifactId: 'open-a',
+        finalizeRunId: 'run-1',
+        reportTitle: 'ARBA Report',
+        reportName: 'arba_report',
+        sectionLabel: 'Rabbit Open A',
+        artifactStatus: 'failed',
+        taskStatus: 'failed',
+        retryable: false,
+        group: CloseoutReviewGroup.nonRetryableFailure,
+      );
+
+      final sections = blockingArbaReviewSectionLabels(
+        reports: [..._reviewReports, duplicate, openA],
+        finalizeRunId: 'run-1',
+      );
+
+      expect(sections, ['Cavy Youth B', 'Rabbit Open A']);
+      expect(arbaEmailBlockedMessage(sections), contains('Cavy Youth B'));
+      expect(arbaEmailBlockedMessage(sections), contains('Rabbit Open A'));
+    });
+  });
+
   group('closeout failure display', () {
     test('presents an actionable ARBA sanction warning', () {
       final display = closeoutFailureDisplay(

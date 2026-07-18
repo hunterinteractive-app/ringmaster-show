@@ -3143,6 +3143,18 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         .toList();
   }
 
+  List<String> get _blockingArbaReviewSections =>
+      blockingArbaReviewSectionLabels(
+        reports: _reportsNeedingReview,
+        finalizeRunId: _finalizeRunIdForSelectedScope,
+      );
+
+  String? get _arbaEmailBlockedMessage {
+    final sections = _blockingArbaReviewSections;
+    if (sections.isEmpty) return null;
+    return arbaEmailBlockedMessage(sections);
+  }
+
   Future<int> _finalizeShow() async {
     if (_generationProgress.isActive) {
       throw StateError('Reports are already being generated for this scope.');
@@ -6796,6 +6808,16 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
   }) async {
     if (await _blockedBySupportModeForEmailSend('Report')) return;
 
+    if (reportName == 'arba_report') {
+      final blockedMessage = _arbaEmailBlockedMessage;
+      if (blockedMessage != null) {
+        if (!mounted) return;
+        _showCloseoutSnack(SnackBar(content: Text(blockedMessage)));
+        _viewReportsNeedingReview();
+        return;
+      }
+    }
+
     try {
       await _ensureReportsLoaded();
 
@@ -7328,6 +7350,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                     onEmail: _emailReportByName,
                     onEmailThisLetter: _emailArtifactThisLetter,
                     onEmailAllLetters: _emailArtifactAllLetters,
+                    arbaEmailBlockedMessage: _arbaEmailBlockedMessage,
                     loading: _generatingReport || _generationProgress.isActive,
                     reportsBlocked: reportsBlocked,
                     reportsBlockedMessage: reportsBlockedMessage,
@@ -8280,6 +8303,7 @@ class _ReportActionsCard extends StatefulWidget {
   final String selectedFinalizeRunId;
   final bool reportsBlocked;
   final String? reportsBlockedMessage;
+  final String? arbaEmailBlockedMessage;
 
   const _ReportActionsCard({
     super.key,
@@ -8298,6 +8322,7 @@ class _ReportActionsCard extends StatefulWidget {
     required this.loading,
     required this.reportsBlocked,
     this.reportsBlockedMessage,
+    this.arbaEmailBlockedMessage,
   });
 
   @override
@@ -9235,11 +9260,13 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
         if (reportName == 'arba_report')
           Tooltip(
             message:
+                widget.arbaEmailBlockedMessage ??
                 'Emails all generated ARBA reports for the selected scope.',
             child: OutlinedButton.icon(
               onPressed:
                   _selectedReportCanEmail &&
                       _arbaReportOptions.isNotEmpty &&
+                      widget.arbaEmailBlockedMessage == null &&
                       reportName != null
                   ? () => widget.onEmail(reportName)
                   : null,
