@@ -34,9 +34,8 @@ void main() {
     const rabbit = RabbitResultsRules();
     const cavy = CavyResultsRules();
     expect(rabbit.normalizeStoredAwards(['Best of Group']), {'BOG'});
-    expect(cavy.normalizeStoredAwards(['Best of Variety']), {
-      'Best of Variety',
-    });
+    expect(cavy.normalizeStoredAwards(['Best of Variety']), {'BOV'});
+    expect(cavy.normalizeStoredAwards(['Best of Group']), {'BOV'});
   });
 
   test('validation entry points are physically separate', () {
@@ -54,7 +53,8 @@ void main() {
     expect(cavySource, contains('validateCavyResults'));
     expect(cavySource, isNot(contains('validateRabbitResults')));
     expect(rabbitSource, contains('BOG'));
-    expect(cavySource, isNot(contains('BOV')));
+    expect(cavySource, contains('BOV'));
+    expect(cavySource, isNot(contains("requiredAwards: const ['BOG'")));
     expect(sharedSource, isNot(contains('buildBreedCompletionIssues')));
     expect(sharedSource, isNot(contains("requiredAwards: const ['BOV'")));
     expect(sharedSource, isNot(contains("requiredAwards: const ['BOG'")));

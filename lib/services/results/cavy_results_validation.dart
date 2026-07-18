@@ -2,7 +2,8 @@ import '../results_entry_validation.dart';
 
 List<ResultsEntryBlockingIssue> validateCavyResults({
   required List<Map<String, dynamic>> entries,
-  required bool requireGroupAwards,
+  bool requireVarietyAwards = false,
+  bool requireGroupAwards = false,
   required bool requireBreedAwards,
   required bool Function(Map<String, dynamic>) hasBasicOutcome,
   required bool Function(Map<String, dynamic>) isEligibleForSpecialAward,
@@ -11,10 +12,19 @@ List<ResultsEntryBlockingIssue> validateCavyResults({
   required String Function(Map<String, dynamic>) entryLabel,
   required String Function(Map<String, dynamic>) sectionId,
   required String Function(Map<String, dynamic>) breed,
-  required String Function(Map<String, dynamic>) group,
+  String Function(Map<String, dynamic>)? variety,
+  String Function(Map<String, dynamic>)? group,
+  String Function(Map<String, dynamic>)? className,
   required String Function(Map<String, dynamic>) sex,
 }) {
   final issues = <ResultsEntryBlockingIssue>[];
+  final requiresVarietyAwards = requireVarietyAwards || requireGroupAwards;
+  final varietyValue =
+      variety ??
+      group ??
+      (entry) => (entry['variety'] ?? entry['variety_name'] ?? '').toString();
+  final classValue =
+      className ?? (entry) => (entry['class_name'] ?? '').toString();
   final allBasicsComplete =
       entries.isNotEmpty && entries.every(hasBasicOutcome);
 
@@ -120,15 +130,94 @@ List<ResultsEntryBlockingIssue> validateCavyResults({
     }
   }
 
-  if (requireGroupAwards) {
+  if (requiresVarietyAwards) {
     validateBuckets(
       values: buckets((entry) {
-        final scope = [sectionId(entry), breed(entry), group(entry)];
+        final scope = [sectionId(entry), breed(entry), varietyValue(entry)];
         return scope.any((value) => value.isEmpty) ? '' : scope.join('|');
       }).values,
-      requiredAwards: const ['BOG', 'BOSG'],
-      scopeLabel: 'group',
-      level: ResultsValidationIssueLevel.group,
+      requiredAwards: const ['BOV', 'BOSV'],
+      scopeLabel: 'variety',
+      level: ResultsValidationIssueLevel.variety,
+    );
+  }
+
+  void validateAgeWinners({
+    required Iterable<List<Map<String, dynamic>>> values,
+    required Map<String, String> awardsByAge,
+    required String scopeLabel,
+    required ResultsValidationIssueLevel level,
+  }) {
+    for (final bucket in values) {
+      for (final age in awardsByAge.entries) {
+        final ageEntries = bucket.where((entry) {
+          final normalized = classValue(entry).trim().toLowerCase();
+          return normalized.contains(age.key);
+        }).toList();
+        final eligible = ageEntries.where(isEligibleForSpecialAward).toList();
+        final winners = ageEntries
+            .where((entry) => awardCodes(entry).contains(age.value))
+            .toList();
+        if (winners.length > 1) {
+          issues.add(
+            ResultsEntryBlockingIssue(
+              code: 'duplicate_${age.value.toLowerCase()}',
+              title: 'Duplicate ${age.value} winner',
+              message:
+                  '${age.value} is assigned to more than one cavy in this $scopeLabel: ${entryLabel(winners[0])} and ${entryLabel(winners[1])}.',
+              entry: winners[0],
+              conflictsWith: winners[1],
+              level: level,
+              awardCode: age.value,
+            ),
+          );
+        }
+        if (!allBasicsComplete || eligible.isEmpty || winners.isNotEmpty) {
+          continue;
+        }
+        issues.add(
+          ResultsEntryBlockingIssue(
+            code: 'missing_${age.value.toLowerCase()}',
+            title: 'Missing ${age.value} winner',
+            message:
+                'Select one eligible ${age.value} winner for this cavy $scopeLabel.',
+            entry: eligible.first,
+            level: level,
+            awardCode: age.value,
+          ),
+        );
+      }
+    }
+  }
+
+  if (requiresVarietyAwards) {
+    validateAgeWinners(
+      values: buckets((entry) {
+        final scope = [sectionId(entry), breed(entry), varietyValue(entry)];
+        return scope.any((value) => value.isEmpty) ? '' : scope.join('|');
+      }).values,
+      awardsByAge: const {
+        'junior': 'BJV',
+        'intermediate': 'BIV',
+        'senior': 'BSV',
+      },
+      scopeLabel: 'variety',
+      level: ResultsValidationIssueLevel.variety,
+    );
+  }
+  if (requireBreedAwards) {
+    validateAgeWinners(
+      values: buckets((entry) {
+        final scope = [sectionId(entry), breed(entry)];
+        return scope.any((value) => value.isEmpty) ? '' : scope.join('|');
+      }).values,
+      awardsByAge: const {
+        'junior': 'BJB',
+        'intermediate': 'BIB',
+        'senior': 'BSB',
+      },
+      scopeLabel: 'breed',
+      level: ResultsValidationIssueLevel.breed,
     );
   }
   if (requireBreedAwards) {

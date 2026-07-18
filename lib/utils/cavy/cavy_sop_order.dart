@@ -84,17 +84,10 @@ const Map<String, List<String>> cavyVarietyOrderByBreed = {
   ],
 
   'American Satin': [
-    'Black',
-    'Cream',
-    'Orange',
-    'Red',
-    'White',
-    'Any Other Self',
+    'Self',
     'Agouti',
-    'Intermixed Solids',
-    'Ticked Solids',
-    'Broken Color & Tortoise Shell',
-    'Any Other Marked',
+    'Solid',
+    'Marked',
     'Tan Pattern',
     'Cal Pattern',
   ],
@@ -146,12 +139,12 @@ const Map<String, List<String>> cavyVarietyOrderByBreed = {
 
 /// Class order (important for control sheets)
 const List<String> cavyClassOrder = [
-  'Junior Buck',
-  'Junior Doe',
-  'Intermediate Buck',
-  'Intermediate Doe',
-  'Senior Buck',
-  'Senior Doe',
+  'Junior Boar',
+  'Junior Sow',
+  'Intermediate Boar',
+  'Intermediate Sow',
+  'Senior Boar',
+  'Senior Sow',
 ];
 
 int cavyBreedSortIndex(String breed) {

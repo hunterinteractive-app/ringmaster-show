@@ -14,7 +14,7 @@ ResultsAwardMode resolveResultsAwardMode({
   String? varietyName,
 }) {
   final normalizedSpecies = normalizeResultsSpecies(species);
-  if (normalizedSpecies == 'cavy' && usesGroupAwards) {
+  if (normalizedSpecies == 'cavy' && (usesGroupAwards || usesVarietyAwards)) {
     return ResultsAwardMode.cavyGroup;
   }
   if (normalizedSpecies == 'rabbit' && usesVarietyAwards) {
@@ -67,6 +67,21 @@ String canonicalResultsAwardCode(Object? award) {
     'bosb': 'BOSB',
     'best opposite sex of breed': 'BOSB',
     'best opposite of breed': 'BOSB',
+    'bjv': 'BJV',
+    'best junior variety': 'BJV',
+    'biv': 'BIV',
+    'best intermediate variety': 'BIV',
+    'bsv': 'BSV',
+    'best senior variety': 'BSV',
+    'bjb': 'BJB',
+    'best junior breed': 'BJB',
+    'best junior of breed': 'BJB',
+    'bib': 'BIB',
+    'best intermediate breed': 'BIB',
+    'best intermediate of breed': 'BIB',
+    'bsb': 'BSB',
+    'best senior breed': 'BSB',
+    'best senior of breed': 'BSB',
     'best junior': 'Best Junior',
     'best intermediate': 'Best Intermediate',
     'best senior': 'Best Senior',
@@ -133,7 +148,7 @@ bool resultsAwardModeHasRecognizedSource(
 
 Set<String> sourceAwardCodesForMode(ResultsAwardMode mode) {
   return switch (mode) {
-    ResultsAwardMode.cavyGroup => const {'BOG', 'BOSG'},
+    ResultsAwardMode.cavyGroup => const {'BOV', 'BOSV'},
     ResultsAwardMode.rabbitVariety => const {'BOV', 'BOSV'},
     ResultsAwardMode.directBreed => const {},
   };
@@ -143,11 +158,14 @@ String resultsAwardLabel(String award, ResultsAwardMode mode) {
   final code = canonicalResultsAwardCode(award);
   if (mode == ResultsAwardMode.cavyGroup) {
     return switch (code) {
-      'Best Junior' => 'Best Junior Group',
-      'Best Intermediate' => 'Best Intermediate Group',
-      'Best Senior' => 'Best Senior Group',
-      'BOG' => 'Best of Group',
-      'BOSG' => 'Best Opposite Sex of Group',
+      'BJV' => 'Best Junior Variety',
+      'BIV' => 'Best Intermediate Variety',
+      'BSV' => 'Best Senior Variety',
+      'BJB' => 'Best Junior of Breed',
+      'BIB' => 'Best Intermediate of Breed',
+      'BSB' => 'Best Senior of Breed',
+      'BOV' => 'Best of Variety',
+      'BOSV' => 'Best Opposite Sex of Variety',
       'BOB' => 'Best of Breed',
       'BOSB' => 'Best Opposite Sex of Breed',
       'Best 4-Class' => 'Best 4-Class',
@@ -182,14 +200,16 @@ List<String> visibleResultsAwardCodes({
     if (normalizedClass.contains('junior') &&
         !normalizedClass.contains('pre-junior') &&
         !normalizedClass.contains('pre junior')) {
-      awards.add('Best Junior');
+      awards.addAll(const ['BJV', 'BJB']);
     }
     if (classSystem.trim().toLowerCase() == 'six' &&
         normalizedClass.contains('intermediate')) {
-      awards.add('Best Intermediate');
+      awards.addAll(const ['BIV', 'BIB']);
     }
-    if (normalizedClass.contains('senior')) awards.add('Best Senior');
-    awards.addAll(const ['BOG', 'BOSG', 'BOB', 'BOSB']);
+    if (normalizedClass.contains('senior')) {
+      awards.addAll(const ['BSV', 'BSB']);
+    }
+    awards.addAll(const ['BOV', 'BOSV', 'BOB', 'BOSB']);
   } else if (mode == ResultsAwardMode.rabbitVariety) {
     awards.addAll(const ['BOV', 'BOSV', 'BOB', 'BOSB']);
   } else {
@@ -214,12 +234,12 @@ String? validateAwardModeCompatibility({
 }) {
   final awards = normalizedResultsAwardCodes(selectedAwards);
   if (mode == ResultsAwardMode.cavyGroup) {
-    if ((awards.contains('BOG') || awards.contains('BOSG')) &&
+    if ((awards.contains('BOV') || awards.contains('BOSV')) &&
         !resultsAwardModeHasRecognizedSource(mode, entry)) {
-      return '${unresolvedCavyGroupMessage(entry)} ${awards.contains('BOG') ? 'Best of Group' : 'Best Opposite Sex of Group'} cannot be assigned.';
+      return '${unresolvedCavyGroupMessage(entry)} ${awards.contains('BOV') ? 'Best of Variety' : 'Best Opposite Sex of Variety'} cannot be assigned.';
     }
-    if (awards.contains('BOV') || awards.contains('BOSV')) {
-      return 'Variety awards are not valid for a cavy breed configured to use group awards.';
+    if (awards.contains('BOG') || awards.contains('BOSG')) {
+      return 'Group awards are not valid for cavy results. Use Best of Variety and Best Opposite Sex of Variety.';
     }
   }
   if (mode == ResultsAwardMode.rabbitVariety &&
@@ -232,7 +252,7 @@ String? validateAwardModeCompatibility({
       sources.isNotEmpty &&
       awards.intersection(sources).isEmpty) {
     final sourceLabel = mode == ResultsAwardMode.cavyGroup
-        ? 'Best of Group or Best Opposite Sex of Group'
+        ? 'Best of Variety or Best Opposite Sex of Variety'
         : 'Best of Variety or Best Opposite Sex of Variety';
     return 'Best of Breed awards require $sourceLabel first.';
   }

@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ringmaster_show/services/results/cavy_results_rules.dart';
 import 'package:ringmaster_show/services/results/cavy_results_validation.dart';
@@ -9,144 +7,100 @@ void main() {
 
   Map<String, dynamic> cavy({
     String id = 'cavy-1',
-    String breed = 'American',
-    String group = 'Black',
+    String variety = 'Black',
     String sex = 'Boar',
+    String className = 'Senior',
     List<String> awards = const [],
   }) => {
     'id': id,
     'entry_id': id,
     'species': 'Cavy',
-    'section_id': 'cavy-open-a',
-    'breed_id': breed.toLowerCase(),
-    'breed': breed,
-    'exact_variety_name': group,
-    'variety': group,
-    'uses_group_awards': true,
+    'section_id': 'open-a',
+    'breed_id': 'american',
+    'breed': 'American',
+    'variety': variety,
+    'exact_variety_name': variety,
     'uses_variety_awards': true,
     'placement': '1',
     'result_status': 'Shown',
-    'class_name': 'Senior $sex',
+    'class_name': '$className $sex',
     'sex': sex,
     '_awards': awards,
   };
 
-  for (final group in const ['Black', 'Cream', 'White']) {
-    test('American $group resolves as an independent cavy group', () {
-      final child = rules.childIdentity(cavy(group: group));
-      expect(child.displayName, group);
-      expect(child.stableKey, 'fallback:american:${group.toLowerCase()}');
-    });
-  }
-
-  test('Teddy catalog group remains authoritative', () {
-    final row = cavy(breed: 'Teddy', group: 'Teddy')
-      ..['group_id'] = 'teddy-marked'
-      ..['group_name'] = 'Marked';
-    final child = rules.childIdentity(row);
-    expect(child.displayName, 'Marked');
-    expect(child.stableKey, 'explicit:teddy:teddy-marked');
-  });
-
-  test('American groups remain separate child cards', () {
-    final groups = rules.buildChildGroups([
-      cavy(id: 'black', group: 'Black'),
-      cavy(id: 'cream', group: 'Cream'),
-      cavy(id: 'white', group: 'White'),
-    ]);
-    expect(groups, hasLength(3));
-    expect(groups.map((group) => group.displayName).toSet(), {
-      'Black',
-      'Cream',
-      'White',
+  test('historical cavy group awards normalize to variety awards', () {
+    expect(rules.normalizeStoredAwards(['BOG', 'Best Opposite Sex of Group']), {
+      'BOV',
+      'BOSV',
     });
   });
 
-  test(
-    'cavy normalizer preserves BOG/BOSG and stored awards reopen checked',
-    () {
-      expect(
-        rules.normalizeStoredAwards(['bog', 'Best Opposite Sex of Group']),
-        {'BOG', 'BOSG'},
-      );
-    },
-  );
+  test('cavy results use variety cards instead of group cards', () {
+    final entries = [
+      cavy(id: 'black', variety: 'Black'),
+      cavy(id: 'cream', variety: 'Cream'),
+    ];
+    expect(rules.usesGroupLayer(entries.first), isFalse);
+    expect(rules.usesVarietyLayer(entries.first), isTrue);
+    expect(rules.buildGroupGroups(entries), isEmpty);
+    expect(
+      rules.buildVarietyGroups(entries).map((group) => group.displayName),
+      containsAll(['Black', 'Cream']),
+    );
+  });
 
-  test('cavy editor options show group awards and never variety awards', () {
+  test('senior cavy options expose variety and breed age winners', () {
     final options = rules.buildAwardOptions(
       entry: cavy(),
-      classSystem: 'four',
+      classSystem: 'six',
       finalAwardMode: 'bis_ris',
     );
-    expect(options, containsAll(['BOG', 'BOSG', 'BOB', 'BOSB', 'HM']));
-    expect(options, isNot(contains('BOV')));
-    expect(options, isNot(contains('BOSV')));
+    expect(options, containsAll(['BSV', 'BSB', 'BOV', 'BOSV', 'BOB', 'BOSB']));
+    expect(options, isNot(contains('BOG')));
+    expect(options, isNot(contains('BOSG')));
   });
 
-  test('valid BOG/BOB selection is accepted for Save and Save & Next', () {
-    final selected = rules.normalizeStoredAwards(['BOG', 'BOB']);
-    final compatibility = rules.validateAwardSelection(
-      entry: cavy(),
-      selectedAwards: selected,
-    );
-    expect(compatibility.valid, isTrue);
+  test('breed age winner requires corresponding variety age winner', () {
     expect(
       rules.canUseAward(
         entry: cavy(),
-        award: 'BOB',
-        selectedAwards: selected,
+        award: 'BSB',
+        selectedAwards: const {},
         effectiveStatus: 'Shown',
         effectivePlacement: '1',
-        classSystem: 'four',
+        classSystem: 'six',
+        finalAwardMode: 'bis_ris',
+      ),
+      isFalse,
+    );
+    expect(
+      rules.canUseAward(
+        entry: cavy(),
+        award: 'BSB',
+        selectedAwards: const {'BSV'},
+        effectiveStatus: 'Shown',
+        effectivePlacement: '1',
+        classSystem: 'six',
         finalAwardMode: 'bis_ris',
       ),
       isTrue,
     );
   });
 
-  test('cavy BOB must come from BOG while BOSB may come from BOG/BOSG', () {
-    expect(
-      rules
-          .validateAwardSelection(
-            entry: cavy(),
-            selectedAwards: {'BOSG', 'BOB'},
-          )
-          .valid,
-      isFalse,
-    );
-    expect(
-      rules
-          .validateAwardSelection(
-            entry: cavy(),
-            selectedAwards: {'BOSG', 'BOSB'},
-          )
-          .valid,
-      isTrue,
-    );
-  });
-
-  test(
-    'cavy validation rejects rabbit legacy awards without requiring them',
-    () {
-      final invalid = rules.validateAwardSelection(
-        entry: cavy(),
-        selectedAwards: {'BOV'},
-      );
-      expect(invalid.valid, isFalse);
-      expect(invalid.message, contains('Rabbit variety awards'));
-      expect(invalid.message, isNot(contains('requires BOV')));
-    },
-  );
-
-  test('group conflicts and ownership are scoped to exact cavy group', () {
+  test('validation requires age winners at variety and breed levels', () {
     final rows = [
-      cavy(id: 'black-1', group: 'Black', awards: const ['BOG']),
-      cavy(id: 'black-2', group: 'Black', awards: const ['BOG']),
-      cavy(id: 'cream-1', group: 'Cream', awards: const ['BOG']),
+      cavy(id: 'black-sr', awards: const ['BSV', 'BSB', 'BOV', 'BOB']),
+      cavy(
+        id: 'black-int',
+        className: 'Intermediate',
+        sex: 'Sow',
+        awards: const ['BIV', 'BIB', 'BOSV', 'BOSB'],
+      ),
+      cavy(id: 'black-jr', className: 'Junior', awards: const ['BJV', 'BJB']),
     ];
     final issues = validateCavyResults(
       entries: rows,
-      requireGroupAwards: true,
+      requireVarietyAwards: true,
       requireBreedAwards: true,
       hasBasicOutcome: (_) => true,
       isEligibleForSpecialAward: (_) => true,
@@ -155,30 +109,50 @@ void main() {
       entryLabel: (entry) => entry['id'].toString(),
       sectionId: (entry) => entry['section_id'].toString(),
       breed: (entry) => entry['breed_id'].toString(),
-      group: (entry) => rules.childIdentity(entry).stableKey,
+      variety: (entry) => entry['variety'].toString(),
+      className: (entry) => entry['class_name'].toString(),
       sex: (entry) => entry['sex'].toString(),
     );
-    final duplicates = issues.where((issue) => issue.code == 'duplicate_bog');
-    expect(duplicates, hasLength(1));
-    expect(duplicates.single.groupScope, contains('black'));
-    expect(duplicates.single.level.name, 'group');
+    expect(issues, isEmpty);
   });
 
-  test('failed SOP enrichment cannot erase variety fallback identity', () {
-    final row = cavy(group: 'Cream')
-      ..remove('cavy_sop_group_name')
-      ..remove('group_name')
-      ..remove('group_id');
-    final child = rules.childIdentity(row);
-    expect(child.displayName, 'Cream');
-    expect(child.stableKey, 'fallback:american:cream');
-  });
+  test('validation flags every missing age winner at both levels', () {
+    final rows = [
+      cavy(id: 'black-sr', awards: const ['BOV', 'BOB']),
+      cavy(
+        id: 'black-int',
+        className: 'Intermediate',
+        sex: 'Sow',
+        awards: const ['BOSV', 'BOSB'],
+      ),
+      cavy(id: 'black-jr', className: 'Junior'),
+    ];
+    final issues = validateCavyResults(
+      entries: rows,
+      requireVarietyAwards: true,
+      requireBreedAwards: true,
+      hasBasicOutcome: (_) => true,
+      isEligibleForSpecialAward: (_) => true,
+      isExcludedFromSpecials: (_) => false,
+      awardCodes: (entry) => List<String>.from(entry['_awards'] as List),
+      entryLabel: (entry) => entry['id'].toString(),
+      sectionId: (entry) => entry['section_id'].toString(),
+      breed: (entry) => entry['breed_id'].toString(),
+      variety: (entry) => entry['variety'].toString(),
+      className: (entry) => entry['class_name'].toString(),
+      sex: (entry) => entry['sex'].toString(),
+    );
 
-  test('cavy implementation cannot import a rabbit variety resolver', () {
-    final source = File(
-      'lib/services/results/cavy_results_rules.dart',
-    ).readAsStringSync();
-    expect(source, isNot(contains('rabbit_results')));
-    expect(source, isNot(contains('resolveRabbitVariety')));
+    expect(
+      issues.map((issue) => issue.code),
+      containsAll(<String>[
+        'missing_bjv',
+        'missing_biv',
+        'missing_bsv',
+        'missing_bjb',
+        'missing_bib',
+        'missing_bsb',
+      ]),
+    );
   });
 }

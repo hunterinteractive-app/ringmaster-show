@@ -349,7 +349,7 @@ _ResultScopeCompletion _resultCompletionForEntries(
       ),
       ResultsSpecies.cavy => validateCavyResults(
         entries: entries,
-        requireGroupAwards: requireGroupAwards,
+        requireVarietyAwards: requireVarietyAwards || requireGroupAwards,
         requireBreedAwards: requireBreedAwards,
         hasBasicOutcome: _entryHasBasicOutcome,
         isEligibleForSpecialAward: _entryIsEligibleForSpecialAward,
@@ -360,7 +360,8 @@ _ResultScopeCompletion _resultCompletionForEntries(
         entryLabel: _entryShortAnimalLabel,
         sectionId: _entryScopeSectionId,
         breed: _entryScopeBreed,
-        group: _entryScopeGroup,
+        variety: _entryScopeVariety,
+        className: (entry) => (entry['class_name'] ?? '').toString(),
         sex: _entrySexKey,
       ),
     };
@@ -1894,7 +1895,9 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
         ),
         ResultsSpecies.cavy => validateCavyResults(
           entries: breedEntries,
-          requireGroupAwards: breedEntries.any(showsByGroup),
+          requireVarietyAwards:
+              breedEntries.any(showsByVariety) ||
+              breedEntries.any(showsByGroup),
           requireBreedAwards: true,
           hasBasicOutcome: _entryHasBasicOutcome,
           isEligibleForSpecialAward: _entryIsEligibleForSpecialAward,
@@ -1905,7 +1908,8 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
           entryLabel: _entryLabel,
           sectionId: _entryScopeSectionId,
           breed: _entryScopeBreed,
-          group: _entryScopeGroup,
+          variety: _entryScopeVariety,
+          className: (entry) => (entry['class_name'] ?? '').toString(),
           sex: _entrySexKey,
         ),
       };
@@ -6625,7 +6629,7 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
 
     if (_isCavyEntry(widget.entry)) {
       bool sameClassAge(Map<String, dynamic> e) =>
-          sameGroup(e) &&
+          sameVariety(e) &&
           (e['class_name'] ?? '').toString().trim().toLowerCase() ==
               (widget.entry['class_name'] ?? '')
                   .toString()
@@ -6634,9 +6638,9 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
 
       for (final award in _selectedAwards) {
         final sameScope = switch (award) {
-          'Best Junior' || 'Best Intermediate' || 'Best Senior' => sameClassAge,
-          'BOG' || 'BOSG' => sameGroup,
-          'BOB' || 'BOSB' => sameBreed,
+          'BJV' || 'BIV' || 'BSV' => sameClassAge,
+          'BJB' || 'BIB' || 'BSB' || 'BOB' || 'BOSB' => sameBreed,
+          'BOV' || 'BOSV' => sameVariety,
           'Best 4-Class' ||
           'Best 6-Class' ||
           'Best In Show' ||
@@ -6661,20 +6665,23 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
         }
       }
 
-      if (_hasAward('BOG')) {
-        final bosg = _winnerForAwardInScope(
-          award: 'BOSG',
-          sameScope: sameGroup,
+      if (_hasAward('BOV')) {
+        final bosv = _winnerForAwardInScope(
+          award: 'BOSV',
+          sameScope: sameVariety,
         );
-        if (!_isOppositeSexOf(bosg)) {
-          return 'Best of Group and Best Opposite Sex of Group must be opposite sex within the same cavy group.';
+        if (!_isOppositeSexOf(bosv)) {
+          return 'Best of Variety and Best Opposite Sex of Variety must be opposite sex within the same cavy variety.';
         }
       }
 
-      if (_hasAward('BOSG')) {
-        final bog = _winnerForAwardInScope(award: 'BOG', sameScope: sameGroup);
-        if (!_isOppositeSexOf(bog)) {
-          return 'Best of Group and Best Opposite Sex of Group must be opposite sex within the same cavy group.';
+      if (_hasAward('BOSV')) {
+        final bov = _winnerForAwardInScope(
+          award: 'BOV',
+          sameScope: sameVariety,
+        );
+        if (!_isOppositeSexOf(bov)) {
+          return 'Best of Variety and Best Opposite Sex of Variety must be opposite sex within the same cavy variety.';
         }
       }
 

@@ -20,10 +20,10 @@ bool _entryBool(Object? value) {
 }
 
 bool _isCavyGroupEntry(Map<String, dynamic> entry) {
-  if (!_entryBool(entry['uses_group_awards'])) return false;
   final species = normalizeResultsGroupKey(entry['species']);
-  if (species == 'cavy' || species == 'cavies') return true;
-  return false;
+  if (species != 'cavy' && species != 'cavies') return false;
+  return _entryBool(entry['uses_group_awards']) ||
+      _entryBool(entry['uses_variety_awards']);
 }
 
 class ResolvedCavyGroup {
@@ -177,7 +177,7 @@ String unresolvedCavyGroupMessage(Map<String, dynamic> entry) {
   ]);
   final breedLabel = breed.isEmpty ? 'This cavy breed' : breed;
   if (variety.isNotEmpty) {
-    return '$breedLabel • variety $variety is not mapped to a cavy group in the breed catalog.';
+    return '$breedLabel • variety $variety is not recognized in the cavy breed catalog.';
   }
-  return '$breedLabel does not have a recognized cavy group or variety value.';
+  return '$breedLabel does not have a recognized cavy variety.';
 }
