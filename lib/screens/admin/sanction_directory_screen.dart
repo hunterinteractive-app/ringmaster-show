@@ -10,15 +10,13 @@ import '../../services/app_session.dart';
 final _supabase = Supabase.instance.client;
 
 class SanctionDirectoryScreen extends StatefulWidget {
-  const SanctionDirectoryScreen({
-    super.key,
-    this.showId,
-  });
+  const SanctionDirectoryScreen({super.key, this.showId});
 
   final String? showId;
 
   @override
-  State<SanctionDirectoryScreen> createState() => _SanctionDirectoryScreenState();
+  State<SanctionDirectoryScreen> createState() =>
+      _SanctionDirectoryScreenState();
 }
 
 class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
@@ -29,7 +27,8 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
 
   final TextEditingController _searchController = TextEditingController();
   String _searchText = '';
-  _SanctionDirectoryFilter _selectedFilter = _SanctionDirectoryFilter.nationalBreedClubs;
+  _SanctionDirectoryFilter _selectedFilter =
+      _SanctionDirectoryFilter.nationalBreedClubs;
 
   List<_SanctionDirectoryRow> _rows = const [];
   List<_ShowSectionOption> _sections = const [];
@@ -71,14 +70,7 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
         return;
       }
 
-      final roleRows = await _supabase
-          .from('role_assignments')
-          .select('role')
-          .eq('user_id', user.id)
-          .inFilter('role', ['super_admin', 'admin', 'show_admin'])
-          .limit(1);
-
-      final hasAdminAccess = (roleRows as List).isNotEmpty;
+      final hasAdminAccess = await _hasSuperAdminAccess(user.id);
       if (!hasAdminAccess) {
         setState(() {
           _hasAdminAccess = false;
@@ -102,7 +94,10 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
 
         sections = (sectionRows as List)
             .whereType<Map>()
-            .map((raw) => _ShowSectionOption.fromMap(Map<String, dynamic>.from(raw)))
+            .map(
+              (raw) =>
+                  _ShowSectionOption.fromMap(Map<String, dynamic>.from(raw)),
+            )
             .toList();
 
         sections.sort((a, b) {
@@ -189,9 +184,13 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
       }
 
       rows.sort((a, b) {
-        final breedCompare = a.breedName.toLowerCase().compareTo(b.breedName.toLowerCase());
+        final breedCompare = a.breedName.toLowerCase().compareTo(
+          b.breedName.toLowerCase(),
+        );
         if (breedCompare != 0) return breedCompare;
-        final clubCompare = a.clubName.toLowerCase().compareTo(b.clubName.toLowerCase());
+        final clubCompare = a.clubName.toLowerCase().compareTo(
+          b.clubName.toLowerCase(),
+        );
         if (clubCompare != 0) return clubCompare;
         return a.linkLabel.toLowerCase().compareTo(b.linkLabel.toLowerCase());
       });
@@ -213,9 +212,37 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
     }
   }
 
+  Future<bool> _hasSuperAdminAccess(String userId) async {
+    // Older super-admin accounts are stored in super_admins, while newer ones
+    // may use role_assignments. The directory must recognize both sources.
+    try {
+      final legacySuperAdmin = await _supabase
+          .from('super_admins')
+          .select('user_id')
+          .eq('user_id', userId)
+          .maybeSingle();
+      if (legacySuperAdmin != null) return true;
+    } catch (_) {
+      // Continue to the current role source.
+    }
+
+    try {
+      final roleRows = await _supabase
+          .from('role_assignments')
+          .select('role')
+          .eq('user_id', userId)
+          .eq('role', 'super_admin')
+          .limit(1);
+      return (roleRows as List).isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
   List<_SanctionDirectoryRow> get _filteredRows {
     return _rows.where((row) {
-      final matchesSearch = _searchText.isEmpty ||
+      final matchesSearch =
+          _searchText.isEmpty ||
           row.breedName.toLowerCase().contains(_searchText) ||
           row.clubName.toLowerCase().contains(_searchText) ||
           row.clubType.toLowerCase().contains(_searchText) ||
@@ -287,7 +314,9 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
   Future<void> _markRequested(_SanctionDirectoryRow row) async {
     final showId = widget.showId?.trim();
     if (showId == null || showId.isEmpty) {
-      _showSnack('Open this directory from a show to mark a sanction requested.');
+      _showSnack(
+        'Open this directory from a show to mark a sanction requested.',
+      );
       return;
     }
 
@@ -312,20 +341,25 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      row.breedName.isEmpty ? row.clubName : '${row.breedName} • ${row.clubName}',
-                      style: Theme.of(dialogContext).textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
+                      row.breedName.isEmpty
+                          ? row.clubName
+                          : '${row.breedName} • ${row.clubName}',
+                      style: Theme.of(dialogContext).textTheme.bodyMedium
+                          ?.copyWith(fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: 12),
-                    const Text('Choose the show sections this request applies to:'),
+                    const Text(
+                      'Choose the show sections this request applies to:',
+                    ),
                     const SizedBox(height: 8),
                     ConstrainedBox(
                       constraints: const BoxConstraints(maxHeight: 280),
                       child: SingleChildScrollView(
                         child: Column(
                           children: _sections.map((section) {
-                            final selected = selectedSectionIds.contains(section.id);
+                            final selected = selectedSectionIds.contains(
+                              section.id,
+                            );
                             return CheckboxListTile(
                               dense: true,
                               contentPadding: EdgeInsets.zero,
@@ -356,7 +390,9 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
                 ElevatedButton.icon(
                   onPressed: selectedSectionIds.isEmpty
                       ? null
-                      : () => Navigator.of(dialogContext).pop(Set<String>.from(selectedSectionIds)),
+                      : () => Navigator.of(
+                          dialogContext,
+                        ).pop(Set<String>.from(selectedSectionIds)),
                   icon: const Icon(Icons.check),
                   label: const Text('Mark Requested'),
                 ),
@@ -389,28 +425,28 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
             : null;
 
         final payload = <String, dynamic>{
-            'show_id': showId,
-            'section_id': sectionId,
-            'breed_club_id': row.clubId,
-            'sanctioning_body': row.sanctioningBody,
-            'club_name': row.clubName,
-            'breed_name': row.breedName,
-            'request_status': 'secretary_requested',
-            'requested_by_user_id': user?.id,
-            'requested_by_role': 'admin',
-            'requested_at': DateTime.now().toUtc().toIso8601String(),
-            'request_source': 'sanction_directory',
-            };
+          'show_id': showId,
+          'section_id': sectionId,
+          'breed_club_id': row.clubId,
+          'sanctioning_body': row.sanctioningBody,
+          'club_name': row.clubName,
+          'breed_name': row.breedName,
+          'request_status': 'secretary_requested',
+          'requested_by_user_id': user?.id,
+          'requested_by_role': 'admin',
+          'requested_at': DateTime.now().toUtc().toIso8601String(),
+          'request_source': 'sanction_directory',
+        };
 
-            final insertPayload = <String, dynamic>{
-            ...payload,
-            'sanction_number': '',
-            'notes': null,
-            };
+        final insertPayload = <String, dynamic>{
+          ...payload,
+          'sanction_number': '',
+          'notes': null,
+        };
 
         if (existing == null) {
-            await _supabase.from('show_sanctions').insert(insertPayload);
-            } else {
+          await _supabase.from('show_sanctions').insert(insertPayload);
+        } else {
           await _supabase
               .from('show_sanctions')
               .update(payload)
@@ -419,7 +455,9 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
       }
 
       if (mounted) {
-        _showSnack('Marked requested for ${confirmedSectionIds.length} section(s).');
+        _showSnack(
+          'Marked requested for ${confirmedSectionIds.length} section(s).',
+        );
       }
       await _load();
     } catch (e) {
@@ -463,10 +501,11 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      row.breedName.isEmpty ? row.clubName : '${row.breedName} • ${row.clubName}',
-                      style: Theme.of(dialogContext).textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
+                      row.breedName.isEmpty
+                          ? row.clubName
+                          : '${row.breedName} • ${row.clubName}',
+                      style: Theme.of(dialogContext).textTheme.bodyMedium
+                          ?.copyWith(fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: 12),
                     const Text(
@@ -478,7 +517,9 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
                       child: SingleChildScrollView(
                         child: Column(
                           children: _sections.map((section) {
-                            final selected = selectedSectionIds.contains(section.id);
+                            final selected = selectedSectionIds.contains(
+                              section.id,
+                            );
                             return CheckboxListTile(
                               dense: true,
                               contentPadding: EdgeInsets.zero,
@@ -509,7 +550,9 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
                 FilledButton.icon(
                   onPressed: selectedSectionIds.isEmpty
                       ? null
-                      : () => Navigator.of(dialogContext).pop(Set<String>.from(selectedSectionIds)),
+                      : () => Navigator.of(
+                          dialogContext,
+                        ).pop(Set<String>.from(selectedSectionIds)),
                   icon: const Icon(Icons.clear),
                   label: const Text('Remove Flag'),
                 ),
@@ -536,12 +579,17 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
             .eq('show_id', showId)
             .eq('section_id', sectionId)
             .eq('breed_club_id', row.clubId)
-            .inFilter('request_status', ['secretary_requested', 'exhibitor_requested']);
+            .inFilter('request_status', [
+              'secretary_requested',
+              'exhibitor_requested',
+            ]);
 
         for (final raw in existingRows as List) {
           if (raw is! Map) continue;
           final existing = Map<String, dynamic>.from(raw);
-          final sanctionNumber = (existing['sanction_number'] ?? '').toString().trim();
+          final sanctionNumber = (existing['sanction_number'] ?? '')
+              .toString()
+              .trim();
 
           if (sanctionNumber.isEmpty) {
             await _supabase
@@ -589,7 +637,9 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
 
   void _showSnack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -624,8 +674,8 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
                   Text(
                     'Admin Access Required',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -655,8 +705,8 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
                   Text(
                     'Could not load sanction directory',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Text(_error!),
@@ -737,13 +787,16 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
               ? const Center(child: Text('No sanction links found.'))
               : ListView.separated(
                   itemCount: rows.length,
-                  separatorBuilder: (context, index) => const SizedBox(height: 10),
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(height: 10),
                   itemBuilder: (context, index) {
                     final row = rows[index];
                     return _SanctionDirectoryCard(
                       row: row,
                       status: _statusByBreedClubId[row.clubId],
-                      showRequestButton: widget.showId != null && widget.showId!.trim().isNotEmpty,
+                      showRequestButton:
+                          widget.showId != null &&
+                          widget.showId!.trim().isNotEmpty,
                       isBusy: _markingRequested,
                       onOpen: () => _openUrl(row.url),
                       onMarkRequested: () => _markRequested(row),
@@ -794,9 +847,9 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
                   Text(
                     'Sanction Directory',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: primary,
-                        ),
+                      fontWeight: FontWeight.w800,
+                      color: primary,
+                    ),
                   ),
                   const SizedBox(height: 6),
                   Text(
@@ -838,7 +891,8 @@ class _SanctionDirectoryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasLink = row.url.trim().isNotEmpty;
     final statusColor = status?.color;
-    final canClearRequest = showRequestButton &&
+    final canClearRequest =
+        showRequestButton &&
         (status == _SanctionDirectoryStatus.secretaryRequested ||
             status == _SanctionDirectoryStatus.exhibitorRequested);
 
@@ -864,10 +918,11 @@ class _SanctionDirectoryCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        row.breedName.isEmpty ? 'All Breeds / General Sanction' : row.breedName,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w800,
-                            ),
+                        row.breedName.isEmpty
+                            ? 'All Breeds / General Sanction'
+                            : row.breedName,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w800),
                       ),
                       const SizedBox(height: 4),
                       Text(
@@ -895,13 +950,18 @@ class _SanctionDirectoryCard extends StatelessWidget {
               runSpacing: 8,
               children: [
                 if (row.sanctioningBody.isNotEmpty)
-                  _InfoChip(icon: Icons.account_balance, label: row.sanctioningBody),
+                  _InfoChip(
+                    icon: Icons.account_balance,
+                    label: row.sanctioningBody,
+                  ),
                 if (row.stateCode.isNotEmpty)
                   _InfoChip(icon: Icons.place_outlined, label: row.stateCode),
                 if (row.linkType.isNotEmpty)
                   _InfoChip(icon: Icons.link, label: row.linkType),
                 _InfoChip(
-                  icon: row.lastVerifiedAt == null ? Icons.report_problem_outlined : Icons.fact_check_outlined,
+                  icon: row.lastVerifiedAt == null
+                      ? Icons.report_problem_outlined
+                      : Icons.fact_check_outlined,
                   label: row.linkCheckedLabel,
                 ),
               ],
@@ -911,9 +971,9 @@ class _SanctionDirectoryCard extends StatelessWidget {
               if (row.linkLabel.isNotEmpty)
                 Text(
                   row.linkLabel,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
                 ),
               if (row.linkNotes.isNotEmpty) ...[
                 const SizedBox(height: 4),
@@ -934,24 +994,28 @@ class _SanctionDirectoryCard extends StatelessWidget {
                   message: !showRequestButton
                       ? 'Open this directory from a show sanctions dialog to mark or remove a request.'
                       : canClearRequest
-                          ? 'Remove the requested flag for this show.'
-                          : 'Mark this sanction as requested for this show.',
+                      ? 'Remove the requested flag for this show.'
+                      : 'Mark this sanction as requested for this show.',
                   child: OutlinedButton.icon(
                     onPressed: !showRequestButton || isBusy
                         ? null
                         : canClearRequest
-                            ? onClearRequested
-                            : onMarkRequested,
+                        ? onClearRequested
+                        : onMarkRequested,
                     icon: Icon(
                       canClearRequest
                           ? Icons.remove_circle_outline
                           : Icons.check_circle_outline,
                     ),
-                    label: Text(canClearRequest ? 'Remove Requested' : 'Mark Requested'),
+                    label: Text(
+                      canClearRequest ? 'Remove Requested' : 'Mark Requested',
+                    ),
                   ),
                 ),
                 OutlinedButton.icon(
-                  onPressed: row.linkId == null || isBusy ? null : onReportBroken,
+                  onPressed: row.linkId == null || isBusy
+                      ? null
+                      : onReportBroken,
                   icon: const Icon(Icons.flag_outlined),
                   label: const Text('Report Broken Link'),
                 ),
@@ -963,6 +1027,7 @@ class _SanctionDirectoryCard extends StatelessWidget {
     );
   }
 }
+
 class _DirectoryRequestStatusChip extends StatelessWidget {
   const _DirectoryRequestStatusChip({required this.status});
 
@@ -979,9 +1044,9 @@ class _DirectoryRequestStatusChip extends StatelessWidget {
       ),
       child: Text(
         status.label,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              fontWeight: FontWeight.w800,
-            ),
+        style: Theme.of(
+          context,
+        ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w800),
       ),
     );
   }
@@ -1006,9 +1071,9 @@ class _StatusChip extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: primary,
-              fontWeight: FontWeight.w700,
-            ),
+          color: primary,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }
@@ -1025,7 +1090,9 @@ class _InfoChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: .65),
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: .65),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
@@ -1099,14 +1166,8 @@ class _SanctionDirectoryRow {
       linkId: link == null ? null : (link['id'] ?? '').toString(),
       linkType: (link?['link_type'] ?? '').toString(),
       linkLabel: (link?['label'] ?? '').toString(),
-      url: _firstNonEmpty([
-        link?['url'],
-        club['website'],
-      ]),
-      linkNotes: _firstNonEmpty([
-        link?['notes'],
-        club['notes'],
-      ]),
+      url: _firstNonEmpty([link?['url'], club['website']]),
+      linkNotes: _firstNonEmpty([link?['notes'], club['notes']]),
       lastVerifiedAt: _tryParseDate(link?['last_verified_at']),
     );
   }
@@ -1175,6 +1236,7 @@ enum _SanctionDirectoryFilter {
     }
   }
 }
+
 class _ShowSectionOption {
   const _ShowSectionOption({
     required this.id,
@@ -1212,6 +1274,7 @@ class _ShowSectionOption {
     return letterLabel.isEmpty ? kindLabel : '$kindLabel $letterLabel';
   }
 }
+
 enum _SanctionDirectoryStatus {
   secretaryRequested,
   exhibitorRequested,
