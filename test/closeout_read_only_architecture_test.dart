@@ -42,6 +42,9 @@ void main() {
   final deferredArbaProgressMigration = File(
     'supabase/migrations/20260717204006_exclude_deferred_arba_from_closeout_progress.sql',
   ).readAsStringSync();
+  final largeCloseoutTimeoutMigration = File(
+    'supabase/migrations/20260718233449_allow_large_scoped_closeout_finalize.sql',
+  ).readAsStringSync();
   final edgeFunction = File(
     'supabase/functions/run-closeout/index.ts',
   ).readAsStringSync();
@@ -534,6 +537,21 @@ void main() {
   });
 
   group('database manifest and queue contract', () {
+    test('large closeouts receive a function-scoped timeout allowance', () {
+      expect(
+        largeCloseoutTimeoutMigration,
+        contains('alter function public.finalize_show_scoped('),
+      );
+      expect(
+        largeCloseoutTimeoutMigration,
+        contains("set statement_timeout = '55s'"),
+      );
+      expect(
+        largeCloseoutTimeoutMigration,
+        isNot(contains('alter role')),
+      );
+    });
+
     test('review details retain latest task history behind artifact cause', () {
       expect(finalFailureMigration, contains("'task_history_category'"));
       expect(finalFailureMigration, contains("'task_history_message'"));
