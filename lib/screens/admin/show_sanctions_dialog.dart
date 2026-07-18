@@ -17,16 +17,43 @@ class ShowSanctionsDialog {
     await showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => _ShowSanctionsDialog(showId: showId, showName: showName),
+      builder: (_) => _ShowSanctionsDialog(
+        showId: showId,
+        showName: showName,
+        accessMode: _ShowSanctionsAccessMode.manage,
+      ),
+    );
+  }
+
+  static Future<void> openForExhibitor(
+    BuildContext context, {
+    required String showId,
+    required String showName,
+  }) async {
+    await showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (_) => _ShowSanctionsDialog(
+        showId: showId,
+        showName: showName,
+        accessMode: _ShowSanctionsAccessMode.exhibitorView,
+      ),
     );
   }
 }
 
+enum _ShowSanctionsAccessMode { manage, exhibitorView }
+
 class _ShowSanctionsDialog extends StatefulWidget {
   final String showId;
   final String showName;
+  final _ShowSanctionsAccessMode accessMode;
 
-  const _ShowSanctionsDialog({required this.showId, required this.showName});
+  const _ShowSanctionsDialog({
+    required this.showId,
+    required this.showName,
+    required this.accessMode,
+  });
 
   @override
   State<_ShowSanctionsDialog> createState() => _ShowSanctionsDialogState();
@@ -45,7 +72,10 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
   final ScrollController _spreadsheetScrollController = ScrollController();
   String _searchText = '';
 
-  bool get _isReadOnly => _isLocked || _isFinalized;
+  bool get _isExhibitorView =>
+      widget.accessMode == _ShowSanctionsAccessMode.exhibitorView;
+
+  bool get _isReadOnly => _isExhibitorView || _isLocked || _isFinalized;
 
   final List<_SectionColumn> _sections = [];
   final List<_SanctionRowModel> _rows = [];
@@ -494,20 +524,20 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
 
     final clubRows = (clubsRes as List).cast<Map<String, dynamic>>();
 
-    final contactsRes = await supabase
-        .from('breed_club_contacts')
-        .select('id,breed_club_id,email,is_primary,is_active')
-        .eq('is_active', true)
-        .order('is_primary', ascending: false);
-
-    final contactRows = (contactsRes as List).cast<Map<String, dynamic>>();
-
     final primaryEmailByClubId = <String, String>{};
-    for (final c in contactRows) {
-      final clubId = (c['breed_club_id'] ?? '').toString().trim();
-      final email = (c['email'] ?? '').toString().trim();
-      if (clubId.isEmpty || email.isEmpty) continue;
-      primaryEmailByClubId.putIfAbsent(clubId, () => email);
+    if (!_isExhibitorView) {
+      final contactsRes = await supabase
+          .from('breed_club_contacts')
+          .select('id,breed_club_id,email,is_primary,is_active')
+          .eq('is_active', true)
+          .order('is_primary', ascending: false);
+
+      for (final c in (contactsRes as List).cast<Map<String, dynamic>>()) {
+        final clubId = (c['breed_club_id'] ?? '').toString().trim();
+        final email = (c['email'] ?? '').toString().trim();
+        if (clubId.isEmpty || email.isEmpty) continue;
+        primaryEmailByClubId.putIfAbsent(clubId, () => email);
+      }
     }
 
     final rowMap = <String, _SanctionRowModel>{};
@@ -747,6 +777,10 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
 
     var tabRows = _rows.where((r) => r.tabKind == tab).toList();
 
+    if (_isExhibitorView) {
+      tabRows = tabRows.where(_rowHasVisibleSanctionStatus).toList();
+    }
+
     final search = _searchText.trim().toLowerCase();
     if (search.isNotEmpty) {
       final normalizedSearch = _normName(search)
@@ -851,6 +885,16 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
     }
 
     return result;
+  }
+
+  bool _rowHasVisibleSanctionStatus(_SanctionRowModel row) {
+    if (row.rowType != _SanctionRowType.club) return false;
+    return _sections.any((section) {
+      if (!row.allowedSectionIds.contains(section.id)) return false;
+      final key = _cellKey(row.key, section.id);
+      return (_controllers[key]?.text.trim().isNotEmpty ?? false) ||
+          (_requestStatusByCellKey[key]?.trim().isNotEmpty ?? false);
+    });
   }
 
   Future<void> _saveAll() async {
@@ -1039,16 +1083,19 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                 constraints: BoxConstraints(
                   minWidth:
                       firstColWidth +
-                      useArbaColWidth +
+                      (_isExhibitorView ? 0 : useArbaColWidth) +
                       (_sections.length * dataColWidth),
                 ),
                 child: Table(
                   defaultVerticalAlignment: TableCellVerticalAlignment.middle,
                   columnWidths: {
                     0: const FixedColumnWidth(firstColWidth),
-                    1: const FixedColumnWidth(useArbaColWidth),
+                    if (!_isExhibitorView)
+                      1: const FixedColumnWidth(useArbaColWidth),
                     for (int i = 0; i < _sections.length; i++)
-                      i + 2: const FixedColumnWidth(dataColWidth),
+                      i + (_isExhibitorView ? 1 : 2): const FixedColumnWidth(
+                        dataColWidth,
+                      ),
                   },
                   border: TableBorder.all(
                     color: Colors.grey.shade300,
@@ -1061,7 +1108,7 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                       ),
                       children: [
                         _headerCell('Club / Breed / State Club'),
-                        _headerCell('Use ARBA'),
+                        if (!_isExhibitorView) _headerCell('Use ARBA'),
                         ..._sections.map((s) => _headerCell(s.displayName)),
                       ],
                     ),
@@ -1076,9 +1123,21 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                             _sections.map((s) => s.id),
                           ),
                         ),
-                        _centerCell(const SizedBox.shrink(), height: rowHeight),
+                        if (!_isExhibitorView)
+                          _centerCell(
+                            const SizedBox.shrink(),
+                            height: rowHeight,
+                          ),
                         ..._sections.map((s) {
                           final c = _controllerFor('__ARBA__', s.id);
+                          if (_isExhibitorView) {
+                            return _readOnlySanctionCell(
+                              value: c.text.trim(),
+                              height: rowHeight,
+                              showNumber: true,
+                              fillColor: _cellStatusColor('__ARBA__', s.id),
+                            );
+                          }
                           return _inputCell(
                             controller: c,
                             enabled: !_saving && !_isReadOnly,
@@ -1101,10 +1160,11 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                               height: smallRowHeight,
                               isBold: true,
                             ),
-                            _centerCell(
-                              const SizedBox.shrink(),
-                              height: smallRowHeight,
-                            ),
+                            if (!_isExhibitorView)
+                              _centerCell(
+                                const SizedBox.shrink(),
+                                height: smallRowHeight,
+                              ),
                             ..._sections.map(
                               (_) => _centerCell(
                                 const SizedBox.shrink(),
@@ -1127,20 +1187,22 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                               row.allowedSectionIds,
                             ),
                           ),
-                          _centerCell(
-                            Checkbox(
-                              value: useArba,
-                              visualDensity: VisualDensity.compact,
-                              onChanged: (_saving || _isReadOnly)
-                                  ? null
-                                  : (v) {
-                                      setState(() {
-                                        _useArbaByRowKey[row.key] = v ?? false;
-                                      });
-                                    },
+                          if (!_isExhibitorView)
+                            _centerCell(
+                              Checkbox(
+                                value: useArba,
+                                visualDensity: VisualDensity.compact,
+                                onChanged: (_saving || _isReadOnly)
+                                    ? null
+                                    : (v) {
+                                        setState(() {
+                                          _useArbaByRowKey[row.key] =
+                                              v ?? false;
+                                        });
+                                      },
+                              ),
+                              height: smallRowHeight,
                             ),
-                            height: smallRowHeight,
-                          ),
                           ..._sections.map((s) {
                             final c = _controllerFor(row.key, s.id);
                             final allowedHere = row.allowedSectionIds.contains(
@@ -1154,6 +1216,20 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                                 child: const ColoredBox(
                                   color: Color(0xFFF3F4F6),
                                 ),
+                              );
+                            }
+
+                            if (_isExhibitorView) {
+                              return _readOnlySanctionCell(
+                                value: c.text.trim(),
+                                requestStatus:
+                                    _requestStatusByCellKey[_cellKey(
+                                      row.key,
+                                      s.id,
+                                    )],
+                                height: smallRowHeight,
+                                showNumber: false,
+                                fillColor: _cellStatusColor(row.key, s.id),
                               );
                             }
 
@@ -1298,6 +1374,40 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
     );
   }
 
+  Widget _readOnlySanctionCell({
+    required String value,
+    String? requestStatus,
+    required double height,
+    required bool showNumber,
+    Color? fillColor,
+  }) {
+    final normalizedStatus = requestStatus?.trim().toLowerCase();
+    final label = value.isNotEmpty
+        ? showNumber
+              ? value
+              : 'Sanctioned'
+        : switch (normalizedStatus) {
+            'secretary_requested' => 'Requested',
+            'exhibitor_requested' => 'Requested',
+            'problem' => 'Problem',
+            _ => '',
+          };
+
+    return SizedBox(
+      height: height,
+      child: ColoredBox(
+        color: fillColor ?? Colors.transparent,
+        child: Center(
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+          ),
+        ),
+      ),
+    );
+  }
+
   Color? _cellStatusColor(String rowKey, String sectionId) {
     final value = _controllerFor(rowKey, sectionId).text.trim();
     if (value.isNotEmpty) {
@@ -1355,7 +1465,9 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'Sanction Numbers — ${widget.showName}',
+                        _isExhibitorView
+                            ? 'Show Sanctions — ${widget.showName}'
+                            : 'Sanction Numbers — ${widget.showName}',
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w700,
@@ -1393,7 +1505,9 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                             children: [
                               Expanded(
                                 child: Text(
-                                  'Sections are pulled from this show only and sorted Open first, Youth last.',
+                                  _isExhibitorView
+                                      ? 'View sanctioned and requested breeds or clubs by show section. Only ARBA sanction numbers are displayed.'
+                                      : 'Sections are pulled from this show only and sorted Open first, Youth last.',
                                   style: TextStyle(
                                     color: AppColors.headerForeground
                                         .withValues(alpha: .9),
@@ -1407,10 +1521,14 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                                     : () async {
                                         await Navigator.of(context).push(
                                           MaterialPageRoute(
-                                            builder: (_) =>
-                                                SanctionDirectoryScreen(
-                                                  showId: widget.showId,
-                                                ),
+                                            builder: (_) => SanctionDirectoryScreen(
+                                              showId: widget.showId,
+                                              accessMode: _isExhibitorView
+                                                  ? SanctionDirectoryAccessMode
+                                                        .exhibitor
+                                                  : SanctionDirectoryAccessMode
+                                                        .admin,
+                                            ),
                                           ),
                                         );
 
@@ -1455,7 +1573,7 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                             ),
                           ),
                           const SizedBox(height: 12),
-                          if (_isReadOnly) ...[
+                          if (_isReadOnly && !_isExhibitorView) ...[
                             Container(
                               width: double.infinity,
                               padding: const EdgeInsets.all(12),
@@ -1532,41 +1650,50 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                                   ),
                           ),
                           const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton(
-                                  onPressed: _saving
-                                      ? null
-                                      : () => Navigator.pop(context),
-                                  child: const Text('Close'),
-                                ),
+                          if (_isExhibitorView)
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton(
+                                onPressed: () => Navigator.pop(context),
+                                child: const Text('Close'),
                               ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: FilledButton(
-                                  style: FilledButton.styleFrom(
-                                    backgroundColor: AppColors.primaryButton,
-                                    foregroundColor:
-                                        AppColors.primaryButtonText,
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 16,
+                            )
+                          else
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: _saving
+                                        ? null
+                                        : () => Navigator.pop(context),
+                                    child: const Text('Close'),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: FilledButton(
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: AppColors.primaryButton,
+                                      foregroundColor:
+                                          AppColors.primaryButtonText,
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 16,
+                                      ),
+                                    ),
+                                    onPressed: (_saving || _isReadOnly)
+                                        ? null
+                                        : _saveAll,
+                                    child: Text(
+                                      _saving
+                                          ? 'Saving…'
+                                          : _isReadOnly
+                                          ? 'View Only'
+                                          : 'Save',
                                     ),
                                   ),
-                                  onPressed: (_saving || _isReadOnly)
-                                      ? null
-                                      : _saveAll,
-                                  child: Text(
-                                    _saving
-                                        ? 'Saving…'
-                                        : _isReadOnly
-                                        ? 'View Only'
-                                        : 'Save',
-                                  ),
                                 ),
-                              ),
-                            ],
-                          ),
+                              ],
+                            ),
                         ],
                       ),
                     ),
@@ -1581,6 +1708,30 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
   }
 
   Widget _buildStatusLegend() {
+    if (_isExhibitorView) {
+      return Wrap(
+        spacing: 10,
+        runSpacing: 8,
+        children: const [
+          _SanctionStatusLegendItem(
+            color: Color(0xFFC8E6C9),
+            label: 'Sanctioned',
+          ),
+          _SanctionStatusLegendItem(
+            color: Color(0xFFFFECB3),
+            label: 'Secretary requested',
+          ),
+          _SanctionStatusLegendItem(
+            color: Color(0xFFBBDEFB),
+            label: 'Exhibitor requested',
+          ),
+          _SanctionStatusLegendItem(
+            color: Color(0xFFFFCDD2),
+            label: 'Problem / broken link',
+          ),
+        ],
+      );
+    }
     return Wrap(
       spacing: 10,
       runSpacing: 8,

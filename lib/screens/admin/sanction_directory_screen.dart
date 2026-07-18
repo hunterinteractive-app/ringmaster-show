@@ -10,10 +10,17 @@ import '../../services/show_permissions_service.dart';
 
 final _supabase = Supabase.instance.client;
 
+enum SanctionDirectoryAccessMode { admin, exhibitor }
+
 class SanctionDirectoryScreen extends StatefulWidget {
-  const SanctionDirectoryScreen({super.key, this.showId});
+  const SanctionDirectoryScreen({
+    super.key,
+    this.showId,
+    this.accessMode = SanctionDirectoryAccessMode.admin,
+  });
 
   final String? showId;
+  final SanctionDirectoryAccessMode accessMode;
 
   @override
   State<SanctionDirectoryScreen> createState() =>
@@ -38,6 +45,9 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
   final Map<String, Set<String>> _requestedSectionsByBreedClubId = {};
   final Map<String, _LinkReport> _openReportByLinkId = {};
   final Set<String> _reviewingLinkIds = {};
+
+  bool get _isExhibitorView =>
+      widget.accessMode == SanctionDirectoryAccessMode.exhibitor;
 
   @override
   void initState() {
@@ -81,6 +91,15 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
       final isSuperAdmin = await _hasSuperAdminAccess(user.id);
       var hasAdminAccess = isSuperAdmin;
       final showId = widget.showId?.trim();
+      if (_isExhibitorView && showId != null && showId.isNotEmpty) {
+        final publishedShows = await _supabase
+            .from('shows')
+            .select('id')
+            .eq('id', showId)
+            .eq('is_published', true)
+            .limit(1);
+        hasAdminAccess = (publishedShows as List).isNotEmpty;
+      }
       if (!hasAdminAccess && showId != null && showId.isNotEmpty) {
         final permissions = await ShowPermissionsService.load(showId);
         hasAdminAccess = permissions.canManageShow;
@@ -154,7 +173,8 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
             statusByBreedClubId[breedClubId] = status;
           }
 
-          if (status == _SanctionDirectoryStatus.secretaryRequested) {
+          if (status == _SanctionDirectoryStatus.secretaryRequested ||
+              status == _SanctionDirectoryStatus.exhibitorRequested) {
             final sectionId = (map['section_id'] ?? '').toString().trim();
             final sectionLabel = sectionLabelById[sectionId];
             if (sectionLabel != null) {
@@ -228,11 +248,12 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
       });
 
       final openReportByLinkId = <String, _LinkReport>{};
+      final reportFields = _isSuperAdmin
+          ? 'id,sanction_link_id,reported_by_name,reported_by_email,report_reason,proposed_url,status,created_at'
+          : 'id,sanction_link_id,report_reason,proposed_url,status,created_at';
       final reportRows = await _supabase
           .from('breed_club_link_reports')
-          .select(
-            'id,sanction_link_id,reported_by_name,reported_by_email,report_reason,proposed_url,status,created_at',
-          )
+          .select(reportFields)
           .eq('status', 'open')
           .order('created_at', ascending: false);
       for (final raw in reportRows as List) {
@@ -833,7 +854,7 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
       for (final sectionId in confirmedSectionIds) {
         final existingRows = await _supabase
             .from('show_sanctions')
-            .select('id')
+            .select('id,sanction_number,request_status')
             .eq('show_id', showId)
             .eq('section_id', sectionId)
             .eq('breed_club_id', row.clubId)
@@ -843,6 +864,15 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
             ? Map<String, dynamic>.from(existingRows.first as Map)
             : null;
 
+        if (_isExhibitorView &&
+            (existing?['sanction_number'] ?? '').toString().trim().isNotEmpty) {
+          continue;
+        }
+        if (_isExhibitorView &&
+            (existing?['request_status'] ?? '').toString().trim().isNotEmpty) {
+          continue;
+        }
+
         final payload = <String, dynamic>{
           'show_id': showId,
           'section_id': sectionId,
@@ -850,9 +880,11 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
           'sanctioning_body': row.sanctioningBody,
           'club_name': row.clubName,
           'breed_name': row.breedName,
-          'request_status': 'secretary_requested',
+          'request_status': _isExhibitorView
+              ? 'exhibitor_requested'
+              : 'secretary_requested',
           'requested_by_user_id': user?.id,
-          'requested_by_role': 'admin',
+          'requested_by_role': _isExhibitorView ? 'exhibitor' : 'admin',
           'requested_at': DateTime.now().toUtc().toIso8601String(),
           'request_source': 'sanction_directory',
         };
@@ -1239,6 +1271,7 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
                     return _SanctionDirectoryCard(
                       row: row,
                       isSuperAdmin: _isSuperAdmin,
+                      isExhibitorView: _isExhibitorView,
                       pendingReport: report,
                       status: _statusByBreedClubId[row.clubId],
                       requestedSections:
@@ -1316,6 +1349,8 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
                   Text(
                     _isSuperAdmin
                         ? 'Super admin view for maintaining breed club sanction and sweepstakes links.'
+                        : _isExhibitorView
+                        ? 'Exhibitor view for opening sanction links, marking requests, and reporting broken links.'
                         : 'Secretary view for finding sanction links, marking requests, and reporting broken links.',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: Colors.white.withValues(alpha: .88),
@@ -1335,6 +1370,7 @@ class _SanctionDirectoryCard extends StatelessWidget {
   const _SanctionDirectoryCard({
     required this.row,
     required this.isSuperAdmin,
+    required this.isExhibitorView,
     required this.pendingReport,
     required this.status,
     required this.requestedSections,
@@ -1351,6 +1387,7 @@ class _SanctionDirectoryCard extends StatelessWidget {
 
   final _SanctionDirectoryRow row;
   final bool isSuperAdmin;
+  final bool isExhibitorView;
   final _LinkReport? pendingReport;
   final _SanctionDirectoryStatus? status;
   final Set<String> requestedSections;
@@ -1372,6 +1409,7 @@ class _SanctionDirectoryCard extends StatelessWidget {
     final statusColor = status?.color;
     final hasPendingReport = pendingReport != null;
     final canClearRequest =
+        !isExhibitorView &&
         showRequestButton &&
         (status == _SanctionDirectoryStatus.secretaryRequested ||
             status == _SanctionDirectoryStatus.exhibitorRequested);
@@ -1497,7 +1535,14 @@ class _SanctionDirectoryCard extends StatelessWidget {
                     spacing: 8,
                     runSpacing: 8,
                     children: requestedSections
-                        .map((section) => _RequestedSectionChip(label: section))
+                        .map(
+                          (section) => _RequestedSectionChip(
+                            label: section,
+                            isExhibitorRequest:
+                                status ==
+                                _SanctionDirectoryStatus.exhibitorRequested,
+                          ),
+                        )
                         .toList(),
                   ),
                 ],
@@ -1614,7 +1659,13 @@ class _SanctionDirectoryCard extends StatelessWidget {
                           ),
                           side: BorderSide(color: colorScheme.primary),
                         ),
-                        onPressed: !showRequestButton || isBusy
+                        onPressed:
+                            !showRequestButton ||
+                                isBusy ||
+                                (isExhibitorView &&
+                                    status ==
+                                        _SanctionDirectoryStatus
+                                            .exhibitorRequested)
                             ? null
                             : canClearRequest
                             ? onClearRequested
@@ -1627,6 +1678,11 @@ class _SanctionDirectoryCard extends StatelessWidget {
                         label: Text(
                           canClearRequest
                               ? 'Remove Requested'
+                              : isExhibitorView &&
+                                    status ==
+                                        _SanctionDirectoryStatus
+                                            .exhibitorRequested
+                              ? 'Requested'
                               : 'Mark Requested',
                         ),
                       ),
@@ -1709,23 +1765,35 @@ class _DirectoryRequestStatusChip extends StatelessWidget {
 }
 
 class _RequestedSectionChip extends StatelessWidget {
-  const _RequestedSectionChip({required this.label});
+  const _RequestedSectionChip({
+    required this.label,
+    required this.isExhibitorRequest,
+  });
 
   final String label;
+  final bool isExhibitorRequest;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.amber.shade200,
+        color: isExhibitorRequest
+            ? Colors.blue.shade100
+            : Colors.amber.shade200,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.amber.shade800),
+        border: Border.all(
+          color: isExhibitorRequest
+              ? Colors.blue.shade700
+              : Colors.amber.shade800,
+        ),
       ),
       child: Text(
         '$label requested',
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: Colors.brown.shade900,
+          color: isExhibitorRequest
+              ? Colors.blue.shade900
+              : Colors.brown.shade900,
           fontWeight: FontWeight.w800,
         ),
       ),
