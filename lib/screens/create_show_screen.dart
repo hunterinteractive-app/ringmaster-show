@@ -28,6 +28,7 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
   DateTime _end = DateTime.now();
   bool _published = false;
   bool _isNationalShow = false;
+  String? _nationalShowSectionKey;
   bool _autoEmailCheckInSheets = false;
 
   int _openCount = 1;
@@ -220,6 +221,11 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
       return false;
     }
 
+    if (_isNationalShow && _nationalShowSectionKey == null) {
+      setState(() => _msg = 'Select which show is the national show.');
+      return false;
+    }
+
     if (_entryCloseAt != null) {
       final showEndLocal = DateTime(_end.year, _end.month, _end.day, 23, 59);
       if (_entryCloseAt!.isAfter(showEndLocal)) {
@@ -264,6 +270,30 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
     );
 
     return rows;
+  }
+
+  List<DropdownMenuItem<String>> _nationalShowSectionItems() {
+    final items = <DropdownMenuItem<String>>[];
+    void addItems(String kind, String label, int count) {
+      for (var index = 0; index < count; index++) {
+        final letter = String.fromCharCode(65 + index);
+        items.add(
+          DropdownMenuItem(
+            value: '$kind:$letter',
+            child: Text('$label $letter'),
+          ),
+        );
+      }
+    }
+
+    addItems('open', 'Open', _openCount);
+    addItems('youth', 'Youth', _youthCount);
+    return items;
+  }
+
+  bool _nationalShowSectionKeyIsAvailable(String? key) {
+    if (key == null) return false;
+    return _nationalShowSectionItems().any((item) => item.value == key);
   }
 
   Future<Map<String, dynamic>> _createFirstClubForUser({
@@ -353,7 +383,21 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
 
       final sectionRows = _buildSectionRows(showId);
       if (sectionRows.isNotEmpty) {
-        await supabase.from('show_sections').insert(sectionRows);
+        final insertedSections = await supabase
+            .from('show_sections')
+            .insert(sectionRows)
+            .select('id,kind,letter');
+        if (_isNationalShow && _nationalShowSectionKey != null) {
+          final selected = (insertedSections as List).cast<Map>().firstWhere(
+            (section) =>
+                '${section['kind']}:${section['letter']}' ==
+                _nationalShowSectionKey,
+          );
+          await supabase
+              .from('shows')
+              .update({'national_show_section_id': selected['id']})
+              .eq('id', showId);
+        }
       }
 
       if (!mounted) return;
@@ -555,8 +599,27 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
                               value: _isNationalShow,
                               onChanged: _saving
                                   ? null
-                                  : (v) => setState(() => _isNationalShow = v),
+                                  : (v) => setState(() {
+                                      _isNationalShow = v;
+                                      if (!v) _nationalShowSectionKey = null;
+                                    }),
                             ),
+                            if (_isNationalShow) ...[
+                              const SizedBox(height: 8),
+                              DropdownButtonFormField<String>(
+                                initialValue: _nationalShowSectionKey,
+                                decoration: const InputDecoration(
+                                  labelText: 'Which show is the national show?',
+                                  border: OutlineInputBorder(),
+                                ),
+                                items: _nationalShowSectionItems(),
+                                onChanged: _saving
+                                    ? null
+                                    : (value) => setState(
+                                        () => _nationalShowSectionKey = value,
+                                      ),
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -686,7 +749,14 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
                               }),
                               onChanged: _saving
                                   ? null
-                                  : (v) => setState(() => _openCount = v ?? 0),
+                                  : (v) => setState(() {
+                                      _openCount = v ?? 0;
+                                      if (!_nationalShowSectionKeyIsAvailable(
+                                        _nationalShowSectionKey,
+                                      )) {
+                                        _nationalShowSectionKey = null;
+                                      }
+                                    }),
                             ),
                             const SizedBox(height: 12),
                             DropdownButtonFormField<int>(
@@ -723,7 +793,14 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
                               }),
                               onChanged: _saving
                                   ? null
-                                  : (v) => setState(() => _youthCount = v ?? 0),
+                                  : (v) => setState(() {
+                                      _youthCount = v ?? 0;
+                                      if (!_nationalShowSectionKeyIsAvailable(
+                                        _nationalShowSectionKey,
+                                      )) {
+                                        _nationalShowSectionKey = null;
+                                      }
+                                    }),
                             ),
                             const SizedBox(height: 8),
                             Text(

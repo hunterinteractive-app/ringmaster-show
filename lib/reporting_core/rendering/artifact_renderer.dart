@@ -165,7 +165,7 @@ final class RegistryArtifactRenderer implements ArtifactRenderer {
     }
     final show = await client
         .from('shows')
-        .select('name,start_date,is_national_show')
+        .select('name,start_date,is_national_show,national_show_section_id')
         .eq('id', artifact.showId)
         .single();
     final metadata = artifact.metadata;
@@ -187,7 +187,12 @@ final class RegistryArtifactRenderer implements ArtifactRenderer {
       sanctionNumber: _text(metadata, 'sanction_number'),
       exhibitorId: _text(metadata, 'exhibitor_id'),
       exhibitorName: _text(metadata, 'exhibitor_name'),
-      isNationalShow: show['is_national_show'] == true,
+      isNationalShow: reportScopeIsNationalShow(
+        isNationalShow: show['is_national_show'] == true,
+        nationalShowSectionId: show['national_show_section_id']?.toString(),
+        sectionId: _text(metadata, 'section_id'),
+        sectionIds: artifact.sectionIds,
+      ),
     );
     final definition = registry.get(artifact.reportName);
     final dataWatch = Stopwatch()..start();

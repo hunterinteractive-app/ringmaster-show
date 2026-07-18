@@ -20,6 +20,7 @@ import 'package:ringmaster_show/screens/admin/closeout/data/loaders/arba_report_
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/arba_report_pdf.dart';
 import 'package:ringmaster_show/screens/admin/closeout/registry/report_registry.dart';
 import 'package:ringmaster_show/screens/admin/closeout/services/closeout_runner.dart';
+import 'package:ringmaster_show/screens/admin/closeout/models/base/report_request.dart';
 import 'package:ringmaster_show/screens/admin/closeout/services/closeout_dashboard_poller.dart';
 import 'package:ringmaster_show/screens/admin/closeout/services/report_engine.dart';
 import 'package:ringmaster_show/screens/admin/closeout/services/report_upload_service.dart';
@@ -3440,7 +3441,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
     final arbaBuilder = ArbaReportPdfBuilder(assets: _reportAssets);
 
     final showBasics = await repository.loadShowBasics(widget.showId);
-    final isNationalShow = showBasics['is_national_show'] == true;
+    final showIsNational = showBasics['is_national_show'] == true;
+    final nationalShowSectionId = showBasics['national_show_section_id']
+        ?.toString();
     final showDate = _formatShowDate(showBasics['start_date']);
     final sanctionNumber = await _loadArbaSanctionNumber(widget.showId);
 
@@ -3577,6 +3580,12 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       final artifactSectionIds = _metadataSectionIds(artifact.metadata);
       final artifactSectionId = _artifactMetaString(artifact, 'section_id');
       final artifactScopeLabel = _artifactMetaString(artifact, 'scope_label');
+      final isNationalShow = reportScopeIsNationalShow(
+        isNationalShow: showIsNational,
+        nationalShowSectionId: nationalShowSectionId,
+        sectionId: artifactSectionId,
+        sectionIds: artifactSectionIds,
+      );
       onStarted(key);
 
       final runId = (artifact.finalizeRunId ?? '').trim().isNotEmpty
@@ -5224,7 +5233,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       final showBasics = await repository.loadShowBasics(widget.showId);
       final showDate = _formatShowDate(showBasics['start_date']);
       final sanctionNumber = await _loadArbaSanctionNumber(widget.showId);
-      final isNationalShow = showBasics['is_national_show'] == true;
+      final showIsNational = showBasics['is_national_show'] == true;
+      final nationalShowSectionId = showBasics['national_show_section_id']
+          ?.toString();
 
       final legsLoader = LegsReportLoader(repository);
       final checkInSheetLoader = CheckInSheetReportLoader(supabase);
@@ -5447,6 +5458,15 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       final breedJudgedScopeLabel = selectedReportScopeLabel.isNotEmpty
           ? selectedReportScopeLabel
           : (_artifactMetaString(resolvedArtifact, 'scope_label') ?? '');
+      final reportSectionIds = breedJudgedSectionIds.isNotEmpty
+          ? breedJudgedSectionIds
+          : resolvedArtifact.sectionIds;
+      final isNationalShow = reportScopeIsNationalShow(
+        isNationalShow: showIsNational,
+        nationalShowSectionId: nationalShowSectionId,
+        sectionId: _artifactMetaString(resolvedArtifact, 'section_id'),
+        sectionIds: reportSectionIds,
+      );
 
       /*debugPrint(
         '[Closeout:${widget.showId}] Generating report=$reportName '

@@ -44,6 +44,7 @@ create table if not exists public.shows (
   coop_numbering_mode text not null default 'separate',
   created_by uuid,
   is_national_show boolean not null default false,
+  national_show_section_id uuid,
   is_test boolean not null default false,
   is_locked boolean not null default false,
   entry_close_at timestamptz,
@@ -118,6 +119,12 @@ create table if not exists public.show_sections (
   sort_order integer not null default 0,
   unique(show_id, kind, letter, display_name)
 );
+
+alter table public.shows
+  add constraint shows_national_show_section_id_fkey
+  foreign key (national_show_section_id)
+  references public.show_sections(id)
+  on delete set null;
 
 create table if not exists public.exhibitors (
   id uuid primary key default extensions.gen_random_uuid(),

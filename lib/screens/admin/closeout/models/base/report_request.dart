@@ -1,5 +1,18 @@
 // lib/screens/admin/closeout/models/base/report_request.dart
 
+bool reportScopeIsNationalShow({
+  required bool isNationalShow,
+  String? nationalShowSectionId,
+  String? sectionId,
+  Iterable<String> sectionIds = const <String>[],
+}) {
+  if (!isNationalShow) return false;
+  final nationalId = nationalShowSectionId?.trim() ?? '';
+  if (nationalId.isEmpty) return true;
+  return sectionId?.trim() == nationalId ||
+      sectionIds.any((id) => id.trim() == nationalId);
+}
+
 class ReportRequest {
   ReportRequest({
     required this.showId,

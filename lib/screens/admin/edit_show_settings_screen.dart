@@ -159,6 +159,8 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
 
   bool _published = false;
   bool _isNationalShow = false;
+  String? _nationalShowSectionId;
+  List<Map<String, dynamic>> _showSections = [];
   bool _isLocked = false;
   bool _isFinalized = false;
 
@@ -596,7 +598,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
       final show = await supabase
           .from('shows')
           .select(
-            'id,name,location_name,start_date,end_date,timezone,is_published,is_national_show,entry_open_at,entry_close_at,final_award_mode,club_id,club_name,is_locked,locked_at,finalized_at',
+            'id,name,location_name,start_date,end_date,timezone,is_published,is_national_show,national_show_section_id,entry_open_at,entry_close_at,final_award_mode,club_id,club_name,is_locked,locked_at,finalized_at',
           )
           .eq('id', widget.showId)
           .single();
@@ -612,7 +614,17 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
       _timezone = (show['timezone'] ?? _timezone).toString();
       _published = show['is_published'] == true;
       _isNationalShow = show['is_national_show'] == true;
+      _nationalShowSectionId = show['national_show_section_id']?.toString();
       _isLocked = show['is_locked'] == true;
+
+      _showSections = List<Map<String, dynamic>>.from(
+        await supabase
+            .from('show_sections')
+            .select('id,kind,letter,display_name')
+            .eq('show_id', widget.showId)
+            .eq('is_enabled', true)
+            .order('sort_order'),
+      );
 
       final finalizedAt = (show['finalized_at'] ?? '').toString().trim();
       _isFinalized = finalizedAt.isNotEmpty;
@@ -786,6 +798,15 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
       return false;
     }
 
+    if (_isNationalShow &&
+        (_nationalShowSectionId == null ||
+            !_showSections.any(
+              (section) => section['id']?.toString() == _nationalShowSectionId,
+            ))) {
+      setState(() => _msg = 'Select which show is the national show.');
+      return false;
+    }
+
     return true;
   }
 
@@ -808,6 +829,9 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
             'timezone': _timezone,
             'is_published': _published,
             'is_national_show': _isNationalShow,
+            'national_show_section_id': _isNationalShow
+                ? _nationalShowSectionId
+                : null,
             'entry_open_at': _entryOpenAt?.toUtc().toIso8601String(),
             'entry_close_at': _entryCloseAt?.toUtc().toIso8601String(),
             'final_award_mode': _finalAwardMode,
@@ -1869,9 +1893,48 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                 value: _isNationalShow,
                                 onChanged: (_saving || _isReadOnly)
                                     ? null
-                                    : (v) =>
-                                          setState(() => _isNationalShow = v),
+                                    : (v) => setState(() {
+                                        _isNationalShow = v;
+                                        if (!v) {
+                                          _nationalShowSectionId = null;
+                                        }
+                                      }),
                               ),
+                              if (_isNationalShow) ...[
+                                const SizedBox(height: 8),
+                                DropdownButtonFormField<String>(
+                                  initialValue:
+                                      _showSections.any(
+                                        (section) =>
+                                            section['id']?.toString() ==
+                                            _nationalShowSectionId,
+                                      )
+                                      ? _nationalShowSectionId
+                                      : null,
+                                  decoration: const InputDecoration(
+                                    labelText:
+                                        'Which show is the national show?',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                  items: _showSections
+                                      .map(
+                                        (section) => DropdownMenuItem<String>(
+                                          value: section['id']?.toString(),
+                                          child: Text(
+                                            (section['display_name'] ??
+                                                    '${section['kind']} ${section['letter']}')
+                                                .toString(),
+                                          ),
+                                        ),
+                                      )
+                                      .toList(),
+                                  onChanged: (_saving || _isReadOnly)
+                                      ? null
+                                      : (value) => setState(
+                                          () => _nationalShowSectionId = value,
+                                        ),
+                                ),
+                              ],
                               const SizedBox(height: 12),
                               DropdownButtonFormField<String>(
                                 initialValue: _finalAwardMode,
