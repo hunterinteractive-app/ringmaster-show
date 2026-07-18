@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../widgets/ringmaster_page_shell.dart';
 import '../../services/app_session.dart';
+import '../../services/show_permissions_service.dart';
 
 final _supabase = Supabase.instance.client;
 
@@ -22,6 +23,7 @@ class SanctionDirectoryScreen extends StatefulWidget {
 class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
   bool _loading = true;
   bool _hasAdminAccess = false;
+  bool _isSuperAdmin = false;
   bool _markingRequested = false;
   String? _error;
 
@@ -64,6 +66,7 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
       if (user == null) {
         setState(() {
           _hasAdminAccess = false;
+          _isSuperAdmin = false;
           _rows = const [];
           _sections = const [];
           _statusByBreedClubId.clear();
@@ -73,10 +76,17 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
         return;
       }
 
-      final hasAdminAccess = await _hasSuperAdminAccess(user.id);
+      final isSuperAdmin = await _hasSuperAdminAccess(user.id);
+      var hasAdminAccess = isSuperAdmin;
+      final showId = widget.showId?.trim();
+      if (!hasAdminAccess && showId != null && showId.isNotEmpty) {
+        final permissions = await ShowPermissionsService.load(showId);
+        hasAdminAccess = permissions.canManageShow;
+      }
       if (!hasAdminAccess) {
         setState(() {
           _hasAdminAccess = false;
+          _isSuperAdmin = false;
           _rows = const [];
           _sections = const [];
           _statusByBreedClubId.clear();
@@ -216,6 +226,7 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
 
       setState(() {
         _hasAdminAccess = true;
+        _isSuperAdmin = isSuperAdmin;
         _rows = rows;
         _sections = sections;
         _statusByBreedClubId
@@ -1206,6 +1217,7 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
                         : _openReportByLinkId[row.linkId];
                     return _SanctionDirectoryCard(
                       row: row,
+                      isSuperAdmin: _isSuperAdmin,
                       pendingReport: report,
                       status: _statusByBreedClubId[row.clubId],
                       showRequestButton:
@@ -1278,7 +1290,9 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Admin view for maintaining breed club sanction and sweepstakes links before this is opened more broadly to show secretaries.',
+                    _isSuperAdmin
+                        ? 'Super admin view for maintaining breed club sanction and sweepstakes links.'
+                        : 'Secretary view for finding sanction links, marking requests, and reporting broken links.',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: Colors.white.withValues(alpha: .88),
                     ),
@@ -1296,6 +1310,7 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
 class _SanctionDirectoryCard extends StatelessWidget {
   const _SanctionDirectoryCard({
     required this.row,
+    required this.isSuperAdmin,
     required this.pendingReport,
     required this.status,
     required this.showRequestButton,
@@ -1310,6 +1325,7 @@ class _SanctionDirectoryCard extends StatelessWidget {
   });
 
   final _SanctionDirectoryRow row;
+  final bool isSuperAdmin;
   final _LinkReport? pendingReport;
   final _SanctionDirectoryStatus? status;
   final bool showRequestButton;
@@ -1424,13 +1440,13 @@ class _SanctionDirectoryCard extends StatelessWidget {
                         icon: Icons.place_outlined,
                         label: row.stateCode,
                       ),
-                    if (row.linkType.isNotEmpty)
+                    if (isSuperAdmin && row.linkType.isNotEmpty)
                       _InfoChip(icon: Icons.link, label: row.linkType),
                     _InfoChip(
                       icon: row.lastVerifiedAt == null
                           ? Icons.report_problem_outlined
                           : Icons.fact_check_outlined,
-                      label: row.linkCheckedLabel,
+                      label: row.linkCheckedLabel(showDate: isSuperAdmin),
                     ),
                   ],
                 ),
@@ -1471,11 +1487,14 @@ class _SanctionDirectoryCard extends StatelessWidget {
                               ),
                         ),
                         const SizedBox(height: 6),
-                        Text(
-                          'Reported by ${pendingReport!.reporterLabel} • ${pendingReport!.createdAtLabel}',
-                          style: TextStyle(color: Colors.red.shade900),
-                        ),
-                        if (pendingReport!.reportReason.trim().isNotEmpty) ...[
+                        if (isSuperAdmin) ...[
+                          Text(
+                            'Reported by ${pendingReport!.reporterLabel} • ${pendingReport!.createdAtLabel}',
+                            style: TextStyle(color: Colors.red.shade900),
+                          ),
+                        ],
+                        if (isSuperAdmin &&
+                            pendingReport!.reportReason.trim().isNotEmpty) ...[
                           const SizedBox(height: 4),
                           Text(
                             pendingReport!.reportReason,
@@ -1535,7 +1554,7 @@ class _SanctionDirectoryCard extends StatelessWidget {
                       icon: const Icon(Icons.open_in_new),
                       label: const Text('Open Link'),
                     ),
-                    if (!hasPendingReport)
+                    if (isSuperAdmin && !hasPendingReport)
                       OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
                           foregroundColor: colorScheme.primary,
@@ -1595,7 +1614,8 @@ class _SanctionDirectoryCard extends StatelessWidget {
                             : 'Report Broken Link',
                       ),
                     ),
-                    if (hasPendingReport &&
+                    if (isSuperAdmin &&
+                        hasPendingReport &&
                         pendingReport!.proposedUrl.trim().isNotEmpty)
                       ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
@@ -1606,7 +1626,7 @@ class _SanctionDirectoryCard extends StatelessWidget {
                         icon: const Icon(Icons.check_circle_outline),
                         label: const Text('Approve New Link'),
                       ),
-                    if (hasPendingReport)
+                    if (isSuperAdmin && hasPendingReport)
                       OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Colors.red.shade800,
@@ -1857,8 +1877,9 @@ class _SanctionDirectoryRow {
         .join(' ');
   }
 
-  String get linkCheckedLabel {
+  String linkCheckedLabel({required bool showDate}) {
     if (lastVerifiedAt == null) return 'Link not checked';
+    if (!showDate) return 'Link checked';
     final date = lastVerifiedAt!;
     return 'Link checked ${date.month}/${date.day}/${date.year}';
   }
