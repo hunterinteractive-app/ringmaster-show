@@ -65,6 +65,32 @@ const _reviewReports = <CloseoutReviewReport>[
 
 void main() {
   group('closeout failure display', () {
+    test('prefers useful task diagnostics over the generic render message', () {
+      final display = closeoutFailureDisplay(
+        errorCategory: 'render_error',
+        metadataErrorMessage: 'The report could not be rendered.',
+        taskErrorMessage: 'The report could not be rendered.',
+        taskLastError: 'Exception: Open A is missing an ARBA sanction number.',
+      );
+
+      expect(display.message, 'Open A is missing an ARBA sanction number.');
+    });
+
+    test('replaces database identifiers with the section name', () {
+      final display = closeoutFailureDisplay(
+        errorCategory: 'render_error',
+        taskLastError:
+            'Show a97fbdd2-b6a4-4f5c-ac99-5d4fbf763550 is missing an ARBA sanction number.',
+        sectionLabel: 'Open A',
+      );
+
+      expect(
+        display.message,
+        'Show Open A is missing an ARBA sanction number.',
+      );
+      expect(display.message, isNot(contains('a97fbdd2')));
+    });
+
     test('maps the current ARBA Best In Show address error', () {
       final display = closeoutFailureDisplay(
         errorCategory: 'render_error',

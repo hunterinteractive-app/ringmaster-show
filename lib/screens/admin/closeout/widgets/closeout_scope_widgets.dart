@@ -415,6 +415,7 @@ CloseoutFailureDisplay closeoutFailureDisplay({
   String missingField = '',
   String missingLabel = '',
   String exhibitorName = '',
+  String sectionLabel = '',
 }) {
   final details = <String>[
     metadataLastError,
@@ -452,17 +453,31 @@ CloseoutFailureDisplay closeoutFailureDisplay({
     );
   }
 
-  final fallback = details.isEmpty
+  final usefulDetails = details.where(
+    (value) =>
+        value.toLowerCase().replaceAll(RegExp(r'[.!]+$'), '') !=
+        'the report could not be rendered',
+  );
+  final fallback = usefulDetails.isEmpty
       ? 'No additional error details are available.'
-      : details.first.replaceFirst(
+      : usefulDetails.first.replaceFirst(
           RegExp(r'^\s*exception\s*:\s*', caseSensitive: false),
           '',
         );
+  final friendlyFallback = fallback.replaceAllMapped(
+    RegExp(
+      r'\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b',
+      caseSensitive: false,
+    ),
+    (_) => sectionLabel.trim().isNotEmpty
+        ? sectionLabel.trim()
+        : 'the selected section',
+  );
   return CloseoutFailureDisplay(
     title: 'The report could not be rendered',
-    message: fallback.isEmpty
+    message: friendlyFallback.isEmpty
         ? 'No additional error details are available.'
-        : fallback,
+        : friendlyFallback,
   );
 }
 
@@ -689,6 +704,7 @@ class CloseoutReportsNeedingReviewPanel extends StatelessWidget {
       missingField: report.missingField,
       missingLabel: report.missingLabel,
       exhibitorName: report.exhibitorName,
+      sectionLabel: report.sectionLabel,
     );
   }
 
