@@ -84,6 +84,34 @@ void main() {
       expect(generateBody, contains('finalizeRunId: finalizeRunId'));
     });
 
+    test('bulk regeneration and dashboards preserve species scope', () {
+      final closeoutSource = File(
+        'lib/screens/admin/show_closeout.dart',
+      ).readAsStringSync();
+      final runnerSource = File(
+        'supabase/functions/run-closeout/index.ts',
+      ).readAsStringSync();
+      final migration = File(
+        'supabase/migrations/20260718224839_species_scoped_closeout_regeneration.sql',
+      ).readAsStringSync();
+
+      expect(
+        closeoutSource,
+        contains("'get_closeout_dashboard_scoped_for_species'"),
+      );
+      expect(closeoutSource, contains("'species_filter':"));
+      expect(
+        runnerSource,
+        contains('"requeue_closeout_render_tasks_for_species"'),
+      );
+      expect(runnerSource, contains('p_species_filter: speciesFilter'));
+      expect(
+        migration,
+        contains("lower(a.metadata ->> 'species') = v_species"),
+      );
+      expect(migration, contains('get_closeout_dashboard_scoped_for_species'));
+    });
+
     test('regeneration reuses the finalize-run artifact identity owner', () {
       final createBody = methodBody(
         'Future<ReportArtifactSummary> _createManualReportArtifact({',
@@ -228,7 +256,7 @@ void main() {
         'Future<void> _ensureReportsLoaded',
       );
 
-      expect(body, contains("'get_closeout_dashboard_scoped'"));
+      expect(body, contains("'get_closeout_dashboard_scoped_for_species'"));
       expect(body, contains("'p_scope_key'"));
       expect(body, contains("'p_section_ids'"));
       expect(body, contains("'p_artifact_limit': pageSize"));

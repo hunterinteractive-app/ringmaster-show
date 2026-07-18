@@ -130,7 +130,11 @@ class CloseoutScopeResolver {
     }).toList();
 
     final sectionIds = selected.map((section) => section.id).toSet();
-    final species = selected.expand((section) => section.species).toSet();
+    final species = switch (selection.kind) {
+      CloseoutScopeKind.rabbits => <String>{'rabbit'},
+      CloseoutScopeKind.cavies => <String>{'cavy'},
+      _ => selected.expand((section) => section.species).toSet(),
+    };
     final letters = selected
         .map((section) => section.letter.trim().toUpperCase())
         .where((letter) => letter.isNotEmpty)

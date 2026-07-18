@@ -219,6 +219,38 @@ void main() {
     );
   });
 
+  test('mixed sections retain the explicitly selected species', () {
+    const mixedSections = <CloseoutSection>[
+      CloseoutSection(
+        id: 'mixed-open-a',
+        kind: 'open',
+        letter: 'A',
+        displayName: 'Open A',
+        breedScope: 'all',
+        breedIds: {},
+        species: {'rabbit', 'cavy'},
+        isEnabled: true,
+      ),
+    ];
+    final rabbit = resolver.resolve(
+      showId: 'mixed-show',
+      sections: mixedSections,
+      selection: const CloseoutScopeSelection(kind: CloseoutScopeKind.rabbits),
+    );
+    final cavy = resolver.resolve(
+      showId: 'mixed-show',
+      sections: mixedSections,
+      selection: const CloseoutScopeSelection(kind: CloseoutScopeKind.cavies),
+    );
+
+    expect(rabbit.sectionIds, {'mixed-open-a'});
+    expect(cavy.sectionIds, {'mixed-open-a'});
+    expect(rabbit.species, {'rabbit'});
+    expect(cavy.species, {'cavy'});
+    expect(rabbit.displayLabel, startsWith('Rabbit '));
+    expect(cavy.displayLabel, startsWith('Cavy '));
+  });
+
   test('section presentation hides raw scope and species values', () {
     expect(
       CloseoutSectionPresentation.displayLabel(

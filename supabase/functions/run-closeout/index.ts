@@ -35,6 +35,12 @@ serve(async (req) => {
     const action = String(body.action ?? "finalize").trim();
     const finalizeRunId = String(body.finalize_run_id ?? "").trim();
     const suppliedScopeKey = String(body.scope_key ?? "").trim();
+    const requestedSpecies = String(body.species_filter ?? "").trim()
+      .toLowerCase();
+    const speciesFilter = requestedSpecies === "rabbit" ||
+        requestedSpecies === "cavy"
+      ? requestedSpecies
+      : null;
     const sectionIds = Array.isArray(body.section_ids)
       ? Array.from(
         new Set(
@@ -107,12 +113,13 @@ serve(async (req) => {
         : { finalize_run_id: data };
     } else {
       const { data, error } = await supabase.rpc(
-        "requeue_closeout_render_tasks",
+        "requeue_closeout_render_tasks_for_species",
         {
           p_show_id: showId,
           p_finalize_run_id: finalizeRunId,
           p_scope_key: stableScopeKey,
           p_regenerate_all: action === "regenerate_all",
+          p_species_filter: speciesFilter,
         },
       );
       if (error) throw error;
@@ -132,6 +139,7 @@ serve(async (req) => {
       job_id: jobId,
       ...result,
       scope_key: stableScopeKey,
+      species_filter: speciesFilter,
     });
   } catch (error) {
     const message = errorMessage(error);

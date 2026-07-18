@@ -434,6 +434,15 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
     ResolvedCloseoutScope resolved, {
     String? runId,
   }) {
+    final speciesFilter = _speciesFilterForScope(resolved);
+    if (speciesFilter != null) {
+      final artifactSpecies = (artifact.metadata['species'] ?? '')
+          .toString()
+          .trim()
+          .toLowerCase();
+      if (artifactSpecies != speciesFilter) return false;
+    }
+
     final selectedRunId = runId?.trim() ?? '';
     if (selectedRunId.isNotEmpty && artifact.finalizeRunId == selectedRunId) {
       return true;
@@ -644,6 +653,16 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
           completedRunIdsByScope: _completedFinalizeRunIdsByScope,
         ) ||
         _finalizeRunIdForSelectedScope.isNotEmpty;
+  }
+
+  String? _speciesFilterForScope(ResolvedCloseoutScope scope) {
+    if (scope.species.length != 1) return null;
+    final species = scope.species.single.trim().toLowerCase();
+    return species == 'rabbit' || species == 'cavy' ? species : null;
+  }
+
+  String _dashboardKeyForScope(ResolvedCloseoutScope scope) {
+    return '${scope.stableScopeKey}|${_speciesFilterForScope(scope) ?? 'all'}';
   }
 
   ResolvedCloseoutScope get _resolvedCloseoutScope {
@@ -2716,13 +2735,14 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
 
     Future<CloseoutDashboard> loadPage(int offset) async {
       final response = await supabase.rpc(
-        'get_closeout_dashboard_scoped',
+        'get_closeout_dashboard_scoped_for_species',
         params: {
           'p_show_id': widget.showId,
           'p_scope_key': resolved.stableScopeKey,
           'p_section_ids': resolved.sectionIds.toList()..sort(),
           'p_artifact_limit': pageSize,
           'p_artifact_offset': offset,
+          'p_species_filter': _speciesFilterForScope(resolved),
         },
       );
       return CloseoutDashboard.fromJson(
@@ -2812,11 +2832,11 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
     });
 
     try {
-      final requestedScopeKey = _resolvedCloseoutScope.stableScopeKey;
+      final requestedScopeKey = _dashboardKeyForScope(_resolvedCloseoutScope);
       final dashboard = await _loadDashboardSummary();
 
       if (!mounted ||
-          requestedScopeKey != _resolvedCloseoutScope.stableScopeKey) {
+          requestedScopeKey != _dashboardKeyForScope(_resolvedCloseoutScope)) {
         return;
       }
       final generationCompleted = _observeGenerationProgress(
@@ -2829,7 +2849,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         _dashboardScopeKey = requestedScopeKey;
         _completedFinalizeRunIdsByScope = runId.isEmpty
             ? const <String, String>{}
-            : <String, String>{requestedScopeKey: runId};
+            : <String, String>{_resolvedCloseoutScope.stableScopeKey: runId};
         _reportsLoaded = true;
         _rebuildReportCaches();
       });
@@ -2862,7 +2882,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       _dashboardRefreshInFlight = true;
       final requestRevision = _dashboardContextRevision;
       final requestedScope = _resolvedCloseoutScope;
-      final requestedScopeKey = requestedScope.stableScopeKey;
+      final requestedScopeKey = _dashboardKeyForScope(requestedScope);
       try {
         final dashboard = await _loadDashboardSummary(
           requestedScope: requestedScope,
@@ -2870,7 +2890,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
 
         if (!mounted) return;
         if (requestRevision != _dashboardContextRevision ||
-            requestedScopeKey != _resolvedCloseoutScope.stableScopeKey) {
+            requestedScopeKey !=
+                _dashboardKeyForScope(_resolvedCloseoutScope)) {
           _dashboardRefreshPending = true;
           continue;
         }
@@ -2885,7 +2906,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
           _dashboardScopeKey = requestedScopeKey;
           _completedFinalizeRunIdsByScope = runId.isEmpty
               ? const <String, String>{}
-              : <String, String>{requestedScopeKey: runId};
+              : <String, String>{requestedScope.stableScopeKey: runId};
           _reportsLoaded = true;
           _rebuildReportCaches();
 
@@ -2972,7 +2993,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
   }
 
   CloseoutGenerationProgress get _generationProgress {
-    if (_dashboardScopeKey != _resolvedCloseoutScope.stableScopeKey) {
+    if (_dashboardScopeKey != _dashboardKeyForScope(_resolvedCloseoutScope)) {
       return const CloseoutGenerationProgress();
     }
     final counts = _dashboard?.taskCounts ?? const CloseoutTaskCounts();
@@ -3021,7 +3042,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
   }
 
   String get _currentGenerationKey {
-    final scopeKey = _resolvedCloseoutScope.stableScopeKey;
+    final scopeKey = _dashboardKeyForScope(_resolvedCloseoutScope);
     final runId = (_dashboard?.latestFinalize.id ?? '').trim();
     return '$scopeKey|$runId';
   }
@@ -3210,7 +3231,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         throw StateError('Closeout completed without a current finalize run.');
       }
       _observedGenerationKey =
-          '${_resolvedCloseoutScope.stableScopeKey}|$resolvedRunId';
+          '${_dashboardKeyForScope(_resolvedCloseoutScope)}|$resolvedRunId';
       _observedActiveGeneration = true;
       final queuedCount = ((responseData['new_tasks'] ?? 0) as num).toInt();
       await _refreshDashboardOnly();
@@ -3237,6 +3258,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         'section_ids': _resolvedCloseoutScope.sectionIds.toList()..sort(),
         'scope_label': _selectedCloseoutScopeLabel,
         'scope_key': _resolvedCloseoutScope.stableScopeKey,
+        'species_filter': _speciesFilterForScope(_resolvedCloseoutScope),
         'action': action,
       },
     );
@@ -3247,7 +3269,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       );
     }
     final data = _normalizeFunctionData(response.data);
-    _observedGenerationKey = '${_resolvedCloseoutScope.stableScopeKey}|$runId';
+    _observedGenerationKey =
+        '${_dashboardKeyForScope(_resolvedCloseoutScope)}|$runId';
     _observedActiveGeneration = true;
     await _refreshDashboardOnly();
     return ((data['queued_count'] ?? 0) as num).toInt();
@@ -4659,12 +4682,12 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
 
     try {
       await _loadCloseoutScopes();
-      final requestedScopeKey = _resolvedCloseoutScope.stableScopeKey;
+      final requestedScopeKey = _dashboardKeyForScope(_resolvedCloseoutScope);
       final dashboard = await _loadDashboardSummary();
       await _loadArbaDetails();
 
       if (!mounted ||
-          requestedScopeKey != _resolvedCloseoutScope.stableScopeKey) {
+          requestedScopeKey != _dashboardKeyForScope(_resolvedCloseoutScope)) {
         return;
       }
       final generationCompleted = _observeGenerationProgress(
@@ -4677,7 +4700,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         _dashboardScopeKey = requestedScopeKey;
         _completedFinalizeRunIdsByScope = runId.isEmpty
             ? const <String, String>{}
-            : <String, String>{requestedScopeKey: runId};
+            : <String, String>{_resolvedCloseoutScope.stableScopeKey: runId};
         _reportsLoaded = true;
         _rebuildReportCaches();
 
