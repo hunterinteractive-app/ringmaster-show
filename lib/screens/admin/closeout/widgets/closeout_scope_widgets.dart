@@ -453,6 +453,21 @@ CloseoutFailureDisplay closeoutFailureDisplay({
     );
   }
 
+  final isMissingArbaSanction =
+      errorCategory.trim().toLowerCase() == 'missing_sanction_number';
+  if (isMissingArbaSanction) {
+    final subject = sectionLabel.trim().isNotEmpty
+        ? sectionLabel.trim()
+        : 'The selected section';
+    return CloseoutFailureDisplay(
+      title: 'Missing ARBA Sanction Number',
+      message:
+          '$subject is missing its ARBA sanction number. Add the sanction '
+          'number, then generate the ARBA report after exhibitor and club '
+          'reports are sent.',
+    );
+  }
+
   final usefulDetails = details.where(
     (value) =>
         value.toLowerCase().replaceAll(RegExp(r'[.!]+$'), '') !=
