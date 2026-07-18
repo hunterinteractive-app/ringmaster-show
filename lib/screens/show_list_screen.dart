@@ -1233,7 +1233,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
     final selection = await showDialog<_ShowInformationChoice>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Breeds & Sanctions'),
+        title: const Text('Sanctions and Counts'),
         content: SizedBox(
           width: 440,
           child: Column(
@@ -1781,7 +1781,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
                                                     size: 18,
                                                   ),
                                                   label: const Text(
-                                                    'Breeds & Sanctions',
+                                                    'Sanctions and Counts',
                                                   ),
                                                 ),
                                                 OutlinedButton.icon(
