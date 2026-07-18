@@ -585,11 +585,15 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
                           ? row.clubName
                           : '${row.breedName} • ${row.clubName}',
                       style: Theme.of(dialogContext).textTheme.bodyMedium
-                          ?.copyWith(fontWeight: FontWeight.w700),
+                          ?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                          ),
                     ),
                     const SizedBox(height: 12),
                     const Text(
                       'Choose the show sections this request applies to:',
+                      style: TextStyle(color: Colors.white),
                     ),
                     const SizedBox(height: 8),
                     ConstrainedBox(
@@ -604,7 +608,18 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
                               dense: true,
                               contentPadding: EdgeInsets.zero,
                               value: selected,
-                              title: Text(section.label),
+                              activeColor: Colors.white,
+                              checkColor: Theme.of(
+                                dialogContext,
+                              ).colorScheme.primary,
+                              side: const BorderSide(
+                                color: Colors.white,
+                                width: 2,
+                              ),
+                              title: Text(
+                                section.label,
+                                style: const TextStyle(color: Colors.white),
+                              ),
                               onChanged: (value) {
                                 setDialogState(() {
                                   if (value == true) {
@@ -745,11 +760,15 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
                           ? row.clubName
                           : '${row.breedName} • ${row.clubName}',
                       style: Theme.of(dialogContext).textTheme.bodyMedium
-                          ?.copyWith(fontWeight: FontWeight.w700),
+                          ?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                          ),
                     ),
                     const SizedBox(height: 12),
                     const Text(
                       'Choose the show sections where the requested flag should be removed. Existing sanction numbers will not be removed.',
+                      style: TextStyle(color: Colors.white),
                     ),
                     const SizedBox(height: 8),
                     ConstrainedBox(
@@ -764,7 +783,18 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
                               dense: true,
                               contentPadding: EdgeInsets.zero,
                               value: selected,
-                              title: Text(section.label),
+                              activeColor: Colors.white,
+                              checkColor: Theme.of(
+                                dialogContext,
+                              ).colorScheme.primary,
+                              side: const BorderSide(
+                                color: Colors.white,
+                                width: 2,
+                              ),
+                              title: Text(
+                                section.label,
+                                style: const TextStyle(color: Colors.white),
+                              ),
                               onChanged: (value) {
                                 setDialogState(() {
                                   if (value == true) {
