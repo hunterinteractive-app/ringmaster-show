@@ -1858,54 +1858,57 @@ class _ControlSheetsGeneratorSheetState
               const SizedBox(height: 10),
             ],
             const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.black12),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Font Size Scale',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Adjust judging sheet text size for clubs that prefer larger print.',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      const Text('100%'),
-                      Expanded(
-                        child: Slider(
-                          value: _fontScale,
-                          min: 1.0,
-                          max: 2.0,
-                          divisions: 10,
-                          label: '${(_fontScale * 100).round()}%',
-                          onChanged: _building
-                              ? null
-                              : (v) {
-                                  setState(() {
-                                    _fontScale = v;
-                                  });
-                                },
+            AppTheme.surfaceTextScope(
+              context,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.black12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Font Size Scale',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Adjust judging sheet text size for clubs that prefer larger print.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Text('100%'),
+                        Expanded(
+                          child: Slider(
+                            value: _fontScale,
+                            min: 1.0,
+                            max: 2.0,
+                            divisions: 10,
+                            label: '${(_fontScale * 100).round()}%',
+                            onChanged: _building
+                                ? null
+                                : (v) {
+                                    setState(() {
+                                      _fontScale = v;
+                                    });
+                                  },
+                          ),
                         ),
-                      ),
-                      Text('${(_fontScale * 100).round()}%'),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Maximum rendered font size is capped at 16 pt.',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
+                        Text('${(_fontScale * 100).round()}%'),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Maximum rendered font size is capped at 16 pt.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
               ),
             ),
             FilledButton.icon(

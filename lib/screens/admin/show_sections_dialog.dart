@@ -432,95 +432,98 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setInnerState) {
-            return AlertDialog(
-              title: Text(
-                s.breedScope == 'single'
-                    ? 'Select breed'
-                    : 'Select allowed breeds',
-              ),
-              content: SizedBox(
-                width: 520,
-                height: 420,
-                child: _loadingBreeds
-                    ? const Center(child: CircularProgressIndicator())
-                    : ListView.builder(
-                        itemCount: _breedOptions.length,
-                        itemBuilder: (context, index) {
-                          final breed = _breedOptions[index];
-                          final breedId = breed['id'].toString();
-                          final species = (breed['species'] ?? '')
-                              .toString()
-                              .toUpperCase();
-                          final name = (breed['name'] ?? '').toString();
-                          final checked = working.contains(breedId);
+            return AppTheme.gradientTextScope(
+              context,
+              child: AlertDialog(
+                title: Text(
+                  s.breedScope == 'single'
+                      ? 'Select breed'
+                      : 'Select allowed breeds',
+                ),
+                content: SizedBox(
+                  width: 520,
+                  height: 420,
+                  child: _loadingBreeds
+                      ? const Center(child: CircularProgressIndicator())
+                      : ListView.builder(
+                          itemCount: _breedOptions.length,
+                          itemBuilder: (context, index) {
+                            final breed = _breedOptions[index];
+                            final breedId = breed['id'].toString();
+                            final species = (breed['species'] ?? '')
+                                .toString()
+                                .toUpperCase();
+                            final name = (breed['name'] ?? '').toString();
+                            final checked = working.contains(breedId);
 
-                          if (s.breedScope == 'single') {
-                            return RadioListTile<String>(
-                              value: breedId,
-                              groupValue: working.isEmpty
-                                  ? null
-                                  : working.first,
+                            if (s.breedScope == 'single') {
+                              return RadioListTile<String>(
+                                value: breedId,
+                                groupValue: working.isEmpty
+                                    ? null
+                                    : working.first,
+                                title: Text('$species — $name'),
+                                onChanged: _isReadOnly
+                                    ? null
+                                    : (value) {
+                                        if (value == null) return;
+                                        setInnerState(() {
+                                          working
+                                            ..clear()
+                                            ..add(value);
+                                        });
+                                      },
+                              );
+                            }
+
+                            return CheckboxListTile(
+                              value: checked,
                               title: Text('$species — $name'),
+                              subtitle: const Text(
+                                'Choose the breeds allowed in this show.',
+                              ),
                               onChanged: _isReadOnly
                                   ? null
                                   : (value) {
-                                      if (value == null) return;
                                       setInnerState(() {
-                                        working
-                                          ..clear()
-                                          ..add(value);
+                                        if (value == true) {
+                                          working.add(breedId);
+                                        } else {
+                                          working.remove(breedId);
+                                        }
                                       });
                                     },
                             );
-                          }
-
-                          return CheckboxListTile(
-                            value: checked,
-                            title: Text('$species — $name'),
-                            subtitle: const Text(
-                              'Choose the breeds allowed in this show.',
-                            ),
-                            onChanged: _isReadOnly
-                                ? null
-                                : (value) {
-                                    setInnerState(() {
-                                      if (value == true) {
-                                        working.add(breedId);
-                                      } else {
-                                        working.remove(breedId);
-                                      }
-                                    });
-                                  },
-                          );
-                        },
-                      ),
+                          },
+                        ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: _isReadOnly
+                        ? null
+                        : () {
+                            working.clear();
+                            Navigator.pop(ctx);
+                          },
+                    child: const Text('Clear'),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: _isReadOnly
+                        ? null
+                        : () {
+                            setState(() {
+                              s.allowedBreedIds = working.toList();
+                            });
+                            Navigator.pop(ctx);
+                          },
+                    child: const Text('Apply'),
+                  ),
+                ],
               ),
-              actions: [
-                TextButton(
-                  onPressed: _isReadOnly
-                      ? null
-                      : () {
-                          working.clear();
-                          Navigator.pop(ctx);
-                        },
-                  child: const Text('Clear'),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Cancel'),
-                ),
-                FilledButton(
-                  onPressed: _isReadOnly
-                      ? null
-                      : () {
-                          setState(() {
-                            s.allowedBreedIds = working.toList();
-                          });
-                          Navigator.pop(ctx);
-                        },
-                  child: const Text('Apply'),
-                ),
-              ],
             );
           },
         );

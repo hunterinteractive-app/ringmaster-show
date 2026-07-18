@@ -2540,29 +2540,37 @@ class _MoveEntrySheetState extends State<_MoveEntrySheet> {
                   ),
                 ),
               ),
-            DropdownButtonFormField<String>(
-              initialValue: _sectionId,
-              decoration: const InputDecoration(
-                labelText: 'Move to section',
-                border: OutlineInputBorder(),
+            AppTheme.surfaceTextScope(
+              context,
+              child: DropdownButtonFormField<String>(
+                initialValue: _sectionId,
+                decoration: const InputDecoration(
+                  labelText: 'Move to section',
+                  border: OutlineInputBorder(),
+                ),
+                items: widget.sections
+                    .map(
+                      (s) => DropdownMenuItem<String>(
+                        value: s['id']?.toString(),
+                        child: Text(_sectionLabel(s)),
+                      ),
+                    )
+                    .toList(),
+                onChanged: _saving
+                    ? null
+                    : (v) => setState(() => _sectionId = v),
               ),
-              items: widget.sections
-                  .map(
-                    (s) => DropdownMenuItem<String>(
-                      value: s['id']?.toString(),
-                      child: Text(_sectionLabel(s)),
-                    ),
-                  )
-                  .toList(),
-              onChanged: _saving ? null : (v) => setState(() => _sectionId = v),
             ),
             const SizedBox(height: 12),
-            TextField(
-              controller: _className,
-              enabled: !_saving,
-              decoration: const InputDecoration(
-                labelText: 'Class',
-                border: OutlineInputBorder(),
+            AppTheme.surfaceTextScope(
+              context,
+              child: TextField(
+                controller: _className,
+                enabled: !_saving,
+                decoration: const InputDecoration(
+                  labelText: 'Class',
+                  border: OutlineInputBorder(),
+                ),
               ),
             ),
             const SizedBox(height: 12),

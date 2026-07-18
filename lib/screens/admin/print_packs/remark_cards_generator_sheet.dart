@@ -970,31 +970,34 @@ class _RemarkCardsGeneratorSheetState extends State<RemarkCardsGeneratorSheet> {
             ),
             const SizedBox(height: 12),
 
-            DropdownButtonFormField<String>(
-              isExpanded: true,
-              initialValue:
-                  (_selectedSectionId != null &&
-                      widget.sections.any(
-                        (s) => s['id']?.toString() == _selectedSectionId,
-                      ))
-                  ? _selectedSectionId
-                  : null,
-              hint: const Text('Select a section'),
-              decoration: const InputDecoration(
-                labelText: 'Show Letter / Section',
-                border: OutlineInputBorder(),
+            AppTheme.surfaceTextScope(
+              context,
+              child: DropdownButtonFormField<String>(
+                isExpanded: true,
+                initialValue:
+                    (_selectedSectionId != null &&
+                        widget.sections.any(
+                          (s) => s['id']?.toString() == _selectedSectionId,
+                        ))
+                    ? _selectedSectionId
+                    : null,
+                hint: const Text('Select a section'),
+                decoration: const InputDecoration(
+                  labelText: 'Show Letter / Section',
+                  border: OutlineInputBorder(),
+                ),
+                items: widget.sections
+                    .map(
+                      (s) => DropdownMenuItem<String>(
+                        value: s['id']?.toString(),
+                        child: Text(_sectionLabel(s)),
+                      ),
+                    )
+                    .toList(),
+                onChanged: widget.sections.isEmpty
+                    ? null
+                    : (v) => setState(() => _selectedSectionId = v),
               ),
-              items: widget.sections
-                  .map(
-                    (s) => DropdownMenuItem<String>(
-                      value: s['id']?.toString(),
-                      child: Text(_sectionLabel(s)),
-                    ),
-                  )
-                  .toList(),
-              onChanged: widget.sections.isEmpty
-                  ? null
-                  : (v) => setState(() => _selectedSectionId = v),
             ),
 
             const SizedBox(height: 8),
