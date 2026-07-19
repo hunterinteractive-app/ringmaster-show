@@ -26,7 +26,6 @@ import 'account_profile_setup_screen.dart';
 
 import '../config/legal_config.dart';
 import '../services/app_session.dart';
-import '../services/role_service.dart';
 import '../services/stripe_connect_service.dart';
 import '../utils/date_time_utils.dart';
 import '../theme/app_theme.dart';
@@ -726,16 +725,27 @@ class _ShowListScreenState extends State<ShowListScreen> {
     return purchased > consumed;
   }
 
+  Future<bool> _effectiveUserIsSuperAdmin() async {
+    final userId = _effectiveUserId;
+    if (userId == null || widget.demoMode) return false;
+
+    final row = await supabase
+        .from('role_assignments')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('role', 'super_admin')
+        .limit(1)
+        .maybeSingle();
+
+    return row != null;
+  }
+
   Future<_ShowListBundle> _loadBundle() async {
     final shows = await _loadShows();
-    final isSupportMode = SupportImpersonationSession.isActive;
-    final realUserIsSuperAdmin = widget.demoMode
-        ? false
-        : await RoleService.isSuperAdmin();
-    final isSuper = !isSupportMode && realUserIsSuperAdmin;
+    final isSuper = await _effectiveUserIsSuperAdmin();
 
     List<Map<String, dynamic>> superAdminShows = <Map<String, dynamic>>[];
-    if (isSuper || (isSupportMode && realUserIsSuperAdmin)) {
+    if (isSuper) {
       try {
         superAdminShows = await _loadAllShowsForSuperAdmin();
       } catch (_) {
@@ -1167,11 +1177,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
   }
 
   void _openAdmin(BuildContext context, _ShowListBundle bundle) {
-    final allowedShowIds =
-        SupportImpersonationSession.isActive &&
-            bundle.superAdminShowIds.isNotEmpty
-        ? bundle.superAdminShowIds.toList()
-        : bundle.isSuperAdmin
+    final allowedShowIds = bundle.isSuperAdmin
         ? bundle.superAdminShowIds.toList()
         : bundle.adminShowIds.toList();
 
@@ -1396,10 +1402,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
             bundle: bundle,
             showAdmin:
                 !_loadingAdminAccess &&
-                (_canAccessAdmin ||
-                    (bundle?.canSeeAdminButton ?? false) ||
-                    (SupportImpersonationSession.isActive &&
-                        (bundle?.superAdminShowIds.isNotEmpty ?? false))),
+                (_canAccessAdmin || (bundle?.canSeeAdminButton ?? false)),
             onAdmin: bundle == null ? null : () => _openAdmin(context, bundle),
             showSuperintendent:
                 !_loadingAdminAccess &&
@@ -1481,10 +1484,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
                       content = _UpcomingShowsEmptyState(
                         showAdminButton:
                             !_loadingAdminAccess &&
-                            (_canAccessAdmin ||
-                                bundle.canSeeAdminButton ||
-                                (SupportImpersonationSession.isActive &&
-                                    bundle.superAdminShowIds.isNotEmpty)),
+                            (_canAccessAdmin || bundle.canSeeAdminButton),
                         onAdmin: () => _openAdmin(context, bundle),
                       );
                     } else {
