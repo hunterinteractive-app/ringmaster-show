@@ -10,6 +10,9 @@ verify_jwt = true
 [functions.stripe-webhook]
 verify_jwt = false
 
+[functions.stripe-license-webhook]
+verify_jwt = false
+
 [functions.square-payment-webhook]
 verify_jwt = false
 
