@@ -163,7 +163,7 @@ class _LoginScreenState extends State<LoginScreen>
 
     _sub = supabase.auth.onAuthStateChange.listen((data) async {
       if (data.session == null || !mounted || _handlingAuth) return;
-      _goToShowList();
+      await _goToShowList();
     });
   }
 
@@ -204,7 +204,7 @@ class _LoginScreenState extends State<LoginScreen>
       }
 
       if (!mounted) return;
-      _goToShowList();
+      await _goToShowList();
     } catch (e) {
       if (!mounted) return;
 
@@ -217,14 +217,27 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
-  void _goToShowList() {
+  Future<void> _goToShowList() async {
     if (!mounted || _handlingAuth) return;
 
     _handlingAuth = true;
 
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const ShowListScreen()),
-    );
+    try {
+      await AppInitService.initializeForCurrentUser();
+
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const ShowListScreen()),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      _handlingAuth = false;
+      setState(() {
+        _busy = false;
+        _msg =
+            'Your login succeeded, but we could not finish setting up your account. Please try again.';
+      });
+    }
   }
 
   @override
@@ -368,7 +381,7 @@ class _LoginScreenState extends State<LoginScreen>
       }
 
       if (!mounted) return;
-      _goToShowList();
+      await _goToShowList();
     } on AuthException catch (e) {
       if (!mounted) return;
       setState(() {

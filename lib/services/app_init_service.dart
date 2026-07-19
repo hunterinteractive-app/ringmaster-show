@@ -8,24 +8,40 @@ class AppInitService {
   static final SupabaseClient _supabase = Supabase.instance.client;
 
   static String? _lastClaimedUserId;
-  static bool _claimInProgress = false;
+  static String? _claimingUserId;
+  static Future<void>? _claimFuture;
 
   static Future<void> initializeForCurrentUser() async {
     final user = _supabase.auth.currentUser;
     if (user == null) return;
 
-    if (_claimInProgress) return;
     if (_lastClaimedUserId == user.id) return;
 
-    _claimInProgress = true;
+    final inProgress = _claimFuture;
+    if (inProgress != null && _claimingUserId == user.id) {
+      await inProgress;
+      return;
+    }
 
+    final claim = _claimPendingLicenses(user);
+    _claimingUserId = user.id;
+    _claimFuture = claim;
+
+    try {
+      await claim;
+    } finally {
+      if (identical(_claimFuture, claim)) {
+        _claimFuture = null;
+        _claimingUserId = null;
+      }
+    }
+  }
+
+  static Future<void> _claimPendingLicenses(User user) async {
     try {
       await _supabase.rpc(
         'claim_pending_licenses',
-        params: {
-          'p_user_id': user.id,
-          'p_email': user.email,
-        },
+        params: {'p_user_id': user.id, 'p_email': user.email},
       );
 
       _lastClaimedUserId = user.id;
@@ -34,13 +50,13 @@ class AppInitService {
     } catch (e) {
       // ignore: avoid_print
       print('Error claiming pending licenses: $e');
-    } finally {
-      _claimInProgress = false;
+      rethrow;
     }
   }
 
   static void reset() {
     _lastClaimedUserId = null;
-    _claimInProgress = false;
+    _claimingUserId = null;
+    _claimFuture = null;
   }
 }
