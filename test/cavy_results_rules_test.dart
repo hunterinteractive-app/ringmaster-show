@@ -116,6 +116,44 @@ void main() {
     expect(issues, isEmpty);
   });
 
+  test('validation flags duplicate BOV after legacy varieties consolidate', () {
+    final rows = [
+      cavy(
+        id: 'tattoo-190',
+        variety: 'Marked',
+        className: 'Intermediate',
+        awards: const ['BOV'],
+      ),
+      cavy(
+        id: 'tattoo-045',
+        variety: 'Marked',
+        sex: 'Sow',
+        awards: const ['BOV'],
+      ),
+    ];
+    final issues = validateCavyResults(
+      entries: rows,
+      requireVarietyAwards: true,
+      requireBreedAwards: false,
+      hasBasicOutcome: (_) => true,
+      isEligibleForSpecialAward: (_) => true,
+      isExcludedFromSpecials: (_) => false,
+      awardCodes: (entry) => List<String>.from(entry['_awards'] as List),
+      entryLabel: (entry) => entry['id'].toString(),
+      sectionId: (entry) => entry['section_id'].toString(),
+      breed: (entry) => entry['breed_id'].toString(),
+      variety: (entry) => entry['variety'].toString(),
+      className: (entry) => entry['class_name'].toString(),
+      sex: (entry) => entry['sex'].toString(),
+    );
+
+    final duplicate = issues.singleWhere(
+      (issue) => issue.code == 'duplicate_bov',
+    );
+    expect(duplicate.message, contains('tattoo-190'));
+    expect(duplicate.message, contains('tattoo-045'));
+  });
+
   test('validation flags every missing age winner at both levels', () {
     final rows = [
       cavy(id: 'black-sr', awards: const ['BOV', 'BOB']),
