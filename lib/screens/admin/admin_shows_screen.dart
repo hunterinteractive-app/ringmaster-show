@@ -74,7 +74,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
   Future<List<Map<String, dynamic>>> _loadShows() async {
     final realUserId = supabase.auth.currentUser?.id;
     final effectiveUserId = AppSession.effectiveUserId ?? realUserId;
-    final userId = AppSession.isSupportMode ? realUserId : effectiveUserId;
+    final userId = effectiveUserId;
     if (userId == null || userId.isEmpty) return [];
 
     final superAdminRes = await supabase
@@ -264,13 +264,34 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
       );
     }
     if (AppSession.isSupportMode) {
-      return const _ShowCreationStatus(
-        canCreate: false,
-        remainingShowDays: 0,
-        unlimitedActive: false,
-        unlimitedExpiresAt: null,
-        message: 'Creating shows is disabled while viewing as another user.',
-      );
+      final targetUserId = AppSession.effectiveUserId;
+      if (targetUserId == null) {
+        return const _ShowCreationStatus(
+          canCreate: false,
+          remainingShowDays: 0,
+          unlimitedActive: false,
+          unlimitedExpiresAt: null,
+          message: 'No support user selected.',
+        );
+      }
+
+      try {
+        final result = await supabase.rpc(
+          'support_user_access_snapshot',
+          params: {'p_target_user_id': targetUserId},
+        );
+        return _ShowCreationStatus.fromMap(
+          Map<String, dynamic>.from(result as Map),
+        );
+      } catch (e) {
+        return _ShowCreationStatus(
+          canCreate: false,
+          remainingShowDays: 0,
+          unlimitedActive: false,
+          unlimitedExpiresAt: null,
+          message: 'Support license check failed: $e',
+        );
+      }
     }
 
     final userId = AppSession.effectiveUserId;

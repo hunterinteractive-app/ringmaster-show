@@ -515,40 +515,46 @@ class _ShowListScreenState extends State<ShowListScreen> {
     var canSuperintendent = false;
 
     try {
-      final roleRows = await supabase
-          .from('role_assignments')
-          .select('show_id, role')
-          .eq('user_id', effectiveUserId)
-          .inFilter('role', const [
-            'super_admin',
-            'admin',
-            'show_admin',
-            'superintendent',
-            'reporting_clerk',
-          ])
-          .limit(1);
+      if (SupportImpersonationSession.isActive) {
+        final supportAccess = await _loadSupportAccessSnapshot();
+        canAdmin = supportAccess.canAccessAdmin;
+        canSuperintendent = false;
+      } else {
+        final roleRows = await supabase
+            .from('role_assignments')
+            .select('show_id, role')
+            .eq('user_id', effectiveUserId)
+            .inFilter('role', const [
+              'super_admin',
+              'admin',
+              'show_admin',
+              'superintendent',
+              'reporting_clerk',
+            ])
+            .limit(1);
 
-      final showAdminRows = await supabase
-          .from('show_admins')
-          .select('show_id')
-          .eq('user_id', effectiveUserId)
-          .limit(1);
+        final showAdminRows = await supabase
+            .from('show_admins')
+            .select('show_id')
+            .eq('user_id', effectiveUserId)
+            .limit(1);
 
-      canAdmin =
-          (roleRows as List).isNotEmpty || (showAdminRows as List).isNotEmpty;
+        canAdmin =
+            (roleRows as List).isNotEmpty || (showAdminRows as List).isNotEmpty;
 
-      canSuperintendent = (roleRows as List).cast<Map<String, dynamic>>().any((
-        row,
-      ) {
-        final role = (row['role'] ?? '').toString();
-        return role == 'super_admin' ||
-            (_enableSuperintendentRoleAccess && role == 'superintendent');
-      });
+        canSuperintendent = (roleRows as List).cast<Map<String, dynamic>>().any(
+          (row) {
+            final role = (row['role'] ?? '').toString();
+            return role == 'super_admin' ||
+                (_enableSuperintendentRoleAccess && role == 'superintendent');
+          },
+        );
+      }
     } catch (_) {
       canAdmin = false;
     }
 
-    if (!canSuperintendent) {
+    if (!SupportImpersonationSession.isActive && !canSuperintendent) {
       try {
         canSuperintendent = await _loadSuperintendentAccessFlag();
       } catch (_) {
@@ -740,9 +746,29 @@ class _ShowListScreenState extends State<ShowListScreen> {
     return row != null;
   }
 
+  Future<_SupportAccessSnapshot> _loadSupportAccessSnapshot() async {
+    final targetUserId = SupportImpersonationSession.targetUserId;
+    if (targetUserId == null || targetUserId.isEmpty) {
+      return const _SupportAccessSnapshot.empty();
+    }
+
+    final raw = await supabase.rpc(
+      'support_user_access_snapshot',
+      params: {'p_target_user_id': targetUserId},
+    );
+
+    return _SupportAccessSnapshot.fromMap(
+      Map<String, dynamic>.from(raw as Map),
+    );
+  }
+
   Future<_ShowListBundle> _loadBundle() async {
     final shows = await _loadShows();
-    final isSuper = await _effectiveUserIsSuperAdmin();
+    final supportAccess = SupportImpersonationSession.isActive
+        ? await _loadSupportAccessSnapshot()
+        : null;
+    final isSuper =
+        supportAccess?.isSuperAdmin ?? await _effectiveUserIsSuperAdmin();
 
     List<Map<String, dynamic>> superAdminShows = <Map<String, dynamic>>[];
     if (isSuper) {
@@ -754,14 +780,20 @@ class _ShowListScreenState extends State<ShowListScreen> {
     }
 
     Set<String> adminShowIds = <String>{};
-    try {
-      adminShowIds = await _loadAdminShowIds();
-    } catch (_) {
-      adminShowIds = <String>{};
+    if (supportAccess != null) {
+      adminShowIds = supportAccess.adminShowIds;
+    } else {
+      try {
+        adminShowIds = await _loadAdminShowIds();
+      } catch (_) {
+        adminShowIds = <String>{};
+      }
     }
 
     bool hasAvailableShowCapacity = false;
-    if (widget.demoMode && widget.demoSecretaryMode) {
+    if (supportAccess != null) {
+      hasAvailableShowCapacity = supportAccess.hasAvailableShowCapacity;
+    } else if (widget.demoMode && widget.demoSecretaryMode) {
       hasAvailableShowCapacity = true;
     } else if (!widget.demoMode) {
       try {
@@ -772,7 +804,9 @@ class _ShowListScreenState extends State<ShowListScreen> {
     }
 
     bool hasAnyAssignedShows = false;
-    if (!widget.demoMode) {
+    if (supportAccess != null) {
+      hasAnyAssignedShows = supportAccess.hasAnyAssignedShows;
+    } else if (!widget.demoMode) {
       try {
         hasAnyAssignedShows = await _hasAnyAssignedShows();
       } catch (_) {
@@ -2312,4 +2346,45 @@ class _ShowListBundle {
       adminShowIds.isNotEmpty ||
       hasAvailableShowCapacity ||
       hasAnyAssignedShows;
+}
+
+class _SupportAccessSnapshot {
+  final bool isSuperAdmin;
+  final bool canAccessAdmin;
+  final bool hasAvailableShowCapacity;
+  final bool hasAnyAssignedShows;
+  final Set<String> adminShowIds;
+
+  const _SupportAccessSnapshot({
+    required this.isSuperAdmin,
+    required this.canAccessAdmin,
+    required this.hasAvailableShowCapacity,
+    required this.hasAnyAssignedShows,
+    required this.adminShowIds,
+  });
+
+  const _SupportAccessSnapshot.empty()
+    : isSuperAdmin = false,
+      canAccessAdmin = false,
+      hasAvailableShowCapacity = false,
+      hasAnyAssignedShows = false,
+      adminShowIds = const <String>{};
+
+  factory _SupportAccessSnapshot.fromMap(Map<String, dynamic> map) {
+    final rawIds = map['admin_show_ids'];
+    final ids = rawIds is List
+        ? rawIds
+              .map((value) => value.toString())
+              .where((value) => value.isNotEmpty)
+              .toSet()
+        : <String>{};
+
+    return _SupportAccessSnapshot(
+      isSuperAdmin: map['is_super_admin'] == true,
+      canAccessAdmin: map['can_access_admin'] == true,
+      hasAvailableShowCapacity: map['has_available_show_capacity'] == true,
+      hasAnyAssignedShows: map['has_any_assigned_shows'] == true,
+      adminShowIds: ids,
+    );
+  }
 }
