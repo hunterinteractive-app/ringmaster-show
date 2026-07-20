@@ -78,6 +78,7 @@ void main() {
       isCurrent: current,
       metadata: {
         'scope_key': key,
+        'run_scope_key': key,
         'section_ids': sectionIds.toList(),
         'section_id': sectionId,
         'scope': section.kind,
@@ -201,6 +202,36 @@ void main() {
     );
     expect(bundled, hasLength(5));
   });
+
+  test(
+    'bundled email accepts canonical single-section keys in a combined scope',
+    () {
+      final canonical = ArbaArtifactDescriptor(
+        id: 'youth-a',
+        finalizeRunId: 'run-current',
+        reportName: 'arba_report',
+        artifactStatus: 'generated',
+        storageBucket: 'show-files',
+        storagePath: 'show/run-current/youth-a.pdf',
+        isCurrent: true,
+        metadata: {
+          'section_id': 'r-youth-a',
+          'section_ids': ['r-youth-a'],
+          'scope_key': 'artifact-specific-youth-a-key',
+          'run_scope_key': scopeKey,
+        },
+      );
+
+      final bundled = selectBundledArbaArtifacts(
+        artifacts: [canonical],
+        finalizeRunId: 'run-current',
+        stableScopeKey: scopeKey,
+        selectedSectionIds: sectionIds,
+      );
+
+      expect(bundled.map((item) => item.id), ['youth-a']);
+    },
+  );
 
   test('bundled email is independent of individual dropdown selection', () {
     final options = buildArbaReportOptions(

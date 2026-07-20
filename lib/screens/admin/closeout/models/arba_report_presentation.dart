@@ -245,8 +245,11 @@ bool _matchesScope(
   required String stableScopeKey,
   required Set<String> selectedSectionIds,
 }) {
-  final artifactKey = (metadata['scope_key'] ?? '').toString().trim();
-  if (artifactKey.isNotEmpty) return artifactKey == stableScopeKey;
+  final runScopeKey = (metadata['run_scope_key'] ?? '').toString().trim();
+  if (runScopeKey.isNotEmpty && runScopeKey != stableScopeKey) return false;
+
+  final sectionId = (metadata['section_id'] ?? '').toString().trim();
+  if (sectionId.isNotEmpty) return selectedSectionIds.contains(sectionId);
 
   final rawIds = metadata['section_ids'];
   if (rawIds is List) {
@@ -255,13 +258,17 @@ bool _matchesScope(
         .where((value) => value.isNotEmpty)
         .toSet();
     if (ids.isNotEmpty) {
-      return ids.length == selectedSectionIds.length &&
-          ids.containsAll(selectedSectionIds);
+      return ids.every(selectedSectionIds.contains);
     }
   }
 
-  final sectionId = (metadata['section_id'] ?? '').toString().trim();
-  return sectionId.isNotEmpty && selectedSectionIds.contains(sectionId);
+  if (runScopeKey.isNotEmpty) return true;
+
+  // Legacy artifacts stored the finalize-run key in scope_key. Canonical
+  // artifacts now store an artifact-specific key there, so it is only a safe
+  // fallback when structured section scope is unavailable.
+  final artifactKey = (metadata['scope_key'] ?? '').toString().trim();
+  return artifactKey.isNotEmpty && artifactKey == stableScopeKey;
 }
 
 int _compareSections(
