@@ -116,17 +116,17 @@ void main() {
     expect(issues, isEmpty);
   });
 
-  test('validation flags duplicate BOV after legacy varieties consolidate', () {
+  test('validation flags duplicate BOV within the same variety', () {
     final rows = [
       cavy(
         id: 'tattoo-190',
-        variety: 'Marked',
+        variety: 'Any Other Marked',
         className: 'Intermediate',
         awards: const ['BOV'],
       ),
       cavy(
         id: 'tattoo-045',
-        variety: 'Marked',
+        variety: 'Any Other Marked',
         sex: 'Sow',
         awards: const ['BOV'],
       ),
