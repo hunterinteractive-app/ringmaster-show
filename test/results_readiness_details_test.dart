@@ -26,6 +26,15 @@ void main() {
           'award_label': 'Best in Show',
         },
       ],
+      'suggested_final_award_count': 1,
+      'suggested_final_awards': [
+        {
+          'section_id': 'open-c',
+          'section_label': 'Open C',
+          'award_code': '2RIS',
+          'award_label': 'Second Reserve in Show',
+        },
+      ],
     });
 
     expect(readiness.missingFinalAwardCount, 2);
@@ -35,6 +44,8 @@ void main() {
       ),
       ['Open A: First Reserve in Show', 'Open B: Best in Show'],
     );
+    expect(readiness.suggestedFinalAwardCount, 1);
+    expect(readiness.suggestedFinalAwards.single.awardCode, '2RIS');
   });
 
   test('older readiness responses remain compatible', () {
@@ -45,22 +56,29 @@ void main() {
 
     expect(readiness.missingFinalAwardCount, 1);
     expect(readiness.missingFinalAwards, isEmpty);
+    expect(readiness.suggestedFinalAwardCount, 0);
+    expect(readiness.suggestedFinalAwards, isEmpty);
   });
 
   test('migration keeps count and detail rows on the same award matrix', () {
     final migration = File(
       'supabase/migrations/'
-      '20260722175233_expose_missing_final_award_details.sql',
+      '20260722203058_make_second_reserve_suggested.sql',
     ).readAsStringSync();
 
-    expect(migration, contains("('BIS', 'Best in Show', 1)"));
-    expect(migration, contains("('1RIS', 'First Reserve in Show', 2)"));
-    expect(migration, contains("('2RIS', 'Second Reserve in Show', 3)"));
+    expect(migration, contains("('BIS', 'Best in Show', 1, true)"));
+    expect(migration, contains("('1RIS', 'First Reserve in Show', 2, true)"));
+    expect(migration, contains("('2RIS', 'Second Reserve in Show', 3, false)"));
     expect(migration, contains("'missing_final_awards', missing_final_awards"));
     expect(
       migration,
+      contains("'suggested_final_awards', suggested_final_awards"),
+    );
+    expect(migration, contains('and required_for_readiness'));
+    expect(
+      migration,
       contains(
-        'public.show_results_readiness_scoped(p_show_id, p_section_ids)',
+        'create or replace function public.show_results_readiness_scoped',
       ),
     );
   });

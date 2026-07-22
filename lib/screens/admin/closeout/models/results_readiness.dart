@@ -6,6 +6,8 @@ class ResultsReadinessDto {
   final int missingFinalAwardCount;
   final int duplicateFinalAwardCount;
   final List<MissingFinalAward> missingFinalAwards;
+  final int suggestedFinalAwardCount;
+  final List<MissingFinalAward> suggestedFinalAwards;
 
   ResultsReadinessDto({
     required this.ready,
@@ -15,6 +17,8 @@ class ResultsReadinessDto {
     required this.missingFinalAwardCount,
     required this.duplicateFinalAwardCount,
     this.missingFinalAwards = const [],
+    this.suggestedFinalAwardCount = 0,
+    this.suggestedFinalAwards = const [],
   });
 
   factory ResultsReadinessDto.fromJson(Map<String, dynamic> json) {
@@ -36,6 +40,16 @@ class ResultsReadinessDto {
                 MissingFinalAward.fromJson(Map<String, dynamic>.from(item)),
           )
           .toList(),
+      suggestedFinalAwardCount:
+          (json['suggested_final_award_count'] as num?)?.toInt() ?? 0,
+      suggestedFinalAwards:
+          (json['suggested_final_awards'] as List? ?? const [])
+              .whereType<Map>()
+              .map(
+                (item) =>
+                    MissingFinalAward.fromJson(Map<String, dynamic>.from(item)),
+              )
+              .toList(),
     );
   }
 }

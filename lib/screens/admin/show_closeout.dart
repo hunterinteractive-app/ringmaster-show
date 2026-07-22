@@ -1878,6 +1878,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
             missingFinalAwardCount: current.missingFinalAwardCount,
             duplicateFinalAwardCount: current.duplicateFinalAwardCount,
             missingFinalAwards: current.missingFinalAwards,
+            suggestedFinalAwardCount: current.suggestedFinalAwardCount,
+            suggestedFinalAwards: current.suggestedFinalAwards,
           );
           _dashboard = CloseoutDashboard(
             dashboard: _dashboard!.dashboard,
@@ -2256,6 +2258,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
             missingFinalAwardCount: current.missingFinalAwardCount,
             duplicateFinalAwardCount: duplicateCount,
             missingFinalAwards: current.missingFinalAwards,
+            suggestedFinalAwardCount: current.suggestedFinalAwardCount,
+            suggestedFinalAwards: current.suggestedFinalAwards,
           );
           _dashboard = CloseoutDashboard(
             dashboard: _dashboard!.dashboard,
@@ -2628,6 +2632,45 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                     ),
                   )
                   .toList(),
+      ),
+    );
+  }
+
+  Widget _buildSuggestedFinalAwardsPanel() {
+    final readiness = _dashboard?.resultsReadiness;
+    final count = readiness?.suggestedFinalAwardCount ?? 0;
+    if (count <= 0) return const SizedBox.shrink();
+
+    final items =
+        readiness?.suggestedFinalAwards ?? const <MissingFinalAward>[];
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: AppColors.navy.withValues(alpha: .05),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.navy.withValues(alpha: .14)),
+      ),
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        leading: const Icon(Icons.lightbulb_outline, color: AppColors.navy),
+        title: Text(
+          '$count suggested final award${count == 1 ? '' : 's'}',
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+        subtitle: const Text(
+          'Optional — these do not block finalization or reports.',
+        ),
+        children: items
+            .map(
+              (item) => _CloseoutWarningDetailTile(
+                title: '${item.sectionLabel} • ${item.awardLabel}',
+                subtitle: 'Assign ${item.awardCode} in Results Entry if used.',
+              ),
+            )
+            .toList(),
       ),
     );
   }
@@ -7660,6 +7703,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                     _buildMissingPlacementsPanel(),
                     _buildMissingJudgesPanel(),
                     _buildMissingFinalAwardsPanel(),
+                    _buildSuggestedFinalAwardsPanel(),
                     _buildDuplicatePlacementGroupsPanel(),
                     _buildDuplicateFinalAwardsPanel(),
                     const SizedBox(height: 16),
