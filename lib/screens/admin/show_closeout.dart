@@ -15,6 +15,7 @@ import 'package:ringmaster_show/screens/admin/closeout/data/closeout_repository.
 import 'package:ringmaster_show/screens/admin/closeout/models/closeout_scope.dart';
 import 'package:ringmaster_show/screens/admin/closeout/models/closeout_scope_presentation.dart';
 import 'package:ringmaster_show/screens/admin/closeout/models/report_artifact_summary.dart';
+import 'package:ringmaster_show/screens/admin/closeout/models/results_readiness.dart';
 import 'package:ringmaster_show/screens/admin/closeout/models/arba_report_presentation.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/arba_report_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/arba_report_pdf.dart';
@@ -1876,6 +1877,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
             duplicatePlacementGroupCount: current.duplicatePlacementGroupCount,
             missingFinalAwardCount: current.missingFinalAwardCount,
             duplicateFinalAwardCount: current.duplicateFinalAwardCount,
+            missingFinalAwards: current.missingFinalAwards,
           );
           _dashboard = CloseoutDashboard(
             dashboard: _dashboard!.dashboard,
@@ -2253,6 +2255,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
             duplicatePlacementGroupCount: current.duplicatePlacementGroupCount,
             missingFinalAwardCount: current.missingFinalAwardCount,
             duplicateFinalAwardCount: duplicateCount,
+            missingFinalAwards: current.missingFinalAwards,
           );
           _dashboard = CloseoutDashboard(
             dashboard: _dashboard!.dashboard,
@@ -2574,6 +2577,57 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
               );
             }),
         ],
+      ),
+    );
+  }
+
+  Widget _buildMissingFinalAwardsPanel() {
+    final readiness = _dashboard?.resultsReadiness;
+    final count = readiness?.missingFinalAwardCount ?? 0;
+    if (count <= 0) return const SizedBox.shrink();
+
+    final items = readiness?.missingFinalAwards ?? const <MissingFinalAward>[];
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.orange.withValues(alpha: .08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.orange.withValues(alpha: .22)),
+      ),
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        iconColor: AppColors.gold,
+        collapsedIconColor: AppColors.gold,
+        textColor: AppColors.gold,
+        collapsedTextColor: AppColors.gold,
+        leading: const Icon(Icons.emoji_events_outlined, color: AppColors.gold),
+        title: Text(
+          '$count missing final award${count == 1 ? '' : 's'}',
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+        subtitle: Text(
+          'Tap to view which section awards are missing.',
+          style: TextStyle(color: AppColors.gold.withValues(alpha: .82)),
+        ),
+        children: items.isEmpty
+            ? const [
+                _CloseoutWarningDetailTile(
+                  title: 'Missing award details are unavailable.',
+                  subtitle: 'Refresh closeout to load the affected sections.',
+                ),
+              ]
+            : items
+                  .map(
+                    (item) => _CloseoutWarningDetailTile(
+                      title: '${item.sectionLabel} • ${item.awardLabel}',
+                      subtitle:
+                          'Open Results Entry and assign ${item.awardCode}.',
+                    ),
+                  )
+                  .toList(),
       ),
     );
   }
@@ -4454,8 +4508,11 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
 
   Future<bool> _ensureResultsReadyForReports() async {
     final resp = await supabase.rpc(
-      'show_results_readiness',
-      params: {'p_show_id': widget.showId},
+      'show_results_readiness_scoped',
+      params: {
+        'p_show_id': widget.showId,
+        'p_section_ids': _resolvedCloseoutScope.sectionIds.toList()..sort(),
+      },
     );
 
     final readiness = ResultsReadinessDto.fromJson(
@@ -7602,6 +7659,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                     ),
                     _buildMissingPlacementsPanel(),
                     _buildMissingJudgesPanel(),
+                    _buildMissingFinalAwardsPanel(),
                     _buildDuplicatePlacementGroupsPanel(),
                     _buildDuplicateFinalAwardsPanel(),
                     const SizedBox(height: 16),
@@ -9957,39 +10015,6 @@ class _ReportInfoTile extends StatelessWidget {
           Text('Last generated: ${_fmt(generatedAt)}'),
         ],
       ),
-    );
-  }
-}
-
-class ResultsReadinessDto {
-  final bool ready;
-  final int missingPlacementCount;
-  final int missingJudgeCount;
-  final int duplicatePlacementGroupCount;
-  final int missingFinalAwardCount;
-  final int duplicateFinalAwardCount;
-
-  ResultsReadinessDto({
-    required this.ready,
-    required this.missingPlacementCount,
-    required this.missingJudgeCount,
-    required this.duplicatePlacementGroupCount,
-    required this.missingFinalAwardCount,
-    required this.duplicateFinalAwardCount,
-  });
-
-  factory ResultsReadinessDto.fromJson(Map<String, dynamic> json) {
-    return ResultsReadinessDto(
-      ready: (json['ready'] ?? false) == true,
-      missingPlacementCount: ((json['missing_placement_count'] ?? 0) as num)
-          .toInt(),
-      missingJudgeCount: ((json['missing_judge_count'] ?? 0) as num).toInt(),
-      duplicatePlacementGroupCount:
-          ((json['duplicate_placement_group_count'] ?? 0) as num).toInt(),
-      missingFinalAwardCount:
-          (json['missing_final_award_count'] as num?)?.toInt() ?? 0,
-      duplicateFinalAwardCount:
-          (json['duplicate_final_award_count'] as num?)?.toInt() ?? 0,
     );
   }
 }
