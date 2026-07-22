@@ -10,6 +10,7 @@ import 'package:ringmaster_show/widgets/exhibitor_builder_dialog.dart';
 import 'package:ringmaster_show/utils/cavy/cavy_sop_order.dart';
 import 'package:ringmaster_show/widgets/animal_editor/open_animal_editor_dialog.dart';
 import 'package:ringmaster_show/services/app_session.dart';
+import 'package:ringmaster_show/utils/open_youth_entry_policy.dart';
 import 'package:ringmaster_show/utils/section_breed_scope.dart';
 
 import 'cart_screen.dart';
@@ -32,6 +33,8 @@ class EnterShowScreen extends StatefulWidget {
 
 class _EnterShowScreenState extends State<EnterShowScreen> {
   bool get isDemo => widget.showId == '0f432fe8-2be2-467a-842f-ff3777436992';
+  bool get _allowsSameLetterOpenYouthEntries =>
+      allowsSameLetterOpenYouthEntries(widget.showId);
   final Map<String, bool> _selected = {};
   final Map<String, TextEditingController> _classControllers = {};
 
@@ -236,6 +239,8 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   }
 
   bool _hasSectionConflictForAnimal(String animalId) {
+    if (_allowsSameLetterOpenYouthEntries) return false;
+
     final existingSectionIds = _enteredSectionsByAnimal[animalId];
     if (existingSectionIds == null || existingSectionIds.isEmpty) return false;
 
@@ -1203,20 +1208,22 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
       errors.add('Select at least one show section.');
     }
 
-    final selectedKindsByLetter = <String, Set<String>>{};
-    for (final sectionId in _selectedSectionIds) {
-      final letter = _sectionLetterForId(sectionId);
-      final kind = _sectionKindForId(sectionId);
-      if (letter.isEmpty || kind.isEmpty) continue;
+    if (!_allowsSameLetterOpenYouthEntries) {
+      final selectedKindsByLetter = <String, Set<String>>{};
+      for (final sectionId in _selectedSectionIds) {
+        final letter = _sectionLetterForId(sectionId);
+        final kind = _sectionKindForId(sectionId);
+        if (letter.isEmpty || kind.isEmpty) continue;
 
-      selectedKindsByLetter.putIfAbsent(letter, () => <String>{}).add(kind);
-    }
+        selectedKindsByLetter.putIfAbsent(letter, () => <String>{}).add(kind);
+      }
 
-    for (final entry in selectedKindsByLetter.entries) {
-      if (entry.value.length > 1) {
-        errors.add(
-          'You cannot enter the same rabbit in both Open and Youth. Remove one of the ${entry.key} sections.',
-        );
+      for (final entry in selectedKindsByLetter.entries) {
+        if (entry.value.length > 1) {
+          errors.add(
+            'You cannot enter the same rabbit in both Open and Youth. Remove one of the ${entry.key} sections.',
+          );
+        }
       }
     }
 
@@ -1309,6 +1316,8 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     required List<Map<String, dynamic>> chosen,
   }) async {
     final errors = <String>[];
+    if (_allowsSameLetterOpenYouthEntries) return errors;
+
     final animalIds = chosen
         .map((a) => (a['id'] ?? '').toString())
         .where((id) => id.isNotEmpty)
