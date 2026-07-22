@@ -697,7 +697,7 @@ class BreedResultsDetailReportLoader {
               exhibitorName: _safe(r['exhibitor_label']),
               sex: _safe(r['sex']),
               variety: _displayVarietyName(r),
-              pointsCategory: _pointsCategoryLabel(r),
+              pointsCategory: _isFurOrWoolRow(r) ? _pointsCategoryLabel(r) : '',
               isFurOrWool: _isFurOrWoolRow(r),
               pointsEarned: awardOnlyPoints
                   ? 0
