@@ -527,8 +527,38 @@ void main() {
         body,
         contains("CloseoutReportUiStatus.generating => 'Generating'"),
       );
+      expect(
+        body,
+        contains(
+          'if ((stateClubSpeciesCard || isArbaReport) &&\n'
+          '                        artifact != null)',
+        ),
+      );
+      expect(body, contains('await widget.onGenerateArtifact(artifact);'));
       expect(body, contains('canDownload'));
       expect(body, contains('_selectedReportCanEmail'));
+    });
+
+    test('individual ARBA regeneration supports legacy scope artifacts', () {
+      final body = methodBody(
+        'Future<void> _generateReportArtifact(',
+        'Future<void> _queueReportByName(',
+      );
+      expect(
+        body,
+        contains('_queueExistingArtifacts(artifactId: artifact.id)'),
+      );
+      expect(
+        body,
+        contains(
+          'No canonical artifact matched the requested finalize run and scope',
+        ),
+      );
+      expect(
+        body,
+        contains('_queueExistingArtifacts(reportName: artifact.reportName)'),
+      );
+      expect(body, contains('_scheduleDashboardPolling()'));
     });
 
     test('exhibitor choices come from scoped artifacts, not all entries', () {
