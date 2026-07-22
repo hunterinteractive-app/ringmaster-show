@@ -87,10 +87,10 @@ class DetailsByBreedReportLoader {
       final exhibitorName = _exhibitorName(row);
       final exhibitorKey = _exhibitorKey(row);
       final entryId = _text(row, ['entry_id', 'id']).trim();
-      final awards = <String>{
+      final awards = normalizeDetailsByBreedAwardCodes({
         ..._awardCodes(row),
         ...?awardsByEntryId[entryId],
-      };
+      });
       final earNumber = _text(row, ['tattoo', 'ear_number', 'ear_no', 'ear']);
       final animalName = _text(row, ['animal_name', 'registered_name', 'name']);
       final placement = _placement(row['placement']);
@@ -901,6 +901,44 @@ class DetailsByBreedReportLoader {
     final id = _text(row, ['exhibitor_id', 'exhibitor_user_id']);
     return id.isNotEmpty ? id : _key(_exhibitorName(row));
   }
+}
+
+Set<String> normalizeDetailsByBreedAwardCodes(Iterable<Object?> awards) {
+  final normalized = <String>{};
+
+  for (final raw in awards) {
+    final code = (raw ?? '').toString().trim().toUpperCase();
+    final compact = code.replaceAll(RegExp(r'[^A-Z0-9]+'), '');
+
+    if (const {
+      '2RIS',
+      '2NDRIS',
+      'SECONDRIS',
+      '2NDRESERVEINSHOW',
+      'SECONDRESERVEINSHOW',
+    }.contains(compact)) {
+      continue;
+    }
+
+    if (const {
+      'RIS',
+      '1RIS',
+      '1STRIS',
+      'FIRSTRIS',
+      'RESERVEINSHOW',
+      'RESERVEOFSHOW',
+      'RESERVEBESTINSHOW',
+      '1STRESERVEINSHOW',
+      'FIRSTRESERVEINSHOW',
+    }.contains(compact)) {
+      normalized.add('RIS');
+      continue;
+    }
+
+    if (code.isNotEmpty) normalized.add(code);
+  }
+
+  return normalized;
 }
 
 class _BreedAccumulator {
