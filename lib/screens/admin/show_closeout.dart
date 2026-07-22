@@ -5717,7 +5717,22 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
     });
 
     try {
-      await _queueExistingArtifacts(artifactId: artifact.id);
+      try {
+        await _queueExistingArtifacts(artifactId: artifact.id);
+      } catch (error) {
+        final isLegacyScopeMismatch =
+            artifact.reportName == 'arba_report' &&
+            error.toString().contains(
+              'No canonical artifact matched the requested finalize run and scope',
+            );
+        if (!isLegacyScopeMismatch) rethrow;
+
+        // Older generated ARBA artifacts can predate canonical artifact scope
+        // keys. Requeue the current run's ARBA artifacts so the database can
+        // select the canonical rows instead of rejecting the legacy ID.
+        await _queueExistingArtifacts(reportName: artifact.reportName);
+      }
+      _scheduleDashboardPolling();
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -9229,7 +9244,8 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
             ),
             onPressed: canGenerate
                 ? () async {
-                    if (stateClubSpeciesCard && artifact != null) {
+                    if ((stateClubSpeciesCard || isArbaReport) &&
+                        artifact != null) {
                       await widget.onGenerateArtifact(artifact);
                       return;
                     }
