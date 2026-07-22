@@ -511,12 +511,7 @@ class BreedResultsDetailReportPdf {
   }
 
   bool _isFurWoolAward(BreedAward award, VarietySection variety) {
-    if (award.pointsCategory.trim().isNotEmpty) return true;
-    return _isFurWoolTextMatch([
-      award.variety,
-      award.className,
-      variety.varietyName,
-    ]);
+    return breedResultsDetailIsFurWoolAward(award, variety);
   }
 
   bool _isFurWoolPlacementRow(
@@ -524,22 +519,7 @@ class BreedResultsDetailReportPdf {
     ClassSection classGroup,
     VarietySection variety,
   ) {
-    if (row.pointsCategory.trim().isNotEmpty) return true;
-    return _isFurWoolTextMatch([
-      row.variety,
-      classGroup.className,
-      variety.varietyName,
-    ]);
-  }
-
-  bool _isFurWoolTextMatch(List<String> values) {
-    for (final value in values) {
-      final normalized = value.toLowerCase().trim();
-      if (normalized.contains('fur') || normalized.contains('wool')) {
-        return true;
-      }
-    }
-    return false;
+    return breedResultsDetailIsFurWoolPlacement(row, classGroup, variety);
   }
 
   List<pw.Widget> _buildFurWoolPlacementSections(
@@ -999,4 +979,37 @@ class BreedResultsDetailReportPdf {
       ),
     );
   }
+}
+
+bool breedResultsDetailIsFurWoolAward(
+  BreedAward award,
+  VarietySection variety,
+) {
+  if (award.isFurOrWool) return true;
+  return _breedResultsDetailIsFurWoolTextMatch([
+    award.variety,
+    award.className,
+    variety.varietyName,
+  ]);
+}
+
+bool breedResultsDetailIsFurWoolPlacement(
+  ClassEntry row,
+  ClassSection classGroup,
+  VarietySection variety,
+) {
+  if (row.isFurOrWool) return true;
+  return _breedResultsDetailIsFurWoolTextMatch([
+    row.variety,
+    classGroup.className,
+    variety.varietyName,
+  ]);
+}
+
+bool _breedResultsDetailIsFurWoolTextMatch(List<String> values) {
+  for (final value in values) {
+    final normalized = value.toLowerCase().trim();
+    if (normalized.contains('fur') || normalized.contains('wool')) return true;
+  }
+  return false;
 }

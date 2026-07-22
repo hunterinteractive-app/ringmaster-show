@@ -617,6 +617,7 @@ class BreedResultsDetailReportLoader {
             sex: '',
             variety: _pointsCategoryLabel(row),
             pointsCategory: _pointsCategoryLabel(row),
+            isFurOrWool: true,
             pointsEarned: awardOnlyPoints
                 ? 0
                 : _pointsForRow(
@@ -697,6 +698,7 @@ class BreedResultsDetailReportLoader {
               sex: _safe(r['sex']),
               variety: _displayVarietyName(r),
               pointsCategory: _pointsCategoryLabel(r),
+              isFurOrWool: _isFurOrWoolRow(r),
               pointsEarned: awardOnlyPoints
                   ? 0
                   : _pointsForRow(
@@ -767,10 +769,15 @@ class BreedResultsDetailReportLoader {
 
     final sex = _firstNonEmpty([_safe(row['sex']), _safe(winnerRow?['sex'])]);
 
-    final pointsCategory = _firstNonEmpty([
-      _pointsCategoryLabel(row),
-      if (winnerRow != null) _pointsCategoryLabel(winnerRow),
-    ]);
+    final isFurOrWool =
+        _isFurOrWoolRow(row) ||
+        (winnerRow != null && _isFurOrWoolRow(winnerRow));
+    final pointsCategory = isFurOrWool
+        ? _firstNonEmpty([
+            _pointsCategoryLabel(row),
+            if (winnerRow != null) _pointsCategoryLabel(winnerRow),
+          ])
+        : '';
 
     final animalLabel = _firstNonEmpty([
       _animalLabel(row),
@@ -795,6 +802,7 @@ class BreedResultsDetailReportLoader {
       sex: sex,
       variety: variety,
       pointsCategory: pointsCategory,
+      isFurOrWool: isFurOrWool,
       animalsJudged: count.animals,
       exhibitorsJudged: count.exhibitors,
       pointsEarned: _pointsForRow(

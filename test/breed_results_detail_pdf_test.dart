@@ -85,6 +85,7 @@ void main() {
                   exhibitorName: 'Sample Exhibitor',
                   variety: 'White',
                   pointsCategory: 'White',
+                  isFurOrWool: true,
                   pointsEarned: 5,
                 ),
               ],
@@ -137,5 +138,53 @@ void main() {
     expect(result.mimeType, 'application/pdf');
     expect(result.bytes.length, greaterThan(1000));
     expect(await output.exists(), isTrue);
+  });
+
+  test('does not classify an ordinary White variety as fur', () {
+    const ordinaryWhiteRow = ClassEntry(
+      place: '1',
+      animal: 'White Breed Winner',
+      exhibitorName: 'Sample Exhibitor',
+      variety: 'White',
+      pointsCategory: 'White',
+    );
+    const furWhiteRow = ClassEntry(
+      place: '1',
+      animal: 'White Fur Winner',
+      exhibitorName: 'Sample Exhibitor',
+      variety: 'White',
+      pointsCategory: 'White',
+      isFurOrWool: true,
+    );
+    const classGroup = ClassSection(
+      className: 'Senior Buck',
+      entryCount: 1,
+      placedCount: 1,
+      animalsJudged: 1,
+      exhibitorsJudged: 1,
+      rows: [ordinaryWhiteRow],
+    );
+    const whiteVariety = VarietySection(
+      varietyName: 'White',
+      awards: [],
+      sexSections: [],
+    );
+
+    expect(
+      breedResultsDetailIsFurWoolPlacement(
+        ordinaryWhiteRow,
+        classGroup,
+        whiteVariety,
+      ),
+      isFalse,
+    );
+    expect(
+      breedResultsDetailIsFurWoolPlacement(
+        furWhiteRow,
+        classGroup,
+        whiteVariety,
+      ),
+      isTrue,
+    );
   });
 }

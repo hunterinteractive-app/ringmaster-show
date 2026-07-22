@@ -71,6 +71,7 @@ class BreedAward {
   final String sex;
   final String variety;
   final String pointsCategory;
+  final bool isFurOrWool;
   final int animalsJudged;
   final int exhibitorsJudged;
   final double pointsEarned;
@@ -84,6 +85,7 @@ class BreedAward {
     this.sex = '',
     this.variety = '',
     this.pointsCategory = '',
+    this.isFurOrWool = false,
     this.animalsJudged = 0,
     this.exhibitorsJudged = 0,
     this.pointsEarned = 0,
@@ -134,6 +136,7 @@ class ClassEntry {
   final String sex;
   final String variety;
   final String pointsCategory;
+  final bool isFurOrWool;
   final double pointsEarned;
 
   const ClassEntry({
@@ -143,6 +146,7 @@ class ClassEntry {
     this.sex = '',
     this.variety = '',
     this.pointsCategory = '',
+    this.isFurOrWool = false,
     this.pointsEarned = 0,
   });
 }
