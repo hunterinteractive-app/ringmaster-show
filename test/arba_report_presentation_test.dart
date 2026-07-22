@@ -105,13 +105,7 @@ void main() {
     expect(options, hasLength(5));
     expect(
       options.map((option) => option.label),
-      containsAll([
-        'ARBA Report — Rabbit Open A',
-        'ARBA Report — Rabbit Open B',
-        'ARBA Report — Rabbit Youth A',
-        'ARBA Report — Wool Specialty Open D',
-        'ARBA Report — Cavy Open A',
-      ]),
+      containsAll(['All Breed', 'Wool Specialty']),
     );
   });
 
@@ -121,11 +115,11 @@ void main() {
       sections: sections,
     ).single;
 
-    expect(option.label, 'ARBA Report — Wool Specialty Open D');
+    expect(option.label, 'Wool Specialty');
     expect(option.label, isNot(contains('All Breed')));
   });
 
-  test('duplicate-looking sections receive unique structured labels', () {
+  test('duplicate display names remain exactly as configured', () {
     const duplicateSections = [
       ArbaReportSectionDescriptor(
         id: 'one',
@@ -160,11 +154,9 @@ void main() {
     final labels = buildArbaReportOptions(
       artifacts: [duplicate('one'), duplicate('two')],
       sections: duplicateSections,
-    ).map((option) => option.label).toSet();
+    ).map((option) => option.label).toList();
 
-    expect(labels, hasLength(2));
-    expect(labels, contains('ARBA Report — Rabbit Open A • Section 1'));
-    expect(labels, contains('ARBA Report — Rabbit Open A • Section 2'));
+    expect(labels, ['All Breed', 'All Breed']);
   });
 
   test('individual selection resolves only its actual storage path', () {

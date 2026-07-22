@@ -120,31 +120,12 @@ List<ArbaReportOption> buildArbaReportOptions({
           (a, b) => _compareSections(a.section, b.section, a.name, b.name),
         );
 
-  final baseCounts = <String, int>{};
-  for (final row in rows) {
-    baseCounts[row.name] = (baseCounts[row.name] ?? 0) + 1;
-  }
-
-  final duplicateIndexes = <String, int>{};
   return rows.map((row) {
-    var name = row.name;
-    if ((baseCounts[name] ?? 0) > 1) {
-      final next = (duplicateIndexes[name] ?? 0) + 1;
-      duplicateIndexes[name] = next;
-      final displayName = row.section?.displayName.trim() ?? '';
-      final discriminator =
-          displayName.isNotEmpty &&
-              displayName.toLowerCase() != 'all breed' &&
-              !name.toLowerCase().contains(displayName.toLowerCase())
-          ? displayName
-          : 'Section $next';
-      name = '$name • $discriminator';
-    }
     return ArbaReportOption(
       artifactId: row.artifact.id,
       sectionId: row.sectionId,
-      sectionName: name,
-      label: 'ARBA Report — $name',
+      sectionName: row.name,
+      label: row.name,
       storagePath: row.artifact.storagePath,
     );
   }).toList();
@@ -173,24 +154,11 @@ String arbaSectionDisplayName({
               '')
           .toString()
           .trim();
+  if (configuredName.isNotEmpty) return configuredName;
+
   final suffix = [kind, letter].where((part) => part.isNotEmpty).join(' ');
   final standard = [species, suffix].where((part) => part.isNotEmpty).join(' ');
-  final normalizedConfigured = _normalize(configuredName);
-  final configuredIsGeneric =
-      configuredName.isEmpty ||
-      normalizedConfigured == 'all breed' ||
-      normalizedConfigured == _normalize(suffix) ||
-      normalizedConfigured == _normalize(standard) ||
-      (section?.isAllBreed == true &&
-          normalizedConfigured.contains('all breed'));
-
-  if (configuredIsGeneric) {
-    return standard.isEmpty ? 'Selected Section' : standard;
-  }
-  if (suffix.isNotEmpty && normalizedConfigured.endsWith(_normalize(suffix))) {
-    return configuredName;
-  }
-  return [configuredName, suffix].where((part) => part.isNotEmpty).join(' ');
+  return standard.isEmpty ? 'Selected Section' : standard;
 }
 
 String arbaDownloadFileName({
@@ -325,6 +293,3 @@ String _title(Object? value) {
   if (text.isEmpty) return '';
   return '${text[0].toUpperCase()}${text.substring(1)}';
 }
-
-String _normalize(String value) =>
-    value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
