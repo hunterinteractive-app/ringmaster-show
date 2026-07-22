@@ -365,7 +365,7 @@ class BreedResultsDetailReportLoader {
       final entryRows = await repo.supabase
           .from('entries')
           .select(
-            'id, scratched_at, status, is_shown, is_fur, fur_variety, fur_placement',
+            'id, scratched_at, status, is_shown, is_disqualified, disqualified_reason, is_fur, fur_variety, fur_placement',
           )
           .eq('show_id', showId)
           .inFilter('id', chunk);
@@ -390,6 +390,8 @@ class BreedResultsDetailReportLoader {
         'entry_scratched_at': entry['scratched_at'],
         'entry_status': entry['status'],
         'entry_is_shown': entry['is_shown'],
+        'entry_is_disqualified': entry['is_disqualified'],
+        'entry_disqualified_reason': entry['disqualified_reason'],
         'entry_is_fur': entry['is_fur'],
         'entry_fur_variety': entry['fur_variety'],
         'entry_fur_placement': entry['fur_placement'],
@@ -626,7 +628,9 @@ class BreedResultsDetailReportLoader {
         })
         .toList();
 
-    final judgedRows = rows.where(_isCountableJudgedEntry).toList();
+    final judgedRows = rows
+        .where(breedResultsDetailIsCountableJudgedEntry)
+        .toList();
 
     return ClassSection(
       className: '',
@@ -704,7 +708,9 @@ class BreedResultsDetailReportLoader {
           })
           .toList();
 
-      final judgedRows = classRows.where(_isCountableJudgedEntry).toList();
+      final judgedRows = classRows
+          .where(breedResultsDetailIsCountableJudgedEntry)
+          .toList();
       final animalsJudged = judgedRows.length;
       final exhibitorsJudged = judgedRows
           .map((r) => _safe(r['exhibitor_id']))
@@ -805,7 +811,9 @@ class BreedResultsDetailReportLoader {
     List<Map<String, dynamic>> overallRows = const [],
   }) {
     _JudgedCount countFor(Iterable<Map<String, dynamic>> source) {
-      final judged = source.where(_isCountableJudgedEntry).toList();
+      final judged = source
+          .where(breedResultsDetailIsCountableJudgedEntry)
+          .toList();
       return _JudgedCount(
         animals: judged.length,
         exhibitors: judged
@@ -1184,51 +1192,6 @@ class BreedResultsDetailReportLoader {
       default:
         return 999;
     }
-  }
-
-  bool _isCountableJudgedEntry(Map<String, dynamic> row) {
-    if (_safe(row['scratched_at']).isNotEmpty) return false;
-    if (_safe(row['entry_scratched_at']).isNotEmpty) return false;
-    if (_isExplicitFalse(row['is_shown'])) return false;
-    if (_isExplicitFalse(row['entry_is_shown'])) return false;
-
-    final statuses = [
-      _safe(row['fur_result_status']),
-      _safe(row['result_status']),
-      _safe(row['status']),
-      _safe(row['entry_status']),
-    ];
-    if (statuses.any(_isNoShowStatus)) return false;
-    if (statuses.any(_isScratchedStatus)) return false;
-
-    return true;
-  }
-
-  bool _isExplicitFalse(Object? value) {
-    if (value == false) return true;
-    if (value is! String) return false;
-
-    final normalized = value.trim().toLowerCase();
-    return normalized == 'false' ||
-        normalized == 'f' ||
-        normalized == '0' ||
-        normalized == 'no';
-  }
-
-  bool _isNoShowStatus(String value) {
-    final normalized = value.toLowerCase().replaceAll(
-      RegExp(r'[^a-z0-9]+'),
-      '',
-    );
-    return normalized == 'noshow' || normalized == 'notshown';
-  }
-
-  bool _isScratchedStatus(String value) {
-    final normalized = value.toLowerCase().replaceAll(
-      RegExp(r'[^a-z0-9]+'),
-      '',
-    );
-    return normalized == 'scratched' || normalized == 'scratch';
   }
 
   int _furPlacementNumber(Map<String, dynamic> row) {
@@ -2168,6 +2131,51 @@ bool breedResultsDetailIsFurOrWoolRow(Map<String, dynamic> row) {
 
   return rowType.contains('fur') || rowType.contains('wool');
 }
+
+bool breedResultsDetailIsCountableJudgedEntry(Map<String, dynamic> row) {
+  if (_detailSafe(row['scratched_at']).isNotEmpty ||
+      _detailSafe(row['entry_scratched_at']).isNotEmpty) {
+    return false;
+  }
+  if (_detailIsExplicitFalse(row['is_shown']) ||
+      _detailIsExplicitFalse(row['entry_is_shown'])) {
+    return false;
+  }
+  if (_detailBool(row['is_disqualified']) ||
+      _detailBool(row['entry_is_disqualified'])) {
+    return false;
+  }
+
+  final statuses = [
+    row['fur_result_status'],
+    row['result_status'],
+    row['status'],
+    row['entry_status'],
+  ].map(_detailNormalizedStatus);
+
+  return !statuses.any(
+    (status) =>
+        status == 'noshow' ||
+        status == 'notshown' ||
+        status == 'scratched' ||
+        status == 'scratch' ||
+        status.startsWith('disqual') ||
+        status == 'dq',
+  );
+}
+
+bool _detailIsExplicitFalse(Object? value) {
+  if (value == false) return true;
+  if (value is! String) return false;
+  final normalized = value.trim().toLowerCase();
+  return normalized == 'false' ||
+      normalized == 'f' ||
+      normalized == '0' ||
+      normalized == 'no';
+}
+
+String _detailNormalizedStatus(Object? value) =>
+    _detailSafe(value).toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '');
 
 String _detailFirstNonEmpty(List<String> values) {
   for (final value in values) {

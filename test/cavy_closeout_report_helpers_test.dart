@@ -119,6 +119,30 @@ void main() {
       );
     });
 
+    test('excludes disqualified entries from judged population counts', () {
+      expect(
+        breedResultsDetailIsCountableJudgedEntry({
+          'result_status': 'Disqualified - Wrong Tattoo',
+          'is_shown': true,
+        }),
+        isFalse,
+      );
+      expect(
+        breedResultsDetailIsCountableJudgedEntry({
+          'entry_is_disqualified': true,
+          'result_status': 'shown',
+        }),
+        isFalse,
+      );
+      expect(
+        breedResultsDetailIsCountableJudgedEntry({
+          'result_status': 'shown',
+          'is_shown': true,
+        }),
+        isTrue,
+      );
+    });
+
     test('uses cavy scoped exhibitor numbers for legs', () {
       expect(
         legExhibitorNumberFromResultRow({
