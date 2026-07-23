@@ -175,10 +175,7 @@ void main() {
         'supabase/migrations/20260718234217_include_cavy_sweepstakes_rows_in_pdf_view.sql',
       ).readAsStringSync();
       expect(pdfViewMigration, contains('with (security_invoker = true)'));
-      expect(
-        pdfViewMigration,
-        contains("in ('v2', 'cavy-fixed-v1')"),
-      );
+      expect(pdfViewMigration, contains("in ('v2', 'cavy-fixed-v1')"));
     });
 
     test('regeneration reuses the finalize-run artifact identity owner', () {
@@ -317,6 +314,31 @@ void main() {
       expect(body, isNot(contains('_ensureReportsLoaded')));
       expect(body, isNot(contains('.insert(')));
       expect(body, isNot(contains('.update(')));
+    });
+
+    test('duplicate-award details cannot overwrite readiness blockers', () {
+      final body = methodBody(
+        'Future<void> _loadDuplicateFinalAwards()',
+        'Future<void> _sendExhibitorArtifactsEmail({',
+      );
+
+      expect(body, contains('selectedSectionIds'));
+      expect(body, contains('Conflicting awards:'));
+      expect(body, isNot(contains('ResultsReadinessDto(')));
+      expect(body, isNot(contains('duplicateFinalAwardCount:')));
+    });
+
+    test('render queue rechecks result readiness before queueing', () {
+      final body = methodBody(
+        'Future<int> _queueScopedRenderTasks({required String action})',
+        'Future<void> _showReportsQueuedDialog',
+      );
+
+      expect(body, contains('await _ensureResultsReadyForReports()'));
+      expect(
+        body.indexOf('await _ensureResultsReadyForReports()'),
+        lessThan(body.indexOf("functions.invoke(\n        'run-closeout'")),
+      );
     });
 
     test('dashboard query is scoped, bounded, and has no storage calls', () {
@@ -585,10 +607,7 @@ void main() {
         largeCloseoutTimeoutMigration,
         contains("set statement_timeout = '55s'"),
       );
-      expect(
-        largeCloseoutTimeoutMigration,
-        isNot(contains('alter role')),
-      );
+      expect(largeCloseoutTimeoutMigration, isNot(contains('alter role')));
     });
 
     test('review details retain latest task history behind artifact cause', () {

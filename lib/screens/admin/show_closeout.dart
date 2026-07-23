@@ -93,6 +93,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
   final _superintendentController = TextEditingController();
   final _superintendentNumberController = TextEditingController();
   final _sweepstakesClubController = TextEditingController();
+  DateTime? _exhibitorReportsSentDate;
+  DateTime? _clubReportsFiledDate;
 
   bool _sweepstakesIssue = false;
   bool _officialProtest = false;
@@ -2131,8 +2133,20 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
 
     try {
       final resultRows = await _loadAllResultsEntryRows();
+      final selectedSectionIds = _resolvedCloseoutScope.sectionIds
+          .map((id) => id.trim().toLowerCase())
+          .where((id) => id.isNotEmpty)
+          .toSet();
       final resultByEntryId = <String, Map<String, dynamic>>{};
       for (final row in resultRows) {
+        final sectionId = (row['section_id'] ?? '')
+            .toString()
+            .trim()
+            .toLowerCase();
+        if (selectedSectionIds.isNotEmpty &&
+            !selectedSectionIds.contains(sectionId)) {
+          continue;
+        }
         final id = (row['entry_id'] ?? row['id'] ?? '').toString().trim();
         if (id.isNotEmpty) resultByEntryId[id] = row;
       }
@@ -2144,7 +2158,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         final response = await supabase
             .from('entry_awards')
             .select('entry_id,award_code')
-            .eq('show_id', widget.showId)
             .range(from, from + pageSize - 1);
         final page = (response as List)
             .map((raw) => Map<String, dynamic>.from(raw as Map))
@@ -2160,13 +2173,17 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
           '',
         );
         return switch (value) {
-          'BESTINSHOW' || 'BIS' => 'BIS',
-          'RESERVEINSHOW' || 'RESERVEBESTINSHOW' || 'RIS' => 'RIS',
-          '1STRIS' || 'FIRSTRIS' || '1RIS' => '1RIS',
-          '2NDRIS' || 'SECONDRIS' || '2RIS' => '2RIS',
-          'HONORABLEMENTION' || 'HM' => 'HM',
-          'BEST4CLASS' || 'B4C' => 'Best 4-Class',
-          'BEST6CLASS' || 'B6C' => 'Best 6-Class',
+          'BESTINSHOW' || 'BESTINSHOWRABBIT' || 'BIS' => 'BIS',
+          '1RIS' ||
+          '1STRIS' ||
+          'FIRSTRIS' ||
+          '1STRESERVEINSHOW' ||
+          'FIRSTRESERVEINSHOW' => '1RIS',
+          '2RIS' ||
+          '2NDRIS' ||
+          'SECONDRIS' ||
+          '2NDRESERVEINSHOW' ||
+          'SECONDRESERVEINSHOW' => '2RIS',
           _ => '',
         };
       }
@@ -2189,11 +2206,15 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       }
 
       final grouped = <String, Map<String, _DuplicateFinalAwardWinner>>{};
+      final awardKindsByEntryId = <String, Set<String>>{};
       for (final raw in awardRows) {
         final entryId = (raw['entry_id'] ?? '').toString().trim();
         final awardCode = canonicalFinalAward(raw['award_code']);
         final row = resultByEntryId[entryId];
         if (entryId.isEmpty || awardCode.isEmpty || row == null) continue;
+
+        awardKindsByEntryId.putIfAbsent(entryId, () => <String>{});
+        awardKindsByEntryId[entryId]!.add(awardCode);
 
         final sectionId = (row['section_id'] ?? row['show_letter'] ?? '')
             .toString()
@@ -2230,6 +2251,31 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
           ),
         );
       }
+      for (final entry in awardKindsByEntryId.entries) {
+        final awards = entry.value.toList()..sort();
+        if (awards.length <= 1) continue;
+        final row = resultByEntryId[entry.key]!;
+        items.add(
+          _DuplicateFinalAwardItem(
+            sectionLabel: sectionFor(row),
+            species: speciesFor(row),
+            awardCode: 'Conflicting awards: ${awards.join(', ')}',
+            winners: [
+              _DuplicateFinalAwardWinner(
+                entryId: entry.key,
+                tattoo: (row['tattoo'] ?? '').toString().trim(),
+                animalName: (row['animal_name'] ?? '').toString().trim(),
+                breedName: (row['breed'] ?? row['breed_name'] ?? '')
+                    .toString()
+                    .trim(),
+                varietyName: (row['variety'] ?? row['variety_name'] ?? '')
+                    .toString()
+                    .trim(),
+              ),
+            ],
+          ),
+        );
+      }
       items.sort((a, b) {
         final section = a.sectionLabel.compareTo(b.sectionLabel);
         if (section != 0) return section;
@@ -2242,45 +2288,24 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       setState(() {
         _duplicateFinalAwardItems = items;
         _duplicateFinalAwardsLoaded = true;
-        if (_dashboard != null) {
-          final current = _dashboard!.resultsReadiness;
-          final duplicateCount = items.length;
-          final corrected = ResultsReadinessDto(
-            ready:
-                current.missingPlacementCount == 0 &&
-                current.missingJudgeCount == 0 &&
-                current.duplicatePlacementGroupCount == 0 &&
-                current.missingFinalAwardCount == 0 &&
-                duplicateCount == 0,
-            missingPlacementCount: current.missingPlacementCount,
-            missingJudgeCount: current.missingJudgeCount,
-            duplicatePlacementGroupCount: current.duplicatePlacementGroupCount,
-            missingFinalAwardCount: current.missingFinalAwardCount,
-            duplicateFinalAwardCount: duplicateCount,
-            missingFinalAwards: current.missingFinalAwards,
-            suggestedFinalAwardCount: current.suggestedFinalAwardCount,
-            suggestedFinalAwards: current.suggestedFinalAwards,
-          );
-          _dashboard = CloseoutDashboard(
-            dashboard: _dashboard!.dashboard,
-            resultsReadiness: corrected,
-            latestFinalize: _dashboard!.latestFinalize,
-            reports: _dashboard!.reports,
-            reviewReports: _dashboard!.reviewReports,
-            deliveries: _dashboard!.deliveries,
-            latestArchive: _dashboard!.latestArchive,
-            taskCounts: _dashboard!.taskCounts,
-            artifactCounts: _dashboard!.artifactCounts,
-            artifactPage: _dashboard!.artifactPage,
-          );
-        }
       });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _duplicateFinalAwardsLoaded = true;
+        _duplicateFinalAwardItems = [];
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed loading duplicate final awards: $error'),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _loadingDuplicateFinalAwards = false);
     }
   }
 
-  Future<void> _sendExhibitorArtifactsEmail({
+  Future<ReportEmailSendResult> _sendExhibitorArtifactsEmail({
     required List<ReportArtifactSummary> artifacts,
     required String to,
     String? subject,
@@ -2293,7 +2318,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
 
     final service = ReportEmailService();
 
-    await service.sendExhibitorReportEmail(
+    return service.sendExhibitorReportEmail(
       showId: widget.showId,
       artifactIds: artifacts.map((a) => a.id).toList(),
       to: to,
@@ -2303,11 +2328,12 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
     );
   }
 
-  Future<void> _sendClubArtifactsEmail({
+  Future<ReportEmailSendResult> _sendClubArtifactsEmail({
     required List<ReportArtifactSummary> artifacts,
     required String to,
     String? subject,
     String? message,
+    bool forceResend = false,
   }) async {
     if (artifacts.isEmpty) {
       throw Exception('No reports provided for club email send.');
@@ -2315,12 +2341,13 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
 
     final service = ReportEmailService();
 
-    await service.sendClubReportEmail(
+    return service.sendClubReportEmail(
       showId: widget.showId,
       artifactIds: artifacts.map((a) => a.id).toList(),
       to: to,
       subject: subject,
       message: message,
+      forceResend: forceResend,
     );
   }
 
@@ -3342,6 +3369,11 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
     if (_generationProgress.isActive) {
       throw StateError('Reports are already being generated for this scope.');
     }
+    if (!await _ensureResultsReadyForReports()) {
+      throw StateError(
+        'Reports cannot be generated until the result conflicts are fixed.',
+      );
+    }
     final runId = _finalizeRunIdForSelectedScope;
     if (runId.isEmpty) {
       throw StateError('Finalize this scope before queuing report renders.');
@@ -3472,7 +3504,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
           )
           .eq('show_id', widget.showId)
           .eq('finalize_run_id', finalizeRunId)
-          .eq('scope_key', scopeKey)
           .eq('is_current', true)
           .limit(200);
       final candidates = (rows as List)
@@ -4157,6 +4188,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       }
 
       if (!mounted) return;
+      if (sentCount > 0 && _exhibitorReportsSentDate == null) {
+        await _recordCloseoutSentDate(exhibitorReports: true);
+      }
 
       final summary =
           'Exhibitor report send complete. Sent: $sentCount, skipped: $skippedCount, failed: $failedCount';
@@ -4371,6 +4405,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       }
 
       if (!mounted) return;
+      if (sentCount > 0 && _clubReportsFiledDate == null) {
+        await _recordCloseoutSentDate(exhibitorReports: false);
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -4390,6 +4427,27 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         });
       }
     }
+  }
+
+  Future<void> _recordCloseoutSentDate({required bool exhibitorReports}) async {
+    final sentAt = DateTime.now();
+    final column = exhibitorReports
+        ? 'exhibitor_emails_sent_at'
+        : 'club_reports_sent_at';
+
+    await supabase.from('show_closeout_state').upsert({
+      'show_id': widget.showId,
+      column: sentAt.toUtc().toIso8601String(),
+    });
+
+    if (!mounted) return;
+    setState(() {
+      if (exhibitorReports) {
+        _exhibitorReportsSentDate = sentAt;
+      } else {
+        _clubReportsFiledDate = sentAt;
+      }
+    });
   }
 
   bool get _resultsReadyForReports =>
@@ -4733,6 +4791,11 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         ''')
         .eq('show_id', widget.showId)
         .maybeSingle();
+    final closeoutStateRow = await supabase
+        .from('show_closeout_state')
+        .select('exhibitor_emails_sent_at,club_reports_sent_at')
+        .eq('show_id', widget.showId)
+        .maybeSingle();
 
     final row = arbaRow ?? <String, dynamic>{};
     final show = showRow ?? <String, dynamic>{};
@@ -4772,6 +4835,19 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         .toString();
     _officialProtest = row['official_protest'] == true;
     _arbaReportFiled = _officialProtest && row['arba_report_filed'] == true;
+    _exhibitorReportsSentDate = _tryParseCloseoutDate(
+      closeoutStateRow?['exhibitor_emails_sent_at'],
+    );
+    _clubReportsFiledDate = _tryParseCloseoutDate(
+      closeoutStateRow?['club_reports_sent_at'],
+    );
+  }
+
+  DateTime? _tryParseCloseoutDate(Object? value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    final text = value.toString().trim();
+    return text.isEmpty ? null : DateTime.tryParse(text);
   }
 
   Future<void> _loadData() async {
@@ -4869,6 +4945,16 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
             : null,
         'official_protest': _officialProtest,
         'arba_report_filed': _officialProtest ? _arbaReportFiled : null,
+      });
+
+      await supabase.from('show_closeout_state').upsert({
+        'show_id': widget.showId,
+        'exhibitor_emails_sent_at': _exhibitorReportsSentDate
+            ?.toUtc()
+            .toIso8601String(),
+        'club_reports_sent_at': _clubReportsFiledDate
+            ?.toUtc()
+            .toIso8601String(),
       });
 
       if (!mounted) return;
@@ -7132,15 +7218,35 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         );
         if (confirmed != true) return;
 
-        await _sendClubArtifactsEmail(
+        final sendResult = await _sendClubArtifactsEmail(
           artifacts: list,
           to: email,
           subject: '${widget.showName} - ARBA Show Report',
           message:
               'Attached ${list.length == 1 ? 'is the ARBA show report' : 'are the ARBA show reports'} for ${widget.showName}.',
+          forceResend: true,
         );
 
         if (!mounted) return;
+        if (sendResult.alreadySent) {
+          final sentAt = sendResult.sentAt?.toLocal();
+          final sentLabel = sentAt == null
+              ? 'previously'
+              : '${sentAt.month}/${sentAt.day}/${sentAt.year}';
+          final providerSuffix = sendResult.providerMessageId.isEmpty
+              ? ''
+              : ' Resend ID: ${sendResult.providerMessageId}.';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              duration: const Duration(seconds: 8),
+              content: Text(
+                'These ARBA reports were already sent to $email on '
+                '$sentLabel. No new email was created.$providerSuffix',
+              ),
+            ),
+          );
+          return;
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -7589,6 +7695,14 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                     superintendentController: _superintendentController,
                     superintendentNumberController:
                         _superintendentNumberController,
+                    exhibitorReportsSentDate: _exhibitorReportsSentDate,
+                    onExhibitorReportsSentDateChanged: (date) {
+                      setState(() => _exhibitorReportsSentDate = date);
+                    },
+                    clubReportsFiledDate: _clubReportsFiledDate,
+                    onClubReportsFiledDateChanged: (date) {
+                      setState(() => _clubReportsFiledDate = date);
+                    },
                     sweepstakesIssue: _sweepstakesIssue,
                     sweepstakesClubController: _sweepstakesClubController,
                     onSweepstakesChanged: (v) {
@@ -7870,6 +7984,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                               onPressed:
                                   _isBusy ||
                                       generationActive ||
+                                      reportsBlocked ||
                                       _resolvedCloseoutScope.isEmpty
                                   ? null
                                   : () async {
@@ -8223,6 +8338,10 @@ class _ArbaCloseoutCard extends StatelessWidget {
   final TextEditingController superintendentController;
   final TextEditingController superintendentNumberController;
   final TextEditingController sweepstakesClubController;
+  final DateTime? exhibitorReportsSentDate;
+  final ValueChanged<DateTime> onExhibitorReportsSentDateChanged;
+  final DateTime? clubReportsFiledDate;
+  final ValueChanged<DateTime> onClubReportsFiledDateChanged;
 
   final bool sweepstakesIssue;
   final ValueChanged<bool> onSweepstakesChanged;
@@ -8243,6 +8362,10 @@ class _ArbaCloseoutCard extends StatelessWidget {
     required this.secretaryPhoneController,
     required this.superintendentController,
     required this.superintendentNumberController,
+    required this.exhibitorReportsSentDate,
+    required this.onExhibitorReportsSentDateChanged,
+    required this.clubReportsFiledDate,
+    required this.onClubReportsFiledDateChanged,
     required this.sweepstakesIssue,
     required this.sweepstakesClubController,
     required this.onSweepstakesChanged,
@@ -8310,6 +8433,18 @@ class _ArbaCloseoutCard extends StatelessWidget {
             labelText: 'Superintendent ARBA Number',
             border: OutlineInputBorder(),
           ),
+        ),
+        const SizedBox(height: 16),
+        _CloseoutSentDateField(
+          label: 'Date Reports Were Sent to Exhibitors',
+          value: exhibitorReportsSentDate,
+          onChanged: onExhibitorReportsSentDateChanged,
+        ),
+        const SizedBox(height: 12),
+        _CloseoutSentDateField(
+          label: 'Date Sweepstakes Reports Were Filed with Clubs',
+          value: clubReportsFiledDate,
+          onChanged: onClubReportsFiledDateChanged,
         ),
         const SizedBox(height: 16),
         Container(
@@ -8403,6 +8538,49 @@ class _ArbaCloseoutCard extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _CloseoutSentDateField extends StatelessWidget {
+  final String label;
+  final DateTime? value;
+  final ValueChanged<DateTime> onChanged;
+
+  const _CloseoutSentDateField({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  String _format(DateTime date) => '${date.month}/${date.day}/${date.year}';
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(4),
+      onTap: () async {
+        final now = DateTime.now();
+        final selected = await showDatePicker(
+          context: context,
+          initialDate: value ?? now,
+          firstDate: DateTime(now.year - 2),
+          lastDate: now,
+          helpText: label,
+        );
+        if (selected != null) onChanged(selected);
+      },
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: label,
+          helperText: value == null
+              ? 'Recorded automatically after the first successful send'
+              : 'Recorded from the first successful send',
+          border: const OutlineInputBorder(),
+          suffixIcon: const Icon(Icons.calendar_today_outlined),
+        ),
+        child: Text(value == null ? 'Not sent yet' : _format(value!)),
+      ),
     );
   }
 }

@@ -119,6 +119,41 @@ void main() {
       );
     });
 
+    test('preserves a normal classification on an optional fur entry', () {
+      final regularRow = breedResultsDetailWithoutFurOrWoolFields({
+        'is_fur': true,
+        'fur_variety': 'White',
+        'fur_placement': 1,
+        'variety_name': 'White',
+        'class_name': 'Senior Buck',
+        'placement': 1,
+      });
+
+      expect(breedResultsDetailIsFurOrWoolRow(regularRow), isFalse);
+      expect(regularRow['variety_name'], 'White');
+      expect(regularRow['placement'], 1);
+      expect(regularRow['fur_variety'], isEmpty);
+      expect(regularRow['fur_placement'], isNull);
+    });
+
+    test('recognizes an explicitly dedicated fur result row', () {
+      expect(
+        breedResultsDetailIsDedicatedFurOrWoolRow({
+          'row_type': 'fur',
+          'variety_name': 'White',
+        }),
+        isTrue,
+      );
+      expect(
+        breedResultsDetailIsDedicatedFurOrWoolRow({
+          'is_fur': true,
+          'fur_variety': 'Colored',
+          'variety_name': 'Colored',
+        }),
+        isFalse,
+      );
+    });
+
     test('excludes disqualified entries from judged population counts', () {
       expect(
         breedResultsDetailIsCountableJudgedEntry({

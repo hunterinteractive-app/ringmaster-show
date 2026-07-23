@@ -476,21 +476,30 @@ class BreedResultsDetailReportLoader {
     final furByCategory = <String, List<Map<String, dynamic>>>{};
 
     for (final row in rows) {
-      if (_isFurOrWoolRow(row)) {
+      final isFurOrWool = _isFurOrWoolRow(row);
+      if (isFurOrWool) {
         final category = _pointsCategoryLabel(row).isEmpty
             ? 'Uncategorized'
             : _pointsCategoryLabel(row);
         furByCategory.putIfAbsent(category, () => []);
         furByCategory[category]!.add(row);
-        continue;
       }
 
-      final sectionName = breedResultsDetailTopSectionName(
-        row,
-        groupByBreed: groupByBreed,
-      );
-      regularByVariety.putIfAbsent(sectionName, () => []);
-      regularByVariety[sectionName]!.add(row);
+      // A single entry row can carry both its normal breed placement and an
+      // optional fur/wool placement. Keep the breed result in its catalog
+      // classification while also emitting the fur/wool result separately.
+      // Rows explicitly identified as fur/wool-only are the exception.
+      if (!breedResultsDetailIsDedicatedFurOrWoolRow(row)) {
+        final regularRow = isFurOrWool
+            ? breedResultsDetailWithoutFurOrWoolFields(row)
+            : row;
+        final sectionName = breedResultsDetailTopSectionName(
+          regularRow,
+          groupByBreed: groupByBreed,
+        );
+        regularByVariety.putIfAbsent(sectionName, () => []);
+        regularByVariety[sectionName]!.add(regularRow);
+      }
     }
 
     final sections = <VarietySection>[];
@@ -2138,6 +2147,30 @@ bool breedResultsDetailIsFurOrWoolRow(Map<String, dynamic> row) {
   ]).toLowerCase();
 
   return rowType.contains('fur') || rowType.contains('wool');
+}
+
+bool breedResultsDetailIsDedicatedFurOrWoolRow(Map<String, dynamic> row) {
+  final rowType = _detailFirstNonEmpty([
+    _detailSafe(row['row_type']),
+    _detailSafe(row['result_row_type']),
+    _detailSafe(row['line_type']),
+  ]).toLowerCase();
+
+  return rowType.contains('fur') || rowType.contains('wool');
+}
+
+Map<String, dynamic> breedResultsDetailWithoutFurOrWoolFields(
+  Map<String, dynamic> row,
+) {
+  return {
+    ...row,
+    'is_fur': false,
+    'entry_is_fur': false,
+    'fur_variety': '',
+    'entry_fur_variety': '',
+    'fur_placement': null,
+    'entry_fur_placement': null,
+  };
 }
 
 bool breedResultsDetailIsCountableJudgedEntry(Map<String, dynamic> row) {
