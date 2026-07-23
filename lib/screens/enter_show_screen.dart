@@ -34,7 +34,10 @@ class EnterShowScreen extends StatefulWidget {
 class _EnterShowScreenState extends State<EnterShowScreen> {
   bool get isDemo => widget.showId == '0f432fe8-2be2-467a-842f-ff3777436992';
   bool get _allowsSameLetterOpenYouthEntries =>
-      allowsSameLetterOpenYouthEntries(widget.showId);
+      allowsSameLetterOpenYouthEntries(
+        widget.showId,
+        ownerUserId: _showOwnerUserId,
+      );
   final Map<String, bool> _selected = {};
   final Map<String, TextEditingController> _classControllers = {};
 
@@ -43,6 +46,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   bool get _hasCommercialClasses => _commercialByCode.isNotEmpty;
 
   DateTime? _showDate;
+  String? _showOwnerUserId;
 
   bool _furEntriesEnabled = false;
 
@@ -688,12 +692,13 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   Future<void> _loadShowContext() async {
     final show = await supabase
         .from('shows')
-        .select('start_date')
+        .select('start_date,owner_user_id')
         .eq('id', widget.showId)
         .single();
 
     final sd = show['start_date']?.toString();
     _showDate = sd == null ? null : DateTime.tryParse(sd);
+    _showOwnerUserId = show['owner_user_id']?.toString();
 
     final breeds = await supabase
         .from('breeds')

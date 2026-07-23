@@ -15,5 +15,25 @@ void main() {
         isFalse,
       );
     });
+
+    test('allows every show owned by the exempt secretary', () {
+      expect(
+        allowsSameLetterOpenYouthEntries(
+          '00000000-0000-0000-0000-000000000000',
+          ownerUserId: rollingHillsSecretaryUserId,
+        ),
+        isTrue,
+      );
+    });
+
+    test('keeps the blocker for other secretaries', () {
+      expect(
+        allowsSameLetterOpenYouthEntries(
+          '00000000-0000-0000-0000-000000000000',
+          ownerUserId: '11111111-1111-1111-1111-111111111111',
+        ),
+        isFalse,
+      );
+    });
   });
 }
