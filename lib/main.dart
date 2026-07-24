@@ -16,6 +16,7 @@ import 'screens/show_list_screen.dart';
 import 'screens/account_profile_setup_screen.dart';
 
 import 'config/supabase_config.dart';
+import 'config/release_config.dart';
 import 'theme/app_theme.dart';
 import 'services/app_init_service.dart';
 
@@ -114,6 +115,12 @@ class MyApp extends StatelessWidget {
       child: MaterialApp(
         title: 'RingMaster Show',
         theme: AppTheme.lightTheme,
+        builder: (context, child) => Column(
+          children: [
+            Expanded(child: child ?? const SizedBox.shrink()),
+            const _BuildGenerationFooter(),
+          ],
+        ),
         home: const Root(),
         onGenerateRoute: (settings) {
           final routeUri = Uri.parse(settings.name ?? '');
@@ -151,6 +158,29 @@ class MyApp extends StatelessWidget {
 
           return null;
         },
+      ),
+    );
+  }
+}
+
+class _BuildGenerationFooter extends StatelessWidget {
+  const _BuildGenerationFooter();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      color: Theme.of(context).colorScheme.surface,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      child: SafeArea(
+        top: false,
+        child: Text(
+          'Generation $appGeneration',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
       ),
     );
   }
