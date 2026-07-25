@@ -12,9 +12,11 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --create-home --uid 10001 renderer
 WORKDIR /app
-COPY --chmod=0555 --from=build /tmp/closeout_renderer /app/closeout_renderer
-COPY --chmod=0555 assets/fonts /app/assets/fonts
-COPY --chmod=0555 assets/images /app/assets/images
+COPY --from=build /tmp/closeout_renderer /app/closeout_renderer
+RUN chmod 0555 /app/closeout_renderer
+COPY assets/fonts /app/assets/fonts
+COPY assets/images /app/assets/images
+RUN chmod -R a+rX /app/assets
 USER renderer
 ENV ASSET_ROOT=/app/assets PORT=8080
 EXPOSE 8080

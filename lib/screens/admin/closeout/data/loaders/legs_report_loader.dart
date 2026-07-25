@@ -668,12 +668,20 @@ class LegsReportLoader {
 
     for (final row in allRows) {
       final sectionId = _str(row['resolved_section_id']);
+      final entryId = _str(row['entry_id']);
       final animalId = _str(row['animal_id']);
       final exhibitorId = _str(row['exhibitor_id']);
       final tattoo = _str(row['tattoo']).toLowerCase();
       final breed = _str(row['breed_name']).toLowerCase();
 
-      final animalKey = animalId.isNotEmpty
+      // The results RPC can omit animal_id. In that case, entry_id is the
+      // reliable identity: different rabbits can legitimately share a tattoo
+      // within the same exhibitor and breed (for example, a buck and doe).
+      // A fur result for an existing entry retains the same entry_id, so this
+      // still collapses duplicate regular/fur result rows correctly.
+      final animalKey = entryId.isNotEmpty
+          ? 'entry:$entryId'
+          : animalId.isNotEmpty
           ? animalId
           : [exhibitorId, breed, tattoo].join('|');
       final dedupeKey = '$sectionId|$animalKey';
