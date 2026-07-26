@@ -15,6 +15,7 @@ class ExhibitorReportLoader {
   Future<ExhibitorReportData> load(ReportRequest request) async {
     final showId = request.showId;
     final exhibitorId = (request.exhibitorId ?? '').trim();
+    final requestedSpecies = (request.species ?? '').trim().toLowerCase();
 
     if (exhibitorId.isEmpty) {
       throw Exception(
@@ -59,6 +60,11 @@ class ExhibitorReportLoader {
 
       for (final raw in (rows as List)) {
         final row = Map<String, dynamic>.from(raw as Map);
+
+        if ((requestedSpecies == 'rabbit' || requestedSpecies == 'cavy') &&
+            legSpeciesFromResultRow(row) != requestedSpecies) {
+          continue;
+        }
 
         final scratchedAt = _str(row['scratched_at']);
 
