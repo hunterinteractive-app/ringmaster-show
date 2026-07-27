@@ -175,7 +175,7 @@ class _BuildGenerationFooter extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: Text(
-          'Generation $appGeneration',
+          'Version $appGeneration',
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
             color: Theme.of(context).colorScheme.onSurfaceVariant,
