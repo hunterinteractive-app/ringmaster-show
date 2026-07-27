@@ -5929,12 +5929,18 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
 
     try {
       try {
+        final artifactFinalizeRunId = (artifact.finalizeRunId ?? '').trim();
+        final artifactScopeKey = (artifact.scopeKey ?? '').trim();
         await supabase.rpc(
           'requeue_single_closeout_artifact',
           params: {
             'p_show_id': widget.showId,
-            'p_finalize_run_id': _finalizeRunIdForSelectedScope,
-            'p_scope_key': _resolvedCloseoutScope.stableScopeKey,
+            'p_finalize_run_id': artifactFinalizeRunId.isNotEmpty
+                ? artifactFinalizeRunId
+                : _finalizeRunIdForSelectedScope,
+            'p_scope_key': artifactScopeKey.isNotEmpty
+                ? artifactScopeKey
+                : _resolvedCloseoutScope.stableScopeKey,
             'p_artifact_id': artifact.id,
           },
         );
