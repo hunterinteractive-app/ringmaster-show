@@ -124,6 +124,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
   final Set<String> _customCloseoutSectionIds = {};
 
   bool _loading = true;
+  bool _isShowSuperAdmin = false;
   bool _loadingReports = false;
   bool _reportsLoaded = false;
   bool _reportsSectionOpen = false;
@@ -169,6 +170,12 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
   static const Set<String> _breedClubReportKeys = {
     'sweepstakes_report',
     'breed_results_detail_report',
+  };
+
+  static const Set<String> _acbaClubReportKeys = {
+    ..._breedClubReportKeys,
+    'details_by_breed',
+    'exh_by_breed',
   };
 
   static const Set<String> _stateClubReportKeys = {
@@ -531,7 +538,12 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       return true;
     }
 
-    if (!_breedClubReportKeys.contains(artifact.reportName)) return false;
+    final isAcbaCavyTarget =
+        targetBody == 'NATIONAL CLUB' && targetSpecies == 'cavy';
+    final allowedReportNames = isAcbaCavyTarget
+        ? _acbaClubReportKeys
+        : _breedClubReportKeys;
+    if (!allowedReportNames.contains(artifact.reportName)) return false;
     if (artifactBody.isNotEmpty && artifactBody != targetBody) return false;
     if (artifactClub.isNotEmpty &&
         artifactClub != target.clubName.trim().toLowerCase()) {
@@ -550,6 +562,16 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
     }
 
     return artifactBreed == targetBreed;
+  }
+
+  Set<String> _reportNamesForClubTarget(_ClubEmailTarget target) {
+    if (target.sanctioningBody.trim().toUpperCase() == 'STATE CLUB') {
+      return _stateClubReportKeys;
+    }
+    return target.sanctioningBody.trim().toUpperCase() == 'NATIONAL CLUB' &&
+            target.species.trim().toLowerCase() == 'cavy'
+        ? _acbaClubReportKeys
+        : _breedClubReportKeys;
   }
 
   Future<List<_ExhibitorEmailTarget>> _loadExhibitorEmailTargets() async {
@@ -4310,9 +4332,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
             first.sanctioningBody.trim().toUpperCase() == 'STATE CLUB';
         final artifactsById = <String, ReportArtifactSummary>{};
 
-        final reportNames = isStateClub
-            ? _stateClubReportKeys
-            : _breedClubReportKeys;
+        final reportNames = _reportNamesForClubTarget(first);
 
         for (final target in targets) {
           for (final reportName in reportNames) {
@@ -4389,6 +4409,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
           final message = isStateClub
               ? 'Attached are the ${speciesMessagePrefix}Breed Totals, Breed Special Points, and Display Points reports for ${widget.showName} for ${first.scope} ${first.showLetter}.\n\n'
                     '${includedSanctionNumbers.isNotEmpty ? 'Included shows: ${includedSanctionNumbers.join(', ')}.' : ''}'
+              : first.sanctioningBody.trim().toUpperCase() == 'NATIONAL CLUB' &&
+                    first.species.trim().toLowerCase() == 'cavy'
+              ? 'Attached are the sweepstakes, breed results detail, exhibitor by breed, and details by breed reports for ${widget.showName}.\n\n'
               : 'Attached are the sweepstakes and breed results detail reports for ${widget.showName}.\n\n'
                     '${includedSanctionNumbers.isNotEmpty ? 'Included shows: ${includedSanctionNumbers.join(', ')}.' : ''}';
 
@@ -4857,6 +4880,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
     });
 
     try {
+      final isShowSuperAdmin = await _currentUserIsShowSuperAdmin();
       await _loadCloseoutScopes();
       final requestedScopeKey = _dashboardKeyForScope(_resolvedCloseoutScope);
       final dashboard = await _loadDashboardSummary();
@@ -4872,6 +4896,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       );
       final runId = (dashboard.latestFinalize.id ?? '').trim();
       setState(() {
+        _isShowSuperAdmin = isShowSuperAdmin;
         _dashboard = dashboard;
         _dashboardScopeKey = requestedScopeKey;
         _completedFinalizeRunIdsByScope = runId.isEmpty
@@ -5904,7 +5929,15 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
 
     try {
       try {
-        await _queueExistingArtifacts(artifactId: artifact.id);
+        await supabase.rpc(
+          'requeue_single_closeout_artifact',
+          params: {
+            'p_show_id': widget.showId,
+            'p_finalize_run_id': _finalizeRunIdForSelectedScope,
+            'p_scope_key': _resolvedCloseoutScope.stableScopeKey,
+            'p_artifact_id': artifact.id,
+          },
+        );
       } catch (error) {
         final isLegacyScopeMismatch =
             artifact.reportName == 'arba_report' &&
@@ -7622,6 +7655,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                     loading: _generatingReport || _generationProgress.isActive,
                     reportsBlocked: reportsBlocked,
                     reportsBlockedMessage: reportsBlockedMessage,
+                    canRegenerateIndividualArtifacts: _isShowSuperAdmin,
                   ),
                 ],
               ),
@@ -8646,6 +8680,7 @@ class _ReportActionsCard extends StatefulWidget {
   final bool reportsBlocked;
   final String? reportsBlockedMessage;
   final String? arbaEmailBlockedMessage;
+  final bool canRegenerateIndividualArtifacts;
 
   const _ReportActionsCard({
     super.key,
@@ -8665,6 +8700,7 @@ class _ReportActionsCard extends StatefulWidget {
     required this.reportsBlocked,
     this.reportsBlockedMessage,
     this.arbaEmailBlockedMessage,
+    required this.canRegenerateIndividualArtifacts,
   });
 
   @override
@@ -8745,6 +8781,12 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
       _selectedReportName == 'details_by_breed' ||
       _selectedReportName == 'exh_by_breed' ||
       _selectedReportName == 'best_display_report';
+
+  // Temporary operational control: lets staff regenerate one selected breed
+  // club artifact without queuing every artifact with the same report name.
+  bool get _selectedReportIsBreedClub =>
+      _selectedReportName == 'sweepstakes_report' ||
+      _selectedReportName == 'breed_results_detail_report';
 
   List<ReportArtifactSummary> get _selectedArtifacts {
     final reportName = _selectedReportName;
@@ -9443,6 +9485,8 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
     final isExhibitorReport = reportName == 'exhibitor_report';
     final isLegsReport = reportName == 'legs';
     final isCheckInSheet = reportName == 'checkin_sheet';
+    final canRegenerateThisArtifact =
+        widget.canRegenerateIndividualArtifacts && artifact != null;
     final emailShowLetter =
         (artifact?.metadata['show_letter'] ?? _selectedShowLetter)
             .toString()
@@ -9515,7 +9559,9 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
       children: [
         if (isArbaReport ||
             uiStatus != CloseoutReportUiStatus.generated ||
-            _selectedGroupAllowsRegeneration)
+            _selectedGroupAllowsRegeneration ||
+            _selectedReportIsBreedClub ||
+            canRegenerateThisArtifact)
           FilledButton.icon(
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.primaryButton,
@@ -9524,7 +9570,10 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
             ),
             onPressed: canGenerate
                 ? () async {
-                    if ((stateClubSpeciesCard || isArbaReport) &&
+                    if ((canRegenerateThisArtifact ||
+                            stateClubSpeciesCard ||
+                            isArbaReport ||
+                            _selectedReportIsBreedClub) &&
                         artifact != null) {
                       await widget.onGenerateArtifact(artifact);
                       return;

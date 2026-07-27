@@ -316,6 +316,9 @@ class BreedResultsDetailReportPdf {
         breedAwards.where((a) => !_isOverallAward(a.award)).toList()
           ..sort(compareBreedResultsDetailAwards);
 
+    widgets.add(_buildPointsSummary(breedAwards, varieties));
+    widgets.add(pw.SizedBox(height: 12));
+
     if (overallAwards.isNotEmpty) {
       widgets.add(_sectionTitle('Overall Show Awards'));
       widgets.add(_buildAwardTable(overallAwards, includeBreed: true));
@@ -348,6 +351,53 @@ class BreedResultsDetailReportPdf {
     }
 
     return widgets;
+  }
+
+  pw.Widget _buildPointsSummary(
+    List<BreedAward> breedAwards,
+    List<VarietySection> varieties,
+  ) {
+    const varietyAwardCodes = {'BOV', 'BOSV', 'BJV', 'BIV', 'BSV'};
+    final overallAwardPoints = breedAwards
+        .where((award) => !varietyAwardCodes.contains(award.award))
+        .fold<double>(0, (total, award) => total + award.pointsEarned);
+    final rows =
+        varieties
+            .map((variety) {
+              final classPoints = variety.sexSections
+                  .expand((section) => section.classes)
+                  .expand((section) => section.rows)
+                  .fold<double>(0, (total, row) => total + row.pointsEarned);
+              final awardPoints = variety.awards.fold<double>(
+                0,
+                (total, award) => total + award.pointsEarned,
+              );
+              return (
+                name: variety.varietyName,
+                points: classPoints + awardPoints,
+              );
+            })
+            .where((row) => row.name.trim().isNotEmpty)
+            .toList()
+          ..sort((a, b) => a.name.compareTo(b.name));
+    final varietyPoints = rows.fold<double>(
+      0,
+      (total, row) => total + row.points,
+    );
+
+    return pw.TableHelper.fromTextArray(
+      headers: const ['Points summary', 'Points'],
+      data: [
+        ['Overall total', _points(overallAwardPoints + varietyPoints)],
+        ...rows.map((row) => ['${row.name} variety', _points(row.points)]),
+      ],
+      headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
+      headerStyle: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
+      cellStyle: const pw.TextStyle(fontSize: 8),
+      border: pw.TableBorder.all(color: PdfColors.grey400, width: .5),
+      cellPadding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      columnWidths: const {1: pw.FixedColumnWidth(55)},
+    );
   }
 
   List<pw.Widget> _buildVarietySection(
@@ -801,6 +851,7 @@ class BreedResultsDetailReportPdf {
           ? const [
               'Award',
               'Animal',
+              'Exhibitor',
               'Breed',
               'Variety',
               'Class',
@@ -811,6 +862,7 @@ class BreedResultsDetailReportPdf {
           : const [
               'Award',
               'Animal',
+              'Exhibitor',
               'Variety',
               'Class',
               'Sex',
@@ -823,6 +875,7 @@ class BreedResultsDetailReportPdf {
                 ? [
                     _awardLabel(r.award),
                     r.animal,
+                    r.exhibitorName,
                     r.breedName,
                     r.variety,
                     r.className,
@@ -835,6 +888,7 @@ class BreedResultsDetailReportPdf {
                 : [
                     _awardLabel(r.award),
                     r.animal,
+                    r.exhibitorName,
                     r.variety,
                     r.className,
                     r.sex,
@@ -859,21 +913,23 @@ class BreedResultsDetailReportPdf {
           ? {
               0: const pw.FixedColumnWidth(86),
               1: const pw.FlexColumnWidth(1.05),
-              2: const pw.FlexColumnWidth(1.0),
+              2: const pw.FlexColumnWidth(1.15),
+              3: const pw.FlexColumnWidth(1.0),
+              4: const pw.FlexColumnWidth(1.0),
+              5: const pw.FlexColumnWidth(0.9),
+              6: const pw.FixedColumnWidth(30),
+              7: const pw.FixedColumnWidth(40),
+              8: const pw.FixedColumnWidth(36),
+            }
+          : {
+              0: const pw.FixedColumnWidth(86),
+              1: const pw.FlexColumnWidth(1.1),
+              2: const pw.FlexColumnWidth(1.4),
               3: const pw.FlexColumnWidth(1.0),
               4: const pw.FlexColumnWidth(0.9),
               5: const pw.FixedColumnWidth(30),
               6: const pw.FixedColumnWidth(40),
               7: const pw.FixedColumnWidth(36),
-            }
-          : {
-              0: const pw.FixedColumnWidth(86),
-              1: const pw.FlexColumnWidth(1.1),
-              2: const pw.FlexColumnWidth(1.0),
-              3: const pw.FlexColumnWidth(0.9),
-              4: const pw.FixedColumnWidth(30),
-              5: const pw.FixedColumnWidth(40),
-              6: const pw.FixedColumnWidth(36),
             },
     );
   }

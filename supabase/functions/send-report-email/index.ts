@@ -153,9 +153,17 @@ serve(async (req)=>{
     const anchorEmail = String(anchorMeta["sweepstakes_email"] ?? "").trim().toLowerCase();
     const anchorSanctioningBody = String(anchorMeta["sanctioning_body"] ?? "").trim().toUpperCase();
     if (anchorBreed || anchorClub || anchorEmail) {
+      const isAcbaCavyDelivery = anchorSanctioningBody === "NATIONAL CLUB" && (
+        anchorBreed.toLowerCase() === "cavy" ||
+        String(anchorMeta["species"] ?? "").trim().toLowerCase() === "cavy"
+      );
       const groupedReportNames = anchorSanctioningBody === "NATIONAL CLUB" ? [
         "sweepstakes_report",
-        "breed_results_detail_report"
+        "breed_results_detail_report",
+        ...isAcbaCavyDelivery ? [
+          "details_by_breed",
+          "exh_by_breed"
+        ] : []
       ] : [
         ...new Set(artifacts.map((artifact)=>artifact.report_name))
       ];
