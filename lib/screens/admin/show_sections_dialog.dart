@@ -49,6 +49,17 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
   final Set<String> _deletedIds = <String>{};
   List<Map<String, dynamic>> _breedOptions = [];
 
+  static const List<Map<String, dynamic>> _commercialClassDefaults = [
+    {
+      'class_code': 'single_fryer',
+      'display_name': 'Single Fryers',
+      'sort_order': 10,
+    },
+    {'class_code': 'roaster', 'display_name': 'Roasters', 'sort_order': 20},
+    {'class_code': 'stewer', 'display_name': 'Stewers', 'sort_order': 30},
+    {'class_code': 'meat_pen', 'display_name': 'Meat Pens', 'sort_order': 40},
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -381,6 +392,8 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
         }
       }
 
+      await _ensureCommercialClassesForMeatSections();
+
       if (!mounted) return;
       Navigator.pop(context, true);
     } catch (e) {
@@ -389,6 +402,44 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
         _saving = false;
         _msg = 'Save failed: $e';
       });
+    }
+  }
+
+  /// A meat-capable section needs commercial classes to be available at entry
+  /// time. Initialize any missing defaults when that capability is enabled,
+  /// but leave an existing disabled class disabled so an admin's class-level
+  /// choice is never overwritten.
+  Future<void> _ensureCommercialClassesForMeatSections() async {
+    final hasMeatSection = _sections.any(
+      (section) => section.isEnabled && section.allowMeatClasses,
+    );
+    if (!hasMeatSection) return;
+
+    final existingRows = await supabase
+        .from('show_commercial_classes')
+        .select('class_code')
+        .eq('show_id', widget.showId);
+    final existingCodes = (existingRows as List)
+        .cast<Map<String, dynamic>>()
+        .map((row) => (row['class_code'] ?? '').toString().trim())
+        .where((code) => code.isNotEmpty)
+        .toSet();
+
+    final missingRows = _commercialClassDefaults
+        .where((item) => !existingCodes.contains(item['class_code'].toString()))
+        .map(
+          (item) => <String, dynamic>{
+            'show_id': widget.showId,
+            'class_code': item['class_code'],
+            'display_name': item['display_name'],
+            'sort_order': item['sort_order'],
+            'is_enabled': true,
+          },
+        )
+        .toList();
+
+    if (missingRows.isNotEmpty) {
+      await supabase.from('show_commercial_classes').insert(missingRows);
     }
   }
 
