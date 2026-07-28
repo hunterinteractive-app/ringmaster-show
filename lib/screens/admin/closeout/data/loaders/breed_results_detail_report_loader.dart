@@ -2178,8 +2178,15 @@ bool breedResultsDetailIsCountableJudgedEntry(Map<String, dynamic> row) {
       _detailSafe(row['entry_scratched_at']).isNotEmpty) {
     return false;
   }
+  // Fur/Wool results are eligible when they have a Fur/Wool placement. The
+  // entry's normal `is_shown` field belongs to its regular class result and
+  // may be false for a separately judged Fur/Wool result, particularly in
+  // legacy imports. The canonical report row already derives `is_shown` from
+  // its Fur/Wool placement, so do not override it with that normal field.
+  final isFurOrWool =
+      _detailBool(row['is_fur']) || _detailBool(row['entry_is_fur']);
   if (_detailIsExplicitFalse(row['is_shown']) ||
-      _detailIsExplicitFalse(row['entry_is_shown'])) {
+      (!isFurOrWool && _detailIsExplicitFalse(row['entry_is_shown']))) {
     return false;
   }
   if (_detailBool(row['is_disqualified']) ||
