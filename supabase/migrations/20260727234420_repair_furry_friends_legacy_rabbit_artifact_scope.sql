@@ -1,9 +1,9 @@
--- These two legacy Pennsylvania State RBA Youth A artifacts predate
--- species-scoped closeout artifacts.  Youth A contains both rabbits and
--- cavies, so the scope resolver cannot infer a species from entries.
--- The sanctioned club is a rabbit club; record that fact explicitly and
--- rebuild each artifact's canonical metadata, section IDs, scope key, and
--- identity.
+-- Legacy State RBA artifacts predate species-scoped closeout artifacts.
+-- In combined rabbit/cavy sections the scope resolver cannot infer the
+-- species from entries. State RBA is an explicit rabbit-club designation;
+-- record that fact and rebuild each affected artifact's canonical metadata,
+-- section IDs, scope key, and identity. This deliberately excludes clubs
+-- whose names indicate both rabbits and cavies.
 with repaired as (
   select
     a.id,
@@ -18,12 +18,16 @@ with repaired as (
     a.report_name,
     a.metadata || jsonb_build_object('species', 'rabbit')
   ) scope
-  where a.id in (
-    '3765a970-8d9f-4a2c-979c-1d55d3212b7a'::uuid,
-    'd1184af2-a1de-430b-8704-b95ec97adfa2'::uuid
-  )
-    and a.show_id = 'c5d96a62-ab5a-4775-9e32-aa60ad383e7c'::uuid
-    and a.is_current = true
+  where a.is_current = true
+    and a.report_name in (
+      'details_by_breed'::public.report_type,
+      'exh_by_breed'::public.report_type,
+      'best_display_report'::public.report_type
+    )
+    and upper(coalesce(a.metadata ->> 'sanctioning_body', '')) = 'STATE CLUB'
+    and upper(coalesce(a.metadata ->> 'club_name', '')) like '% RBA%'
+    and upper(coalesce(a.metadata ->> 'club_name', '')) not like '%CAVY%'
+    and nullif(btrim(a.metadata ->> 'species'), '') is null
     and scope.is_repairable
 )
 update public.show_report_artifacts a
