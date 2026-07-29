@@ -333,7 +333,7 @@ class BreedJudgedTotalsReportPdfBuilder {
     widgets.add(pw.SizedBox(height: 8));
     widgets.add(
       _buildScopeSpeciesTotals(
-        title: 'Grand Total by Species and Scope',
+        title: 'Grand Total by Species for All Shows',
         totals: _scopeSpeciesTotals(data.showBreakdowns),
       ),
     );
