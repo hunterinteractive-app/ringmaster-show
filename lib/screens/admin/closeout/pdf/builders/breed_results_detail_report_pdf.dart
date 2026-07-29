@@ -101,6 +101,7 @@ class BreedResultsDetailReportPdf {
               )
             else
               ..._buildSections(
+                breedName: data.breedName,
                 breedAwards: section.breedAwards,
                 varieties: section.varieties,
                 isRabbit: breedResultsDetailUsesRabbitClassLayout(data.species),
@@ -303,6 +304,7 @@ class BreedResultsDetailReportPdf {
   }
 
   List<pw.Widget> _buildSections({
+    required String breedName,
     required List<BreedAward> breedAwards,
     required List<VarietySection> varieties,
     required bool isRabbit,
@@ -315,9 +317,6 @@ class BreedResultsDetailReportPdf {
     final breedOnlyAwards =
         breedAwards.where((a) => !_isOverallAward(a.award)).toList()
           ..sort(compareBreedResultsDetailAwards);
-
-    widgets.add(_buildPointsSummary(breedAwards, varieties));
-    widgets.add(pw.SizedBox(height: 12));
 
     if (overallAwards.isNotEmpty) {
       widgets.add(_sectionTitle('Overall Show Awards'));
@@ -350,46 +349,109 @@ class BreedResultsDetailReportPdf {
       widgets.addAll(_buildFurWoolPlacementSections(furWoolVarieties));
     }
 
+    widgets.add(pw.SizedBox(height: 8));
+    widgets.add(_buildPointsSummary(breedName, breedAwards, varieties));
+
     return widgets;
   }
 
   pw.Widget _buildPointsSummary(
+    String breedName,
     List<BreedAward> breedAwards,
     List<VarietySection> varieties,
   ) {
     const varietyAwardCodes = {'BOV', 'BOSV', 'BJV', 'BIV', 'BSV'};
-    final overallAwardPoints = breedAwards
-        .where((award) => !varietyAwardCodes.contains(award.award))
-        .fold<double>(0, (total, award) => total + award.pointsEarned);
-    final rows =
-        varieties
-            .map((variety) {
-              final classPoints = variety.sexSections
-                  .expand((section) => section.classes)
-                  .expand((section) => section.rows)
-                  .fold<double>(0, (total, row) => total + row.pointsEarned);
-              final awardPoints = variety.awards.fold<double>(
-                0,
-                (total, award) => total + award.pointsEarned,
-              );
-              return (
-                name: variety.varietyName,
-                points: classPoints + awardPoints,
-              );
-            })
-            .where((row) => row.name.trim().isNotEmpty)
-            .toList()
-          ..sort((a, b) => a.name.compareTo(b.name));
-    final varietyPoints = rows.fold<double>(
-      0,
-      (total, row) => total + row.points,
-    );
+    final pointsByVariety = <String, Map<String, double>>{};
 
+    void addPoints({
+      required String variety,
+      required String exhibitor,
+      required double points,
+    }) {
+      final varietyName = variety.trim().isEmpty
+          ? 'Unspecified'
+          : variety.trim();
+      final exhibitorName = exhibitor.trim().isEmpty
+          ? 'Exhibitor not listed'
+          : exhibitor.trim();
+      final exhibitors = pointsByVariety.putIfAbsent(varietyName, () => {});
+      exhibitors[exhibitorName] = (exhibitors[exhibitorName] ?? 0) + points;
+    }
+
+    final normalizedBreedName = breedName.trim().toLowerCase();
+    // BOB/BOS and other breed/show bonuses are intentionally not assigned to
+    // a variety exhibitor total. They are included only in the overall total.
+    final overallBonusPoints = breedAwards
+        .where(
+          (award) =>
+              !varietyAwardCodes.contains(award.award) &&
+              (award.breedName.trim().isEmpty ||
+                  award.breedName.trim().toLowerCase() == normalizedBreedName),
+        )
+        .fold<double>(0, (total, award) => total + award.pointsEarned);
+
+    for (final variety in varieties) {
+      for (final award in variety.awards) {
+        addPoints(
+          variety: award.variety.trim().isEmpty
+              ? variety.varietyName
+              : award.variety,
+          exhibitor: award.exhibitorName,
+          points: award.pointsEarned,
+        );
+      }
+      for (final row
+          in variety.sexSections
+              .expand((section) => section.classes)
+              .expand((classSection) => classSection.rows)) {
+        addPoints(
+          variety: row.variety.trim().isEmpty
+              ? variety.varietyName
+              : row.variety,
+          exhibitor: row.exhibitorName,
+          points: row.pointsEarned,
+        );
+      }
+    }
+
+    final varietyNames = pointsByVariety.keys.toList()
+      ..sort((a, b) => a.compareTo(b));
+    final totalPoints = pointsByVariety.values
+        .expand((exhibitors) => exhibitors.values)
+        .fold<double>(overallBonusPoints, (total, points) => total + points);
+
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        _sectionTitle('Points Summary'),
+        pw.SizedBox(height: 3),
+        pw.Text(
+          'Overall total: ${_points(totalPoints)}',
+          style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+        ),
+        pw.SizedBox(height: 6),
+        for (final varietyName in varietyNames) ...[
+          _buildExhibitorPointsTable(
+            varietyName,
+            pointsByVariety[varietyName]!,
+          ),
+          pw.SizedBox(height: 8),
+        ],
+      ],
+    );
+  }
+
+  pw.Widget _buildExhibitorPointsTable(
+    String varietyName,
+    Map<String, double> pointsByExhibitor,
+  ) {
+    final exhibitors = pointsByExhibitor.keys.toList()
+      ..sort((a, b) => a.compareTo(b));
     return pw.TableHelper.fromTextArray(
-      headers: const ['Points summary', 'Points'],
+      headers: ['$varietyName Variety - Exhibitor', 'Points'],
       data: [
-        ['Overall total', _points(overallAwardPoints + varietyPoints)],
-        ...rows.map((row) => ['${row.name} variety', _points(row.points)]),
+        for (final exhibitor in exhibitors)
+          [exhibitor, _points(pointsByExhibitor[exhibitor]!)],
       ],
       headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
       headerStyle: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
@@ -732,6 +794,8 @@ class BreedResultsDetailReportPdf {
 
   String _categoryLabelFromValues(List<String> values) {
     for (final value in values) {
+      final trimmed = value.trim();
+      if (trimmed.isEmpty) continue;
       final normalized = value
           .toLowerCase()
           .replaceAll('-', ' ')
@@ -745,6 +809,10 @@ class BreedResultsDetailReportPdf {
       if (normalized.contains('color') && !normalized.contains('white')) {
         return 'Colored';
       }
+
+      // Legacy Fur/Wool entries sometimes only store the rabbit variety.
+      // Anything that is not a White variety is a Colored Fur/Wool entry.
+      return 'Colored';
     }
 
     return '';

@@ -478,27 +478,22 @@ class BreedResultsDetailReportLoader {
     for (final row in rows) {
       final isFurOrWool = _isFurOrWoolRow(row);
       if (isFurOrWool) {
-        final category = _pointsCategoryLabel(row).isEmpty
+        final category = _furWoolCategoryLabel(row).isEmpty
             ? 'Uncategorized'
-            : _pointsCategoryLabel(row);
+            : _furWoolCategoryLabel(row);
         furByCategory.putIfAbsent(category, () => []);
         furByCategory[category]!.add(row);
       }
 
-      // A single entry row can carry both its normal breed placement and an
-      // optional fur/wool placement. Keep the breed result in its catalog
-      // classification while also emitting the fur/wool result separately.
-      // Rows explicitly identified as fur/wool-only are the exception.
-      if (!breedResultsDetailIsDedicatedFurOrWoolRow(row)) {
-        final regularRow = isFurOrWool
-            ? breedResultsDetailWithoutFurOrWoolFields(row)
-            : row;
+      // A row marked Fur/Wool represents the dedicated Fur/Wool result. Its
+      // placement must not be repeated in the regular variety classes.
+      if (!isFurOrWool) {
         final sectionName = breedResultsDetailTopSectionName(
-          regularRow,
+          row,
           groupByBreed: groupByBreed,
         );
         regularByVariety.putIfAbsent(sectionName, () => []);
-        regularByVariety[sectionName]!.add(regularRow);
+        regularByVariety[sectionName]!.add(row);
       }
     }
 
@@ -624,8 +619,8 @@ class BreedResultsDetailReportLoader {
             animal: _animalLabel(row),
             exhibitorName: _safe(row['exhibitor_label']),
             sex: '',
-            variety: _pointsCategoryLabel(row),
-            pointsCategory: _pointsCategoryLabel(row),
+            variety: _furWoolCategoryLabel(row),
+            pointsCategory: _furWoolCategoryLabel(row),
             isFurOrWool: true,
             pointsEarned: awardOnlyPoints
                 ? 0
@@ -706,7 +701,9 @@ class BreedResultsDetailReportLoader {
               exhibitorName: _safe(r['exhibitor_label']),
               sex: _safe(r['sex']),
               variety: _displayVarietyName(r),
-              pointsCategory: _isFurOrWoolRow(r) ? _pointsCategoryLabel(r) : '',
+              pointsCategory: _isFurOrWoolRow(r)
+                  ? _furWoolCategoryLabel(r)
+                  : '',
               isFurOrWool: _isFurOrWoolRow(r),
               pointsEarned: awardOnlyPoints
                   ? 0
@@ -783,8 +780,8 @@ class BreedResultsDetailReportLoader {
         (winnerRow != null && _isFurOrWoolRow(winnerRow));
     final pointsCategory = isFurOrWool
         ? _firstNonEmpty([
-            _pointsCategoryLabel(row),
-            if (winnerRow != null) _pointsCategoryLabel(winnerRow),
+            _furWoolCategoryLabel(row),
+            if (winnerRow != null) _furWoolCategoryLabel(winnerRow),
           ])
         : '';
 
@@ -1686,6 +1683,27 @@ class BreedResultsDetailReportLoader {
       _safe(row['variety']),
     ]);
     return _normalizePointsCategory(variety);
+  }
+
+  /// Fur/Wool entries are always classified as White or Colored. Older entries
+  /// may not have saved that selection; in that case, derive it from the
+  /// rabbit's actual variety. A White variety belongs in White and every other
+  /// color (Black, Brown, Blue, etc.) belongs in Colored.
+  String _furWoolCategoryLabel(Map<String, dynamic> row) {
+    final raw = _firstNonEmpty([
+      _safe(row['points_category']),
+      _safe(row['pointsCategory']),
+      _safe(row['points_category_name']),
+      _safe(row['sweepstakes_category']),
+      _safe(row['fur_variety']),
+      _safe(row['entry_fur_variety']),
+      _safe(row['variety_name']),
+      _safe(row['variety']),
+    ]);
+    if (raw.isEmpty) return '';
+
+    final normalized = _normalizePointsCategory(raw);
+    return normalized.isEmpty ? 'Colored' : normalized;
   }
 
   String _normalizePointsCategory(String raw) {

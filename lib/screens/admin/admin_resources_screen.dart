@@ -390,11 +390,23 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
                             children: [
                               if (!isScribe && url.isNotEmpty)
                                 IconButton(
+                                  style: IconButton.styleFrom(
+                                    foregroundColor: AppColors.navy,
+                                    backgroundColor: AppColors.navy.withOpacity(
+                                      .08,
+                                    ),
+                                  ),
                                   tooltip: 'Preview',
                                   icon: const Icon(Icons.visibility_outlined),
                                   onPressed: () => _previewImage(url),
                                 ),
                               IconButton(
+                                style: IconButton.styleFrom(
+                                  foregroundColor: AppColors.navy,
+                                  backgroundColor: AppColors.navy.withOpacity(
+                                    .08,
+                                  ),
+                                ),
                                 tooltip: isScribe ? 'Open Guide' : 'Download',
                                 icon: Icon(
                                   isScribe ? Icons.open_in_new : Icons.download,

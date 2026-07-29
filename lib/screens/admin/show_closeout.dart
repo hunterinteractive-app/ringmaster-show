@@ -5029,13 +5029,20 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
     );
 
     final resolvedScope = _resolvedCloseoutScope;
+    final requestedSpecies = (metadata?['species'] ?? '').toString().trim();
+    final scopeSpecies = resolvedScope.species.length == 1
+        ? resolvedScope.species.first.trim()
+        : '';
     final scopedMetadata = <String, dynamic>{
       ...?metadata,
       'scope_key': resolvedScope.stableScopeKey,
       'scope_label': resolvedScope.displayLabel,
       'section_ids': resolvedScope.sectionIds.toList()..sort(),
-      'species': resolvedScope.species.toList()..sort(),
       'show_letters': resolvedScope.showLetters.toList()..sort(),
+      if (requestedSpecies.isNotEmpty)
+        'species': requestedSpecies
+      else if (scopeSpecies.isNotEmpty)
+        'species': scopeSpecies,
     };
     final artifactKey = (await supabase.rpc(
       'closeout_artifact_identity',
@@ -5072,14 +5079,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         break;
       }
     }
-
-    await supabase
-        .from('show_report_artifacts')
-        .update({'is_current': false})
-        .eq('show_id', widget.showId)
-        .eq('report_name', reportName)
-        .eq('scope_key', resolvedScope.stableScopeKey)
-        .eq('is_current', true);
 
     if (identityOwner != null) {
       final reused = await supabase
@@ -5402,7 +5401,11 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
 
     final targetSpecies = isCavyClubReportTarget(breedName: breedName)
         ? 'cavy'
-        : '';
+        : ((reportName == 'sweepstakes_report' ||
+                      reportName == 'breed_results_detail_report') &&
+                  (breedName ?? '').trim().isNotEmpty
+              ? 'rabbit'
+              : '');
     final targetDisplayBreedName = displayBreedNameForClubReport(
       reportName: reportName,
       breedName: breedName,
@@ -5623,6 +5626,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
           final artLetter = (_artifactMetaString(r, 'show_letter') ?? '')
               .trim()
               .toUpperCase();
+          final artifactSpecies = (_artifactMetaString(r, 'species') ?? '')
+              .trim()
+              .toLowerCase();
 
           final isBreedSpecific =
               reportName == 'sweepstakes_report' ||
@@ -5638,6 +5644,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                     club == (clubName ?? '').trim().toLowerCase();
 
           return targetMatches &&
+              (targetSpecies.isEmpty || artifactSpecies == targetSpecies) &&
               artScope == (scope ?? '').trim().toUpperCase() &&
               artLetter == (showLetter ?? '').trim().toUpperCase();
         }, orElse: () => null);
@@ -5661,11 +5668,23 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         );
       }
 
+      final targetSectionId = isSectionScopedReport && hasExplicitScope
+          ? await _loadSectionIdForScope(scope!.trim(), showLetter!.trim())
+          : '';
+      if (isSectionScopedReport &&
+          hasExplicitScope &&
+          targetSectionId.isEmpty) {
+        throw StateError(
+          'Could not find the selected $scope ${showLetter!.toUpperCase()} section.',
+        );
+      }
+
       final resolvedArtifact =
           artifact ??
           await _createManualReportArtifact(
             reportName: reportName,
             metadata: {
+              if (targetSectionId.isNotEmpty) 'section_id': targetSectionId,
               if (targetDisplayBreedName.trim().isNotEmpty)
                 'breed_name': targetDisplayBreedName.trim(),
               if (targetSpecies.isNotEmpty) 'species': targetSpecies,
@@ -6008,6 +6027,27 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         showLetter: showLetter,
         exhibitorId: exhibitorId,
         exhibitorName: exhibitorName,
+      );
+      return;
+    }
+
+    final isLateAddedBreedReport =
+        (reportName == 'breed_results_detail_report' ||
+            reportName == 'sweepstakes_report') &&
+        (breedName ?? '').trim().isNotEmpty &&
+        (scope ?? '').trim().isNotEmpty &&
+        (showLetter ?? '').trim().isNotEmpty;
+
+    // A scope's manifest is normally created during finalize. If a breed is
+    // added after that point, there is no artifact for the selected
+    // breed/scope/letter for the regular queue to requeue. Use the existing
+    // on-demand artifact path in that case instead of silently doing nothing.
+    if (isLateAddedBreedReport) {
+      await _generateReportByName(
+        reportName,
+        breedName: breedName,
+        scope: scope,
+        showLetter: showLetter,
       );
       return;
     }
