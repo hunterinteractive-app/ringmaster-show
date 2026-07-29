@@ -1,6 +1,9 @@
 [functions.run-closeout]
 verify_jwt = true
 
+[functions.sweepstakes-request-code]
+verify_jwt = false
+
 [functions.square-connect-callback]
 verify_jwt = false
 

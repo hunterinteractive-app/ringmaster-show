@@ -214,6 +214,7 @@ List<BreedJudgedTotalsShowBreakdown> aggregateBreedJudgedTotalsByShow(
       .map(
         (group) => BreedJudgedTotalsShowBreakdown(
           label: group.label,
+          scope: group.kind,
           breedRows: _sortedRows(group.breedRows.values),
           furRows: _sortedRows(group.furRows.values),
         ),

@@ -71,9 +71,13 @@ class BreedJudgedTotalsShowBreakdown {
     required this.label,
     required this.breedRows,
     required this.furRows,
+    this.scope = '',
   });
 
   final String label;
+
+  /// The show-section kind (for example, OPEN or YOUTH).
+  final String scope;
   final List<BreedJudgedTotalsReportRow> breedRows;
   final List<BreedJudgedTotalsReportRow> furRows;
 

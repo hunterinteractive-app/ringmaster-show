@@ -225,6 +225,7 @@ void main() {
         'Open Show A',
         'Youth Show A',
       ]);
+      expect(breakdowns.map((breakdown) => breakdown.scope), ['OPEN', 'YOUTH']);
       expect(breakdowns.first.totalBreedJudged, 1);
       expect(breakdowns.first.totalFurJudged, 1);
       expect(breakdowns.last.totalJudged, 1);
@@ -254,11 +255,13 @@ void main() {
         showBreakdowns: [
           BreedJudgedTotalsShowBreakdown(
             label: 'Open Show A',
+            scope: 'OPEN',
             breedRows: rows.take(750).toList(),
             furRows: const <BreedJudgedTotalsReportRow>[],
           ),
           BreedJudgedTotalsShowBreakdown(
             label: 'Youth Show A',
+            scope: 'YOUTH',
             breedRows: rows.skip(750).toList(),
             furRows: const <BreedJudgedTotalsReportRow>[],
           ),

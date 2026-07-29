@@ -329,6 +329,15 @@ class BreedJudgedTotalsReportPdfBuilder {
       widgets.addAll(_buildShowBreakdown(breakdown));
     }
 
+    widgets.add(pw.NewPage(freeSpace: 120));
+    widgets.add(pw.SizedBox(height: 8));
+    widgets.add(
+      _buildScopeSpeciesTotals(
+        title: 'Grand Total by Species and Scope',
+        totals: _scopeSpeciesTotals(data.showBreakdowns),
+      ),
+    );
+
     return widgets;
   }
 
@@ -357,6 +366,11 @@ class BreedJudgedTotalsReportPdfBuilder {
         ),
       ],
       pw.SizedBox(height: 10),
+      _buildScopeSpeciesTotals(
+        title: '${breakdown.label} Total by Species',
+        totals: _scopeSpeciesTotals([breakdown]),
+      ),
+      pw.SizedBox(height: 6),
       pw.Align(
         alignment: pw.Alignment.centerRight,
         child: pw.Text(
@@ -365,6 +379,82 @@ class BreedJudgedTotalsReportPdfBuilder {
         ),
       ),
     ];
+  }
+
+  _BreedJudgedScopeSpeciesTotals _scopeSpeciesTotals(
+    Iterable<BreedJudgedTotalsShowBreakdown> breakdowns,
+  ) {
+    final totals = _BreedJudgedScopeSpeciesTotals();
+
+    for (final breakdown in breakdowns) {
+      final scope = breakdown.scope.trim().toUpperCase();
+      if (scope != 'OPEN' && scope != 'YOUTH') continue;
+
+      for (final row in breakdown.breedRows) {
+        final species = row.species.trim().toLowerCase();
+        if (species == 'rabbit') {
+          totals.add(scope: scope, rabbit: row.totalJudged);
+        } else if (species == 'cavy') {
+          totals.add(scope: scope, cavy: row.totalJudged);
+        }
+      }
+    }
+
+    return totals;
+  }
+
+  pw.Widget _buildScopeSpeciesTotals({
+    required String title,
+    required _BreedJudgedScopeSpeciesTotals totals,
+  }) {
+    return pw.Container(
+      padding: const pw.EdgeInsets.all(6),
+      decoration: pw.BoxDecoration(
+        color: PdfColors.grey100,
+        border: pw.Border.all(color: PdfColors.grey600, width: 0.4),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: <pw.Widget>[
+          pw.Text(
+            title,
+            style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+          ),
+          pw.SizedBox(height: 5),
+          pw.TableHelper.fromTextArray(
+            headers: const <String>[
+              'Open Rabbit',
+              'Youth Rabbit',
+              'Open Cavy',
+              'Youth Cavy',
+              'Grand Total',
+            ],
+            data: <List<String>>[
+              <String>[
+                totals.openRabbit.toString(),
+                totals.youthRabbit.toString(),
+                totals.openCavy.toString(),
+                totals.youthCavy.toString(),
+                totals.total.toString(),
+              ],
+            ],
+            headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
+            headerStyle: pw.TextStyle(
+              fontSize: 7,
+              fontWeight: pw.FontWeight.bold,
+            ),
+            cellStyle: const pw.TextStyle(fontSize: 8),
+            cellAlignment: pw.Alignment.center,
+            headerAlignment: pw.Alignment.center,
+            border: pw.TableBorder.all(color: PdfColors.grey700, width: 0.35),
+            cellPadding: const pw.EdgeInsets.symmetric(
+              horizontal: 3,
+              vertical: 3,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   pw.Widget _buildBreakdownTotals(BreedJudgedTotalsShowBreakdown breakdown) {
@@ -470,4 +560,23 @@ class _BreedJudgedTotalsReportFonts {
 
   final pw.Font regular;
   final pw.Font bold;
+}
+
+class _BreedJudgedScopeSpeciesTotals {
+  int openRabbit = 0;
+  int youthRabbit = 0;
+  int openCavy = 0;
+  int youthCavy = 0;
+
+  int get total => openRabbit + youthRabbit + openCavy + youthCavy;
+
+  void add({required String scope, int rabbit = 0, int cavy = 0}) {
+    if (scope == 'OPEN') {
+      openRabbit += rabbit;
+      openCavy += cavy;
+    } else if (scope == 'YOUTH') {
+      youthRabbit += rabbit;
+      youthCavy += cavy;
+    }
+  }
 }

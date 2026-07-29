@@ -61,6 +61,9 @@ node_modules/
 # next.js
 /.next/
 /out/
+/.open-next/
+/.wrangler/
+cloudflare-env.d.ts
 
 # production
 /build
