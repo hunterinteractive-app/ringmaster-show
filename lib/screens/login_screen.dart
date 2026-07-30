@@ -445,6 +445,7 @@ class _LoginScreenState extends State<LoginScreen>
               child: Scrollbar(
                 thumbVisibility: true,
                 child: SingleChildScrollView(
+                  primary: true,
                   padding: const EdgeInsets.all(AppSpacing.xl),
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 560),
@@ -616,6 +617,7 @@ class _DemoLoginScreenState extends State<DemoLoginScreen> {
               child: Scrollbar(
                 thumbVisibility: true,
                 child: SingleChildScrollView(
+                  primary: true,
                   padding: const EdgeInsets.all(AppSpacing.xl),
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 560),

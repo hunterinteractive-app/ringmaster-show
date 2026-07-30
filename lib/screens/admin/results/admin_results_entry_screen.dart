@@ -6538,7 +6538,9 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
 
   List<String> _placementOptions() {
     final current = (_placement ?? '').trim();
-    final options = [...widget.availablePlacements];
+    // Zero is the persisted numeric value for NP (No Placing).  It is a
+    // completed result, unlike the blank value used by the placeholder.
+    final options = ['0', ...widget.availablePlacements];
     if (current.isNotEmpty && !options.contains(current)) {
       options.add(current);
     }
@@ -7351,10 +7353,13 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
                   items: [
                     const DropdownMenuItem<String>(
                       value: '',
-                      child: Text('(No placing)'),
+                      child: Text('(Placement not selected)'),
                     ),
                     ...placementOptions.map(
-                      (p) => DropdownMenuItem<String>(value: p, child: Text(p)),
+                      (p) => DropdownMenuItem<String>(
+                        value: p,
+                        child: Text(p == '0' ? 'NP — No Placing' : p),
+                      ),
                     ),
                   ],
                   onChanged: _saving
