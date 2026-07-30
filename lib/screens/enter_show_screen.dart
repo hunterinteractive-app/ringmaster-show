@@ -10,7 +10,7 @@ import 'package:ringmaster_show/widgets/exhibitor_builder_dialog.dart';
 import 'package:ringmaster_show/utils/cavy/cavy_sop_order.dart';
 import 'package:ringmaster_show/widgets/animal_editor/open_animal_editor_dialog.dart';
 import 'package:ringmaster_show/services/app_session.dart';
-import 'package:ringmaster_show/utils/open_youth_entry_policy.dart';
+import 'package:ringmaster_show/policies/open_youth_entry_policy.dart';
 import 'package:ringmaster_show/utils/section_breed_scope.dart';
 
 import 'cart_screen.dart';

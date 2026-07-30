@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ringmaster_show/utils/open_youth_entry_policy.dart';
+import 'package:ringmaster_show/policies/open_youth_entry_policy.dart';
 
 void main() {
   group('allowsSameLetterOpenYouthEntries', () {

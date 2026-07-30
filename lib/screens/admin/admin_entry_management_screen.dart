@@ -7,6 +7,7 @@ import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/services/show_lock_service.dart';
 import 'package:ringmaster_show/services/app_session.dart';
+import 'package:ringmaster_show/policies/manual_exhibitor_information_policy.dart';
 import 'package:ringmaster_show/utils/section_breed_scope.dart';
 
 final supabase = Supabase.instance.client;
@@ -2602,6 +2603,8 @@ class _AdminAddEntrySheet extends StatefulWidget {
 class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
   bool _loading = true;
   bool _saving = false;
+  bool get _allowNameOnlyManualExhibitors =>
+      allowsNameOnlyManualExhibitors(widget.showId);
   String? _msg;
 
   List<Map<String, dynamic>> _exhibitors = [];
@@ -3646,16 +3649,16 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
       );
     }
 
-    if (addressLine1.isEmpty) {
+    if (!_allowNameOnlyManualExhibitors && addressLine1.isEmpty) {
       throw Exception('Enter address line 1.');
     }
-    if (city.isEmpty) {
+    if (!_allowNameOnlyManualExhibitors && city.isEmpty) {
       throw Exception('Enter city.');
     }
-    if (state.isEmpty) {
+    if (!_allowNameOnlyManualExhibitors && state.isEmpty) {
       throw Exception('Enter state.');
     }
-    if (zip.isEmpty) {
+    if (!_allowNameOnlyManualExhibitors && zip.isEmpty) {
       throw Exception('Enter ZIP code.');
     }
 
@@ -3705,11 +3708,11 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
           'last_name': last.isEmpty ? null : last,
           'phone': phone.isEmpty ? null : phone,
           'arba_number': arbaNumber.isEmpty ? null : arbaNumber,
-          'address_line1': addressLine1,
+          'address_line1': addressLine1.isEmpty ? null : addressLine1,
           'address_line2': addressLine2.isEmpty ? null : addressLine2,
-          'city': city,
-          'state': state,
-          'zip': zip,
+          'city': city.isEmpty ? null : city,
+          'state': state.isEmpty ? null : state,
+          'zip': zip.isEmpty ? null : zip,
           'type': _exhibitorType,
           'is_active': true,
           'is_local_only': true,
@@ -4341,8 +4344,10 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                             controller: _addressLine1,
                             enabled: !_saving && !AppSession.isSupportMode,
                             textCapitalization: TextCapitalization.words,
-                            decoration: const InputDecoration(
-                              labelText: 'Address Line 1 *',
+                            decoration: InputDecoration(
+                              labelText: _allowNameOnlyManualExhibitors
+                                  ? 'Address Line 1'
+                                  : 'Address Line 1 *',
                               border: OutlineInputBorder(),
                             ),
                           ),
@@ -4361,8 +4366,10 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                             controller: _city,
                             enabled: !_saving && !AppSession.isSupportMode,
                             textCapitalization: TextCapitalization.words,
-                            decoration: const InputDecoration(
-                              labelText: 'City *',
+                            decoration: InputDecoration(
+                              labelText: _allowNameOnlyManualExhibitors
+                                  ? 'City'
+                                  : 'City *',
                               border: OutlineInputBorder(),
                             ),
                           ),
@@ -4378,8 +4385,10 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                                   textCapitalization:
                                       TextCapitalization.characters,
                                   inputFormatters: [UpperCaseTextFormatter()],
-                                  decoration: const InputDecoration(
-                                    labelText: 'State *',
+                                  decoration: InputDecoration(
+                                    labelText: _allowNameOnlyManualExhibitors
+                                        ? 'State'
+                                        : 'State *',
                                     border: OutlineInputBorder(),
                                   ),
                                 ),
@@ -4391,8 +4400,10 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                                   controller: _zip,
                                   enabled:
                                       !_saving && !AppSession.isSupportMode,
-                                  decoration: const InputDecoration(
-                                    labelText: 'ZIP Code *',
+                                  decoration: InputDecoration(
+                                    labelText: _allowNameOnlyManualExhibitors
+                                        ? 'ZIP Code'
+                                        : 'ZIP Code *',
                                     border: OutlineInputBorder(),
                                   ),
                                 ),
