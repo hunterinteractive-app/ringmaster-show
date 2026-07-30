@@ -30,6 +30,7 @@ export default function Home() {
     "email" | "magiclink"
   >("magiclink");
   const [authStep, setAuthStep] = useState<"email" | "code">("email");
+  const [verificationCode, setVerificationCode] = useState("");
   const [email, setEmail] = useState("");
   const [portalShows, setPortalShows] = useState<PortalShow[]>([]);
   const [isTester, setIsTester] = useState(false);
@@ -92,6 +93,7 @@ export default function Home() {
       return;
     }
     setPendingEmail(signInEmail);
+    setVerificationCode("");
     setAuthStep("code");
     setAuthMessage("We emailed a six-digit code to you.");
     setVerificationType(
@@ -101,9 +103,7 @@ export default function Home() {
 
   async function verifyCode(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const token = String(
-      new FormData(event.currentTarget).get("code") ?? "",
-    ).replace(/\D/g, "");
+    const token = verificationCode.replace(/\D/g, "");
     if (token.length !== 6) {
       setAuthMessage("Enter the six-digit code from your email.");
       return;
@@ -124,6 +124,7 @@ export default function Home() {
     setPortalShows([]);
     setEmail("");
     setAuthMessage("");
+    setVerificationCode("");
   }
   const clubs = useMemo(
     () =>
@@ -151,12 +152,15 @@ export default function Home() {
         authMessage={authMessage}
         authStep={authStep}
         pendingEmail={pendingEmail}
+        verificationCode={verificationCode}
         onAcceptedTermsChange={setAcceptedTerms}
         onSignIn={signIn}
         onVerifyCode={verifyCode}
+        onVerificationCodeChange={setVerificationCode}
         onStartOver={() => {
           setAuthStep("email");
           setAuthMessage("");
+          setVerificationCode("");
         }}
       />
     );
@@ -401,18 +405,22 @@ function SignIn({
   authMessage,
   authStep,
   pendingEmail,
+  verificationCode,
   onAcceptedTermsChange,
   onSignIn,
   onVerifyCode,
+  onVerificationCodeChange,
   onStartOver,
 }: {
   acceptedTerms: boolean;
   authMessage: string;
   authStep: "email" | "code";
   pendingEmail: string;
+  verificationCode: string;
   onAcceptedTermsChange: (accepted: boolean) => void;
   onSignIn: (event: FormEvent<HTMLFormElement>) => void;
   onVerifyCode: (event: FormEvent<HTMLFormElement>) => void;
+  onVerificationCodeChange: (code: string) => void;
   onStartOver: () => void;
 }) {
   return (
@@ -438,7 +446,7 @@ function SignIn({
             : `We sent a code to ${pendingEmail}.`}
         </p>
         {authStep === "email" ? (
-          <form onSubmit={onSignIn}>
+          <form key="sweepstakes-email-form" onSubmit={onSignIn}>
             <label>
               Email address
               <input
@@ -486,21 +494,28 @@ function SignIn({
             </button>
           </form>
         ) : (
-          <form onSubmit={onVerifyCode}>
+          <form key="sweepstakes-verification-form" onSubmit={onVerifyCode}>
             <label>
               Six-digit code
               <input
                 className="code-input"
-                name="code"
+                id="sweepstakes-verification-code"
+                name="sweepstakes-verification-code"
+                type="text"
                 inputMode="numeric"
                 autoComplete="one-time-code"
+                autoCapitalize="none"
+                spellCheck={false}
+                data-1p-ignore="true"
+                data-lpignore="true"
                 pattern="[0-9]{6}"
                 maxLength={6}
-                onInput={(event) => {
-                  event.currentTarget.value = event.currentTarget.value
-                    .replace(/\D/g, "")
-                    .slice(0, 6);
-                }}
+                value={verificationCode}
+                onChange={(event) =>
+                  onVerificationCodeChange(
+                    event.currentTarget.value.replace(/\D/g, "").slice(0, 6),
+                  )
+                }
                 placeholder="000000"
                 required
                 autoFocus
