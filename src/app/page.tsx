@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 
-const PORTAL_VERSION = "v0.1.11";
+const PORTAL_VERSION = "v0.1.14";
 const portalCacheKey = (email: string) =>
   `ringmaster-sweepstakes-portal:${email.toLowerCase()}`;
 
@@ -38,6 +38,7 @@ export default function Home() {
   const [email, setEmail] = useState("");
   const [portalShows, setPortalShows] = useState<PortalShow[]>([]);
   const [isTester, setIsTester] = useState(false);
+  const [managerName, setManagerName] = useState<string | null>(null);
   const [clubId, setClubId] = useState("");
   const [loading, setLoading] = useState(true);
   const loadingPortalRef = useRef(false);
@@ -54,11 +55,13 @@ export default function Home() {
           const parsed = JSON.parse(cached) as {
             shows?: PortalShow[];
             isTester?: boolean;
+            managerName?: string | null;
           };
           if (Array.isArray(parsed.shows)) {
             displayedCachedPortal = true;
             setPortalShows(parsed.shows);
             setIsTester(Boolean(parsed.isTester));
+            setManagerName(parsed.managerName ?? null);
             setClubId((currentClubId) =>
               currentClubId &&
               parsed.shows?.some(
@@ -80,9 +83,10 @@ export default function Home() {
         p_privacy_version: "2026-07-29",
       });
       try {
-        const [showsResponse, testerResponse] = await Promise.all([
+        const [showsResponse, testerResponse, managerResponse] = await Promise.all([
           supabase.rpc("get_sweepstakes_portal_shows_payload"),
           supabase.rpc("is_sweepstakes_portal_tester"),
+          supabase.rpc("get_sweepstakes_portal_manager_profile"),
         ]);
         if (showsResponse.error) {
           if (!displayedCachedPortal)
@@ -93,8 +97,11 @@ export default function Home() {
         }
         const shows = (showsResponse.data ?? []) as PortalShow[];
         const tester = Boolean(testerResponse.data);
+        const manager = managerResponse.data as { display_name?: string } | null;
+        const displayName = manager?.display_name?.trim() || null;
         setPortalShows(shows);
         setIsTester(Boolean(tester));
+        setManagerName(displayName);
         setClubId((currentClubId) =>
           currentClubId &&
           shows.some((show) => show.portal_club_id === currentClubId)
@@ -105,7 +112,7 @@ export default function Home() {
         try {
           window.sessionStorage.setItem(
             portalCacheKey(userEmail),
-            JSON.stringify({ shows, isTester: tester }),
+            JSON.stringify({ shows, isTester: tester, managerName: displayName }),
           );
         } catch {
           // Caching is an enhancement; the live portal remains available.
@@ -178,6 +185,7 @@ export default function Home() {
     await supabase.auth.signOut();
     setScreen("sign-in");
     setPortalShows([]);
+    setManagerName(null);
     setEmail("");
     setAuthMessage("");
     setVerificationCode("");
@@ -258,7 +266,7 @@ export default function Home() {
       </header>
       <div className="portal-body">
         <aside className="sidebar">
-          <p className="club-label">YOUR CLUB</p>
+          <p className="club-label">{managerName ? "YOUR CLUBS" : "YOUR CLUB"}</p>
           <div className="club-name">{selectedClub}</div>
           <nav aria-label="Portal navigation">
             <button
@@ -292,19 +300,26 @@ export default function Home() {
             clubs={clubs}
             clubId={clubId}
             isTester={isTester}
+            managerName={managerName}
             onClubChange={setClubId}
             shows={selectedShows}
             onPoints={() => setScreen("points")}
           />
         ) : (
-          <Points clubName={selectedClub} />
+          <Points clubName={selectedClub} isTester={isTester} />
         )}
       </div>
     </main>
   );
 }
 
-function CavyPoints({ clubName }: { clubName: string }) {
+function CavyPoints({
+  clubName,
+  isTester,
+}: {
+  clubName: string;
+  isTester: boolean;
+}) {
   type Award = { code: string; cavy_points: number | string; active: boolean };
   const [clubId, setClubId] = useState<string | null>(null);
   const [awards, setAwards] = useState<Award[]>([]);
@@ -337,9 +352,9 @@ function CavyPoints({ clubName }: { clubName: string }) {
           active: award.active,
         })),
       );
-      setCanManage(Boolean(allowed));
+      setCanManage(Boolean(allowed) || isTester);
     })();
-  }, [clubName]);
+  }, [clubName, isTester]);
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!clubId || !effectiveOn || effectiveOn < today) return;
@@ -625,6 +640,7 @@ function Shows({
   clubs,
   clubId,
   isTester,
+  managerName,
   onClubChange,
   shows,
   onPoints,
@@ -632,6 +648,7 @@ function Shows({
   clubs: { id: string; name: string }[];
   clubId: string;
   isTester: boolean;
+  managerName: string | null;
   onClubChange: (id: string) => void;
   shows: PortalShow[];
   onPoints: () => void;
@@ -735,12 +752,16 @@ function Shows({
       <div className="page-heading">
         <div>
           <div className="eyebrow">
-            {isTester ? "TESTER PREVIEW" : clubs[0]?.name?.toUpperCase()}
+            {isTester
+              ? "TESTER PREVIEW"
+              : managerName
+                ? `Hi ${managerName}`
+                : clubs[0]?.name?.toUpperCase()}
           </div>
           <h1>Sanctioned shows</h1>
           <p>Only shows sanctioned for your club appear here.</p>
         </div>
-        {isTester && (
+        {(isTester || managerName) && (
           <label className="club-picker">
             Preview club
             <select
@@ -909,7 +930,13 @@ function Shows({
   );
 }
 
-function Points({ clubName }: { clubName: string }) {
+function Points({
+  clubName,
+  isTester,
+}: {
+  clubName: string;
+  isTester: boolean;
+}) {
   type Placement = { place: number; points: number | string };
   type Award = {
     code: string;
@@ -993,12 +1020,14 @@ function Points({ clubName }: { clubName: string }) {
       setNationalProfiles(defaults?.national_profiles ?? []);
       setSchedules(rows ?? []);
       setPointMode(mode);
-      setCanManage(Boolean(allowed) && (mode === "rabbit" || mode === "state"));
+      setCanManage(
+        (Boolean(allowed) || isTester) && (mode === "rabbit" || mode === "state"),
+      );
       if (mode === "none")
         setMessage("Point schedules are not available for this club yet.");
     }
     void load();
-  }, [clubName]);
+  }, [clubName, isTester]);
 
   function updatePlacement(index: number, value: string) {
     setPlacements((current) =>
@@ -1072,7 +1101,8 @@ function Points({ clubName }: { clubName: string }) {
     setMessage("Points schedule saved.");
   }
 
-  if (pointMode === "cavy") return <CavyPoints clubName={clubName} />;
+  if (pointMode === "cavy")
+    return <CavyPoints clubName={clubName} isTester={isTester} />;
 
   return (
     <section className="content points-page">
