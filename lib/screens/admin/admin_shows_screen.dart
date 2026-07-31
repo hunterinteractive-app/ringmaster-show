@@ -210,7 +210,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
           letter,
           display_name,
           sort_order,
-          entries!left(id)
+          entries!left(id, status, scratched_at)
         ''')
         .inFilter('show_id', showIds)
         .eq('is_enabled', true)
@@ -233,7 +233,15 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
       final sortOrder = (row['sort_order'] as num?)?.toInt() ?? 999999;
 
       final entriesRaw = row['entries'];
-      final entryCount = entriesRaw is List ? entriesRaw.length : 0;
+      // Match Judging Line-Up: scratched entries remain in the secretary's
+      // records, but are not eligible to be placed before a judge.
+      final entryCount = entriesRaw is List
+          ? entriesRaw.where((entry) {
+              if (entry is! Map) return false;
+              final status = (entry['status'] ?? '').toString().toLowerCase();
+              return entry['scratched_at'] == null && status != 'scratched';
+            }).length
+          : 0;
 
       final counts = countsByShow.putIfAbsent(showId, _ShowEntryCounts.new);
       counts.addCount(
