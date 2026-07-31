@@ -811,10 +811,12 @@ input:focus {
   border: 1px solid #d7cdea;
   border-radius: 8px;
   background: #f7f4fb;
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: center;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 14px 16px;
+}
+.report-viewer-header {
+  min-width: 0;
 }
 .report-viewer strong,
 .report-viewer span {
@@ -840,6 +842,22 @@ input:focus {
   color: var(--purple);
   font-size: 12px;
   font-weight: bold;
+}
+.report-viewer-links .text-button {
+  color: var(--purple);
+  font-size: 12px;
+  font-weight: bold;
+}
+.report-viewer-close {
+  align-self: start;
+}
+.report-preview {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: min(78vh, 900px);
+  border: 1px solid #d7cdea;
+  border-radius: 6px;
+  background: #fff;
 }
 @media (max-width: 1100px) {
   .portal-body {

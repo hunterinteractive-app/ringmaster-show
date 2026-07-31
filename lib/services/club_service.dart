@@ -47,10 +47,9 @@ class ClubService {
     }
 
     list.sort(
-      (a, b) => (a['name'] ?? '')
-          .toString()
-          .toLowerCase()
-          .compareTo((b['name'] ?? '').toString().toLowerCase()),
+      (a, b) => (a['name'] ?? '').toString().toLowerCase().compareTo(
+        (b['name'] ?? '').toString().toLowerCase(),
+      ),
     );
 
     return list;
@@ -66,9 +65,7 @@ class ClubService {
     return canSwitchHostingClub();
   }
 
-  static Future<Map<String, dynamic>> createClub({
-    required String name,
-  }) async {
+  static Future<Map<String, dynamic>> createClub({required String name}) async {
     final user = supabase.auth.currentUser;
     if (user == null) {
       throw Exception('Not signed in.');
@@ -81,10 +78,7 @@ class ClubService {
 
     final createdClub = await supabase
         .from('clubs')
-        .insert({
-          'name': trimmed,
-          'is_active': true,
-        })
+        .insert({'name': trimmed, 'created_by': user.id, 'is_active': true})
         .select('id, name, is_active')
         .single();
 
@@ -107,8 +101,6 @@ class ClubService {
       throw Exception('Club name is required.');
     }
 
-    await supabase.from('clubs').update({
-      'name': trimmed,
-    }).eq('id', clubId);
+    await supabase.from('clubs').update({'name': trimmed}).eq('id', clubId);
   }
 }

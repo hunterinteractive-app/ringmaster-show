@@ -37,7 +37,7 @@ serve(async (request) => {
 
   // This RPC is the authorization boundary: it only returns rows assigned to
   // the signed-in chair (or the designated tester preview account).
-  const { data: visibleRows, error: visibleError } = await userClient.rpc("list_sweepstakes_portal_shows");
+  const { data: visibleRows, error: visibleError } = await userClient.rpc("get_sweepstakes_portal_shows_payload");
   if (visibleError) return json({ error: "We could not confirm portal access." }, 403);
   const visible = (visibleRows ?? []).find((row: any) =>
     String(row.portal_club_id) === portalClubId && String(row.show_id) === showId && String(row.sanction_number ?? "") === sanctionNumber && row.report_status === "generated"
@@ -71,9 +71,13 @@ serve(async (request) => {
   if (!matching.length) return json({ error: "The report files are still being prepared." }, 409);
   const downloads = [];
   for (const artifact of matching) {
-    const { data, error } = await admin.storage.from(artifact.storage_bucket).createSignedUrl(artifact.storage_path, 60, { download: artifact.file_name || `${artifact.report_name}.pdf` });
-    if (error || !data?.signedUrl) return json({ error: "We could not prepare the report download." }, 500);
-    downloads.push({ name: artifact.file_name || `${artifact.report_name}.pdf`, url: data.signedUrl });
+    const name = artifact.file_name || `${artifact.report_name}.pdf`;
+    const [{ data: download, error: downloadError }, { data: view, error: viewError }] = await Promise.all([
+      admin.storage.from(artifact.storage_bucket).createSignedUrl(artifact.storage_path, 60, { download: name }),
+      admin.storage.from(artifact.storage_bucket).createSignedUrl(artifact.storage_path, 60),
+    ]);
+    if (downloadError || viewError || !download?.signedUrl || !view?.signedUrl) return json({ error: "We could not prepare the report files." }, 500);
+    downloads.push({ name, url: download.signedUrl, view_url: view.signedUrl });
   }
   return json({ downloads });
 });

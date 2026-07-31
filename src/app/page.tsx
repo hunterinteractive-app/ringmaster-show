@@ -1,10 +1,12 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 
-const PORTAL_VERSION = "v0.1.1";
+const PORTAL_VERSION = "v0.1.9";
+const portalCacheKey = (email: string) =>
+  `ringmaster-sweepstakes-portal:${email.toLowerCase()}`;
 
 type Screen = "sign-in" | "shows" | "points";
 type PortalShow = {
@@ -38,29 +40,80 @@ export default function Home() {
   const [isTester, setIsTester] = useState(false);
   const [clubId, setClubId] = useState("");
   const [loading, setLoading] = useState(true);
+  const loadingPortalRef = useRef(false);
 
   useEffect(() => {
     async function openPortal(userEmail: string) {
-      setLoading(true);
+      if (loadingPortalRef.current) return;
+      loadingPortalRef.current = true;
       setEmail(userEmail);
-      await supabase.rpc("record_sweepstakes_portal_legal_acceptance", {
+      let displayedCachedPortal = false;
+      try {
+        const cached = window.sessionStorage.getItem(portalCacheKey(userEmail));
+        if (cached) {
+          const parsed = JSON.parse(cached) as {
+            shows?: PortalShow[];
+            isTester?: boolean;
+          };
+          if (Array.isArray(parsed.shows)) {
+            displayedCachedPortal = true;
+            setPortalShows(parsed.shows);
+            setIsTester(Boolean(parsed.isTester));
+            setClubId((currentClubId) =>
+              currentClubId &&
+              parsed.shows?.some(
+                (show) => show.portal_club_id === currentClubId,
+              )
+                ? currentClubId
+                : (parsed.shows?.[0]?.portal_club_id ?? ""),
+            );
+            setScreen("shows");
+            setLoading(false);
+          }
+        }
+      } catch {
+        // A blocked or stale browser cache should never prevent portal access.
+      }
+      if (!displayedCachedPortal) setLoading(true);
+      void supabase.rpc("record_sweepstakes_portal_legal_acceptance", {
         p_terms_version: "2026-07-29",
         p_privacy_version: "2026-07-29",
       });
-      const [{ data: shows, error }, { data: tester }] = await Promise.all([
-        supabase.rpc("list_sweepstakes_portal_shows"),
-        supabase.rpc("is_sweepstakes_portal_tester"),
-      ]);
-      if (error)
-        setAuthMessage(
-          "We could not load your portal access. Please try again.",
+      try {
+        const [showsResponse, testerResponse] = await Promise.all([
+          supabase.rpc("get_sweepstakes_portal_shows_payload"),
+          supabase.rpc("is_sweepstakes_portal_tester"),
+        ]);
+        if (showsResponse.error) {
+          if (!displayedCachedPortal)
+            setAuthMessage(
+              "We could not load your portal access. Please try again.",
+            );
+          return;
+        }
+        const shows = (showsResponse.data ?? []) as PortalShow[];
+        const tester = Boolean(testerResponse.data);
+        setPortalShows(shows);
+        setIsTester(Boolean(tester));
+        setClubId((currentClubId) =>
+          currentClubId &&
+          shows.some((show) => show.portal_club_id === currentClubId)
+            ? currentClubId
+            : (shows[0]?.portal_club_id ?? ""),
         );
-      const rows = (shows ?? []) as PortalShow[];
-      setPortalShows(rows);
-      setIsTester(Boolean(tester));
-      setClubId(rows[0]?.portal_club_id ?? "");
-      setScreen("shows");
-      setLoading(false);
+        if (!displayedCachedPortal) setScreen("shows");
+        try {
+          window.sessionStorage.setItem(
+            portalCacheKey(userEmail),
+            JSON.stringify({ shows, isTester: tester }),
+          );
+        } catch {
+          // Caching is an enhancement; the live portal remains available.
+        }
+      } finally {
+        setLoading(false);
+        loadingPortalRef.current = false;
+      }
     }
     const loadSession = async () => {
       const {
@@ -72,8 +125,9 @@ export default function Home() {
     void loadSession();
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) void openPortal(session.user.email ?? "");
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_IN" && session)
+        void openPortal(session.user.email ?? "");
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -573,11 +627,13 @@ function Shows({
   shows: PortalShow[];
   onPoints: () => void;
 }) {
+  type PortalReport = { name: string; url: string; view_url: string };
   const [loadingKey, setLoadingKey] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [reportsToView, setReportsToView] = useState<{
     title: string;
-    downloads: { name: string; url: string }[];
+    downloads: PortalReport[];
+    activeUrl: string;
   } | null>(null);
   const entries = shows.reduce(
     (sum, show) => sum + Number(show.eligible_entry_count ?? 0),
@@ -604,7 +660,7 @@ function Shows({
       throw new Error(
         data?.error ?? "We could not prepare those reports. Please try again.",
       );
-    return data.downloads as { name: string; url: string }[];
+    return data.downloads as PortalReport[];
   }
 
   async function downloadReports(show: PortalShow) {
@@ -614,19 +670,13 @@ function Shows({
     try {
       const downloads = await getReports(show);
       for (const download of downloads) {
-        const response = await fetch(download.url);
-        if (!response.ok)
-          throw new Error(
-            "One of the report files could not be downloaded. Please try again.",
-          );
-        const blobUrl = URL.createObjectURL(await response.blob());
         const link = document.createElement("a");
-        link.href = blobUrl;
+        link.href = download.url;
         link.download = download.name;
+        link.rel = "noreferrer";
         document.body.appendChild(link);
         link.click();
         link.remove();
-        window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
       }
       setMessage(
         downloads.length > 1
@@ -648,9 +698,11 @@ function Shows({
     setLoadingKey(key);
     setMessage("");
     try {
+      const downloads = await getReports(show);
       setReportsToView({
         title: `${show.show_name} — ${show.section_label || "Reports"}`,
-        downloads: await getReports(show),
+        downloads,
+        activeUrl: downloads[0].view_url,
       });
     } catch (error) {
       setMessage(
@@ -714,28 +766,36 @@ function Shows({
       </div>
       {reportsToView && (
         <section className="report-viewer">
-          <div>
+          <div className="report-viewer-header">
             <strong>{reportsToView.title}</strong>
-            <span>Choose a report to view in a new tab.</span>
+            <span>Viewing the current report in your browser.</span>
+            <div className="report-viewer-links">
+              {reportsToView.downloads.map((report) => (
+                <button
+                  className="text-button"
+                  key={report.url}
+                  onClick={() =>
+                    setReportsToView((current) =>
+                      current ? { ...current, activeUrl: report.view_url } : null,
+                    )
+                  }
+                >
+                  {report.name}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="report-viewer-links">
-            {reportsToView.downloads.map((report) => (
-              <a
-                key={report.url}
-                href={report.url}
-                target="_blank"
-                rel="noreferrer"
-              >
-                View {report.name} ↗
-              </a>
-            ))}
-            <button
-              className="text-button"
-              onClick={() => setReportsToView(null)}
-            >
-              Close
-            </button>
-          </div>
+          <button
+            className="text-button report-viewer-close"
+            onClick={() => setReportsToView(null)}
+          >
+            Close
+          </button>
+          <iframe
+            className="report-preview"
+            src={reportsToView.activeUrl}
+            title={reportsToView.title}
+          />
         </section>
       )}
       <div className="show-list">
