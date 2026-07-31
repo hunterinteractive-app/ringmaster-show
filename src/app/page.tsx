@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 
-const PORTAL_VERSION = "v0.1.9";
+const PORTAL_VERSION = "v0.1.11";
 const portalCacheKey = (email: string) =>
   `ringmaster-sweepstakes-portal:${email.toLowerCase()}`;
 
@@ -186,11 +186,20 @@ export default function Home() {
     () =>
       Array.from(
         new Map(
-          portalShows.map((show) => [show.portal_club_id, show.club_name]),
+          portalShows.map((show) => [
+            show.portal_club_id,
+            {
+              name: show.club_name,
+              breedName: show.breed_name || show.club_name,
+            },
+          ]),
         ).entries(),
       )
-        .map(([id, name]) => ({ id, name }))
-        .sort((a, b) => a.name.localeCompare(b.name)),
+        .map(([id, club]) => ({ id, name: club.name, breedName: club.breedName }))
+        .sort(
+          (a, b) =>
+            a.breedName.localeCompare(b.breedName) || a.name.localeCompare(b.name),
+        ),
     [portalShows],
   );
   const selectedShows = portalShows.filter(
@@ -635,6 +644,7 @@ function Shows({
     downloads: PortalReport[];
     activeUrl: string;
   } | null>(null);
+  const reportViewerRef = useRef<HTMLElement | null>(null);
   const entries = shows.reduce(
     (sum, show) => sum + Number(show.eligible_entry_count ?? 0),
     0,
@@ -704,6 +714,12 @@ function Shows({
         downloads,
         activeUrl: downloads[0].view_url,
       });
+      window.setTimeout(() => {
+        reportViewerRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 0);
     } catch (error) {
       setMessage(
         error instanceof Error
@@ -765,7 +781,7 @@ function Shows({
         {message && <p className="download-message">{message}</p>}
       </div>
       {reportsToView && (
-        <section className="report-viewer">
+        <section className="report-viewer" ref={reportViewerRef}>
           <div className="report-viewer-header">
             <strong>{reportsToView.title}</strong>
             <span>Viewing the current report in your browser.</span>
