@@ -212,7 +212,7 @@ class _AdminEntryManagementScreenState
     final rows = await supabase
         .from('show_sections')
         .select(
-          'id,letter,display_name,kind,is_enabled,sort_order,breed_scope,allowed_breed_ids',
+          'id,letter,display_name,kind,is_enabled,sort_order,breed_scope,allowed_breed_ids,allow_meat_classes',
         )
         .eq('show_id', widget.showId)
         .eq('is_enabled', true)
@@ -1204,7 +1204,6 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
 
   List<Map<String, dynamic>> _breedOptions = [];
   List<Map<String, dynamic>> _varietyOptions = [];
-
   bool _loadingBreeds = false;
   bool _loadingVarieties = false;
   bool _isLopBreedName(String breedName) {
@@ -2650,12 +2649,19 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
 
   List<Map<String, dynamic>> _breedOptions = [];
   List<Map<String, dynamic>> _varietyOptions = [];
+  final Map<String, Map<String, dynamic>> _commercialByCode = {};
+
+  static const List<Map<String, String>> _commercialDefaults = [
+    {'class_code': 'single_fryer', 'display_name': 'Single Fryers'},
+    {'class_code': 'roaster', 'display_name': 'Roasters'},
+    {'class_code': 'stewer', 'display_name': 'Stewers'},
+    {'class_code': 'meat_pen', 'display_name': 'Meat Pens'},
+  ];
 
   bool _loadingBreeds = false;
   bool _loadingVarieties = false;
 
   final _className = TextEditingController();
-  final _notes = TextEditingController();
   final _furNotes = TextEditingController();
 
   bool _isFur = false;
@@ -2700,7 +2706,349 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await _loadBreedsForSpecies();
+      await Future.wait([_loadBreedsForSpecies(), _loadCommercialClasses()]);
+    });
+  }
+
+  Future<void> _loadCommercialClasses() async {
+    try {
+      final rows = await supabase
+          .from('show_commercial_classes')
+          .select('class_code,display_name,is_enabled,sort_order')
+          .eq('show_id', widget.showId)
+          .eq('is_enabled', true)
+          .order('sort_order');
+
+      if (!mounted) return;
+      setState(() {
+        _commercialByCode
+          ..clear()
+          ..addEntries(
+            (rows as List)
+                .whereType<Map>()
+                .map((raw) {
+                  final row = Map<String, dynamic>.from(raw);
+                  return MapEntry((row['class_code'] ?? '').toString(), row);
+                })
+                .where((entry) => entry.key.isNotEmpty),
+          );
+      });
+    } catch (_) {
+      // A show without commercial classes should retain the regular manual
+      // entry workflow instead of failing to open this sheet.
+    }
+  }
+
+  String _commercialLabel(String classCode) {
+    final configured = (_commercialByCode[classCode]?['display_name'] ?? '')
+        .toString()
+        .trim();
+    if (configured.isNotEmpty) return configured;
+    return _commercialDefaults.firstWhere(
+          (row) => row['class_code'] == classCode,
+          orElse: () => const {},
+        )['display_name'] ??
+        classCode;
+  }
+
+  bool _sectionAllowsMeatClasses(String sectionId) {
+    final section = _sectionById(sectionId);
+    return section['breed_scope']?.toString().toLowerCase() == 'meat_only' ||
+        section['allow_meat_classes'] == true;
+  }
+
+  bool get _hasSelectedMeatSection =>
+      _selectedSectionIds.isNotEmpty &&
+      _selectedSectionIds.any(_sectionAllowsMeatClasses);
+
+  Future<void> _selectRabbitForCommercialEntry(String classCode) async {
+    final rabbits = _animals
+        .where(
+          (animal) =>
+              (animal['species'] ?? '').toString().trim().toLowerCase() ==
+              'rabbit',
+        )
+        .toList();
+
+    if (rabbits.isEmpty) {
+      setState(() {
+        _msg =
+            'This exhibitor has no saved rabbits to use for '
+            '${_commercialLabel(classCode)}.';
+      });
+      return;
+    }
+
+    final selected = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Select Rabbit for ${_commercialLabel(classCode)}'),
+        content: SizedBox(
+          width: 440,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: rabbits.length,
+            itemBuilder: (_, index) {
+              final rabbit = rabbits[index];
+              return ListTile(
+                leading: const Icon(Icons.pets),
+                title: Text(_animalLabel(rabbit)),
+                onTap: () => Navigator.pop(dialogContext, rabbit),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+
+    if (selected == null || !mounted) return;
+    setState(() {
+      _useLocalAnimal = false;
+      _animal = selected;
+      final savedSex = (selected['sex'] ?? '').toString().trim();
+      if (savedSex.isNotEmpty) {
+        _sexValue = savedSex;
+        _sex.text = savedSex;
+      }
+      _classValue = 'commercial:$classCode';
+      _className.text = _classValue!;
+      _isFur = false;
+      _msg = null;
+    });
+  }
+
+  Widget _buildCommercialEntriesCard() {
+    if (!_hasSelectedMeatSection || _commercialByCode.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final hasExhibitor = _exhibitorId?.isNotEmpty == true;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 14),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Commercial Entries',
+            style: const TextStyle(
+              color: AppColors.text,
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            hasExhibitor
+                ? 'Choose a class to enter a rabbit in this commercial section.'
+                : 'Select an exhibitor first.',
+            style: const TextStyle(color: AppColors.muted),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final code in _commercialByCode.keys.where(
+                (code) => code != 'meat_pen',
+              ))
+                OutlinedButton.icon(
+                  onPressed:
+                      (_saving || AppSession.isSupportMode || !hasExhibitor)
+                      ? null
+                      : () => _selectRabbitForCommercialEntry(code),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.text,
+                    disabledForegroundColor: AppColors.muted,
+                  ),
+                  icon: const Icon(Icons.add, size: 18),
+                  label: Text('Add ${_commercialLabel(code)}'),
+                ),
+              if (_commercialByCode.containsKey('meat_pen'))
+                OutlinedButton.icon(
+                  onPressed:
+                      (_saving ||
+                          AppSession.isSupportMode ||
+                          _exhibitorId == null ||
+                          !_hasSelectedMeatSection)
+                      ? null
+                      : _openSecretaryMeatPenDialog,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.text,
+                    disabledForegroundColor: AppColors.muted,
+                  ),
+                  icon: const Icon(Icons.set_meal, size: 18),
+                  label: Text('Add ${_commercialLabel('meat_pen')}'),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openSecretaryMeatPenDialog() async {
+    final breed = TextEditingController();
+    final variety = TextEditingController();
+    final tattoo1 = TextEditingController();
+    final tattoo2 = TextEditingController();
+    final tattoo3 = TextEditingController();
+    String? error;
+
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text('Add Meat Pen'),
+            content: SizedBox(
+              width: 420,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Enter the shared breed, variety, and all three tattoos.',
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: breed,
+                    decoration: const InputDecoration(labelText: 'Breed'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: variety,
+                    decoration: const InputDecoration(labelText: 'Variety'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: tattoo1,
+                    decoration: const InputDecoration(labelText: 'Tattoo 1'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: tattoo2,
+                    decoration: const InputDecoration(labelText: 'Tattoo 2'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: tattoo3,
+                    decoration: const InputDecoration(labelText: 'Tattoo 3'),
+                  ),
+                  if (error != null) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      error!,
+                      style: const TextStyle(color: AppColors.danger),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () async {
+                  final values = [
+                    breed.text,
+                    variety.text,
+                    tattoo1.text,
+                    tattoo2.text,
+                    tattoo3.text,
+                  ].map((value) => value.trim()).toList();
+                  if (values.any((value) => value.isEmpty)) {
+                    setDialogState(
+                      () => error =
+                          'Breed, variety, and all three tattoos are required.',
+                    );
+                    return;
+                  }
+                  try {
+                    await _saveSecretaryMeatPen(
+                      breed: values[0],
+                      variety: values[1],
+                      tattoos: values
+                          .sublist(2)
+                          .map((value) => value.toUpperCase())
+                          .toList(),
+                    );
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                    }
+                  } catch (e) {
+                    setDialogState(() => error = e.toString());
+                  }
+                },
+                child: const Text('Add Meat Pen'),
+              ),
+            ],
+          ),
+        ),
+      );
+    } finally {
+      breed.dispose();
+      variety.dispose();
+      tattoo1.dispose();
+      tattoo2.dispose();
+      tattoo3.dispose();
+    }
+  }
+
+  Future<void> _saveSecretaryMeatPen({
+    required String breed,
+    required String variety,
+    required List<String> tattoos,
+  }) async {
+    final exhibitorId = _exhibitorId;
+    if (exhibitorId == null || exhibitorId.isEmpty) {
+      throw Exception('Select an exhibitor first.');
+    }
+    final sections = _selectedSectionIds
+        .where(_sectionAllowsMeatClasses)
+        .toList();
+    if (sections.isEmpty || sections.length != _selectedSectionIds.length) {
+      throw Exception('Select only sections that allow Meat Classes.');
+    }
+    final exhibitor = _selectedExhibitor();
+    final ownerUserId = (exhibitor?['owner_user_id'] ?? '').toString().trim();
+    final now = DateTime.now().toUtc().toIso8601String();
+    await supabase.from('entries').insert([
+      for (final sectionId in sections)
+        {
+          'show_id': widget.showId,
+          'section_id': sectionId,
+          'exhibitor_id': exhibitorId,
+          'exhibitor_user_id': ownerUserId.isEmpty ? null : ownerUserId,
+          'animal_id': null,
+          'species': 'rabbit',
+          'tattoo': tattoos.join(' / '),
+          'breed': breed,
+          'variety': variety,
+          'sex': null,
+          'class_name': 'Meat Pen',
+          'is_fur': false,
+          'status': 'entered',
+          'created_at': now,
+          'updated_at': now,
+        },
+    ]);
+    if (!mounted) return;
+    setState(() {
+      _savedSectionIdsDuringSession.addAll(sections);
+      _msg = 'Meat Pen added.';
     });
   }
 
@@ -2725,7 +3073,6 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     _variety.dispose();
     _sex.dispose();
     _className.dispose();
-    _notes.dispose();
     _furNotes.dispose();
     super.dispose();
   }
@@ -3849,29 +4196,50 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
         }
       }
 
-      final selectedClass = (_classValue ?? _className.text).trim();
-      if (selectedClass.isEmpty) {
+      final selectedClassValue = (_classValue ?? _className.text).trim();
+      if (selectedClassValue.isEmpty) {
         throw Exception('Select class');
+      }
+      final commercialClassCode = selectedClassValue.startsWith('commercial:')
+          ? selectedClassValue.substring('commercial:'.length)
+          : null;
+      final isCommercialEntry =
+          commercialClassCode != null && commercialClassCode.isNotEmpty;
+      final selectedClass = isCommercialEntry
+          ? _commercialLabel(commercialClassCode)
+          : selectedClassValue;
+      // Mirror the exhibitor entry flow: Commercial classes are entered only
+      // in the selected sections that have Meat Classes enabled. This permits
+      // a secretary to select a qualifying Youth section without rejecting a
+      // separate selected regular section.
+      final entrySectionIds = isCommercialEntry
+          ? _selectedSectionIds.where(_sectionAllowsMeatClasses).toList()
+          : _selectedSectionIds.toList();
+      if (entrySectionIds.isEmpty) {
+        throw Exception(
+          '$selectedClass requires a selected section with Meat Classes enabled.',
+        );
       }
 
       final entrySpecies = _useLocalAnimal
           ? _species
           : (_animal!['species'] ?? '').toString().trim();
-      final entryBreed = _useLocalAnimal
+      final animalBreed = _useLocalAnimal
           ? _breed.text.trim()
           : (_animal!['breed'] ?? '').toString().trim();
-      for (final sectionId in _selectedSectionIds) {
+      final entryBreed = isCommercialEntry ? 'Commercial' : animalBreed;
+      for (final sectionId in entrySectionIds) {
         final section = _sectionById(sectionId);
-        if (!sectionAllowsBreed(section, entryBreed)) {
+        if (!isCommercialEntry && !sectionAllowsBreed(section, entryBreed)) {
           throw Exception(
             '$entryBreed cannot be entered in ${_sectionDisplayLabelById(sectionId)}. '
             'That section only accepts ${sectionBreedScopeDescription(section)}.',
           );
         }
       }
-      final entryVariety = await _canonicalEntryVarietyName(
+      final animalVariety = await _canonicalEntryVarietyName(
         species: entrySpecies,
-        breedName: entryBreed,
+        breedName: animalBreed,
         varietyName: _useLocalAnimal
             ? _variety.text
             : (_animal!['variety'] ?? '').toString(),
@@ -3880,6 +4248,9 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
         showId: widget.showId,
         breedId: _useLocalAnimal ? _breedId : null,
       );
+      final entryVariety = isCommercialEntry
+          ? _commercialLabel(commercialClassCode)
+          : animalVariety;
 
       String? animalId;
 
@@ -3891,7 +4262,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
             .from('animals')
             .select('id')
             .eq('tattoo', normalizedTattoo)
-            .eq('breed', entryBreed)
+            .eq('breed', animalBreed)
             .eq('species', entrySpecies);
 
         if (exhibitorOwnerUserId.isNotEmpty) {
@@ -3923,8 +4294,8 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                     ? null
                     : _animalName.text.trim(),
                 'tattoo': normalizedTattoo,
-                'breed': entryBreed,
-                'variety': entryVariety.isEmpty ? null : entryVariety,
+                'breed': animalBreed,
+                'variety': animalVariety.isEmpty ? null : animalVariety,
                 'sex': _sexValue,
                 'created_at': now,
                 'updated_at': now,
@@ -3941,7 +4312,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
       final existingEntryFlagsBySection =
           <String, ({bool regular, bool fur})>{};
 
-      for (final sectionId in _selectedSectionIds) {
+      for (final sectionId in entrySectionIds) {
         final duplicateRows = await supabase
             .from('entries')
             .select('id,is_fur')
@@ -3973,7 +4344,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
 
       final rows = <Map<String, dynamic>>[];
 
-      for (final sectionId in _selectedSectionIds) {
+      for (final sectionId in entrySectionIds) {
         final existingFlags =
             existingEntryFlagsBySection[sectionId] ??
             (regular: false, fur: false);
@@ -4000,7 +4371,6 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
           'variety': entryVariety.isEmpty ? null : entryVariety,
           'sex': _useLocalAnimal ? _sexValue : _animal!['sex'],
           'class_name': selectedClass,
-          'notes': _notes.text.trim().isEmpty ? null : _notes.text.trim(),
           'status': 'entered',
           'created_at': DateTime.now().toUtc().toIso8601String(),
           'updated_at': DateTime.now().toUtc().toIso8601String(),
@@ -4043,9 +4413,9 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
           .select('id,section_id,animal_id,is_fur');
 
       final inserted = (insertedRows as List).cast<Map<String, dynamic>>();
-      _savedSectionIdsDuringSession.addAll(_selectedSectionIds);
+      _savedSectionIdsDuringSession.addAll(entrySectionIds);
 
-      for (final sectionId in _selectedSectionIds) {
+      for (final sectionId in entrySectionIds) {
         final existingFlags =
             existingEntryFlagsBySection[sectionId] ??
             (regular: false, fur: false);
@@ -4100,7 +4470,6 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
         _tattoo.clear();
         _breed.clear();
         _variety.clear();
-        _notes.clear();
         _furNotes.clear();
         if (_addNewExhibitor) {
           _showingName.clear();
@@ -4841,15 +5210,20 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
 
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    initialValue: _classValue,
+                    initialValue: _classValue?.startsWith('commercial:') == true
+                        ? null
+                        : _classValue,
                     style: _entrySheetDropdownTextStyle,
                     dropdownColor: AppColors.surface,
                     iconEnabledColor: AppColors.muted,
                     iconDisabledColor: AppColors.muted,
                     decoration: InputDecoration(
-                      labelText: 'Class / Age Override',
-                      helperText:
-                          'Use this when DOB is missing or when the show secretary needs to override the calculated class.',
+                      labelText: _hasSelectedMeatSection
+                          ? 'Regular Class / Age Override'
+                          : 'Class / Age Override',
+                      helperText: _hasSelectedMeatSection
+                          ? 'Choose a regular class, or choose a Commercial Entry above.'
+                          : 'Select a section that allows Meat Classes to enter Commercial rabbits.',
                       helperStyle: TextStyle(
                         color: AppColors.headerForeground.withValues(
                           alpha: .82,
@@ -4967,20 +5341,8 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                     ),
                   ],
 
+                  _buildCommercialEntriesCard(),
                   const SizedBox(height: 10),
-                  TextField(
-                    controller: _notes,
-                    enabled: !_saving && !AppSession.isSupportMode,
-                    minLines: 2,
-                    maxLines: 4,
-                    style: _entrySheetDropdownTextStyle,
-                    decoration: const InputDecoration(
-                      labelText: 'Notes',
-                      labelStyle: _entrySheetInputLabelStyle,
-                      floatingLabelStyle: _entrySheetFocusedInputLabelStyle,
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
                   const SizedBox(height: 16),
                   Row(
                     children: [

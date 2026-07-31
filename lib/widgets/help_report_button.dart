@@ -1,7 +1,7 @@
 // lib/widgets/help_report_button.dart
 
 import 'package:flutter/material.dart';
-import 'package:ringmaster_show/widgets/help_report_dialog.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class HelpReportButton extends StatelessWidget {
   const HelpReportButton({
@@ -17,15 +17,23 @@ class HelpReportButton extends StatelessWidget {
   final String? showId;
   final bool compact;
 
-  Future<void> _openDialog(BuildContext context) async {
-    await showDialog<bool>(
-      context: context,
-      builder: (_) => HelpReportDialog(
-        pageTitle: pageTitle,
-        pageRoute: pageRoute ?? ModalRoute.of(context)?.settings.name,
-        showId: showId,
+  Future<void> _emailSupport(BuildContext context) async {
+    final subject = pageTitle?.trim().isNotEmpty == true
+        ? 'RingMaster Show help: ${pageTitle!.trim()}'
+        : 'RingMaster Show help request';
+    final opened = await launchUrl(
+      Uri(
+        scheme: 'mailto',
+        path: 'support@ringmasterone.com',
+        queryParameters: {'subject': subject},
       ),
+      mode: LaunchMode.externalApplication,
     );
+    if (!opened && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to open your email app.')),
+      );
+    }
   }
 
   @override
@@ -34,12 +42,12 @@ class HelpReportButton extends StatelessWidget {
       return IconButton(
         tooltip: 'Report an issue',
         icon: const Icon(Icons.help_outline),
-        onPressed: () => _openDialog(context),
+        onPressed: () => _emailSupport(context),
       );
     }
 
     return TextButton.icon(
-      onPressed: () => _openDialog(context),
+      onPressed: () => _emailSupport(context),
       icon: const Icon(Icons.help_outline),
       label: const Text('Help'),
     );

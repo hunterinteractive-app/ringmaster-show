@@ -1749,8 +1749,13 @@ class _ShowListScreenState extends State<ShowListScreen> {
                                         ),
                                         child: LayoutBuilder(
                                           builder: (context, cardConstraints) {
+                                            // The action row needs considerably
+                                            // more room than the show details.
+                                            // Keeping both in a Row at tablet
+                                            // widths collapses the details into
+                                            // a nearly unreadable strip.
                                             final compactCard =
-                                                cardConstraints.maxWidth < 640;
+                                                cardConstraints.maxWidth < 960;
 
                                             final showInfo = Column(
                                               crossAxisAlignment:

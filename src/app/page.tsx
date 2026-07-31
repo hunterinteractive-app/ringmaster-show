@@ -4,6 +4,8 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 
+const PORTAL_VERSION = "v0.1.1";
+
 type Screen = "sign-in" | "shows" | "points";
 type PortalShow = {
   portal_club_id: string;
@@ -219,6 +221,7 @@ export default function Home() {
             >
               Contact RingMaster support
             </a>
+            <span className="portal-version">Sweepstakes Portal {PORTAL_VERSION}</span>
           </div>
         </aside>
         {screen === "shows" ? (

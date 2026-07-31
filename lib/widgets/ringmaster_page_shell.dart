@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:ringmaster_show/services/app_session.dart';
 import 'package:ringmaster_show/screens/show_list_screen.dart';
-import 'package:ringmaster_show/widgets/help_report_dialog.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class RingMasterPageShell extends StatelessWidget {
   final String title;
@@ -54,12 +54,24 @@ class RingMasterPageShell extends StatelessWidget {
     return Navigator.of(context).canPop();
   }
 
+  Future<void> _emailSupport(BuildContext context) async {
+    final opened = await launchUrl(
+      Uri(
+        scheme: 'mailto',
+        path: 'support@ringmasterone.com',
+        queryParameters: {'subject': 'RingMaster Show help: $title'},
+      ),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to open your email app.')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final route = ModalRoute.of(context);
-    final routeName = route?.settings.name;
-    final routeArgs = route?.settings.arguments;
-    final effectiveShowId = showId ?? _showIdFromRouteArguments(routeArgs);
     final isSupportMode = AppSession.isSupportMode;
     final impersonatedLabel =
         AppSession.impersonatedUserName ??
@@ -142,14 +154,7 @@ class RingMasterPageShell extends StatelessWidget {
         IconButton(
           tooltip: 'Report an issue',
           icon: const Icon(Icons.help_outline),
-          onPressed: () => showDialog<void>(
-            context: context,
-            builder: (_) => HelpReportDialog(
-              pageTitle: title,
-              pageRoute: routeName,
-              showId: effectiveShowId,
-            ),
-          ),
+          onPressed: () => _emailSupport(context),
         ),
     ];
 
@@ -289,27 +294,6 @@ class _SupportModeBanner extends StatelessWidget {
       ),
     );
   }
-}
-
-String? _showIdFromRouteArguments(Object? args) {
-  if (args == null) return null;
-
-  if (args is String && args.trim().isNotEmpty) {
-    return args.trim();
-  }
-
-  if (args is Map) {
-    final possibleKeys = ['showId', 'show_id', 'id'];
-
-    for (final key in possibleKeys) {
-      final value = args[key];
-      if (value != null && value.toString().trim().isNotEmpty) {
-        return value.toString().trim();
-      }
-    }
-  }
-
-  return null;
 }
 
 class _MobileHeader extends StatelessWidget {
