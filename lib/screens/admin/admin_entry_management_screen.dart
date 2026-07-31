@@ -524,7 +524,11 @@ class _AdminEntryManagementScreenState
   Future<void> _toggleScratch(Map<String, dynamic> entry) async {
     final id = entry['id'].toString();
     final scratchedAt = entry['scratched_at']?.toString();
-    final willScratch = scratchedAt == null || scratchedAt.isEmpty;
+    final status = (entry['status'] ?? '').toString().trim().toLowerCase();
+    final isScratched =
+        (scratchedAt != null && scratchedAt.isNotEmpty) ||
+        status == 'scratched';
+    final willScratch = !isScratched;
 
     try {
       await ShowLockService.assertShowUnlocked(widget.showId);
@@ -532,6 +536,7 @@ class _AdminEntryManagementScreenState
       await supabase
           .from('entries')
           .update({
+            'status': willScratch ? 'scratched' : 'entered',
             'scratched_at': willScratch
                 ? DateTime.now().toUtc().toIso8601String()
                 : null,
@@ -1026,8 +1031,14 @@ class _AdminEntryManagementScreenState
                                   .toString();
                               final notes = (e['notes'] ?? '').toString();
                               final scratchedAt = e['scratched_at']?.toString();
+                              final status = (e['status'] ?? '')
+                                  .toString()
+                                  .trim()
+                                  .toLowerCase();
                               final isScratched =
-                                  scratchedAt != null && scratchedAt.isNotEmpty;
+                                  (scratchedAt != null &&
+                                      scratchedAt.isNotEmpty) ||
+                                  status == 'scratched';
 
                               final section = e['show_sections'];
                               final letter =
@@ -1056,7 +1067,9 @@ class _AdminEntryManagementScreenState
                                       : 'Fur/Wool',
                                 if (letter.isNotEmpty) 'Show: $letter',
                                 if (isScratched)
-                                  'SCRATCHED: ${_dateOnly(scratchedAt)}',
+                                  scratchedAt != null && scratchedAt.isNotEmpty
+                                      ? 'SCRATCHED: ${_dateOnly(scratchedAt)}'
+                                      : 'SCRATCHED',
                                 if (notes.isNotEmpty) 'Notes: $notes',
                               ].join(' • ');
 
