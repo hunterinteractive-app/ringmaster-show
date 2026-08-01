@@ -2652,6 +2652,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
   final _animalName = TextEditingController();
   final _tattoo = TextEditingController();
   final _breed = TextEditingController();
+  final _breedSearchFocus = FocusNode();
   final _variety = TextEditingController();
   final _sex = TextEditingController();
 
@@ -3083,6 +3084,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     _animalName.dispose();
     _tattoo.dispose();
     _breed.dispose();
+    _breedSearchFocus.dispose();
     _variety.dispose();
     _sex.dispose();
     _className.dispose();
@@ -5133,6 +5135,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                     if (_loadingBreeds) const LinearProgressIndicator(),
                     RawAutocomplete<Map<String, dynamic>>(
                       textEditingController: _breed,
+                      focusNode: _breedSearchFocus,
                       displayStringForOption: (breed) =>
                           (breed['name'] ?? '').toString(),
                       optionsBuilder: (value) =>
