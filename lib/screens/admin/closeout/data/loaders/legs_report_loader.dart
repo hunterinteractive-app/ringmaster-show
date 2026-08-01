@@ -370,39 +370,14 @@ class LegsReportLoader {
       return a.earNumber.compareTo(b.earNumber);
     });
 
-    final missingSanctionContexts = _missingArbaSanctionContexts(output);
-    if (missingSanctionContexts.isNotEmpty) {
-      throw Exception(
-        'Leg certificate not generated: selected section missing an ARBA sanction number: '
-        '${missingSanctionContexts.join('; ')}.',
-      );
-    }
+    // A leg cannot be certified without the sanction number for its section.
+    // Omit only that certificate: other sanctioned legs, plus the exhibitor
+    // report itself, must still be available for generation.
+    output = output
+        .where((certificate) => certificate.sanctionNumber.trim().isNotEmpty)
+        .toList();
 
     return output;
-  }
-
-  List<String> _missingArbaSanctionContexts(
-    List<LegsCertificateData> certificates,
-  ) {
-    final contexts = <String>{};
-
-    for (final certificate in certificates) {
-      if (certificate.sanctionNumber.trim().isNotEmpty) continue;
-
-      final section = _sectionFromCertificateId(certificate.certificateId);
-      final sectionLabel = section.isEmpty
-          ? 'unknown section'
-          : 'Show $section';
-      final breed = certificate.breed.trim().isEmpty
-          ? 'selected breed'
-          : certificate.breed.trim();
-      final species = isKnownCavyBreed(breed) ? 'Cavy' : 'Rabbit';
-      contexts.add(
-        '$species $sectionLabel — $breed does not have an ARBA sanction number',
-      );
-    }
-
-    return contexts.toList()..sort();
   }
 
   Future<Map<String, dynamic>?> _loadArbaDetails(String showId) async {

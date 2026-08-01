@@ -446,11 +446,16 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
   }) {
     final speciesFilter = _speciesFilterForScope(resolved);
     if (speciesFilter != null) {
-      final artifactSpecies = (artifact.metadata['species'] ?? '')
-          .toString()
-          .trim()
-          .toLowerCase();
-      if (artifactSpecies != speciesFilter) return false;
+      final rawSpecies = artifact.metadata['species'];
+      final artifactSpecies = switch (rawSpecies) {
+        List() =>
+          rawSpecies
+              .map((value) => value.toString().trim().toLowerCase())
+              .where((value) => value.isNotEmpty)
+              .toSet(),
+        _ => {rawSpecies?.toString().trim().toLowerCase() ?? ''}..remove(''),
+      };
+      if (!artifactSpecies.contains(speciesFilter)) return false;
     }
 
     final selectedRunId = runId?.trim() ?? '';
