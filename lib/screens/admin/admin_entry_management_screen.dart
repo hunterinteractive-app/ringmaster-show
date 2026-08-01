@@ -3734,6 +3734,36 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     }
   }
 
+  Iterable<Map<String, dynamic>> _filteredBreedOptions(String query) {
+    final normalizedQuery = query.trim().toLowerCase();
+    if (normalizedQuery.isEmpty) return _breedOptions;
+
+    final prefixMatches = _breedOptions.where((breed) {
+      final name = (breed['name'] ?? '').toString().trim().toLowerCase();
+      return name.startsWith(normalizedQuery);
+    });
+    if (prefixMatches.isNotEmpty) return prefixMatches;
+
+    return _breedOptions.where((breed) {
+      final name = (breed['name'] ?? '').toString().trim().toLowerCase();
+      return name.contains(normalizedQuery);
+    });
+  }
+
+  Future<void> _selectBreed(Map<String, dynamic> selected) async {
+    final breedId = (selected['id'] ?? '').toString().trim();
+    if (breedId.isEmpty) return;
+
+    setState(() {
+      _breedId = breedId;
+      _breed.text = (selected['name'] ?? '').toString();
+      _variety.clear();
+      _varietyOptions = [];
+      _msg = null;
+    });
+    await _loadVarietiesForBreed(breedId);
+  }
+
   Future<void> _loadVarietiesForBreed(String breedId) async {
     setState(() {
       _loadingVarieties = true;
@@ -5101,48 +5131,83 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                     ),
                     const SizedBox(height: 10),
                     if (_loadingBreeds) const LinearProgressIndicator(),
-                    DropdownButtonFormField<String>(
-                      initialValue: _breedId,
-                      style: _entrySheetDropdownTextStyle,
-                      dropdownColor: AppColors.surface,
-                      iconEnabledColor: AppColors.muted,
-                      iconDisabledColor: AppColors.muted,
-                      decoration: const InputDecoration(
-                        labelText: 'Breed',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: _breedOptions
-                          .map(
-                            (b) => DropdownMenuItem<String>(
-                              value: (b['id'] ?? '').toString(),
-                              child: Text(
-                                (b['name'] ?? '').toString(),
-                                style: _entrySheetDropdownTextStyle,
-                              ),
+                    RawAutocomplete<Map<String, dynamic>>(
+                      textEditingController: _breed,
+                      displayStringForOption: (breed) =>
+                          (breed['name'] ?? '').toString(),
+                      optionsBuilder: (value) =>
+                          _filteredBreedOptions(value.text),
+                      onSelected: _selectBreed,
+                      fieldViewBuilder:
+                          (
+                            context,
+                            textEditingController,
+                            focusNode,
+                            onFieldSubmitted,
+                          ) => TextField(
+                            controller: textEditingController,
+                            focusNode: focusNode,
+                            enabled: !_saving && !AppSession.isSupportMode,
+                            style: _entrySheetDropdownTextStyle,
+                            decoration: const InputDecoration(
+                              labelText: 'Breed',
+                              hintText: 'Type to search breeds',
+                              prefixIcon: Icon(Icons.search),
+                              border: OutlineInputBorder(),
                             ),
-                          )
-                          .toList(),
-                      onChanged: (_saving || AppSession.isSupportMode)
-                          ? null
-                          : (value) async {
-                              final selected = _breedOptions.firstWhere(
-                                (b) => (b['id'] ?? '').toString() == value,
-                                orElse: () => <String, dynamic>{},
-                              );
-
+                            onChanged: (value) {
+                              final selectedName = _breedOptions
+                                  .where(
+                                    (breed) =>
+                                        (breed['id'] ?? '').toString() ==
+                                        _breedId,
+                                  )
+                                  .map(
+                                    (breed) => (breed['name'] ?? '').toString(),
+                                  )
+                                  .firstOrNull;
+                              if (value.trim() == selectedName) return;
                               setState(() {
-                                _breedId = value;
-                                _breed.text = (selected['name'] ?? '')
-                                    .toString();
+                                _breedId = null;
                                 _variety.clear();
                                 _varietyOptions = [];
-                                _msg = null;
                               });
-
-                              if (value != null && value.isNotEmpty) {
-                                await _loadVarietiesForBreed(value);
-                              }
                             },
+                            onSubmitted: (_) => onFieldSubmitted(),
+                          ),
+                      optionsViewBuilder: (context, onSelected, options) {
+                        final optionList = options.toList();
+                        return Align(
+                          alignment: Alignment.topLeft,
+                          child: Material(
+                            color: AppColors.surface,
+                            elevation: 6,
+                            borderRadius: BorderRadius.circular(12),
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(
+                                maxHeight: 280,
+                                maxWidth: 620,
+                              ),
+                              child: ListView.builder(
+                                padding: EdgeInsets.zero,
+                                shrinkWrap: true,
+                                itemCount: optionList.length,
+                                itemBuilder: (context, index) {
+                                  final option = optionList[index];
+                                  return ListTile(
+                                    dense: true,
+                                    title: Text(
+                                      (option['name'] ?? '').toString(),
+                                      style: _entrySheetDropdownTextStyle,
+                                    ),
+                                    onTap: () => onSelected(option),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        );
+                      },
                     ),
                     const SizedBox(height: 10),
                     if (_breedId != null && _loadingVarieties)
