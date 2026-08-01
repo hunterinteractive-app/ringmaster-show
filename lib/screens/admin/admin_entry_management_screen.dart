@@ -2654,7 +2654,10 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
   final _breed = TextEditingController();
   final _breedSearchFocus = FocusNode();
   final _variety = TextEditingController();
+  final _varietySearchFocus = FocusNode();
   final _sex = TextEditingController();
+  final _sexFocus = FocusNode();
+  final _classFocus = FocusNode();
 
   String? _breedId;
   String? _sexValue;
@@ -2670,6 +2673,13 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     {'class_code': 'roaster', 'display_name': 'Roasters'},
     {'class_code': 'stewer', 'display_name': 'Stewers'},
     {'class_code': 'meat_pen', 'display_name': 'Meat Pens'},
+  ];
+
+  static const List<String> _regularClassOptions = [
+    'Senior',
+    'Intermediate',
+    'Junior',
+    'Pre-Junior',
   ];
 
   bool _loadingBreeds = false;
@@ -2709,8 +2719,8 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     if (_sectionId != null && _sectionId!.isNotEmpty) {
       _selectedSectionIds.add(_sectionId!);
     }
-    _sexValue = _sexOptions.first;
-    _sex.text = _sexValue ?? '';
+    _sexValue = null;
+    _sex.clear();
     _className.text = _classValue ?? '';
     _loadExhibitors();
     _firstName.addListener(_autoFillShowingName);
@@ -2831,7 +2841,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
         _sex.text = savedSex;
       }
       _classValue = 'commercial:$classCode';
-      _className.text = _classValue!;
+      _className.clear();
       _isFur = false;
       _msg = null;
     });
@@ -3086,7 +3096,10 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     _breed.dispose();
     _breedSearchFocus.dispose();
     _variety.dispose();
+    _varietySearchFocus.dispose();
     _sex.dispose();
+    _sexFocus.dispose();
+    _classFocus.dispose();
     _className.dispose();
     _furNotes.dispose();
     super.dispose();
@@ -3752,6 +3765,39 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     });
   }
 
+  Iterable<Map<String, dynamic>> _filteredVarietyOptions(String query) {
+    final normalizedQuery = query.trim().toLowerCase();
+    if (normalizedQuery.isEmpty) return _varietyOptions;
+
+    final prefixMatches = _varietyOptions.where((variety) {
+      final name = (variety['name'] ?? '').toString().trim().toLowerCase();
+      return name.startsWith(normalizedQuery);
+    });
+    if (prefixMatches.isNotEmpty) return prefixMatches;
+
+    return _varietyOptions.where((variety) {
+      final name = (variety['name'] ?? '').toString().trim().toLowerCase();
+      return name.contains(normalizedQuery);
+    });
+  }
+
+  Iterable<String> _filteredTextOptions(
+    String query,
+    Iterable<String> options,
+  ) {
+    final normalizedQuery = query.trim().toLowerCase();
+    if (normalizedQuery.isEmpty) return options;
+
+    final prefixMatches = options.where(
+      (option) => option.toLowerCase().startsWith(normalizedQuery),
+    );
+    return prefixMatches.isNotEmpty
+        ? prefixMatches
+        : options.where(
+            (option) => option.toLowerCase().contains(normalizedQuery),
+          );
+  }
+
   Future<void> _selectBreed(Map<String, dynamic> selected) async {
     final breedId = (selected['id'] ?? '').toString().trim();
     if (breedId.isEmpty) return;
@@ -3764,6 +3810,77 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
       _msg = null;
     });
     await _loadVarietiesForBreed(breedId);
+    if (mounted) _varietySearchFocus.requestFocus();
+  }
+
+  void _selectVariety(Map<String, dynamic> selected) {
+    setState(() {
+      _variety.text = (selected['name'] ?? '').toString();
+      _msg = null;
+    });
+    _sexFocus.requestFocus();
+  }
+
+  void _selectSex(String sex) {
+    setState(() {
+      _sexValue = sex;
+      _sex.text = sex;
+      _msg = null;
+    });
+    _classFocus.requestFocus();
+  }
+
+  void _selectClass(String className) {
+    setState(() {
+      _classValue = className;
+      _className.text = className;
+      _msg = null;
+    });
+  }
+
+  Widget _entryAutocompleteOptions<T>({
+    required BuildContext context,
+    required Iterable<T> options,
+    required void Function(T) onSelected,
+    required String Function(T) labelForOption,
+  }) {
+    final optionList = options.toList();
+    return Align(
+      alignment: Alignment.topLeft,
+      child: Material(
+        color: AppColors.surface,
+        elevation: 6,
+        borderRadius: BorderRadius.circular(12),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 280, maxWidth: 620),
+          child: ListView.builder(
+            padding: EdgeInsets.zero,
+            shrinkWrap: true,
+            itemCount: optionList.length,
+            itemBuilder: (context, index) {
+              final option = optionList[index];
+              return Builder(
+                builder: (context) {
+                  final isHighlighted =
+                      AutocompleteHighlightedOption.of(context) == index;
+                  return ListTile(
+                    dense: true,
+                    tileColor: isHighlighted
+                        ? AppColors.primaryButton.withValues(alpha: .24)
+                        : null,
+                    title: Text(
+                      labelForOption(option),
+                      style: _entrySheetDropdownTextStyle,
+                    ),
+                    onTap: () => onSelected(option),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _loadVarietiesForBreed(String breedId) async {
@@ -4191,6 +4308,22 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
           resolvedExhibitorId = existingId;
         } else {
           resolvedExhibitorId = await _createNewExhibitor();
+
+          // A walk-in exhibitor has just been created. Retain that exhibitor
+          // as the form's selection before a possible "Save & Add Another"
+          // reset, just as we do when the exhibitor already existed.
+          final createdExhibitor = _exhibitors.firstWhere(
+            (e) => (e['id'] ?? '').toString() == resolvedExhibitorId,
+            orElse: () => <String, dynamic>{},
+          );
+          setState(() {
+            _addNewExhibitor = false;
+            _useLocalAnimal = true;
+            _animal = null;
+            _animals = [];
+            _exhibitorId = resolvedExhibitorId;
+            _exhibitorSearch.text = _exhibitorLabel(createdExhibitor);
+          });
         }
       } else {
         if (_exhibitorId == null || _exhibitorId!.isEmpty) {
@@ -4236,6 +4369,13 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
         if (_variety.text.trim().isEmpty) {
           throw Exception('Select variety');
         }
+        if (!_varietyOptions.any(
+          (variety) =>
+              (variety['name'] ?? '').toString().trim().toLowerCase() ==
+              _variety.text.trim().toLowerCase(),
+        )) {
+          throw Exception('Select a variety from the list.');
+        }
         if (_sexValue == null || _sexValue!.trim().isEmpty) {
           throw Exception('Select sex');
         }
@@ -4253,6 +4393,10 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
       final selectedClass = isCommercialEntry
           ? _commercialLabel(commercialClassCode)
           : selectedClassValue;
+      if (!isCommercialEntry &&
+          !_regularClassOptions.contains(selectedClassValue)) {
+        throw Exception('Select a class from the list.');
+      }
       // Mirror the exhibitor entry flow: Commercial classes are entered only
       // in the selected sections that have Meat Classes enabled. This permits
       // a secretary to select a qualifying Youth section without rejecting a
@@ -4506,8 +4650,8 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
         _breedId = null;
         _breedOptions = [];
         _varietyOptions = [];
-        _sexValue = _sexOptions.first;
-        _sex.text = _sexValue ?? '';
+        _sexValue = null;
+        _sex.clear();
         _classValue = null;
         _furVarietyValue = null;
         _className.clear();
@@ -5092,8 +5236,8 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                               final newSpecies = v ?? 'rabbit';
                               setState(() {
                                 _species = newSpecies;
-                                _sexValue = _sexOptions.first;
-                                _sex.text = _sexValue ?? '';
+                                _sexValue = null;
+                                _sex.clear();
                                 _breedId = null;
                                 _breedOptions = [];
                                 _varietyOptions = [];
@@ -5152,6 +5296,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                             focusNode: focusNode,
                             enabled: !_saving && !AppSession.isSupportMode,
                             style: _entrySheetDropdownTextStyle,
+                            textInputAction: TextInputAction.next,
                             decoration: const InputDecoration(
                               labelText: 'Breed',
                               hintText: 'Type to search breeds',
@@ -5176,112 +5321,127 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                                 _varietyOptions = [];
                               });
                             },
-                            onSubmitted: (_) => onFieldSubmitted(),
+                            onSubmitted: (_) {
+                              final matches = _filteredBreedOptions(
+                                textEditingController.text,
+                              ).toList();
+                              if (matches.length == 1) {
+                                _selectBreed(matches.single);
+                                return;
+                              }
+                              onFieldSubmitted();
+                            },
                           ),
-                      optionsViewBuilder: (context, onSelected, options) {
-                        final optionList = options.toList();
-                        return Align(
-                          alignment: Alignment.topLeft,
-                          child: Material(
-                            color: AppColors.surface,
-                            elevation: 6,
-                            borderRadius: BorderRadius.circular(12),
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(
-                                maxHeight: 280,
-                                maxWidth: 620,
-                              ),
-                              child: ListView.builder(
-                                padding: EdgeInsets.zero,
-                                shrinkWrap: true,
-                                itemCount: optionList.length,
-                                itemBuilder: (context, index) {
-                                  final option = optionList[index];
-                                  return ListTile(
-                                    dense: true,
-                                    title: Text(
-                                      (option['name'] ?? '').toString(),
-                                      style: _entrySheetDropdownTextStyle,
-                                    ),
-                                    onTap: () => onSelected(option),
-                                  );
-                                },
-                              ),
-                            ),
+                      optionsViewBuilder: (context, onSelected, options) =>
+                          _entryAutocompleteOptions(
+                            context: context,
+                            options: options,
+                            onSelected: onSelected,
+                            labelForOption: (option) =>
+                                (option['name'] ?? '').toString(),
                           ),
-                        );
-                      },
                     ),
                     const SizedBox(height: 10),
                     if (_breedId != null && _loadingVarieties)
                       const LinearProgressIndicator(),
-                    DropdownButtonFormField<String>(
-                      initialValue: _variety.text.trim().isEmpty
-                          ? null
-                          : _variety.text.trim(),
-                      style: _entrySheetDropdownTextStyle,
-                      dropdownColor: AppColors.surface,
-                      iconEnabledColor: AppColors.muted,
-                      iconDisabledColor: AppColors.muted,
-                      decoration: const InputDecoration(
-                        labelText: 'Variety',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: _varietyOptions
-                          .map(
-                            (v) => DropdownMenuItem<String>(
-                              value: (v['name'] ?? '').toString(),
-                              child: Text(
-                                (v['name'] ?? '').toString(),
-                                style: _entrySheetDropdownTextStyle,
-                              ),
+                    RawAutocomplete<Map<String, dynamic>>(
+                      textEditingController: _variety,
+                      focusNode: _varietySearchFocus,
+                      displayStringForOption: (variety) =>
+                          (variety['name'] ?? '').toString(),
+                      optionsBuilder: (value) =>
+                          _filteredVarietyOptions(value.text),
+                      onSelected: _selectVariety,
+                      fieldViewBuilder:
+                          (
+                            context,
+                            textEditingController,
+                            focusNode,
+                            onFieldSubmitted,
+                          ) => TextField(
+                            controller: textEditingController,
+                            focusNode: focusNode,
+                            enabled:
+                                !_saving &&
+                                !AppSession.isSupportMode &&
+                                _breedId != null,
+                            style: _entrySheetDropdownTextStyle,
+                            textInputAction: TextInputAction.next,
+                            decoration: const InputDecoration(
+                              labelText: 'Variety',
+                              hintText: 'Type to search varieties',
+                              prefixIcon: Icon(Icons.search),
+                              border: OutlineInputBorder(),
                             ),
-                          )
-                          .toList(),
-                      onChanged:
-                          (_saving ||
-                              AppSession.isSupportMode ||
-                              _breedId == null)
-                          ? null
-                          : (value) {
-                              setState(() {
-                                _variety.text = value ?? '';
-                                _msg = null;
-                              });
+                            onSubmitted: (_) {
+                              final matches = _filteredVarietyOptions(
+                                textEditingController.text,
+                              ).toList();
+                              if (matches.length == 1) {
+                                _selectVariety(matches.single);
+                                return;
+                              }
+                              onFieldSubmitted();
                             },
+                          ),
+                      optionsViewBuilder: (context, onSelected, options) =>
+                          _entryAutocompleteOptions(
+                            context: context,
+                            options: options,
+                            onSelected: onSelected,
+                            labelForOption: (option) =>
+                                (option['name'] ?? '').toString(),
+                          ),
                     ),
                     const SizedBox(height: 10),
                     const SizedBox(height: 10),
-                    DropdownButtonFormField<String>(
-                      initialValue: _sexValue,
-                      style: _entrySheetDropdownTextStyle,
-                      dropdownColor: AppColors.surface,
-                      iconEnabledColor: AppColors.muted,
-                      iconDisabledColor: AppColors.muted,
-                      decoration: const InputDecoration(
-                        labelText: 'Sex',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: _sexOptions
-                          .map(
-                            (sex) => DropdownMenuItem<String>(
-                              value: sex,
-                              child: Text(
-                                sex,
-                                style: _entrySheetDropdownTextStyle,
-                              ),
+                    RawAutocomplete<String>(
+                      textEditingController: _sex,
+                      focusNode: _sexFocus,
+                      optionsBuilder: (value) =>
+                          _filteredTextOptions(value.text, _sexOptions),
+                      onSelected: _selectSex,
+                      fieldViewBuilder:
+                          (
+                            context,
+                            textEditingController,
+                            focusNode,
+                            onFieldSubmitted,
+                          ) => TextField(
+                            controller: textEditingController,
+                            focusNode: focusNode,
+                            enabled: !_saving && !AppSession.isSupportMode,
+                            style: _entrySheetDropdownTextStyle,
+                            textInputAction: TextInputAction.next,
+                            decoration: const InputDecoration(
+                              labelText: 'Sex',
+                              hintText: 'Type to search sex',
+                              prefixIcon: Icon(Icons.search),
+                              border: OutlineInputBorder(),
                             ),
-                          )
-                          .toList(),
-                      onChanged: (_saving || AppSession.isSupportMode)
-                          ? null
-                          : (value) {
-                              setState(() {
-                                _sexValue = value;
-                                _sex.text = value ?? '';
-                                _msg = null;
-                              });
+                            onChanged: (value) {
+                              if (_sexOptions.contains(value)) return;
+                              setState(() => _sexValue = null);
                             },
+                            onSubmitted: (_) {
+                              final matches = _filteredTextOptions(
+                                textEditingController.text,
+                                _sexOptions,
+                              ).toList();
+                              if (matches.length == 1) {
+                                _selectSex(matches.single);
+                                return;
+                              }
+                              onFieldSubmitted();
+                            },
+                          ),
+                      optionsViewBuilder: (context, onSelected, options) =>
+                          _entryAutocompleteOptions(
+                            context: context,
+                            options: options,
+                            onSelected: onSelected,
+                            labelForOption: (option) => option,
+                          ),
                     ),
                   ] else if (_addNewExhibitor) ...[
                     const Text(
@@ -5290,69 +5450,63 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                   ],
 
                   const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: _classValue?.startsWith('commercial:') == true
-                        ? null
-                        : _classValue,
-                    style: _entrySheetDropdownTextStyle,
-                    dropdownColor: AppColors.surface,
-                    iconEnabledColor: AppColors.muted,
-                    iconDisabledColor: AppColors.muted,
-                    decoration: InputDecoration(
-                      labelText: _hasSelectedMeatSection
-                          ? 'Regular Class / Age Override'
-                          : 'Class / Age Override',
-                      helperText: _hasSelectedMeatSection
-                          ? 'Choose a regular class, or choose a Commercial Entry above.'
-                          : 'Select a section that allows Meat Classes to enter Commercial rabbits.',
-                      helperStyle: TextStyle(
-                        color: AppColors.headerForeground.withValues(
-                          alpha: .82,
-                        ),
-                      ),
-                      border: const OutlineInputBorder(),
-                    ),
-                    items: const [
-                      DropdownMenuItem(
-                        value: 'Senior',
-                        child: Text(
-                          'Senior',
+                  RawAutocomplete<String>(
+                    textEditingController: _className,
+                    focusNode: _classFocus,
+                    optionsBuilder: (value) =>
+                        _filteredTextOptions(value.text, _regularClassOptions),
+                    onSelected: _selectClass,
+                    fieldViewBuilder:
+                        (
+                          context,
+                          textEditingController,
+                          focusNode,
+                          onFieldSubmitted,
+                        ) => TextField(
+                          controller: textEditingController,
+                          focusNode: focusNode,
+                          enabled: !_saving && !AppSession.isSupportMode,
                           style: _entrySheetDropdownTextStyle,
-                        ),
-                      ),
-                      DropdownMenuItem(
-                        value: 'Intermediate',
-                        child: Text(
-                          'Intermediate',
-                          style: _entrySheetDropdownTextStyle,
-                        ),
-                      ),
-                      DropdownMenuItem(
-                        value: 'Junior',
-                        child: Text(
-                          'Junior',
-                          style: _entrySheetDropdownTextStyle,
-                        ),
-                      ),
-                      DropdownMenuItem(
-                        value: 'Pre-Junior',
-                        child: Text(
-                          'Pre-Junior',
-                          style: _entrySheetDropdownTextStyle,
-                        ),
-                      ),
-                    ],
-                    onChanged: (_saving || AppSession.isSupportMode)
-                        ? null
-                        : (value) {
-                            setState(() {
-                              _classValue = value;
-                              _className.text = value ?? '';
-                              _msg = null;
-                            });
+                          textInputAction: TextInputAction.next,
+                          decoration: InputDecoration(
+                            labelText: _hasSelectedMeatSection
+                                ? 'Regular Class'
+                                : 'Class',
+                            hintText: 'Type to search classes',
+                            prefixIcon: const Icon(Icons.search),
+                            helperText: _hasSelectedMeatSection
+                                ? 'Choose a regular class, or choose a Commercial Entry above.'
+                                : 'Select a section that allows Meat Classes to enter Commercial rabbits.',
+                            helperStyle: TextStyle(
+                              color: AppColors.headerForeground.withValues(
+                                alpha: .82,
+                              ),
+                            ),
+                            border: const OutlineInputBorder(),
+                          ),
+                          onChanged: (value) {
+                            if (_regularClassOptions.contains(value)) return;
+                            setState(() => _classValue = null);
                           },
+                          onSubmitted: (_) {
+                            final matches = _filteredTextOptions(
+                              textEditingController.text,
+                              _regularClassOptions,
+                            ).toList();
+                            if (matches.length == 1) {
+                              _selectClass(matches.single);
+                            }
+                            onFieldSubmitted();
+                          },
+                        ),
+                    optionsViewBuilder: (context, onSelected, options) =>
+                        _entryAutocompleteOptions(
+                          context: context,
+                          options: options,
+                          onSelected: onSelected,
+                          labelForOption: (option) => option,
+                        ),
                   ),
-
                   const SizedBox(height: 12),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
