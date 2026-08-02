@@ -34,6 +34,7 @@ import 'package:ringmaster_show/utils/file_download.dart';
 import 'results/admin_results_entry_screen.dart';
 
 import 'closeout/data/loaders/legs_report_loader.dart';
+import 'closeout/data/loaders/michelles_special_report_loader.dart';
 import 'closeout/data/loaders/check_in_sheet_report_loader.dart';
 import 'closeout/data/loaders/exhibitor_report_loader.dart';
 import 'closeout/data/loaders/sweepstakes_report_loader.dart';
@@ -64,6 +65,7 @@ import 'closeout/pdf/builders/ribbon_payout_report_pdf.dart';
 import 'closeout/pdf/builders/payback_report_pdf.dart';
 import 'closeout/pdf/builders/details_by_breed_report_pdf.dart';
 import 'closeout/pdf/builders/exhibitor_by_breed_report_pdf.dart';
+import 'closeout/csv/builders/michelles_special_report_csv.dart';
 
 import '../../../utils/date_time_utils.dart';
 
@@ -125,6 +127,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
 
   bool _loading = true;
   bool _isShowSuperAdmin = false;
+  bool _isMichellesShow = false;
   bool _loadingReports = false;
   bool _reportsLoaded = false;
   bool _reportsSectionOpen = false;
@@ -193,12 +196,26 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
 
   static const Set<String> _arbaReportKeys = {'arba_report'};
 
+  // These are operational reports whose data is useful while entries and
+  // payments are still changing. They deliberately do not belong to a
+  // finalized-results version.
+  static const Set<String> _preShowReportKeys = {
+    'unpaid_balances_report',
+    'paid_exhibitor_report',
+    'entered_exhibitors_contact_report',
+    'michelles_special_report',
+  };
+
+  static const String _michellesSecretaryId =
+      '96d62792-7aad-49da-a27a-4fb496289176';
+
   static const List<String> _reportDisplayOrder = [
     'arba_report',
     'exhibitor_report',
     'unpaid_balances_report',
     'paid_exhibitor_report',
     'entered_exhibitors_contact_report',
+    'michelles_special_report',
     'legs',
     'checkin_sheet',
     'newsletter_show_report',
@@ -2842,6 +2859,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       'paid_exhibitor_report',
       'checkin_sheet',
       'entered_exhibitors_contact_report',
+      'michelles_special_report',
     };
 
     final rows = await supabase
@@ -3733,6 +3751,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       detailsByBreedReportBuilder: detailsByBreedReportBuilder,
       exhibitorByBreedReportLoader: exhibitorByBreedReportLoader,
       exhibitorByBreedReportBuilder: exhibitorByBreedReportBuilder,
+      michellesSpecialReportLoader: MichellesSpecialReportLoader(supabase),
+      michellesSpecialReportBuilder: MichellesSpecialReportCsvBuilder(),
     );
 
     final engine = ReportEngine(registry);
@@ -4886,6 +4906,14 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
 
     try {
       final isShowSuperAdmin = await _currentUserIsShowSuperAdmin();
+      final showOwner = await supabase
+          .from('shows')
+          .select('created_by')
+          .eq('id', widget.showId)
+          .maybeSingle();
+      final isMichellesShow =
+          (showOwner?['created_by'] ?? '').toString().trim() ==
+          _michellesSecretaryId;
       await _loadCloseoutScopes();
       final requestedScopeKey = _dashboardKeyForScope(_resolvedCloseoutScope);
       final dashboard = await _loadDashboardSummary();
@@ -4902,6 +4930,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       final runId = (dashboard.latestFinalize.id ?? '').trim();
       setState(() {
         _isShowSuperAdmin = isShowSuperAdmin;
+        _isMichellesShow = isMichellesShow;
         _dashboard = dashboard;
         _dashboardScopeKey = requestedScopeKey;
         _completedFinalizeRunIdsByScope = runId.isEmpty
@@ -5019,17 +5048,13 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
 
   Future<ReportArtifactSummary> _createManualReportArtifact({
     required String reportName,
+    String? finalizeRunId,
     Map<String, dynamic>? metadata,
   }) async {
-    final finalizeRunId = _finalizeRunIdForSelectedScope;
-    if (finalizeRunId.isEmpty) {
-      throw StateError(
-        'Finalize this scope before generating report artifacts.',
-      );
-    }
+    final resolvedFinalizeRunId = finalizeRunId?.trim();
     debugPrint(
       '[Closeout:${widget.showId}] Creating manual artifact '
-      'report=$reportName finalizeRunId=$finalizeRunId '
+      'report=$reportName finalizeRunId=${resolvedFinalizeRunId ?? '(pre-show)'} '
       'metadata=${metadata ?? <String, dynamic>{}}',
     );
 
@@ -5053,7 +5078,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       'closeout_artifact_identity',
       params: {'p_report_name': reportName, 'p_metadata': scopedMetadata},
     )).toString();
-    final identityOwners = await supabase
+    final identityOwnersQuery = supabase
         .from('show_report_artifacts')
         .select('''
             id,
@@ -5072,9 +5097,12 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
             metadata
           ''')
         .eq('show_id', widget.showId)
-        .eq('finalize_run_id', finalizeRunId)
-        .eq('report_name', reportName)
-        .limit(200);
+        .eq('report_name', reportName);
+    final identityOwners = resolvedFinalizeRunId == null
+        ? await identityOwnersQuery.isFilter('finalize_run_id', null).limit(200)
+        : await identityOwnersQuery
+              .eq('finalize_run_id', resolvedFinalizeRunId)
+              .limit(200);
     Map<String, dynamic>? identityOwner;
     for (final raw in identityOwners as List) {
       final row = Map<String, dynamic>.from(raw as Map);
@@ -5119,7 +5147,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         .from('show_report_artifacts')
         .insert({
           'show_id': widget.showId,
-          'finalize_run_id': finalizeRunId,
+          if (resolvedFinalizeRunId != null)
+            'finalize_run_id': resolvedFinalizeRunId,
           'report_name': reportName,
           'artifact_status': 'queued',
           'is_current': true,
@@ -5343,10 +5372,16 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
     String? exhibitorId,
     String? exhibitorName,
   }) async {
+    if (reportName == 'michelles_special_report' && !_isMichellesShow) {
+      throw StateError(
+        'Michelle’s Special Report is not available for this show.',
+      );
+    }
     if (reportName != 'unpaid_balances_report' &&
         reportName != 'paid_exhibitor_report' &&
         reportName != 'checkin_sheet' &&
-        reportName != 'entered_exhibitors_contact_report') {
+        reportName != 'entered_exhibitors_contact_report' &&
+        reportName != 'michelles_special_report') {
       final ready = await _ensureResultsReadyForReports();
       if (!ready) return;
     }
@@ -5539,6 +5574,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
           assets: _reportAssets,
           logoBytes: _reportLogoBytes,
         ),
+        michellesSpecialReportLoader: MichellesSpecialReportLoader(supabase),
+        michellesSpecialReportBuilder: MichellesSpecialReportCsvBuilder(),
         unpaidBalancesLoader: unpaidBalancesLoader,
         unpaidBalancesBuilder: _requiredReportDependency(
           _unpaidBalancesBuilder,
@@ -5588,16 +5625,24 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
 
       ReportArtifactSummary? artifact;
       final finalizeRunId = _finalizeRunIdForSelectedScope;
-      if (finalizeRunId.isEmpty) {
+      final isPreShowReport = _preShowReportKeys.contains(reportName);
+      if (finalizeRunId.isEmpty && !isPreShowReport) {
         throw StateError(
           'Finalize this scope before generating report artifacts.',
         );
       }
+      final artifactVersionKey = finalizeRunId.isEmpty
+          ? 'pre-show'
+          : finalizeRunId;
 
       final reports = (_dashboard?.reports ?? const <ReportArtifactSummary>[])
           .where((r) => r.reportName == reportName)
           .where((r) => r.isCurrent)
-          .where((r) => r.finalizeRunId == finalizeRunId)
+          .where(
+            (r) => finalizeRunId.isEmpty
+                ? (r.finalizeRunId ?? '').trim().isEmpty
+                : r.finalizeRunId == finalizeRunId,
+          )
           .where((r) => r.scopeKey == _resolvedCloseoutScope.stableScopeKey)
           .where(_artifactMatchesSelectedScope)
           .toList();
@@ -5688,6 +5733,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
           artifact ??
           await _createManualReportArtifact(
             reportName: reportName,
+            finalizeRunId: finalizeRunId.isEmpty ? null : finalizeRunId,
             metadata: {
               if (targetSectionId.isNotEmpty) 'section_id': targetSectionId,
               if (targetDisplayBreedName.trim().isNotEmpty)
@@ -5735,7 +5781,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
 
       await runner.generateSingleReport(
         showId: widget.showId,
-        finalizeRunId: finalizeRunId,
+        finalizeRunId: artifactVersionKey,
         reportName: reportName,
         artifactId: resolvedArtifact.id,
         breedName: targetLoaderBreedName,
@@ -6017,6 +6063,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       'paid_exhibitor_report',
       'checkin_sheet',
       'entered_exhibitors_contact_report',
+      'michelles_special_report',
       'payback_report',
       'ribbon_payout_report',
       'judge_report',
@@ -7496,6 +7543,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         'club' =>
           reports.where((r) => _clubReportKeys.contains(r.reportName)).toList(),
         'other' => reports.where((r) {
+          if (r.reportName == 'michelles_special_report' && !_isMichellesShow) {
+            return false;
+          }
           return !_arbaReportKeys.contains(r.reportName) &&
               !_exhibitorReportKeys.contains(r.reportName) &&
               !_clubReportKeys.contains(r.reportName);
@@ -7537,10 +7587,11 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
   void _addManualReportNames(String groupKey, List<String> names) {
     final manualNames = switch (groupKey) {
       'arba' || 'exhibitor' || 'club' => const <String>{},
-      'other' => const <String>{
+      'other' => <String>{
         'unpaid_balances_report',
         'paid_exhibitor_report',
         'entered_exhibitors_contact_report',
+        if (_isMichellesShow) 'michelles_special_report',
         'ribbon_payout_report',
         'judge_report',
         'breed_judged_totals_report',
@@ -7654,11 +7705,17 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                             .where((artifact) => artifact.isCurrent)
                             .where(_artifactMatchesSelectedScope)
                             .where((artifact) {
+                              if (artifact.reportName ==
+                                      'michelles_special_report' &&
+                                  !_isMichellesShow) {
+                                return false;
+                              }
                               const preFinalizeReports = <String>{
                                 'unpaid_balances_report',
                                 'paid_exhibitor_report',
                                 'checkin_sheet',
                                 'entered_exhibitors_contact_report',
+                                'michelles_special_report',
                               };
 
                               if (preFinalizeReports.contains(
@@ -8897,6 +8954,8 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
   bool get _selectedReportIgnoresResultsReadiness =>
       _selectedReportName == 'unpaid_balances_report' ||
       _selectedReportName == 'paid_exhibitor_report' ||
+      _selectedReportName == 'entered_exhibitors_contact_report' ||
+      _selectedReportName == 'michelles_special_report' ||
       _selectedReportName == 'checkin_sheet';
 
   bool get _selectedReportCanEmail {
@@ -10807,6 +10866,8 @@ String _friendlyReportName(String? key) {
       return 'Newsletter';
     case 'entered_exhibitors_contact_report':
       return 'Entered Exhibitors Contact Report';
+    case 'michelles_special_report':
+      return "Michelle's Special Report";
     case 'ribbon_payout_report':
       return 'Ribbon Report';
     case 'payback_report':

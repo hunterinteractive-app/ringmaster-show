@@ -14,6 +14,7 @@ import 'package:ringmaster_show/screens/admin/closeout/data/loaders/exhibitor_by
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/exhibitor_report_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/judge_report_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/legs_report_loader.dart';
+import 'package:ringmaster_show/screens/admin/closeout/data/loaders/michelles_special_report_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/paid_exhibitor_report_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/payback_report_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/ribbon_payout_report_loader.dart';
@@ -36,6 +37,7 @@ import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/payback_repo
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/ribbon_payout_report_pdf.dart';
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/sweepstakes_report_pdf.dart';
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/unpaid_balances_report_pdf.dart';
+import 'package:ringmaster_show/screens/admin/closeout/csv/builders/michelles_special_report_csv.dart';
 import 'package:ringmaster_show/screens/admin/closeout/registry/report_registry.dart';
 import 'package:supabase/supabase.dart';
 
@@ -135,6 +137,8 @@ final class RegistryArtifactRenderer implements ArtifactRenderer {
       ),
       bestDisplayReportLoader: BestDisplayReportLoader(supabase: client),
       bestDisplayReportBuilder: BestDisplayReportPdfBuilder(assets: assets),
+      michellesSpecialReportLoader: MichellesSpecialReportLoader(client),
+      michellesSpecialReportBuilder: MichellesSpecialReportCsvBuilder(),
     );
     return RegistryArtifactRenderer(
       client: client,

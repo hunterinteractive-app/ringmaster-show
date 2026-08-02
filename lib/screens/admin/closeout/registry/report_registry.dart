@@ -11,6 +11,7 @@ import '../data/loaders/exhibitor_report_loader.dart';
 import '../data/loaders/judge_report_loader.dart';
 import '../data/loaders/best_display_report_loader.dart';
 import '../data/loaders/legs_report_loader.dart';
+import '../data/loaders/michelles_special_report_loader.dart';
 import '../data/loaders/paid_exhibitor_report_loader.dart';
 import '../data/loaders/payback_report_loader.dart';
 import '../data/loaders/ribbon_payout_report_loader.dart';
@@ -31,6 +32,7 @@ import '../models/exhibitor/payback_report_data.dart';
 import '../models/judge/breed_judged_totals_report_data.dart';
 import '../models/judge/judge_report_data.dart';
 import '../models/legs/legs_certificate_data.dart';
+import '../models/other/michelles_special_report_data.dart';
 import '../models/paid/paid_exhibitor_report_data.dart';
 import '../models/unpaid/unpaid_balances_report_data.dart';
 
@@ -50,6 +52,7 @@ import '../pdf/builders/payback_report_pdf.dart';
 import '../pdf/builders/ribbon_payout_report_pdf.dart';
 import '../pdf/builders/sweepstakes_report_pdf.dart';
 import '../pdf/builders/unpaid_balances_report_pdf.dart';
+import '../csv/builders/michelles_special_report_csv.dart';
 
 import 'report_definition.dart';
 
@@ -90,6 +93,8 @@ class ReportRegistry {
     required BreedJudgedTotalsReportPdfBuilder breedJudgedTotalsReportBuilder,
     required BestDisplayReportLoader bestDisplayReportLoader,
     required BestDisplayReportPdfBuilder bestDisplayReportBuilder,
+    required MichellesSpecialReportLoader michellesSpecialReportLoader,
+    required MichellesSpecialReportCsvBuilder michellesSpecialReportBuilder,
   }) : definitions = {
          'arba_report': ReportDefinition(
            reportName: 'arba_report',
@@ -218,6 +223,13 @@ class ReportRegistry {
            loader: (req) async => await bestDisplayReportLoader.load(req),
            builder: (data, req) async => await bestDisplayReportBuilder
                .buildFile(data as BestDisplayReportData, req),
+         ),
+         'michelles_special_report': ReportDefinition(
+           reportName: 'michelles_special_report',
+           outputType: 'csv',
+           loader: (req) async => await michellesSpecialReportLoader.load(req),
+           builder: (data, req) async => await michellesSpecialReportBuilder
+               .buildFile(data as MichellesSpecialReportData, req),
          ),
        };
 
