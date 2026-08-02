@@ -1196,6 +1196,7 @@ class _EditEntrySheet extends StatefulWidget {
 
 class _EditEntrySheetState extends State<_EditEntrySheet> {
   bool _saving = false;
+  bool _applyChangesToAllShowEntries = false;
   String? _msg;
 
   late final TextEditingController _animalName;
@@ -1638,6 +1639,27 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
             : null,
       };
 
+      if (_applyChangesToAllShowEntries && animalId.isNotEmpty) {
+        var allEntriesQuery = supabase
+            .from('entries')
+            .update(basePayload)
+            .eq('show_id', showId)
+            .eq('animal_id', animalId);
+        if (exhibitorId.isNotEmpty) {
+          allEntriesQuery = allEntriesQuery.eq('exhibitor_id', exhibitorId);
+        }
+
+        final allUpdatedRows = await allEntriesQuery.select('id');
+        final allUpdated = (allUpdatedRows as List)
+            .cast<Map<String, dynamic>>();
+        if (allUpdated.isEmpty ||
+            !allUpdated.any((row) => (row['id'] ?? '').toString() == id)) {
+          throw Exception(
+            'No matching entries were updated for this animal. This usually means RLS blocked the update.',
+          );
+        }
+      }
+
       debugPrint('Updating entry $id with: $updatePayload');
 
       final updatedRows = await supabase
@@ -1968,6 +1990,22 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
                       _msg = null;
                     }),
             ),
+            if ((widget.entry['animal_id'] ?? '').toString().trim().isNotEmpty)
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text(
+                  'Apply changes to every show entry for this animal',
+                ),
+                subtitle: const Text(
+                  'Updates Open A, Open B, Youth A, etc. Fur/Wool choices stay with their individual show entries.',
+                ),
+                value: _applyChangesToAllShowEntries,
+                onChanged: _saving
+                    ? null
+                    : (value) => setState(
+                        () => _applyChangesToAllShowEntries = value ?? false,
+                      ),
+              ),
             if (_isFur) ...[
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(

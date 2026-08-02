@@ -54,6 +54,11 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
 
   // Breed list cache
   List<Map<String, dynamic>> _breeds = [];
+  final Set<String> _allActiveBreedIds = {};
+
+  // Enabled Open/Youth sections for this show. Breed switches below use the
+  // same section configuration that entry validation already reads.
+  List<Map<String, dynamic>> _showSections = [];
 
   bool _loading = true;
   bool _isLocked = false;
@@ -196,6 +201,30 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
       }
 
       _breeds = breedData.cast<Map<String, dynamic>>();
+
+      final List allActiveBreedData = await supabase
+          .from('breeds')
+          .select('id')
+          .eq('is_active', true);
+      _allActiveBreedIds
+        ..clear()
+        ..addAll(
+          allActiveBreedData
+              .cast<Map<String, dynamic>>()
+              .map((breed) => breed['id'].toString())
+              .where((id) => id.isNotEmpty),
+        );
+
+      final List sectionData = await supabase
+          .from('show_sections')
+          .select(
+            'id,kind,letter,display_name,sort_order,breed_scope,allowed_breed_ids',
+          )
+          .eq('show_id', widget.showId)
+          .eq('is_enabled', true)
+          .order('sort_order')
+          .order('letter');
+      _showSections = sectionData.cast<Map<String, dynamic>>();
 
       final sbid = _singleBreedId;
       if (_isSingleBreedShow && sbid != null && sbid.isNotEmpty) {
@@ -344,6 +373,46 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
     return _showHasBreedRows ? false : true;
   }
 
+  /// A show without rows in `show_breeds` historically means every active
+  /// breed is allowed.  Preserve that meaning when an admin touches the first
+  /// toggle by materializing the full enabled list before changing one breed.
+  /// Otherwise, creating a single disabled row would inadvertently turn every
+  /// unlisted breed off after the next refresh.
+  Future<void> _initializeAllBreedsForShowIfNeeded() async {
+    if (_showHasBreedRows) return;
+
+    final List breedRows = await supabase
+        .from('breeds')
+        .select('id')
+        .eq('is_active', true);
+
+    final rows = breedRows
+        .cast<Map<String, dynamic>>()
+        .map(
+          (breed) => {
+            'show_id': widget.showId,
+            'breed_id': breed['id'],
+            'is_enabled': true,
+            'class_system_override': null,
+          },
+        )
+        .toList();
+
+    if (rows.isNotEmpty) {
+      await supabase.from('show_breeds').insert(rows);
+    }
+
+    for (final row in rows) {
+      final breedId = row['breed_id'].toString();
+      _showBreedByBreedId[breedId] = {
+        'breed_id': breedId,
+        'is_enabled': true,
+        'class_system_override': null,
+      };
+    }
+    _showHasBreedRows = true;
+  }
+
   Future<void> _setBreedEnabled(String breedId, bool enabled) async {
     final sbid = _singleBreedId;
     if (_isSingleBreedShow && sbid != null && breedId == sbid) {
@@ -356,6 +425,8 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
 
     try {
       await ShowLockService.assertShowUnlocked(widget.showId);
+      await _initializeAllBreedsForShowIfNeeded();
+
       final existing = _showBreedByBreedId[breedId];
       if (existing == null) {
         await supabase.from('show_breeds').insert({
@@ -389,6 +460,109 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _msg = 'Breed update failed: $e');
+    }
+  }
+
+  String _sectionLabel(Map<String, dynamic> section) {
+    final displayName = (section['display_name'] ?? '').toString().trim();
+    if (displayName.isNotEmpty) return displayName;
+
+    final kind = (section['kind'] ?? '').toString().trim().toLowerCase();
+    final letter = (section['letter'] ?? '').toString().trim().toUpperCase();
+    final kindLabel = kind == 'youth' ? 'Youth' : 'Open';
+    return letter.isEmpty ? kindLabel : '$kindLabel $letter';
+  }
+
+  bool _isMeatOnlySection(Map<String, dynamic> section) =>
+      (section['breed_scope'] ?? '').toString().trim().toLowerCase() ==
+      'meat_only';
+
+  bool _sectionAllowsBreed(Map<String, dynamic> section, String breedId) {
+    final scope = (section['breed_scope'] ?? 'all')
+        .toString()
+        .trim()
+        .toLowerCase();
+    if (scope == 'all' || scope == 'all_breed') return true;
+    if (scope == 'meat_only') return false;
+
+    return (section['allowed_breed_ids'] as Iterable? ?? const <dynamic>[])
+        .map((id) => id.toString())
+        .contains(breedId);
+  }
+
+  Future<void> _setSectionBreedEnabled({
+    required Map<String, dynamic> section,
+    required String breedId,
+    required bool enabled,
+  }) async {
+    if (_isMeatOnlySection(section)) return;
+
+    try {
+      await ShowLockService.assertShowUnlocked(widget.showId);
+
+      final sectionId = (section['id'] ?? '').toString();
+      if (sectionId.isEmpty) {
+        throw Exception('The selected show section is missing an ID.');
+      }
+
+      final scope = (section['breed_scope'] ?? 'all')
+          .toString()
+          .trim()
+          .toLowerCase();
+      final allowedIds =
+          (section['allowed_breed_ids'] as Iterable? ?? const <dynamic>[])
+              .map((id) => id.toString())
+              .where((id) => id.isNotEmpty)
+              .toSet();
+
+      String nextScope = scope;
+      if (enabled) {
+        if (scope == 'all' || scope == 'all_breed') {
+          if (!mounted) return;
+          setState(
+            () => _msg = '${_sectionLabel(section)} already allows this breed',
+          );
+          return;
+        }
+        allowedIds.add(breedId);
+        if (scope == 'single' || scope.startsWith('grouped_')) {
+          nextScope = 'limited';
+        }
+      } else {
+        if (scope == 'all' || scope == 'all_breed') {
+          allowedIds
+            ..clear()
+            ..addAll(_allActiveBreedIds)
+            ..remove(breedId);
+          nextScope = 'limited';
+        } else {
+          allowedIds.remove(breedId);
+          if (scope == 'single' || scope.startsWith('grouped_')) {
+            nextScope = 'limited';
+          }
+        }
+      }
+
+      await supabase
+          .from('show_sections')
+          .update({
+            'breed_scope': nextScope,
+            'allowed_breed_ids': allowedIds.toList(),
+          })
+          .eq('id', sectionId);
+
+      section['breed_scope'] = nextScope;
+      section['allowed_breed_ids'] = allowedIds.toList();
+
+      if (!mounted) return;
+      setState(
+        () => _msg = enabled
+            ? '${_sectionLabel(section)} now allows this breed'
+            : '${_sectionLabel(section)} no longer allows this breed',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _msg = 'Section breed update failed: $e');
     }
   }
 
@@ -876,6 +1050,51 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (_showSections.isNotEmpty) ...[
+                      const Text(
+                        'Show Sections',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Choose which individual shows accept this breed.',
+                        style: TextStyle(color: AppColors.muted),
+                      ),
+                      const SizedBox(height: 8),
+                      ..._showSections.map((section) {
+                        final isMeatOnly = _isMeatOnlySection(section);
+                        final sectionEnabled =
+                            !isMeatOnly &&
+                            _sectionAllowsBreed(section, breedId);
+
+                        return SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(_sectionLabel(section)),
+                          subtitle: isMeatOnly
+                              ? const Text(
+                                  'Commercial classes only',
+                                  style: TextStyle(color: AppColors.muted),
+                                )
+                              : (!enabled
+                                    ? const Text(
+                                        'Enable the all-sections breed switch above first',
+                                        style: TextStyle(
+                                          color: AppColors.muted,
+                                        ),
+                                      )
+                                    : null),
+                          value: sectionEnabled,
+                          onChanged: (!enabled || isMeatOnly || _isReadOnly)
+                              ? null
+                              : (value) => _setSectionBreedEnabled(
+                                  section: section,
+                                  breedId: breedId,
+                                  enabled: value,
+                                ),
+                        );
+                      }),
+                      const Divider(height: 24),
+                    ],
                     if (species == 'rabbit') ...[
                       const SizedBox(height: 6),
                       DropdownButtonFormField<String>(
