@@ -27,6 +27,7 @@ class _ExhibitorCheckinPortalScreenState
   bool _entriesConfirmed = false;
   String _receiptPreference = 'no_receipt';
   String? _message;
+  String? _showName;
 
   @override
   void dispose() {
@@ -35,6 +36,30 @@ class _ExhibitorCheckinPortalScreenState
     _initials.dispose();
     _signature.dispose();
     super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadShowName();
+  }
+
+  Future<void> _loadShowName() async {
+    final portalToken = widget.initialToken?.trim() ?? '';
+    if (portalToken.isEmpty) return;
+    try {
+      final response = await _supabase.rpc(
+        'get_exhibitor_checkin_portal_show',
+        params: {'p_portal_token': portalToken},
+      );
+      if (!mounted) return;
+      final data = Map<String, dynamic>.from(response as Map);
+      final name = (data['show_name'] ?? '').toString().trim();
+      if (name.isNotEmpty) setState(() => _showName = name);
+    } catch (_) {
+      // Verification will show the appropriate message if this link is no
+      // longer available. Do not disclose why a public link is unavailable.
+    }
   }
 
   Future<void> _verify() async {
@@ -275,6 +300,17 @@ class _ExhibitorCheckinPortalScreenState
             context,
           ).textTheme.headlineSmall?.copyWith(color: bright),
         ),
+        if (_showName != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            _showName!,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              color: AppColors.primaryButton,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
         const SizedBox(height: 8),
         Text(
           'Enter the information from your show entry to review your entries and complete check-in.',
