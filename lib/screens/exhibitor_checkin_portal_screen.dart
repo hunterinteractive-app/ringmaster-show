@@ -318,24 +318,20 @@ class _ExhibitorCheckinPortalScreenState
           style: TextStyle(color: muted),
         ),
         const SizedBox(height: 28),
-        TextField(
+        _buildVerificationField(
+          label: 'Exhibitor number',
           controller: _exhibitorNumber,
+          hintText: 'Enter exhibitor number',
           keyboardType: TextInputType.number,
           textInputAction: TextInputAction.next,
-          decoration: const InputDecoration(
-            labelText: 'Exhibitor number',
-            border: OutlineInputBorder(),
-          ),
         ),
         const SizedBox(height: 14),
-        TextField(
+        _buildVerificationField(
+          label: 'Last name',
           controller: _lastName,
+          hintText: 'Enter last name',
           textInputAction: TextInputAction.done,
           onSubmitted: (_) => _verifying ? null : _verify(),
-          decoration: const InputDecoration(
-            labelText: 'Last name',
-            border: OutlineInputBorder(),
-          ),
         ),
         if (_message != null) ...[
           const SizedBox(height: 14),
@@ -355,6 +351,40 @@ class _ExhibitorCheckinPortalScreenState
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Text('Continue'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildVerificationField({
+    required String label,
+    required TextEditingController controller,
+    required String hintText,
+    TextInputType? keyboardType,
+    TextInputAction? textInputAction,
+    ValueChanged<String>? onSubmitted,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+            color: AppColors.headerForeground,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 6),
+        TextField(
+          controller: controller,
+          keyboardType: keyboardType,
+          textInputAction: textInputAction,
+          onSubmitted: onSubmitted,
+          decoration: InputDecoration(
+            hintText: hintText,
+            floatingLabelBehavior: FloatingLabelBehavior.never,
+            border: const OutlineInputBorder(),
+          ),
         ),
       ],
     );
