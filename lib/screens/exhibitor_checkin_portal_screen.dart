@@ -337,7 +337,7 @@ class _ExhibitorCheckinPortalScreenState
     );
     if (submitted == true) {
       try {
-        await _supabase.rpc(
+        final response = await _supabase.rpc(
           'submit_exhibitor_checkin_change_request',
           params: {
             'p_session_token': _sessionToken,
@@ -348,9 +348,21 @@ class _ExhibitorCheckinPortalScreenState
           },
         );
         if (mounted) {
+          final result = Map<String, dynamic>.from(response as Map);
+          final automatic = Map<String, dynamic>.from(
+            result['automatic_changes'] as Map? ?? const {},
+          );
+          final pending = Map<String, dynamic>.from(
+            result['pending_review_changes'] as Map? ?? const {},
+          );
+          await _loadReview();
+          if (!mounted) return;
           setState(
-            () => _message =
-                'Your change request was sent to the show secretary.',
+            () => _message = automatic.isNotEmpty && pending.isNotEmpty
+                ? 'Allowed changes were applied. The remaining changes were sent to the show secretary.'
+                : automatic.isNotEmpty
+                ? 'Your allowed changes were applied.'
+                : 'Your change request was sent to the show secretary.',
           );
         }
       } catch (error) {
