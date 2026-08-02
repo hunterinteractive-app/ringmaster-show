@@ -533,16 +533,10 @@ class _AdminEntryManagementScreenState
     try {
       await ShowLockService.assertShowUnlocked(widget.showId);
 
-      await supabase
-          .from('entries')
-          .update({
-            'status': willScratch ? 'scratched' : 'entered',
-            'scratched_at': willScratch
-                ? DateTime.now().toUtc().toIso8601String()
-                : null,
-            'updated_at': DateTime.now().toUtc().toIso8601String(),
-          })
-          .eq('id', id);
+      await supabase.rpc(
+        'set_entry_scratch_state',
+        params: {'p_entry_id': id, 'p_is_scratched': willScratch},
+      );
 
       await _loadEntries();
       if (!mounted) return;

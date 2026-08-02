@@ -300,10 +300,10 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
     if (confirmed != true) return;
 
     try {
-      await supabase
-          .from('entries')
-          .update({'status': 'scratched'})
-          .eq('id', id);
+      await supabase.rpc(
+        'set_entry_scratch_state',
+        params: {'p_entry_id': id, 'p_is_scratched': true},
+      );
 
       await _load();
 
@@ -355,7 +355,10 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
     if (confirmed != true) return;
 
     try {
-      await supabase.from('entries').update({'status': 'entered'}).eq('id', id);
+      await supabase.rpc(
+        'set_entry_scratch_state',
+        params: {'p_entry_id': id, 'p_is_scratched': false},
+      );
 
       await _load();
 

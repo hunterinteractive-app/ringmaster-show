@@ -19,6 +19,8 @@ import 'payback_settings_dialog.dart';
 import 'show_role_assignments_dialog.dart';
 import 'show_sections_dialog.dart';
 import 'show_judges_dialog.dart';
+import 'show_checkin_settings_dialog.dart';
+import 'checkin_change_requests_screen.dart';
 import '../../widgets/rm_timezone_notice_banner.dart';
 import '../../services/show_permissions_service.dart';
 import '../../services/stripe_connect_service.dart';
@@ -887,6 +889,14 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
     showDialog<void>(
       context: context,
       builder: (_) => PaybackSettingsDialog(showId: widget.showId),
+    );
+  }
+
+  void _openCheckinSettings() {
+    ShowCheckinSettingsDialog.open(
+      context,
+      showId: widget.showId,
+      showName: _effectiveShowName(),
     );
   }
 
@@ -2128,6 +2138,21 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                 subtitle:
                                     'Per-animal fees, discounts, day-of-show, and online payment setup',
                                 onTap: _saving ? null : _openFees,
+                              ),
+                              _buildSettingsActionTile(
+                                icon: Icons.qr_code_2,
+                                title: 'Check-In Settings',
+                                subtitle:
+                                    'Portal availability, QR code, confirmations, and entry-change permissions',
+                                onTap: (_saving || _isReadOnly)
+                                    ? null
+                                    : _openCheckinSettings,
+                              ),
+                              _buildSettingsActionTile(
+                                icon: Icons.playlist_add_check,
+                                title: 'Check-In Change Requests',
+                                subtitle: 'Review exhibitor check-in corrections and requests',
+                                onTap: _saving ? null : () => Navigator.push(context, MaterialPageRoute(builder: (_) => CheckinChangeRequestsScreen(showId: widget.showId))),
                               ),
                               _buildSettingsActionTile(
                                 icon: Icons.payments_outlined,
