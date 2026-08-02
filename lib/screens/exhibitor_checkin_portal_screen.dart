@@ -161,29 +161,178 @@ class _ExhibitorCheckinPortalScreenState
   }
 
   Future<void> _requestChange(Map<String, dynamic> entry) async {
+    final earNumber = TextEditingController(text: _text(entry, 'tattoo'));
+    final breed = TextEditingController(text: _text(entry, 'breed'));
+    final variety = TextEditingController(text: _text(entry, 'variety'));
+    final className = TextEditingController(text: _text(entry, 'class_name'));
+    final sex = TextEditingController(text: _text(entry, 'sex'));
+    final furVariety = TextEditingController(text: _text(entry, 'fur_variety'));
     final note = TextEditingController();
+    final requestedChanges = <String, dynamic>{};
+    var scratchRequested = false;
+    final editableFields =
+        <
+              ({
+                String key,
+                String label,
+                TextEditingController controller,
+                String original,
+              })
+            >[
+              (
+                key: 'ear_number',
+                label: 'Tattoo / Ear #',
+                controller: earNumber,
+                original: _text(entry, 'tattoo'),
+              ),
+              (
+                key: 'breed',
+                label: 'Breed',
+                controller: breed,
+                original: _text(entry, 'breed'),
+              ),
+              (
+                key: 'variety',
+                label: 'Variety',
+                controller: variety,
+                original: _text(entry, 'variety'),
+              ),
+              (
+                key: 'class',
+                label: 'Class',
+                controller: className,
+                original: _text(entry, 'class_name'),
+              ),
+              (
+                key: 'sex',
+                label: 'Sex',
+                controller: sex,
+                original: _text(entry, 'sex'),
+              ),
+              (
+                key: 'fur_variety',
+                label: 'Fur Variety',
+                controller: furVariety,
+                original: _text(entry, 'fur_variety'),
+              ),
+            ]
+            .where((field) => _canRequestEdit(field.key))
+            .toList();
+
     final submitted = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Request a change'),
-        content: TextField(
-          controller: note,
-          maxLines: 4,
-          decoration: const InputDecoration(
-            labelText: 'Describe the correction needed',
-            border: OutlineInputBorder(),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => Dialog(
+          backgroundColor: AppColors.pageBackground,
+          insetPadding: const EdgeInsets.all(20),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(28),
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 620, maxHeight: 760),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(26),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Request Entry Change',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: AppColors.headerForeground,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Update the details that need corrected. Your show secretary will review the request.',
+                    style: TextStyle(
+                      color: AppColors.headerForeground.withValues(alpha: .82),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  if (editableFields.isEmpty &&
+                      !_canRequestEdit('scratch_entry'))
+                    Text(
+                      'This show does not currently allow entry changes through the portal. You can still leave a note for the show secretary.',
+                      style: TextStyle(
+                        color: AppColors.headerForeground.withValues(
+                          alpha: .82,
+                        ),
+                      ),
+                    ),
+                  for (final field in editableFields) ...[
+                    _changeRequestField(
+                      label: field.label,
+                      controller: field.controller,
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (_canRequestEdit('scratch_entry'))
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      checkColor: AppColors.pageBackground,
+                      fillColor: WidgetStateProperty.resolveWith(
+                        (states) => states.contains(WidgetState.selected)
+                            ? AppColors.primaryButton
+                            : AppColors.surface,
+                      ),
+                      value: scratchRequested,
+                      onChanged: (value) => setDialogState(
+                        () => scratchRequested = value ?? false,
+                      ),
+                      title: Text(
+                        'Scratch this entry',
+                        style: TextStyle(color: AppColors.headerForeground),
+                      ),
+                    ),
+                  _changeRequestField(
+                    label: 'Notes for the show secretary',
+                    controller: note,
+                    hintText: 'Describe anything else that needs corrected',
+                    maxLines: 4,
+                  ),
+                  const SizedBox(height: 22),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('Cancel'),
+                      ),
+                      const SizedBox(width: 12),
+                      FilledButton(
+                        onPressed: () {
+                          for (final field in editableFields) {
+                            final value = field.controller.text.trim();
+                            if (value != field.original) {
+                              requestedChanges[field.key] = value;
+                            }
+                          }
+                          if (scratchRequested) {
+                            requestedChanges['scratch_entry'] = true;
+                          }
+                          if (requestedChanges.isEmpty &&
+                              note.text.trim().isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Change a field, select scratch, or add a note first.',
+                                ),
+                              ),
+                            );
+                            return;
+                          }
+                          Navigator.pop(context, true);
+                        },
+                        child: const Text('Submit Request'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Submit request'),
-          ),
-        ],
       ),
     );
     if (submitted == true) {
@@ -194,7 +343,7 @@ class _ExhibitorCheckinPortalScreenState
             'p_session_token': _sessionToken,
             'p_entry_id': entry['id'],
             'p_request_type': 'entry_edit',
-            'p_requested_changes': <String, dynamic>{},
+            'p_requested_changes': requestedChanges,
             'p_note': note.text.trim(),
           },
         );
@@ -210,7 +359,56 @@ class _ExhibitorCheckinPortalScreenState
         }
       }
     }
+    earNumber.dispose();
+    breed.dispose();
+    variety.dispose();
+    className.dispose();
+    sex.dispose();
+    furVariety.dispose();
     note.dispose();
+  }
+
+  bool _canRequestEdit(String field) {
+    final checkin = _portalData?['checkin'];
+    final rawPermissions = checkin is Map
+        ? checkin['entry_edit_permissions']
+        : null;
+    final permissions = rawPermissions is Map
+        ? rawPermissions.map((key, value) => MapEntry('$key', '$value'))
+        : const <String, String>{};
+    final permission = permissions[field];
+    return permission == 'automatic' || permission == 'approval';
+  }
+
+  Widget _changeRequestField({
+    required String label,
+    required TextEditingController controller,
+    String? hintText,
+    int maxLines = 1,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+            color: AppColors.headerForeground,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 6),
+        TextField(
+          controller: controller,
+          maxLines: maxLines,
+          textCapitalization: TextCapitalization.words,
+          decoration: InputDecoration(
+            hintText: hintText,
+            floatingLabelBehavior: FloatingLabelBehavior.never,
+            border: const OutlineInputBorder(),
+          ),
+        ),
+      ],
+    );
   }
 
   List<Map<String, dynamic>> get _entries {
