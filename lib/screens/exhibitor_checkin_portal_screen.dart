@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ExhibitorCheckinPortalScreen extends StatefulWidget {
@@ -219,6 +220,8 @@ class _ExhibitorCheckinPortalScreenState
   }
 
   Widget _buildVerify() {
+    final bright = AppColors.headerForeground;
+    final muted = bright.withValues(alpha: 0.82);
     if ((widget.initialToken ?? '').trim().isEmpty) {
       return ListView(
         shrinkWrap: true,
@@ -226,25 +229,31 @@ class _ExhibitorCheckinPortalScreenState
           Icon(
             Icons.qr_code_scanner_outlined,
             size: 72,
-            color: Theme.of(context).colorScheme.primary,
+            color: AppColors.primaryButton,
           ),
           const SizedBox(height: 18),
           Text(
             'Exhibitor Check-In',
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.headlineSmall,
+            style: Theme.of(
+              context,
+            ).textTheme.headlineSmall?.copyWith(color: bright),
           ),
           const SizedBox(height: 10),
           Text(
             'Use the QR code or check-in link provided by your show secretary to review your entries and complete check-in.',
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyLarge,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyLarge?.copyWith(color: muted),
           ),
           const SizedBox(height: 18),
           Text(
             'Need help? Please contact your show secretary.',
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: muted),
           ),
         ],
       );
@@ -256,18 +265,21 @@ class _ExhibitorCheckinPortalScreenState
         Icon(
           Icons.fact_check_outlined,
           size: 64,
-          color: Theme.of(context).colorScheme.primary,
+          color: AppColors.primaryButton,
         ),
         const SizedBox(height: 18),
         Text(
           'Exhibitor Check-In',
           textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.headlineSmall,
+          style: Theme.of(
+            context,
+          ).textTheme.headlineSmall?.copyWith(color: bright),
         ),
         const SizedBox(height: 8),
-        const Text(
+        Text(
           'Enter the information from your show entry to review your entries and complete check-in.',
           textAlign: TextAlign.center,
+          style: TextStyle(color: muted),
         ),
         const SizedBox(height: 28),
         TextField(
@@ -313,6 +325,8 @@ class _ExhibitorCheckinPortalScreenState
   }
 
   Widget _buildReview() {
+    final bright = AppColors.headerForeground;
+    final muted = bright.withValues(alpha: 0.82);
     final show = Map<String, dynamic>.from(
       _portalData?['show'] as Map? ?? const {},
     );
@@ -334,20 +348,26 @@ class _ExhibitorCheckinPortalScreenState
       children: [
         Text(
           _text(show, 'name'),
-          style: Theme.of(context).textTheme.headlineSmall,
+          style: Theme.of(
+            context,
+          ).textTheme.headlineSmall?.copyWith(color: bright),
         ),
         const SizedBox(height: 4),
         Text(
           'Checking in: ${_text(exhibitor, 'name')} ${_text(exhibitor, 'number').isEmpty ? '' : '• #${_text(exhibitor, 'number')}'}',
+          style: TextStyle(color: muted),
         ),
         const SizedBox(height: 20),
         Text(
           'Review your entries',
-          style: Theme.of(context).textTheme.titleLarge,
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(color: bright),
         ),
         const SizedBox(height: 4),
-        const Text(
+        Text(
           'These are the entries currently on file. You will be able to confirm or request changes in the next step.',
+          style: TextStyle(color: muted),
         ),
         const SizedBox(height: 16),
         if (grouped.isEmpty)
@@ -364,7 +384,9 @@ class _ExhibitorCheckinPortalScreenState
             padding: const EdgeInsets.only(top: 12, bottom: 6),
             child: Text(
               group.key,
-              style: Theme.of(context).textTheme.titleMedium,
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(color: bright),
             ),
           ),
           for (final entry in group.value)
