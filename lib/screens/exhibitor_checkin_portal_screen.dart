@@ -108,12 +108,21 @@ class _ExhibitorCheckinPortalScreenState
       );
       if (!mounted) return;
       setState(() => _portalData = Map<String, dynamic>.from(response as Map));
+    } on PostgrestException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _sessionToken = null;
+        _portalData = null;
+        _message = error.code == '42501'
+            ? 'Your check-in session expired. Please verify again.'
+            : 'We could not load your entries. Please try again.';
+      });
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _sessionToken = null;
         _portalData = null;
-        _message = 'Your check-in session expired. Please verify again.';
+        _message = 'We could not load your entries. Please try again.';
       });
     }
   }
