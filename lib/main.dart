@@ -10,6 +10,7 @@ import 'package:ringmaster_show/screens/admin/judging/mobile/qr_results_entry_sc
 import 'package:ringmaster_show/screens/admin/judging/mobile/table_qr_queue_screen.dart';
 import 'package:ringmaster_show/screens/admin/square_connect_return_screen.dart';
 import 'package:ringmaster_show/screens/square_payment_return_screen.dart';
+import 'package:ringmaster_show/screens/exhibitor_checkin_portal_screen.dart';
 
 import 'screens/login_screen.dart';
 import 'screens/show_list_screen.dart';
@@ -23,6 +24,7 @@ import 'services/app_init_service.dart';
 final supabase = Supabase.instance.client;
 
 Uri? initialQrUri;
+Uri? initialCheckinUri;
 bool initialDemoMode = false;
 
 Future<void> main() async {
@@ -36,6 +38,7 @@ Future<void> main() async {
   );
 
   initialQrUri = _qrUriFromBrowser();
+  initialCheckinUri = _checkinUriFromBrowser();
   initialDemoMode = _demoModeFromBrowser();
 
   runApp(const MyApp());
@@ -59,6 +62,18 @@ Uri? _qrUriFromBrowser() {
 
   return null;
 }
+
+Uri? _checkinUriFromBrowser() {
+  final fragment = Uri.base.fragment.trim();
+  if (fragment.isNotEmpty) {
+    final uri = Uri.parse(fragment);
+    if (uri.path == '/checkin') return uri;
+  }
+  return Uri.base.path.endsWith('/checkin') ? Uri.base : null;
+}
+
+bool _isCheckinPortalHost() =>
+    Uri.base.host.toLowerCase() == 'checkin.ringmasterone.com';
 
 bool _demoModeFromBrowser() {
   final fragment = Uri.base.fragment.trim();
@@ -140,6 +155,14 @@ class MyApp extends StatelessWidget {
             return MaterialPageRoute(builder: (_) => _qrScreenFromUri(uri));
           }
 
+          if (uri.path == '/checkin') {
+            return MaterialPageRoute(
+              builder: (_) => ExhibitorCheckinPortalScreen(
+                initialToken: uri.queryParameters['token'],
+              ),
+            );
+          }
+
           if (uri.path == '/demo') {
             return MaterialPageRoute(builder: (_) => const DemoLoginScreen());
           }
@@ -205,6 +228,7 @@ class _RootState extends State<Root> {
     super.initState();
 
     initialQrUri ??= _qrUriFromBrowser();
+    initialCheckinUri ??= _checkinUriFromBrowser();
     initialDemoMode = initialDemoMode || _demoModeFromBrowser();
 
     _refresh();
@@ -214,6 +238,7 @@ class _RootState extends State<Root> {
       final session = data.session;
 
       initialQrUri ??= _qrUriFromBrowser();
+      initialCheckinUri ??= _checkinUriFromBrowser();
       initialDemoMode = initialDemoMode || _demoModeFromBrowser();
 
       if (event == AuthChangeEvent.signedOut || session == null) {
@@ -288,6 +313,7 @@ class _RootState extends State<Root> {
   @override
   Widget build(BuildContext context) {
     final qrUri = initialQrUri ?? _qrUriFromBrowser();
+    final checkinUri = initialCheckinUri ?? _checkinUriFromBrowser();
     final session = supabase.auth.currentSession;
     final demoMode = initialDemoMode || _demoModeFromBrowser();
     final squareConnectUri = _squareConnectUriFromBrowser();
@@ -297,6 +323,12 @@ class _RootState extends State<Root> {
         return _tableQrScreenFromUri(qrUri);
       }
       return _qrScreenFromUri(qrUri);
+    }
+
+    if (checkinUri != null || _isCheckinPortalHost()) {
+      return ExhibitorCheckinPortalScreen(
+        initialToken: checkinUri?.queryParameters['token'],
+      );
     }
 
     if (demoMode) {

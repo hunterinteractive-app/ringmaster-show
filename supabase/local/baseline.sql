@@ -17,7 +17,7 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 do $$ begin
   create type public.artifact_status as enum
-    ('queued','generating','generated','failed');
+    ('queued','generating','generated','failed','warning');
 exception when duplicate_object then null; end $$;
 do $$ begin
   create type public.show_task_type as enum
@@ -26,6 +26,12 @@ exception when duplicate_object then null; end $$;
 do $$ begin
   create type public.show_task_status as enum
     ('queued','claimed','completed','failed','cancelled');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create type public.point_source_type as enum (
+    'class_placement','variety_award','group_award','breed_award',
+    'best_in_show_award','manual_adjustment'
+  );
 exception when duplicate_object then null; end $$;
 
 create table if not exists public.shows (
@@ -64,6 +70,42 @@ create table if not exists public.user_profiles (
   first_name text, last_name text, display_name text,
   email text, phone text, address_line1 text, address_line2 text,
   city text, state text, zip text, arba_number text
+);
+create table if not exists public.account_license_balances (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  purchased_show_days integer not null default 0,
+  consumed_show_days integer not null default 0,
+  unlimited_access boolean not null default false,
+  can_change_host_club boolean not null default false,
+  updated_at timestamptz not null default now(),
+  unlimited_active boolean not null default false,
+  unlimited_expires_at timestamptz,
+  secretary_name text,
+  secretary_email text,
+  secretary_license_expires_at timestamptz
+);
+create table if not exists public.pending_licenses (
+  id uuid primary key default extensions.gen_random_uuid(),
+  email text not null,
+  stripe_session_id text,
+  purchased_show_days integer default 0,
+  unlimited_access boolean default false,
+  unlimited_expires_at timestamptz,
+  can_change_host_club boolean default false,
+  created_at timestamptz default now(),
+  claimed_at timestamptz,
+  secretary_name text,
+  secretary_license_expires_at timestamptz
+);
+create table if not exists public.point_award_scale (
+  award_code text primary key,
+  source_type public.point_source_type not null,
+  award_points numeric(10,2) not null default 0,
+  is_active boolean not null default true,
+  sort_order integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  cavy_award_points numeric
 );
 create table if not exists public.show_managers (
   show_id uuid not null references public.shows(id) on delete cascade,
