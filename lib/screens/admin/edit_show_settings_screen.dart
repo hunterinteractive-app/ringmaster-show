@@ -20,7 +20,6 @@ import 'show_role_assignments_dialog.dart';
 import 'show_sections_dialog.dart';
 import 'show_judges_dialog.dart';
 import 'show_checkin_settings_dialog.dart';
-import 'checkin_change_requests_screen.dart';
 import 'show_checkin_dashboard_screen.dart';
 import '../../widgets/rm_timezone_notice_banner.dart';
 import '../../services/show_permissions_service.dart';
@@ -2172,23 +2171,6 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                         MaterialPageRoute(
                                           builder: (_) =>
                                               ShowCheckinDashboardScreen(
-                                                showId: widget.showId,
-                                              ),
-                                        ),
-                                      ),
-                              ),
-                              _buildSettingsActionTile(
-                                icon: Icons.playlist_add_check,
-                                title: 'Check-In Change Requests',
-                                subtitle:
-                                    'Review exhibitor check-in corrections and requests',
-                                onTap: _saving
-                                    ? null
-                                    : () => Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) =>
-                                              CheckinChangeRequestsScreen(
                                                 showId: widget.showId,
                                               ),
                                         ),

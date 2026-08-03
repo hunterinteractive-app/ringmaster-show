@@ -609,7 +609,10 @@ class _ShowCheckinDashboardScreenState
                         const Divider(height: 1),
                         ListTile(
                           leading: const Icon(Icons.playlist_add_check),
-                          title: const Text('Pending change requests'),
+                          title: const Text('Check-In Change Requests'),
+                          subtitle: const Text(
+                            'Review exhibitor corrections and requests',
+                          ),
                           trailing: Chip(
                             label: Text(
                               '${_data?['pending_change_requests'] ?? 0}',
