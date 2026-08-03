@@ -46,7 +46,7 @@ class _ShowCheckinDashboardScreenState
     }
   }
 
-  Future<void> _completeForExhibitor() async {
+  Future<Map<String, dynamic>?> _pickExhibitor(String title) async {
     final search = TextEditingController();
     List<Map<String, dynamic>> results = const [];
     Map<String, dynamic>? selected;
@@ -54,7 +54,7 @@ class _ShowCheckinDashboardScreenState
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Complete Check-In for Exhibitor'),
+          title: Text(title),
           content: SizedBox(
             width: 480,
             child: Column(
@@ -133,8 +133,175 @@ class _ShowCheckinDashboardScreenState
       ),
     );
     search.dispose();
+    return picked;
+  }
+
+  Future<void> _completeForExhibitor() async {
+    final picked = await _pickExhibitor('Complete Check-In for Exhibitor');
     if (picked == null || !mounted) return;
     await _confirmSecretaryCheckin(picked);
+  }
+
+  Future<void> _recordPayment() async {
+    final exhibitor = await _pickExhibitor('Record Payment');
+    if (exhibitor == null || !mounted) return;
+    try {
+      final rawContext = await _db.rpc(
+        'get_show_checkin_payment_context',
+        params: {
+          'p_show_id': widget.showId,
+          'p_exhibitor_id': exhibitor['exhibitor_id'],
+        },
+      );
+      final payment = Map<String, dynamic>.from(rawContext as Map);
+      final dueCents = (payment['balance_due_cents'] as num?)?.toInt() ?? 0;
+      if (dueCents <= 0) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('This exhibitor does not have a balance due.'),
+            ),
+          );
+        }
+        return;
+      }
+      await _recordPaymentForExhibitor(exhibitor, dueCents);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not load this exhibitor’s payment details.'),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _recordPaymentForExhibitor(
+    Map<String, dynamic> exhibitor,
+    int dueCents,
+  ) async {
+    final amount = TextEditingController(
+      text: (dueCents / 100).toStringAsFixed(2),
+    );
+    final reference = TextEditingController();
+    var method = 'cash';
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(
+            'Record Payment — ${exhibitor['exhibitor_name'] ?? 'Exhibitor'}',
+          ),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Balance due: \$${(dueCents / 100).toStringAsFixed(2)}'),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: amount,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'Amount',
+                    prefixText: r'$',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  initialValue: method,
+                  decoration: const InputDecoration(
+                    labelText: 'Payment method',
+                  ),
+                  items:
+                      const [
+                            'cash',
+                            'check',
+                            'digital',
+                            'stripe',
+                            'square',
+                            'paypal',
+                          ]
+                          .map(
+                            (value) => DropdownMenuItem(
+                              value: value,
+                              child: Text(value),
+                            ),
+                          )
+                          .toList(),
+                  onChanged: (value) =>
+                      setDialogState(() => method = value ?? method),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: reference,
+                  decoration: const InputDecoration(
+                    labelText: 'Reference or check number (optional)',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Record Payment'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (saved == true) {
+      final amountCents = ((double.tryParse(amount.text.trim()) ?? 0) * 100)
+          .round();
+      if (amountCents <= 0 || amountCents > dueCents) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                r'Enter an amount greater than $0 and no more than the balance due.',
+              ),
+            ),
+          );
+        }
+      } else {
+        try {
+          await _db.rpc(
+            'record_checkin_manual_payment',
+            params: {
+              'p_show_id': widget.showId,
+              'p_exhibitor_id': exhibitor['exhibitor_id'],
+              'p_amount_cents': amountCents,
+              'p_method': method,
+              'p_reference': reference.text.trim(),
+              'p_receipt_preference': 'no_receipt',
+            },
+          );
+          await _load();
+          if (mounted) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text('Payment recorded.')));
+          }
+        } catch (_) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Could not record this payment.')),
+            );
+          }
+        }
+      }
+    }
+    amount.dispose();
+    reference.dispose();
   }
 
   Future<void> _confirmSecretaryCheckin(Map<String, dynamic> exhibitor) async {
@@ -255,6 +422,11 @@ class _ShowCheckinDashboardScreenState
             onPressed: _loading ? null : _completeForExhibitor,
             icon: const Icon(Icons.how_to_reg_outlined),
             tooltip: 'Complete Check-In for Exhibitor',
+          ),
+          IconButton(
+            onPressed: _loading ? null : _recordPayment,
+            icon: const Icon(Icons.payments_outlined),
+            tooltip: 'Record Payment',
           ),
           IconButton(
             onPressed: _loading ? null : _load,
