@@ -1,5 +1,5 @@
 import { errorMessage, handleOptions, jsonResponse } from "../_shared/http.ts";
-import { serviceClient } from "../_shared/supabase.ts";
+import { authenticatedUser, serviceClient } from "../_shared/supabase.ts";
 
 type ReceiptContext = {
   delivery_id?: string;
@@ -20,13 +20,19 @@ Deno.serve(async (request) => {
   let deliveryId = "";
   let delivered = false;
   try {
-    const body = await request.json() as { session_token?: string };
+    const body = await request.json() as { session_token?: string; checkin_record_id?: string };
     const sessionToken = body.session_token?.trim() ?? "";
-    if (!sessionToken) return jsonResponse({ error: "Check-in session is required." }, 400);
-
-    const { data, error } = await backend.rpc("claim_checkin_receipt_delivery", {
-      p_session_token: sessionToken,
-    });
+    const recordId = body.checkin_record_id?.trim() ?? "";
+    const claim = sessionToken
+      ? await backend.rpc("claim_checkin_receipt_delivery", { p_session_token: sessionToken })
+      : recordId
+      ? await (await authenticatedUser(request)).client.rpc(
+          "claim_checkin_receipt_delivery_by_staff",
+          { p_checkin_record_id: recordId },
+        )
+      : null;
+    if (!claim) return jsonResponse({ error: "Check-in session is required." }, 400);
+    const { data, error } = claim;
     if (error || !data) throw new Error("Receipt email is not available.");
     const context = data as ReceiptContext;
     if (context.already_sent) return jsonResponse({ status: "already_sent" });

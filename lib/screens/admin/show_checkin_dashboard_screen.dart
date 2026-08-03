@@ -311,6 +311,7 @@ class _ShowCheckinDashboardScreenState
     final signature = TextEditingController();
     final note = TextEditingController();
     var entriesConfirmed = false;
+    var receiptPreference = 'no_receipt';
     final complete = await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -351,6 +352,26 @@ class _ShowCheckinDashboardScreenState
                     labelText: 'Staff note (optional)',
                   ),
                 ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  initialValue: receiptPreference,
+                  decoration: const InputDecoration(
+                    labelText: 'Receipt preference',
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'email_receipt',
+                      child: Text('Email receipt confirmation'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'no_receipt',
+                      child: Text('No receipt needed'),
+                    ),
+                  ],
+                  onChanged: (value) => setDialogState(
+                    () => receiptPreference = value ?? 'no_receipt',
+                  ),
+                ),
               ],
             ),
           ),
@@ -371,8 +392,8 @@ class _ShowCheckinDashboardScreenState
     );
     if (complete == true) {
       try {
-        await _db.rpc(
-          'complete_exhibitor_checkin_by_secretary',
+        final result = await _db.rpc(
+          'complete_exhibitor_checkin_by_secretary_with_receipt',
           params: {
             'p_show_id': widget.showId,
             'p_exhibitor_id': exhibitor['exhibitor_id'],
@@ -380,13 +401,30 @@ class _ShowCheckinDashboardScreenState
             'p_initials': initials.text.trim(),
             'p_signature_data': signature.text.trim(),
             'p_note': note.text.trim(),
+            'p_receipt_preference': receiptPreference,
           },
         );
+        var message = 'Check-in completed by secretary.';
+        if (receiptPreference == 'email_receipt') {
+          final record = Map<String, dynamic>.from(result as Map);
+          try {
+            final receipt = await _db.functions.invoke(
+              'checkin-send-receipt',
+              body: {'checkin_record_id': record['id']},
+            );
+            message = receipt.status >= 200 && receipt.status < 300
+                ? 'Check-in completed and confirmation email sent.'
+                : 'Check-in completed. The confirmation email could not be sent.';
+          } catch (_) {
+            message =
+                'Check-in completed. The confirmation email could not be sent.';
+          }
+        }
         await _load();
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Check-in completed by secretary.')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(message)));
         }
       } catch (_) {
         if (mounted) {
