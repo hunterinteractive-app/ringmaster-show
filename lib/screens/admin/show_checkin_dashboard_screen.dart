@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'checkin_change_requests_screen.dart';
 import 'show_checkin_activity_screen.dart';
+import 'show_checkin_roster_screen.dart';
 
 class ShowCheckinDashboardScreen extends StatefulWidget {
   const ShowCheckinDashboardScreen({super.key, required this.showId});
@@ -534,6 +535,23 @@ class _ShowCheckinDashboardScreenState
                   Card(
                     child: Column(
                       children: [
+                        ListTile(
+                          leading: const Icon(Icons.people_outline),
+                          title: const Text('Check-In Roster'),
+                          subtitle: const Text(
+                            'Search all entered exhibitors and see their check-in status',
+                          ),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ShowCheckinRosterScreen(
+                                showId: widget.showId,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const Divider(height: 1),
                         ListTile(
                           leading: const Icon(Icons.history_outlined),
                           title: const Text('Check-In Activity'),
