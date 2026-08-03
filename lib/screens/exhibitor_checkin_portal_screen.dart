@@ -622,6 +622,9 @@ class _ExhibitorCheckinPortalScreenState
     final checkin = Map<String, dynamic>.from(
       _portalData?['checkin'] as Map? ?? const {},
     );
+    final payment = Map<String, dynamic>.from(
+      _portalData?['payment'] as Map? ?? const {},
+    );
     final isCompleted = _text(checkin, 'status') == 'completed';
     for (final entry in _entries) {
       final label = _text(entry, 'show_label').isEmpty
@@ -696,6 +699,8 @@ class _ExhibitorCheckinPortalScreenState
               ),
             ),
         ],
+        const SizedBox(height: 20),
+        _buildPaymentStatus(payment),
         const SizedBox(height: 20),
         Card(
           child: Padding(
@@ -817,5 +822,60 @@ class _ExhibitorCheckinPortalScreenState
         ],
       ],
     );
+  }
+
+  Widget _buildPaymentStatus(Map<String, dynamic> payment) {
+    final dueCents = _int(payment['balance_due_cents']);
+    final isPaid = dueCents <= 0;
+    final onlineAvailable = payment['online_payment_available'] == true;
+    final currency = _text(payment, 'currency').toUpperCase();
+    final amount = _formatCurrency(dueCents, currency);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Payment status',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            if (isPaid)
+              const Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.green),
+                  SizedBox(width: 8),
+                  Expanded(child: Text('Your entry fees are paid.')),
+                ],
+              )
+            else ...[
+              Text(
+                'Amount due: $amount',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                onlineAvailable
+                    ? 'Online payment is available for this show. A secure payment page will be added in the next check-in update.'
+                    : 'Please see the show secretary to arrange payment. Staff can record cash, check, or digital payments.',
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  int _int(dynamic value) =>
+      value is num ? value.toInt() : int.tryParse('$value') ?? 0;
+
+  String _formatCurrency(int cents, String currency) {
+    final dollars = cents ~/ 100;
+    final remainder = (cents % 100).abs().toString().padLeft(2, '0');
+    return '${currency == 'USD' || currency.isEmpty ? r'$' : '$currency '}$dollars.$remainder';
   }
 }
