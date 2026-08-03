@@ -426,6 +426,194 @@ class _ExhibitorCheckinPortalScreenState
     note.dispose();
   }
 
+  Future<void> _addEntry() async {
+    if (_sessionToken == null) return;
+    try {
+      final raw = await _supabase.rpc(
+        'get_exhibitor_checkin_add_entry_options',
+        params: {'p_session_token': _sessionToken},
+      );
+      final options = Map<String, dynamic>.from(raw as Map);
+      final defaults = Map<String, dynamic>.from(
+        options['defaults'] as Map? ?? const {},
+      );
+      final sections = (options['sections'] as List? ?? const [])
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+      if (sections.isEmpty) throw Exception('No show sections are available.');
+      if (!mounted) return;
+      final ear = TextEditingController();
+      final animal = TextEditingController();
+      final breed = TextEditingController(text: _text(defaults, 'breed'));
+      final variety = TextEditingController(text: _text(defaults, 'variety'));
+      final className = TextEditingController(text: _text(defaults, 'class'));
+      final sex = TextEditingController(text: _text(defaults, 'sex'));
+      final note = TextEditingController();
+      String sectionId = _text(sections.first, 'id');
+      var fur = false;
+      final submitted = await showDialog<bool>(
+        context: context,
+        builder: (context) => StatefulBuilder(
+          builder: (context, setDialogState) => Dialog(
+            backgroundColor: AppColors.pageBackground,
+            insetPadding: const EdgeInsets.all(20),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 620, maxHeight: 760),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(26),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Add Entry',
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(
+                            color: AppColors.headerForeground,
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Add an entry for this exhibitor. The show secretary’s settings determine whether it is added now or reviewed first.',
+                      style: TextStyle(
+                        color: AppColors.headerForeground.withValues(
+                          alpha: .82,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    DropdownButtonFormField<String>(
+                      initialValue: sectionId,
+                      decoration: const InputDecoration(
+                        labelText: 'Show section',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: sections
+                          .map(
+                            (section) => DropdownMenuItem(
+                              value: _text(section, 'id'),
+                              child: Text(_text(section, 'label')),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) =>
+                          setDialogState(() => sectionId = value ?? sectionId),
+                    ),
+                    const SizedBox(height: 12),
+                    _changeRequestField(
+                      label: 'Tattoo / Ear #',
+                      controller: ear,
+                    ),
+                    const SizedBox(height: 12),
+                    _changeRequestField(
+                      label: 'Animal name (optional)',
+                      controller: animal,
+                    ),
+                    const SizedBox(height: 12),
+                    _changeRequestField(label: 'Breed', controller: breed),
+                    const SizedBox(height: 12),
+                    _changeRequestField(label: 'Variety', controller: variety),
+                    const SizedBox(height: 12),
+                    _changeRequestField(label: 'Class', controller: className),
+                    const SizedBox(height: 12),
+                    _changeRequestField(label: 'Sex', controller: sex),
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: fur,
+                      onChanged: (value) =>
+                          setDialogState(() => fur = value ?? false),
+                      title: Text(
+                        'Include Fur / Wool entry',
+                        style: TextStyle(color: AppColors.headerForeground),
+                      ),
+                    ),
+                    _changeRequestField(
+                      label: 'Notes for the show secretary',
+                      controller: note,
+                      maxLines: 3,
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('Cancel'),
+                        ),
+                        const SizedBox(width: 12),
+                        FilledButton(
+                          onPressed: () {
+                            if (breed.text.trim().isEmpty ||
+                                className.text.trim().isEmpty ||
+                                sex.text.trim().isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Breed, class, and sex are required.',
+                                  ),
+                                ),
+                              );
+                              return;
+                            }
+                            Navigator.pop(context, true);
+                          },
+                          child: const Text('Submit Entry'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      if (submitted == true) {
+        final result = await _supabase.rpc(
+          'submit_exhibitor_checkin_add_entry',
+          params: {
+            'p_session_token': _sessionToken,
+            'p_changes': {
+              'section_id': sectionId,
+              'ear_number': ear.text.trim(),
+              'animal_name': animal.text.trim(),
+              'breed': breed.text.trim(),
+              'variety': variety.text.trim(),
+              'class': className.text.trim(),
+              'sex': sex.text.trim(),
+              'is_fur': fur,
+            },
+            'p_note': note.text.trim(),
+          },
+        );
+        final response = Map<String, dynamic>.from(result as Map);
+        await _loadReview();
+        if (mounted) {
+          setState(
+            () => _message = _text(response, 'status') == 'approved'
+                ? 'Your entry was added to your cart and the balance was updated.'
+                : 'Your new entry was sent to the show secretary for approval.',
+          );
+        }
+      }
+      ear.dispose();
+      animal.dispose();
+      breed.dispose();
+      variety.dispose();
+      className.dispose();
+      sex.dispose();
+      note.dispose();
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _message =
+              'Could not submit the new entry. Please try again or see the show secretary.',
+        );
+      }
+    }
+  }
+
   bool _canRequestEdit(String field) {
     final checkin = _portalData?['checkin'];
     final rawPermissions = checkin is Map
@@ -744,6 +932,14 @@ class _ExhibitorCheckinPortalScreenState
                     : const Chip(label: Text('Entered')),
               ),
             ),
+        ],
+        if (_canRequestEdit('add_entry')) ...[
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _addEntry,
+            icon: const Icon(Icons.add),
+            label: const Text('Add entry'),
+          ),
         ],
         const SizedBox(height: 20),
         _buildPaymentStatus(payment),
