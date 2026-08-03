@@ -583,7 +583,8 @@ class _ShowCheckinDashboardScreenState
                   children: [
                     Text(
                       'Live check-in status',
-                      style: Theme.of(context).textTheme.headlineSmall,
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(color: AppColors.headerForeground),
                     ),
                     const SizedBox(height: 8),
                     Wrap(
@@ -704,7 +705,9 @@ class _ShowCheckinDashboardScreenState
                     const SizedBox(height: 20),
                     Text(
                       'Recent check-ins',
-                      style: Theme.of(context).textTheme.titleLarge,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: AppColors.headerForeground,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     if (recent.isEmpty)
