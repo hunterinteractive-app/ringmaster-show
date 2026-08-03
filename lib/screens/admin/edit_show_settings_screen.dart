@@ -21,6 +21,7 @@ import 'show_sections_dialog.dart';
 import 'show_judges_dialog.dart';
 import 'show_checkin_settings_dialog.dart';
 import 'checkin_change_requests_screen.dart';
+import 'show_checkin_dashboard_screen.dart';
 import '../../widgets/rm_timezone_notice_banner.dart';
 import '../../services/show_permissions_service.dart';
 import '../../services/stripe_connect_service.dart';
@@ -2159,6 +2160,23 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                       ? null
                                       : _openCheckinSettings,
                                 ),
+                              _buildSettingsActionTile(
+                                icon: Icons.fact_check_outlined,
+                                title: 'Check-In Dashboard',
+                                subtitle:
+                                    'Live check-in progress, balances, and recent exhibitor activity',
+                                onTap: _saving
+                                    ? null
+                                    : () => Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              ShowCheckinDashboardScreen(
+                                                showId: widget.showId,
+                                              ),
+                                        ),
+                                      ),
+                              ),
                               _buildSettingsActionTile(
                                 icon: Icons.playlist_add_check,
                                 title: 'Check-In Change Requests',
