@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../theme/app_theme.dart';
 import 'checkin_change_requests_screen.dart';
 import 'show_checkin_activity_screen.dart';
 import 'show_checkin_roster_screen.dart';
@@ -52,85 +53,125 @@ class _ShowCheckinDashboardScreenState
     final search = TextEditingController();
     List<Map<String, dynamic>> results = const [];
     Map<String, dynamic>? selected;
+    String? searchError;
+    var hasLoaded = false;
+
+    Future<void> loadResults(StateSetter setDialogState) async {
+      try {
+        final data = await _db.rpc(
+          'search_show_checkin_exhibitors',
+          params: {'p_show_id': widget.showId, 'p_search': search.text.trim()},
+        );
+        setDialogState(() {
+          results = List<Map<String, dynamic>>.from(data as List);
+          searchError = null;
+        });
+      } catch (_) {
+        setDialogState(() => searchError = 'Could not search exhibitors.');
+      }
+    }
+
     final picked = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text(title),
-          content: SizedBox(
-            width: 480,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: search,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Exhibitor name or number',
-                    suffixIcon: Icon(Icons.search),
-                  ),
-                  onSubmitted: (_) async {
-                    final data = await _db.rpc(
-                      'search_show_checkin_exhibitors',
-                      params: {
-                        'p_show_id': widget.showId,
-                        'p_search': search.text.trim(),
-                      },
-                    );
-                    setDialogState(() {
-                      results = List<Map<String, dynamic>>.from(data as List);
-                    });
-                  },
+      builder: (context) => AppTheme.gradientTextScope(
+        context,
+        child: StatefulBuilder(
+          builder: (context, setDialogState) {
+            if (!hasLoaded) {
+              hasLoaded = true;
+              WidgetsBinding.instance.addPostFrameCallback(
+                (_) => loadResults(setDialogState),
+              );
+            }
+            return AlertDialog(
+              title: Text(title),
+              content: SizedBox(
+                width: 480,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AppTheme.surfaceTextScope(
+                      context,
+                      child: TextField(
+                        controller: search,
+                        autofocus: true,
+                        decoration: InputDecoration(
+                          labelText: 'Exhibitor name or number',
+                          suffixIcon: IconButton(
+                            tooltip: 'Search exhibitors',
+                            onPressed: () => loadResults(setDialogState),
+                            icon: const Icon(Icons.search),
+                          ),
+                        ),
+                        onSubmitted: (_) => loadResults(setDialogState),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 230,
+                      child: ListView(
+                        children: [
+                          for (final exhibitor in results)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: AppTheme.surfaceTextScope(
+                                context,
+                                child: Card(
+                                  child: ListTile(
+                                    leading: Icon(
+                                      selected?['exhibitor_id'] ==
+                                              exhibitor['exhibitor_id']
+                                          ? Icons.check_circle
+                                          : Icons.circle_outlined,
+                                    ),
+                                    selected:
+                                        selected?['exhibitor_id'] ==
+                                        exhibitor['exhibitor_id'],
+                                    onTap: () => setDialogState(
+                                      () => selected = exhibitor,
+                                    ),
+                                    title: Text(
+                                      (exhibitor['exhibitor_name'] ??
+                                              'Exhibitor')
+                                          .toString(),
+                                    ),
+                                    subtitle: Text(
+                                      '#${exhibitor['exhibitor_number'] ?? '—'} • ${exhibitor['checkin_status'] ?? 'not checked in'}',
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          if (searchError != null)
+                            Text(
+                              searchError!,
+                              style: const TextStyle(color: AppColors.danger),
+                            )
+                          else if (results.isEmpty)
+                            const Padding(
+                              padding: EdgeInsets.only(top: 24),
+                              child: Text('No exhibitors match this search.'),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  height: 230,
-                  child: ListView(
-                    children: [
-                      for (final exhibitor in results)
-                        ListTile(
-                          leading: Icon(
-                            selected?['exhibitor_id'] ==
-                                    exhibitor['exhibitor_id']
-                                ? Icons.check_circle
-                                : Icons.circle_outlined,
-                          ),
-                          selected:
-                              selected?['exhibitor_id'] ==
-                              exhibitor['exhibitor_id'],
-                          onTap: () =>
-                              setDialogState(() => selected = exhibitor),
-                          title: Text(
-                            (exhibitor['exhibitor_name'] ?? 'Exhibitor')
-                                .toString(),
-                          ),
-                          subtitle: Text(
-                            '#${exhibitor['exhibitor_number'] ?? '—'} • ${exhibitor['checkin_status'] ?? 'not checked in'}',
-                          ),
-                        ),
-                      if (results.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 24),
-                          child: Text('Search to find an exhibitor.'),
-                        ),
-                    ],
-                  ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: selected == null
+                      ? null
+                      : () => Navigator.pop(context, selected),
+                  child: const Text('Continue'),
                 ),
               ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: selected == null
-                  ? null
-                  : () => Navigator.pop(context, selected),
-              child: const Text('Continue'),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
@@ -529,196 +570,228 @@ class _ShowCheckinDashboardScreenState
           ),
         ],
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-          ? Center(child: Text(_error!))
-          : RefreshIndicator(
-              onRefresh: _load,
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  Text(
-                    'Live check-in status',
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: [
-                      _metric(
-                        'Completed',
-                        _count(records, 'completed'),
-                        Icons.check_circle_outline,
-                      ),
-                      _metric(
-                        'In progress',
-                        _count(records, 'in_progress'),
-                        Icons.pending_outlined,
-                      ),
-                      _metric(
-                        'Not started',
-                        _count(records, 'not_started'),
-                        Icons.schedule_outlined,
-                      ),
-                      _metric(
-                        'Locked',
-                        _count(records, 'locked'),
-                        Icons.lock_outline,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  Card(
-                    child: Column(
+      body: AppTheme.gradientTextScope(
+        context,
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : _error != null
+            ? Center(child: Text(_error!))
+            : RefreshIndicator(
+                onRefresh: _load,
+                child: ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    Text(
+                      'Live check-in status',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
                       children: [
-                        ListTile(
-                          leading: const Icon(Icons.people_outline),
-                          title: const Text('Check-In Roster'),
-                          subtitle: const Text(
-                            'Search all entered exhibitors and see their check-in status',
-                          ),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => ShowCheckinRosterScreen(
-                                showId: widget.showId,
-                              ),
-                            ),
-                          ),
+                        _metric(
+                          context,
+                          'Completed',
+                          _count(records, 'completed'),
+                          Icons.check_circle_outline,
                         ),
-                        const Divider(height: 1),
-                        ListTile(
-                          leading: const Icon(Icons.history_outlined),
-                          title: const Text('Check-In Activity'),
-                          subtitle: const Text(
-                            'View verifications, payments, changes, and status updates',
-                          ),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => ShowCheckinActivityScreen(
-                                showId: widget.showId,
-                              ),
-                            ),
-                          ),
+                        _metric(
+                          context,
+                          'In progress',
+                          _count(records, 'in_progress'),
+                          Icons.pending_outlined,
                         ),
-                        const Divider(height: 1),
-                        ListTile(
-                          leading: const Icon(Icons.playlist_add_check),
-                          title: const Text('Check-In Change Requests'),
-                          subtitle: const Text(
-                            'Review exhibitor corrections and requests',
-                          ),
-                          trailing: Chip(
-                            label: Text(
-                              '${_data?['pending_change_requests'] ?? 0}',
-                            ),
-                          ),
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => CheckinChangeRequestsScreen(
-                                showId: widget.showId,
-                              ),
-                            ),
-                          ).then((_) => _load()),
+                        _metric(
+                          context,
+                          'Not started',
+                          _count(records, 'not_started'),
+                          Icons.schedule_outlined,
                         ),
-                        const Divider(height: 1),
-                        ListTile(
-                          leading: const Icon(Icons.payments_outlined),
-                          title: const Text('Exhibitors with a balance due'),
-                          trailing: Chip(
-                            label: Text('${_data?['unpaid_exhibitors'] ?? 0}'),
-                          ),
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => ShowCheckinRosterScreen(
-                                showId: widget.showId,
-                                initialStatus: 'balance_due',
-                              ),
-                            ),
-                          ),
+                        _metric(
+                          context,
+                          'Locked',
+                          _count(records, 'locked'),
+                          Icons.lock_outline,
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    'Recent check-ins',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 8),
-                  if (recent.isEmpty)
-                    const Card(
-                      child: Padding(
-                        padding: EdgeInsets.all(20),
-                        child: Text('No exhibitors have checked in yet.'),
-                      ),
-                    ),
-                  for (final row in recent)
-                    Card(
-                      child: ListTile(
-                        leading: const Icon(Icons.verified_outlined),
-                        title: Text(
-                          (row['exhibitor_name'] ?? 'Exhibitor').toString(),
-                        ),
-                        subtitle: Text(_subtitle(row)),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
+                    const SizedBox(height: 20),
+                    AppTheme.surfaceTextScope(
+                      context,
+                      child: Card(
+                        child: Column(
                           children: [
-                            if (row['receipt_preference'] == 'email_receipt')
-                              Icon(
-                                row['receipt_sent_at'] == null
-                                    ? Icons.mail_outline
-                                    : Icons.mark_email_read_outlined,
+                            ListTile(
+                              leading: const Icon(Icons.people_outline),
+                              title: const Text('Check-In Roster'),
+                              subtitle: const Text(
+                                'Search all entered exhibitors and see their check-in status',
                               ),
-                            if (row['status'] != 'locked')
-                              PopupMenuButton<String>(
-                                onSelected: (value) =>
-                                    _changeCheckinStatus(row, value),
-                                itemBuilder: (context) => [
-                                  if (row['status'] == 'completed')
-                                    const PopupMenuItem(
-                                      value: 'reviewed_by_secretary',
-                                      child: Text('Mark reviewed'),
-                                    ),
-                                  const PopupMenuItem(
-                                    value: 'locked',
-                                    child: Text('Lock check-in'),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => ShowCheckinRosterScreen(
+                                    showId: widget.showId,
                                   ),
-                                ],
+                                ),
                               ),
+                            ),
+                            const Divider(height: 1),
+                            ListTile(
+                              leading: const Icon(Icons.history_outlined),
+                              title: const Text('Check-In Activity'),
+                              subtitle: const Text(
+                                'View verifications, payments, changes, and status updates',
+                              ),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => ShowCheckinActivityScreen(
+                                    showId: widget.showId,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const Divider(height: 1),
+                            ListTile(
+                              leading: const Icon(Icons.playlist_add_check),
+                              title: const Text('Check-In Change Requests'),
+                              subtitle: const Text(
+                                'Review exhibitor corrections and requests',
+                              ),
+                              trailing: Chip(
+                                label: Text(
+                                  '${_data?['pending_change_requests'] ?? 0}',
+                                ),
+                              ),
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => CheckinChangeRequestsScreen(
+                                    showId: widget.showId,
+                                  ),
+                                ),
+                              ).then((_) => _load()),
+                            ),
+                            const Divider(height: 1),
+                            ListTile(
+                              leading: const Icon(Icons.payments_outlined),
+                              title: const Text(
+                                'Exhibitors with a balance due',
+                              ),
+                              trailing: Chip(
+                                label: Text(
+                                  '${_data?['unpaid_exhibitors'] ?? 0}',
+                                ),
+                              ),
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => ShowCheckinRosterScreen(
+                                    showId: widget.showId,
+                                    initialStatus: 'balance_due',
+                                  ),
+                                ),
+                              ),
+                            ),
                           ],
                         ),
                       ),
                     ),
-                ],
+                    const SizedBox(height: 20),
+                    Text(
+                      'Recent check-ins',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 8),
+                    if (recent.isEmpty)
+                      AppTheme.surfaceTextScope(
+                        context,
+                        child: const Card(
+                          child: Padding(
+                            padding: EdgeInsets.all(20),
+                            child: Text('No exhibitors have checked in yet.'),
+                          ),
+                        ),
+                      ),
+                    for (final row in recent)
+                      AppTheme.surfaceTextScope(
+                        context,
+                        child: Card(
+                          child: ListTile(
+                            leading: const Icon(Icons.verified_outlined),
+                            title: Text(
+                              (row['exhibitor_name'] ?? 'Exhibitor').toString(),
+                            ),
+                            subtitle: Text(_subtitle(row)),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (row['receipt_preference'] ==
+                                    'email_receipt')
+                                  Icon(
+                                    row['receipt_sent_at'] == null
+                                        ? Icons.mail_outline
+                                        : Icons.mark_email_read_outlined,
+                                  ),
+                                if (row['status'] != 'locked')
+                                  PopupMenuButton<String>(
+                                    onSelected: (value) =>
+                                        _changeCheckinStatus(row, value),
+                                    itemBuilder: (context) => [
+                                      if (row['status'] == 'completed')
+                                        const PopupMenuItem(
+                                          value: 'reviewed_by_secretary',
+                                          child: Text('Mark reviewed'),
+                                        ),
+                                      const PopupMenuItem(
+                                        value: 'locked',
+                                        child: Text('Lock check-in'),
+                                      ),
+                                    ],
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
-            ),
+      ),
     );
   }
 
-  Widget _metric(String label, int count, IconData icon) => SizedBox(
+  Widget _metric(
+    BuildContext context,
+    String label,
+    int count,
+    IconData icon,
+  ) => SizedBox(
     width: 150,
-    child: Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon),
-            const SizedBox(height: 10),
-            Text(
-              '$count',
-              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-            ),
-            Text(label),
-          ],
+    child: AppTheme.surfaceTextScope(
+      context,
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon),
+              const SizedBox(height: 10),
+              Text(
+                '$count',
+                style: const TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Text(label),
+            ],
+          ),
         ),
       ),
     ),
