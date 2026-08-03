@@ -30,6 +30,7 @@ class _ExhibitorCheckinPortalScreenState
   String _receiptPreference = 'no_receipt';
   String? _message;
   String? _showName;
+  List<Map<String, dynamic>> _changeRequests = const [];
 
   @override
   void dispose() {
@@ -112,10 +113,19 @@ class _ExhibitorCheckinPortalScreenState
         'get_exhibitor_checkin_payment_status',
         params: {'p_session_token': _sessionToken},
       );
+      final changeRequests = await _supabase.rpc(
+        'get_exhibitor_checkin_change_requests',
+        params: {'p_session_token': _sessionToken},
+      );
       if (!mounted) return;
       final data = Map<String, dynamic>.from(response as Map);
       data['payment'] = Map<String, dynamic>.from(payment as Map);
-      setState(() => _portalData = data);
+      setState(() {
+        _portalData = data;
+        _changeRequests = List<Map<String, dynamic>>.from(
+          changeRequests as List,
+        );
+      });
     } on PostgrestException catch (error) {
       if (!mounted) return;
       setState(() {
@@ -132,6 +142,44 @@ class _ExhibitorCheckinPortalScreenState
         _portalData = null;
         _message = 'We could not load your entries. Please try again.';
       });
+    }
+  }
+
+  Future<void> _cancelChangeRequest(Map<String, dynamic> request) async {
+    final cancelled = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancel change request?'),
+        content: const Text(
+          'The show secretary will no longer review this request.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep Request'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Cancel Request'),
+          ),
+        ],
+      ),
+    );
+    if (cancelled != true) return;
+    try {
+      await _supabase.rpc(
+        'cancel_exhibitor_checkin_change_request',
+        params: {
+          'p_session_token': _sessionToken,
+          'p_request_id': request['id'],
+        },
+      );
+      await _loadReview();
+      if (mounted) setState(() => _message = 'Change request cancelled.');
+    } catch (_) {
+      if (mounted) {
+        setState(() => _message = 'Could not cancel this change request.');
+      }
     }
   }
 
@@ -966,6 +1014,30 @@ class _ExhibitorCheckinPortalScreenState
             label: const Text('Add entry'),
           ),
         ],
+        if (_changeRequests.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          Text(
+            'Your change requests',
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(color: bright),
+          ),
+          const SizedBox(height: 8),
+          for (final request in _changeRequests)
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.edit_note_outlined),
+                title: Text(_requestTitle(request)),
+                subtitle: Text(_requestSubtitle(request)),
+                trailing: _canCancelRequest(request)
+                    ? TextButton(
+                        onPressed: () => _cancelChangeRequest(request),
+                        child: const Text('Cancel'),
+                      )
+                    : Chip(label: Text(_requestStatus(request))),
+              ),
+            ),
+        ],
         const SizedBox(height: 20),
         _buildPaymentStatus(payment),
         const SizedBox(height: 20),
@@ -1089,6 +1161,32 @@ class _ExhibitorCheckinPortalScreenState
         ],
       ],
     );
+  }
+
+  bool _canCancelRequest(Map<String, dynamic> request) => const {
+    'submitted',
+    'pending_payment',
+    'pending_review',
+  }.contains(_requestStatus(request));
+
+  String _requestStatus(Map<String, dynamic> request) =>
+      (request['status'] ?? '').toString().toLowerCase();
+
+  String _requestTitle(Map<String, dynamic> request) {
+    final type = (request['request_type'] ?? 'change').toString().replaceAll(
+      '_',
+      ' ',
+    );
+    final tattoo = (request['entry_tattoo'] ?? '').toString().trim();
+    return tattoo.isEmpty ? type : '$type • $tattoo';
+  }
+
+  String _requestSubtitle(Map<String, dynamic> request) {
+    final status = _requestStatus(request).replaceAll('_', ' ');
+    final note = (request['review_note'] ?? request['exhibitor_note'] ?? '')
+        .toString()
+        .trim();
+    return note.isEmpty ? status : '$status • $note';
   }
 
   Widget _buildPaymentStatus(Map<String, dynamic> payment) {
