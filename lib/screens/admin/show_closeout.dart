@@ -10892,7 +10892,7 @@ String _friendlyReportName(String? key) {
     case 'entered_exhibitors_contact_report':
       return 'Entered Exhibitors Contact Report';
     case 'entered_exhibitors_list_report':
-      return 'Entered Exhibitors List';
+      return 'Exhibitor Number Lookup Report';
     case 'michelles_special_report':
       return "Michelle's Special Report";
     case 'ribbon_payout_report':

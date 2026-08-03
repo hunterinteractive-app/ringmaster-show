@@ -26,7 +26,7 @@ class EnteredExhibitorsListReportPdf {
         margin: const pw.EdgeInsets.all(30),
         build: (context) => [
           pw.Text(
-            'Entered Exhibitors List',
+            'Exhibitor Number Lookup Report',
             style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
           ),
           pw.SizedBox(height: 6),
@@ -61,7 +61,7 @@ class EnteredExhibitorsListReportPdf {
         .replaceAll(RegExp(r'\\s+'), '_');
     return ReportFileResult(
       bytes: Uint8List.fromList(await pdf.save()),
-      fileName: '${cleanShowName}_entered_exhibitors_list.pdf',
+      fileName: '${cleanShowName}_exhibitor_number_lookup_report.pdf',
       mimeType: 'application/pdf',
     );
   }

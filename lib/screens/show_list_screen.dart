@@ -587,6 +587,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
         isSuperAdmin: false,
         hasAvailableShowCapacity: false,
         hasAnyAssignedShows: false,
+        exhibitorWelcome: null,
       ),
     );
     _verifyLegalAcceptance();
@@ -764,6 +765,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
 
   Future<_ShowListBundle> _loadBundle() async {
     final shows = await _loadShows();
+    final exhibitorWelcome = await _loadExhibitorWelcome();
     final supportAccess = SupportImpersonationSession.isActive
         ? await _loadSupportAccessSnapshot()
         : null;
@@ -821,7 +823,69 @@ class _ShowListScreenState extends State<ShowListScreen> {
       isSuperAdmin: isSuper,
       hasAvailableShowCapacity: hasAvailableShowCapacity,
       hasAnyAssignedShows: hasAnyAssignedShows,
+      exhibitorWelcome: exhibitorWelcome,
     );
+  }
+
+  Future<_ExhibitorWelcome?> _loadExhibitorWelcome() async {
+    if (widget.demoMode) return null;
+    final userId = _effectiveUserId;
+    if (userId == null) return null;
+
+    try {
+      final profile = await supabase
+          .from('profiles')
+          .select('primary_exhibitor_id')
+          .eq('user_id', userId)
+          .maybeSingle();
+      final primaryId = profile?['primary_exhibitor_id']?.toString().trim();
+      final rows = await supabase
+          .from('exhibitors')
+          .select(
+            'id,type,display_name,first_name,last_name,exhibitor_number,is_active,created_at',
+          )
+          .eq('owner_user_id', userId)
+          .eq('is_active', true)
+          .order('created_at', ascending: true);
+      final exhibitors = (rows as List)
+          .map((row) => Map<String, dynamic>.from(row as Map))
+          .toList();
+      if (exhibitors.isEmpty) return null;
+
+      Map<String, dynamic>? selected;
+      if (primaryId != null && primaryId.isNotEmpty) {
+        selected = exhibitors.cast<Map<String, dynamic>?>().firstWhere(
+          (row) => row?['id']?.toString() == primaryId,
+          orElse: () => null,
+        );
+      }
+      selected ??= exhibitors.cast<Map<String, dynamic>?>().firstWhere(
+        (row) => (row?['type'] ?? '').toString().toLowerCase() == 'adult',
+        orElse: () => exhibitors.first,
+      );
+      final selectedExhibitor = selected;
+      if (selectedExhibitor == null) return null;
+
+      final displayName = (selectedExhibitor['display_name'] ?? '')
+          .toString()
+          .trim();
+      final firstName = (selectedExhibitor['first_name'] ?? '')
+          .toString()
+          .trim();
+      final lastName = (selectedExhibitor['last_name'] ?? '').toString().trim();
+      final name = displayName.isNotEmpty
+          ? displayName
+          : [firstName, lastName].where((part) => part.isNotEmpty).join(' ');
+      if (name.isEmpty) return null;
+      return _ExhibitorWelcome(
+        name: name,
+        exhibitorNumber: (selectedExhibitor['exhibitor_number'] ?? '')
+            .toString()
+            .trim(),
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   String? _formatDemoResetText(List<Map<String, dynamic>> shows) {
@@ -1532,10 +1596,55 @@ class _ShowListScreenState extends State<ShowListScreen> {
                           return SingleChildScrollView(
                             child: Column(
                               children: [
+                                if (bundle.exhibitorWelcome != null)
+                                  Padding(
+                                    padding: EdgeInsets.fromLTRB(
+                                      horizontalPadding,
+                                      AppSpacing.md,
+                                      horizontalPadding,
+                                      0,
+                                    ),
+                                    child: Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Welcome, ${bundle.exhibitorWelcome!.name}',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .titleLarge
+                                                ?.copyWith(
+                                                  color: AppColors.surface,
+                                                  fontWeight: FontWeight.w800,
+                                                ),
+                                          ),
+                                          if (bundle
+                                              .exhibitorWelcome!
+                                              .exhibitorNumber
+                                              .isNotEmpty) ...[
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              'Exhibitor #${bundle.exhibitorWelcome!.exhibitorNumber}',
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodyMedium
+                                                  ?.copyWith(
+                                                    color: AppColors.surface
+                                                        .withValues(alpha: .86),
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                  ),
                                 Padding(
                                   padding: EdgeInsets.fromLTRB(
                                     horizontalPadding,
-                                    0,
+                                    AppSpacing.md,
                                     horizontalPadding,
                                     AppSpacing.md,
                                   ),
@@ -2331,6 +2440,7 @@ class _ShowListBundle {
   final bool isSuperAdmin;
   final bool hasAvailableShowCapacity;
   final bool hasAnyAssignedShows;
+  final _ExhibitorWelcome? exhibitorWelcome;
 
   _ShowListBundle({
     required this.shows,
@@ -2339,6 +2449,7 @@ class _ShowListBundle {
     required this.isSuperAdmin,
     required this.hasAvailableShowCapacity,
     required this.hasAnyAssignedShows,
+    required this.exhibitorWelcome,
   });
 
   Set<String> get superAdminShowIds => superAdminShows
@@ -2351,6 +2462,13 @@ class _ShowListBundle {
       adminShowIds.isNotEmpty ||
       hasAvailableShowCapacity ||
       hasAnyAssignedShows;
+}
+
+class _ExhibitorWelcome {
+  final String name;
+  final String exhibitorNumber;
+
+  const _ExhibitorWelcome({required this.name, required this.exhibitorNumber});
 }
 
 class _SupportAccessSnapshot {
