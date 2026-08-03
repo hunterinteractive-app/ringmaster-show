@@ -46,6 +46,192 @@ class _ShowCheckinDashboardScreenState
     }
   }
 
+  Future<void> _completeForExhibitor() async {
+    final search = TextEditingController();
+    List<Map<String, dynamic>> results = const [];
+    Map<String, dynamic>? selected;
+    final picked = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Complete Check-In for Exhibitor'),
+          content: SizedBox(
+            width: 480,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: search,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Exhibitor name or number',
+                    suffixIcon: Icon(Icons.search),
+                  ),
+                  onSubmitted: (_) async {
+                    final data = await _db.rpc(
+                      'search_show_checkin_exhibitors',
+                      params: {
+                        'p_show_id': widget.showId,
+                        'p_search': search.text.trim(),
+                      },
+                    );
+                    setDialogState(() {
+                      results = List<Map<String, dynamic>>.from(data as List);
+                    });
+                  },
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 230,
+                  child: ListView(
+                    children: [
+                      for (final exhibitor in results)
+                        ListTile(
+                          leading: Icon(
+                            selected?['exhibitor_id'] ==
+                                    exhibitor['exhibitor_id']
+                                ? Icons.check_circle
+                                : Icons.circle_outlined,
+                          ),
+                          selected:
+                              selected?['exhibitor_id'] ==
+                              exhibitor['exhibitor_id'],
+                          onTap: () =>
+                              setDialogState(() => selected = exhibitor),
+                          title: Text(
+                            (exhibitor['exhibitor_name'] ?? 'Exhibitor')
+                                .toString(),
+                          ),
+                          subtitle: Text(
+                            '#${exhibitor['exhibitor_number'] ?? '—'} • ${exhibitor['checkin_status'] ?? 'not checked in'}',
+                          ),
+                        ),
+                      if (results.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 24),
+                          child: Text('Search to find an exhibitor.'),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: selected == null
+                  ? null
+                  : () => Navigator.pop(context, selected),
+              child: const Text('Continue'),
+            ),
+          ],
+        ),
+      ),
+    );
+    search.dispose();
+    if (picked == null || !mounted) return;
+    await _confirmSecretaryCheckin(picked);
+  }
+
+  Future<void> _confirmSecretaryCheckin(Map<String, dynamic> exhibitor) async {
+    final initials = TextEditingController();
+    final signature = TextEditingController();
+    final note = TextEditingController();
+    var entriesConfirmed = false;
+    final complete = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('Check In ${exhibitor['exhibitor_name'] ?? 'Exhibitor'}'),
+          content: SizedBox(
+            width: 480,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CheckboxListTile(
+                  value: entriesConfirmed,
+                  onChanged: (value) =>
+                      setDialogState(() => entriesConfirmed = value ?? false),
+                  title: const Text(
+                    'I confirmed the exhibitor’s entries are correct.',
+                  ),
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+                TextField(
+                  controller: initials,
+                  decoration: const InputDecoration(
+                    labelText: 'Initials (optional)',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: signature,
+                  decoration: const InputDecoration(
+                    labelText: 'Signature (optional)',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: note,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Staff note (optional)',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: entriesConfirmed
+                  ? () => Navigator.pop(context, true)
+                  : null,
+              child: const Text('Complete Check-In'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (complete == true) {
+      try {
+        await _db.rpc(
+          'complete_exhibitor_checkin_by_secretary',
+          params: {
+            'p_show_id': widget.showId,
+            'p_exhibitor_id': exhibitor['exhibitor_id'],
+            'p_entries_confirmed': true,
+            'p_initials': initials.text.trim(),
+            'p_signature_data': signature.text.trim(),
+            'p_note': note.text.trim(),
+          },
+        );
+        await _load();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Check-in completed by secretary.')),
+          );
+        }
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not complete this check-in.')),
+          );
+        }
+      }
+    }
+    initials.dispose();
+    signature.dispose();
+    note.dispose();
+  }
+
   Map<String, dynamic> _map(dynamic value) => value is Map
       ? Map<String, dynamic>.from(value)
       : const <String, dynamic>{};
@@ -65,6 +251,11 @@ class _ShowCheckinDashboardScreenState
       appBar: AppBar(
         title: const Text('Check-In Dashboard'),
         actions: [
+          IconButton(
+            onPressed: _loading ? null : _completeForExhibitor,
+            icon: const Icon(Icons.how_to_reg_outlined),
+            tooltip: 'Complete Check-In for Exhibitor',
+          ),
           IconButton(
             onPressed: _loading ? null : _load,
             icon: const Icon(Icons.refresh),
