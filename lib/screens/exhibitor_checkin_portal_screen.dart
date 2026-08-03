@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ExhibitorCheckinPortalScreen extends StatefulWidget {
   const ExhibitorCheckinPortalScreen({super.key, this.initialToken});
@@ -24,6 +25,7 @@ class _ExhibitorCheckinPortalScreenState
   Map<String, dynamic>? _portalData;
   bool _verifying = false;
   bool _completing = false;
+  bool _startingPayment = false;
   bool _entriesConfirmed = false;
   String _receiptPreference = 'no_receipt';
   String? _message;
@@ -157,6 +159,50 @@ class _ExhibitorCheckinPortalScreenState
       setState(() => _message = 'Could not complete check-in: $error');
     } finally {
       if (mounted) setState(() => _completing = false);
+    }
+  }
+
+  Future<void> _startOnlinePayment() async {
+    if (_sessionToken == null || _sessionToken!.isEmpty) return;
+    setState(() {
+      _startingPayment = true;
+      _message = null;
+    });
+    try {
+      final response = await _supabase.functions.invoke(
+        'checkin-stripe-create-checkout',
+        body: {
+          'session_token': _sessionToken,
+          'return_token': widget.initialToken,
+        },
+      );
+      final data = Map<String, dynamic>.from(response.data as Map);
+      final url = (data['checkout_url'] ?? '').toString().trim();
+      if (response.status < 200 || response.status >= 300 || url.isEmpty) {
+        throw Exception(
+          (data['error'] ?? 'Could not start online payment.').toString(),
+        );
+      }
+      final launched = await launchUrl(
+        Uri.parse(url),
+        mode: LaunchMode.platformDefault,
+        webOnlyWindowName: '_self',
+      );
+      if (!launched && mounted) {
+        setState(
+          () => _message =
+              'We could not open the payment page. Please try again.',
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _message =
+              'We could not start online payment. Please try again or see the show secretary.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _startingPayment = false);
     }
   }
 
@@ -860,9 +906,23 @@ class _ExhibitorCheckinPortalScreenState
               const SizedBox(height: 4),
               Text(
                 onlineAvailable
-                    ? 'Online payment is available for this show. A secure payment page will be added in the next check-in update.'
+                    ? 'Pay securely online, or see the show secretary to arrange payment.'
                     : 'Please see the show secretary to arrange payment. Staff can record cash, check, or digital payments.',
               ),
+              if (onlineAvailable) ...[
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  onPressed: _startingPayment ? null : _startOnlinePayment,
+                  icon: _startingPayment
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.lock_outline),
+                  label: const Text('Pay online'),
+                ),
+              ],
             ],
           ],
         ),
