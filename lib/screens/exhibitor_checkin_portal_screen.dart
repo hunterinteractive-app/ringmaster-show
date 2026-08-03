@@ -30,6 +30,7 @@ class _ExhibitorCheckinPortalScreenState
   String _receiptPreference = 'no_receipt';
   String? _message;
   String? _showName;
+  String? _openingChangeEntryId;
   List<Map<String, dynamic>> _changeRequests = const [];
 
   @override
@@ -350,6 +351,13 @@ class _ExhibitorCheckinPortalScreenState
             () => _message =
                 'We could not load the available entry options. Please try again.',
           );
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'We could not load the available entry options. Please try again.',
+              ),
+            ),
+          );
         }
         earNumber.dispose();
         breed.dispose();
@@ -624,6 +632,18 @@ class _ExhibitorCheckinPortalScreenState
     sex.dispose();
     furVariety.dispose();
     note.dispose();
+  }
+
+  Future<void> _openRequestChange(Map<String, dynamic> entry) async {
+    final entryId = _text(entry, 'id');
+    if (entryId.isEmpty || _openingChangeEntryId != null) return;
+
+    setState(() => _openingChangeEntryId = entryId);
+    try {
+      await _requestChange(entry);
+    } finally {
+      if (mounted) setState(() => _openingChangeEntryId = null);
+    }
   }
 
   Future<void> _addEntry() async {
@@ -1206,7 +1226,9 @@ class _ExhibitorCheckinPortalScreenState
           for (final entry in group.value)
             Card(
               child: ListTile(
-                onTap: () => _requestChange(entry),
+                onTap: _openingChangeEntryId == null
+                    ? () => _openRequestChange(entry)
+                    : null,
                 title: Text(_entryTitle(entry)),
                 subtitle: Text(
                   [
@@ -1217,11 +1239,29 @@ class _ExhibitorCheckinPortalScreenState
                     if (entry['is_fur'] == true) 'Fur / Wool',
                   ].where((value) => value.isNotEmpty).join(' • '),
                 ),
-                trailing:
-                    _text(entry, 'scratched_at').isNotEmpty ||
-                        _text(entry, 'status').toLowerCase() == 'scratched'
-                    ? const Chip(label: Text('Scratched'))
-                    : const Chip(label: Text('Entered')),
+                trailing: SizedBox(
+                  width: 142,
+                  child: _openingChangeEntryId == _text(entry, 'id')
+                      ? const Center(
+                          child: SizedBox(
+                            height: 22,
+                            width: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : OutlinedButton(
+                          onPressed: _openingChangeEntryId == null
+                              ? () => _openRequestChange(entry)
+                              : null,
+                          child: Text(
+                            _text(entry, 'scratched_at').isNotEmpty ||
+                                    _text(entry, 'status').toLowerCase() ==
+                                        'scratched'
+                                ? 'Scratched'
+                                : 'Request change',
+                          ),
+                        ),
+                ),
               ),
             ),
         ],
