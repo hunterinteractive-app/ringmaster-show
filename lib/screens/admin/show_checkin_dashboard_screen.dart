@@ -399,6 +399,61 @@ class _ShowCheckinDashboardScreenState
     note.dispose();
   }
 
+  Future<void> _changeCheckinStatus(
+    Map<String, dynamic> row,
+    String status,
+  ) async {
+    final action = status == 'locked' ? 'lock' : 'mark as reviewed';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          '${action[0].toUpperCase()}${action.substring(1)} check-in?',
+        ),
+        content: Text(
+          status == 'locked'
+              ? 'This prevents any further changes through the exhibitor portal.'
+              : 'This records that the secretary reviewed the completed check-in.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(status == 'locked' ? 'Lock Check-In' : 'Mark Reviewed'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await _db.rpc(
+        'update_show_checkin_record_status',
+        params: {'p_checkin_record_id': row['id'], 'p_status': status},
+      );
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              status == 'locked'
+                  ? 'Check-in locked.'
+                  : 'Check-in marked as reviewed.',
+            ),
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not update this check-in.')),
+        );
+      }
+    }
+  }
+
   Map<String, dynamic> _map(dynamic value) => value is Map
       ? Map<String, dynamic>.from(value)
       : const <String, dynamic>{};
@@ -527,13 +582,33 @@ class _ShowCheckinDashboardScreenState
                           (row['exhibitor_name'] ?? 'Exhibitor').toString(),
                         ),
                         subtitle: Text(_subtitle(row)),
-                        trailing: row['receipt_preference'] == 'email_receipt'
-                            ? Icon(
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (row['receipt_preference'] == 'email_receipt')
+                              Icon(
                                 row['receipt_sent_at'] == null
                                     ? Icons.mail_outline
                                     : Icons.mark_email_read_outlined,
-                              )
-                            : null,
+                              ),
+                            if (row['status'] != 'locked')
+                              PopupMenuButton<String>(
+                                onSelected: (value) =>
+                                    _changeCheckinStatus(row, value),
+                                itemBuilder: (context) => [
+                                  if (row['status'] == 'completed')
+                                    const PopupMenuItem(
+                                      value: 'reviewed_by_secretary',
+                                      child: Text('Mark reviewed'),
+                                    ),
+                                  const PopupMenuItem(
+                                    value: 'locked',
+                                    child: Text('Lock check-in'),
+                                  ),
+                                ],
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                 ],
