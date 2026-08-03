@@ -462,22 +462,35 @@ class _ShowCheckinSettingsDialogState
                       if (entry.key != 'add_entry' || !_useNormalAddEntryFee)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 12),
-                          child: TextField(
-                            controller: _feeControllers[entry.key],
-                            enabled: !disabled,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                            inputFormatters: [
-                              FilteringTextInputFormatter.allow(
-                                RegExp(r'^\d{0,6}(\.\d{0,2})?'),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${entry.value} fee',
+                                style: TextStyle(
+                                  color: foreground,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              TextField(
+                                controller: _feeControllers[entry.key],
+                                enabled: !disabled,
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.allow(
+                                    RegExp(r'^\d{0,6}(\.\d{0,2})?'),
+                                  ),
+                                ],
+                                decoration: const InputDecoration(
+                                  prefixText: '\$',
+                                  border: OutlineInputBorder(),
+                                ),
                               ),
                             ],
-                            decoration: InputDecoration(
-                              labelText: '${entry.value} fee',
-                              prefixText: '\$',
-                              border: const OutlineInputBorder(),
-                            ),
                           ),
                         ),
                     ],
