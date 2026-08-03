@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../theme/app_theme.dart';
+import 'admin_entry_management_screen.dart';
 import 'checkin_change_requests_screen.dart';
 import 'show_checkin_activity_screen.dart';
 import 'show_checkin_roster_screen.dart';
@@ -185,6 +186,24 @@ class _ShowCheckinDashboardScreenState
     await _confirmSecretaryCheckin(picked);
   }
 
+  Future<void> _reviewAndEditEntries(Map<String, dynamic> exhibitor) async {
+    final exhibitorId = exhibitor['exhibitor_id']?.toString().trim() ?? '';
+    if (exhibitorId.isEmpty) return;
+    final exhibitorName =
+        exhibitor['exhibitor_name']?.toString().trim() ?? 'Exhibitor';
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AdminEntryManagementScreen(
+          showId: widget.showId,
+          showName: 'Check-In — $exhibitorName',
+          initialExhibitorId: exhibitorId,
+        ),
+      ),
+    );
+    if (mounted) await _load();
+  }
+
   Future<void> _recordPayment() async {
     final exhibitor = await _pickExhibitor('Record Payment');
     if (exhibitor == null || !mounted) return;
@@ -363,6 +382,36 @@ class _ShowCheckinDashboardScreenState
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Entries on file',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: AppColors.headerForeground,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Review this exhibitor’s entries or make corrections before completing check-in.',
+                  style: TextStyle(
+                    color: AppColors.headerForeground.withValues(alpha: .82),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: AppTheme.gradientTextScope(
+                    context,
+                    child: OutlinedButton.icon(
+                      onPressed: () => _reviewAndEditEntries(exhibitor),
+                      icon: const Icon(Icons.edit_note_outlined),
+                      label: const Text('Review and edit entries'),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
                 CheckboxListTile(
                   value: entriesConfirmed,
                   onChanged: (value) =>

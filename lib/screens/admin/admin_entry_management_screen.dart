@@ -148,11 +148,13 @@ Future<String> _canonicalEntryVarietyName({
 class AdminEntryManagementScreen extends StatefulWidget {
   final String showId;
   final String showName;
+  final String? initialExhibitorId;
 
   const AdminEntryManagementScreen({
     super.key,
     required this.showId,
     required this.showName,
+    this.initialExhibitorId,
   });
 
   @override
@@ -309,6 +311,10 @@ class _AdminEntryManagementScreenState
 
     if (_selectedSectionId != null) {
       q = q.eq('section_id', _selectedSectionId!);
+    }
+    final initialExhibitorId = widget.initialExhibitorId?.trim();
+    if (initialExhibitorId != null && initialExhibitorId.isNotEmpty) {
+      q = q.eq('exhibitor_id', initialExhibitorId);
     }
 
     final res = await q.order('created_at', ascending: true);
