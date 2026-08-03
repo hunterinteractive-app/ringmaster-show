@@ -148,13 +148,11 @@ Future<String> _canonicalEntryVarietyName({
 class AdminEntryManagementScreen extends StatefulWidget {
   final String showId;
   final String showName;
-  final String? initialExhibitorId;
 
   const AdminEntryManagementScreen({
     super.key,
     required this.showId,
     required this.showName,
-    this.initialExhibitorId,
   });
 
   @override
@@ -312,11 +310,6 @@ class _AdminEntryManagementScreenState
     if (_selectedSectionId != null) {
       q = q.eq('section_id', _selectedSectionId!);
     }
-    final initialExhibitorId = widget.initialExhibitorId?.trim();
-    if (initialExhibitorId != null && initialExhibitorId.isNotEmpty) {
-      q = q.eq('exhibitor_id', initialExhibitorId);
-    }
-
     final res = await q.order('created_at', ascending: true);
     _entries = (res as List).cast<Map<String, dynamic>>();
   }
@@ -620,16 +613,7 @@ class _AdminEntryManagementScreenState
     // account, and RLS correctly prevents show staff from editing those rows.
     // Updating the entries row keeps the current show entry correct without
     // changing the exhibitor's saved animal profile.
-    final saved = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _themedBottomSheetShell(
-        context,
-        child: _EditEntrySheet(entry: entry),
-      ),
-    );
+    final saved = await showAdminEntryEditSheet(context, entry: entry);
 
     if (saved == true) {
       await _loadEntries();
@@ -1131,6 +1115,24 @@ class _AdminEntryManagementScreenState
             ),
     );
   }
+}
+
+/// Opens the standard staff entry editor used throughout RingMaster Show.
+///
+/// This keeps check-in corrections on the same direct-edit workflow as Entry
+/// Management, without navigating staff away from the check-in process.
+Future<bool?> showAdminEntryEditSheet(
+  BuildContext context, {
+  required Map<String, dynamic> entry,
+}) {
+  return showModalBottomSheet<bool>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) =>
+        _themedBottomSheetShell(context, child: _EditEntrySheet(entry: entry)),
+  );
 }
 
 Widget _themedBottomSheetShell(BuildContext context, {required Widget child}) {

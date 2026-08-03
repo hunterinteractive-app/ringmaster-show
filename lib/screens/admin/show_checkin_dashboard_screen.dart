@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../theme/app_theme.dart';
-import 'admin_entry_management_screen.dart';
 import 'checkin_change_requests_screen.dart';
+import 'secretary_checkin_entry_review_screen.dart';
 import 'show_checkin_activity_screen.dart';
 import 'show_checkin_roster_screen.dart';
 
@@ -186,7 +186,7 @@ class _ShowCheckinDashboardScreenState
     await _confirmSecretaryCheckin(picked);
   }
 
-  Future<void> _reviewAndEditEntries(Map<String, dynamic> exhibitor) async {
+  Future<void> _reviewEntriesForCheckin(Map<String, dynamic> exhibitor) async {
     final exhibitorId = exhibitor['exhibitor_id']?.toString().trim() ?? '';
     if (exhibitorId.isEmpty) return;
     final exhibitorName =
@@ -194,10 +194,12 @@ class _ShowCheckinDashboardScreenState
     await Navigator.push<void>(
       context,
       MaterialPageRoute(
-        builder: (_) => AdminEntryManagementScreen(
+        builder: (_) => SecretaryCheckinEntryReviewScreen(
           showId: widget.showId,
-          showName: 'Check-In — $exhibitorName',
-          initialExhibitorId: exhibitorId,
+          exhibitorId: exhibitorId,
+          exhibitorName: exhibitorName,
+          exhibitorNumber:
+              exhibitor['exhibitor_number']?.toString().trim() ?? '',
         ),
       ),
     );
@@ -405,9 +407,9 @@ class _ShowCheckinDashboardScreenState
                   child: AppTheme.gradientTextScope(
                     context,
                     child: OutlinedButton.icon(
-                      onPressed: () => _reviewAndEditEntries(exhibitor),
+                      onPressed: () => _reviewEntriesForCheckin(exhibitor),
                       icon: const Icon(Icons.edit_note_outlined),
-                      label: const Text('Review and edit entries'),
+                      label: const Text('Review entries'),
                     ),
                   ),
                 ),
