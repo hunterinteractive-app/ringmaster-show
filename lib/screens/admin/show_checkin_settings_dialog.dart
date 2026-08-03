@@ -65,11 +65,23 @@ class _ShowCheckinSettingsDialogState
   final Map<String, String> _editPermissions = {
     for (final key in _permissions.keys) key: 'disabled',
   };
+  final Map<String, TextEditingController> _feeControllers = {
+    for (final key in _permissions.keys) key: TextEditingController(),
+  };
+  bool _useNormalAddEntryFee = true;
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    for (final controller in _feeControllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -82,7 +94,7 @@ class _ShowCheckinSettingsDialogState
       final settings = await _supabase
           .from('show_checkin_settings')
           .select(
-            'is_enabled,opens_at,closes_at,require_initials,require_signature,entry_edit_permissions',
+            'is_enabled,opens_at,closes_at,require_initials,require_signature,entry_edit_permissions,entry_edit_fee_cents',
           )
           .eq('show_id', widget.showId)
           .maybeSingle();
@@ -91,6 +103,10 @@ class _ShowCheckinSettingsDialogState
       final permissions = rawPermissions is Map
           ? rawPermissions.map((key, value) => MapEntry('$key', '$value'))
           : const <String, String>{};
+      final rawFees = settings?['entry_edit_fee_cents'];
+      final fees = rawFees is Map
+          ? rawFees.map((key, value) => MapEntry('$key', value))
+          : const <String, dynamic>{};
       setState(() {
         _isReadOnly =
             show['is_locked'] == true ||
@@ -109,6 +125,15 @@ class _ShowCheckinSettingsDialogState
           _editPermissions[key] = _permissionLabels.containsKey(value)
               ? value!
               : 'disabled';
+          if (key == 'add_entry') {
+            final rawFee = fees[key];
+            _useNormalAddEntryFee = rawFee == null;
+            _feeControllers[key]!.text = rawFee == null
+                ? ''
+                : _formatDollars(rawFee);
+          } else {
+            _feeControllers[key]!.text = _formatDollars(fees[key] ?? 0);
+          }
         }
         _loading = false;
       });
@@ -135,6 +160,23 @@ class _ShowCheckinSettingsDialogState
       _message = null;
     });
     try {
+      final feeCents = <String, int?>{};
+      for (final key in _permissions.keys) {
+        if (key == 'add_entry' && _useNormalAddEntryFee) {
+          feeCents[key] = null;
+          continue;
+        }
+        final cents = _parseCents(_feeControllers[key]!.text);
+        if (cents == null) {
+          setState(() {
+            _saving = false;
+            _message =
+                'Enter a valid non-negative dollar amount for ${_permissions[key]}.';
+          });
+          return;
+        }
+        feeCents[key] = cents;
+      }
       await _supabase.from('show_checkin_settings').upsert({
         'show_id': widget.showId,
         'is_enabled': _isEnabled,
@@ -143,6 +185,7 @@ class _ShowCheckinSettingsDialogState
         'require_initials': _requireInitials,
         'require_signature': _requireSignature,
         'entry_edit_permissions': _editPermissions,
+        'entry_edit_fee_cents': feeCents,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       });
       if (!mounted) return;
@@ -153,6 +196,22 @@ class _ShowCheckinSettingsDialogState
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  String _formatDollars(Object? value) {
+    final cents = switch (value) {
+      int value => value,
+      num value => value.round(),
+      String value => int.tryParse(value) ?? 0,
+      _ => 0,
+    };
+    return (cents / 100).toStringAsFixed(2);
+  }
+
+  int? _parseCents(String value) {
+    final amount = double.tryParse(value.trim());
+    if (amount == null || amount < 0) return null;
+    return (amount * 100).round();
   }
 
   Future<void> _generatePortalLink() async {
@@ -366,6 +425,62 @@ class _ShowCheckinSettingsDialogState
                           ],
                         ),
                       ),
+                    Divider(
+                      height: 32,
+                      color: foreground.withValues(alpha: 0.22),
+                    ),
+                    Text('Check-in action fees', style: sectionStyle),
+                    const SizedBox(height: 6),
+                    Text(
+                      'These fees are added to the exhibitor balance when an allowed change is completed. All actions start at \$0.00. Add Entry uses the normal show entry fee unless you set a custom amount.',
+                      style: TextStyle(color: mutedForeground),
+                    ),
+                    const SizedBox(height: 14),
+                    for (final entry in _permissions.entries) ...[
+                      if (entry.key == 'add_entry')
+                        CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          fillColor: const WidgetStatePropertyAll(
+                            AppColors.headerForeground,
+                          ),
+                          checkColor: AppColors.pageBackground,
+                          side: const BorderSide(
+                            color: AppColors.headerForeground,
+                            width: 2,
+                          ),
+                          value: _useNormalAddEntryFee,
+                          onChanged: disabled
+                              ? null
+                              : (value) => setState(
+                                  () => _useNormalAddEntryFee = value ?? true,
+                                ),
+                          title: Text(
+                            'Add Entry: use normal show entry fee',
+                            style: TextStyle(color: foreground),
+                          ),
+                        ),
+                      if (entry.key != 'add_entry' || !_useNormalAddEntryFee)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: TextField(
+                            controller: _feeControllers[entry.key],
+                            enabled: !disabled,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            inputFormatters: [
+                              FilteringTextInputFormatter.allow(
+                                RegExp(r'^\d{0,6}(\.\d{0,2})?'),
+                              ),
+                            ],
+                            decoration: InputDecoration(
+                              labelText: '${entry.value} fee',
+                              prefixText: '\$',
+                              border: const OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                    ],
                     Divider(
                       height: 32,
                       color: foreground.withValues(alpha: 0.22),
