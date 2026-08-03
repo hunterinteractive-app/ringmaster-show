@@ -12,19 +12,26 @@ class _State extends State<CheckinChangeRequestsScreen> {
   final db = Supabase.instance.client;
   List<Map<String, dynamic>> rows = [];
   bool loading = true;
+  String filter = 'pending';
+  String? error;
   Future<void> load() async {
-    final r = await db
-        .from('show_checkin_change_requests')
-        .select(
-          'id,exhibitor_id,status,request_type,requested_changes,original_values,applied_changes,exhibitor_note,review_note,created_at,exhibitors(display_name,showing_name),entries(tattoo,breed,variety)',
-        )
-        .eq('show_id', widget.showId)
-        .order('created_at');
-    if (mounted) {
-      setState(() {
-        rows = List<Map<String, dynamic>>.from(r);
-        loading = false;
-      });
+    setState(() {
+      loading = true;
+      error = null;
+    });
+    try {
+      final r = await db
+          .from('show_checkin_change_requests')
+          .select(
+            'id,exhibitor_id,status,request_type,requested_changes,original_values,applied_changes,exhibitor_note,review_note,created_at,exhibitors(display_name,showing_name),entries(tattoo,breed,variety)',
+          )
+          .eq('show_id', widget.showId)
+          .order('created_at');
+      if (mounted) setState(() => rows = List<Map<String, dynamic>>.from(r));
+    } catch (_) {
+      if (mounted) setState(() => error = 'We could not load change requests.');
+    } finally {
+      if (mounted) setState(() => loading = false);
     }
   }
 
@@ -94,6 +101,24 @@ class _State extends State<CheckinChangeRequestsScreen> {
     final requested = _map(row['requested_changes']);
     final applied = _map(row['applied_changes']);
     final lines = <String>[];
+    if (row['request_type'] == 'add_entry') {
+      const addLabels = <String, String>{
+        'section_id': 'Show section',
+        'ear_number': 'Tattoo / Ear #',
+        'animal_name': 'Animal name',
+        'breed': 'Breed',
+        'variety': 'Variety',
+        'class': 'Class',
+        'sex': 'Sex',
+        'fur_variety': 'Fur variety',
+      };
+      for (final entry in addLabels.entries) {
+        if (requested.containsKey(entry.key)) {
+          lines.add('${entry.value}: ${requested[entry.key]}');
+        }
+      }
+      return lines.join('\n');
+    }
     for (final key in labels.keys) {
       if (requested.containsKey(key)) {
         lines.add(
@@ -107,6 +132,37 @@ class _State extends State<CheckinChangeRequestsScreen> {
       }
     }
     return lines.join('\n');
+  }
+
+  bool _isPending(Map<String, dynamic> row) => const {
+    'submitted',
+    'pending_payment',
+    'pending_review',
+  }.contains(row['status']);
+
+  List<Map<String, dynamic>> get _visibleRows => switch (filter) {
+    'pending' => rows.where(_isPending).toList(),
+    'approved' => rows.where((row) => row['status'] == 'approved').toList(),
+    'denied' => rows.where((row) => row['status'] == 'denied').toList(),
+    'cancelled' => rows.where((row) => row['status'] == 'cancelled').toList(),
+    _ => rows,
+  };
+
+  int _countFor(String value) => switch (value) {
+    'pending' => rows.where(_isPending).length,
+    _ => rows.where((row) => row['status'] == value).length,
+  };
+
+  String _requestLabel(Map<String, dynamic> row) {
+    final exhibitor = _map(row['exhibitors']);
+    final name =
+        (exhibitor['display_name'] ?? exhibitor['showing_name'] ?? 'Exhibitor')
+            .toString();
+    final type = (row['request_type'] ?? 'change').toString().replaceAll(
+      '_',
+      ' ',
+    );
+    return '$name • $type';
   }
 
   Future<void> recordPayment(Map<String, dynamic> row) async {
@@ -191,15 +247,52 @@ class _State extends State<CheckinChangeRequestsScreen> {
 
   @override
   Widget build(BuildContext c) => Scaffold(
-    appBar: AppBar(title: const Text('Check-In Change Requests')),
+    appBar: AppBar(
+      title: const Text('Check-In Change Requests'),
+      actions: [
+        IconButton(
+          onPressed: loading ? null : load,
+          icon: const Icon(Icons.refresh),
+        ),
+      ],
+    ),
     body: loading
         ? const Center(child: CircularProgressIndicator())
+        : error != null
+        ? Center(child: Text(error!))
         : ListView(
+            padding: const EdgeInsets.all(12),
             children: [
-              for (final r in rows)
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final item in const [
+                    ('pending', 'Pending'),
+                    ('approved', 'Approved'),
+                    ('denied', 'Denied'),
+                    ('cancelled', 'Cancelled'),
+                    ('all', 'All'),
+                  ])
+                    ChoiceChip(
+                      label: Text('${item.$2} (${_countFor(item.$1)})'),
+                      selected: filter == item.$1,
+                      onSelected: (_) => setState(() => filter = item.$1),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              if (_visibleRows.isEmpty)
+                const Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(20),
+                    child: Text('No change requests match this filter.'),
+                  ),
+                ),
+              for (final r in _visibleRows)
                 Card(
                   child: ListTile(
-                    title: Text('${r['request_type']} • ${r['status']}'),
+                    title: Text(_requestLabel(r)),
                     subtitle: Text(
                       [
                         _changeSummary(r),
