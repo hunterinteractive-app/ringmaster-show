@@ -63,6 +63,145 @@ class _ShowCheckinRosterScreenState extends State<ShowCheckinRosterScreen> {
     }
   }
 
+  Future<void> _recordPayment(
+    Map<String, dynamic> exhibitor,
+    int dueCents,
+  ) async {
+    final amount = TextEditingController(
+      text: (dueCents / 100).toStringAsFixed(2),
+    );
+    final reference = TextEditingController();
+    var method = 'cash';
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (context) => AppTheme.gradientTextScope(
+        context,
+        child: StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: Text(
+              'Record Payment — ${exhibitor['exhibitor_name'] ?? 'Exhibitor'}',
+            ),
+            content: SizedBox(
+              width: 420,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Balance due: \$${(dueCents / 100).toStringAsFixed(2)}'),
+                  const SizedBox(height: 12),
+                  AppTheme.surfaceTextScope(
+                    context,
+                    child: TextField(
+                      controller: amount,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'Amount',
+                        prefixText: r'$ ',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  AppTheme.surfaceTextScope(
+                    context,
+                    child: DropdownButtonFormField<String>(
+                      initialValue: method,
+                      decoration: const InputDecoration(
+                        labelText: 'Payment method',
+                      ),
+                      items:
+                          const [
+                                'cash',
+                                'check',
+                                'digital',
+                                'stripe',
+                                'square',
+                                'paypal',
+                              ]
+                              .map(
+                                (value) => DropdownMenuItem(
+                                  value: value,
+                                  child: Text(value),
+                                ),
+                              )
+                              .toList(),
+                      onChanged: (value) =>
+                          setDialogState(() => method = value ?? method),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  AppTheme.surfaceTextScope(
+                    context,
+                    child: TextField(
+                      controller: reference,
+                      decoration: const InputDecoration(
+                        labelText: 'Reference or check number (optional)',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Record Payment'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (saved == true) {
+      final amountCents = ((double.tryParse(amount.text.trim()) ?? 0) * 100)
+          .round();
+      if (amountCents <= 0 || amountCents > dueCents) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                r'Enter an amount greater than $0 and no more than the balance due.',
+              ),
+            ),
+          );
+        }
+      } else {
+        try {
+          await _db.rpc(
+            'record_checkin_manual_payment',
+            params: {
+              'p_show_id': widget.showId,
+              'p_exhibitor_id': exhibitor['exhibitor_id'],
+              'p_amount_cents': amountCents,
+              'p_method': method,
+              'p_reference': reference.text.trim(),
+              'p_receipt_preference': 'no_receipt',
+            },
+          );
+          await _load();
+          if (mounted) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text('Payment recorded.')));
+          }
+        } catch (_) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Could not record this payment.')),
+            );
+          }
+        }
+      }
+    }
+    amount.dispose();
+    reference.dispose();
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
@@ -166,6 +305,9 @@ class _ShowCheckinRosterScreenState extends State<ShowCheckinRosterScreen> {
                                 context,
                                 child: Card(
                                   child: ListTile(
+                                    onTap: dueCents > 0
+                                        ? () => _recordPayment(row, dueCents)
+                                        : null,
                                     leading: Icon(_icon(status)),
                                     title: Text(
                                       (row['exhibitor_name'] ?? 'Exhibitor')
@@ -174,12 +316,18 @@ class _ShowCheckinRosterScreenState extends State<ShowCheckinRosterScreen> {
                                     subtitle: Text(
                                       '#${row['exhibitor_number'] ?? '—'}${dueCents > 0 ? ' • Balance due: \$${(dueCents / 100).toStringAsFixed(2)}' : ''}',
                                     ),
-                                    trailing: Text(
-                                      _label(status),
-                                      style: const TextStyle(
-                                        color: AppColors.muted,
-                                      ),
-                                    ),
+                                    trailing: dueCents > 0
+                                        ? FilledButton(
+                                            onPressed: () =>
+                                                _recordPayment(row, dueCents),
+                                            child: const Text('Record payment'),
+                                          )
+                                        : Text(
+                                            _label(status),
+                                            style: const TextStyle(
+                                              color: AppColors.muted,
+                                            ),
+                                          ),
                                   ),
                                 ),
                               );
