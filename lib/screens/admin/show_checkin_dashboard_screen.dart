@@ -369,7 +369,13 @@ class _ShowCheckinDashboardScreenState
                       setDialogState(() => entriesConfirmed = value ?? false),
                   title: const Text(
                     'I confirmed the exhibitor’s entries are correct.',
+                    style: TextStyle(
+                      color: AppColors.headerForeground,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
+                  activeColor: AppColors.header,
+                  checkColor: AppColors.headerForeground,
                   controlAffinity: ListTileControlAffinity.leading,
                 ),
                 TextField(
