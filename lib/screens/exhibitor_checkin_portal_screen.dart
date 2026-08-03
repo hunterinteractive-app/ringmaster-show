@@ -108,8 +108,14 @@ class _ExhibitorCheckinPortalScreenState
         'get_exhibitor_checkin_portal_data',
         params: {'p_session_token': _sessionToken},
       );
+      final payment = await _supabase.rpc(
+        'get_exhibitor_checkin_payment_status',
+        params: {'p_session_token': _sessionToken},
+      );
       if (!mounted) return;
-      setState(() => _portalData = Map<String, dynamic>.from(response as Map));
+      final data = Map<String, dynamic>.from(response as Map);
+      data['payment'] = Map<String, dynamic>.from(payment as Map);
+      setState(() => _portalData = data);
     } on PostgrestException catch (error) {
       if (!mounted) return;
       setState(() {
