@@ -559,10 +559,21 @@ class _ShowCheckinDashboardScreenState
             icon: const Icon(Icons.how_to_reg_outlined),
             tooltip: 'Complete Check-In for Exhibitor',
           ),
-          IconButton(
-            onPressed: _loading ? null : _recordPayment,
-            icon: const Icon(Icons.payments_outlined),
-            tooltip: 'Record Payment',
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: FilledButton.icon(
+              onPressed: _loading ? null : _recordPayment,
+              icon: const Icon(Icons.payments_outlined, size: 18),
+              label: const Text('Record Payment'),
+              style: FilledButton.styleFrom(
+                minimumSize: Size.zero,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
           ),
           IconButton(
             onPressed: _loading ? null : _load,
