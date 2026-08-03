@@ -554,10 +554,21 @@ class _ShowCheckinDashboardScreenState
       appBar: AppBar(
         title: const Text('Check-In Dashboard'),
         actions: [
-          IconButton(
-            onPressed: _loading ? null : _completeForExhibitor,
-            icon: const Icon(Icons.how_to_reg_outlined),
-            tooltip: 'Complete Check-In for Exhibitor',
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: FilledButton.icon(
+              onPressed: _loading ? null : _completeForExhibitor,
+              icon: const Icon(Icons.how_to_reg_outlined, size: 18),
+              label: const Text('Complete Check-In'),
+              style: FilledButton.styleFrom(
+                minimumSize: Size.zero,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
           ),
           Padding(
             padding: const EdgeInsets.only(right: 4),
