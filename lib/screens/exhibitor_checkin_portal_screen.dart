@@ -338,6 +338,52 @@ class _ExhibitorCheckinPortalScreenState
             .where((field) => _canRequestEdit(field.key))
             .toList();
 
+    Map<String, dynamic> selectionOptions = const {};
+    if (editableFields.any(
+      (field) => field.key == 'breed' || field.key == 'variety',
+    )) {
+      try {
+        selectionOptions = await _entrySelectionOptions(entryId: entry['id']);
+      } catch (_) {
+        if (mounted) {
+          setState(
+            () => _message =
+                'We could not load the available entry options. Please try again.',
+          );
+        }
+        earNumber.dispose();
+        breed.dispose();
+        variety.dispose();
+        className.dispose();
+        sex.dispose();
+        furVariety.dispose();
+        note.dispose();
+        return;
+      }
+    }
+
+    final breedOptions = _selectionRows(selectionOptions, 'breeds');
+    var varietyOptions = _selectionRows(selectionOptions, 'varieties');
+    var selectedBreedId = selectionOptions['selected_breed_id']?.toString();
+    var selectedVariety = _selectedOptionName(varietyOptions, variety.text);
+    const classOptions = ['Senior', 'Intermediate', 'Junior', 'Pre-Junior'];
+    var selectedClass = _selectedOption(classOptions, className.text);
+    final sexOptions = selectionOptions['species'] == 'cavy'
+        ? const ['Boar', 'Sow']
+        : const ['Buck', 'Doe'];
+    var selectedSex = _selectedOption(sexOptions, sex.text);
+
+    if (!mounted) {
+      earNumber.dispose();
+      breed.dispose();
+      variety.dispose();
+      className.dispose();
+      sex.dispose();
+      furVariety.dispose();
+      note.dispose();
+      return;
+    }
+
     final submitted = await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -380,10 +426,91 @@ class _ExhibitorCheckinPortalScreenState
                       ),
                     ),
                   for (final field in editableFields) ...[
-                    _changeRequestField(
-                      label: field.label,
-                      controller: field.controller,
-                    ),
+                    if (field.key == 'breed')
+                      _changeRequestDropdown(
+                        label: field.label,
+                        value: selectedBreedId,
+                        items: breedOptions,
+                        valueKey: 'id',
+                        hintText: 'Select breed',
+                        onChanged: (value) async {
+                          final selected = breedOptions.firstWhere(
+                            (option) => option['id']?.toString() == value,
+                            orElse: () => const <String, dynamic>{},
+                          );
+                          if (selected.isEmpty) return;
+
+                          final options = await _entrySelectionOptions(
+                            entryId: entry['id'],
+                            breedId: value,
+                          );
+                          if (!context.mounted) return;
+                          final updatedVarieties = _selectionRows(
+                            options,
+                            'varieties',
+                          );
+                          setDialogState(() {
+                            selectedBreedId = value;
+                            breed.text = (selected['name'] ?? '').toString();
+                            varietyOptions = updatedVarieties;
+                            selectedVariety = _selectedOptionName(
+                              updatedVarieties,
+                              variety.text,
+                            );
+                            if (selectedVariety == null &&
+                                updatedVarieties.length == 1) {
+                              selectedVariety = updatedVarieties.first['name']
+                                  ?.toString();
+                            }
+                            variety.text = selectedVariety ?? '';
+                          });
+                        },
+                      )
+                    else if (field.key == 'variety')
+                      _changeRequestDropdown(
+                        label: field.label,
+                        value: selectedVariety,
+                        items: varietyOptions,
+                        hintText: selectedBreedId == null
+                            ? 'Select breed first'
+                            : 'Select variety',
+                        enabled: selectedBreedId != null,
+                        onChanged: (value) => setDialogState(() {
+                          selectedVariety = value;
+                          variety.text = value ?? '';
+                        }),
+                      )
+                    else if (field.key == 'class')
+                      _changeRequestDropdown(
+                        label: field.label,
+                        value: selectedClass,
+                        items: classOptions
+                            .map((value) => {'id': value, 'name': value})
+                            .toList(),
+                        hintText: 'Select class',
+                        onChanged: (value) => setDialogState(() {
+                          selectedClass = value;
+                          className.text = value ?? '';
+                        }),
+                      )
+                    else if (field.key == 'sex')
+                      _changeRequestDropdown(
+                        label: field.label,
+                        value: selectedSex,
+                        items: sexOptions
+                            .map((value) => {'id': value, 'name': value})
+                            .toList(),
+                        hintText: 'Select sex',
+                        onChanged: (value) => setDialogState(() {
+                          selectedSex = value;
+                          sex.text = value ?? '';
+                        }),
+                      )
+                    else
+                      _changeRequestField(
+                        label: field.label,
+                        controller: field.controller,
+                      ),
                     const SizedBox(height: 12),
                   ],
                   if (_canRequestEdit('scratch_entry'))
@@ -697,6 +824,98 @@ class _ExhibitorCheckinPortalScreenState
         : const <String, String>{};
     final permission = permissions[field];
     return permission == 'automatic' || permission == 'approval';
+  }
+
+  Future<Map<String, dynamic>> _entrySelectionOptions({
+    required Object? entryId,
+    String? breedId,
+  }) async {
+    if (_sessionToken == null || _sessionToken!.isEmpty) {
+      throw StateError('Your check-in session has expired.');
+    }
+    final raw = await _supabase.rpc(
+      'get_exhibitor_checkin_entry_selection_options',
+      params: {
+        'p_session_token': _sessionToken,
+        'p_entry_id': entryId,
+        'p_breed_id': breedId,
+      },
+    );
+    return Map<String, dynamic>.from(raw as Map);
+  }
+
+  List<Map<String, dynamic>> _selectionRows(
+    Map<String, dynamic> options,
+    String key,
+  ) {
+    return (options[key] as List? ?? const [])
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+  }
+
+  String? _selectedOption(Iterable<String> options, String value) {
+    final normalized = value.trim().toLowerCase();
+    if (normalized.isEmpty) return null;
+    for (final option in options) {
+      if (option.trim().toLowerCase() == normalized) return option;
+    }
+    return null;
+  }
+
+  String? _selectedOptionName(
+    Iterable<Map<String, dynamic>> options,
+    String value,
+  ) => _selectedOption(
+    options.map((option) => (option['name'] ?? '').toString()),
+    value,
+  );
+
+  Widget _changeRequestDropdown({
+    required String label,
+    required String? value,
+    required List<Map<String, dynamic>> items,
+    required ValueChanged<String?> onChanged,
+    String valueKey = 'name',
+    String? hintText,
+    bool enabled = true,
+  }) {
+    final validValue =
+        items.any((item) => (item[valueKey] ?? '').toString() == value)
+        ? value
+        : null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+            color: AppColors.headerForeground,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 6),
+        DropdownButtonFormField<String>(
+          initialValue: validValue,
+          isExpanded: true,
+          dropdownColor: AppColors.surface,
+          decoration: InputDecoration(
+            hintText: hintText,
+            floatingLabelBehavior: FloatingLabelBehavior.never,
+            border: const OutlineInputBorder(),
+          ),
+          items: items
+              .map(
+                (item) => DropdownMenuItem<String>(
+                  value: (item[valueKey] ?? '').toString(),
+                  child: Text((item['name'] ?? '').toString()),
+                ),
+              )
+              .toList(),
+          onChanged: enabled ? onChanged : null,
+        ),
+      ],
+    );
   }
 
   Widget _changeRequestField({
