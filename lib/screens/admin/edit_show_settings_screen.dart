@@ -166,6 +166,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   List<Map<String, dynamic>> _showSections = [];
   bool _isLocked = false;
   bool _isFinalized = false;
+  bool _isCheckinPortalActive = false;
 
   bool get _isReadOnly => _isLocked || _isFinalized;
 
@@ -638,6 +639,13 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
             .order('sort_order'),
       );
 
+      final checkinSettings = await supabase
+          .from('show_checkin_settings')
+          .select('is_enabled,opens_at,closes_at')
+          .eq('show_id', widget.showId)
+          .maybeSingle();
+      _isCheckinPortalActive = _isActiveCheckinPortal(checkinSettings);
+
       final finalizedAt = (show['finalized_at'] ?? '').toString().trim();
       _isFinalized = finalizedAt.isNotEmpty;
 
@@ -662,6 +670,21 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
         _msg = 'Load failed: $e';
       });
     }
+  }
+
+  bool _isActiveCheckinPortal(Map<String, dynamic>? settings) {
+    if (settings?['is_enabled'] != true) return false;
+
+    final now = DateTime.now().toUtc();
+    final opensAt = DateTime.tryParse(
+      '${settings?['opens_at'] ?? ''}',
+    )?.toUtc();
+    final closesAt = DateTime.tryParse(
+      '${settings?['closes_at'] ?? ''}',
+    )?.toUtc();
+
+    return (opensAt == null || !now.isBefore(opensAt)) &&
+        (closesAt == null || !now.isAfter(closesAt));
   }
 
   Future<void> _loadStripeStatus({bool showErrorInBanner = true}) async {
@@ -902,12 +925,14 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
     );
   }
 
-  void _openCheckinSettings() {
-    ShowCheckinSettingsDialog.open(
+  Future<void> _openCheckinSettings() async {
+    await ShowCheckinSettingsDialog.open(
       context,
       showId: widget.showId,
       showName: _effectiveShowName(),
     );
+
+    if (mounted) await _load();
   }
 
   void _openRoleAssignments() {
@@ -2052,6 +2077,25 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                     'Check-In Sheets, Control Sheets, Coop Tags, Comment Cards',
                                 onTap: _saving ? null : _openPrintPacks,
                               ),
+                            if (_isCheckinPortalActive &&
+                                (canManageEntries || canManageShowSettings))
+                              _buildSettingsActionTile(
+                                icon: Icons.fact_check_outlined,
+                                title: 'Check-In Dashboard',
+                                subtitle:
+                                    'Live check-in progress, balances, and exhibitor activity',
+                                onTap: _saving
+                                    ? null
+                                    : () => Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              ShowCheckinDashboardScreen(
+                                                showId: widget.showId,
+                                              ),
+                                        ),
+                                      ),
+                              ),
                           ],
                         ),
 
@@ -2159,23 +2203,6 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                       ? null
                                       : _openCheckinSettings,
                                 ),
-                              _buildSettingsActionTile(
-                                icon: Icons.fact_check_outlined,
-                                title: 'Check-In Dashboard',
-                                subtitle:
-                                    'Live check-in progress, balances, and recent exhibitor activity',
-                                onTap: _saving
-                                    ? null
-                                    : () => Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) =>
-                                              ShowCheckinDashboardScreen(
-                                                showId: widget.showId,
-                                              ),
-                                        ),
-                                      ),
-                              ),
                               _buildSettingsActionTile(
                                 icon: Icons.payments_outlined,
                                 title: 'Payback Settings',
