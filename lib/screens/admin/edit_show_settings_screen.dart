@@ -51,7 +51,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   bool _loading = true;
   bool _loadingPermissions = true;
   ShowPermissions _permissions = ShowPermissions.none;
-  bool _isSuperAdmin = false;
+  bool _canManageCheckinSettings = false;
   bool _saving = false;
   String? _msg;
   bool _loadingStripeStatus = false;
@@ -449,26 +449,30 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
 
   Future<void> _loadPermissions() async {
     try {
-      var isSuperAdmin = false;
+      var canManageCheckinSettings = false;
       try {
-        isSuperAdmin = await supabase.rpc('is_super_admin') == true;
+        canManageCheckinSettings =
+            await supabase.rpc(
+              'user_can_manage_show_checkin_settings',
+              params: {'p_show_id': widget.showId},
+            ) ==
+            true;
       } catch (_) {
-        // This gate is deliberately fail-closed: if the role check cannot be
-        // confirmed, do not expose Check-In Settings.
+        // Keep this fail-closed until the database confirms access.
       }
       final permissions = await ShowPermissionsService.load(widget.showId);
 
       if (!mounted) return;
       setState(() {
         _permissions = permissions;
-        _isSuperAdmin = isSuperAdmin;
+        _canManageCheckinSettings = canManageCheckinSettings;
         _loadingPermissions = false;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _permissions = ShowPermissions.none;
-        _isSuperAdmin = false;
+        _canManageCheckinSettings = false;
         _loadingPermissions = false;
         _msg = 'Failed to load permissions: $e';
       });
@@ -2193,7 +2197,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                     'Per-animal fees, discounts, day-of-show, and online payment setup',
                                 onTap: _saving ? null : _openFees,
                               ),
-                              if (_isSuperAdmin)
+                              if (_canManageCheckinSettings)
                                 _buildSettingsActionTile(
                                   icon: Icons.qr_code_2,
                                   title: 'Check-In Settings',
