@@ -13,6 +13,9 @@ verify_jwt = true
 [functions.checkin-stripe-create-checkout]
 verify_jwt = false
 
+[functions.checkin-send-receipt]
+verify_jwt = false
+
 [functions.stripe-webhook]
 verify_jwt = false
 

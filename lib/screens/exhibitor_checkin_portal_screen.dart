@@ -157,9 +157,28 @@ class _ExhibitorCheckinPortalScreenState
           'p_receipt_preference': _receiptPreference,
         },
       );
+      var confirmationMessage = 'Check-in complete. Thank you!';
+      if (_receiptPreference == 'email_receipt') {
+        try {
+          final response = await _supabase.functions.invoke(
+            'checkin-send-receipt',
+            body: {'session_token': _sessionToken},
+          );
+          if (response.status >= 200 && response.status < 300) {
+            confirmationMessage =
+                'Check-in complete. A confirmation email was sent.';
+          } else {
+            confirmationMessage =
+                'Check-in complete. We could not send the confirmation email; please see the show secretary.';
+          }
+        } catch (_) {
+          confirmationMessage =
+              'Check-in complete. We could not send the confirmation email; please see the show secretary.';
+        }
+      }
       await _loadReview();
       if (!mounted) return;
-      setState(() => _message = 'Check-in complete. Thank you!');
+      setState(() => _message = confirmationMessage);
     } catch (error) {
       if (!mounted) return;
       setState(() => _message = 'Could not complete check-in: $error');
