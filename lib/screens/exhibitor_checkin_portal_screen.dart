@@ -1224,45 +1224,94 @@ class _ExhibitorCheckinPortalScreenState
             ),
           ),
           for (final entry in group.value)
-            Card(
-              child: ListTile(
-                onTap: _openingChangeEntryId == null
-                    ? () => _openRequestChange(entry)
-                    : null,
-                title: Text(_entryTitle(entry)),
-                subtitle: Text(
-                  [
-                    _text(entry, 'breed'),
-                    _text(entry, 'variety'),
-                    _text(entry, 'class_name'),
-                    _text(entry, 'sex'),
-                    if (entry['is_fur'] == true) 'Fur / Wool',
-                  ].where((value) => value.isNotEmpty).join(' • '),
-                ),
-                trailing: SizedBox(
-                  width: 142,
-                  child: _openingChangeEntryId == _text(entry, 'id')
-                      ? const Center(
-                          child: SizedBox(
-                            height: 22,
-                            width: 22,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+            Builder(
+              builder: (context) {
+                final request = _latestRequestForEntry(_text(entry, 'id'));
+                final changeLabel = request == null
+                    ? null
+                    : _entryChangeLabel(request);
+                final isPending =
+                    request != null && _isActiveChangeRequest(request);
+                return Card(
+                  color: isPending ? AppColors.warningBg : null,
+                  shape: isPending
+                      ? RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(AppRadius.md),
+                          side: const BorderSide(
+                            color: AppColors.warningBorder,
+                            width: 1.5,
                           ),
                         )
-                      : OutlinedButton(
-                          onPressed: _openingChangeEntryId == null
-                              ? () => _openRequestChange(entry)
-                              : null,
-                          child: Text(
-                            _text(entry, 'scratched_at').isNotEmpty ||
-                                    _text(entry, 'status').toLowerCase() ==
-                                        'scratched'
-                                ? 'Scratched'
-                                : 'Request change',
-                          ),
+                      : null,
+                  child: ListTile(
+                    onTap: _openingChangeEntryId == null
+                        ? () => _openRequestChange(entry)
+                        : null,
+                    title: Row(
+                      children: [
+                        Expanded(child: Text(_entryTitle(entry))),
+                        if (changeLabel != null)
+                          _entryChangeChip(changeLabel, isPending),
+                      ],
+                    ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          [
+                            _text(entry, 'breed'),
+                            _text(entry, 'variety'),
+                            _text(entry, 'class_name'),
+                            _text(entry, 'sex'),
+                            if (entry['is_fur'] == true) 'Fur / Wool',
+                          ].where((value) => value.isNotEmpty).join(' • '),
                         ),
-                ),
-              ),
+                        if (request != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            _requestChangeSummary(request),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: isPending
+                                  ? AppColors.warning
+                                  : AppColors.success,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    trailing: SizedBox(
+                      width: 142,
+                      child: _openingChangeEntryId == _text(entry, 'id')
+                          ? const Center(
+                              child: SizedBox(
+                                height: 22,
+                                width: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            )
+                          : OutlinedButton(
+                              onPressed: _openingChangeEntryId == null
+                                  ? () => _openRequestChange(entry)
+                                  : null,
+                              child: Text(
+                                _text(entry, 'scratched_at').isNotEmpty ||
+                                        _text(entry, 'status').toLowerCase() ==
+                                            'scratched'
+                                    ? 'Scratched'
+                                    : isPending
+                                    ? 'View / change'
+                                    : 'Request change',
+                              ),
+                            ),
+                    ),
+                  ),
+                );
+              },
             ),
         ],
         if (_canRequestEdit('add_entry')) ...[
@@ -1287,7 +1336,17 @@ class _ExhibitorCheckinPortalScreenState
               child: ListTile(
                 leading: const Icon(Icons.edit_note_outlined),
                 title: Text(_requestTitle(request)),
-                subtitle: Text(_requestSubtitle(request)),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _requestChangeSummary(request),
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(_requestSubtitle(request)),
+                  ],
+                ),
                 trailing: _canCancelRequest(request)
                     ? TextButton(
                         onPressed: () => _cancelChangeRequest(request),
@@ -1446,6 +1505,92 @@ class _ExhibitorCheckinPortalScreenState
         .toString()
         .trim();
     return note.isEmpty ? status : '$status • $note';
+  }
+
+  Map<String, dynamic>? _latestRequestForEntry(String entryId) {
+    if (entryId.isEmpty) return null;
+    for (final request in _changeRequests) {
+      if (_text(request, 'entry_id') == entryId &&
+          _requestStatus(request) != 'cancelled' &&
+          _requestStatus(request) != 'denied') {
+        return request;
+      }
+    }
+    return null;
+  }
+
+  bool _isActiveChangeRequest(Map<String, dynamic> request) => const {
+    'submitted',
+    'pending_payment',
+    'pending_review',
+  }.contains(_requestStatus(request));
+
+  String _entryChangeLabel(Map<String, dynamic> request) {
+    return _isActiveChangeRequest(request) ? 'Change requested' : 'Updated';
+  }
+
+  Widget _entryChangeChip(String label, bool pending) {
+    final color = pending ? AppColors.warning : AppColors.success;
+    final background = pending ? AppColors.warningBg : AppColors.successBg;
+    return Container(
+      margin: const EdgeInsets.only(left: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        border: Border.all(color: color.withValues(alpha: .55)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  String _requestChangeSummary(Map<String, dynamic> request) {
+    final requestedRaw = request['requested_changes'];
+    final appliedRaw = request['applied_changes'];
+    final changes = requestedRaw is Map && requestedRaw.isNotEmpty
+        ? Map<String, dynamic>.from(requestedRaw)
+        : appliedRaw is Map
+        ? Map<String, dynamic>.from(appliedRaw)
+        : const <String, dynamic>{};
+    final originalRaw = request['original_values'];
+    final original = originalRaw is Map
+        ? Map<String, dynamic>.from(originalRaw)
+        : const <String, dynamic>{};
+    final labels = <String, String>{
+      'ear_number': 'Ear #',
+      'breed': 'Breed',
+      'variety': 'Variety',
+      'class': 'Class',
+      'sex': 'Sex',
+      'fur_variety': 'Fur variety',
+    };
+    final details = <String>[];
+    for (final entry in changes.entries) {
+      if (entry.key == 'scratch_entry' && entry.value == true) {
+        details.add('Scratch requested');
+        continue;
+      }
+      if (!labels.containsKey(entry.key)) continue;
+      final before = (original[entry.key] ?? '').toString().trim();
+      final after = (entry.value ?? '').toString().trim();
+      if (after.isEmpty) continue;
+      details.add(
+        before.isEmpty
+            ? '${labels[entry.key]}: $after'
+            : '${labels[entry.key]}: $before → $after',
+      );
+    }
+    if (details.isEmpty && request['request_type'] == 'add_entry') {
+      return 'New entry requested';
+    }
+    return details.isEmpty ? 'Change request submitted' : details.join(' • ');
   }
 
   Widget _buildPaymentStatus(Map<String, dynamic> payment) {
