@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'checkin_change_requests_screen.dart';
+import 'show_checkin_activity_screen.dart';
 
 class ShowCheckinDashboardScreen extends StatefulWidget {
   const ShowCheckinDashboardScreen({super.key, required this.showId});
@@ -533,6 +534,23 @@ class _ShowCheckinDashboardScreenState
                   Card(
                     child: Column(
                       children: [
+                        ListTile(
+                          leading: const Icon(Icons.history_outlined),
+                          title: const Text('Check-In Activity'),
+                          subtitle: const Text(
+                            'View verifications, payments, changes, and status updates',
+                          ),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ShowCheckinActivityScreen(
+                                showId: widget.showId,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const Divider(height: 1),
                         ListTile(
                           leading: const Icon(Icons.playlist_add_check),
                           title: const Text('Pending change requests'),
