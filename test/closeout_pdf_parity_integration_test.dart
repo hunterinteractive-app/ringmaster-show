@@ -11,10 +11,12 @@ import 'package:ringmaster_show/screens/admin/closeout/data/loaders/breed_result
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/check_in_sheet_report_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/details_by_breed_report_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/entered_exhibitors_contact_report_loader.dart';
+import 'package:ringmaster_show/screens/admin/closeout/data/loaders/entered_exhibitors_list_report_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/exhibitor_by_breed_report_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/exhibitor_report_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/judge_report_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/legs_report_loader.dart';
+import 'package:ringmaster_show/screens/admin/closeout/data/loaders/michelles_special_report_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/paid_exhibitor_report_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/payback_report_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/ribbon_payout_report_loader.dart';
@@ -28,10 +30,12 @@ import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/breed_result
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/check_in_sheet_report_pdf.dart';
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/details_by_breed_report_pdf.dart';
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/entered_exhibitors_contact_report_pdf.dart';
+import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/entered_exhibitors_list_report_pdf.dart';
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/exhibitor_by_breed_report_pdf.dart';
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/exhibitor_report_pdf.dart';
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/judge_report_pdf.dart';
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/legs_report_pdf.dart';
+import 'package:ringmaster_show/screens/admin/closeout/csv/builders/michelles_special_report_csv.dart';
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/paid_exhibitor_report_pdf.dart';
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/payback_report_pdf.dart';
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/ribbon_payout_report_pdf.dart';
@@ -121,6 +125,10 @@ void main() {
         enteredExhibitorsContactBuilder: EnteredExhibitorsContactReportPdf(
           assets: assets,
         ),
+        enteredExhibitorsListLoader: EnteredExhibitorsListReportLoader(client),
+        enteredExhibitorsListBuilder: EnteredExhibitorsListReportPdf(
+          assets: assets,
+        ),
         ribbonPayoutLoader: RibbonPayoutReportLoader(repository),
         ribbonPayoutBuilder: RibbonPayoutReportPdf(assets: assets),
         paybackReportLoader: PaybackReportLoader(supabase: client),
@@ -135,6 +143,8 @@ void main() {
         ),
         bestDisplayReportLoader: BestDisplayReportLoader(supabase: client),
         bestDisplayReportBuilder: BestDisplayReportPdfBuilder(assets: assets),
+        michellesSpecialReportLoader: MichellesSpecialReportLoader(client),
+        michellesSpecialReportBuilder: MichellesSpecialReportCsvBuilder(),
       );
       final engine = ReportEngine(registry);
 

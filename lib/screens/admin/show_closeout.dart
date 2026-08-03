@@ -42,6 +42,7 @@ import 'closeout/data/loaders/breed_results_detail_report_loader.dart';
 import 'closeout/data/loaders/unpaid_balances_report_loader.dart';
 import 'closeout/data/loaders/paid_exhibitor_report_loader.dart';
 import 'closeout/data/loaders/entered_exhibitors_contact_report_loader.dart';
+import 'closeout/data/loaders/entered_exhibitors_list_report_loader.dart';
 import 'closeout/data/loaders/ribbon_payout_report_loader.dart';
 import 'closeout/data/loaders/judge_report_loader.dart';
 import 'closeout/data/loaders/breed_judged_totals_report_loader.dart';
@@ -61,6 +62,7 @@ import 'closeout/pdf/builders/breed_results_detail_report_pdf.dart';
 import 'closeout/pdf/builders/unpaid_balances_report_pdf.dart';
 import 'closeout/pdf/builders/paid_exhibitor_report_pdf.dart';
 import 'closeout/pdf/builders/entered_exhibitors_contact_report_pdf.dart';
+import 'closeout/pdf/builders/entered_exhibitors_list_report_pdf.dart';
 import 'closeout/pdf/builders/ribbon_payout_report_pdf.dart';
 import 'closeout/pdf/builders/payback_report_pdf.dart';
 import 'closeout/pdf/builders/details_by_breed_report_pdf.dart';
@@ -203,6 +205,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
     'unpaid_balances_report',
     'paid_exhibitor_report',
     'entered_exhibitors_contact_report',
+    'entered_exhibitors_list_report',
     'michelles_special_report',
   };
 
@@ -215,6 +218,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
     'unpaid_balances_report',
     'paid_exhibitor_report',
     'entered_exhibitors_contact_report',
+    'entered_exhibitors_list_report',
     'michelles_special_report',
     'legs',
     'checkin_sheet',
@@ -2859,6 +2863,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       'paid_exhibitor_report',
       'checkin_sheet',
       'entered_exhibitors_contact_report',
+      'entered_exhibitors_list_report',
       'michelles_special_report',
     };
 
@@ -3684,6 +3689,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
     final enteredExhibitorsContactLoader = EnteredExhibitorsContactReportLoader(
       supabase,
     );
+    final enteredExhibitorsListLoader = EnteredExhibitorsListReportLoader(
+      supabase,
+    );
 
     final ribbonPayoutLoader = RibbonPayoutReportLoader(repository);
 
@@ -3726,6 +3734,10 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       enteredExhibitorsContactBuilder: _requiredReportDependency(
         _enteredExhibitorsContactBuilder,
         'Entered exhibitors contact report PDF builder',
+      ),
+      enteredExhibitorsListLoader: enteredExhibitorsListLoader,
+      enteredExhibitorsListBuilder: EnteredExhibitorsListReportPdf(
+        assets: _reportAssets,
       ),
       ribbonPayoutLoader: ribbonPayoutLoader,
       ribbonPayoutBuilder: _requiredReportDependency(
@@ -5292,7 +5304,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
     if (reportName != 'unpaid_balances_report' &&
         reportName != 'paid_exhibitor_report' &&
         reportName != 'checkin_sheet' &&
-        reportName != 'entered_exhibitors_contact_report') {
+        reportName != 'entered_exhibitors_contact_report' &&
+        reportName != 'entered_exhibitors_list_report') {
       final ready = await _ensureResultsReadyForReports();
       if (!ready) return;
     }
@@ -5381,6 +5394,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         reportName != 'paid_exhibitor_report' &&
         reportName != 'checkin_sheet' &&
         reportName != 'entered_exhibitors_contact_report' &&
+        reportName != 'entered_exhibitors_list_report' &&
         reportName != 'michelles_special_report') {
       final ready = await _ensureResultsReadyForReports();
       if (!ready) return;
@@ -5540,6 +5554,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
 
       final enteredExhibitorsContactLoader =
           EnteredExhibitorsContactReportLoader(supabase);
+      final enteredExhibitorsListLoader = EnteredExhibitorsListReportLoader(
+        supabase,
+      );
 
       final ribbonPayoutLoader = RibbonPayoutReportLoader(repository);
 
@@ -5590,6 +5607,10 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         enteredExhibitorsContactBuilder: _requiredReportDependency(
           _enteredExhibitorsContactBuilder,
           'Entered exhibitors contact report PDF builder',
+        ),
+        enteredExhibitorsListLoader: enteredExhibitorsListLoader,
+        enteredExhibitorsListBuilder: EnteredExhibitorsListReportPdf(
+          assets: _reportAssets,
         ),
         ribbonPayoutLoader: ribbonPayoutLoader,
         ribbonPayoutBuilder: _requiredReportDependency(
@@ -6063,6 +6084,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       'paid_exhibitor_report',
       'checkin_sheet',
       'entered_exhibitors_contact_report',
+      'entered_exhibitors_list_report',
       'michelles_special_report',
       'payback_report',
       'ribbon_payout_report',
@@ -7591,6 +7613,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         'unpaid_balances_report',
         'paid_exhibitor_report',
         'entered_exhibitors_contact_report',
+        'entered_exhibitors_list_report',
         if (_isMichellesShow) 'michelles_special_report',
         'ribbon_payout_report',
         'judge_report',
@@ -7715,6 +7738,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                                 'paid_exhibitor_report',
                                 'checkin_sheet',
                                 'entered_exhibitors_contact_report',
+                                'entered_exhibitors_list_report',
                                 'michelles_special_report',
                               };
 
@@ -8955,6 +8979,7 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
       _selectedReportName == 'unpaid_balances_report' ||
       _selectedReportName == 'paid_exhibitor_report' ||
       _selectedReportName == 'entered_exhibitors_contact_report' ||
+      _selectedReportName == 'entered_exhibitors_list_report' ||
       _selectedReportName == 'michelles_special_report' ||
       _selectedReportName == 'checkin_sheet';
 
@@ -10866,6 +10891,8 @@ String _friendlyReportName(String? key) {
       return 'Newsletter';
     case 'entered_exhibitors_contact_report':
       return 'Entered Exhibitors Contact Report';
+    case 'entered_exhibitors_list_report':
+      return 'Entered Exhibitors List';
     case 'michelles_special_report':
       return "Michelle's Special Report";
     case 'ribbon_payout_report':

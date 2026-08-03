@@ -10,6 +10,7 @@ import 'package:ringmaster_show/screens/admin/closeout/data/loaders/breed_result
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/check_in_sheet_report_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/details_by_breed_report_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/entered_exhibitors_contact_report_loader.dart';
+import 'package:ringmaster_show/screens/admin/closeout/data/loaders/entered_exhibitors_list_report_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/exhibitor_by_breed_report_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/exhibitor_report_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/judge_report_loader.dart';
@@ -28,6 +29,7 @@ import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/breed_result
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/check_in_sheet_report_pdf.dart';
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/details_by_breed_report_pdf.dart';
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/entered_exhibitors_contact_report_pdf.dart';
+import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/entered_exhibitors_list_report_pdf.dart';
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/exhibitor_by_breed_report_pdf.dart';
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/exhibitor_report_pdf.dart';
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/judge_report_pdf.dart';
@@ -121,6 +123,10 @@ final class RegistryArtifactRenderer implements ArtifactRenderer {
         client,
       ),
       enteredExhibitorsContactBuilder: EnteredExhibitorsContactReportPdf(
+        assets: assets,
+      ),
+      enteredExhibitorsListLoader: EnteredExhibitorsListReportLoader(client),
+      enteredExhibitorsListBuilder: EnteredExhibitorsListReportPdf(
         assets: assets,
       ),
       ribbonPayoutLoader: RibbonPayoutReportLoader(repository),

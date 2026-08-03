@@ -7,6 +7,7 @@ import '../data/loaders/check_in_sheet_report_loader.dart';
 import '../data/loaders/details_by_breed_report_loader.dart';
 import '../data/loaders/exhibitor_by_breed_report_loader.dart';
 import '../data/loaders/entered_exhibitors_contact_report_loader.dart';
+import '../data/loaders/entered_exhibitors_list_report_loader.dart';
 import '../data/loaders/exhibitor_report_loader.dart';
 import '../data/loaders/judge_report_loader.dart';
 import '../data/loaders/best_display_report_loader.dart';
@@ -25,6 +26,7 @@ import '../models/clubs/exhibitor_by_breed_report_data.dart';
 import '../models/clubs/sweepstakes_report_data.dart';
 import '../models/exhibitor/check_in_sheet_report_data.dart';
 import '../models/exhibitor/entered_exhibitors_contact_report_data.dart';
+import '../models/exhibitor/entered_exhibitors_list_report_data.dart';
 import '../models/exhibitor/exhibitor_report_data.dart';
 import '../models/exhibitor/best_display_report_data.dart';
 import '../models/exhibitor/ribbon_payout_report_data.dart';
@@ -43,6 +45,7 @@ import '../pdf/builders/check_in_sheet_report_pdf.dart';
 import '../pdf/builders/details_by_breed_report_pdf.dart';
 import '../pdf/builders/exhibitor_by_breed_report_pdf.dart';
 import '../pdf/builders/entered_exhibitors_contact_report_pdf.dart';
+import '../pdf/builders/entered_exhibitors_list_report_pdf.dart';
 import '../pdf/builders/exhibitor_report_pdf.dart';
 import '../pdf/builders/judge_report_pdf.dart';
 import '../pdf/builders/best_display_report_pdf.dart';
@@ -83,6 +86,8 @@ class ReportRegistry {
     required EnteredExhibitorsContactReportLoader
     enteredExhibitorsContactLoader,
     required EnteredExhibitorsContactReportPdf enteredExhibitorsContactBuilder,
+    required EnteredExhibitorsListReportLoader enteredExhibitorsListLoader,
+    required EnteredExhibitorsListReportPdf enteredExhibitorsListBuilder,
     required RibbonPayoutReportLoader ribbonPayoutLoader,
     required RibbonPayoutReportPdf ribbonPayoutBuilder,
     required PaybackReportLoader paybackReportLoader,
@@ -184,6 +189,13 @@ class ReportRegistry {
                await enteredExhibitorsContactLoader.load(req),
            builder: (data, req) async => await enteredExhibitorsContactBuilder
                .buildFile(data as EnteredExhibitorsContactReportData, req),
+         ),
+         'entered_exhibitors_list_report': ReportDefinition(
+           reportName: 'entered_exhibitors_list_report',
+           outputType: 'pdf',
+           loader: (req) async => await enteredExhibitorsListLoader.load(req),
+           builder: (data, req) async => await enteredExhibitorsListBuilder
+               .buildFile(data as EnteredExhibitorsListReportData, req),
          ),
          'ribbon_payout_report': ReportDefinition(
            reportName: 'ribbon_payout_report',
