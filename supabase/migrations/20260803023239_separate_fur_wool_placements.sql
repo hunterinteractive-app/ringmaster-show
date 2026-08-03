@@ -63,10 +63,10 @@ begin
     raise exception 'Entry not found';
   end if;
 
-  update public.entries
+  update public.entries as e
   set
-    placement = case when v_is_fur then placement else v_placement end,
-    fur_placement = case when v_is_fur then v_placement else fur_placement end,
+    placement = case when v_is_fur then e.placement else v_placement::text end,
+    fur_placement = case when v_is_fur then v_placement else e.fur_placement end,
     result_status = p_result_status,
     disqualified_reason = p_disqualified_reason,
     is_shown = p_is_shown,
@@ -77,8 +77,8 @@ begin
     result_entered_by_phone = p_result_entered_by_phone,
     result_entered_at = now(),
     updated_at = now()
-  where public.entries.id = p_entry_id
-    and public.entries.show_id = p_show_id;
+  where e.id = p_entry_id
+    and e.show_id = p_show_id;
 
   delete from public.entry_awards ea
   where ea.show_id = p_show_id
@@ -100,7 +100,10 @@ begin
   return query
   select
     e.id,
-    (case when coalesce(e.is_fur, false) then e.fur_placement else e.placement end)::integer,
+    case
+      when coalesce(e.is_fur, false) then e.fur_placement
+      else nullif(trim(e.placement), '')::integer
+    end,
     e.result_status,
     e.judged_by_show_judge_id
   from public.entries e
