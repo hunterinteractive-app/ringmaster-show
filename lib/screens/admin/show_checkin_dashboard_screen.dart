@@ -634,6 +634,15 @@ class _ShowCheckinDashboardScreenState
                           trailing: Chip(
                             label: Text('${_data?['unpaid_exhibitors'] ?? 0}'),
                           ),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ShowCheckinRosterScreen(
+                                showId: widget.showId,
+                                initialStatus: 'balance_due',
+                              ),
+                            ),
+                          ),
                         ),
                       ],
                     ),

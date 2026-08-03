@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../theme/app_theme.dart';
+
 class ShowCheckinRosterScreen extends StatefulWidget {
-  const ShowCheckinRosterScreen({super.key, required this.showId});
+  const ShowCheckinRosterScreen({
+    super.key,
+    required this.showId,
+    this.initialStatus = 'all',
+  });
 
   final String showId;
+  final String initialStatus;
 
   @override
   State<ShowCheckinRosterScreen> createState() =>
@@ -15,13 +22,14 @@ class _ShowCheckinRosterScreenState extends State<ShowCheckinRosterScreen> {
   final _db = Supabase.instance.client;
   final _search = TextEditingController();
   List<Map<String, dynamic>> _rows = const [];
-  String _status = 'all';
+  late String _status;
   bool _loading = true;
   String? _error;
 
   @override
   void initState() {
     super.initState();
+    _status = widget.initialStatus;
     _load();
   }
 
@@ -66,94 +74,121 @@ class _ShowCheckinRosterScreenState extends State<ShowCheckinRosterScreen> {
         ),
       ],
     ),
-    body: Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              TextField(
-                controller: _search,
-                decoration: InputDecoration(
-                  labelText: 'Search exhibitor name or number',
-                  prefixIcon: const Icon(Icons.search),
-                  suffixIcon: IconButton(
-                    onPressed: _load,
-                    icon: const Icon(Icons.arrow_forward),
+    body: AppTheme.gradientTextScope(
+      context,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: AppTheme.surfaceTextScope(
+              context,
+              child: Column(
+                children: [
+                  TextField(
+                    controller: _search,
+                    decoration: InputDecoration(
+                      labelText: 'Search exhibitor name or number',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: IconButton(
+                        onPressed: _load,
+                        icon: const Icon(Icons.arrow_forward),
+                      ),
+                    ),
+                    onSubmitted: (_) => _load(),
                   ),
-                ),
-                onSubmitted: (_) => _load(),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: _status,
+                    decoration: const InputDecoration(
+                      labelText: 'Check-in status',
+                    ),
+                    items:
+                        const [
+                              ('all', 'All exhibitors'),
+                              ('balance_due', 'Balance due'),
+                              ('not_started', 'Not started'),
+                              ('in_progress', 'In progress'),
+                              ('completed', 'Completed'),
+                              ('reviewed_by_secretary', 'Reviewed'),
+                              ('locked', 'Locked'),
+                            ]
+                            .map(
+                              (item) => DropdownMenuItem(
+                                value: item.$1,
+                                child: Text(item.$2),
+                              ),
+                            )
+                            .toList(),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() => _status = value);
+                      _load();
+                    },
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                initialValue: _status,
-                decoration: const InputDecoration(labelText: 'Check-in status'),
-                items:
-                    const [
-                          ('all', 'All exhibitors'),
-                          ('not_started', 'Not started'),
-                          ('in_progress', 'In progress'),
-                          ('completed', 'Completed'),
-                          ('reviewed_by_secretary', 'Reviewed'),
-                          ('locked', 'Locked'),
-                        ]
-                        .map(
-                          (item) => DropdownMenuItem(
-                            value: item.$1,
-                            child: Text(item.$2),
-                          ),
-                        )
-                        .toList(),
-                onChanged: (value) {
-                  if (value == null) return;
-                  setState(() => _status = value);
-                  _load();
-                },
-              ),
-            ],
+            ),
           ),
-        ),
-        Expanded(
-          child: _loading
-              ? const Center(child: CircularProgressIndicator())
-              : _error != null
-              ? Center(child: Text(_error!))
-              : RefreshIndicator(
-                  onRefresh: _load,
-                  child: _rows.isEmpty
-                      ? ListView(
-                          children: const [
-                            Padding(
-                              padding: EdgeInsets.all(24),
-                              child: Center(
-                                child: Text('No exhibitors match this filter.'),
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                ? Center(child: Text(_error!))
+                : RefreshIndicator(
+                    onRefresh: _load,
+                    child: _rows.isEmpty
+                        ? ListView(
+                            children: const [
+                              Padding(
+                                padding: EdgeInsets.all(24),
+                                child: Center(
+                                  child: Text(
+                                    'No exhibitors match this filter.',
+                                  ),
+                                ),
                               ),
-                            ),
-                          ],
-                        )
-                      : ListView.builder(
-                          itemCount: _rows.length,
-                          itemBuilder: (context, index) {
-                            final row = _rows[index];
-                            final status =
-                                row['checkin_status']?.toString() ??
-                                'not_started';
-                            return ListTile(
-                              leading: Icon(_icon(status)),
-                              title: Text(
-                                (row['exhibitor_name'] ?? 'Exhibitor')
-                                    .toString(),
-                              ),
-                              subtitle: Text(
-                                '#${row['exhibitor_number'] ?? '—'}',
-                              ),
-                              trailing: Text(_label(status)),
-                            );
-                          },
-                        ),
-                ),
-        ),
-      ],
+                            ],
+                          )
+                        : ListView.separated(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                            itemCount: _rows.length,
+                            separatorBuilder: (_, _) =>
+                                const SizedBox(height: 8),
+                            itemBuilder: (context, index) {
+                              final row = _rows[index];
+                              final status =
+                                  row['checkin_status']?.toString() ??
+                                  'not_started';
+                              final dueCents =
+                                  (row['balance_due_cents'] as num?)?.toInt() ??
+                                  0;
+                              return AppTheme.surfaceTextScope(
+                                context,
+                                child: Card(
+                                  child: ListTile(
+                                    leading: Icon(_icon(status)),
+                                    title: Text(
+                                      (row['exhibitor_name'] ?? 'Exhibitor')
+                                          .toString(),
+                                    ),
+                                    subtitle: Text(
+                                      '#${row['exhibitor_number'] ?? '—'}${dueCents > 0 ? ' • Balance due: \$${(dueCents / 100).toStringAsFixed(2)}' : ''}',
+                                    ),
+                                    trailing: Text(
+                                      _label(status),
+                                      style: const TextStyle(
+                                        color: AppColors.muted,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+          ),
+        ],
+      ),
     ),
   );
 
