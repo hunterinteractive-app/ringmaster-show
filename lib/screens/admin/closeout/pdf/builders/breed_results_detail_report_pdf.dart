@@ -11,6 +11,9 @@ import '../../models/base/report_request.dart';
 import '../../models/clubs/breed_results_detail_report_data.dart';
 import '../../utils/breed_results_detail_order.dart';
 
+/// Bump when the Breed Results Detail PDF template changes.
+const String breedResultsDetailReportVersion = '0.6.1';
+
 class BreedResultsDetailReportPdf {
   final Uint8List? logoBytes;
   final ReportAssetLoader assets;
@@ -1109,6 +1112,13 @@ class BreedResultsDetailReportPdf {
                   fontSize: 7,
                   color: PdfColors.grey700,
                   fontStyle: pw.FontStyle.italic,
+                ),
+              ),
+              pw.Text(
+                'Breed Results Detail Report v$breedResultsDetailReportVersion',
+                style: const pw.TextStyle(
+                  fontSize: 7,
+                  color: PdfColors.grey700,
                 ),
               ),
               pw.Text(
