@@ -19,17 +19,54 @@ const Map<String, int> _awardOrder = {
   'BOV': 7,
   'BOSV': 7,
   'BSB': 8,
+  'BSV': 8,
   'BIB': 9,
+  'BIV': 9,
   'BJB': 10,
+  'BJV': 10,
   'HM': 11,
 };
 
+String breedResultsDetailAwardCode(String award) {
+  final normalized = award.trim().toUpperCase().replaceAll(RegExp(r'\s+'), ' ');
+  const labels = <String, String>{
+    'BEST IN SHOW': 'BIS',
+    'RESERVE IN SHOW': 'RIS',
+    'RESERVE BEST IN SHOW': 'RIS',
+    'BEST 4 CLASS': 'B4C',
+    'BEST 4-CLASS': 'B4C',
+    'BEST FOUR CLASS': 'B4C',
+    'BEST 6 CLASS': 'B6C',
+    'BEST 6-CLASS': 'B6C',
+    'BEST SIX CLASS': 'B6C',
+    'BEST OF BREED': 'BOB',
+    'BEST OPPOSITE SEX OF BREED': 'BOSB',
+    'BEST OPPOSITE OF BREED': 'BOSB',
+    'BEST OF GROUP': 'BOG',
+    'BEST OPPOSITE SEX OF GROUP': 'BOSG',
+    'BEST OPPOSITE OF GROUP': 'BOSG',
+    'BEST OF VARIETY': 'BOV',
+    'BEST OPPOSITE SEX OF VARIETY': 'BOSV',
+    'BEST OPPOSITE SEX VARIETY': 'BOSV',
+    'BEST OPPOSITE OF VARIETY': 'BOSV',
+    'BEST SENIOR BREED': 'BSB',
+    'BEST INTERMEDIATE BREED': 'BIB',
+    'BEST JUNIOR BREED': 'BJB',
+    'BEST SENIOR VARIETY': 'BSV',
+    'BEST INTERMEDIATE VARIETY': 'BIV',
+    'BEST JUNIOR VARIETY': 'BJV',
+  };
+  if (normalized == 'BOS') return 'BOSB';
+  if (normalized == 'RBIS') return 'RIS';
+  return labels[normalized] ?? normalized;
+}
+
 int breedResultsDetailAwardRank(String awardCode) =>
-    _awardOrder[awardCode.trim().toUpperCase()] ?? 999;
+    _awardOrder[breedResultsDetailAwardCode(awardCode)] ?? 999;
 
 int compareBreedResultsDetailAwards(BreedAward a, BreedAward b) {
-  final aCode = a.award.trim().toUpperCase();
-  final bCode = b.award.trim().toUpperCase();
+  final aCode = breedResultsDetailAwardCode(a.award);
+  final bCode = breedResultsDetailAwardCode(b.award);
   final rank = breedResultsDetailAwardRank(
     aCode,
   ).compareTo(breedResultsDetailAwardRank(bCode));

@@ -335,22 +335,12 @@ class BreedResultsDetailReportPdf {
   }) {
     final widgets = <pw.Widget>[];
 
-    final overallAwards =
-        breedAwards.where((a) => _isOverallAward(a.award)).toList()
-          ..sort(compareBreedResultsDetailAwards);
-    final breedOnlyAwards =
-        breedAwards.where((a) => !_isOverallAward(a.award)).toList()
-          ..sort(compareBreedResultsDetailAwards);
+    final orderedShowAwards = [...breedAwards]
+      ..sort(compareBreedResultsDetailAwards);
 
-    if (overallAwards.isNotEmpty) {
-      widgets.add(_sectionTitle('Overall Show Awards'));
-      widgets.add(_buildAwardTable(overallAwards, includeBreed: true));
-      widgets.add(pw.SizedBox(height: 12));
-    }
-
-    if (breedOnlyAwards.isNotEmpty) {
+    if (orderedShowAwards.isNotEmpty) {
       widgets.add(_sectionTitle('Show Awards'));
-      widgets.add(_buildAwardTable(breedOnlyAwards, includeBreed: true));
+      widgets.add(_buildAwardTable(orderedShowAwards, includeBreed: true));
       widgets.add(pw.SizedBox(height: 12));
     }
 
@@ -917,20 +907,6 @@ class BreedResultsDetailReportPdf {
         return 'Honorable Mention / 2nd RIS';
       default:
         return code;
-    }
-  }
-
-  bool _isOverallAward(String code) {
-    switch (code.toUpperCase().trim()) {
-      case 'BIS':
-      case 'RIS':
-      case 'RBIS':
-      case 'B4C':
-      case 'B6C':
-      case 'HM':
-        return true;
-      default:
-        return false;
     }
   }
 

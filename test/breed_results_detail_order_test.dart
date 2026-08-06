@@ -140,12 +140,48 @@ void main() {
       'BOV',
       'BOSV',
       'BSB',
-      'BIB',
-      'BJB',
-      'HM',
-      'BIV',
-      'BJV',
       'BSV',
+      'BIB',
+      'BIV',
+      'BJB',
+      'BJV',
+      'HM',
+    ]);
+  });
+
+  test('display labels follow the same show-award hierarchy as codes', () {
+    BreedAward award(String label, {String group = '', String variety = ''}) =>
+        BreedAward(
+          award: label,
+          animal: label,
+          groupName: group,
+          variety: variety,
+          className: '',
+          exhibitorName: '',
+        );
+
+    final awards = [
+      award('Best of Group', group: 'Tan'),
+      award('Best of Breed'),
+      award('Best Opposite Sex of Breed'),
+      award('Best in Show'),
+      award('Reserve in Show'),
+      award('Best Opposite Sex of Group', group: 'Tan'),
+      award('Best Opposite Sex of Variety', variety: 'Black'),
+      award('Best of Variety', variety: 'Black'),
+      award('Best Junior Breed'),
+    ]..sort(compareBreedResultsDetailAwards);
+
+    expect(awards.map((award) => award.award), [
+      'Best in Show',
+      'Reserve in Show',
+      'Best of Breed',
+      'Best Opposite Sex of Breed',
+      'Best of Group',
+      'Best Opposite Sex of Group',
+      'Best of Variety',
+      'Best Opposite Sex of Variety',
+      'Best Junior Breed',
     ]);
   });
 
