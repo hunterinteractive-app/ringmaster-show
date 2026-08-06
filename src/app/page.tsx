@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 
-const PORTAL_VERSION = "v0.1.14";
+const PORTAL_VERSION = "v0.1.15";
 const portalCacheKey = (email: string) =>
   `ringmaster-sweepstakes-portal:${email.toLowerCase()}`;
 
@@ -171,13 +171,27 @@ export default function Home() {
       setAuthMessage("Enter the six-digit code from your email.");
       return;
     }
-    const { error } = await supabase.auth.verifyOtp({
+    let { error } = await supabase.auth.verifyOtp({
       email: pendingEmail,
       token,
       type: verificationType,
     });
+    // Supabase has transitioned email OTPs away from the older magic-link
+    // verification type. Accept either format while existing generated codes
+    // are still in circulation.
+    if (error) {
+      const alternateType =
+        verificationType === "email" ? "magiclink" : "email";
+      ({ error } = await supabase.auth.verifyOtp({
+        email: pendingEmail,
+        token,
+        type: alternateType,
+      }));
+    }
     setAuthMessage(
-      error ? "That code did not work. Request a new one and try again." : "",
+      error
+        ? "That code is incorrect, expired, or has been replaced by a newer code. Request one new code and enter it right away."
+        : "",
     );
   }
 
