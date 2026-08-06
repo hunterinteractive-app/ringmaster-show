@@ -5,37 +5,58 @@ bool breedResultsDetailUsesRabbitClassLayout(String species) =>
 
 const Map<String, int> _awardOrder = {
   'BIS': 0,
-  'B4C': 1,
-  'B6C': 2,
-  'RIS': 3,
-  'RBIS': 3,
-  'HM': 4,
-  'BOB': 5,
-  'BOSB': 6,
-  'BOS': 6,
-  'BSB': 7,
-  'BIB': 8,
-  'BJB': 9,
-  'BOG': 10,
-  'BOSG': 11,
-  'BOV': 12,
-  'BOSV': 13,
-  'BSV': 14,
-  'BIV': 15,
-  'BJV': 16,
+  'RIS': 1,
+  'RBIS': 1,
+  'B4C': 2,
+  'B6C': 3,
+  'BOB': 4,
+  'BOSB': 5,
+  'BOS': 5,
+  // Group and variety pairs share a rank so their identifying name can
+  // control ordering and keep each Best/Best Opposite pair together.
+  'BOG': 6,
+  'BOSG': 6,
+  'BOV': 7,
+  'BOSV': 7,
+  'BSB': 8,
+  'BIB': 9,
+  'BJB': 10,
+  'HM': 11,
 };
 
 int breedResultsDetailAwardRank(String awardCode) =>
     _awardOrder[awardCode.trim().toUpperCase()] ?? 999;
 
 int compareBreedResultsDetailAwards(BreedAward a, BreedAward b) {
+  final aCode = a.award.trim().toUpperCase();
+  final bCode = b.award.trim().toUpperCase();
   final rank = breedResultsDetailAwardRank(
-    a.award,
-  ).compareTo(breedResultsDetailAwardRank(b.award));
+    aCode,
+  ).compareTo(breedResultsDetailAwardRank(bCode));
   if (rank != 0) return rank;
+
+  // Page-one award order is grouped by the award's subject: every group gets
+  // Best of Group followed by Best Opposite Sex of Group; every variety gets
+  // Best of Variety followed by Best Opposite Sex of Variety.
+  if (const {'BOG', 'BOSG'}.contains(aCode) &&
+      const {'BOG', 'BOSG'}.contains(bCode)) {
+    final group = _compareText(_groupSortName(a), _groupSortName(b));
+    if (group != 0) return group;
+    final award = _groupPairRank(aCode).compareTo(_groupPairRank(bCode));
+    if (award != 0) return award;
+  }
+
+  if (const {'BOV', 'BOSV'}.contains(aCode) &&
+      const {'BOV', 'BOSV'}.contains(bCode)) {
+    final variety = _compareText(a.variety, b.variety);
+    if (variety != 0) return variety;
+    final award = _varietyPairRank(aCode).compareTo(_varietyPairRank(bCode));
+    if (award != 0) return award;
+  }
 
   for (final pair in [
     (a.breedName, b.breedName),
+    (a.groupName, b.groupName),
     (a.variety, b.variety),
     (a.className, b.className),
     (a.sex, b.sex),
@@ -48,6 +69,20 @@ int compareBreedResultsDetailAwards(BreedAward a, BreedAward b) {
   }
   return 0;
 }
+
+int _compareText(String a, String b) =>
+    a.trim().toLowerCase().compareTo(b.trim().toLowerCase());
+
+String _groupSortName(BreedAward award) {
+  final group = award.groupName.trim();
+  // Older stored report rows may not expose group_name. In those rows,
+  // variety is the best stable, human-readable fallback for pairing awards.
+  return group.isEmpty ? award.variety : group;
+}
+
+int _groupPairRank(String awardCode) => awardCode == 'BOG' ? 0 : 1;
+
+int _varietyPairRank(String awardCode) => awardCode == 'BOV' ? 0 : 1;
 
 int compareBreedResultsDetailSectionNames(String a, String b) =>
     a.trim().toLowerCase().compareTo(b.trim().toLowerCase());

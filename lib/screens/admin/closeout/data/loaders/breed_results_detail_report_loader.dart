@@ -259,6 +259,7 @@ class BreedResultsDetailReportLoader {
       return BreedResultsDetailSection(
         showLetter: showLetter,
         judgeName: '',
+        totalAnimalsShown: 0,
         breedAwards: const [],
         varieties: const [],
         noResultsFound: true,
@@ -289,6 +290,10 @@ class BreedResultsDetailReportLoader {
 
     final judgeName = _deriveJudgeName(reportRows);
     final counts = _buildAwardCounts(reportRows, overallRows: overallRows);
+    final totalAnimalsShown = reportRows
+        .where((row) => !_isFurOrWoolRow(row))
+        .where(breedResultsDetailIsCountableJudgedEntry)
+        .length;
     final resultRowsForAwardLookup = _mergeResultRows(reportRows, overallRows);
     final sweepstakesPoints = await _loadSweepstakesPointsLookup(
       showId,
@@ -328,6 +333,7 @@ class BreedResultsDetailReportLoader {
     return BreedResultsDetailSection(
       showLetter: showLetter,
       judgeName: judgeName,
+      totalAnimalsShown: totalAnimalsShown,
       breedAwards: breedAwards,
       varieties: _buildVarieties(
         rows: reportRows,
@@ -803,6 +809,7 @@ class BreedResultsDetailReportLoader {
       award: award,
       animal: animalLabel,
       breedName: breedName,
+      groupName: groupName,
       className: className,
       exhibitorName: _safe(row['exhibitor_label']),
       sex: sex,

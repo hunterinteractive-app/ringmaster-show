@@ -60,6 +60,7 @@ class BreedResultsDetailReportPdf {
             BreedResultsDetailSection(
               showLetter: data.showLetter,
               judgeName: data.judgeName,
+              totalAnimalsShown: _totalAnimalsShown(data.varieties),
               breedAwards: data.breedAwards,
               varieties: data.varieties,
               noResultsFound: data.noResultsFound,
@@ -83,6 +84,7 @@ class BreedResultsDetailReportPdf {
               scope: data.scope,
               showLetter: section.showLetter,
               judgeName: section.judgeName,
+              totalAnimalsShown: section.totalAnimalsShown,
               showName: showName,
               showDate: showDate,
               arbaSanctionNumber: data.arbaSanction,
@@ -154,6 +156,7 @@ class BreedResultsDetailReportPdf {
     required String scope,
     required String showLetter,
     required String judgeName,
+    required int totalAnimalsShown,
     required String showName,
     required String showDate,
     required String arbaSanctionNumber,
@@ -254,8 +257,12 @@ class BreedResultsDetailReportPdf {
                       'Show',
                       '$scope - $showLetter',
                     ),
-                    if (breedClubName.trim().isNotEmpty)
-                      infoRow2('Breed Club', breedClubName, '', ''),
+                    infoRow2(
+                      breedClubName.trim().isEmpty ? '' : 'Breed Club',
+                      breedClubName,
+                      'Total Animals Shown',
+                      totalAnimalsShown.toString(),
+                    ),
                     infoRow2(
                       'Judge',
                       judgeName.isEmpty ? 'Judge Not Listed' : judgeName,
@@ -288,6 +295,20 @@ class BreedResultsDetailReportPdf {
         ),
       ],
     );
+  }
+
+  int _totalAnimalsShown(List<VarietySection> varieties) {
+    return varieties
+        .expand((variety) => variety.sexSections)
+        .expand((sexSection) => sexSection.classes)
+        .where(
+          (classSection) =>
+              !classSection.rows.any((entry) => entry.isFurOrWool),
+        )
+        .fold<int>(
+          0,
+          (total, classSection) => total + classSection.animalsJudged,
+        );
   }
 
   pw.Widget _buildNoResultsBox(String message) {

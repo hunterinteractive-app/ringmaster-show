@@ -10,6 +10,9 @@ import '../../models/base/report_file_result.dart';
 import '../../models/base/report_request.dart';
 import '../../models/clubs/sweepstakes_report_data.dart';
 
+/// Bump when the Sweepstakes PDF template or scoring presentation changes.
+const String sweepstakesReportVersion = '0.6.1';
+
 class SweepstakesReportPdf {
   final Uint8List? logoBytes;
   final ReportAssetLoader assets;
@@ -555,6 +558,13 @@ class SweepstakesReportPdf {
                   fontSize: 7,
                   color: PdfColors.grey700,
                   fontStyle: pw.FontStyle.italic,
+                ),
+              ),
+              pw.Text(
+                'Sweepstakes Report v$sweepstakesReportVersion',
+                style: const pw.TextStyle(
+                  fontSize: 7,
+                  color: PdfColors.grey700,
                 ),
               ),
               pw.Text(

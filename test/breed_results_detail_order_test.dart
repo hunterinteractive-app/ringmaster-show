@@ -93,19 +93,24 @@ void main() {
   });
 
   test('show awards follow the standardized hierarchy', () {
-    BreedAward award(String code, {String breed = '', String variety = ''}) =>
-        BreedAward(
-          award: code,
-          animal: code,
-          breedName: breed,
-          variety: variety,
-          className: '',
-          exhibitorName: '',
-        );
+    BreedAward award(
+      String code, {
+      String breed = '',
+      String group = '',
+      String variety = '',
+    }) => BreedAward(
+      award: code,
+      animal: code,
+      breedName: breed,
+      groupName: group,
+      variety: variety,
+      className: '',
+      exhibitorName: '',
+    );
 
     final awards = [
       award('BJV'),
-      award('BOSG'),
+      award('BOSG', group: 'Tan'),
       award('BOB', breed: 'Teddy'),
       award('HM'),
       award('BIS'),
@@ -116,8 +121,8 @@ void main() {
       award('BSB'),
       award('BIB'),
       award('BJB'),
-      award('BOG'),
-      award('BOSV'),
+      award('BOG', group: 'Tan'),
+      award('BOSV', variety: 'White'),
       award('BSV'),
       award('BIV'),
       award('B6C'),
@@ -125,23 +130,66 @@ void main() {
 
     expect(awards.map((award) => award.award), [
       'BIS',
+      'RIS',
       'B4C',
       'B6C',
-      'RIS',
-      'HM',
       'BOB',
       'BOSB',
-      'BSB',
-      'BIB',
-      'BJB',
       'BOG',
       'BOSG',
       'BOV',
       'BOSV',
-      'BSV',
+      'BSB',
+      'BIB',
+      'BJB',
+      'HM',
       'BIV',
       'BJV',
+      'BSV',
     ]);
+  });
+
+  test('group and variety awards are paired alphabetically', () {
+    BreedAward award(String code, {String group = '', String variety = ''}) =>
+        BreedAward(
+          award: code,
+          animal: code,
+          groupName: group,
+          variety: variety,
+          className: '',
+          exhibitorName: '',
+        );
+
+    final awards = [
+      award('BOSG', group: 'Tan'),
+      award('BOG', group: 'Broken'),
+      award('BOSG', group: 'Broken'),
+      award('BOG', group: 'Tan'),
+      award('BOSG', variety: 'AOV'),
+      award('BOG', variety: 'AOV'),
+      award('BOSV', variety: 'Ruby Eyed White'),
+      award('BOV', variety: 'Black'),
+      award('BOSV', variety: 'Black'),
+      award('BOV', variety: 'Ruby Eyed White'),
+    ]..sort(compareBreedResultsDetailAwards);
+
+    expect(
+      awards.map(
+        (award) => '${award.award}:${award.groupName}${award.variety}',
+      ),
+      [
+        'BOG:AOV',
+        'BOSG:AOV',
+        'BOG:Broken',
+        'BOSG:Broken',
+        'BOG:Tan',
+        'BOSG:Tan',
+        'BOV:Black',
+        'BOSV:Black',
+        'BOV:Ruby Eyed White',
+        'BOSV:Ruby Eyed White',
+      ],
+    );
   });
 
   test('cavy reports retain their existing sex-section layout branch', () {

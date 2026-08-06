@@ -49,6 +49,7 @@ class BreedResultsDetailReportData {
 class BreedResultsDetailSection {
   final String showLetter;
   final String judgeName;
+  final int totalAnimalsShown;
   final List<BreedAward> breedAwards;
   final List<VarietySection> varieties;
   final bool noResultsFound;
@@ -56,6 +57,7 @@ class BreedResultsDetailSection {
   const BreedResultsDetailSection({
     required this.showLetter,
     required this.judgeName,
+    this.totalAnimalsShown = 0,
     required this.breedAwards,
     required this.varieties,
     this.noResultsFound = false,
@@ -66,6 +68,10 @@ class BreedAward {
   final String award;
   final String animal;
   final String breedName;
+
+  /// The breed group the award belongs to. This is used to keep Best of
+  /// Group and Best Opposite Sex of Group paired in the report.
+  final String groupName;
   final String className;
   final String exhibitorName;
   final String sex;
@@ -80,6 +86,7 @@ class BreedAward {
     required this.award,
     required this.animal,
     this.breedName = '',
+    this.groupName = '',
     required this.className,
     required this.exhibitorName,
     this.sex = '',
