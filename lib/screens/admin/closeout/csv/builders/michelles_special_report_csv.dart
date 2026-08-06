@@ -11,6 +11,7 @@ class MichellesSpecialReportCsvBuilder {
   ) async {
     final rows = <List<String>>[
       const [
+        'Exhibitor Number',
         'Exhibitor Full Name',
         'Number of Entered Animals',
         'Project Book Verified',
@@ -18,6 +19,7 @@ class MichellesSpecialReportCsvBuilder {
       ],
       ...data.rows.map(
         (row) => [
+          (row['exhibitor_number'] ?? '').toString(),
           (row['exhibitor_name'] ?? '').toString(),
           (row['entered_animal_count'] ?? 0).toString(),
           '',
