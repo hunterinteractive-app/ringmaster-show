@@ -550,6 +550,16 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
         'class_system_override': null,
       });
 
+      // Local breeds do not inherit catalog varieties. Give them one usable
+      // default so entry screens select Standard until the show adds another.
+      await supabase.from('show_varieties').insert({
+        'show_id': widget.showId,
+        'breed_id': inserted['id'],
+        'variety_id': null,
+        'custom_name': 'Standard',
+        'is_enabled': true,
+      });
+
       if (!mounted) return;
       setState(() => _msg = '$name was added for this show only.');
       await _refresh();
