@@ -266,7 +266,8 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
     final rows = await supabase
         .from('breeds')
         .select('name,class_system')
-        .eq('is_active', true);
+        .eq('is_active', true)
+        .or('local_show_id.is.null,local_show_id.eq.${widget.showId}');
 
     _breedClassSystems.clear();
 

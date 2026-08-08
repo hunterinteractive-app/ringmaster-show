@@ -190,14 +190,16 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
       if (_speciesFilter == 'all') {
         breedData = await supabase
             .from('breeds')
-            .select('id,name,species,class_system,is_active')
-            .eq('is_active', true);
+            .select('id,name,species,class_system,is_active,local_show_id')
+            .eq('is_active', true)
+            .or('local_show_id.is.null,local_show_id.eq.${widget.showId}');
       } else {
         breedData = await supabase
             .from('breeds')
-            .select('id,name,species,class_system,is_active')
+            .select('id,name,species,class_system,is_active,local_show_id')
             .eq('is_active', true)
-            .eq('species', _speciesFilter);
+            .eq('species', _speciesFilter)
+            .or('local_show_id.is.null,local_show_id.eq.${widget.showId}');
       }
 
       _breeds = breedData.cast<Map<String, dynamic>>();
@@ -205,7 +207,8 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
       final List allActiveBreedData = await supabase
           .from('breeds')
           .select('id')
-          .eq('is_active', true);
+          .eq('is_active', true)
+          .or('local_show_id.is.null,local_show_id.eq.${widget.showId}');
       _allActiveBreedIds
         ..clear()
         ..addAll(
@@ -384,7 +387,8 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
     final List breedRows = await supabase
         .from('breeds')
         .select('id')
-        .eq('is_active', true);
+        .eq('is_active', true)
+        .or('local_show_id.is.null,local_show_id.eq.${widget.showId}');
 
     final rows = breedRows
         .cast<Map<String, dynamic>>()
@@ -411,6 +415,148 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
       };
     }
     _showHasBreedRows = true;
+  }
+
+  Future<void> _addCustomBreed() async {
+    if (_isReadOnly || _isSingleBreedShow) return;
+
+    final nameController = TextEditingController();
+    var species = _speciesFilter == 'cavy' ? 'cavy' : 'rabbit';
+    var classSystem = 'four';
+    String? validationMessage;
+
+    final created = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AppTheme.surfaceTextScope(
+          dialogContext,
+          child: AlertDialog(
+            backgroundColor: AppColors.surface,
+            title: const Text(
+              'Add custom breed',
+              style: TextStyle(
+                color: AppColors.text,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            content: SizedBox(
+              width: 420,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'This breed is available only for this show. It will not be added to the shared breed catalog.',
+                    style: TextStyle(color: AppColors.muted),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: nameController,
+                    autofocus: true,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(
+                      labelText: 'Breed name',
+                      hintText: 'Enter a breed name',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: species,
+                    decoration: const InputDecoration(labelText: 'Species'),
+                    items: const [
+                      DropdownMenuItem(value: 'rabbit', child: Text('Rabbit')),
+                      DropdownMenuItem(value: 'cavy', child: Text('Cavy')),
+                    ],
+                    onChanged: (value) {
+                      setDialogState(() => species = value ?? 'rabbit');
+                    },
+                  ),
+                  if (species == 'rabbit') ...[
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue: classSystem,
+                      decoration: const InputDecoration(
+                        labelText: 'Class system',
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'four',
+                          child: Text('Four-class (Jr/Sr)'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'six',
+                          child: Text('Six-class (Jr/Int/Sr)'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        setDialogState(() => classSystem = value ?? 'four');
+                      },
+                    ),
+                  ],
+                  if (validationMessage != null) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      validationMessage!,
+                      style: const TextStyle(color: Colors.red),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  if (nameController.text.trim().isEmpty) {
+                    setDialogState(
+                      () => validationMessage = 'Breed name is required.',
+                    );
+                    return;
+                  }
+                  Navigator.pop(dialogContext, true);
+                },
+                child: const Text('Add to this show'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    final name = nameController.text.trim();
+    nameController.dispose();
+    if (created != true || name.isEmpty) return;
+
+    try {
+      await ShowLockService.assertShowUnlocked(widget.showId);
+      final inserted = await supabase
+          .from('breeds')
+          .insert({
+            'name': name,
+            'species': species,
+            'class_system': species == 'rabbit' ? classSystem : 'four',
+            'is_active': true,
+            'local_show_id': widget.showId,
+          })
+          .select('id')
+          .single();
+
+      await supabase.from('show_breeds').insert({
+        'show_id': widget.showId,
+        'breed_id': inserted['id'],
+        'is_enabled': true,
+        'class_system_override': null,
+      });
+
+      if (!mounted) return;
+      setState(() => _msg = '$name was added for this show only.');
+      await _refresh();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _msg = 'Could not add custom breed: $e');
+    }
   }
 
   Future<void> _setBreedEnabled(String breedId, bool enabled) async {
@@ -980,6 +1126,7 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
       final breedId = b['id'].toString();
       final breedName = (b['name'] ?? '').toString();
       final species = (b['species'] ?? '').toString();
+      final isShowOnlyBreed = b['local_show_id']?.toString() == widget.showId;
       final globalClassSystem = (b['class_system'] ?? 'four').toString();
 
       final sbid = _singleBreedId;
@@ -1041,6 +1188,7 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
               child: Text(
                 '${species.toUpperCase()}'
                 '${species == 'rabbit' ? ' • class: $effectiveClass' : ''}'
+                '${isShowOnlyBreed ? ' • show-only' : ''}'
                 '${lockedBreed ? ' • (locked)' : (!enabled ? ' • (disabled for show)' : '')}',
               ),
             ),
@@ -1509,6 +1657,13 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
       useScrollView: false,
       bodyPadding: EdgeInsets.zero,
       actions: [
+        IconButton(
+          tooltip: 'Add custom breed to this show',
+          icon: const Icon(Icons.add),
+          onPressed: (_loading || _isReadOnly || _isSingleBreedShow)
+              ? null
+              : _addCustomBreed,
+        ),
         IconButton(
           tooltip: 'Refresh',
           icon: const Icon(Icons.refresh),

@@ -115,7 +115,13 @@ class _CartScreenState extends State<CartScreen> {
       await attachAllowedBreedNames(
         sections: sections,
         loadBreeds: () async =>
-            ((await supabase.from('breeds').select('id,name')) as List)
+            ((await supabase
+                        .from('breeds')
+                        .select('id,name')
+                        .or(
+                          'local_show_id.is.null,local_show_id.eq.${widget.showId}',
+                        ))
+                    as List)
                 .cast<Map<String, dynamic>>(),
       );
       final sectionIds = sections

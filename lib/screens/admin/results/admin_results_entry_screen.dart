@@ -986,7 +986,8 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     final rows = await supabase
         .from('breeds')
         .select('id,name,class_system,uses_group_awards,uses_variety_awards')
-        .eq('is_active', true);
+        .eq('is_active', true)
+        .or('local_show_id.is.null,local_show_id.eq.${widget.showId}');
 
     _breedClassSystems.clear();
     _breedUsesGroupAwards.clear();

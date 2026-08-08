@@ -28,12 +28,14 @@ class _BreedCatalogScreenState extends State<BreedCatalogScreen> {
       data = await supabase
           .from('breeds')
           .select('id,name,species,class_system,is_active')
+          .isFilter('local_show_id', null)
           .order('species')
           .order('name');
     } else {
       data = await supabase
           .from('breeds')
           .select('id,name,species,class_system,is_active')
+          .isFilter('local_show_id', null)
           .eq('species', _speciesFilter)
           .order('name');
     }

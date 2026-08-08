@@ -1234,17 +1234,18 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
     setState(() => _loadingBreeds = true);
 
     try {
+      final showId = (widget.entry['show_id'] ?? '').toString();
       final globalBreedsRes = await supabase
           .from('breeds')
           .select('id,name,species,is_active')
           .eq('species', _species)
           .eq('is_active', true)
+          .or('local_show_id.is.null,local_show_id.eq.$showId')
           .order('name');
 
       final globalBreeds = (globalBreedsRes as List)
           .cast<Map<String, dynamic>>();
 
-      final showId = (widget.entry['show_id'] ?? '').toString();
       final showBreedRes = await supabase
           .from('show_breeds')
           .select('breed_id,is_enabled')
@@ -3730,6 +3731,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
           .select('id,name,species,is_active')
           .eq('species', _species)
           .eq('is_active', true)
+          .or('local_show_id.is.null,local_show_id.eq.${widget.showId}')
           .order('name');
 
       final globalBreeds = (globalBreedsRes as List)

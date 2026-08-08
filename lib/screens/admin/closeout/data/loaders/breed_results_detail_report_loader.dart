@@ -250,6 +250,7 @@ class BreedResultsDetailReportLoader {
 
     if (species == 'rabbit' && breedName.isNotEmpty) {
       reportRows = await _withRabbitCatalogJudgingOrder(
+        showId: showId,
         breedName: breedName,
         rows: reportRows,
       );
@@ -406,6 +407,7 @@ class BreedResultsDetailReportLoader {
   }
 
   Future<List<Map<String, dynamic>>> _withRabbitCatalogJudgingOrder({
+    required String showId,
     required String breedName,
     required List<Map<String, dynamic>> rows,
   }) async {
@@ -414,6 +416,7 @@ class BreedResultsDetailReportLoader {
         .select('id')
         .ilike('name', breedName.trim())
         .eq('species', 'rabbit')
+        .or('local_show_id.is.null,local_show_id.eq.$showId')
         .maybeSingle();
     final breedId = (breed?['id'] ?? '').toString().trim();
     if (breedId.isEmpty) return rows;

@@ -710,6 +710,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
           'fur_entry_variety_mode',
         )
         .eq('is_active', true)
+        .or('local_show_id.is.null,local_show_id.eq.${widget.showId}')
         .order('name');
 
     final breedRows = (breeds as List).cast<Map<String, dynamic>>();
