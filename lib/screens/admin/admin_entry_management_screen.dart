@@ -4200,6 +4200,10 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
       );
     }
 
+    if (!_allowNameOnlyManualExhibitors && email.isEmpty) {
+      throw Exception('Enter email.');
+    }
+
     if (!_allowNameOnlyManualExhibitors && addressLine1.isEmpty) {
       throw Exception('Enter address line 1.');
     }
