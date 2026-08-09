@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 
-const PORTAL_VERSION = "v0.1.15";
+const PORTAL_VERSION = "v0.1.21";
 const portalCacheKey = (email: string) =>
   `ringmaster-sweepstakes-portal:${email.toLowerCase()}`;
 
@@ -668,7 +668,17 @@ function Shows({
   onPoints: () => void;
 }) {
   type PortalReport = { name: string; url: string; view_url: string };
+  type ReportProgress = {
+    completed: number;
+    total: number;
+    phase: "queued" | "rendering" | "stalled";
+    estimated_seconds_remaining: number | null;
+  };
   const [loadingKey, setLoadingKey] = useState<string | null>(null);
+  const [reportProgress, setReportProgress] = useState<{
+    key: string;
+    value: ReportProgress;
+  } | null>(null);
   const [message, setMessage] = useState("");
   const [reportsToView, setReportsToView] = useState<{
     title: string;
@@ -686,7 +696,7 @@ function Shows({
   const keyFor = (show: PortalShow) =>
     `${show.portal_club_id}-${show.show_id}-${show.sanction_number}`;
 
-  async function getReports(show: PortalShow) {
+  async function getReports(show: PortalShow, refresh: boolean) {
     const { data, error } = await supabase.functions.invoke(
       "sweepstakes-download-reports",
       {
@@ -694,9 +704,14 @@ function Shows({
           show_id: show.show_id,
           portal_club_id: show.portal_club_id,
           sanction_number: show.sanction_number,
+          refresh,
         },
       },
     );
+    if (data?.progress) {
+      setReportProgress({ key: keyFor(show), value: data.progress as ReportProgress });
+    }
+    if (data?.refreshing) return null;
     if (error || !data?.downloads?.length)
       throw new Error(
         data?.error ?? "We could not prepare those reports. Please try again.",
@@ -704,13 +719,34 @@ function Shows({
     return data.downloads as PortalReport[];
   }
 
+  async function getFreshReports(show: PortalShow) {
+    setReportProgress({
+      key: keyFor(show),
+      value: { completed: 0, total: 0, phase: "queued", estimated_seconds_remaining: null },
+    });
+    let downloads = await getReports(show, true);
+    for (let attempt = 0; !downloads && attempt < 30; attempt += 1) {
+      setMessage("Waiting for the latest report changes to finish…");
+      await new Promise((resolve) => window.setTimeout(resolve, 2000));
+      downloads = await getReports(show, false);
+    }
+    if (!downloads) {
+      throw new Error(
+        "The latest reports are still being generated. Please try again in a moment.",
+      );
+    }
+    return downloads;
+  }
+
   async function downloadReports(show: PortalShow) {
     const key = keyFor(show);
     setLoadingKey(key);
     setMessage("");
     try {
-      const downloads = await getReports(show);
-      for (const download of downloads) {
+      const downloads = await getFreshReports(show);
+      // Safari commonly discards additional programmatic downloads fired in the
+      // same event loop. Space these out so every report for the section starts.
+      for (const [index, download] of downloads.entries()) {
         const link = document.createElement("a");
         link.href = download.url;
         link.download = download.name;
@@ -718,6 +754,9 @@ function Shows({
         document.body.appendChild(link);
         link.click();
         link.remove();
+        if (index < downloads.length - 1) {
+          await new Promise((resolve) => window.setTimeout(resolve, 650));
+        }
       }
       setMessage(
         downloads.length > 1
@@ -732,6 +771,7 @@ function Shows({
       );
     }
     setLoadingKey(null);
+    setReportProgress(null);
   }
 
   async function viewReports(show: PortalShow) {
@@ -739,7 +779,7 @@ function Shows({
     setLoadingKey(key);
     setMessage("");
     try {
-      const downloads = await getReports(show);
+      const downloads = await getFreshReports(show);
       setReportsToView({
         title: `${show.show_name} — ${show.section_label || "Reports"}`,
         downloads,
@@ -759,6 +799,7 @@ function Shows({
       );
     }
     setLoadingKey(null);
+    setReportProgress(null);
   }
 
   return (
@@ -917,6 +958,40 @@ function Shows({
                     >
                       View reports ↗
                     </button>
+                  )}
+                  {reportProgress?.key === key && (
+                    <div className={`report-progress ${reportProgress.value.phase}`}>
+                      <div className="report-progress-label">
+                        <span>
+                          {reportProgress.value.phase === "stalled"
+                            ? "Report generation appears stalled"
+                            : reportProgress.value.phase === "rendering"
+                              ? "Rendering latest report"
+                              : "Queued for the report renderer"}
+                        </span>
+                        {reportProgress.value.total > 0 && (
+                          <strong>
+                            {reportProgress.value.completed} of {reportProgress.value.total} ready
+                          </strong>
+                        )}
+                      </div>
+                      <div className="report-progress-track" aria-hidden="true">
+                        <span
+                          style={{
+                            width: `${reportProgress.value.total
+                              ? Math.max(6, Math.round((reportProgress.value.completed / reportProgress.value.total) * 100))
+                              : 6}%`,
+                          }}
+                        />
+                      </div>
+                      <small>
+                        {reportProgress.value.phase === "stalled"
+                          ? "Still checking the renderer. If this continues, contact RingMaster support."
+                          : reportProgress.value.estimated_seconds_remaining
+                            ? `Estimated ready in about ${reportProgress.value.estimated_seconds_remaining} seconds.`
+                            : "Preparing your latest report files."}
+                      </small>
+                    </div>
                   )}
                 </div>
               </article>

@@ -40,35 +40,111 @@ serve(async (request) => {
   const { data: visibleRows, error: visibleError } = await userClient.rpc("get_sweepstakes_portal_shows_payload");
   if (visibleError) return json({ error: "We could not confirm portal access." }, 403);
   const visible = (visibleRows ?? []).find((row: any) =>
-    String(row.portal_club_id) === portalClubId && String(row.show_id) === showId && String(row.sanction_number ?? "") === sanctionNumber && row.report_status === "generated"
+    String(row.portal_club_id) === portalClubId && String(row.show_id) === showId && String(row.sanction_number ?? "") === sanctionNumber
   );
   if (!visible) return json({ error: "That report is not available to this portal account." }, 403);
 
   const clubName = String(visible.club_name ?? "");
   const bodyName = String(visible.sanctioning_body ?? "").trim().toUpperCase();
+  const sectionLabel = normalized(visible.section_label);
   const isArba = normalized(clubName) === "arba";
   const { data: artifacts, error: artifactError } = await admin
     .from("show_report_artifacts")
-    .select("id, report_name, artifact_status, storage_bucket, storage_path, file_name, metadata, generated_at")
+    .select("id, finalize_run_id, scope_key, report_name, artifact_status, storage_bucket, storage_path, file_name, metadata, generated_at")
     .eq("show_id", showId)
-    .eq("is_current", true)
-    .in("artifact_status", isArba ? ["generated", "warning"] : ["generated"]);
+    .eq("is_current", true);
   if (artifactError) return json({ error: "We could not locate the report files." }, 500);
 
   const matching = (artifacts ?? []).filter((artifact: any) => {
     const meta = artifact.metadata ?? {};
-    if (!artifact.storage_bucket || !artifact.storage_path) return false;
+    // A sanction can be blank or shared by several sections (notably state
+    // club reports). In that case the report's structured section label is the
+    // boundary that keeps one portal row from refreshing every section.
+    const sectionMatches = !sectionLabel ||
+      !meta.section_label ||
+      normalized(meta.section_label) === sectionLabel;
     if (isArba) return artifact.report_name === "arba_report" && String(artifact.id) === String(visible.report_artifact_id);
     if (normalized(meta.club_name) !== normalized(clubName)) return false;
     if (bodyName === "STATE CLUB") {
       if (!["details_by_breed", "exh_by_breed", "best_display_report"].includes(artifact.report_name)) return false;
-      return String(meta.sanction_number ?? sanctionNumber) === sanctionNumber;
+      return String(meta.sanction_number ?? sanctionNumber) === sanctionNumber && sectionMatches;
     }
     if (!["sweepstakes_report", "breed_results_detail_report", "details_by_breed", "exh_by_breed"].includes(artifact.report_name)) return false;
-    return String(meta.sanction_number ?? "") === sanctionNumber;
+    return String(meta.sanction_number ?? "") === sanctionNumber && sectionMatches;
   }).sort((a: any, b: any) => String(a.report_name).localeCompare(String(b.report_name)));
 
   if (!matching.length) return json({ error: "The report files are still being prepared." }, 409);
+  const isReady = (artifact: any) =>
+    artifact.artifact_status === "generated" ||
+    (isArba && artifact.artifact_status === "warning");
+
+  // The portal only exposes an aggregate of its own authorized report jobs.
+  // Queue timestamps let the chair see whether the renderer is actively working
+  // instead of being left with an indeterminate "Preparing" state.
+  const getProgress = async (currentArtifacts: any[]) => {
+    const artifactIds = currentArtifacts.map((artifact: any) => artifact.id);
+    const { data: tasks, error: taskError } = await admin
+      .from("show_task_queue")
+      .select("report_artifact_id, task_status, created_at, started_at, heartbeat_at, available_at")
+      .eq("task_type", "render_report")
+      .in("report_artifact_id", artifactIds)
+      .order("created_at", { ascending: false });
+    if (taskError) {
+      console.error("Could not load Sweepstakes report progress", taskError);
+    }
+
+    const latestTaskByArtifact = new Map<string, any>();
+    for (const task of tasks ?? []) {
+      const artifactId = String(task.report_artifact_id ?? "");
+      if (artifactId && !latestTaskByArtifact.has(artifactId)) {
+        latestTaskByArtifact.set(artifactId, task);
+      }
+    }
+    const now = Date.now();
+    const pending = currentArtifacts.filter((artifact: any) => {
+      const taskStatus = String(
+        latestTaskByArtifact.get(String(artifact.id))?.task_status ?? "",
+      );
+      return !isReady(artifact) || ["queued", "running"].includes(taskStatus);
+    });
+    const stalled = pending.some((artifact: any) => {
+      const task = latestTaskByArtifact.get(String(artifact.id));
+      if (!task) return false;
+      const taskStatus = String(task.task_status ?? "");
+      const lastActivity = task.heartbeat_at ?? task.started_at ?? task.available_at ?? task.created_at;
+      const age = lastActivity ? now - new Date(lastActivity).getTime() : 0;
+      return (taskStatus === "running" && age > 75_000) ||
+        (taskStatus === "queued" && age > 120_000);
+    });
+    const hasRunningTask = pending.some((artifact: any) =>
+      String(latestTaskByArtifact.get(String(artifact.id))?.task_status ?? "") === "running",
+    );
+    return {
+      completed: currentArtifacts.length - pending.length,
+      total: currentArtifacts.length,
+      phase: stalled ? "stalled" : hasRunningTask ? "rendering" : "queued",
+      // A deliberately conservative estimate: report rendering normally takes
+      // about 25 seconds per remaining file, plus a short queue hand-off.
+      estimated_seconds_remaining: stalled ? null : Math.max(15, pending.length * 25),
+    };
+  };
+
+  // Downloads and in-browser views never initiate report generation. The Show
+  // application marks artifacts queued when report-relevant data changes, and
+  // this endpoint simply waits for that existing generation to finish.
+  if (!matching.every(isReady)) {
+    const hasFailure = matching.some((artifact: any) => artifact.artifact_status === "failed");
+    return json(
+      hasFailure
+        ? { error: "The latest report could not be prepared. Please try again shortly." }
+        : { refreshing: true, retry_after_ms: 2000, progress: await getProgress(matching) },
+      hasFailure ? 500 : 202,
+    );
+  }
+
+  if (matching.some((artifact: any) => !artifact.storage_bucket || !artifact.storage_path)) {
+    return json({ error: "The refreshed report files are still being saved." }, 409);
+  }
   const downloads = [];
   for (const artifact of matching) {
     const name = artifact.file_name || `${artifact.report_name}.pdf`;
