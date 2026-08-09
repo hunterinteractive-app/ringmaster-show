@@ -442,7 +442,9 @@ class _CartScreenState extends State<CartScreen> {
 
   Future<void> _refreshQuotePreview() async {
     final provider = _selectedOnlineProvider;
-    if (_selectedPaymentTiming != 'online' || provider == null) {
+    if (AppSession.isSupportMode ||
+        _selectedPaymentTiming != 'online' ||
+        provider == null) {
       if (!mounted) return;
       setState(() {
         _quotePreview = null;
