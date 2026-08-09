@@ -2183,7 +2183,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   Future<_MeatPenInput?> _openMeatPenDialog() {
     return showDialog<_MeatPenInput>(
       context: context,
-      builder: (_) => _MeatPenDialog(),
+      builder: (_) => _MeatPenDialog(showId: widget.showId),
     );
   }
 
@@ -2924,7 +2924,9 @@ class _MeatPenInput {
 }
 
 class _MeatPenDialog extends StatefulWidget {
-  const _MeatPenDialog();
+  final String showId;
+
+  const _MeatPenDialog({required this.showId});
 
   @override
   State<_MeatPenDialog> createState() => _MeatPenDialogState();
@@ -3084,14 +3086,37 @@ class _MeatPenDialogState extends State<_MeatPenDialog> {
         .eq('breed_id', breedId)
         .order('name');
 
+    final showVarieties = await supabase
+        .from('show_varieties')
+        .select('id,custom_name,is_enabled')
+        .eq('show_id', widget.showId)
+        .eq('breed_id', breedId)
+        .isFilter('variety_id', null)
+        .eq('is_enabled', true);
+
+    final options = (res as List)
+        .cast<Map<String, dynamic>>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+    final knownNames = options
+        .map((row) => (row['name'] ?? '').toString().trim().toLowerCase())
+        .toSet();
+    for (final raw in showVarieties as List) {
+      final row = Map<String, dynamic>.from(raw as Map);
+      final name = (row['custom_name'] ?? '').toString().trim();
+      if (name.isEmpty || !knownNames.add(name.toLowerCase())) continue;
+      options.add({'id': 'custom_$name', 'name': name});
+    }
+
+    options.sort(
+      (a, b) => (a['name'] ?? '').toString().toLowerCase().compareTo(
+        (b['name'] ?? '').toString().toLowerCase(),
+      ),
+    );
+
     if (!mounted) return;
     setState(() {
-      _varietyOptions = (res as List).cast<Map<String, dynamic>>()
-        ..sort(
-          (a, b) => (a['name'] ?? '').toString().toLowerCase().compareTo(
-            (b['name'] ?? '').toString().toLowerCase(),
-          ),
-        );
+      _varietyOptions = options;
       _loadingVarieties = false;
     });
   }
