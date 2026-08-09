@@ -50,7 +50,7 @@ serve(async (request) => {
   const isArba = normalized(clubName) === "arba";
   const { data: artifacts, error: artifactError } = await admin
     .from("show_report_artifacts")
-    .select("id, finalize_run_id, scope_key, report_name, artifact_status, storage_bucket, storage_path, file_name, metadata, generated_at")
+    .select("id, finalize_run_id, scope_key, section_ids, report_name, artifact_status, storage_bucket, storage_path, file_name, metadata, generated_at")
     .eq("show_id", showId)
     .eq("is_current", true);
   if (artifactError) return json({ error: "We could not locate the report files." }, 500);
@@ -77,6 +77,33 @@ serve(async (request) => {
   const isReady = (artifact: any) =>
     artifact.artifact_status === "generated" ||
     (isArba && artifact.artifact_status === "warning");
+
+  // A download is also the portal's freshness check.  It queues a new render
+  // only when report-relevant data changed after this exact artifact was made;
+  // otherwise it immediately returns the existing PDF(s).
+  const reportInputsChangedSince = async (artifact: any) => {
+    if (!artifact.generated_at) return true;
+    const sectionIds = Array.isArray(artifact.section_ids) ? artifact.section_ids : [];
+    const timestamps: string[] = [];
+    const addTimestamp = (value: unknown) => {
+      if (value && !Number.isNaN(new Date(String(value)).getTime())) timestamps.push(String(value));
+    };
+
+    const [{ data: show }, { data: sanction }, { data: latestEntry }] = await Promise.all([
+      admin.from("shows").select("updated_at, results_last_changed_at").eq("id", showId).maybeSingle(),
+      admin.from("show_sanctions").select("updated_at").eq("show_id", showId).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
+      sectionIds.length
+        ? admin.from("entries").select("updated_at").eq("show_id", showId).in("section_id", sectionIds).order("updated_at", { ascending: false }).limit(1).maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
+
+    addTimestamp(show?.updated_at);
+    addTimestamp(show?.results_last_changed_at);
+    addTimestamp(sanction?.updated_at);
+    addTimestamp(latestEntry?.updated_at);
+    const newestInput = timestamps.reduce<number>((latest, value) => Math.max(latest, new Date(value).getTime()), 0);
+    return newestInput > new Date(artifact.generated_at).getTime();
+  };
 
   // The portal only exposes an aggregate of its own authorized report jobs.
   // Queue timestamps let the chair see whether the renderer is actively working
@@ -129,9 +156,30 @@ serve(async (request) => {
     };
   };
 
-  // Downloads and in-browser views never initiate report generation. The Show
-  // application marks artifacts queued when report-relevant data changes, and
-  // this endpoint simply waits for that existing generation to finish.
+  // Queue only those report files whose inputs are newer than their generated
+  // version. This preserves instant downloads when nothing has changed.
+  if (matching.every(isReady)) {
+    const staleArtifacts = (await Promise.all(matching.map(async (artifact: any) =>
+      (await reportInputsChangedSince(artifact)) ? artifact : null,
+    ))).filter(Boolean);
+    if (staleArtifacts.length) {
+      const refreshes = await Promise.all(staleArtifacts.map((artifact: any) =>
+        admin.rpc("requeue_single_closeout_artifact", {
+          p_show_id: showId,
+          p_finalize_run_id: artifact.finalize_run_id,
+          p_scope_key: artifact.scope_key,
+          p_artifact_id: artifact.id,
+        }),
+      ));
+      const refreshError = refreshes.find((result: any) => result.error)?.error;
+      if (refreshError) {
+        console.error("Could not queue a fresh Sweepstakes report", refreshError);
+        return json({ error: "We could not queue the latest report files." }, 500);
+      }
+      return json({ refreshing: true, retry_after_ms: 2000, progress: await getProgress(matching) }, 202);
+    }
+  }
+
   if (!matching.every(isReady)) {
     const hasFailure = matching.some((artifact: any) => artifact.artifact_status === "failed");
     return json(

@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 
-const PORTAL_VERSION = "v0.1.21";
+const PORTAL_VERSION = "v0.1.22";
 const portalCacheKey = (email: string) =>
   `ringmaster-sweepstakes-portal:${email.toLowerCase()}`;
 
