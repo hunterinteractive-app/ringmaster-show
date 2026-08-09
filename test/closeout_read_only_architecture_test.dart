@@ -43,7 +43,10 @@ void main() {
     'supabase/migrations/20260717204006_exclude_deferred_arba_from_closeout_progress.sql',
   ).readAsStringSync();
   final largeCloseoutTimeoutMigration = File(
-    'supabase/migrations/20260718233449_allow_large_scoped_closeout_finalize.sql',
+    'supabase/migrations/20260718233709_allow_large_scoped_closeout_finalize.sql',
+  ).readAsStringSync();
+  final closeoutReadinessOptimizationMigration = File(
+    'supabase/migrations/20260809201258_optimize_closeout_readiness.sql',
   ).readAsStringSync();
   final edgeFunction = File(
     'supabase/functions/run-closeout/index.ts',
@@ -608,6 +611,27 @@ void main() {
         contains("set statement_timeout = '55s'"),
       );
       expect(largeCloseoutTimeoutMigration, isNot(contains('alter role')));
+    });
+
+    test('dashboard polling does not run the readiness validator', () {
+      final dashboardBody = methodBody(
+        'Future<CloseoutDashboard> _loadDashboardSummary({',
+        'Future<void> _ensureReportsLoaded({bool force = false}) async',
+      );
+
+      expect(dashboardBody, contains('_loadResultsReadiness(resolved)'));
+      expect(
+        closeoutReadinessOptimizationMigration,
+        contains('get_closeout_dashboard_scoped_without_readiness_details'),
+      );
+      expect(
+        closeoutReadinessOptimizationMigration,
+        isNot(contains('report_results_entry_rows(')),
+      );
+      expect(
+        closeoutReadinessOptimizationMigration,
+        contains('entry_awards_entry_id_idx'),
+      );
     });
 
     test('review details retain latest task history behind artifact cause', () {

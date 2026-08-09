@@ -2903,9 +2903,19 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
 
   Future<CloseoutDashboard> _loadDashboardSummary({
     ResolvedCloseoutScope? requestedScope,
+    bool refreshReadiness = false,
   }) async {
     final resolved = requestedScope ?? _resolvedCloseoutScope;
     const pageSize = 200;
+    final dashboardScopeKey = _dashboardKeyForScope(resolved);
+    // Polling tracks render progress only. Recheck results when the screen is
+    // first opened or the selected scope changes, never every poll interval.
+    final readinessFuture =
+        refreshReadiness ||
+            _dashboard == null ||
+            _dashboardScopeKey != dashboardScopeKey
+        ? _loadResultsReadiness(resolved)
+        : null;
 
     Future<CloseoutDashboard> loadPage(int offset) async {
       final response = await supabase.rpc(
@@ -2977,10 +2987,13 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         (a, b) =>
             compareCloseoutReportArtifacts(a, b, selectedFinalizeRunId: runId),
       );
+    final resultsReadiness = readinessFuture == null
+        ? (_dashboard?.resultsReadiness ?? dashboard.resultsReadiness)
+        : await readinessFuture;
 
     return CloseoutDashboard(
       dashboard: dashboard.dashboard,
-      resultsReadiness: dashboard.resultsReadiness,
+      resultsReadiness: resultsReadiness,
       latestFinalize: dashboard.latestFinalize,
       reports: mergedReports,
       reviewReports: dashboard.reviewReports,
@@ -3060,6 +3073,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       try {
         final dashboard = await _loadDashboardSummary(
           requestedScope: requestedScope,
+          refreshReadiness: !includeReports,
         );
 
         if (!mounted) return;
@@ -4668,17 +4682,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
   }
 
   Future<bool> _ensureResultsReadyForReports() async {
-    final resp = await supabase.rpc(
-      'show_results_readiness_scoped',
-      params: {
-        'p_show_id': widget.showId,
-        'p_section_ids': _resolvedCloseoutScope.sectionIds.toList()..sort(),
-      },
-    );
-
-    final readiness = ResultsReadinessDto.fromJson(
-      Map<String, dynamic>.from(resp as Map),
-    );
+    final readiness = await _loadResultsReadiness(_resolvedCloseoutScope);
 
     if (!mounted) return false;
 
@@ -4757,6 +4761,21 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
     );
 
     return false;
+  }
+
+  Future<ResultsReadinessDto> _loadResultsReadiness(
+    ResolvedCloseoutScope scope,
+  ) async {
+    final response = await supabase.rpc(
+      'show_results_readiness_scoped',
+      params: {
+        'p_show_id': widget.showId,
+        'p_section_ids': scope.sectionIds.toList()..sort(),
+      },
+    );
+    return ResultsReadinessDto.fromJson(
+      Map<String, dynamic>.from(response as Map),
+    );
   }
 
   bool get _isBusy => _loading || _generatingReport;
