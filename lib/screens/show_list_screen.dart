@@ -26,7 +26,7 @@ import 'account_profile_setup_screen.dart';
 
 import '../config/legal_config.dart';
 import '../services/app_session.dart';
-import '../services/stripe_connect_service.dart';
+import '../services/show_payment_configuration_service.dart';
 import '../utils/date_time_utils.dart';
 import '../theme/app_theme.dart';
 import '../widgets/rm_widgets.dart';
@@ -1425,11 +1425,15 @@ class _ShowListScreenState extends State<ShowListScreen> {
     String? error;
 
     try {
-      final status = await StripeConnectService.getAccountStatus(showId);
+      // Use the same public-safe checkout configuration as the cart. Payment
+      // account rows are manager-only, so querying account status here made
+      // the payment indicator disagree with what exhibitors can check out.
+      final configuration = await ShowPaymentConfigurationService.load(showId);
       payOnline =
-          status['charges_enabled'] == true &&
-          status['payouts_enabled'] == true &&
-          status['details_submitted'] == true;
+          configuration.allowOnline &&
+          configuration.providers.any(
+            (provider) => provider.enabled && provider.ready,
+          );
     } catch (e) {
       error = e.toString();
     }
