@@ -4326,18 +4326,39 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
           .select(
             'id,recipient_name,recipient_email,subject,delivery_status,'
             'provider_message_id,error_message,sent_at,created_at,report_name,'
-            'show_report_artifacts(file_name,metadata)',
+            'artifact_id',
           )
           .eq('show_id', widget.showId)
           .order('sent_at', ascending: false)
           .order('created_at', ascending: false);
       if (!mounted) return;
 
-      final deliveries = _ReportDeliveryHistoryItem.group(
-        List<Map<String, dynamic>>.from(
-          (rows as List).map((row) => Map<String, dynamic>.from(row as Map)),
-        ),
+      final deliveryRows = List<Map<String, dynamic>>.from(
+        (rows as List).map((row) => Map<String, dynamic>.from(row as Map)),
       );
+      final artifactIds = deliveryRows
+          .map((row) => (row['artifact_id'] ?? '').toString().trim())
+          .where((id) => id.isNotEmpty)
+          .toSet()
+          .toList();
+      final artifactsById = <String, Map<String, dynamic>>{};
+      if (artifactIds.isNotEmpty) {
+        final artifacts = await supabase
+            .from('show_report_artifacts')
+            .select('id,file_name,metadata')
+            .inFilter('id', artifactIds);
+        for (final artifact in artifacts as List) {
+          final map = Map<String, dynamic>.from(artifact as Map);
+          final id = (map['id'] ?? '').toString().trim();
+          if (id.isNotEmpty) artifactsById[id] = map;
+        }
+      }
+      for (final row in deliveryRows) {
+        final artifactId = (row['artifact_id'] ?? '').toString().trim();
+        row['show_report_artifacts'] = artifactsById[artifactId];
+      }
+
+      final deliveries = _ReportDeliveryHistoryItem.group(deliveryRows);
       await showDialog<void>(
         context: context,
         builder: (context) => _ReportDeliveryHistoryDialog(
