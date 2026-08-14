@@ -49,7 +49,6 @@ class _CartScreenState extends State<CartScreen> {
   List<String> _breedScopeErrors = [];
   Map<String, dynamic>? _feeSettings;
   Map<String, Map<String, dynamic>> _sectionFeeBySectionId = {};
-  Map<String, dynamic>? _stripeStatus;
   ShowPaymentConfiguration? _paymentConfiguration;
   String _selectedPaymentTiming = 'at_show';
   String? _selectedOnlineProvider;
@@ -151,15 +150,6 @@ class _CartScreenState extends State<CartScreen> {
       final paymentConfiguration = await ShowPaymentConfigurationService.load(
         widget.showId,
       );
-      Map<String, dynamic>? stripeStatus;
-      try {
-        stripeStatus = await StripeConnectService.getAccountStatus(
-          widget.showId,
-        );
-      } catch (_) {
-        stripeStatus = await _loadStripeStatusFallback();
-      }
-
       final parsedSections = {for (final s in sections) s['id'].toString(): s};
 
       final parsedSectionFees = {
@@ -205,7 +195,6 @@ class _CartScreenState extends State<CartScreen> {
         _sectionById = parsedSections;
         _items = parsedItems;
         _breedScopeErrors = breedScopeErrors;
-        _stripeStatus = stripeStatus;
         _paymentConfiguration = paymentConfiguration;
         _selectedOnlineProvider = selectedProvider;
         _selectedPaymentTiming = selectedTiming;
@@ -220,36 +209,6 @@ class _CartScreenState extends State<CartScreen> {
         _msg = 'Load failed: $e';
       });
     }
-  }
-
-  Future<Map<String, dynamic>?> _loadStripeStatusFallback() async {
-    final row = await supabase
-        .from('show_payment_account_links')
-        .select(
-          'id,show_id,provider,stripe_account_id,charges_enabled,payouts_enabled,details_submitted,account_status',
-        )
-        .eq('show_id', widget.showId)
-        .eq('provider', 'stripe')
-        .maybeSingle();
-
-    if (row == null) return null;
-
-    final stripeAccountId = (row['stripe_account_id'] ?? '').toString().trim();
-    if (stripeAccountId.isEmpty) return null;
-
-    final chargesEnabled = row['charges_enabled'] == true;
-    final payoutsEnabled = row['payouts_enabled'] == true;
-    final detailsSubmitted = row['details_submitted'] == true;
-    final accountStatus = (row['account_status'] ?? '').toString().trim();
-
-    return {
-      'ok': true,
-      'status': accountStatus.isNotEmpty ? accountStatus : 'connected',
-      'charges_enabled': chargesEnabled,
-      'payouts_enabled': payoutsEnabled,
-      'details_submitted': detailsSubmitted,
-      'show_payment_account': row,
-    };
   }
 
   Future<void> _loadExhibitorLabelsForCart(
@@ -359,58 +318,6 @@ class _CartScreenState extends State<CartScreen> {
     return 'Projected Class: $className';
   }
 
-  bool get _stripeHasAccount {
-    final account = _stripeStatus?['show_payment_account'];
-    final nestedStripeAccountId = account is Map
-        ? (account['stripe_account_id'] ?? account['provider_account_id'] ?? '')
-              .toString()
-              .trim()
-        : '';
-
-    final topLevelStripeAccountId =
-        (_stripeStatus?['stripe_account_id'] ??
-                _stripeStatus?['provider_account_id'] ??
-                '')
-            .toString()
-            .trim();
-
-    return nestedStripeAccountId.isNotEmpty ||
-        topLevelStripeAccountId.isNotEmpty;
-  }
-
-  bool get _stripeReady {
-    if (!_stripeHasAccount) return false;
-
-    final status = (_stripeStatus?['status'] ?? '')
-        .toString()
-        .toLowerCase()
-        .trim();
-    final accountStatus =
-        (_stripeStatus?['account_status'] ??
-                (_stripeStatus?['show_payment_account'] is Map
-                    ? (_stripeStatus!['show_payment_account']
-                          as Map)['account_status']
-                    : null) ??
-                '')
-            .toString()
-            .toLowerCase()
-            .trim();
-
-    final isRestricted =
-        status == 'restricted' ||
-        accountStatus == 'restricted' ||
-        status == 'incomplete' ||
-        accountStatus == 'incomplete' ||
-        status == 'not_ready' ||
-        accountStatus == 'not_ready';
-
-    if (isRestricted) return false;
-
-    return _stripeStatus?['charges_enabled'] == true &&
-        _stripeStatus?['payouts_enabled'] == true &&
-        _stripeStatus?['details_submitted'] == true;
-  }
-
   bool _providerReady(String provider) {
     for (final option
         in _paymentConfiguration?.providers ??
@@ -494,8 +401,7 @@ class _CartScreenState extends State<CartScreen> {
         _providerReady(_selectedOnlineProvider!) &&
         !_quotePreviewLoading &&
         _quotePreviewError == null &&
-        _quotePreview?.provider == _selectedOnlineProvider &&
-        (_selectedOnlineProvider != 'stripe' || _stripeReady);
+        _quotePreview?.provider == _selectedOnlineProvider;
   }
 
   Map<String, dynamic> _calculateFeesForItems(
