@@ -13,6 +13,7 @@ import 'package:ringmaster_show/widgets/help_report_dialog.dart';
 import 'login_screen.dart';
 import 'my_animals_screen.dart';
 import 'enter_show_screen.dart';
+import 'cart_screen.dart';
 import 'account_settings_screen.dart';
 import 'my_entries_screen.dart';
 import 'my_help_requests_screen.dart';
@@ -1422,6 +1423,8 @@ class _ShowListScreenState extends State<ShowListScreen> {
     );
 
     bool payOnline = false;
+    String? cartId;
+    bool hasCartItems = false;
     String? error;
 
     try {
@@ -1434,6 +1437,26 @@ class _ShowListScreenState extends State<ShowListScreen> {
           configuration.providers.any(
             (provider) => provider.enabled && provider.ready,
           );
+
+      final userId = AppSession.effectiveUserId;
+      if (userId != null && userId.isNotEmpty) {
+        final carts = await supabase
+            .from('entry_carts')
+            .select('id')
+            .eq('show_id', showId)
+            .eq('user_id', userId)
+            .eq('status', 'active')
+            .limit(1);
+        if ((carts as List).isNotEmpty) {
+          cartId = carts.first['id'].toString();
+          final items = await supabase
+              .from('entry_cart_items')
+              .select('id')
+              .eq('cart_id', cartId)
+              .limit(1);
+          hasCartItems = (items as List).isNotEmpty;
+        }
+      }
     } catch (e) {
       error = e.toString();
     }
@@ -1476,6 +1499,15 @@ class _ShowListScreenState extends State<ShowListScreen> {
                 ).textTheme.bodySmall?.copyWith(color: AppColors.muted),
               ),
             ],
+            if (payOnline) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                hasCartItems
+                    ? 'Your active cart is ready to review and check out.'
+                    : 'Add entries before checking out online.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
           ],
         ),
         actions: [
@@ -1483,6 +1515,31 @@ class _ShowListScreenState extends State<ShowListScreen> {
             onPressed: () => Navigator.pop(context),
             child: const Text('Close'),
           ),
+          if (payOnline)
+            FilledButton.icon(
+              onPressed: () {
+                Navigator.pop(context);
+                if (hasCartItems && cartId != null) {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => CartScreen(
+                        cartId: cartId!,
+                        showId: showId,
+                        showName: showName,
+                      ),
+                    ),
+                  );
+                } else {
+                  _openEnterShow(context, showId, showName);
+                }
+              },
+              icon: Icon(
+                hasCartItems
+                    ? Icons.shopping_cart_checkout
+                    : Icons.add_circle_outline,
+              ),
+              label: Text(hasCartItems ? 'Go to checkout' : 'Add entries'),
+            ),
         ],
       ),
     );
