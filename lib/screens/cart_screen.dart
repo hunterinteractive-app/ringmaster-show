@@ -398,10 +398,7 @@ class _CartScreenState extends State<CartScreen> {
         _items.isNotEmpty &&
         _selectedPaymentTiming == 'online' &&
         _selectedOnlineProvider != null &&
-        _providerReady(_selectedOnlineProvider!) &&
-        !_quotePreviewLoading &&
-        _quotePreviewError == null &&
-        _quotePreview?.provider == _selectedOnlineProvider;
+        _providerReady(_selectedOnlineProvider!);
   }
 
   Map<String, dynamic> _calculateFeesForItems(
