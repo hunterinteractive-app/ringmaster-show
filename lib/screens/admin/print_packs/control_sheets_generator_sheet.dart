@@ -17,6 +17,183 @@ final supabase = Supabase.instance.client;
 
 // =======================================================
 
+/// Produces one blank control sheet per enabled show section for day-of-show
+/// entries. It deliberately includes only the printable fields, never entry
+/// data or payment information.
+Future<String?> downloadBlankControlSheetsPdf({
+  required String showName,
+  required List<Map<String, dynamic>> sections,
+}) async {
+  final theme = await buildPrintPackPdfTheme();
+  final doc = pw.Document(theme: theme);
+  final sortedSections = [...sections]
+    ..sort(
+      (a, b) => ((a['sort_order'] as num?)?.toInt() ?? 9999).compareTo(
+        (b['sort_order'] as num?)?.toInt() ?? 9999,
+      ),
+    );
+
+  String titleFor(Map<String, dynamic> section) {
+    final displayName = (section['display_name'] ?? '').toString().trim();
+    if (displayName.isNotEmpty) return displayName;
+    return [section['kind'], section['letter']]
+        .map((value) => (value ?? '').toString().trim())
+        .where((value) => value.isNotEmpty)
+        .join(' ');
+  }
+
+  pw.Widget blankLine() => pw.Expanded(
+    child: pw.Container(
+      height: 11,
+      decoration: const pw.BoxDecoration(
+        border: pw.Border(bottom: pw.BorderSide(width: .6)),
+      ),
+    ),
+  );
+
+  pw.Widget field(String label) => pw.Expanded(
+    child: pw.Row(
+      children: [
+        pw.Text(
+          label,
+          style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+        ),
+        pw.SizedBox(width: 4),
+        blankLine(),
+      ],
+    ),
+  );
+
+  for (final section in sortedSections) {
+    final sectionTitle = titleFor(section);
+    doc.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.letter,
+        margin: const pw.EdgeInsets.fromLTRB(42, 24, 18, 26),
+        build: (_) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+          children: [
+            pw.Center(
+              child: pw.Text(
+                '$showName   $sectionTitle',
+                style: pw.TextStyle(
+                  fontSize: 12,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+                textAlign: pw.TextAlign.center,
+              ),
+            ),
+            pw.SizedBox(height: 3),
+            pw.Center(
+              child: pw.Text(
+                'Judging Sheet - Breed Class • Compact',
+                style: pw.TextStyle(
+                  fontSize: 12,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+            ),
+            pw.SizedBox(height: 7),
+            pw.Row(
+              children: [
+                field('Judge:'),
+                pw.SizedBox(width: 18),
+                field('Writer:'),
+              ],
+            ),
+            pw.SizedBox(height: 10),
+            pw.Row(
+              children: [
+                field('Breed:'),
+                pw.SizedBox(width: 14),
+                field('Variety:'),
+              ],
+            ),
+            pw.SizedBox(height: 7),
+            pw.Row(
+              children: [
+                field('Class:'),
+                pw.SizedBox(width: 14),
+                field('Sex:'),
+                pw.SizedBox(width: 14),
+                field('No. In Class:'),
+              ],
+            ),
+            pw.SizedBox(height: 7),
+            pw.Text(
+              'Day-of-show entry control sheet',
+              style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+            ),
+            pw.SizedBox(height: 6),
+            pw.Table(
+              border: pw.TableBorder.all(width: .4),
+              columnWidths: {
+                0: const pw.FixedColumnWidth(52),
+                1: const pw.FixedColumnWidth(64),
+                2: const pw.FlexColumnWidth(.75),
+                3: const pw.FixedColumnWidth(95),
+                4: const pw.FixedColumnWidth(76),
+              },
+              children: [
+                pw.TableRow(
+                  decoration: const pw.BoxDecoration(color: PdfColors.grey300),
+                  children:
+                      const [
+                            'Coop #',
+                            'Ear #',
+                            'Exhibitor',
+                            'Place / DQ',
+                            'Specials',
+                          ]
+                          .map(
+                            (label) => pw.Padding(
+                              padding: pw.EdgeInsets.all(3),
+                              child: pw.Text(
+                                label,
+                                style: pw.TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: pw.FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                ),
+                ...List.generate(
+                  16,
+                  (_) => pw.TableRow(
+                    children: List.generate(5, (_) => pw.SizedBox(height: 22)),
+                  ),
+                ),
+              ],
+            ),
+            pw.Spacer(),
+            pw.Row(
+              children: [
+                pw.Text(
+                  'RingMaster One Show',
+                  style: const pw.TextStyle(fontSize: 8),
+                ),
+                pw.Spacer(),
+                pw.Text(
+                  'Blank day-of-show control sheet',
+                  style: const pw.TextStyle(fontSize: 8),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  final bytes = await doc.save();
+  return savePdfToUserChosenLocation(
+    bytes: Uint8List.fromList(bytes),
+    suggestedName: 'blank_control_sheets_$showName.pdf',
+  );
+}
+
 class ControlSheetsGeneratorSheet extends StatefulWidget {
   final String showId;
   final String showName;
@@ -1790,6 +1967,9 @@ class _ControlSheetsGeneratorSheetState
     }
   }
 
+  // Kept as an internal fallback for the generator sheet; the direct download
+  // action above is the primary day-of-show workflow.
+  // ignore: unused_element
   pw.Document _buildBlankPdf(pw.ThemeData theme) {
     final doc = pw.Document(theme: theme);
     final sectionIds = widget.sectionIds.isNotEmpty
@@ -1972,6 +2152,7 @@ class _ControlSheetsGeneratorSheetState
     return doc;
   }
 
+  // ignore: unused_element
   Future<void> _generateBlankPdf() async {
     if (_building) return;
     setState(() {
@@ -2143,12 +2324,6 @@ class _ControlSheetsGeneratorSheetState
               label: Text(
                 _building ? 'Building Compact PDF…' : 'Generate Compact PDF',
               ),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: _building ? null : _generateBlankPdf,
-              icon: const Icon(Icons.edit_note_outlined),
-              label: const Text('Download Blank Day-of-Show Control Sheet'),
             ),
             const SizedBox(height: 8),
             Container(

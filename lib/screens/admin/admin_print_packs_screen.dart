@@ -41,6 +41,7 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
   bool _autoEmailCheckInSheets = false;
   bool _savingAutoEmailCheckInSheets = false;
   bool _savingSecretaryInfo = false;
+  bool _buildingBlankControlSheets = false;
   bool _secretaryInfoExpanded = true;
   final TextEditingController _secretaryNameController =
       TextEditingController();
@@ -519,6 +520,34 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
     );
   }
 
+  Future<void> _downloadBlankControlSheets() async {
+    if (_buildingBlankControlSheets || _sections.isEmpty) return;
+    setState(() {
+      _buildingBlankControlSheets = true;
+      _msg = null;
+    });
+
+    try {
+      final savedPath = await downloadBlankControlSheetsPdf(
+        showName: widget.showName,
+        sections: _sections,
+      );
+      if (!mounted) return;
+      setState(() {
+        _buildingBlankControlSheets = false;
+        _msg = savedPath == null
+            ? 'Blank control sheet download canceled.'
+            : 'Blank control sheets saved to: $savedPath';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _buildingBlankControlSheets = false;
+        _msg = 'Failed to build blank control sheets: $e';
+      });
+    }
+  }
+
   List<List<Map<String, dynamic>>> _controlSheetButtonGroups() {
     if (!_pairOpenYouthByLetter) {
       return _sections.map((s) => [s]).toList();
@@ -893,6 +922,21 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
                           ),
                         ),
                       ),
+                    const SizedBox(height: 4),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: _buildingBlankControlSheets
+                            ? null
+                            : _downloadBlankControlSheets,
+                        icon: const Icon(Icons.edit_note_outlined),
+                        label: Text(
+                          _buildingBlankControlSheets
+                              ? 'Building Blank Control Sheets…'
+                              : 'Download Blank Day-of-Show Control Sheets',
+                        ),
+                      ),
+                    ),
                   ],
                 ),
 
