@@ -22,6 +22,9 @@ verify_jwt = false
 [functions.stripe-license-webhook]
 verify_jwt = false
 
+[functions.resend-report-webhook]
+verify_jwt = false
+
 [functions.square-payment-webhook]
 verify_jwt = false
 

@@ -4319,6 +4319,42 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
     }
   }
 
+  Future<void> _showReportDeliveryHistory() async {
+    try {
+      final rows = await supabase
+          .from('show_email_deliveries')
+          .select(
+            'id,recipient_name,recipient_email,subject,delivery_status,'
+            'provider_message_id,error_message,sent_at,created_at,report_name,'
+            'show_report_artifacts(file_name,metadata)',
+          )
+          .eq('show_id', widget.showId)
+          .order('sent_at', ascending: false)
+          .order('created_at', ascending: false);
+      if (!mounted) return;
+
+      final deliveries = _ReportDeliveryHistoryItem.group(
+        List<Map<String, dynamic>>.from(
+          (rows as List).map((row) => Map<String, dynamic>.from(row as Map)),
+        ),
+      );
+      await showDialog<void>(
+        context: context,
+        builder: (context) => _ReportDeliveryHistoryDialog(
+          showName: widget.showName,
+          deliveries: deliveries,
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Unable to load report delivery history: $error'),
+        ),
+      );
+    }
+  }
+
   Future<void> _sendAllClubReports() async {
     if (await _blockedBySupportModeForEmailSend('Club')) return;
     if (!_canSendClubReports) {
@@ -8387,6 +8423,11 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                               ),
                             ),
                           ),
+                          OutlinedButton.icon(
+                            onPressed: _showReportDeliveryHistory,
+                            icon: const Icon(Icons.mark_email_read_outlined),
+                            label: const Text('Report Delivery History'),
+                          ),
                         ],
                       ),
                     ),
@@ -11440,6 +11481,240 @@ class _CloseoutScopeCard extends StatelessWidget {
         .toList();
 
     return labels.isEmpty ? ['None'] : labels;
+  }
+}
+
+class _ReportDeliveryHistoryItem {
+  final String recipientName;
+  final String recipientEmail;
+  final String subject;
+  final String deliveryStatus;
+  final String? errorMessage;
+  final DateTime? sentAt;
+  final List<String> fileNames;
+
+  const _ReportDeliveryHistoryItem({
+    required this.recipientName,
+    required this.recipientEmail,
+    required this.subject,
+    required this.deliveryStatus,
+    required this.errorMessage,
+    required this.sentAt,
+    required this.fileNames,
+  });
+
+  String get _lastNameSortKey {
+    final words = recipientName
+        .trim()
+        .toLowerCase()
+        .split(RegExp(r'\\s+'))
+        .where((word) => word.isNotEmpty)
+        .toList();
+    return words.isEmpty ? recipientEmail.toLowerCase() : words.last;
+  }
+
+  static List<_ReportDeliveryHistoryItem> group(
+    List<Map<String, dynamic>> rows,
+  ) {
+    final grouped = <String, List<Map<String, dynamic>>>{};
+    for (final row in rows) {
+      final providerId = (row['provider_message_id'] ?? '').toString().trim();
+      // A successful multi-file email shares one provider message ID. Failed
+      // sends have no provider ID, so keep each attempted report visible.
+      final key = providerId.isEmpty
+          ? 'attempt:${row['id']}'
+          : 'provider:$providerId';
+      grouped.putIfAbsent(key, () => []).add(row);
+    }
+
+    final result =
+        grouped.values.map((items) {
+          final first = items.first;
+          final artifact = first['show_report_artifacts'];
+          final metadata = artifact is Map
+              ? Map<String, dynamic>.from(
+                  artifact['metadata'] as Map? ?? const {},
+                )
+              : const <String, dynamic>{};
+          final configuredName = (first['recipient_name'] ?? '')
+              .toString()
+              .trim();
+          final recipientName = configuredName.isNotEmpty
+              ? configuredName
+              : (metadata['exhibitor_name'] ??
+                        metadata['club_name'] ??
+                        metadata['breed_name'] ??
+                        first['recipient_email'] ??
+                        '')
+                    .toString()
+                    .trim();
+          final files = <String>{};
+          for (final item in items) {
+            final linkedArtifact = item['show_report_artifacts'];
+            final fileName = linkedArtifact is Map
+                ? (linkedArtifact['file_name'] ?? '').toString().trim()
+                : '';
+            files.add(
+              fileName.isNotEmpty
+                  ? fileName
+                  : _friendlyReportName((item['report_name'] ?? '').toString()),
+            );
+          }
+          final sentAt = DateTime.tryParse(
+            (first['sent_at'] ?? first['created_at'] ?? '').toString(),
+          );
+          return _ReportDeliveryHistoryItem(
+            recipientName: recipientName.isEmpty
+                ? 'Unknown recipient'
+                : recipientName,
+            recipientEmail: (first['recipient_email'] ?? '').toString().trim(),
+            subject: (first['subject'] ?? '').toString().trim(),
+            deliveryStatus: (first['delivery_status'] ?? 'unknown')
+                .toString()
+                .trim(),
+            errorMessage:
+                (first['error_message'] ?? '').toString().trim().isEmpty
+                ? null
+                : (first['error_message'] ?? '').toString().trim(),
+            sentAt: sentAt,
+            fileNames: files.toList()..sort(),
+          );
+        }).toList()..sort((a, b) {
+          final name = a._lastNameSortKey.compareTo(b._lastNameSortKey);
+          return name != 0 ? name : a.recipientName.compareTo(b.recipientName);
+        });
+    return result;
+  }
+}
+
+class _ReportDeliveryHistoryDialog extends StatelessWidget {
+  final String showName;
+  final List<_ReportDeliveryHistoryItem> deliveries;
+
+  const _ReportDeliveryHistoryDialog({
+    required this.showName,
+    required this.deliveries,
+  });
+
+  Color _statusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'delivered':
+      case 'opened':
+      case 'clicked':
+        return Colors.green.shade700;
+      case 'bounced':
+      case 'failed':
+      case 'complained':
+      case 'suppressed':
+        return Colors.red.shade700;
+      case 'delivery_delayed':
+        return Colors.orange.shade800;
+      default:
+        return AppColors.navy;
+    }
+  }
+
+  String _statusLabel(String status) => status
+      .replaceAll('_', ' ')
+      .split(' ')
+      .where((word) => word.isNotEmpty)
+      .map((word) => '${word[0].toUpperCase()}${word.substring(1)}')
+      .join(' ');
+
+  String _sentLabel(DateTime? value) {
+    if (value == null) return 'Date unavailable';
+    final local = value.toLocal();
+    final month = local.month.toString().padLeft(2, '0');
+    final day = local.day.toString().padLeft(2, '0');
+    final hour = local.hour.toString().padLeft(2, '0');
+    final minute = local.minute.toString().padLeft(2, '0');
+    return '${local.year}-$month-$day $hour:$minute';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Report Delivery History'),
+      content: SizedBox(
+        width: 680,
+        child: deliveries.isEmpty
+            ? Text('No report emails have been logged for $showName yet.')
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Recipients are sorted by last name.'),
+                  const SizedBox(height: 10),
+                  Flexible(
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: deliveries.length,
+                      separatorBuilder: (_, _) => const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final item = deliveries[index];
+                        return ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 8,
+                          ),
+                          title: Text(item.recipientName),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(item.recipientEmail),
+                              if (item.subject.isNotEmpty) Text(item.subject),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Files: ${item.fileNames.join(', ')}',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                              if (item.errorMessage != null) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  item.errorMessage!,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(color: Colors.red.shade700),
+                                ),
+                              ],
+                            ],
+                          ),
+                          trailing: SizedBox(
+                            width: 104,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  _statusLabel(item.deliveryStatus),
+                                  textAlign: TextAlign.end,
+                                  style: TextStyle(
+                                    color: _statusColor(item.deliveryStatus),
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  _sentLabel(item.sentAt),
+                                  textAlign: TextAlign.end,
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Close'),
+        ),
+      ],
+    );
   }
 }
 
