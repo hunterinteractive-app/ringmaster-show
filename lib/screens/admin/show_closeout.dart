@@ -11655,16 +11655,29 @@ class _ReportDeliveryHistoryDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      backgroundColor: const Color(0xFF3D1B78),
+      titleTextStyle: const TextStyle(
+        color: Colors.white,
+        fontSize: 20,
+        fontWeight: FontWeight.w700,
+      ),
+      contentTextStyle: const TextStyle(color: Colors.white),
       title: const Text('Report Delivery History'),
       content: SizedBox(
         width: 680,
         child: deliveries.isEmpty
-            ? Text('No report emails have been logged for $showName yet.')
+            ? Text(
+                'No report emails have been logged for $showName yet.',
+                style: const TextStyle(color: Colors.white),
+              )
             : Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Recipients are sorted by last name.'),
+                  const Text(
+                    'Recipients are sorted by last name.',
+                    style: TextStyle(color: Colors.white),
+                  ),
                   const SizedBox(height: 10),
                   Flexible(
                     child: ListView.separated(
@@ -11677,16 +11690,32 @@ class _ReportDeliveryHistoryDialog extends StatelessWidget {
                           contentPadding: const EdgeInsets.symmetric(
                             vertical: 8,
                           ),
-                          title: Text(item.recipientName),
+                          title: Text(
+                            item.recipientName,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                           subtitle: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(item.recipientEmail),
-                              if (item.subject.isNotEmpty) Text(item.subject),
+                              Text(
+                                item.recipientEmail,
+                                style: const TextStyle(color: Colors.white),
+                              ),
+                              if (item.subject.isNotEmpty)
+                                Text(
+                                  item.subject,
+                                  style: const TextStyle(color: Colors.white),
+                                ),
                               const SizedBox(height: 4),
                               Text(
                                 'Files: ${item.fileNames.join(', ')}',
-                                style: Theme.of(context).textTheme.bodySmall,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                ),
                               ),
                               if (item.errorMessage != null) ...[
                                 const SizedBox(height: 4),
@@ -11694,7 +11723,9 @@ class _ReportDeliveryHistoryDialog extends StatelessWidget {
                                   item.errorMessage!,
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(color: Colors.red.shade700),
+                                  style: const TextStyle(
+                                    color: Color(0xFFFFC1C1),
+                                  ),
                                 ),
                               ],
                             ],
@@ -11717,7 +11748,10 @@ class _ReportDeliveryHistoryDialog extends StatelessWidget {
                                 Text(
                                   _sentLabel(item.sentAt),
                                   textAlign: TextAlign.end,
-                                  style: Theme.of(context).textTheme.bodySmall,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                  ),
                                 ),
                               ],
                             ),
@@ -11732,7 +11766,7 @@ class _ReportDeliveryHistoryDialog extends StatelessWidget {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Close'),
+          child: const Text('Close', style: TextStyle(color: Colors.white)),
         ),
       ],
     );

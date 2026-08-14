@@ -49,8 +49,10 @@ class ReportEmailService {
     String? replyTo,
     bool allowLegs = false, // 👈 Leg Change
   }) async {
+    // Use the shared report sender so exhibitor sends are recorded in the
+    // same delivery history as National and State club report sends.
     final resp = await supabase.functions.invoke(
-      'send-exhibitor-report-email',
+      'send-report-email',
       body: {
         'show_id': showId,
         'artifact_ids': artifactIds,

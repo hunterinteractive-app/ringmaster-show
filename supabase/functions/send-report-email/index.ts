@@ -61,6 +61,7 @@ serve(async (req)=>{
     const subjectOverride = body.subject?.trim();
     const message = body.message?.trim() ?? "";
     const requestedReplyTo = body.reply_to?.trim();
+    const requestedRecipientName = body.recipient_name?.trim();
     const forceResend = body.force_resend === true;
     if (!showId) {
       return json({
@@ -422,12 +423,13 @@ serve(async (req)=>{
         bcc: resendPayload.bcc
       });
     }
+    const loggedRecipientName = requestedRecipientName || String(artifacts[0]?.metadata?.["exhibitor_name"] ?? artifacts[0]?.metadata?.["club_name"] ?? artifacts[0]?.metadata?.["breed_name"] ?? "").trim() || null;
     const { error: logError } = await adminClient.from("show_email_deliveries").insert(artifacts.map((artifact)=>({
         show_id: showId,
         artifact_id: artifact.id,
         report_name: artifact.report_name,
         recipient_email: recipients.join(", "),
-        recipient_name: null,
+        recipient_name: loggedRecipientName,
         subject,
         delivery_type: artifact.report_name,
         delivery_status: deliveryStatus,
