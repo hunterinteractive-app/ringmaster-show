@@ -3466,58 +3466,6 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
   }
 }
 
-// ignore: unused_element
-class _EmptyLineupCard extends StatelessWidget {
-  const _EmptyLineupCard({required this.onAdd});
-
-  final VoidCallback onAdd;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(28),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
-      child: Column(
-        children: [
-          Icon(
-            Icons.table_chart_outlined,
-            size: 56,
-            color: colorScheme.primary,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'No line-up rows yet',
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Add a breed to start building the superintendent judging order.',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: onAdd,
-            icon: const Icon(Icons.add),
-            label: const Text('Add First Breed'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _ErrorState extends StatelessWidget {
   const _ErrorState({required this.message, required this.onRetry});
 
