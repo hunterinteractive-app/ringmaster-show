@@ -3821,7 +3821,41 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
     }
   }
 
-  Future<void> _sendAllClubReports() async {
+  Future<void> _promptAndSendClubReports() async {
+    final noteController = TextEditingController();
+    final additionalMessage = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Send Club Reports'),
+        content: TextField(
+          controller: noteController,
+          maxLines: 5,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: const InputDecoration(
+            labelText: 'Additional delivery note (optional)',
+            hintText: 'Add a note to every club email in this send.',
+            alignLabelWithHint: true,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.of(context).pop(noteController.text),
+            icon: const Icon(Icons.send_outlined),
+            label: const Text('Send Reports'),
+          ),
+        ],
+      ),
+    );
+    noteController.dispose();
+    if (additionalMessage == null) return;
+    await _sendAllClubReports(additionalMessage: additionalMessage);
+  }
+
+  Future<void> _sendAllClubReports({String additionalMessage = ''}) async {
     if (await _blockedBySupportModeForEmailSend('Club')) return;
     if (!_canSendClubReports) {
       if (!mounted) return;
@@ -3959,7 +3993,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
               ? '${widget.showName} - ${first.clubName} ${speciesLabel}Club Reports'
               : '${widget.showName} - ${first.breedName} Club Reports';
 
-          final message = isStateClub
+          final baseMessage = isStateClub
               ? 'Attached are the ${speciesMessagePrefix}Breed Totals, Breed Special Points, and Display Points reports for ${widget.showName} for ${first.scope} ${first.showLetter}.\n\n'
                     '${includedSanctionNumbers.isNotEmpty ? 'Included shows: ${includedSanctionNumbers.join(', ')}.' : ''}'
               : first.sanctioningBody.trim().toUpperCase() == 'NATIONAL CLUB' &&
@@ -3967,6 +4001,10 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
               ? 'Attached are the sweepstakes, breed results detail, exhibitor by breed, and details by breed reports for ${widget.showName}.\n\n'
               : 'Attached are the sweepstakes and breed results detail reports for ${widget.showName}.\n\n'
                     '${includedSanctionNumbers.isNotEmpty ? 'Included shows: ${includedSanctionNumbers.join(', ')}.' : ''}';
+          final message = [
+            baseMessage,
+            if (additionalMessage.trim().isNotEmpty) additionalMessage.trim(),
+          ].join('\n\n');
 
           await _sendClubArtifactsEmail(
             artifacts: artifacts,
@@ -7779,7 +7817,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                                       _resolvedCloseoutScope.isEmpty ||
                                       !_canSendClubReports
                                   ? null
-                                  : _sendAllClubReports,
+                                  : _promptAndSendClubReports,
                               icon: const Icon(Icons.group_outlined),
                               label: Text(
                                 generationActive
