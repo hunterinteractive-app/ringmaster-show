@@ -11,7 +11,7 @@ import '../../models/base/report_request.dart';
 import '../../models/clubs/sweepstakes_report_data.dart';
 
 /// Bump when the Sweepstakes PDF template or scoring presentation changes.
-const String sweepstakesReportVersion = '0.6.1';
+const String sweepstakesReportVersion = '0.6.2';
 
 class SweepstakesReportPdf {
   final Uint8List? logoBytes;

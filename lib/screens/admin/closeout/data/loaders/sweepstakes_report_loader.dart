@@ -470,11 +470,13 @@ class SweepstakesReportLoader {
     required String species,
     required String breedName,
   }) {
-    if (species != 'cavy' || breedName.isNotEmpty || rows.isEmpty) {
-      return rows;
-    }
+    if (rows.isEmpty) return rows;
 
-    return combineSweepstakesRowsByExhibitor(rows);
+    final normalized = species == 'cavy' && breedName.isEmpty
+        ? combineSweepstakesRowsByExhibitor(rows)
+        : [...rows];
+
+    return sortSweepstakesRowsByExhibitorLastName(normalized);
   }
 
   Future<List<SweepstakesTopBreedRow>> _loadTopBreedRows({
@@ -629,15 +631,49 @@ List<SweepstakesReportRow> combineSweepstakesRowsByExhibitor(
     ..sort((a, b) {
       final totalCmp = b.totalPoints.compareTo(a.totalPoints);
       if (totalCmp != 0) return totalCmp;
-      return a.exhibitorName.toLowerCase().compareTo(
-        b.exhibitorName.toLowerCase(),
-      );
+      return _compareExhibitorNames(a.exhibitorName, b.exhibitorName);
     });
 
   return [
     for (var i = 0; i < combined.length; i++) combined[i].toRow(rank: i + 1),
   ];
 }
+
+/// Sweepstakes reports are filed as alphabetical exhibitor lists. The stored
+/// rank remains the point-based standing, while this controls only the order
+/// in which recipients appear in the PDF.
+List<SweepstakesReportRow> sortSweepstakesRowsByExhibitorLastName(
+  List<SweepstakesReportRow> rows,
+) => [...rows]
+  ..sort((a, b) => _compareExhibitorNames(a.exhibitorName, b.exhibitorName));
+
+int _compareExhibitorNames(String a, String b) {
+  final surnameComparison = _exhibitorLastName(
+    a,
+  ).compareTo(_exhibitorLastName(b));
+  if (surnameComparison != 0) return surnameComparison;
+  return _normalizedExhibitorName(a).compareTo(_normalizedExhibitorName(b));
+}
+
+String _exhibitorLastName(String name) {
+  final normalized = _normalizedExhibitorName(name);
+  if (normalized.isEmpty) return '';
+
+  // Supports both "First Last" and "Last, First" name formats.
+  final beforeComma = normalized.split(',').first.trim();
+  final parts = beforeComma
+      .split(' ')
+      .where((part) => part.isNotEmpty)
+      .toList();
+  const suffixes = {'jr', 'jr.', 'sr', 'sr.', 'ii', 'iii', 'iv', 'v'};
+  while (parts.length > 1 && suffixes.contains(parts.last)) {
+    parts.removeLast();
+  }
+  return parts.last;
+}
+
+String _normalizedExhibitorName(String name) =>
+    name.trim().replaceAll(RegExp(r'\\s+'), ' ').toLowerCase();
 
 class _SweepstakesAccumulator {
   _SweepstakesAccumulator({

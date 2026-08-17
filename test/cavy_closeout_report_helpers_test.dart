@@ -57,6 +57,12 @@ void main() {
       expect(combined.first.bobPoints, 8);
       expect(combined.first.totalPoints, 21);
       expect(combined.last.rank, 2);
+
+      final alphabetized = sortSweepstakesRowsByExhibitorLastName(combined);
+      expect(alphabetized.first.exhibitorName, 'Mary Anne & Al Chmura');
+      expect(alphabetized.last.exhibitorName, 'Another Exhibitor');
+      expect(alphabetized.first.rank, 1);
+      expect(alphabetized.last.rank, 2);
     });
 
     test('uses breed as top section for combined cavy detail reports', () {
