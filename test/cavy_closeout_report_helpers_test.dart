@@ -6,6 +6,27 @@ import 'package:ringmaster_show/screens/admin/closeout/models/clubs/sweepstakes_
 
 void main() {
   group('cavy closeout report helpers', () {
+    test('keeps cavy rows out of rabbit detail reports without species', () {
+      expect(
+        breedResultsDetailRowMatchesSpecies(const {
+          'breed_name': 'American',
+        }, 'rabbit'),
+        isFalse,
+      );
+      expect(
+        breedResultsDetailRowMatchesSpecies(const {
+          'breed_name': 'Mini Lop',
+        }, 'rabbit'),
+        isTrue,
+      );
+      expect(
+        breedResultsDetailRowMatchesSpecies(const {
+          'breed_name': 'American',
+        }, 'cavy'),
+        isTrue,
+      );
+    });
+
     test('combines cavy sweepstakes rows by exhibitor', () {
       final combined = combineSweepstakesRowsByExhibitor(const [
         SweepstakesReportRow(

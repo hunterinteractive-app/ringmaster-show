@@ -8,6 +8,27 @@ import '../../utils/club_report_grouping.dart';
 import '../../utils/breed_results_detail_order.dart';
 import '../closeout_repository.dart';
 
+/// Keeps a species-scoped breed detail report from counting the other species
+/// when an older RPC result omits its explicit species column.
+bool breedResultsDetailRowMatchesSpecies(
+  Map<String, dynamic> row,
+  String species,
+) {
+  if (species.isEmpty) return true;
+
+  final rowSpecies = normalizeClubReportSpecies(
+    (row['species'] ?? row['animal_species'] ?? row['entry_species'] ?? '')
+        .toString(),
+  );
+  if (rowSpecies.isNotEmpty) return rowSpecies == species;
+
+  final breedName = (row['breed_name'] ?? row['breed'] ?? '').toString();
+  if (species == 'cavy') return isKnownCavyBreed(breedName);
+  if (species == 'rabbit') return !isKnownCavyBreed(breedName);
+
+  return false;
+}
+
 class BreedResultsDetailReportLoader {
   BreedResultsDetailReportLoader(this.repo);
 
@@ -285,7 +306,7 @@ class BreedResultsDetailReportLoader {
 
     final awardRows = (awardsResponse as List)
         .map((e) => Map<String, dynamic>.from(e as Map))
-        .where((row) => _rowMatchesSpecies(row, species))
+        .where((row) => breedResultsDetailRowMatchesSpecies(row, species))
         .toList();
     final groupByBreed = species == 'cavy' && breedName.isEmpty;
 
@@ -1516,22 +1537,9 @@ class BreedResultsDetailReportLoader {
     String species,
   ) {
     if (species.isEmpty) return rows;
-    return rows.where((row) => _rowMatchesSpecies(row, species)).toList();
-  }
-
-  bool _rowMatchesSpecies(Map<String, dynamic> row, String species) {
-    if (species.isEmpty) return true;
-
-    final rowSpecies = normalizeClubReportSpecies(
-      _safe(row['species'] ?? row['animal_species'] ?? row['entry_species']),
-    );
-    if (rowSpecies.isNotEmpty) return rowSpecies == species;
-
-    if (species == 'cavy') {
-      return isKnownCavyBreed(_safe(row['breed_name'] ?? row['breed']));
-    }
-
-    return true;
+    return rows
+        .where((row) => breedResultsDetailRowMatchesSpecies(row, species))
+        .toList();
   }
 
   List<Map<String, dynamic>> _mergeResultRows(
