@@ -14,7 +14,45 @@ class ReportEmailSendResult {
   });
 }
 
+class ReportEmailBatchSendResult {
+  final int sentCount;
+  final int alreadySentCount;
+  final int failedCount;
+
+  const ReportEmailBatchSendResult({
+    required this.sentCount,
+    required this.alreadySentCount,
+    required this.failedCount,
+  });
+}
+
 class ReportEmailService {
+  Future<ReportEmailBatchSendResult> sendClubReportBatch({
+    required String showId,
+    required List<Map<String, dynamic>> deliveries,
+  }) async {
+    final response = await supabase.functions.invoke(
+      'send-club-report-batch',
+      body: {'show_id': showId, 'deliveries': deliveries},
+    );
+
+    final data = response.data is Map
+        ? Map<String, dynamic>.from(response.data as Map)
+        : <String, dynamic>{};
+    final error = (data['error'] ?? data['message'] ?? '').toString().trim();
+    if (response.status < 200 || response.status >= 300 || data['ok'] != true) {
+      throw Exception(
+        error.isEmpty ? 'The club report batch did not complete.' : error,
+      );
+    }
+
+    return ReportEmailBatchSendResult(
+      sentCount: (data['sent_count'] as num?)?.toInt() ?? 0,
+      alreadySentCount: (data['already_sent_count'] as num?)?.toInt() ?? 0,
+      failedCount: (data['failed_count'] as num?)?.toInt() ?? 0,
+    );
+  }
+
   Future<ReportEmailSendResult> sendClubReportEmail({
     required String showId,
     required List<String> artifactIds,

@@ -3920,7 +3920,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       int sentCount = 0;
       int skippedCount = 0;
       int failedCount = 0;
-      final deliveryJobs = <Future<bool> Function()>[];
+      final deliveryRequests = <Map<String, dynamic>>[];
 
       final grouped = <String, List<_ClubEmailTarget>>{};
 
@@ -4034,38 +4034,28 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
           if (additionalMessage.trim().isNotEmpty) additionalMessage.trim(),
         ].join('\n\n');
 
-        deliveryJobs.add(() async {
-          try {
-            await _sendClubArtifactsEmail(
-              artifacts: artifacts,
-              to: first.email,
-              subject: subject,
-              message: message,
-            );
-            return true;
-          } catch (error) {
-            debugPrint(
-              '[CloseoutDelivery] club email failed '
-              'recipient=${first.email} error=$error',
-            );
-            return false;
-          }
+        deliveryRequests.add({
+          'artifact_ids': artifacts.map((artifact) => artifact.id).toList(),
+          'to': first.email,
+          'subject': subject,
+          'message': message,
         });
       }
 
-      // Send a few independent club bundles at a time.  Previously, every
-      // recipient waited behind a stalled request, which could leave the UI
-      // in a "Sending" state for many minutes without reaching the provider.
-      const batchSize = 4;
-      for (var start = 0; start < deliveryJobs.length; start += batchSize) {
-        final end = start + batchSize > deliveryJobs.length
-            ? deliveryJobs.length
-            : start + batchSize;
-        final results = await Future.wait(
-          deliveryJobs.sublist(start, end).map((job) => job()),
-        );
-        sentCount += results.where((sent) => sent).length;
-        failedCount += results.where((sent) => !sent).length;
+      if (deliveryRequests.isNotEmpty) {
+        final batchResult = await ReportEmailService()
+            .sendClubReportBatch(
+              showId: widget.showId,
+              deliveries: deliveryRequests,
+            )
+            .timeout(
+              const Duration(seconds: 120),
+              onTimeout: () => throw TimeoutException(
+                'The club report batch did not finish within two minutes.',
+              ),
+            );
+        sentCount += batchResult.sentCount + batchResult.alreadySentCount;
+        failedCount += batchResult.failedCount;
       }
 
       if (!mounted) return;
