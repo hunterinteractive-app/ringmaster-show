@@ -2380,9 +2380,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
           forceResend: forceResend,
         )
         .timeout(
-          const Duration(seconds: 45),
+          const Duration(seconds: 20),
           onTimeout: () => throw TimeoutException(
-            'The club email request did not finish within 45 seconds.',
+            'The club email request did not finish within 20 seconds.',
           ),
         );
   }
@@ -3920,6 +3920,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       int sentCount = 0;
       int skippedCount = 0;
       int failedCount = 0;
+      final deliveryJobs = <Future<bool> Function()>[];
 
       final grouped = <String, List<_ClubEmailTarget>>{};
 
@@ -4005,45 +4006,66 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
           continue;
         }
 
-        try {
-          final species = first.species.trim().toLowerCase();
-          final speciesLabel = species == 'rabbit'
-              ? 'Rabbit '
-              : species == 'cavy'
-              ? 'Cavy '
-              : '';
-          final speciesMessagePrefix = species == 'rabbit'
-              ? 'rabbit '
-              : species == 'cavy'
-              ? 'cavy '
-              : '';
-          final subject = isStateClub
-              ? '${widget.showName} - ${first.clubName} ${speciesLabel}Club Reports'
-              : '${widget.showName} - ${first.breedName} Club Reports';
+        final species = first.species.trim().toLowerCase();
+        final speciesLabel = species == 'rabbit'
+            ? 'Rabbit '
+            : species == 'cavy'
+            ? 'Cavy '
+            : '';
+        final speciesMessagePrefix = species == 'rabbit'
+            ? 'rabbit '
+            : species == 'cavy'
+            ? 'cavy '
+            : '';
+        final subject = isStateClub
+            ? '${widget.showName} - ${first.clubName} ${speciesLabel}Club Reports'
+            : '${widget.showName} - ${first.breedName} Club Reports';
 
-          final baseMessage = isStateClub
-              ? 'Attached are the ${speciesMessagePrefix}Breed Totals, Breed Special Points, and Display Points reports for ${widget.showName} for ${first.scope} ${first.showLetter}.\n\n'
-                    '${includedSanctionNumbers.isNotEmpty ? 'Included shows: ${includedSanctionNumbers.join(', ')}.' : ''}'
-              : first.sanctioningBody.trim().toUpperCase() == 'NATIONAL CLUB' &&
-                    first.species.trim().toLowerCase() == 'cavy'
-              ? 'Attached are the sweepstakes, breed results detail, exhibitor by breed, and details by breed reports for ${widget.showName}.\n\n'
-              : 'Attached are the sweepstakes and breed results detail reports for ${widget.showName}.\n\n'
-                    '${includedSanctionNumbers.isNotEmpty ? 'Included shows: ${includedSanctionNumbers.join(', ')}.' : ''}';
-          final message = [
-            baseMessage,
-            if (additionalMessage.trim().isNotEmpty) additionalMessage.trim(),
-          ].join('\n\n');
+        final baseMessage = isStateClub
+            ? 'Attached are the ${speciesMessagePrefix}Breed Totals, Breed Special Points, and Display Points reports for ${widget.showName} for ${first.scope} ${first.showLetter}.\n\n'
+                  '${includedSanctionNumbers.isNotEmpty ? 'Included shows: ${includedSanctionNumbers.join(', ')}.' : ''}'
+            : first.sanctioningBody.trim().toUpperCase() == 'NATIONAL CLUB' &&
+                  first.species.trim().toLowerCase() == 'cavy'
+            ? 'Attached are the sweepstakes, breed results detail, exhibitor by breed, and details by breed reports for ${widget.showName}.\n\n'
+            : 'Attached are the sweepstakes and breed results detail reports for ${widget.showName}.\n\n'
+                  '${includedSanctionNumbers.isNotEmpty ? 'Included shows: ${includedSanctionNumbers.join(', ')}.' : ''}';
+        final message = [
+          baseMessage,
+          if (additionalMessage.trim().isNotEmpty) additionalMessage.trim(),
+        ].join('\n\n');
 
-          await _sendClubArtifactsEmail(
-            artifacts: artifacts,
-            to: first.email,
-            subject: subject,
-            message: message,
-          );
-          sentCount++;
-        } catch (e) {
-          failedCount++;
-        }
+        deliveryJobs.add(() async {
+          try {
+            await _sendClubArtifactsEmail(
+              artifacts: artifacts,
+              to: first.email,
+              subject: subject,
+              message: message,
+            );
+            return true;
+          } catch (error) {
+            debugPrint(
+              '[CloseoutDelivery] club email failed '
+              'recipient=${first.email} error=$error',
+            );
+            return false;
+          }
+        });
+      }
+
+      // Send a few independent club bundles at a time.  Previously, every
+      // recipient waited behind a stalled request, which could leave the UI
+      // in a "Sending" state for many minutes without reaching the provider.
+      const batchSize = 4;
+      for (var start = 0; start < deliveryJobs.length; start += batchSize) {
+        final end = start + batchSize > deliveryJobs.length
+            ? deliveryJobs.length
+            : start + batchSize;
+        final results = await Future.wait(
+          deliveryJobs.sublist(start, end).map((job) => job()),
+        );
+        sentCount += results.where((sent) => sent).length;
+        failedCount += results.where((sent) => !sent).length;
       }
 
       if (!mounted) return;
