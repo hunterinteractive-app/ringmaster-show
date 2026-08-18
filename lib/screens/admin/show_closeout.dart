@@ -3632,8 +3632,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
     });
 
     try {
-      await _refreshDashboardOnly(includeReports: true);
-
       final exhibitors = await _loadExhibitorEmailTargets();
 
       if (exhibitors.isEmpty) {
@@ -3896,8 +3894,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
     });
 
     try {
-      await _refreshDashboardOnly(includeReports: true);
-
       final clubs = await _loadClubEmailTargets();
 
       if (clubs.isEmpty) {
@@ -4144,8 +4140,6 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
     });
 
     try {
-      await _refreshDashboardOnly(includeReports: true);
-
       final exhibitors = await _loadExhibitorEmailTargets();
 
       if (exhibitors.isEmpty) {
