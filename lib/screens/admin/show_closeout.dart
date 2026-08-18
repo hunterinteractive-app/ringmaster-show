@@ -134,6 +134,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
   bool _reportsLoaded = false;
   bool _reportsSectionOpen = false;
   bool _generatingReport = false;
+  bool _sendingReportEmails = false;
   bool _finalizeOperationInFlight = false;
   bool _dashboardRefreshInFlight = false;
   bool _dashboardRefreshPending = false;
@@ -3612,6 +3613,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
 
     setState(() {
       _generatingReport = true;
+      _sendingReportEmails = true;
     });
 
     try {
@@ -3759,6 +3761,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       if (mounted) {
         setState(() {
           _generatingReport = false;
+          _sendingReportEmails = false;
         });
       }
     }
@@ -3874,6 +3877,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
 
     setState(() {
       _generatingReport = true;
+      _sendingReportEmails = true;
     });
 
     try {
@@ -4038,6 +4042,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       if (mounted) {
         setState(() {
           _generatingReport = false;
+          _sendingReportEmails = false;
         });
       }
     }
@@ -7747,7 +7752,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                                   : _sendAllExhibitorReports,
                               icon: const Icon(Icons.send_outlined),
                               label: Text(
-                                generationActive
+                                _sendingReportEmails
+                                    ? 'Sending Exhibitor Reports…'
+                                    : generationActive
                                     ? 'Exhibitor Reports Generating'
                                     : 'Send Exhibitor Reports',
                               ),
@@ -7764,7 +7771,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                           ),
                           */
                           Tooltip(
-                            message: generationActive
+                            message: _sendingReportEmails
+                                ? 'Sending club reports. Please keep this page open.'
+                                : generationActive
                                 ? 'Club reports are still generating for $tooltipScope'
                                 : 'Send generated club reports for $tooltipScope',
                             child: OutlinedButton.icon(
@@ -7820,7 +7829,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                                   : _promptAndSendClubReports,
                               icon: const Icon(Icons.group_outlined),
                               label: Text(
-                                generationActive
+                                _sendingReportEmails
+                                    ? 'Sending Club Reports…'
+                                    : generationActive
                                     ? 'Club Reports Generating'
                                     : 'Send Club Reports',
                               ),
