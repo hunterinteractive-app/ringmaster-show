@@ -380,7 +380,11 @@ serve(async (req)=>{
       recipients.map((email)=>email.toLowerCase()).sort().join(","),
       subject.toLowerCase(),
       artifacts.map((artifact)=>artifact.id).sort().join(","),
-      forceResend ? crypto.randomUUID() : ""
+      // Resend retains an idempotency key for 24 hours.  The completed-send
+      // check above is our duplicate guard; each real provider attempt must
+      // therefore have its own key so a retry after a failed attempt is not
+      // rejected as a duplicate request.
+      crypto.randomUUID()
     ].join("|");
     const idempotencyKey = await sha256Hex(idempotencySource);
     const resendResp = await fetch("https://api.resend.com/emails", {
