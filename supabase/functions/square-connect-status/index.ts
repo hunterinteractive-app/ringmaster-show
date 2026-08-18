@@ -24,6 +24,7 @@ Deno.serve(async (request: Request) => {
   }
 
   let linkId = "";
+  let clubPaymentProviderAccountId = "";
   let knownExpiry = "";
   try {
     const { show_id: showId = "" } = await request.json() as {
@@ -39,7 +40,7 @@ Deno.serve(async (request: Request) => {
     const { data: link, error: linkError } = await admin
       .from("show_payment_account_links")
       .select(
-        "id,provider_account_id,provider_location_id,status,account_status,authorization_expires_at,metadata",
+        "id,club_payment_provider_account_id,provider_account_id,provider_location_id,status,account_status,authorization_expires_at,metadata",
       )
       .eq("show_id", showId).eq("provider", "square").maybeSingle();
     if (linkError) throw new Error("Unable to load Square status.");
@@ -54,6 +55,9 @@ Deno.serve(async (request: Request) => {
       });
     }
     linkId = String(link.id);
+    clubPaymentProviderAccountId = String(
+      link.club_payment_provider_account_id ?? "",
+    );
     knownExpiry = String(link.authorization_expires_at ?? "");
 
     const { data: credential, error: credentialError } = await admin
@@ -204,6 +208,26 @@ Deno.serve(async (request: Request) => {
     }).eq("id", link.id);
     if (updateError) throw new Error("Unable to update Square status.");
 
+    // A connection is owned by the hosting club.  Keep that canonical record
+    // current so every show that inherits it sees the same Square readiness.
+    if (link.club_payment_provider_account_id) {
+      const { error: clubUpdateError } = await admin
+        .from("club_payment_provider_accounts")
+        .update({
+          provider_account_id: merchantId,
+          provider_location_id: selectedLocation?.id ?? null,
+          status,
+          account_status: status,
+          authorization_expires_at: expiresAt,
+          metadata,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", link.club_payment_provider_account_id);
+      if (clubUpdateError) {
+        throw new Error("Unable to update the club Square status.");
+      }
+    }
+
     return jsonResponse({
       connected: true,
       ready,
@@ -225,11 +249,19 @@ Deno.serve(async (request: Request) => {
       ? "authorization_expired"
       : "reconnect_required";
     if (linkId) {
-      await serviceClient().from("show_payment_account_links").update({
+      const admin = serviceClient();
+      await admin.from("show_payment_account_links").update({
         status: failureStatus,
         account_status: "authorization_invalid",
         updated_at: new Date().toISOString(),
       }).eq("id", linkId);
+      if (clubPaymentProviderAccountId) {
+        await admin.from("club_payment_provider_accounts").update({
+          status: failureStatus,
+          account_status: "authorization_invalid",
+          updated_at: new Date().toISOString(),
+        }).eq("id", clubPaymentProviderAccountId);
+      }
     }
     return jsonResponse({
       error: errorMessage(error),

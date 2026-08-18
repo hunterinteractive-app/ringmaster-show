@@ -237,6 +237,32 @@ serve(async (req) => {
       console.error("Failed updating show_payment_account_links", updateError);
     }
 
+    // Keep the hosting club's reusable connection status in sync.  Individual
+    // show links remain as historical snapshots for audit and checkout.
+    const clubAccountId = (accountRow as any).club_payment_provider_account_id
+      ?.toString()
+      .trim();
+    if (clubAccountId) {
+      const { error: clubUpdateError } = await supabase
+        .from("club_payment_provider_accounts")
+        .update({
+          charges_enabled: chargesEnabled,
+          payouts_enabled: payoutsEnabled,
+          details_submitted: detailsSubmitted,
+          account_status: status,
+          status,
+          metadata: stripeJson,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", clubAccountId);
+      if (clubUpdateError) {
+        console.error(
+          "Failed updating club_payment_provider_accounts",
+          clubUpdateError,
+        );
+      }
+    }
+
     return json({
       ok: true,
       status,

@@ -5,6 +5,7 @@ import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:ringmaster_show/screens/super_admin/help_reports_screen.dart';
+import 'package:ringmaster_show/screens/super_admin/club_payment_provider_migration_reviews_screen.dart';
 
 import '../show_list_screen.dart';
 import 'breed_catalog_screen.dart';
@@ -98,6 +99,15 @@ class _SuperadminHomeScreenState extends State<SuperadminHomeScreen> {
     await Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const HelpReportsScreen()),
+    );
+  }
+
+  Future<void> _openPaymentProviderMigrationReviews() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const ClubPaymentProviderMigrationReviewsScreen(),
+      ),
     );
   }
 
@@ -240,6 +250,14 @@ class _SuperadminHomeScreenState extends State<SuperadminHomeScreen> {
                   subtitle:
                       'Review issue reports, screenshots, device details, and mark reports resolved.',
                   onTap: _openHelpReports,
+                ),
+                const SizedBox(height: 12),
+                _SuperadminToolCard(
+                  icon: Icons.account_balance_wallet_outlined,
+                  title: 'Club Payment Provider Reviews',
+                  subtitle:
+                      'Review legacy Stripe, Square, and PayPal connections that could not be safely migrated to a hosting club.',
+                  onTap: _openPaymentProviderMigrationReviews,
                 ),
                 const SizedBox(height: 12),
                 _SuperadminToolCard(

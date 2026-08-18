@@ -8,6 +8,7 @@ class SquareConnectService {
   static final SupabaseClient _supabase = Supabase.instance.client;
 
   static Future<String> startConnection(String showId) async {
+    await _ensureClubProviderLinks(showId);
     final data = await _invoke('square-connect-start', {'show_id': showId});
     final url = (data['authorization_url'] ?? '').toString().trim();
     if (url.isEmpty) {
@@ -18,6 +19,7 @@ class SquareConnectService {
 
   static Future<Map<String, dynamic>> getStatus(String showId) async {
     if (_supabase.auth.currentUser == null) throw Exception('Not signed in.');
+    await _ensureClubProviderLinks(showId);
     final response = await _supabase.functions.invoke(
       'square-connect-status',
       body: {'show_id': showId},
@@ -57,6 +59,14 @@ class SquareConnectService {
       );
     }
     return data;
+  }
+
+  static Future<void> _ensureClubProviderLinks(String showId) async {
+    if (_supabase.auth.currentUser == null) throw Exception('Not signed in.');
+    await _supabase.rpc(
+      'ensure_show_club_payment_provider_links',
+      params: {'p_show_id': showId},
+    );
   }
 
   static Map<String, dynamic> _normalizeMap(dynamic raw) {

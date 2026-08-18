@@ -20,6 +20,9 @@ class StripeConnectService {
       throw Exception('Not signed in.');
     }
 
+    // Reuse the hosting club's saved connection before creating anything.
+    await _ensureClubProviderLinks(showId);
+
     // Ensure account exists
     await _getOrCreateStripeAccount(showId);
 
@@ -41,9 +44,7 @@ class StripeConnectService {
 
     final response = await _supabase.functions.invoke(
       'stripe-create-checkout-session',
-      body: {
-        'cart_id': cartId,
-      },
+      body: {'cart_id': cartId},
     );
 
     final data = _normalizeMap(response.data);
@@ -69,19 +70,16 @@ class StripeConnectService {
   // 📊 ACCOUNT STATUS (UI STATE)
   // ============================================================
 
-  static Future<Map<String, dynamic>> getAccountStatus(
-    String showId,
-  ) async {
+  static Future<Map<String, dynamic>> getAccountStatus(String showId) async {
     final user = _supabase.auth.currentUser;
     if (user == null) {
       throw Exception('Not signed in.');
     }
 
+    await _ensureClubProviderLinks(showId);
     final response = await _supabase.functions.invoke(
       'stripe-connect-account-status',
-      body: {
-        'show_id': showId,
-      },
+      body: {'show_id': showId},
     );
 
     final data = _normalizeMap(response.data);
@@ -106,11 +104,10 @@ class StripeConnectService {
       throw Exception('Not signed in.');
     }
 
+    await _ensureClubProviderLinks(showId);
     final response = await _supabase.functions.invoke(
       'stripe-connect-account-status',
-      body: {
-        'show_id': showId,
-      },
+      body: {'show_id': showId},
     );
 
     final data = _normalizeMap(response.data);
@@ -139,19 +136,14 @@ class StripeConnectService {
 
     final response = await _supabase.functions.invoke(
       'stripe-connect-create-login-link',
-      body: {
-        'show_id': showId,
-      },
+      body: {'show_id': showId},
     );
 
     final data = _normalizeMap(response.data);
 
     if (response.status < 200 || response.status >= 300) {
       throw Exception(
-        _extractBestError(
-          data,
-          fallback: 'Stripe login link failed.',
-        ),
+        _extractBestError(data, fallback: 'Stripe login link failed.'),
       );
     }
 
@@ -170,55 +162,54 @@ class StripeConnectService {
   static Future<void> _getOrCreateStripeAccount(String showId) async {
     final response = await _supabase.functions.invoke(
       'stripe-connect-create-account-index-ts',
-      body: {
-        'show_id': showId,
-      },
+      body: {'show_id': showId},
     );
 
     final data = _normalizeMap(response.data);
 
     if (response.status < 200 || response.status >= 300) {
       throw Exception(
-        _extractBestError(
-          data,
-          fallback: 'Stripe account creation failed.',
-        ),
+        _extractBestError(data, fallback: 'Stripe account creation failed.'),
       );
     }
 
     final ok = data['ok'] == true;
     if (!ok) {
       throw Exception(
-        _extractBestError(
-          data,
-          fallback: 'Stripe account creation failed.',
-        ),
+        _extractBestError(data, fallback: 'Stripe account creation failed.'),
       );
     }
+
+    // A newly connected account belongs to the hosting club.  The show keeps
+    // its link for audit history, while later shows inherit the club account.
+    await _supabase.rpc(
+      'promote_show_payment_provider_link_to_club',
+      params: {'p_show_id': showId, 'p_provider': 'stripe'},
+    );
+  }
+
+  static Future<void> _ensureClubProviderLinks(String showId) async {
+    await _supabase.rpc(
+      'ensure_show_club_payment_provider_links',
+      params: {'p_show_id': showId},
+    );
   }
 
   // ============================================================
   // 🔧 INTERNAL: CREATE ONBOARDING LINK
   // ============================================================
 
-  static Future<String> _createAccountLink({
-    required String showId,
-  }) async {
+  static Future<String> _createAccountLink({required String showId}) async {
     final response = await _supabase.functions.invoke(
       'stripe-connect-create-account-link-index-ts',
-      body: {
-        'show_id': showId,
-      },
+      body: {'show_id': showId},
     );
 
     final data = _normalizeMap(response.data);
 
     if (response.status < 200 || response.status >= 300) {
       throw Exception(
-        _extractBestError(
-          data,
-          fallback: 'Stripe onboarding link failed.',
-        ),
+        _extractBestError(data, fallback: 'Stripe onboarding link failed.'),
       );
     }
 
@@ -255,9 +246,7 @@ class StripeConnectService {
     }
 
     if (raw is Map) {
-      return raw.map(
-        (key, value) => MapEntry(key.toString(), value),
-      );
+      return raw.map((key, value) => MapEntry(key.toString(), value));
     }
 
     if (raw is String && raw.trim().isNotEmpty) {
@@ -266,9 +255,7 @@ class StripeConnectService {
         return decoded;
       }
       if (decoded is Map) {
-        return decoded.map(
-          (key, value) => MapEntry(key.toString(), value),
-        );
+        return decoded.map((key, value) => MapEntry(key.toString(), value));
       }
     }
 
