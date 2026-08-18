@@ -107,18 +107,35 @@ class _ClubPaymentProviderMigrationReviewsScreenState
                           children: [
                             Text(
                               _relatedName(review, 'clubs'),
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                color: Colors.black,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
                             const SizedBox(height: 4),
-                            Text('Show: ${_relatedName(review, 'shows')}'),
+                            Text(
+                              'Show: ${_relatedName(review, 'shows')}',
+                              style: const TextStyle(color: Colors.black),
+                            ),
                             const SizedBox(height: 10),
-                            Chip(label: Text(provider)),
+                            Chip(
+                              label: Text(
+                                provider,
+                                style: const TextStyle(color: Colors.black),
+                              ),
+                            ),
                             const SizedBox(height: 6),
-                            Text(_reasonLabel(review['reason']?.toString() ?? 'unknown')),
+                            Text(
+                              _reasonLabel(review['reason']?.toString() ?? 'unknown'),
+                              style: const TextStyle(color: Colors.black),
+                            ),
                             const SizedBox(height: 8),
                             Text(
                               'Pending review',
-                              style: TextStyle(color: AppColors.warning, fontWeight: FontWeight.w700),
+                              style: const TextStyle(
+                                color: Colors.black,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ],
                         ),
