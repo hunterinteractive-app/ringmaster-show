@@ -134,7 +134,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
   bool _reportsLoaded = false;
   bool _reportsSectionOpen = false;
   bool _generatingReport = false;
-  bool _sendingReportEmails = false;
+  bool _sendingExhibitorReports = false;
+  bool _sendingClubReports = false;
   bool _finalizeOperationInFlight = false;
   bool _dashboardRefreshInFlight = false;
   bool _dashboardRefreshPending = false;
@@ -2326,14 +2327,21 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
 
     final service = ReportEmailService();
 
-    return service.sendExhibitorReportEmail(
-      showId: widget.showId,
-      artifactIds: artifacts.map((a) => a.id).toList(),
-      to: to,
-      subject: subject,
-      message: message,
-      allowLegs: allowLegs,
-    );
+    return service
+        .sendExhibitorReportEmail(
+          showId: widget.showId,
+          artifactIds: artifacts.map((a) => a.id).toList(),
+          to: to,
+          subject: subject,
+          message: message,
+          allowLegs: allowLegs,
+        )
+        .timeout(
+          const Duration(seconds: 45),
+          onTimeout: () => throw TimeoutException(
+            'The exhibitor email request did not finish within 45 seconds.',
+          ),
+        );
   }
 
   Future<ReportEmailSendResult> _sendClubArtifactsEmail({
@@ -2349,14 +2357,21 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
 
     final service = ReportEmailService();
 
-    return service.sendClubReportEmail(
-      showId: widget.showId,
-      artifactIds: artifacts.map((a) => a.id).toList(),
-      to: to,
-      subject: subject,
-      message: message,
-      forceResend: forceResend,
-    );
+    return service
+        .sendClubReportEmail(
+          showId: widget.showId,
+          artifactIds: artifacts.map((a) => a.id).toList(),
+          to: to,
+          subject: subject,
+          message: message,
+          forceResend: forceResend,
+        )
+        .timeout(
+          const Duration(seconds: 45),
+          onTimeout: () => throw TimeoutException(
+            'The club email request did not finish within 45 seconds.',
+          ),
+        );
   }
 
   Future<void> _openResultsEntryFix(String entryId) async {
@@ -3613,7 +3628,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
 
     setState(() {
       _generatingReport = true;
-      _sendingReportEmails = true;
+      _sendingExhibitorReports = true;
     });
 
     try {
@@ -3761,7 +3776,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       if (mounted) {
         setState(() {
           _generatingReport = false;
-          _sendingReportEmails = false;
+          _sendingExhibitorReports = false;
         });
       }
     }
@@ -3877,7 +3892,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
 
     setState(() {
       _generatingReport = true;
-      _sendingReportEmails = true;
+      _sendingClubReports = true;
     });
 
     try {
@@ -4042,7 +4057,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       if (mounted) {
         setState(() {
           _generatingReport = false;
-          _sendingReportEmails = false;
+          _sendingClubReports = false;
         });
       }
     }
@@ -7752,7 +7767,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                                   : _sendAllExhibitorReports,
                               icon: const Icon(Icons.send_outlined),
                               label: Text(
-                                _sendingReportEmails
+                                _sendingExhibitorReports
                                     ? 'Sending Exhibitor Reports…'
                                     : generationActive
                                     ? 'Exhibitor Reports Generating'
@@ -7771,7 +7786,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                           ),
                           */
                           Tooltip(
-                            message: _sendingReportEmails
+                            message: _sendingClubReports
                                 ? 'Sending club reports. Please keep this page open.'
                                 : generationActive
                                 ? 'Club reports are still generating for $tooltipScope'
@@ -7829,7 +7844,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                                   : _promptAndSendClubReports,
                               icon: const Icon(Icons.group_outlined),
                               label: Text(
-                                _sendingReportEmails
+                                _sendingClubReports
                                     ? 'Sending Club Reports…'
                                     : generationActive
                                     ? 'Club Reports Generating'
