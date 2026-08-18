@@ -4078,10 +4078,20 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         ? 'exhibitor_emails_sent_at'
         : 'club_reports_sent_at';
 
-    await supabase.from('show_closeout_state').upsert({
-      'show_id': widget.showId,
-      column: sentAt.toUtc().toIso8601String(),
-    });
+    try {
+      await supabase
+          .from('show_closeout_state')
+          .upsert({
+            'show_id': widget.showId,
+            column: sentAt.toUtc().toIso8601String(),
+          })
+          .timeout(const Duration(seconds: 15));
+    } catch (error) {
+      // Delivery has already succeeded. This bookkeeping value must never
+      // leave the user on a disabled send screen.
+      debugPrint('Unable to record report delivery date: $error');
+      return;
+    }
 
     if (!mounted) return;
     setState(() {
