@@ -731,12 +731,24 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
             )
           ''')
         .eq('show_id', widget.showId)
-        .inFilter('section_id', selectedSectionIds);
+        .inFilter('section_id', selectedSectionIds)
+        .timeout(
+          const Duration(seconds: 20),
+          onTimeout: () => throw TimeoutException(
+            'Timed out while loading club report recipients.',
+          ),
+        );
 
     final stateClubContactRows = await supabase
         .from('state_club_report_contacts')
         .select('club_name, species, email')
-        .eq('is_active', true);
+        .eq('is_active', true)
+        .timeout(
+          const Duration(seconds: 10),
+          // The sanction's existing email is a safe fallback. Do not hold up
+          // every club delivery if this supplemental directory is unavailable.
+          onTimeout: () => <Map<String, dynamic>>[],
+        );
 
     final stateClubContactsByClub = <String, List<_StateClubReportContact>>{};
 
@@ -926,7 +938,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         final rows = await supabase
             .from('breeds')
             .select('name, species')
-            .inFilter('name', chunk);
+            .inFilter('name', chunk)
+            .timeout(const Duration(seconds: 10));
 
         for (final raw in (rows as List)) {
           final row = Map<String, dynamic>.from(raw as Map);
