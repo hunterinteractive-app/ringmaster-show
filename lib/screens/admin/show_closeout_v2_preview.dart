@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/screens/admin/closeout/models/arba_report_presentation.dart';
 import 'package:ringmaster_show/screens/admin/closeout/models/report_artifact_summary.dart';
+import 'package:ringmaster_show/screens/admin/closeout/widgets/closeout_scope_widgets.dart';
 import 'package:ringmaster_show/screens/admin/closeout/results_entry_fix_launcher.dart';
 import 'package:ringmaster_show/screens/admin/show_checkin_roster_screen.dart';
 import 'package:ringmaster_show/services/locked_show_data_export.dart';
@@ -283,7 +284,10 @@ class _ShowCloseoutV2PreviewPageState extends State<ShowCloseoutV2PreviewPage> {
           const SizedBox(height: 20),
           _buildSelectedPanel(),
           const SizedBox(height: 24),
-          _LiveReportDownloads(showId: widget.showId),
+          _LiveReportDownloads(
+            showId: widget.showId,
+            showName: widget.showName,
+          ),
         ],
       ),
     );
@@ -3527,11 +3531,7 @@ class _ArbaReportActionsState extends State<_ArbaReportActions> {
           if (reports.isEmpty)
             const Text('No ARBA reports have been prepared yet.')
           else
-            ...reports.map(
-              (report) => Text(
-                '${arbaSectionDisplayName(metadata: report.metadata)} — ${closeoutReportStatusLabel(closeoutReportUiStatus(report.artifactStatus))}${report.artifactStatus == 'failed' && (report.metadata['error_message']?.toString().trim().isNotEmpty ?? false) ? ': ${report.metadata['error_message']}' : ''}',
-              ),
-            ),
+            ...reports.map((report) => Text(_arbaReportStatusText(report))),
           const SizedBox(height: 12),
           Wrap(
             spacing: 10,
@@ -3600,6 +3600,22 @@ class _ArbaReportActionsState extends State<_ArbaReportActions> {
     final minute = dateTime.minute.toString().padLeft(2, '0');
     final meridiem = dateTime.hour >= 12 ? 'PM' : 'AM';
     return '${dateTime.month}/${dateTime.day}/${dateTime.year} at $hour:$minute $meridiem';
+  }
+
+  String _arbaReportStatusText(ReportArtifactSummary report) {
+    final section = arbaSectionDisplayName(metadata: report.metadata);
+    if (report.artifactStatus != 'failed') {
+      return '$section — '
+          '${closeoutReportStatusLabel(closeoutReportUiStatus(report.artifactStatus))}';
+    }
+
+    final failure = closeoutFailureDisplay(
+      errorCategory: (report.metadata['error_category'] ?? '').toString(),
+      metadataLastError: (report.metadata['last_error'] ?? '').toString(),
+      metadataErrorMessage: (report.metadata['error_message'] ?? '').toString(),
+      sectionLabel: section,
+    );
+    return '$section — Unable to render: ${failure.message}';
   }
 }
 
@@ -3712,8 +3728,9 @@ class _ComingSoonPanel extends StatelessWidget {
 
 class _LiveReportDownloads extends StatefulWidget {
   final String showId;
+  final String showName;
 
-  const _LiveReportDownloads({required this.showId});
+  const _LiveReportDownloads({required this.showId, required this.showName});
 
   @override
   State<_LiveReportDownloads> createState() => _LiveReportDownloadsState();
@@ -3734,6 +3751,7 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
   String? _selectedShowLetter;
   String? _selectedScope;
   bool _queueingSelectedReport = false;
+  bool _sendingSelectedReport = false;
   final _additionalMessageController = TextEditingController();
 
   static const _groupOrder = ['arba', 'exhibitor', 'club', 'other'];
@@ -3956,6 +3974,214 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
       );
     } finally {
       if (mounted) setState(() => _queueingSelectedReport = false);
+    }
+  }
+
+  bool _isGenerated(ReportArtifactSummary artifact) =>
+      artifact.artifactStatus == 'generated' &&
+      artifact.storageBucket?.trim().isNotEmpty == true &&
+      artifact.storagePath?.trim().isNotEmpty == true;
+
+  String _metadataString(ReportArtifactSummary artifact, String key) =>
+      (artifact.metadata[key] ?? '').toString().trim();
+
+  String? _recipientFor(ReportArtifactSummary artifact) {
+    final keys = _groupFor(artifact.reportName) == 'exhibitor'
+        ? const ['exhibitor_email', 'email']
+        : const ['sweepstakes_email', 'email'];
+    for (final key in keys) {
+      final value = _metadataString(artifact, key);
+      if (value.isNotEmpty) return value;
+    }
+    return null;
+  }
+
+  List<ReportArtifactSummary> _emailArtifactsFor(
+    ReportArtifactSummary source, {
+    required bool allShows,
+    required bool includeReports,
+    required bool includeLegs,
+  }) {
+    if (!allShows) {
+      return [source];
+    }
+    final recipient = _recipientFor(source);
+    if (recipient == null) return const [];
+    final reportNames = <String>{
+      if (includeReports) 'exhibitor_report',
+      if (includeLegs) 'legs',
+      if (!includeReports && !includeLegs) source.reportName,
+    };
+    return _artifacts.where((artifact) {
+      if (!_isGenerated(artifact) ||
+          !reportNames.contains(artifact.reportName)) {
+        return false;
+      }
+      if (_recipientFor(artifact)?.toLowerCase() != recipient.toLowerCase()) {
+        return false;
+      }
+      if (_needsExhibitor) {
+        return _metadataString(artifact, 'exhibitor_id') ==
+            _metadataString(source, 'exhibitor_id');
+      }
+      if (_needsBreed) {
+        return _metadataString(artifact, 'breed_name') ==
+                _metadataString(source, 'breed_name') &&
+            _metadataString(artifact, 'scope').toUpperCase() ==
+                _metadataString(source, 'scope').toUpperCase();
+      }
+      if (_needsClub) {
+        return _metadataString(artifact, 'club_name') ==
+                _metadataString(source, 'club_name') &&
+            _metadataString(artifact, 'scope').toUpperCase() ==
+                _metadataString(source, 'scope').toUpperCase();
+      }
+      return artifact.reportName == source.reportName;
+    }).toList();
+  }
+
+  String _emailSubject(
+    ReportArtifactSummary artifact, {
+    required bool allShows,
+    required bool includeReports,
+    required bool includeLegs,
+  }) {
+    final scope = _metadataString(artifact, 'scope');
+    final letter = _metadataString(artifact, 'show_letter');
+    final suffix = allShows
+        ? 'All ${scope.isEmpty ? '' : '$scope '}Shows'
+        : [scope, letter].where((value) => value.isNotEmpty).join(' ');
+    if (artifact.reportName == 'checkin_sheet') {
+      return '${widget.showName} - Check-In Sheet';
+    }
+    if (_groupFor(artifact.reportName) == 'exhibitor') {
+      final label = includeReports && includeLegs
+          ? 'Exhibitor Reports and Legs'
+          : includeLegs
+          ? 'Exhibitor Legs'
+          : 'Exhibitor Reports';
+      return '${widget.showName} - $label${suffix.isEmpty ? '' : ' - $suffix'}';
+    }
+    return '${widget.showName} - ${_friendlyReportName(artifact.reportName)}${suffix.isEmpty ? '' : ' - $suffix'}';
+  }
+
+  Future<void> _emailSelectedReport({
+    required bool allShows,
+    required bool includeReports,
+    required bool includeLegs,
+  }) async {
+    final source = _selectedArtifact;
+    if (source == null || !_isGenerated(source)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Generate this report before emailing it.'),
+        ),
+      );
+      return;
+    }
+    if (source.reportName == 'arba_report') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Send ARBA reports from Step 8 after they have been viewed.',
+          ),
+        ),
+      );
+      return;
+    }
+    final recipient = _recipientFor(source);
+    if (recipient == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No email recipient is configured for this report.'),
+        ),
+      );
+      return;
+    }
+    final artifacts = _emailArtifactsFor(
+      source,
+      allShows: allShows,
+      includeReports: includeReports,
+      includeLegs: includeLegs,
+    );
+    if (artifacts.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No generated reports are ready for this email.'),
+        ),
+      );
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(allShows ? 'Email All Shows?' : 'Email This Show?'),
+        content: Text(
+          'This will send ${artifacts.length} generated report file${artifacts.length == 1 ? '' : 's'} to $recipient.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Send Email'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _sendingSelectedReport = true);
+    try {
+      final message = _additionalMessageController.text.trim();
+      final service = ReportEmailService();
+      final result = _groupFor(source.reportName) == 'exhibitor'
+          ? await service.sendExhibitorReportEmail(
+              showId: widget.showId,
+              artifactIds: artifacts.map((artifact) => artifact.id).toList(),
+              to: recipient,
+              subject: _emailSubject(
+                source,
+                allShows: allShows,
+                includeReports: includeReports,
+                includeLegs: includeLegs,
+              ),
+              message: message,
+              allowLegs: includeLegs,
+              forceResend: message.isNotEmpty,
+            )
+          : await service.sendClubReportEmail(
+              showId: widget.showId,
+              artifactIds: artifacts.map((artifact) => artifact.id).toList(),
+              to: recipient,
+              subject: _emailSubject(
+                source,
+                allShows: allShows,
+                includeReports: includeReports,
+                includeLegs: includeLegs,
+              ),
+              message: message,
+              forceResend: message.isNotEmpty,
+            );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.alreadySent
+                ? 'These reports were already sent to $recipient.'
+                : 'Reports sent to $recipient.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to send this report: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _sendingSelectedReport = false);
     }
   }
 
@@ -4241,6 +4467,35 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
               ? () => _download(_selectedArtifact!)
               : null,
           onQueue: _selectedReportName == null ? null : _queueSelectedReport,
+          sending: _sendingSelectedReport,
+          onEmailThisShow: _selectedArtifact == null
+              ? null
+              : () => _emailSelectedReport(
+                  allShows: false,
+                  includeReports: _selectedReportName != 'legs',
+                  includeLegs: _selectedReportName == 'legs',
+                ),
+          onEmailAllShows:
+              _selectedArtifact == null ||
+                  _selectedReportName == 'checkin_sheet'
+              ? null
+              : () => _emailSelectedReport(
+                  allShows: true,
+                  includeReports: _selectedReportName != 'legs',
+                  includeLegs: _selectedReportName == 'legs',
+                ),
+          onEmailReportsAndLegs:
+              _selectedArtifact == null ||
+                  !const {
+                    'exhibitor_report',
+                    'legs',
+                  }.contains(_selectedReportName)
+              ? null
+              : () => _emailSelectedReport(
+                  allShows: false,
+                  includeReports: true,
+                  includeLegs: true,
+                ),
         ),
       ],
     ],
@@ -4253,8 +4508,12 @@ class _SelectedReportStatus extends StatelessWidget {
   final String Function(String reportName) friendlyReportName;
   final bool downloading;
   final bool queueing;
+  final bool sending;
   final VoidCallback? onDownload;
   final VoidCallback? onQueue;
+  final VoidCallback? onEmailThisShow;
+  final VoidCallback? onEmailAllShows;
+  final VoidCallback? onEmailReportsAndLegs;
 
   const _SelectedReportStatus({
     required this.artifact,
@@ -4262,8 +4521,12 @@ class _SelectedReportStatus extends StatelessWidget {
     required this.friendlyReportName,
     required this.downloading,
     required this.queueing,
+    required this.sending,
     required this.onDownload,
     required this.onQueue,
+    required this.onEmailThisShow,
+    required this.onEmailAllShows,
+    required this.onEmailReportsAndLegs,
   });
 
   @override
@@ -4332,14 +4595,14 @@ class _SelectedReportStatus extends StatelessWidget {
           Wrap(
             spacing: 10,
             runSpacing: 10,
-            children: _disabledEmailButtons(selectedReportName),
+            children: _emailButtons(selectedReportName),
           ),
         ],
       ),
     );
   }
 
-  List<Widget> _disabledEmailButtons(String? reportName) {
+  List<Widget> _emailButtons(String? reportName) {
     final labels = switch (reportName) {
       'arba_report' => const ['Email All to ARBA'],
       'exhibitor_report' => const [
@@ -4353,18 +4616,39 @@ class _SelectedReportStatus extends StatelessWidget {
       'checkin_sheet' => const ['Email Check-In Sheet'],
       _ => const ['Email This Show', 'Email All Shows'],
     };
-    return labels
-        .map(
-          (label) => Tooltip(
-            message: 'Email is unavailable for this report.',
-            child: OutlinedButton.icon(
-              onPressed: null,
-              icon: const Icon(Icons.email_outlined),
-              label: Text(label),
-            ),
+    if (reportName == 'arba_report') {
+      return [
+        Tooltip(
+          message: 'Send ARBA reports from Step 8 after each has been viewed.',
+          child: OutlinedButton.icon(
+            onPressed: null,
+            icon: Icon(Icons.email_outlined),
+            label: Text('Email All to ARBA'),
           ),
-        )
-        .toList();
+        ),
+      ];
+    }
+    return List<Widget>.generate(labels.length, (index) {
+      final enabled = reportName == 'exhibitor_report' || reportName == 'legs'
+          ? (index == 0 ? onEmailThisShow : onEmailReportsAndLegs)
+          : (index == 0 ? onEmailThisShow : onEmailAllShows);
+      return Tooltip(
+        message: enabled == null
+            ? 'No eligible email recipient is configured for this report.'
+            : '',
+        child: OutlinedButton.icon(
+          onPressed: sending ? null : enabled,
+          icon: sending
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.email_outlined),
+          label: Text(sending ? 'Sending…' : labels[index]),
+        ),
+      );
+    });
   }
 
   String _formatGeneratedAt(String value) {
