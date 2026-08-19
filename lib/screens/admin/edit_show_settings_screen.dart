@@ -34,6 +34,7 @@ import 'admin_print_packs_screen.dart';
 // ✅ Admin Operations (Post-show) screens
 import 'results/admin_results_entry_screen.dart';
 import 'package:ringmaster_show/screens/admin/show_closeout.dart';
+import 'package:ringmaster_show/screens/admin/show_closeout_v2_preview.dart';
 import 'admin_audit_log_screen.dart';
 
 final supabase = Supabase.instance.client;
@@ -48,6 +49,10 @@ class EditShowSettingsScreen extends StatefulWidget {
 }
 
 class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
+  // Keep the previous entry points available in code while Close Show/Reports
+  // V2 is rolled out.  They can be restored by changing this flag.
+  static const bool _showLegacyCloseoutActions = false;
+
   bool _loading = true;
   bool _loadingPermissions = true;
   ShowPermissions _permissions = ShowPermissions.none;
@@ -1106,6 +1111,19 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
     );
   }
 
+  void _openShowCloseoutV2Preview({required bool canFinalizeShow}) {
+    if (!canFinalizeShow) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ShowCloseoutV2PreviewPage(
+          showId: widget.showId,
+          showName: _effectiveShowName(),
+          canFinalizeShow: canFinalizeShow,
+        ),
+      ),
+    );
+  }
+
   Widget _buildSectionCard({
     required String title,
     String? subtitle,
@@ -2117,7 +2135,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                       'Enter placements, DQs, and specials by class',
                                   onTap: _saving ? null : _openResultsEntry,
                                 ),
-                              if (canFinalizeShow)
+                              if (_showLegacyCloseoutActions && canFinalizeShow)
                                 _buildSettingsActionTile(
                                   icon: Icons.archive,
                                   title: 'Close Show/Reports',
@@ -2125,7 +2143,20 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                       'Finalize, send reports, and lock/download copy',
                                   onTap: _saving ? null : _openShowCloseout,
                                 ),
-                              if (canManageShowSettings)
+                              if (canFinalizeShow)
+                                _buildSettingsActionTile(
+                                  icon: Icons.archive_outlined,
+                                  title: 'Close Show/Reports V2',
+                                  subtitle:
+                                      'Finalize, send reports, and lock/download a copy',
+                                  onTap: _saving
+                                      ? null
+                                      : () => _openShowCloseoutV2Preview(
+                                          canFinalizeShow: canFinalizeShow,
+                                        ),
+                                ),
+                              if (_showLegacyCloseoutActions &&
+                                  canManageShowSettings)
                                 _buildSettingsActionTile(
                                   icon: _isLocked
                                       ? Icons.lock_open
@@ -2142,7 +2173,9 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                       ? null
                                       : _toggleShowLock,
                                 ),
-                              if (_isLocked && canManageShowSettings)
+                              if (_showLegacyCloseoutActions &&
+                                  _isLocked &&
+                                  canManageShowSettings)
                                 _buildSettingsActionTile(
                                   icon: Icons.download_for_offline,
                                   title: 'Download Locked Show Data',

@@ -48,6 +48,7 @@ class ReportEmailService {
     String? message,
     String? replyTo,
     bool allowLegs = false, // 👈 Leg Change
+    bool forceResend = false,
   }) async {
     // Use the shared report sender so exhibitor sends are recorded in the
     // same delivery history as National and State club report sends.
@@ -61,6 +62,7 @@ class ReportEmailService {
         'message': message,
         'reply_to': replyTo,
         'allow_legs': allowLegs,
+        'force_resend': forceResend,
       },
     );
 

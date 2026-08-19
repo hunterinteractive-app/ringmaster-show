@@ -153,7 +153,13 @@ serve(async (req)=>{
     const anchorClub = String(anchorMeta["club_name"] ?? "").trim();
     const anchorEmail = String(anchorMeta["sweepstakes_email"] ?? "").trim().toLowerCase();
     const anchorSanctioningBody = String(anchorMeta["sanctioning_body"] ?? "").trim().toUpperCase();
-    if (anchorBreed || anchorClub || anchorEmail) {
+    const isClubReportBundle = artifacts.some((artifact)=>[
+      "sweepstakes_report",
+      "breed_results_detail_report",
+      "details_by_breed",
+      "exh_by_breed"
+    ].includes(String(artifact.report_name ?? "")));
+    if (isClubReportBundle && (anchorBreed || anchorClub || anchorEmail)) {
       const isAcbaCavyDelivery = anchorSanctioningBody === "NATIONAL CLUB" && (
         anchorBreed.toLowerCase() === "cavy" ||
         String(anchorMeta["species"] ?? "").trim().toLowerCase() === "cavy"
@@ -343,6 +349,7 @@ serve(async (req)=>{
 
         ${message ? `
           <div style="margin: 12px 0; white-space: pre-wrap;">
+            <strong>Message from the show secretary:</strong><br />
             ${escapeHtml(message)}
           </div>
         ` : ""}
