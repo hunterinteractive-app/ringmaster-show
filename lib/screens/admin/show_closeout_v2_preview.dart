@@ -3733,6 +3733,7 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
   String? _selectedClubName;
   String? _selectedShowLetter;
   String? _selectedScope;
+  bool _queueingSelectedReport = false;
   final _additionalMessageController = TextEditingController();
 
   static const _groupOrder = ['arba', 'exhibitor', 'club', 'other'];
@@ -3895,13 +3896,83 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
           )
           .toList();
 
-  List<String> _metadataValues(String key) =>
-      _selectedReportArtifacts
-          .map((a) => a.metadata[key]?.toString().trim() ?? '')
-          .where((value) => value.isNotEmpty)
-          .toSet()
-          .toList()
-        ..sort();
+  List<String> _metadataValues(String key) {
+    final candidates = _selectedReportArtifacts.where((artifact) {
+      bool matches(String metadataKey, String? selectedValue) =>
+          metadataKey == key ||
+          selectedValue == null ||
+          artifact.metadata[metadataKey]?.toString() == selectedValue;
+
+      return (!_needsExhibitor ||
+              matches('exhibitor_id', _selectedExhibitorId)) &&
+          (!_needsBreed || matches('breed_name', _selectedBreedName)) &&
+          (!_needsClub || matches('club_name', _selectedClubName)) &&
+          ((!_needsBreed && !_needsClub) ||
+              matches('show_letter', _selectedShowLetter)) &&
+          ((!_needsBreed && !_needsClub) || matches('scope', _selectedScope));
+    });
+    return candidates
+        .map((a) => a.metadata[key]?.toString().trim() ?? '')
+        .where((value) => value.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+  }
+
+  Future<void> _queueSelectedReport() async {
+    final artifact = _selectedArtifact;
+    if (artifact == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No report matches this selection. Adjust the filters to choose an available report.',
+          ),
+        ),
+      );
+      return;
+    }
+    final finalizeRunId = (artifact.finalizeRunId ?? '').trim();
+    final scopeKey = (artifact.scopeKey ?? '').trim();
+    if (finalizeRunId.isEmpty || scopeKey.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'This report is missing its closeout scope and cannot be queued.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _queueingSelectedReport = true);
+    try {
+      await _supabase.rpc(
+        'requeue_single_closeout_artifact',
+        params: {
+          'p_show_id': widget.showId,
+          'p_finalize_run_id': finalizeRunId,
+          'p_scope_key': scopeKey,
+          'p_artifact_id': artifact.id,
+        },
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${_friendlyReportName(artifact.reportName)} queued for generation.',
+          ),
+        ),
+      );
+      await _loadArtifacts();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to queue this report: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _queueingSelectedReport = false);
+    }
+  }
 
   String _groupFor(String reportName) {
     if (reportName == 'arba_report') return 'arba';
@@ -4180,9 +4251,11 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
           reportName: _selectedReportName,
           friendlyReportName: _friendlyReportName,
           downloading: _downloadingArtifactId == _selectedArtifact?.id,
+          queueing: _queueingSelectedReport,
           onDownload: _selectedArtifact?.artifactStatus == 'generated'
               ? () => _download(_selectedArtifact!)
               : null,
+          onQueue: _selectedReportName == null ? null : _queueSelectedReport,
         ),
       ],
     ],
@@ -4194,14 +4267,18 @@ class _SelectedReportStatus extends StatelessWidget {
   final String? reportName;
   final String Function(String reportName) friendlyReportName;
   final bool downloading;
+  final bool queueing;
   final VoidCallback? onDownload;
+  final VoidCallback? onQueue;
 
   const _SelectedReportStatus({
     required this.artifact,
     required this.reportName,
     required this.friendlyReportName,
     required this.downloading,
+    required this.queueing,
     required this.onDownload,
+    required this.onQueue,
   });
 
   @override
@@ -4243,6 +4320,22 @@ class _SelectedReportStatus extends StatelessWidget {
                   )
                 : const Icon(Icons.download_outlined),
             label: const Text('Download'),
+          ),
+          const SizedBox(height: 10),
+          FilledButton.icon(
+            onPressed: queueing ? null : onQueue,
+            icon: queueing
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.refresh),
+            label: Text(
+              artifact?.artifactStatus == 'generated'
+                  ? 'Regenerate Selected Report'
+                  : 'Generate Selected Report',
+            ),
           ),
           const SizedBox(height: 10),
           Wrap(
