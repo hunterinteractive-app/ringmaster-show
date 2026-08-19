@@ -3896,28 +3896,13 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
           )
           .toList();
 
-  List<String> _metadataValues(String key) {
-    final candidates = _selectedReportArtifacts.where((artifact) {
-      bool matches(String metadataKey, String? selectedValue) =>
-          metadataKey == key ||
-          selectedValue == null ||
-          artifact.metadata[metadataKey]?.toString() == selectedValue;
-
-      return (!_needsExhibitor ||
-              matches('exhibitor_id', _selectedExhibitorId)) &&
-          (!_needsBreed || matches('breed_name', _selectedBreedName)) &&
-          (!_needsClub || matches('club_name', _selectedClubName)) &&
-          ((!_needsBreed && !_needsClub) ||
-              matches('show_letter', _selectedShowLetter)) &&
-          ((!_needsBreed && !_needsClub) || matches('scope', _selectedScope));
-    });
-    return candidates
-        .map((a) => a.metadata[key]?.toString().trim() ?? '')
-        .where((value) => value.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort();
-  }
+  List<String> _metadataValues(String key) =>
+      _selectedReportArtifacts
+          .map((a) => a.metadata[key]?.toString().trim() ?? '')
+          .where((value) => value.isNotEmpty)
+          .toSet()
+          .toList()
+        ..sort();
 
   Future<void> _queueSelectedReport() async {
     final artifact = _selectedArtifact;
@@ -4305,6 +4290,12 @@ class _SelectedReportStatus extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text('Status: $status'),
+          if (artifact == null && selectedReportName != null) ...[
+            const SizedBox(height: 4),
+            const Text(
+              'No report artifact exists for this exact selection. This usually means the selected section has no eligible shown entries.',
+            ),
+          ],
           if (artifact?.generatedAt?.isNotEmpty == true) ...[
             const SizedBox(height: 4),
             Text('Generated: ${_formatGeneratedAt(artifact!.generatedAt!)}'),
