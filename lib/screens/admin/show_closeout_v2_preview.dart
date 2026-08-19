@@ -3134,6 +3134,8 @@ class _FinalCloseoutPreviewPanelState
         _FinalReadinessSummary(readiness: _readiness!),
         const SizedBox(height: 16),
         _ArbaReportActions(
+          showId: widget.showId,
+          showName: widget.showName,
           reports: _readiness!.arbaReports,
           exhibitorReportsSentAt: _readiness!.exhibitorReportsSentAt,
           clubReportsSentAt: _readiness!.clubReportsSentAt,
@@ -3285,12 +3287,16 @@ class _FinalCloseoutReadiness {
 }
 
 class _ArbaReportActions extends StatefulWidget {
+  final String showId;
+  final String showName;
   final List<ReportArtifactSummary> reports;
   final String? exhibitorReportsSentAt;
   final String? clubReportsSentAt;
   final Future<void> Function() onChanged;
 
   const _ArbaReportActions({
+    required this.showId,
+    required this.showName,
     required this.reports,
     required this.exhibitorReportsSentAt,
     required this.clubReportsSentAt,
@@ -3305,6 +3311,7 @@ class _ArbaReportActionsState extends State<_ArbaReportActions> {
   final Set<String> _viewedIds = <String>{};
   final Set<String> _downloadingIds = <String>{};
   bool _queueing = false;
+  bool _sending = false;
 
   bool get _hasDeliveryDates =>
       DateTime.tryParse(widget.exhibitorReportsSentAt ?? '') != null &&
@@ -3403,6 +3410,96 @@ class _ArbaReportActionsState extends State<_ArbaReportActions> {
     }
   }
 
+  Future<String?> _loadArbaEmailTarget() async {
+    final rows = await Supabase.instance.client
+        .from('show_sanctions')
+        .select('sweepstakes_email')
+        .eq('show_id', widget.showId)
+        .ilike('sanctioning_body', 'ARBA');
+    for (final raw in rows as List) {
+      final email = (raw as Map)['sweepstakes_email']?.toString().trim() ?? '';
+      if (email.isNotEmpty) return email;
+    }
+    return null;
+  }
+
+  Future<void> _sendAllArbaReports() async {
+    if (_sending || widget.reports.isEmpty) return;
+    final email = await _loadArbaEmailTarget();
+    if (!mounted) return;
+    if (email == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No ARBA email is configured. Add the ARBA sweepstakes email to the ARBA sanction record first.',
+          ),
+        ),
+      );
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Send All ARBA Reports?'),
+        content: Text(
+          'This will send one email to $email with all ${widget.reports.length} generated ARBA report${widget.reports.length == 1 ? '' : 's'} attached.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Send Reports'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _sending = true);
+    _activeDeliveryProgress.value = const _ActiveDeliveryProgress(
+      recipientType: 'ARBA',
+      totalBatches: 1,
+      completedBatches: 0,
+    );
+    try {
+      final result = await ReportEmailService().sendArbaReportEmail(
+        showId: widget.showId,
+        artifactIds: widget.reports.map((report) => report.id).toList(),
+        to: email,
+        subject: '${widget.showName} - ARBA Show Reports',
+        message:
+            'Attached ${widget.reports.length == 1 ? 'is the ARBA show report' : 'are the ARBA show reports'} for ${widget.showName}.',
+      );
+      if (!mounted) return;
+      _activeDeliveryProgress.value = const _ActiveDeliveryProgress(
+        recipientType: 'ARBA',
+        totalBatches: 1,
+        completedBatches: 1,
+      );
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.alreadySent
+                ? 'These ARBA reports were already sent to $email.'
+                : '${widget.reports.length} ARBA report${widget.reports.length == 1 ? '' : 's'} sent to $email.',
+          ),
+        ),
+      );
+      await widget.onChanged();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to send ARBA reports: $error')),
+      );
+    } finally {
+      _activeDeliveryProgress.value = null;
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final reports = widget.reports;
@@ -3457,12 +3554,13 @@ class _ArbaReportActionsState extends State<_ArbaReportActions> {
                 ),
               ),
               if (allViewed)
-                Tooltip(
-                  message: 'Email sending is unavailable for this report.',
-                  child: OutlinedButton.icon(
-                    onPressed: null,
-                    icon: const Icon(Icons.send_outlined),
-                    label: const Text('Send All ARBA Reports'),
+                FilledButton.icon(
+                  onPressed: _sending ? null : _sendAllArbaReports,
+                  icon: const Icon(Icons.send_outlined),
+                  label: Text(
+                    _sending
+                        ? 'Sending ARBA Reports…'
+                        : 'Send All ARBA Reports',
                   ),
                 ),
             ],

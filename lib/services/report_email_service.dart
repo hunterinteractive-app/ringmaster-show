@@ -107,6 +107,31 @@ class ReportEmailService {
     return _validatedSendResult(resp);
   }
 
+  Future<ReportEmailSendResult> sendArbaReportEmail({
+    required String showId,
+    required List<String> artifactIds,
+    required String to,
+    String? subject,
+    String? message,
+    String? replyTo,
+    bool forceResend = false,
+  }) async {
+    final resp = await supabase.functions.invoke(
+      'send-report-email',
+      body: {
+        'show_id': showId,
+        'artifact_ids': artifactIds,
+        'to': to,
+        'subject': subject,
+        'message': message,
+        'reply_to': replyTo,
+        'force_resend': forceResend,
+      },
+    );
+
+    return _validatedSendResult(resp);
+  }
+
   ReportEmailSendResult _validatedSendResult(FunctionResponse response) {
     final data = response.data is Map
         ? Map<String, dynamic>.from(response.data as Map)
