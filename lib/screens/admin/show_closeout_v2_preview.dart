@@ -3469,7 +3469,7 @@ class _ArbaReportActionsState extends State<_ArbaReportActions> {
         showId: widget.showId,
         artifactIds: widget.reports.map((report) => report.id).toList(),
         to: email,
-        subject: '${widget.showName} - ARBA Show Reports',
+        subject: '${widget.showName} - ARBA Show Report',
         message:
             'Attached ${widget.reports.length == 1 ? 'is the ARBA show report' : 'are the ARBA show reports'} for ${widget.showName}.',
       );

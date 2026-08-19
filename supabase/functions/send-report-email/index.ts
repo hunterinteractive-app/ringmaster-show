@@ -303,7 +303,7 @@ serve(async (req)=>{
       ...new Set(artifactList.map((artifact)=>artifact.breedName).filter((value)=>value.length > 0))
     ];
     const fileListHtml = artifactList.map((artifact)=>`<li>${escapeHtml(artifact.display)}</li>`).join("");
-    const subject = subjectOverride || (isArbaReportBundle ? `${showRow.name} - ARBA Show Reports` : `${showRow.name} - ${breedNames.length > 0 ? breedNames.join(", ") : "Club"} Club Reports`);
+    const subject = subjectOverride || (isArbaReportBundle ? `${showRow.name} - ARBA Show Report` : `${showRow.name} - ${breedNames.length > 0 ? breedNames.join(", ") : "Club"} Club Reports`);
     const priorRecipient = recipients.join(", ");
     if (!forceResend) {
       const { data: priorDelivery, error: priorDeliveryError } = await adminClient.from("show_email_deliveries").select("id, provider_message_id, sent_at").eq("show_id", showId).eq("recipient_email", priorRecipient).eq("subject", subject).eq("delivery_status", "sent").order("sent_at", {
