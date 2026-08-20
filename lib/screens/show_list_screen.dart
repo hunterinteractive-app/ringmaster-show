@@ -23,6 +23,7 @@ import 'legal/terms_screen.dart';
 import 'legal/privacy_policy_screen.dart';
 import 'super_admin/superadmin_home_screen.dart';
 import 'package:ringmaster_show/superintendent/superintendent_shows_screen.dart';
+import 'package:ringmaster_show/services/superintendent_access_service.dart';
 import 'account_profile_setup_screen.dart';
 
 import '../config/legal_config.dart';
@@ -473,18 +474,9 @@ class _ShowListScreenState extends State<ShowListScreen> {
     if (userId == null) return false;
 
     try {
-      final roleRows = await supabase
-          .from('role_assignments')
-          .select('role')
-          .eq('user_id', userId)
-          .inFilter('role', const ['superintendent', 'super_admin'])
-          .limit(1);
-
-      return (roleRows as List).cast<Map<String, dynamic>>().any((row) {
-        final role = (row['role'] ?? '').toString();
-        return role == 'super_admin' ||
-            (_enableSuperintendentRoleAccess && role == 'superintendent');
-      });
+      final access = await SuperintendentAccessService.loadShowAccess(userId);
+      return access.isSuperAdmin ||
+          (_enableSuperintendentRoleAccess && access.showIds.isNotEmpty);
     } catch (_) {
       return false;
     }

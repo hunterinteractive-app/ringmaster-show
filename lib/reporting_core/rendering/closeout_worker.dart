@@ -115,7 +115,12 @@ final class CloseoutWorker {
       final result = await renderer.render(artifact);
       await queue.heartbeat(task.id, config.workerId);
       final uploadWatch = Stopwatch()..start();
-      await queue.upload(artifact, result.bytes, checksum: result.checksum);
+      await queue.upload(
+        artifact,
+        result.bytes,
+        checksum: result.checksum,
+        mimeType: result.mimeType,
+      );
       uploadWatch.stop();
       await queue.complete(
         task,
@@ -124,6 +129,7 @@ final class CloseoutWorker {
         fileName: result.fileName,
         byteSize: result.bytes.length,
         checksum: result.checksum,
+        mimeType: result.mimeType,
       );
       log.event('render_completed', {
         ..._fields(task, artifact),

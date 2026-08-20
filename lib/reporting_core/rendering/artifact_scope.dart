@@ -5,6 +5,7 @@ import 'package:crypto/crypto.dart';
 const _sectionScopedReports = <String>{
   'arba_report',
   'sweepstakes_report',
+  'sweepstakes_json_export',
   'breed_results_detail_report',
   'details_by_breed',
   'exh_by_breed',
@@ -13,11 +14,13 @@ const _sectionScopedReports = <String>{
 
 const _breedScopedReports = <String>{
   'sweepstakes_report',
+  'sweepstakes_json_export',
   'breed_results_detail_report',
 };
 
 const _speciesScopedReports = <String>{
   'sweepstakes_report',
+  'sweepstakes_json_export',
   'breed_results_detail_report',
   'details_by_breed',
   'exh_by_breed',

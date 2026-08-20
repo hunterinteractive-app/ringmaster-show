@@ -19,6 +19,7 @@ abstract interface class RenderQueue {
     RenderArtifact artifact,
     Uint8List bytes, {
     required String checksum,
+    required String mimeType,
   });
 
   Future<void> complete(
@@ -28,6 +29,7 @@ abstract interface class RenderQueue {
     required String fileName,
     required int byteSize,
     required String checksum,
+    required String mimeType,
   });
 
   Future<void> fail(RenderTask task, String workerId, RenderFailure failure);
@@ -95,15 +97,16 @@ final class SupabaseRenderQueue implements RenderQueue {
     RenderArtifact artifact,
     Uint8List bytes, {
     required String checksum,
+    required String mimeType,
   }) async {
     final bucket = client.storage.from(artifact.storageBucket);
     try {
       await bucket.uploadBinary(
         artifact.storagePath,
         bytes,
-        fileOptions: const FileOptions(
+        fileOptions: FileOptions(
           cacheControl: '31536000, immutable',
-          contentType: 'application/pdf',
+          contentType: mimeType,
           upsert: false,
         ),
       );
@@ -124,6 +127,7 @@ final class SupabaseRenderQueue implements RenderQueue {
     required String fileName,
     required int byteSize,
     required String checksum,
+    required String mimeType,
   }) async {
     await client.rpc(
       'complete_report_render_task',
@@ -133,7 +137,7 @@ final class SupabaseRenderQueue implements RenderQueue {
         'p_storage_bucket': artifact.storageBucket,
         'p_storage_path': artifact.storagePath,
         'p_file_name': fileName,
-        'p_mime_type': 'application/pdf',
+        'p_mime_type': mimeType,
         'p_file_size_bytes': byteSize,
         'p_file_hash_sha256': checksum,
       },

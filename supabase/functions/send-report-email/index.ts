@@ -156,6 +156,7 @@ serve(async (req)=>{
     const isClubReportBundle = artifacts.some((artifact)=>[
       "sweepstakes_report",
       "breed_results_detail_report",
+      "sweepstakes_json_export",
       "details_by_breed",
       "exh_by_breed"
     ].includes(String(artifact.report_name ?? "")));
@@ -167,6 +168,7 @@ serve(async (req)=>{
       const groupedReportNames = anchorSanctioningBody === "NATIONAL CLUB" ? [
         "sweepstakes_report",
         "breed_results_detail_report",
+        "sweepstakes_json_export",
         ...isAcbaCavyDelivery ? [
           "details_by_breed",
           "exh_by_breed"
@@ -553,6 +555,8 @@ function friendlyReportName(key) {
       return "Sweepstakes Report";
     case "breed_results_detail_report":
       return "Breed Results Detail Report";
+    case "sweepstakes_json_export":
+      return "Sweepstakes JSON Export";
     default:
       return key.split("_").map((word)=>word ? word[0].toUpperCase() + word.slice(1) : word).join(" ");
   }

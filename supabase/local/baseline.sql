@@ -12,7 +12,7 @@ do $$ begin
     'exh_by_breed','best_display_report','unpaid_balances_report',
     'paid_exhibitor_report','entered_exhibitors_contact_report',
     'ribbon_payout_report','payback_report','judge_report',
-    'breed_judged_totals_report','newsletter_show_report'
+    'breed_judged_totals_report','newsletter_show_report','sweepstakes_json_export'
   );
 exception when duplicate_object then null; end $$;
 do $$ begin
@@ -621,6 +621,14 @@ create table if not exists public.show_report_artifacts (
   generated_at timestamptz, error_count integer not null default 0,
   created_at timestamptz default now(), updated_at timestamptz default now()
 );
+create table if not exists public.sweepstakes_json_export_opt_ins (
+  club_name text not null,
+  breed_name text not null,
+  enabled boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (club_name, breed_name)
+);
 create table if not exists public.show_task_queue (
   id uuid primary key default extensions.gen_random_uuid(),
   show_id uuid not null references public.shows(id) on delete cascade,
@@ -895,7 +903,7 @@ grant execute on all functions in schema public to service_role;
 do $$ begin
   if to_regclass('storage.buckets') is not null then
     insert into storage.buckets(id,name,public,file_size_limit,allowed_mime_types)
-    values('show-files','show-files',false,52428800,array['application/pdf'])
+    values('show-files','show-files',false,52428800,array['application/pdf','text/csv','application/json'])
     on conflict(id) do update set public=false;
   end if;
 end $$;

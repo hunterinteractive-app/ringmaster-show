@@ -20,8 +20,12 @@ import 'package:ringmaster_show/screens/admin/closeout/data/loaders/paid_exhibit
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/payback_report_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/ribbon_payout_report_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/sweepstakes_report_loader.dart';
+import 'package:ringmaster_show/screens/admin/closeout/json/builders/sweepstakes_json_export.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/unpaid_balances_report_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/models/base/report_request.dart';
+import 'package:ringmaster_show/screens/admin/closeout/models/base/report_file_result.dart';
+import 'package:ringmaster_show/screens/admin/closeout/models/clubs/breed_results_detail_report_data.dart';
+import 'package:ringmaster_show/screens/admin/closeout/models/clubs/sweepstakes_report_data.dart';
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/arba_report_pdf.dart';
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/best_display_report_pdf.dart';
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/breed_judged_totals_report_pdf.dart';
@@ -74,6 +78,7 @@ final class RegistryArtifactRenderer implements ArtifactRenderer {
     required this.client,
     required this.assets,
     required this.registry,
+    required this.repository,
   });
 
   static Future<RegistryArtifactRenderer> create({
@@ -150,15 +155,20 @@ final class RegistryArtifactRenderer implements ArtifactRenderer {
       client: client,
       assets: assets,
       registry: registry,
+      repository: repository,
     );
   }
 
   final SupabaseClient client;
   final ReportAssetLoader assets;
   final ReportRegistry registry;
+  final CloseoutRepository repository;
 
   @override
-  Set<String> get supportedReportTypes => registry.definitions.keys.toSet();
+  Set<String> get supportedReportTypes => {
+    ...registry.definitions.keys,
+    'sweepstakes_json_export',
+  };
 
   @override
   Future<RenderedArtifact> render(RenderArtifact artifact) async {
@@ -204,33 +214,60 @@ final class RegistryArtifactRenderer implements ArtifactRenderer {
         sectionIds: artifact.sectionIds,
       ),
     );
-    final definition = registry.get(artifact.reportName);
     final dataWatch = Stopwatch()..start();
     late final Object data;
-    try {
-      data = await definition.loader(request);
-    } on ScopedBalanceAllocationException catch (error) {
-      throw RenderFailure.permanent(
-        'unsupported_scoped_balance_report',
-        error.toString(),
-        error.reasons.toString(),
-      );
+    late final Object result;
+    if (artifact.reportName == 'sweepstakes_json_export') {
+      final results = await BreedResultsDetailReportLoader(
+        repository,
+      ).load(request);
+      final sweepstakes = await SweepstakesReportLoader(
+        repository,
+      ).load(request);
+      data = (results, sweepstakes);
+    } else {
+      final definition = registry.get(artifact.reportName);
+      try {
+        data = await definition.loader(request);
+      } on ScopedBalanceAllocationException catch (error) {
+        throw RenderFailure.permanent(
+          'unsupported_scoped_balance_report',
+          error.toString(),
+          error.reasons.toString(),
+        );
+      }
     }
     dataWatch.stop();
     final buildWatch = Stopwatch()..start();
-    final result = await definition.builder(data, request);
+    if (artifact.reportName == 'sweepstakes_json_export') {
+      final export =
+          data as (BreedResultsDetailReportData, SweepstakesReportData);
+      result = const SweepstakesJsonExport().buildFile(
+        results: export.$1,
+        sweepstakes: export.$2,
+        request: request,
+      );
+    } else {
+      result = await registry.get(artifact.reportName).builder(data, request);
+    }
     buildWatch.stop();
-    if (result.mimeType != 'application/pdf' || result.bytes.isEmpty) {
+    final file = result as ReportFileResult;
+    if (file.bytes.isEmpty ||
+        !const {
+          'application/pdf',
+          'text/csv',
+          'application/json',
+        }.contains(file.mimeType)) {
       throw const RenderFailure.permanent(
         'invalid_render_output',
-        'The renderer did not produce a valid PDF.',
+        'The renderer did not produce a valid report file.',
       );
     }
-    final bytes = Uint8List.fromList(result.bytes);
+    final bytes = Uint8List.fromList(file.bytes);
     return RenderedArtifact(
       bytes: bytes,
-      fileName: result.fileName,
-      mimeType: result.mimeType,
+      fileName: file.fileName,
+      mimeType: file.mimeType,
       checksum: sha256.convert(bytes).toString(),
       dataLoadDuration: dataWatch.elapsed,
       pdfBuildDuration: buildWatch.elapsed,

@@ -1,0 +1,914 @@
+{
+  "breed": "Dutch",
+  "club": "AMERICAN DUTCH RABBIT CLUB",
+  "event": {
+    "date": "2026-03-14",
+    "host_club": "Pandemic Palooza Pals R&CBA",
+    "location": "Auburn, NY",
+    "name": "Pandemic Palooza Pals Spring 2026 Show",
+    "secretary": {
+      "email": "JennBurrNY@gmail.com",
+      "name": "Jennifer Burr",
+      "phone": "(315) 529-7860"
+    }
+  },
+  "format": "ringmaster.sweepstakes_results",
+  "show": {
+    "arba_sanction_number": "YOA2892",
+    "awards": [],
+    "club_sanction_number": "ON18843",
+    "judge": "SAMANTHA PERRY (#1032)",
+    "letter": "B",
+    "scope": "OPEN",
+    "varieties": [
+      {
+        "awards": [],
+        "classes": [
+          {
+            "name": "Junior",
+            "placements": [
+              {
+                "animal": "TONY",
+                "exhibitor": "Karen & Rebecca Coombe",
+                "placement": "1",
+                "sex": "Buck",
+                "variety": "Black"
+              },
+              {
+                "animal": "CODAGH",
+                "exhibitor": "Karen & Rebecca Coombe",
+                "placement": "2",
+                "sex": "Buck",
+                "variety": "Black"
+              }
+            ],
+            "sex": "Buck",
+            "shown": 2
+          },
+          {
+            "name": "Junior",
+            "placements": [
+              {
+                "animal": "J696P",
+                "exhibitor": "Emily Moyer",
+                "placement": "1",
+                "sex": "Doe",
+                "variety": "Black"
+              }
+            ],
+            "sex": "Doe",
+            "shown": 1
+          },
+          {
+            "name": "Senior",
+            "placements": [
+              {
+                "animal": "TAIRN",
+                "exhibitor": "Karen & Rebecca Coombe",
+                "placement": "1",
+                "sex": "Buck",
+                "variety": "Black"
+              },
+              {
+                "animal": "B90",
+                "exhibitor": "Harry E. & Breanna L. Brokaw",
+                "placement": "2",
+                "sex": "Buck",
+                "variety": "Black"
+              },
+              {
+                "animal": "XADEN",
+                "exhibitor": "Karen & Rebecca Coombe",
+                "placement": "3",
+                "sex": "Buck",
+                "variety": "Black"
+              }
+            ],
+            "sex": "Buck",
+            "shown": 3
+          },
+          {
+            "name": "Senior",
+            "placements": [
+              {
+                "animal": "J663P",
+                "exhibitor": "Emily Moyer",
+                "placement": "1",
+                "sex": "Doe",
+                "variety": "Black"
+              },
+              {
+                "animal": "J639P",
+                "exhibitor": "Emily Moyer",
+                "placement": "2",
+                "sex": "Doe",
+                "variety": "Black"
+              },
+              {
+                "animal": "ROJO",
+                "exhibitor": "Gail Kaiser & Cassie Haas",
+                "placement": "3",
+                "sex": "Doe",
+                "variety": "Black"
+              }
+            ],
+            "sex": "Doe",
+            "shown": 3
+          }
+        ],
+        "name": "Black"
+      },
+      {
+        "awards": [],
+        "classes": [
+          {
+            "name": "Junior",
+            "placements": [
+              {
+                "animal": "FEN",
+                "exhibitor": "Karen & Rebecca Coombe",
+                "placement": "1",
+                "sex": "Buck",
+                "variety": "Blue"
+              },
+              {
+                "animal": "JW",
+                "exhibitor": "Karen & Rebecca Coombe",
+                "placement": "2",
+                "sex": "Buck",
+                "variety": "Blue"
+              }
+            ],
+            "sex": "Buck",
+            "shown": 2
+          },
+          {
+            "name": "Junior",
+            "placements": [
+              {
+                "animal": "ELLA",
+                "exhibitor": "Karen & Rebecca Coombe",
+                "placement": "1",
+                "sex": "Doe",
+                "variety": "Blue"
+              }
+            ],
+            "sex": "Doe",
+            "shown": 1
+          },
+          {
+            "name": "Senior",
+            "placements": [
+              {
+                "animal": "AEROSMITH",
+                "exhibitor": "Steven/Connie Buell/Forward",
+                "placement": "1",
+                "sex": "Buck",
+                "variety": "Blue"
+              }
+            ],
+            "sex": "Buck",
+            "shown": 1
+          },
+          {
+            "name": "Senior",
+            "placements": [
+              {
+                "animal": "CYAN",
+                "exhibitor": "Karen & Rebecca Coombe",
+                "placement": "1",
+                "sex": "Doe",
+                "variety": "Blue"
+              },
+              {
+                "animal": "DB61",
+                "exhibitor": "Todd Biddle",
+                "placement": "2",
+                "sex": "Doe",
+                "variety": "Blue"
+              },
+              {
+                "animal": "J656P",
+                "exhibitor": "Emily Moyer",
+                "placement": "3",
+                "sex": "Doe",
+                "variety": "Blue"
+              }
+            ],
+            "sex": "Doe",
+            "shown": 3
+          }
+        ],
+        "name": "Blue"
+      },
+      {
+        "awards": [],
+        "classes": [
+          {
+            "name": "Junior",
+            "placements": [
+              {
+                "animal": "RCDLMKR",
+                "exhibitor": "Todd Biddle",
+                "placement": "1",
+                "sex": "Buck",
+                "variety": "Chocolate"
+              },
+              {
+                "animal": "MARBH",
+                "exhibitor": "Karen & Rebecca Coombe",
+                "placement": "2",
+                "sex": "Buck",
+                "variety": "Chocolate"
+              }
+            ],
+            "sex": "Buck",
+            "shown": 2
+          },
+          {
+            "name": "Junior",
+            "placements": [
+              {
+                "animal": "J699P",
+                "exhibitor": "Emily Moyer",
+                "placement": "1",
+                "sex": "Doe",
+                "variety": "Chocolate"
+              },
+              {
+                "animal": "RCJNTW",
+                "exhibitor": "Todd Biddle",
+                "placement": "2",
+                "sex": "Doe",
+                "variety": "Chocolate"
+              },
+              {
+                "animal": "CHIA",
+                "exhibitor": "Gail Kaiser & Cassie Haas",
+                "placement": "3",
+                "sex": "Doe",
+                "variety": "Chocolate"
+              }
+            ],
+            "sex": "Doe",
+            "shown": 3
+          },
+          {
+            "name": "Senior",
+            "placements": [
+              {
+                "animal": "RCCADLC",
+                "exhibitor": "Todd Biddle",
+                "placement": "1",
+                "sex": "Buck",
+                "variety": "Chocolate"
+              },
+              {
+                "animal": "KC941",
+                "exhibitor": "Todd Biddle",
+                "placement": "2",
+                "sex": "Buck",
+                "variety": "Chocolate"
+              },
+              {
+                "animal": "J640P",
+                "exhibitor": "Emily Moyer",
+                "placement": "3",
+                "sex": "Buck",
+                "variety": "Chocolate"
+              },
+              {
+                "animal": "IMAR",
+                "exhibitor": "Karen & Rebecca Coombe",
+                "placement": "4",
+                "sex": "Buck",
+                "variety": "Chocolate"
+              },
+              {
+                "animal": "MALT",
+                "exhibitor": "Gail Kaiser & Cassie Haas",
+                "placement": "5",
+                "sex": "Buck",
+                "variety": "Chocolate"
+              },
+              {
+                "animal": "RIDOC",
+                "exhibitor": "Karen & Rebecca Coombe",
+                "placement": "6",
+                "sex": "Buck",
+                "variety": "Chocolate"
+              }
+            ],
+            "sex": "Buck",
+            "shown": 6
+          },
+          {
+            "name": "Senior",
+            "placements": [
+              {
+                "animal": "RCVIOLA",
+                "exhibitor": "Todd Biddle",
+                "placement": "1",
+                "sex": "Doe",
+                "variety": "Chocolate"
+              },
+              {
+                "animal": "AC2",
+                "exhibitor": "Todd Biddle",
+                "placement": "2",
+                "sex": "Doe",
+                "variety": "Chocolate"
+              },
+              {
+                "animal": "RCPJPNC",
+                "exhibitor": "Todd Biddle",
+                "placement": "3",
+                "sex": "Doe",
+                "variety": "Chocolate"
+              },
+              {
+                "animal": "RCHLRTY",
+                "exhibitor": "Todd Biddle",
+                "placement": "4",
+                "sex": "Doe",
+                "variety": "Chocolate"
+              },
+              {
+                "animal": "DAR",
+                "exhibitor": "Gail Kaiser & Cassie Haas",
+                "placement": "5",
+                "sex": "Doe",
+                "variety": "Chocolate"
+              },
+              {
+                "animal": "AOTROM",
+                "exhibitor": "Karen & Rebecca Coombe",
+                "placement": "6",
+                "sex": "Doe",
+                "variety": "Chocolate"
+              }
+            ],
+            "sex": "Doe",
+            "shown": 6
+          }
+        ],
+        "name": "Chocolate"
+      },
+      {
+        "awards": [],
+        "classes": [
+          {
+            "name": "Junior",
+            "placements": [
+              {
+                "animal": "JP097AL",
+                "exhibitor": "Emily Moyer",
+                "placement": "1",
+                "sex": "Buck",
+                "variety": "Golden Yellow"
+              },
+              {
+                "animal": "JP094AL",
+                "exhibitor": "Emily Moyer",
+                "placement": "2",
+                "sex": "Buck",
+                "variety": "Golden Yellow"
+              }
+            ],
+            "sex": "Buck",
+            "shown": 2
+          },
+          {
+            "name": "Junior",
+            "placements": [
+              {
+                "animal": "JP099AL",
+                "exhibitor": "Emily Moyer",
+                "placement": "1",
+                "sex": "Doe",
+                "variety": "Golden Yellow"
+              }
+            ],
+            "sex": "Doe",
+            "shown": 1
+          },
+          {
+            "name": "Senior",
+            "placements": [
+              {
+                "animal": "RCGVN",
+                "exhibitor": "Todd Biddle",
+                "placement": "1",
+                "sex": "Buck",
+                "variety": "Golden Yellow"
+              }
+            ],
+            "sex": "Buck",
+            "shown": 1
+          },
+          {
+            "name": "Senior",
+            "placements": [
+              {
+                "animal": "JP086AL",
+                "exhibitor": "Emily Moyer",
+                "placement": "1",
+                "sex": "Doe",
+                "variety": "Golden Yellow"
+              }
+            ],
+            "sex": "Doe",
+            "shown": 1
+          }
+        ],
+        "name": "Golden Yellow"
+      },
+      {
+        "awards": [],
+        "classes": [
+          {
+            "name": "Junior",
+            "placements": [
+              {
+                "animal": "J673P",
+                "exhibitor": "Emily Moyer",
+                "placement": "1",
+                "sex": "Doe",
+                "variety": "Gray"
+              },
+              {
+                "animal": "J688P",
+                "exhibitor": "Emily Moyer",
+                "placement": "2",
+                "sex": "Doe",
+                "variety": "Gray"
+              },
+              {
+                "animal": "J698P",
+                "exhibitor": "Emily Moyer",
+                "placement": "3",
+                "sex": "Doe",
+                "variety": "Gray"
+              }
+            ],
+            "sex": "Doe",
+            "shown": 3
+          },
+          {
+            "name": "Senior",
+            "placements": [
+              {
+                "animal": "J658P",
+                "exhibitor": "Emily Moyer",
+                "placement": "1",
+                "sex": "Buck",
+                "variety": "Gray"
+              },
+              {
+                "animal": "J655P",
+                "exhibitor": "Emily Moyer",
+                "placement": "2",
+                "sex": "Buck",
+                "variety": "Gray"
+              },
+              {
+                "animal": "J653P",
+                "exhibitor": "Gail Kaiser & Cassie Haas",
+                "placement": "3",
+                "sex": "Buck",
+                "variety": "Gray"
+              },
+              {
+                "animal": "NERO",
+                "exhibitor": "Karen & Rebecca Coombe",
+                "placement": "4",
+                "sex": "Buck",
+                "variety": "Gray"
+              },
+              {
+                "animal": "ASHER",
+                "exhibitor": "Karen & Rebecca Coombe",
+                "placement": "5",
+                "sex": "Buck",
+                "variety": "Gray"
+              },
+              {
+                "animal": "CAPOTE",
+                "exhibitor": "Karen & Rebecca Coombe",
+                "placement": "6",
+                "sex": "Buck",
+                "variety": "Gray"
+              },
+              {
+                "animal": "ISAC",
+                "exhibitor": "Karen & Rebecca Coombe",
+                "placement": "DQ",
+                "sex": "Buck",
+                "variety": "Gray"
+              }
+            ],
+            "sex": "Buck",
+            "shown": 7
+          },
+          {
+            "name": "Senior",
+            "placements": [
+              {
+                "animal": "J629P",
+                "exhibitor": "Emily Moyer",
+                "placement": "1",
+                "sex": "Doe",
+                "variety": "Gray"
+              },
+              {
+                "animal": "DORIAN",
+                "exhibitor": "Karen & Rebecca Coombe",
+                "placement": "2",
+                "sex": "Doe",
+                "variety": "Gray"
+              },
+              {
+                "animal": "PIP",
+                "exhibitor": "Gail Kaiser & Cassie Haas",
+                "placement": "3",
+                "sex": "Doe",
+                "variety": "Gray"
+              },
+              {
+                "animal": "ARIEL",
+                "exhibitor": "Karen & Rebecca Coombe",
+                "placement": "4",
+                "sex": "Doe",
+                "variety": "Gray"
+              },
+              {
+                "animal": "PEARL",
+                "exhibitor": "Karen & Rebecca Coombe",
+                "placement": "5",
+                "sex": "Doe",
+                "variety": "Gray"
+              },
+              {
+                "animal": "TEETER",
+                "exhibitor": "Karen & Rebecca Coombe",
+                "placement": "DQ",
+                "sex": "Doe",
+                "variety": "Gray"
+              }
+            ],
+            "sex": "Doe",
+            "shown": 6
+          }
+        ],
+        "name": "Gray"
+      },
+      {
+        "awards": [],
+        "classes": [
+          {
+            "name": "Junior",
+            "placements": [
+              {
+                "animal": "J710P",
+                "exhibitor": "Emily Moyer",
+                "placement": "1",
+                "sex": "Buck",
+                "variety": "Lilac"
+              }
+            ],
+            "sex": "Buck",
+            "shown": 1
+          },
+          {
+            "name": "Junior",
+            "placements": [
+              {
+                "animal": "J675P",
+                "exhibitor": "Emily Moyer",
+                "placement": "1",
+                "sex": "Doe",
+                "variety": "Lilac"
+              },
+              {
+                "animal": "J690P",
+                "exhibitor": "Emily Moyer",
+                "placement": "2",
+                "sex": "Doe",
+                "variety": "Lilac"
+              },
+              {
+                "animal": "J695P",
+                "exhibitor": "Emily Moyer",
+                "placement": "3",
+                "sex": "Doe",
+                "variety": "Lilac"
+              }
+            ],
+            "sex": "Doe",
+            "shown": 3
+          },
+          {
+            "name": "Senior",
+            "placements": [
+              {
+                "animal": "P5SD",
+                "exhibitor": "Todd Biddle",
+                "placement": "1",
+                "sex": "Buck",
+                "variety": "Lilac"
+              }
+            ],
+            "sex": "Buck",
+            "shown": 1
+          },
+          {
+            "name": "Senior",
+            "placements": [
+              {
+                "animal": "RCLAV",
+                "exhibitor": "Todd Biddle",
+                "placement": "1",
+                "sex": "Doe",
+                "variety": "Lilac"
+              }
+            ],
+            "sex": "Doe",
+            "shown": 1
+          }
+        ],
+        "name": "Lilac"
+      },
+      {
+        "awards": [],
+        "classes": [
+          {
+            "name": "Senior",
+            "placements": [
+              {
+                "animal": "M53",
+                "exhibitor": "Gail Kaiser & Cassie Haas",
+                "placement": "1",
+                "sex": "Buck",
+                "variety": "Steel"
+              }
+            ],
+            "sex": "Buck",
+            "shown": 1
+          },
+          {
+            "name": "Senior",
+            "placements": [
+              {
+                "animal": "X74",
+                "exhibitor": "Harry E. & Breanna L. Brokaw",
+                "placement": "1",
+                "sex": "Doe",
+                "variety": "Steel"
+              },
+              {
+                "animal": "X75",
+                "exhibitor": "Harry E. & Breanna L. Brokaw",
+                "placement": "2",
+                "sex": "Doe",
+                "variety": "Steel"
+              }
+            ],
+            "sex": "Doe",
+            "shown": 2
+          }
+        ],
+        "name": "Steel"
+      },
+      {
+        "awards": [],
+        "classes": [
+          {
+            "name": "Junior",
+            "placements": [
+              {
+                "animal": "RCABSLT",
+                "exhibitor": "Todd Biddle",
+                "placement": "1",
+                "sex": "Buck",
+                "variety": "Tortoise"
+              },
+              {
+                "animal": "MKD99",
+                "exhibitor": "Mackenzie Kratzsch",
+                "placement": "2",
+                "sex": "Buck",
+                "variety": "Tortoise"
+              }
+            ],
+            "sex": "Buck",
+            "shown": 2
+          },
+          {
+            "name": "Junior",
+            "placements": [
+              {
+                "animal": "RCDAHLIA",
+                "exhibitor": "Todd Biddle",
+                "placement": "1",
+                "sex": "Doe",
+                "variety": "Tortoise"
+              }
+            ],
+            "sex": "Doe",
+            "shown": 1
+          },
+          {
+            "name": "Senior",
+            "placements": [
+              {
+                "animal": "P5EB",
+                "exhibitor": "Todd Biddle",
+                "placement": "1",
+                "sex": "Buck",
+                "variety": "Tortoise"
+              },
+              {
+                "animal": "MKD96",
+                "exhibitor": "Mackenzie Kratzsch",
+                "placement": "2",
+                "sex": "Buck",
+                "variety": "Tortoise"
+              },
+              {
+                "animal": "HSD479",
+                "exhibitor": "Gail Kaiser & Cassie Haas",
+                "placement": "3",
+                "sex": "Buck",
+                "variety": "Tortoise"
+              },
+              {
+                "animal": "B94",
+                "exhibitor": "Harry E. & Breanna L. Brokaw",
+                "placement": "4",
+                "sex": "Buck",
+                "variety": "Tortoise"
+              },
+              {
+                "animal": "MKD97",
+                "exhibitor": "Mackenzie Kratzsch",
+                "placement": "5",
+                "sex": "Buck",
+                "variety": "Tortoise"
+              }
+            ],
+            "sex": "Buck",
+            "shown": 5
+          },
+          {
+            "name": "Senior",
+            "placements": [
+              {
+                "animal": "RCMNLSA",
+                "exhibitor": "Todd Biddle",
+                "placement": "1",
+                "sex": "Doe",
+                "variety": "Tortoise"
+              },
+              {
+                "animal": "RCCRRT",
+                "exhibitor": "Todd Biddle",
+                "placement": "2",
+                "sex": "Doe",
+                "variety": "Tortoise"
+              },
+              {
+                "animal": "GN94",
+                "exhibitor": "Todd Biddle",
+                "placement": "3",
+                "sex": "Doe",
+                "variety": "Tortoise"
+              },
+              {
+                "animal": "RCAMRY",
+                "exhibitor": "Todd Biddle",
+                "placement": "4",
+                "sex": "Doe",
+                "variety": "Tortoise"
+              },
+              {
+                "animal": "X73",
+                "exhibitor": "Harry E. & Breanna L. Brokaw",
+                "placement": "5",
+                "sex": "Doe",
+                "variety": "Tortoise"
+              },
+              {
+                "animal": "RCANMLE",
+                "exhibitor": "Todd Biddle",
+                "placement": "6",
+                "sex": "Doe",
+                "variety": "Tortoise"
+              },
+              {
+                "animal": "VAP",
+                "exhibitor": "Gail Kaiser & Cassie Haas",
+                "placement": "7",
+                "sex": "Doe",
+                "variety": "Tortoise"
+              }
+            ],
+            "sex": "Doe",
+            "shown": 7
+          }
+        ],
+        "name": "Tortoise"
+      }
+    ]
+  },
+  "sweepstakes": {
+    "exhibitors": [
+      {
+        "address": "152 Hillview Ave, State College, PA, 16801",
+        "best_in_show_points": 0,
+        "breed_points": 76,
+        "class_points": 357,
+        "exhibitor": "Todd Biddle",
+        "fur_points": 0,
+        "group_points": 0,
+        "rank": 1,
+        "total_points": 433,
+        "variety_points": 0
+      },
+      {
+        "address": "4 Colonial Dr, Lebanon, PA, 17042",
+        "best_in_show_points": 0,
+        "breed_points": 35,
+        "class_points": 287,
+        "exhibitor": "Emily Moyer",
+        "fur_points": 0,
+        "group_points": 0,
+        "rank": 2,
+        "total_points": 322,
+        "variety_points": 0
+      },
+      {
+        "address": "62 Old Brodhead Rd, Grahamsville, NY, 12740",
+        "best_in_show_points": 0,
+        "breed_points": 0,
+        "class_points": 164,
+        "exhibitor": "Karen & Rebecca Coombe",
+        "fur_points": 0,
+        "group_points": 0,
+        "rank": 3,
+        "total_points": 164,
+        "variety_points": 0
+      },
+      {
+        "address": "95 Puhalka Rd, Newfield, NY, 14867",
+        "best_in_show_points": 0,
+        "breed_points": 0,
+        "class_points": 84,
+        "exhibitor": "Gail Kaiser & Cassie Haas",
+        "fur_points": 0,
+        "group_points": 0,
+        "rank": 4,
+        "total_points": 84,
+        "variety_points": 0
+      },
+      {
+        "address": "337 Grover Rd, Canton, PA, 17724",
+        "best_in_show_points": 0,
+        "breed_points": 0,
+        "class_points": 49,
+        "exhibitor": "Harry E. & Breanna L. Brokaw",
+        "fur_points": 0,
+        "group_points": 0,
+        "rank": 5,
+        "total_points": 49,
+        "variety_points": 0
+      },
+      {
+        "address": "45 Dogwood drive, newton, Nj, 07860",
+        "best_in_show_points": 0,
+        "breed_points": 0,
+        "class_points": 33,
+        "exhibitor": "Mackenzie Kratzsch",
+        "fur_points": 0,
+        "group_points": 0,
+        "rank": 6,
+        "total_points": 33,
+        "variety_points": 0
+      },
+      {
+        "address": "6308 Wendover rd, bouckville, ny, 13310",
+        "best_in_show_points": 0,
+        "breed_points": 0,
+        "class_points": 6,
+        "exhibitor": "Steven/Connie Buell/Forward",
+        "fur_points": 0,
+        "group_points": 0,
+        "rank": 7,
+        "total_points": 6,
+        "variety_points": 0
+      }
+    ],
+    "rule_source": "VERIFIED",
+    "verification_status": "VERIFIED"
+  },
+  "version": 1
+}

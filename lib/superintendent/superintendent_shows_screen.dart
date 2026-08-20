@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:ringmaster_show/services/app_session.dart';
+import 'package:ringmaster_show/services/superintendent_access_service.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:ringmaster_show/superintendent/superintendent_lineup_screen.dart';
@@ -39,21 +40,12 @@ class _SuperintendentShowsScreenState extends State<SuperintendentShowsScreen> {
     final userId = AppSession.effectiveUserId;
     if (userId == null) return [];
 
-    final roleRows = await supabase
-        .from('role_assignments')
-        .select('show_id, role')
-        .eq('user_id', userId)
-        .inFilter('role', const ['superintendent', 'super_admin']);
-
-    final assignments = List<Map<String, dynamic>>.from(roleRows as List);
-    final isSuperAdmin = assignments.any(
-      (row) => (row['role'] ?? '').toString().trim() == 'super_admin',
-    );
+    final access = await SuperintendentAccessService.loadShowAccess(userId);
 
     // A super-admin role is global and does not require one assignment per
     // show. Support Mode intentionally keeps the selected user's assignment
     // scope so support staff do not gain broader access through impersonation.
-    if (isSuperAdmin && !AppSession.isSupportMode) {
+    if (access.isSuperAdmin && !AppSession.isSupportMode) {
       final rows = await supabase
           .from('shows')
           .select('id, name, start_date, end_date, location_name');
@@ -63,11 +55,7 @@ class _SuperintendentShowsScreenState extends State<SuperintendentShowsScreen> {
       return shows;
     }
 
-    final showIds = assignments
-        .map((row) => (row['show_id'] ?? '').toString().trim())
-        .where((showId) => showId.isNotEmpty)
-        .toSet()
-        .toList();
+    final showIds = access.showIds.toList();
 
     if (showIds.isEmpty) return [];
 
@@ -168,7 +156,8 @@ class _SuperintendentShowsScreenState extends State<SuperintendentShowsScreen> {
   Widget build(BuildContext context) {
     return RingMasterPageShell(
       title: 'Show Superintendent',
-      subtitle: 'Build and manage judging line-ups for your assigned shows.',
+      subtitle:
+          'Build and manage line-ups for your assigned shows, or secretary shows without a superintendent.',
       actions: [
         TextButton.icon(
           onPressed: AppSession.isSupportMode ? null : _openPreferences,
@@ -379,7 +368,7 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Shows will appear here when you are assigned the superintendent role.',
+              'Shows appear when you are assigned superintendent, or when you are the secretary and no superintendent is assigned.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
