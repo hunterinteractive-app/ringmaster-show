@@ -11,14 +11,10 @@ class SuperintendentAccessService {
 
   static const _superintendentRole = 'superintendent';
   static const _superAdminRole = 'super_admin';
-  static const _secretaryRoles = <String>{
-    'admin',
-    'show_admin',
-    'show_secretary',
-    'secretary',
-    'show_secretary_admin',
-    'show_secretary_full',
-  };
+  // `role_assignments.role` is the `app_role` enum. A show secretary is
+  // stored as `admin`; historical `show_admin` records live in the separate
+  // `show_admins` table below.
+  static const _secretaryRoles = <String>{'admin'};
 
   static SupabaseClient get _supabase => Supabase.instance.client;
 
