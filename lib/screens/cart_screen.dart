@@ -1140,7 +1140,7 @@ class _CartScreenState extends State<CartScreen> {
       ],
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : Column(
+          : ListView(
               children: [
                 if (AppSession.isSupportMode)
                   Padding(
@@ -1356,96 +1356,88 @@ class _CartScreenState extends State<CartScreen> {
                     ),
                   ),
                 ),
-                Expanded(
-                  child: _items.isEmpty
-                      ? const Center(
-                          child: Text(
-                            'Your cart is empty.',
-                            textAlign: TextAlign.center,
-                          ),
-                        )
-                      : ListView(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          children: [
-                            for (final entry in grouped.entries) ...[
-                              AppTheme.surfaceTextScope(
-                                context,
-                                child: Container(
-                                  margin: const EdgeInsets.only(bottom: 10),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.surface,
-                                    borderRadius: BorderRadius.circular(16),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withValues(
-                                          alpha: .04,
-                                        ),
-                                        blurRadius: 8,
-                                      ),
-                                    ],
-                                  ),
-                                  child: Column(
-                                    children: [
-                                      _ExhibitorGroupHeader(
-                                        exhibitorName:
-                                            entry.key == '__unassigned__'
-                                            ? 'Unassigned Exhibitor'
-                                            : (_exhibitorLabelById[entry.key] ??
-                                                  'Exhibitor'),
-                                        feeSettingsExists: hasFeeConfig,
-                                        feeLine: hasFeeConfig
-                                            ? _buildExhibitorFeeLine(
-                                                exhibitorItems: entry.value,
-                                                currency: currency,
-                                              )
-                                            : null,
-                                      ),
-                                      const Divider(height: 1),
-                                      ...entry.value.map((it) {
-                                        final sectionId =
-                                            it['section_id']?.toString() ?? '';
-                                        final sec = _sectionById[sectionId];
-                                        final secName =
-                                            (sec?['display_name'] ?? 'Section')
-                                                .toString();
-
-                                        return ListTile(
-                                          title: Text(
-                                            _cartItemTitle(it, secName),
-                                            style: const TextStyle(
-                                              color: AppColors.text,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                          subtitle: Text(
-                                            _cartItemSubtitle(it),
-                                            style: const TextStyle(
-                                              color: AppColors.muted,
-                                            ),
-                                          ),
-                                          isThreeLine: _cartItemIsThreeLine(it),
-                                          trailing: IconButton(
-                                            tooltip: 'Remove',
-                                            icon: const Icon(
-                                              Icons.delete_outline,
-                                            ),
-                                            onPressed:
-                                                (_confirming || _payingOnline)
-                                                ? null
-                                                : () => _removeItem(
-                                                    it['id'].toString(),
-                                                  ),
-                                          ),
-                                        );
-                                      }),
-                                    ],
-                                  ),
-                                ),
+                if (_items.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.all(32),
+                    child: Center(
+                      child: Text(
+                        'Your cart is empty.',
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  )
+                else
+                  for (final entry in grouped.entries)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: AppTheme.surfaceTextScope(
+                        context,
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          decoration: BoxDecoration(
+                            color: AppColors.surface,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: .04),
+                                blurRadius: 8,
                               ),
                             ],
-                          ],
+                          ),
+                          child: Column(
+                            children: [
+                              _ExhibitorGroupHeader(
+                                exhibitorName: entry.key == '__unassigned__'
+                                    ? 'Unassigned Exhibitor'
+                                    : (_exhibitorLabelById[entry.key] ??
+                                          'Exhibitor'),
+                                feeSettingsExists: hasFeeConfig,
+                                feeLine: hasFeeConfig
+                                    ? _buildExhibitorFeeLine(
+                                        exhibitorItems: entry.value,
+                                        currency: currency,
+                                      )
+                                    : null,
+                              ),
+                              const Divider(height: 1),
+                              ...entry.value.map((it) {
+                                final sectionId =
+                                    it['section_id']?.toString() ?? '';
+                                final sec = _sectionById[sectionId];
+                                final secName =
+                                    (sec?['display_name'] ?? 'Section')
+                                        .toString();
+
+                                return ListTile(
+                                  title: Text(
+                                    _cartItemTitle(it, secName),
+                                    style: const TextStyle(
+                                      color: AppColors.text,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  subtitle: Text(
+                                    _cartItemSubtitle(it),
+                                    style: const TextStyle(
+                                      color: AppColors.muted,
+                                    ),
+                                  ),
+                                  isThreeLine: _cartItemIsThreeLine(it),
+                                  trailing: IconButton(
+                                    tooltip: 'Remove',
+                                    icon: const Icon(Icons.delete_outline),
+                                    onPressed: (_confirming || _payingOnline)
+                                        ? null
+                                        : () =>
+                                              _removeItem(it['id'].toString()),
+                                  ),
+                                );
+                              }),
+                            ],
+                          ),
                         ),
-                ),
+                      ),
+                    ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                   child: SizedBox(
