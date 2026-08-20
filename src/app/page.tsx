@@ -719,12 +719,12 @@ function Shows({
     return data.downloads as PortalReport[];
   }
 
-  async function getFreshReports(show: PortalShow) {
+  async function getFreshReports(show: PortalShow, refresh = true) {
     setReportProgress({
       key: keyFor(show),
       value: { completed: 0, total: 0, phase: "queued", estimated_seconds_remaining: null },
     });
-    let downloads = await getReports(show, true);
+    let downloads = await getReports(show, refresh);
     for (let attempt = 0; !downloads && attempt < 30; attempt += 1) {
       setMessage("Waiting for the latest report changes to finish…");
       await new Promise((resolve) => window.setTimeout(resolve, 2000));
@@ -779,7 +779,7 @@ function Shows({
     setLoadingKey(key);
     setMessage("");
     try {
-      const downloads = await getFreshReports(show);
+      const downloads = await getFreshReports(show, false);
       setReportsToView({
         title: `${show.show_name} — ${show.section_label || "Reports"}`,
         downloads,

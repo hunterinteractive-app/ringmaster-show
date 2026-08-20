@@ -1124,14 +1124,21 @@ class _AdminEntryManagementScreenState
 Future<bool?> showAdminEntryEditSheet(
   BuildContext context, {
   required Map<String, dynamic> entry,
+  Future<void> Function({
+    required Map<String, dynamic> originalEntry,
+    required Map<String, dynamic> updatedEntry,
+  })?
+  onSavedAudit,
 }) {
   return showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
     backgroundColor: Colors.transparent,
-    builder: (_) =>
-        _themedBottomSheetShell(context, child: _EditEntrySheet(entry: entry)),
+    builder: (_) => _themedBottomSheetShell(
+      context,
+      child: _EditEntrySheet(entry: entry, onSavedAudit: onSavedAudit),
+    ),
   );
 }
 
@@ -1189,8 +1196,13 @@ const _entrySheetFocusedInputLabelStyle = TextStyle(
 
 class _EditEntrySheet extends StatefulWidget {
   final Map<String, dynamic> entry;
+  final Future<void> Function({
+    required Map<String, dynamic> originalEntry,
+    required Map<String, dynamic> updatedEntry,
+  })?
+  onSavedAudit;
 
-  const _EditEntrySheet({required this.entry});
+  const _EditEntrySheet({required this.entry, this.onSavedAudit});
 
   @override
   State<_EditEntrySheet> createState() => _EditEntrySheetState();
@@ -1670,7 +1682,7 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
           .update(updatePayload)
           .eq('id', id)
           .select(
-            'id, animal_name, tattoo, breed, variety, sex, class_name, updated_at',
+            'id, animal_name, tattoo, breed, variety, sex, class_name, notes, is_fur, fur_variety, fur_notes, updated_at',
           );
 
       final updatedList = (updatedRows as List).cast<Map<String, dynamic>>();
@@ -1693,6 +1705,11 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
           furNotes: _furNotes.text.trim(),
         );
       }
+
+      await widget.onSavedAudit?.call(
+        originalEntry: Map<String, dynamic>.from(widget.entry),
+        updatedEntry: Map<String, dynamic>.from(updatedList.first),
+      );
 
       debugPrint('Entry update succeeded: ${updatedList.first}');
 

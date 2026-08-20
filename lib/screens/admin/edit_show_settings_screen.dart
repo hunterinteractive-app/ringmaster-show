@@ -36,6 +36,7 @@ import 'results/admin_results_entry_screen.dart';
 import 'package:ringmaster_show/screens/admin/show_closeout.dart';
 import 'package:ringmaster_show/screens/admin/show_closeout_v2_preview.dart';
 import 'admin_audit_log_screen.dart';
+import '../../superintendent/superintendent_lineup_screen.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -959,6 +960,19 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
         builder: (_) => AdminAuditLogScreen(
           showId: widget.showId,
           showName: _effectiveShowName(),
+        ),
+      ),
+    );
+  }
+
+  void _openSuperintendentLayout() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SuperintendentLineupScreen(
+          showId: widget.showId,
+          showName: _effectiveShowName(),
+          readOnly: true,
         ),
       ),
     );
@@ -2248,6 +2262,13 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                 onTap: (_saving || _isReadOnly)
                                     ? null
                                     : _openPaybacks,
+                              ),
+                              _buildSettingsActionTile(
+                                icon: Icons.visibility_outlined,
+                                title: 'View Superintendent Layout',
+                                subtitle:
+                                    'View the judging line-up for this show; superintendent changes are disabled',
+                                onTap: _openSuperintendentLayout,
                               ),
                               if (canManageShowSettings)
                                 _buildSettingsActionTile(

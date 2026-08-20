@@ -33,6 +33,7 @@ serve(async (request) => {
   const showId = String(body.show_id ?? "").trim();
   const portalClubId = String(body.portal_club_id ?? "").trim();
   const sanctionNumber = String(body.sanction_number ?? "").trim();
+  const refreshRequested = body.refresh === true;
   if (!showId || !portalClubId) return json({ error: "Report details are missing." }, 400);
 
   // This RPC is the authorization boundary: it only returns rows assigned to
@@ -77,33 +78,6 @@ serve(async (request) => {
   const isReady = (artifact: any) =>
     artifact.artifact_status === "generated" ||
     (isArba && artifact.artifact_status === "warning");
-
-  // A download is also the portal's freshness check.  It queues a new render
-  // only when report-relevant data changed after this exact artifact was made;
-  // otherwise it immediately returns the existing PDF(s).
-  const reportInputsChangedSince = async (artifact: any) => {
-    if (!artifact.generated_at) return true;
-    const sectionIds = Array.isArray(artifact.section_ids) ? artifact.section_ids : [];
-    const timestamps: string[] = [];
-    const addTimestamp = (value: unknown) => {
-      if (value && !Number.isNaN(new Date(String(value)).getTime())) timestamps.push(String(value));
-    };
-
-    const [{ data: show }, { data: sanction }, { data: latestEntry }] = await Promise.all([
-      admin.from("shows").select("updated_at, results_last_changed_at").eq("id", showId).maybeSingle(),
-      admin.from("show_sanctions").select("updated_at").eq("show_id", showId).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
-      sectionIds.length
-        ? admin.from("entries").select("updated_at").eq("show_id", showId).in("section_id", sectionIds).order("updated_at", { ascending: false }).limit(1).maybeSingle()
-        : Promise.resolve({ data: null }),
-    ]);
-
-    addTimestamp(show?.updated_at);
-    addTimestamp(show?.results_last_changed_at);
-    addTimestamp(sanction?.updated_at);
-    addTimestamp(latestEntry?.updated_at);
-    const newestInput = timestamps.reduce<number>((latest, value) => Math.max(latest, new Date(value).getTime()), 0);
-    return newestInput > new Date(artifact.generated_at).getTime();
-  };
 
   // The portal only exposes an aggregate of its own authorized report jobs.
   // Queue timestamps let the chair see whether the renderer is actively working
@@ -156,28 +130,27 @@ serve(async (request) => {
     };
   };
 
-  // Queue only those report files whose inputs are newer than their generated
-  // version. This preserves instant downloads when nothing has changed.
-  if (matching.every(isReady)) {
-    const staleArtifacts = (await Promise.all(matching.map(async (artifact: any) =>
-      (await reportInputsChangedSince(artifact)) ? artifact : null,
-    ))).filter(Boolean);
-    if (staleArtifacts.length) {
-      const refreshes = await Promise.all(staleArtifacts.map((artifact: any) =>
+  // A chair's explicit Download or View request is a request for a new report,
+  // not merely a cache check. Re-render every artifact in this authorized
+  // section so the files always reflect the current show data and scoring.
+  // Polling requests set refresh=false, so they observe that single render job
+  // rather than queue it again.
+  if (refreshRequested && matching.every(isReady)) {
+    const refreshes = await Promise.all(matching.map((artifact: any) =>
         admin.rpc("requeue_single_closeout_artifact", {
           p_show_id: showId,
           p_finalize_run_id: artifact.finalize_run_id,
           p_scope_key: artifact.scope_key,
           p_artifact_id: artifact.id,
         }),
-      ));
-      const refreshError = refreshes.find((result: any) => result.error)?.error;
-      if (refreshError) {
-        console.error("Could not queue a fresh Sweepstakes report", refreshError);
-        return json({ error: "We could not queue the latest report files." }, 500);
-      }
-      return json({ refreshing: true, retry_after_ms: 2000, progress: await getProgress(matching) }, 202);
+      ),
+    );
+    const refreshError = refreshes.find((result: any) => result.error)?.error;
+    if (refreshError) {
+      console.error("Could not queue a fresh Sweepstakes report", refreshError);
+      return json({ error: "We could not queue the latest report files." }, 500);
     }
+    return json({ refreshing: true, retry_after_ms: 2000, progress: await getProgress(matching) }, 202);
   }
 
   if (!matching.every(isReady)) {

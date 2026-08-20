@@ -19,6 +19,12 @@ class RabbitResultsRules implements ResultsRules {
           'bjv': 'BJV',
           'biv': 'BIV',
           'bsv': 'BSV',
+          'bjb': 'BJB',
+          'best junior breed': 'BJB',
+          'best junior of breed': 'BJB',
+          'bsb': 'BSB',
+          'best senior breed': 'BSB',
+          'best senior of breed': 'BSB',
           'bog': 'BOG',
           'best of group': 'BOG',
           'bosg': 'BOSG',
@@ -138,21 +144,42 @@ class RabbitResultsRules implements ResultsRules {
       'himalayan',
       'checkered giant',
     }.contains(breed);
+    final isHimalayan = breed == 'himalayan';
+    final isNationalShow = entry['is_national_show'] == true;
     final awards = <String>[
-      if (usesVarietyLayer(entry)) ...['BJV', 'BIV', 'BSV', 'BOV', 'BOSV'],
+      if (usesVarietyLayer(entry)) ...[
+        // Himalayan specialty shows award Best Junior/Senior of Breed. Their
+        // Best Junior/Senior of Variety awards are a national-show rule.
+        if (!isHimalayan || isNationalShow) ...['BJV', 'BIV', 'BSV'],
+        'BOV',
+        'BOSV',
+      ],
       if (usesGroupLayer(entry)) ...['BOG', 'BOSG'],
       'BOB',
       'BOSB',
     ];
     if (supportsBestAge) {
-      if (className.contains('junior') && !className.contains('pre')) {
+      if (isHimalayan && !isNationalShow) {
+        if (className.contains('junior') && !className.contains('pre')) {
+          awards.add('BJB');
+        }
+        if (className.contains('senior')) awards.add('BSB');
+      } else if (isHimalayan) {
+        // Nationals award at both the variety and breed levels. The variety
+        // award was added above; add the matching breed-level award here.
+        if (className.contains('junior') && !className.contains('pre')) {
+          awards.add('BJB');
+        }
+        if (className.contains('senior')) awards.add('BSB');
+      } else if (className.contains('junior') && !className.contains('pre')) {
         awards.add('Best Junior');
+      } else {
+        if (classSystem.toLowerCase() == 'six' &&
+            className.contains('intermediate')) {
+          awards.add('Best Intermediate');
+        }
+        if (className.contains('senior')) awards.add('Best Senior');
       }
-      if (classSystem.toLowerCase() == 'six' &&
-          className.contains('intermediate')) {
-        awards.add('Best Intermediate');
-      }
-      if (className.contains('senior')) awards.add('Best Senior');
     }
     if (finalAwardMode == 'bis_ris') {
       awards.addAll(['Best In Show', 'Reserve In Show']);
@@ -236,7 +263,27 @@ class RabbitResultsRules implements ResultsRules {
     final selected = normalizeStoredAwards(selectedAwards);
     final code = _canonical(award);
     if (const {'BJV', 'BIV', 'BSV', 'BOV', 'BOSV'}.contains(code)) {
+      final breed = normalizeResultsRuleKey(
+        resultsRuleText(entry, const ['breed', 'breed_name']),
+      );
+      if (breed == 'himalayan' &&
+          entry['is_national_show'] != true &&
+          const {'BJV', 'BIV', 'BSV'}.contains(code)) {
+        return false;
+      }
       return usesVarietyLayer(entry);
+    }
+    if (code == 'BJB' || code == 'BSB') {
+      final breed = normalizeResultsRuleKey(
+        resultsRuleText(entry, const ['breed', 'breed_name']),
+      );
+      if (breed != 'himalayan') {
+        return false;
+      }
+      final className = normalizeResultsRuleKey(entry['class_name']);
+      return code == 'BJB'
+          ? className.contains('junior') && !className.contains('pre')
+          : className.contains('senior');
     }
     if (const {'BOG', 'BOSG'}.contains(code)) return usesGroupLayer(entry);
     if (code == 'HM') return false;
@@ -300,6 +347,8 @@ class RabbitResultsRules implements ResultsRules {
     'BJV' => 'Best Junior Variety',
     'BIV' => 'Best Intermediate Variety',
     'BSV' => 'Best Senior Variety',
+    'BJB' => 'Best Junior of Breed',
+    'BSB' => 'Best Senior of Breed',
     'BOV' => 'Best of Variety',
     'BOSV' => 'Best Opposite Sex of Variety',
     'BOG' => 'Best of Rabbit Group',

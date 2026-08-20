@@ -359,20 +359,30 @@ class _ControlSheetsGeneratorSheetState
         rawIsFur?.toString().trim().toLowerCase() == 'true' ||
         rawIsFur?.toString().trim() == '1';
 
+    final rawIsWool = row['is_wool'];
+    final isWoolFlag =
+        rawIsWool == true ||
+        rawIsWool?.toString().trim().toLowerCase() == 'true' ||
+        rawIsWool?.toString().trim() == '1';
+
     final className = _safe(row, 'class_name').toLowerCase();
     final groupName = _safe(row, 'group_name').toLowerCase();
     final variety = _safe(row, 'variety').toLowerCase();
 
-    if (className.contains('wool') ||
-        groupName.contains('wool') ||
-        variety.contains('wool')) {
+    // `Fur / Wool` is the generic display label for a dedicated Fur/Wool
+    // entry. It is not a Wool classification. The Results screen groups
+    // entries with is_fur under that shared label, so the control sheet must
+    // do the same instead of splitting those entries across Fur and Wool.
+    if (isFurFlag) return 'Fur/Wool';
+
+    if (isWoolFlag ||
+        className == 'wool' ||
+        groupName == 'wool' ||
+        variety == 'wool') {
       return 'Wool';
     }
 
-    if (isFurFlag ||
-        className.contains('fur') ||
-        groupName.contains('fur') ||
-        variety.contains('fur')) {
+    if (className == 'fur' || groupName == 'fur' || variety == 'fur') {
       return 'Fur';
     }
 
@@ -484,7 +494,7 @@ class _ControlSheetsGeneratorSheetState
 
       final rows = await supabase
           .from('entries')
-          .select('id,is_fur,animal_id')
+          .select('id,is_fur,animal_id,judged_by_show_judge_id')
           .inFilter('id', chunk);
 
       entryFlagRows.addAll(List<Map<String, dynamic>>.from(rows));
@@ -505,6 +515,7 @@ class _ControlSheetsGeneratorSheetState
       row['is_fur'] = flags['is_fur'];
       row['is_wool'] = false;
       row['animal_id'] = flags['animal_id'];
+      row['judged_by_show_judge_id'] = flags['judged_by_show_judge_id'];
     }
 
     for (final sectionId in sortedIdsToFetch) {
@@ -524,6 +535,7 @@ class _ControlSheetsGeneratorSheetState
             class_name,
             species,
             is_fur,
+            judged_by_show_judge_id,
             scratched_at,
             exhibitors:entries_exhibitor_id_fkey (
               display_name,
@@ -612,6 +624,7 @@ class _ControlSheetsGeneratorSheetState
           'species': row['species'],
           'is_fur': row['is_fur'],
           'is_wool': false,
+          'judged_by_show_judge_id': row['judged_by_show_judge_id'],
           'group_sort_order': 9999,
           'variety_sort_order': 9999,
           'uses_group_awards': false,
@@ -688,6 +701,54 @@ class _ControlSheetsGeneratorSheetState
       row['coop_number'] = animalId.isEmpty || scope.isEmpty
           ? ''
           : (coopByAnimalAndScope['$animalId|$scope'] ?? '');
+    }
+
+    // Superintendent assignments are synced to entries. Resolve the assigned
+    // judge once here so each printed class can carry the same judge name the
+    // results-entry screen will use. A name lookup failure must never prevent
+    // a secretary from printing control sheets, so unassigned/unresolvable
+    // judges simply leave the line blank.
+    final judgeIds = dedupedRows
+        .map((row) => _safe(row, 'judged_by_show_judge_id'))
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+    final judgeNamesById = <String, String>{};
+
+    if (judgeIds.isNotEmpty) {
+      try {
+        final judgeRows = await supabase
+            .from('judges')
+            .select('id,display_name,name,first_name,last_name')
+            .inFilter('id', judgeIds);
+
+        for (final rawJudge in judgeRows as List) {
+          final judge = Map<String, dynamic>.from(rawJudge as Map);
+          final id = _safe(judge, 'id');
+          final displayName = _safe(judge, 'display_name');
+          final name = _safe(judge, 'name');
+          final fullName = [
+            _safe(judge, 'first_name'),
+            _safe(judge, 'last_name'),
+          ].where((part) => part.isNotEmpty).join(' ');
+          final resolvedName = displayName.isNotEmpty
+              ? displayName
+              : name.isNotEmpty
+              ? name
+              : fullName;
+          if (id.isNotEmpty && resolvedName.isNotEmpty) {
+            judgeNamesById[id] = resolvedName;
+          }
+        }
+      } catch (_) {
+        // Older deployments may expose the assignment but not the judge
+        // directory to this role. Leave the printed judge field blank there.
+      }
+    }
+
+    for (final row in dedupedRows) {
+      row['judge_name'] =
+          judgeNamesById[_safe(row, 'judged_by_show_judge_id')] ?? '';
     }
 
     return dedupedRows;
@@ -925,6 +986,12 @@ class _ControlSheetsGeneratorSheetState
         }
 
         final isFurOrWool = _isFurOrWoolRow(first);
+        final judgeNames = groupRows
+            .map((row) => _safe(row, 'judge_name'))
+            .where((name) => name.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
 
         allPages.add({
           'sectionId': _safe(first, 'section_id'),
@@ -946,6 +1013,7 @@ class _ControlSheetsGeneratorSheetState
           'specials': _specialsForRow(first),
           'ageSpecial': _ageSpecialForRow(first),
           'isFurOrWool': isFurOrWool,
+          'judgeName': judgeNames.join(' / '),
           'groupSortOrder': _sortValue(first, 'group_sort_order'),
           'varietySortOrder': _sortValue(first, 'variety_sort_order'),
           'classSortRank': _classSortRankForPrint(
@@ -1189,7 +1257,10 @@ class _ControlSheetsGeneratorSheetState
       sortedSectionGroups.addAll(sectionPageGroups.entries);
     }
 
-    pw.Widget topHeader({required String showHeader}) {
+    pw.Widget topHeader({
+      required String showHeader,
+      required String judgeName,
+    }) {
       return pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.stretch,
         children: [
@@ -1221,7 +1292,7 @@ class _ControlSheetsGeneratorSheetState
                 child: pw.Row(
                   children: [
                     pw.Text(
-                      'Judge: ',
+                      judgeName.isEmpty ? 'Judge: ' : 'Judge: $judgeName',
                       style: pw.TextStyle(
                         fontSize: _scaled(9),
                         fontWeight: pw.FontWeight.bold,
@@ -1293,6 +1364,7 @@ class _ControlSheetsGeneratorSheetState
       required int classExhibitorCount,
       required int sexCount,
       required int sexExhibitorCount,
+      required String judgeName,
     }) {
       final hasSex = sex.trim().isNotEmpty;
       final classTotalText =
@@ -1319,6 +1391,16 @@ class _ControlSheetsGeneratorSheetState
         child: pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.stretch,
           children: [
+            if (judgeName.isNotEmpty) ...[
+              pw.Text(
+                'Judge: $judgeName',
+                style: pw.TextStyle(
+                  fontSize: _scaled(10),
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.SizedBox(height: 5),
+            ],
             pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               crossAxisAlignment: pw.CrossAxisAlignment.center,
@@ -1627,14 +1709,27 @@ class _ControlSheetsGeneratorSheetState
     for (final sectionGroup in sortedSectionGroups) {
       final sectionTitle = sectionGroup.key;
       final pages = sectionGroup.value;
+      final sectionJudgeNames = pages
+          .map((page) => (page['judgeName'] ?? '').toString().trim())
+          .where((name) => name.isNotEmpty)
+          .toSet()
+          .toList()
+        ..sort();
+      final headerJudgeName = sectionJudgeNames.length == 1
+          ? sectionJudgeNames.single
+          : sectionJudgeNames.length > 1
+          ? 'See class below'
+          : '';
 
       doc.addPage(
         pw.MultiPage(
           pageFormat: PdfPageFormat.letter,
           margin: const pw.EdgeInsets.fromLTRB(42, 24, 18, 26),
           theme: theme,
-          header: (_) =>
-              topHeader(showHeader: '${widget.showName}   $sectionTitle'),
+          header: (_) => topHeader(
+            showHeader: '${widget.showName}   $sectionTitle',
+            judgeName: headerJudgeName,
+          ),
           footer: (context) => pw.Row(
             children: [
               pw.Text(
@@ -1831,6 +1926,7 @@ class _ControlSheetsGeneratorSheetState
                     sexCount: sexStats[sexStatsKey]?['entries'] ?? 0,
                     sexExhibitorCount:
                         sexStats[sexStatsKey]?['exhibitors'] ?? 0,
+                    judgeName: (p['judgeName'] ?? '').toString(),
                   ),
                 ];
 

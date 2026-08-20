@@ -12,7 +12,7 @@ import '../../models/clubs/breed_results_detail_report_data.dart';
 import '../../utils/breed_results_detail_order.dart';
 
 /// Bump when the Breed Results Detail PDF template changes.
-const String breedResultsDetailReportVersion = '0.6.2';
+const String breedResultsDetailReportVersion = '0.6.3';
 
 class BreedResultsDetailReportPdf {
   final Uint8List? logoBytes;
@@ -359,7 +359,13 @@ class BreedResultsDetailReportPdf {
 
     if (furWoolVarieties.isNotEmpty) {
       widgets.add(pw.SizedBox(height: 8));
-      widgets.add(_sectionTitle('Fur / Wool Placements'));
+      widgets.add(
+        _sectionTitle(
+          breedName.trim().toLowerCase() == 'himalayan'
+              ? 'White Fur Placements'
+              : 'Fur / Wool Placements',
+        ),
+      );
       widgets.addAll(_buildFurWoolPlacementSections(furWoolVarieties));
     }
 
@@ -877,11 +883,11 @@ class BreedResultsDetailReportPdf {
       case 'BSV':
         return 'Best Senior Variety';
       case 'BJB':
-        return 'Best Junior Breed';
+        return 'Best Junior of Breed';
       case 'BIB':
-        return 'Best Intermediate Breed';
+        return 'Best Intermediate of Breed';
       case 'BSB':
-        return 'Best Senior Breed';
+        return 'Best Senior of Breed';
       case 'BOV':
         return 'Best of Variety';
       case 'BOSV':

@@ -1,7 +1,12 @@
 // lib/superintendent/superintendent_lineup_screen.dart
 // ignore_for_file: use_build_context_synchronously
 
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:ringmaster_show/theme/app_theme.dart';
@@ -34,10 +39,12 @@ class SuperintendentLineupScreen extends StatefulWidget {
     super.key,
     required this.showId,
     required this.showName,
+    this.readOnly = false,
   });
 
   final String showId;
   final String showName;
+  final bool readOnly;
 
   @override
   State<SuperintendentLineupScreen> createState() =>
@@ -51,6 +58,7 @@ class _SuperintendentLineupScreenState
   bool _isAutoFilling = false;
   bool _isSyncingEntries = false;
   bool _isSavingPublishedState = false;
+  bool _isExportingPdf = false;
   String _addBreedSortMode = 'letter';
   String? _addBreedShowLetter;
 
@@ -68,6 +76,7 @@ class _SuperintendentLineupScreenState
   }
 
   Future<void> _syncLineupToEntries() async {
+    if (widget.readOnly) return;
     try {
       await supabase.rpc(
         'apply_lineup_to_entries',
@@ -84,6 +93,7 @@ class _SuperintendentLineupScreenState
   }
 
   Future<void> _manualSyncLineupToEntries() async {
+    if (widget.readOnly) return;
     if (_isSyncingEntries) return;
 
     setState(() => _isSyncingEntries = true);
@@ -98,6 +108,170 @@ class _SuperintendentLineupScreenState
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Judges synced to entries.')));
+  }
+
+  bool _isJudgeAssignment(Map<String, dynamic> row) {
+    return row['is_judge_change'] == true ||
+        (row['breed_id'] ?? '').toString() == '__judge_change__';
+  }
+
+  String _lineupPdfScope(Map<String, dynamic> row) {
+    final scope = (row['scope'] ?? row['section_kind'] ?? row['kind'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
+    return switch (scope) {
+      'open' => 'Open',
+      'youth' => 'Youth',
+      _ => '',
+    };
+  }
+
+  String _lineupPdfItem(Map<String, dynamic> row) {
+    if (_isJudgeAssignment(row)) {
+      return (row['judge_name'] ?? 'Judge not set').toString().trim();
+    }
+
+    final letter =
+        (row['show_letter'] ?? row['letter'] ?? row['section_letter'] ?? '')
+            .toString()
+            .trim();
+    final breed = _lineupBreedLabel(
+      (row['breed_id'] ?? 'Breed not set').toString(),
+      row['variety_key']?.toString(),
+    );
+    return letter.isEmpty ? breed : '$letter - $breed';
+  }
+
+  int _lineupPdfHeadCount(Map<String, dynamic> row) {
+    return (row['entry_count_actual'] as num?)?.toInt() ??
+        (row['entry_count_estimated'] as num?)?.toInt() ??
+        (row['entry_count'] as num?)?.toInt() ??
+        0;
+  }
+
+  String _safePdfFilename(String value) {
+    final cleaned = value
+        .trim()
+        .replaceAll(RegExp(r'[^A-Za-z0-9]+'), '_')
+        .replaceAll(RegExp(r'^_+|_+$'), '');
+    return cleaned.isEmpty ? 'show' : cleaned;
+  }
+
+  Future<void> _exportLineupPdf(_LineupData data) async {
+    if (_isExportingPdf || data.assignments.isEmpty) return;
+
+    setState(() => _isExportingPdf = true);
+    try {
+      final grouped = _groupByTable(data.assignments);
+      final tableNumbers = _tableNumbersForData(data, grouped);
+      final generated = DateTime.now();
+      final generatedLabel =
+          '${generated.month}/${generated.day}/${generated.year} '
+          '${generated.hour == 0
+              ? 12
+              : generated.hour > 12
+              ? generated.hour - 12
+              : generated.hour}:${generated.minute.toString().padLeft(2, '0')} '
+          '${generated.hour >= 12 ? 'PM' : 'AM'}';
+      final document = pw.Document();
+
+      document.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.letter.landscape,
+          margin: const pw.EdgeInsets.all(28),
+          header: (_) => pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(
+                'Judge Lineup',
+                style: pw.TextStyle(
+                  fontSize: 18,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.SizedBox(height: 3),
+              pw.Text(widget.showName, style: const pw.TextStyle(fontSize: 11)),
+              pw.SizedBox(height: 3),
+              pw.Text(
+                'Generated $generatedLabel',
+                style: const pw.TextStyle(
+                  fontSize: 8,
+                  color: PdfColors.grey700,
+                ),
+              ),
+              pw.Divider(color: PdfColors.grey500),
+            ],
+          ),
+          footer: (context) => pw.Align(
+            alignment: pw.Alignment.centerRight,
+            child: pw.Text(
+              'Page ${context.pageNumber} of ${context.pagesCount}',
+              style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
+            ),
+          ),
+          build: (_) => [
+            for (final tableNumber in tableNumbers) ...[
+              pw.Text(
+                'Table $tableNumber',
+                style: pw.TextStyle(
+                  fontSize: 13,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.SizedBox(height: 5),
+              pw.TableHelper.fromTextArray(
+                headers: const ['Type', 'Assignment', 'Division', 'Head Count'],
+                data: (grouped[tableNumber] ?? const <Map<String, dynamic>>[])
+                    .map(
+                      (row) => [
+                        _isJudgeAssignment(row) ? 'Judge' : 'Breed',
+                        _lineupPdfItem(row),
+                        _isJudgeAssignment(row) ? '' : _lineupPdfScope(row),
+                        _isJudgeAssignment(row)
+                            ? ''
+                            : _lineupPdfHeadCount(row).toString(),
+                      ],
+                    )
+                    .toList(),
+                headerStyle: pw.TextStyle(
+                  fontSize: 8,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+                cellStyle: const pw.TextStyle(fontSize: 8),
+                headerDecoration: const pw.BoxDecoration(
+                  color: PdfColors.grey300,
+                ),
+                oddRowDecoration: const pw.BoxDecoration(
+                  color: PdfColors.grey100,
+                ),
+                border: pw.TableBorder.all(color: PdfColors.grey400, width: .4),
+                cellPadding: const pw.EdgeInsets.all(4),
+                columnWidths: const {
+                  0: pw.FixedColumnWidth(56),
+                  1: pw.FlexColumnWidth(4),
+                  2: pw.FixedColumnWidth(70),
+                  3: pw.FixedColumnWidth(62),
+                },
+              ),
+              pw.SizedBox(height: 14),
+            ],
+          ],
+        ),
+      );
+
+      await Printing.sharePdf(
+        bytes: Uint8List.fromList(await document.save()),
+        filename: '${_safePdfFilename(widget.showName)}_judge_lineup.pdf',
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Judge lineup PDF failed: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _isExportingPdf = false);
+    }
   }
 
   Future<bool> _confirmPublishWithIssues(_LineupData data) async {
@@ -147,6 +321,7 @@ class _SuperintendentLineupScreenState
   }
 
   Future<void> _setJudgeOrderPublished(_LineupData data, bool value) async {
+    if (widget.readOnly) return;
     if (_isSavingPublishedState) return;
 
     if (value) {
@@ -711,6 +886,7 @@ class _SuperintendentLineupScreenState
   }
 
   void _addTable() {
+    if (widget.readOnly) return;
     setState(() {
       _extraTableCount += 1;
     });
@@ -721,6 +897,7 @@ class _SuperintendentLineupScreenState
     required String tableNumber,
     required int sortOrder,
   }) async {
+    if (widget.readOnly) return;
     final saved = await showDialog<bool>(
       context: context,
       builder: (context) => Dialog(
@@ -757,6 +934,7 @@ class _SuperintendentLineupScreenState
   }
 
   Future<void> _deleteAssignment(String assignmentId) async {
+    if (widget.readOnly) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -793,6 +971,7 @@ class _SuperintendentLineupScreenState
     int oldIndex,
     int newIndex,
   ) async {
+    if (widget.readOnly) return;
     if (newIndex > oldIndex) newIndex -= 1;
 
     final reordered = List<Map<String, dynamic>>.from(assignments);
@@ -818,6 +997,7 @@ class _SuperintendentLineupScreenState
     String tableNumber,
     int sortOrder,
   ) async {
+    if (widget.readOnly) return;
     if (assignmentId.isEmpty) return;
 
     await supabase
@@ -981,6 +1161,7 @@ class _SuperintendentLineupScreenState
   }
 
   Future<void> _autoFillLineup(_LineupData data) async {
+    if (widget.readOnly) return;
     setState(() => _isAutoFilling = true);
     if (data.judges.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1347,7 +1528,9 @@ class _SuperintendentLineupScreenState
   Widget build(BuildContext context) {
     return RingMasterPageShell(
       title: 'Judging Line-Up',
-      subtitle: widget.showName,
+      subtitle: widget.readOnly
+          ? '${widget.showName} • View only'
+          : widget.showName,
       actions: [
         TextButton.icon(
           onPressed: _refresh,
@@ -1360,57 +1543,60 @@ class _SuperintendentLineupScreenState
             ),
           ),
         ),
-        TextButton.icon(
-          onPressed: _isSyncingEntries ? null : _manualSyncLineupToEntries,
-          icon: _isSyncingEntries
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.sync),
-          label: Text(_isSyncingEntries ? 'Syncing...' : 'Sync Judges'),
-          style: TextButton.styleFrom(
-            foregroundColor: AppColors.headerText,
-            disabledForegroundColor: AppColors.headerText.withValues(
-              alpha: .45,
+        if (!widget.readOnly)
+          TextButton.icon(
+            onPressed: _isSyncingEntries ? null : _manualSyncLineupToEntries,
+            icon: _isSyncingEntries
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.sync),
+            label: Text(_isSyncingEntries ? 'Syncing...' : 'Sync Judges'),
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.headerText,
+              disabledForegroundColor: AppColors.headerText.withValues(
+                alpha: .45,
+              ),
             ),
           ),
-        ),
-        TextButton.icon(
-          onPressed: _isAutoFilling
-              ? null
-              : () async {
-                  final data = await _future;
-                  if (!mounted) return;
-                  await _autoFillLineup(data);
-                },
-          icon: _isAutoFilling
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.auto_fix_high),
-          label: Text(_isAutoFilling ? 'Auto Filling...' : 'Auto Fill'),
-          style: TextButton.styleFrom(
-            foregroundColor: AppColors.headerText,
-            disabledForegroundColor: AppColors.headerText.withValues(
-              alpha: .45,
+        if (!widget.readOnly)
+          TextButton.icon(
+            onPressed: _isAutoFilling
+                ? null
+                : () async {
+                    final data = await _future;
+                    if (!mounted) return;
+                    await _autoFillLineup(data);
+                  },
+            icon: _isAutoFilling
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.auto_fix_high),
+            label: Text(_isAutoFilling ? 'Auto Filling...' : 'Auto Fill'),
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.headerText,
+              disabledForegroundColor: AppColors.headerText.withValues(
+                alpha: .45,
+              ),
             ),
           ),
-        ),
-        TextButton.icon(
-          onPressed: _addTable,
-          icon: const Icon(Icons.table_chart),
-          label: const Text('Add Table'),
-          style: TextButton.styleFrom(
-            foregroundColor: AppColors.headerText,
-            disabledForegroundColor: AppColors.headerText.withValues(
-              alpha: .45,
+        if (!widget.readOnly)
+          TextButton.icon(
+            onPressed: _addTable,
+            icon: const Icon(Icons.table_chart),
+            label: const Text('Add Table'),
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.headerText,
+              disabledForegroundColor: AppColors.headerText.withValues(
+                alpha: .45,
+              ),
             ),
           ),
-        ),
       ],
       body: FutureBuilder<_LineupData>(
         future: _future,
@@ -1440,12 +1626,58 @@ class _SuperintendentLineupScreenState
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
                     children: [
+                      if (widget.readOnly)
+                        AppTheme.surfaceTextScope(
+                          context,
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.withValues(alpha: .10),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Colors.blue.withValues(alpha: .35),
+                              ),
+                            ),
+                            child: const Text(
+                              'View-only access — only the assigned superintendent can change this line-up.',
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                        ),
+                      if (widget.readOnly) const SizedBox(height: 16),
                       _SummaryCards(
                         data: data,
                         isSavingPublishedState: _isSavingPublishedState,
-                        onPublishChanged: (value) =>
-                            _setJudgeOrderPublished(data, value),
+                        onPublishChanged: widget.readOnly
+                            ? null
+                            : (value) => _setJudgeOrderPublished(data, value),
                       ),
+                      if (data.assignments.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: _isExportingPdf
+                                ? null
+                                : () => _exportLineupPdf(data),
+                            icon: _isExportingPdf
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.picture_as_pdf_outlined),
+                            label: Text(
+                              _isExportingPdf
+                                  ? 'Preparing Judge Lineup PDF...'
+                                  : 'Download Judge Lineup PDF',
+                            ),
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 16),
                       _ResponsiveTableGrid(
                         tableNumbers: tableNumbers,
@@ -1474,6 +1706,7 @@ class _SuperintendentLineupScreenState
                               tableNumber,
                               _nextSortOrderForTable(tableNumber, grouped),
                             ),
+                        readOnly: widget.readOnly,
                       ),
                     ],
                   ),
@@ -1529,7 +1762,7 @@ class _SummaryCards extends StatelessWidget {
 
   final _LineupData data;
   final bool isSavingPublishedState;
-  final ValueChanged<bool> onPublishChanged;
+  final ValueChanged<bool>? onPublishChanged;
 
   bool _isJudgeRow(Map<String, dynamic> row) {
     return row['is_judge_change'] == true ||
@@ -1675,7 +1908,7 @@ class _PublishJudgeOrderCard extends StatelessWidget {
   final bool published;
   final bool saving;
   final String? publishedAt;
-  final ValueChanged<bool> onChanged;
+  final ValueChanged<bool>? onChanged;
 
   String _publishedHelper() {
     if (!published) return 'Hidden from exhibitors';
@@ -1839,6 +2072,7 @@ class _ResponsiveTableGrid extends StatelessWidget {
     required this.onDeleteAssignment,
     required this.onReorderAssignments,
     required this.onMoveAssignmentToTable,
+    required this.readOnly,
   });
 
   final List<String> tableNumbers;
@@ -1854,6 +2088,7 @@ class _ResponsiveTableGrid extends StatelessWidget {
   onReorderAssignments;
   final Future<void> Function(String assignmentId, String tableNumber)
   onMoveAssignmentToTable;
+  final bool readOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -1887,6 +2122,7 @@ class _ResponsiveTableGrid extends StatelessWidget {
                 onDeleteAssignment: onDeleteAssignment,
                 onReorderAssignments: onReorderAssignments,
                 onMoveAssignmentToTable: onMoveAssignmentToTable,
+                readOnly: readOnly,
               ),
             );
           }).toList(),
@@ -1906,6 +2142,7 @@ class _TableCard extends StatelessWidget {
     required this.onDeleteAssignment,
     required this.onReorderAssignments,
     required this.onMoveAssignmentToTable,
+    required this.readOnly,
   });
 
   final String tableNumber;
@@ -1922,6 +2159,7 @@ class _TableCard extends StatelessWidget {
   onReorderAssignments;
   final Future<void> Function(String assignmentId, String tableNumber)
   onMoveAssignmentToTable;
+  final bool readOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -1950,10 +2188,14 @@ class _TableCard extends StatelessWidget {
     });
 
     return DragTarget<String>(
-      onWillAcceptWithDetails: (details) => details.data.isNotEmpty,
-      onAcceptWithDetails: (details) {
-        onMoveAssignmentToTable(details.data, tableNumber);
-      },
+      onWillAcceptWithDetails: readOnly
+          ? null
+          : (details) => details.data.isNotEmpty,
+      onAcceptWithDetails: readOnly
+          ? null
+          : (details) {
+              onMoveAssignmentToTable(details.data, tableNumber);
+            },
       builder: (context, candidateData, rejectedData) {
         final isDragTarget = candidateData.isNotEmpty;
 
@@ -1990,7 +2232,7 @@ class _TableCard extends StatelessWidget {
                       );
 
                       final judgeButton = OutlinedButton.icon(
-                        onPressed: onChangeJudge,
+                        onPressed: readOnly ? null : onChangeJudge,
                         icon: const Icon(Icons.gavel, size: 16),
                         label: const Text('Judge'),
                         style: OutlinedButton.styleFrom(
@@ -2005,7 +2247,7 @@ class _TableCard extends StatelessWidget {
                       );
 
                       final breedButton = FilledButton.icon(
-                        onPressed: onAddBreed,
+                        onPressed: readOnly ? null : onAddBreed,
                         icon: const Icon(Icons.add, size: 16),
                         label: const Text('Breed'),
                         style: FilledButton.styleFrom(
@@ -2066,12 +2308,14 @@ class _TableCard extends StatelessWidget {
                               physics: const NeverScrollableScrollPhysics(),
                               buildDefaultDragHandles: false,
                               itemCount: assignments.length,
-                              onReorder: (oldIndex, newIndex) =>
-                                  onReorderAssignments(
-                                    assignments,
-                                    oldIndex,
-                                    newIndex,
-                                  ),
+                              onReorder: (oldIndex, newIndex) {
+                                if (readOnly) return;
+                                onReorderAssignments(
+                                  assignments,
+                                  oldIndex,
+                                  newIndex,
+                                );
+                              },
                               itemBuilder: (context, index) {
                                 final row = assignments[index];
                                 final id =
@@ -2092,6 +2336,7 @@ class _TableCard extends StatelessWidget {
                                     }
                                     onDeleteAssignment(assignmentId);
                                   },
+                                  readOnly: readOnly,
                                 );
                               },
                             ),
@@ -2105,7 +2350,9 @@ class _TableCard extends StatelessWidget {
                                 ),
                               ),
                             ],
-                            if (hasBreedRows && !hasActiveJudgeRows) ...[
+                            if (!readOnly &&
+                                hasBreedRows &&
+                                !hasActiveJudgeRows) ...[
                               const SizedBox(height: 10),
                               Divider(
                                 height: 1,
@@ -2195,6 +2442,7 @@ class _LineupRow extends StatelessWidget {
     required this.tableNumbers,
     required this.onMoveToTable,
     required this.onDelete,
+    required this.readOnly,
   });
 
   final Map<String, dynamic> row;
@@ -2204,6 +2452,7 @@ class _LineupRow extends StatelessWidget {
   final Future<void> Function(String assignmentId, String tableNumber)
   onMoveToTable;
   final VoidCallback onDelete;
+  final bool readOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -2265,16 +2514,25 @@ class _LineupRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          ReorderableDragStartListener(
-            index: index,
-            child: isJudgeChange
-                ? Icon(
-                    Icons.swap_horiz,
-                    size: 22,
-                    color: colorScheme.onSurfaceVariant,
-                  )
-                : _SpeciesIcon(speciesLabel: speciesLabel),
-          ),
+          if (!readOnly)
+            ReorderableDragStartListener(
+              index: index,
+              child: isJudgeChange
+                  ? Icon(
+                      Icons.swap_horiz,
+                      size: 22,
+                      color: colorScheme.onSurfaceVariant,
+                    )
+                  : _SpeciesIcon(speciesLabel: speciesLabel),
+            )
+          else if (isJudgeChange)
+            Icon(
+              Icons.swap_horiz,
+              size: 22,
+              color: colorScheme.onSurfaceVariant,
+            )
+          else
+            _SpeciesIcon(speciesLabel: speciesLabel),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -2321,7 +2579,7 @@ class _LineupRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          if (!isJudgeChange && assignmentId.isNotEmpty)
+          if (!readOnly && !isJudgeChange && assignmentId.isNotEmpty)
             PopupMenuButton<String>(
               tooltip: 'Move to table',
               icon: Icon(
@@ -2343,18 +2601,19 @@ class _LineupRow extends StatelessWidget {
                   )
                   .toList(),
             ),
-          IconButton(
-            tooltip: isJudgeChange ? 'Remove judge' : 'Remove breed',
-            visualDensity: VisualDensity.compact,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints.tightFor(width: 32, height: 32),
-            icon: Icon(
-              Icons.delete_outline,
-              size: 20,
-              color: colorScheme.onSurfaceVariant,
+          if (!readOnly)
+            IconButton(
+              tooltip: isJudgeChange ? 'Remove judge' : 'Remove breed',
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+              icon: Icon(
+                Icons.delete_outline,
+                size: 20,
+                color: colorScheme.onSurfaceVariant,
+              ),
+              onPressed: onDelete,
             ),
-            onPressed: onDelete,
-          ),
           if (!(isJudgeChange &&
               ((row['block_head_count'] as num?)?.toInt() ?? 0) == 0)) ...[
             const SizedBox(width: 4),
@@ -2375,7 +2634,7 @@ class _LineupRow extends StatelessWidget {
       ),
     );
 
-    if (isJudgeChange || assignmentId.isEmpty) {
+    if (readOnly || isJudgeChange || assignmentId.isEmpty) {
       return rowContent;
     }
 

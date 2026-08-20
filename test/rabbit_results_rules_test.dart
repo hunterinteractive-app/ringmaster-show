@@ -18,6 +18,8 @@ void main() {
     bool usesGroups = true,
     bool usesVarieties = true,
     String sex = 'Doe',
+    String className = 'Senior Doe',
+    bool isNationalShow = false,
     List<String> awards = const [],
   }) => {
     'id': id,
@@ -35,7 +37,8 @@ void main() {
     'uses_group_awards': usesGroups,
     'placement': '1',
     'result_status': 'Shown',
-    'class_name': 'Senior Doe',
+    'class_name': className,
+    'is_national_show': isNationalShow,
     'sex': sex,
     '_awards': awards,
   };
@@ -177,6 +180,78 @@ void main() {
     expect(options, isNot(contains('Best 6-Class')));
     expect(rules.normalizeStoredAwards(['BOV', 'BOSV']), {'BOV', 'BOSV'});
   });
+
+  test(
+    'Himalayan specialty awards use breed-level junior and senior awards',
+    () {
+      final senior = rabbit(
+        breed: 'Himalayan',
+        usesGroups: false,
+        usesVarieties: true,
+        className: 'Senior Doe',
+      );
+      final junior = rabbit(
+        breed: 'Himalayan',
+        usesGroups: false,
+        usesVarieties: true,
+        className: 'Junior Buck',
+      );
+
+      final seniorOptions = rules.buildAwardOptions(
+        entry: senior,
+        classSystem: 'four',
+        finalAwardMode: 'bis_ris',
+      );
+      final juniorOptions = rules.buildAwardOptions(
+        entry: junior,
+        classSystem: 'four',
+        finalAwardMode: 'bis_ris',
+      );
+      expect(seniorOptions, contains('BSB'));
+      expect(seniorOptions, isNot(contains('BSV')));
+      expect(juniorOptions, contains('BJB'));
+      expect(juniorOptions, isNot(contains('BJV')));
+      expect(
+        rules.canUseAward(
+          entry: senior,
+          award: 'BSB',
+          selectedAwards: const {},
+          effectiveStatus: 'Shown',
+          effectivePlacement: '1',
+          classSystem: 'four',
+          finalAwardMode: 'bis_ris',
+        ),
+        isTrue,
+      );
+
+      final nationalSenior = {...senior, 'is_national_show': true};
+      final nationalJunior = {...junior, 'is_national_show': true};
+      final nationalOptions = rules.buildAwardOptions(
+        entry: nationalSenior,
+        classSystem: 'four',
+        finalAwardMode: 'bis_ris',
+      );
+      final nationalJuniorOptions = rules.buildAwardOptions(
+        entry: nationalJunior,
+        classSystem: 'four',
+        finalAwardMode: 'bis_ris',
+      );
+      expect(nationalOptions, containsAll(['BSV', 'BSB']));
+      expect(nationalJuniorOptions, containsAll(['BJV', 'BJB']));
+      expect(
+        rules.canUseAward(
+          entry: nationalSenior,
+          award: 'BSB',
+          selectedAwards: const {},
+          effectiveStatus: 'Shown',
+          effectivePlacement: '1',
+          classSystem: 'four',
+          finalAwardMode: 'bis_ris',
+        ),
+        isTrue,
+      );
+    },
+  );
 
   test('display metadata alone never enables rabbit group awards', () {
     final row = rabbit(usesGroups: false, usesVarieties: true);

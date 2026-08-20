@@ -875,6 +875,13 @@ class BreedResultsDetailReportLoader {
         .toList();
     final counts = <String, _JudgedCount>{};
     counts['BREED'] = countFor(regularRows);
+    for (final age in const ['junior', 'intermediate', 'senior']) {
+      counts['BREED_AGE::$age'] = countFor(
+        regularRows.where(
+          (row) => _breedAgeKey(_safe(row['class_name'])) == age,
+        ),
+      );
+    }
     if (regularOverallRows.isNotEmpty) {
       counts['OVERALL'] = countFor(regularOverallRows);
     } else {
@@ -970,6 +977,18 @@ class BreedResultsDetailReportLoader {
 
     if (upper == 'BOB') {
       return counts['BREED'] ?? const _JudgedCount();
+    }
+
+    if (upper == 'BJB') {
+      return counts['BREED_AGE::junior'] ?? const _JudgedCount();
+    }
+
+    if (upper == 'BIB') {
+      return counts['BREED_AGE::intermediate'] ?? const _JudgedCount();
+    }
+
+    if (upper == 'BSB') {
+      return counts['BREED_AGE::senior'] ?? const _JudgedCount();
     }
 
     if (upper == 'BOSG') {
@@ -1351,6 +1370,15 @@ class BreedResultsDetailReportLoader {
     if (c == 'BEST OF VARIETY') return 'BOV';
     if (c == 'BEST OPPOSITE SEX OF VARIETY') return 'BOSV';
     if (c == 'BEST OPPOSITE OF VARIETY') return 'BOSV';
+    if (c == 'BEST JUNIOR BREED' || c == 'BEST JUNIOR OF BREED') {
+      return 'BJB';
+    }
+    if (c == 'BEST INTERMEDIATE BREED' || c == 'BEST INTERMEDIATE OF BREED') {
+      return 'BIB';
+    }
+    if (c == 'BEST SENIOR BREED' || c == 'BEST SENIOR OF BREED') {
+      return 'BSB';
+    }
 
     return c;
   }
@@ -1708,6 +1736,14 @@ class BreedResultsDetailReportLoader {
   /// rabbit's actual variety. A White variety belongs in White and every other
   /// color (Black, Brown, Blue, etc.) belongs in Colored.
   String _furWoolCategoryLabel(Map<String, dynamic> row) {
+    final breed = _firstNonEmpty([
+      _safe(row['breed_name']),
+      _safe(row['breed']),
+    ]).toLowerCase();
+    // Himalayan fur is a white-fur competition regardless of the rabbit's
+    // coat variety or any legacy entry category saved on the record.
+    if (breed == 'himalayan') return 'White';
+
     final raw = _firstNonEmpty([
       _safe(row['points_category']),
       _safe(row['pointsCategory']),
@@ -1742,6 +1778,16 @@ class BreedResultsDetailReportLoader {
       return 'Colored';
     }
 
+    return '';
+  }
+
+  String _breedAgeKey(String className) {
+    final normalized = className.trim().toLowerCase();
+    if (normalized.contains('senior')) return 'senior';
+    if (normalized.contains('intermediate')) return 'intermediate';
+    if (normalized.contains('junior') && !normalized.contains('pre')) {
+      return 'junior';
+    }
     return '';
   }
 
@@ -2081,6 +2127,15 @@ class _SweepstakesPointsLookup {
     if (c == 'BEST OF VARIETY') return 'BOV';
     if (c == 'BEST OPPOSITE SEX OF VARIETY') return 'BOSV';
     if (c == 'BEST OPPOSITE OF VARIETY') return 'BOSV';
+    if (c == 'BEST JUNIOR BREED' || c == 'BEST JUNIOR OF BREED') {
+      return 'BJB';
+    }
+    if (c == 'BEST INTERMEDIATE BREED' || c == 'BEST INTERMEDIATE OF BREED') {
+      return 'BIB';
+    }
+    if (c == 'BEST SENIOR BREED' || c == 'BEST SENIOR OF BREED') {
+      return 'BSB';
+    }
 
     return c;
   }

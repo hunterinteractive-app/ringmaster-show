@@ -14,6 +14,8 @@ import 'package:ringmaster_show/services/results/results_rules.dart';
 import 'package:ringmaster_show/services/results/results_rules_router.dart';
 import 'package:ringmaster_show/services/results/rabbit_results_validation.dart';
 import 'package:ringmaster_show/services/results/cavy_results_validation.dart';
+import 'package:ringmaster_show/screens/admin/admin_entry_management_screen.dart'
+    show showAdminEntryEditSheet;
 
 final supabase = Supabase.instance.client;
 
@@ -42,6 +44,10 @@ const List<String> kBestAgeAwardCodes = [
   'Best Intermediate',
   'Best Senior',
 ];
+
+/// Himalayan specialty shows award these at breed level. National shows keep
+/// the corresponding variety-level awards instead.
+const List<String> kBreedBestAgeAwardCodes = ['BJB', 'BIB', 'BSB'];
 
 bool _isFurEntry(Map<String, dynamic> row) {
   final value = row['is_fur'];
@@ -101,15 +107,15 @@ bool _bestAgeAwardMatchesClass({
   required String classSystem,
 }) {
   final c = className.trim().toLowerCase();
-  if (award == 'Best Junior') {
+  if (award == 'Best Junior' || award == 'BJB') {
     return c.contains('junior') && !_isPreJuniorClassName(className);
   }
 
-  if (award == 'Best Senior') {
+  if (award == 'Best Senior' || award == 'BSB') {
     return c.contains('senior');
   }
 
-  if (award == 'Best Intermediate') {
+  if (award == 'Best Intermediate' || award == 'BIB') {
     return classSystem == 'six' && c.contains('intermediate');
   }
 
@@ -693,6 +699,8 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
   final Map<String, Map<String, dynamic>> _rabbitVarietyByBreedAndName = {};
   final Map<String, Map<String, dynamic>> _rabbitGroupById = {};
   String _finalAwardMode = kDefaultFinalAwardMode;
+  bool _showIsLocked = false;
+  bool _showIsNational = false;
 
   @override
   void initState() {
@@ -966,6 +974,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
             showsByGroup: byGroup,
             showsByVariety: byVariety,
             isQrEntryMode: widget.isQrEntryMode,
+            canEditEntries: !_showIsLocked,
             initialEntryIdToOpen:
                 (targetEntry['entry_id'] ?? targetEntry['id'] ?? '').toString(),
           ),
@@ -1125,7 +1134,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
   Future<void> _loadShowSettings() async {
     final row = await supabase
         .from('shows')
-        .select('final_award_mode')
+        .select('final_award_mode,is_locked,is_national_show')
         .eq('id', widget.showId)
         .maybeSingle();
 
@@ -1139,6 +1148,8 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
       'bis_1ris_2ris' => 'bis_1ris_2ris',
       _ => kDefaultFinalAwardMode,
     };
+    _showIsLocked = row?['is_locked'] == true;
+    _showIsNational = row?['is_national_show'] == true;
   }
 
   Future<List<Map<String, dynamic>>> _fetchHydratedEntries({
@@ -1282,6 +1293,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     for (final e in entries) {
       final id = (e['entry_id'] ?? e['id'] ?? '').toString().trim();
       e['_awards'] = awardsByEntryId[id] ?? <String>[];
+      e['is_national_show'] = _showIsNational;
 
       e['id'] ??= e['entry_id'];
 
@@ -1486,6 +1498,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
             showsByGroup: byGroup,
             showsByVariety: byVariety,
             isQrEntryMode: widget.isQrEntryMode,
+            canEditEntries: !_showIsLocked,
             initialEntryIdToOpen: targetId,
           ),
         ),
@@ -2154,7 +2167,10 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
         final classSystem = _breedClassSystems[breedLower] ?? 'four';
         final className = (e['class_name'] ?? '').toString().trim();
 
-        for (final award in kBestAgeAwardCodes) {
+        for (final award in [
+          ...kBestAgeAwardCodes,
+          ...kBreedBestAgeAwardCodes,
+        ]) {
           if (!a.contains(award)) continue;
 
           if (!_bestAgeAwardMatchesClass(
@@ -2890,6 +2906,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                                           finalAwardMode: _finalAwardMode,
                                           showsByVariety: byVariety,
                                           isQrEntryMode: widget.isQrEntryMode,
+                                          canEditEntries: !_showIsLocked,
                                           initialValidationIssues: breedIssues,
                                           refreshValidationIssues: () =>
                                               _refreshIssuesForBreed(
@@ -2914,6 +2931,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                                           finalAwardMode: _finalAwardMode,
                                           parentGroupLabel: null,
                                           isQrEntryMode: widget.isQrEntryMode,
+                                          canEditEntries: !_showIsLocked,
                                         ),
                                       ),
                                     );
@@ -2935,6 +2953,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                                           showsByGroup: false,
                                           showsByVariety: false,
                                           isQrEntryMode: widget.isQrEntryMode,
+                                          canEditEntries: !_showIsLocked,
                                         ),
                                       ),
                                     );
@@ -2965,6 +2984,7 @@ class _ResultsGroupScreen extends StatefulWidget {
   final String finalAwardMode;
   final bool showsByVariety;
   final bool isQrEntryMode;
+  final bool canEditEntries;
   final List<_ValidationIssue> initialValidationIssues;
   final Future<List<_ValidationIssue>> Function() refreshValidationIssues;
   final Future<void> Function(_ValidationIssue) fixValidationIssue;
@@ -2980,6 +3000,7 @@ class _ResultsGroupScreen extends StatefulWidget {
     required this.finalAwardMode,
     required this.showsByVariety,
     required this.isQrEntryMode,
+    required this.canEditEntries,
     required this.initialValidationIssues,
     required this.refreshValidationIssues,
     required this.fixValidationIssue,
@@ -3540,6 +3561,7 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
                                 finalAwardMode: widget.finalAwardMode,
                                 parentGroupLabel: groupName,
                                 isQrEntryMode: widget.isQrEntryMode,
+                                canEditEntries: widget.canEditEntries,
                               ),
                             ),
                           );
@@ -3561,6 +3583,7 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
                                 showsByGroup: true,
                                 showsByVariety: false,
                                 isQrEntryMode: widget.isQrEntryMode,
+                                canEditEntries: widget.canEditEntries,
                               ),
                             ),
                           );
@@ -3592,6 +3615,7 @@ class _ResultsVarietyScreen extends StatefulWidget {
   final String finalAwardMode;
   final String? parentGroupLabel;
   final bool isQrEntryMode;
+  final bool canEditEntries;
 
   const _ResultsVarietyScreen({
     required this.showId,
@@ -3604,6 +3628,7 @@ class _ResultsVarietyScreen extends StatefulWidget {
     required this.finalAwardMode,
     required this.parentGroupLabel,
     required this.isQrEntryMode,
+    required this.canEditEntries,
   });
 
   @override
@@ -4061,6 +4086,7 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
                                       varietyEntries.first,
                                     ),
                                     isQrEntryMode: widget.isQrEntryMode,
+                                    canEditEntries: widget.canEditEntries,
                                   ),
                                 ),
                               );
@@ -4143,6 +4169,7 @@ class _ResultsClassSexScreen extends StatefulWidget {
   final bool showsByGroup;
   final bool showsByVariety;
   final bool isQrEntryMode;
+  final bool canEditEntries;
 
   const _ResultsClassSexScreen({
     required this.showId,
@@ -4158,6 +4185,7 @@ class _ResultsClassSexScreen extends StatefulWidget {
     required this.showsByGroup,
     required this.showsByVariety,
     required this.isQrEntryMode,
+    required this.canEditEntries,
   });
 
   @override
@@ -4291,6 +4319,7 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
           showsByGroup: widget.showsByGroup,
           showsByVariety: widget.showsByVariety,
           isQrEntryMode: widget.isQrEntryMode,
+          canEditEntries: widget.canEditEntries,
         ),
       ),
     );
@@ -4811,6 +4840,7 @@ class ResultsAnimalsScreen extends StatefulWidget {
   final String? writerName;
   final String? writerPhone;
   final bool isQrEntryMode;
+  final bool canEditEntries;
   final Future<void> Function({
     required String entryId,
     required String fieldName,
@@ -4840,6 +4870,7 @@ class ResultsAnimalsScreen extends StatefulWidget {
     this.writerName,
     this.writerPhone,
     this.isQrEntryMode = false,
+    this.canEditEntries = false,
     this.onQrCorrectionApply,
     this.initialEntryIdToOpen,
   });
@@ -5092,10 +5123,13 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
       }
     }
 
-    for (final award in kBestAgeAwardCodes) {
+    for (final award in [...kBestAgeAwardCodes, ...kBreedBestAgeAwardCodes]) {
       if (!awards.contains(award)) continue;
 
-      final sameScope = widget.showsByVariety ? sameVariety : sameBreed;
+      final isBreedLevelAward = kBreedBestAgeAwardCodes.contains(award);
+      final sameScope = isBreedLevelAward || !widget.showsByVariety
+          ? sameBreed
+          : sameVariety;
 
       if (_otherWinnerInScope(entry: e, award: award, sameScope: sameScope) !=
           null) {
@@ -5783,6 +5817,71 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
     }
   }
 
+  Map<String, dynamic> _entryAuditSnapshot(Map<String, dynamic> entry) {
+    return {
+      'animal_name': entry['animal_name'],
+      'tattoo': entry['tattoo'],
+      'breed': entry['breed'],
+      'variety': entry['variety'],
+      'class_name': entry['class_name'],
+      'sex': entry['sex'],
+      'notes': entry['notes'],
+      'is_fur': entry['is_fur'],
+      'fur_variety': entry['fur_variety'],
+      'fur_notes': entry['fur_notes'],
+    };
+  }
+
+  Future<void> _editEntryFromResults(Map<String, dynamic> resultEntry) async {
+    if (!widget.canEditEntries) return;
+
+    final entryId = _entryId(resultEntry);
+    if (entryId.isEmpty) {
+      setState(() => _msg = 'This entry could not be opened for editing.');
+      return;
+    }
+
+    try {
+      // Keep the action unavailable in locked shows and re-check immediately
+      // before loading the shared editor in case the show was locked elsewhere.
+      await ShowLockService.assertShowUnlocked(widget.showId);
+
+      final entry = await supabase
+          .from('entries')
+          .select()
+          .eq('id', entryId)
+          .eq('show_id', widget.showId)
+          .maybeSingle();
+      if (entry == null) {
+        throw Exception('The entry is no longer available.');
+      }
+
+      final saved = await showAdminEntryEditSheet(
+        context,
+        entry: Map<String, dynamic>.from(entry),
+        onSavedAudit: ({required originalEntry, required updatedEntry}) {
+          return supabase.rpc(
+            'record_results_entry_edit',
+            params: {
+              'p_show_id': widget.showId,
+              'p_entry_id': entryId,
+              'p_before': _entryAuditSnapshot(originalEntry),
+              'p_after': _entryAuditSnapshot(updatedEntry),
+            },
+          );
+        },
+      );
+
+      if (saved != true) return;
+      await _reloadAll();
+      if (!mounted) return;
+      setState(() => _msg = 'Entry updated.');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _msg = 'Entry update failed: $e');
+    }
+  }
+
   int _shownCount() {
     return _entries.where((e) {
       final scratched = (e['scratched_at'] ?? '').toString().trim().isNotEmpty;
@@ -6148,6 +6247,17 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
                                   onPressed: () => _showQrCorrectionDialog(e),
                                   icon: const Icon(Icons.edit_note_outlined),
                                   label: const Text('Request Correction'),
+                                ),
+                              ),
+                            ],
+                            if (widget.canEditEntries) ...[
+                              const SizedBox(height: 10),
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: OutlinedButton.icon(
+                                  onPressed: () => _editEntryFromResults(e),
+                                  icon: const Icon(Icons.edit_outlined),
+                                  label: const Text('Edit Entry'),
                                 ),
                               ),
                             ],
@@ -6807,10 +6917,13 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
       }
     }
 
-    for (final award in kBestAgeAwardCodes) {
+    for (final award in [...kBestAgeAwardCodes, ...kBreedBestAgeAwardCodes]) {
       if (!_hasAward(award)) continue;
 
-      final sameScope = _showsByVariety ? sameVariety : sameBreed;
+      final isBreedLevelAward = kBreedBestAgeAwardCodes.contains(award);
+      final sameScope = isBreedLevelAward || !_showsByVariety
+          ? sameBreed
+          : sameVariety;
 
       final existing = _winnerForAwardInScope(
         award: award,
@@ -6818,7 +6931,7 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
       );
 
       if (existing != null) {
-        return '$award is already assigned for this ${_showsByVariety ? 'variety' : 'breed'}.';
+        return '$award is already assigned for this ${isBreedLevelAward || !_showsByVariety ? 'breed' : 'variety'}.';
       }
 
       if (!_canUseAward(award)) {
