@@ -466,7 +466,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
   };
 
   Future<bool> _loadSuperintendentAccessFlag() async {
-    if (widget.demoMode || SupportImpersonationSession.isActive) {
+    if (widget.demoMode) {
       return false;
     }
 
@@ -547,7 +547,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
       canAdmin = false;
     }
 
-    if (!SupportImpersonationSession.isActive && !canSuperintendent) {
+    if (!canSuperintendent) {
       try {
         canSuperintendent = await _loadSuperintendentAccessFlag();
       } catch (_) {
@@ -1557,7 +1557,6 @@ class _ShowListScreenState extends State<ShowListScreen> {
             onAdmin: bundle == null ? null : () => _openAdmin(context, bundle),
             showSuperintendent:
                 !_loadingAdminAccess &&
-                !SupportImpersonationSession.isActive &&
                 (bundle?.isSuperAdmin == true || _canAccessSuperintendent),
             onSuperintendent: bundle == null
                 ? null
