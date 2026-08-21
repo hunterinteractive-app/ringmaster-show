@@ -132,6 +132,9 @@ class _EntriesByBreedSectionTableState
         int cmp(String key) =>
             ((a[key] ?? '').toString()).compareTo((b[key] ?? '').toString());
 
+        final speciesCmp = cmp('species');
+        if (speciesCmp != 0) return speciesCmp;
+
         final breedCmp = cmp('breed');
         if (breedCmp != 0) return breedCmp;
 
@@ -246,19 +249,27 @@ class _EntriesByBreedSectionTableState
     final breedBuckets = <String, List<Map<String, dynamic>>>{};
 
     for (final row in rows) {
+      final species = _safe(row, 'species');
       final breed = _safe(row, 'breed').isEmpty
           ? '(Unknown Breed)'
           : _safe(row, 'breed');
-      breedBuckets.putIfAbsent(breed, () => <Map<String, dynamic>>[]);
-      breedBuckets[breed]!.add(row);
+      // Breed names overlap between rabbits and cavies (for example,
+      // American). Keep them in separate count buckets and exports.
+      final bucketKey = '${species.toLowerCase()}\u0000${breed.toLowerCase()}';
+      breedBuckets.putIfAbsent(bucketKey, () => <Map<String, dynamic>>[]);
+      breedBuckets[bucketKey]!.add(row);
     }
 
     final groups = breedBuckets.entries.map((breedEntry) {
-      final breed = breedEntry.key;
       final breedRows = breedEntry.value;
       final species = breedRows.isEmpty
           ? ''
           : _safe(breedRows.first, 'species');
+      final breed = breedRows.isEmpty
+          ? '(Unknown Breed)'
+          : (_safe(breedRows.first, 'breed').isEmpty
+                ? '(Unknown Breed)'
+                : _safe(breedRows.first, 'breed'));
 
       final breedCounts = <String, int>{};
       final breedExhibitorsBySection = <String, Set<String>>{};
@@ -421,6 +432,7 @@ class _EntriesByBreedSectionTableState
 
   String _buildCsv() {
     final header = <String>[
+      'Species',
       'Breed',
       'Variety',
       'Age / Sex Class',
@@ -433,6 +445,7 @@ class _EntriesByBreedSectionTableState
 
     for (final breed in _breedGroups) {
       lines.add([
+        breed.species,
         breed.breed,
         '',
         '',
@@ -453,6 +466,7 @@ class _EntriesByBreedSectionTableState
 
     for (final breed in _breedGroups) {
       rows.add([
+        breed.species,
         breed.breed,
         '',
         '',
@@ -466,6 +480,7 @@ class _EntriesByBreedSectionTableState
 
       for (final variety in breed.varieties) {
         rows.add([
+          breed.species,
           breed.breed,
           variety.variety,
           '',
@@ -479,6 +494,7 @@ class _EntriesByBreedSectionTableState
 
         for (final c in variety.classes) {
           rows.add([
+            breed.species,
             breed.breed,
             variety.variety,
             c.label,
@@ -529,6 +545,7 @@ class _EntriesByBreedSectionTableState
           build: (_) => [
             pw.TableHelper.fromTextArray(
               headers: [
+                'Species',
                 'Breed',
                 'Variety',
                 'Age / Sex Class',
