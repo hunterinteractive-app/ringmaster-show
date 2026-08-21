@@ -1,8 +1,15 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:ringmaster_show/reporting_core/assets/flutter_report_asset_loader.dart';
+import 'package:ringmaster_show/screens/admin/closeout/csv/builders/michelles_special_report_csv.dart';
+import 'package:ringmaster_show/screens/admin/closeout/data/loaders/entered_exhibitors_list_report_loader.dart';
+import 'package:ringmaster_show/screens/admin/closeout/data/loaders/michelles_special_report_loader.dart';
+import 'package:ringmaster_show/screens/admin/closeout/models/base/report_request.dart';
 import 'package:ringmaster_show/screens/admin/closeout/models/arba_report_presentation.dart';
 import 'package:ringmaster_show/screens/admin/closeout/models/report_artifact_summary.dart';
+import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/entered_exhibitors_list_report_pdf.dart';
+import 'package:ringmaster_show/screens/admin/closeout/services/report_upload_service.dart';
 import 'package:ringmaster_show/screens/admin/closeout/widgets/closeout_scope_widgets.dart';
 import 'package:ringmaster_show/screens/admin/closeout/results_entry_fix_launcher.dart';
 import 'package:ringmaster_show/screens/admin/show_checkin_roster_screen.dart';
@@ -3737,6 +3744,13 @@ class _LiveReportDownloads extends StatefulWidget {
 }
 
 class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
+  static const _michellesSecretaryId = '96d62792-7aad-49da-a27a-4fb496289176';
+  static const _operationalReportKeys = <String>{
+    'entered_exhibitors_list_report',
+    'michelles_special_report',
+  };
+  static const _reportAssets = FlutterReportAssetLoader();
+
   final _supabase = Supabase.instance.client;
   bool _loading = true;
   String? _error;
@@ -3752,6 +3766,7 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
   String? _selectedScope;
   bool _queueingSelectedReport = false;
   bool _sendingSelectedReport = false;
+  bool _isMichellesShow = false;
   final _additionalMessageController = TextEditingController();
 
   static const _groupOrder = ['arba', 'exhibitor', 'club', 'other'];
@@ -3784,23 +3799,37 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
       _error = null;
     });
     try {
-      final rows = await _supabase
-          .from('show_report_artifacts')
-          .select(
-            'id, show_id, finalize_run_id, report_name, artifact_status, file_name, storage_bucket, storage_path, generated_at, is_current, scope_key, section_ids, generation, created_at, error_count, metadata',
-          )
-          .eq('show_id', widget.showId)
-          .eq('is_current', true)
-          .order('generated_at', ascending: false);
+      final values = await Future.wait<dynamic>([
+        _supabase
+            .from('show_report_artifacts')
+            .select(
+              'id, show_id, finalize_run_id, report_name, artifact_status, file_name, storage_bucket, storage_path, generated_at, is_current, scope_key, section_ids, generation, created_at, error_count, metadata',
+            )
+            .eq('show_id', widget.showId)
+            .eq('is_current', true)
+            .order('generated_at', ascending: false),
+        _supabase
+            .from('shows')
+            .select('created_by')
+            .eq('id', widget.showId)
+            .maybeSingle(),
+      ]);
       if (!mounted) return;
+      final rows = values[0] as List;
+      final show = Map<String, dynamic>.from(
+        values[1] as Map? ?? const <String, dynamic>{},
+      );
       setState(() {
-        _artifacts = (rows as List)
+        _artifacts = rows
             .map(
               (row) => ReportArtifactSummary.fromJson(
                 Map<String, dynamic>.from(row as Map),
               ),
             )
             .toList();
+        _isMichellesShow =
+            (show['created_by'] ?? '').toString().trim() ==
+            _michellesSecretaryId;
         _selectedGroup = _groupOrder.first;
         final reportNames = _reportNamesFor(_selectedGroup);
         _selectedReportName = reportNames.isEmpty ? null : reportNames.first;
@@ -3832,6 +3861,10 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
     if (group == 'other') {
       for (final reportName in _manualOtherReports) {
         if (!reportNames.contains(reportName)) reportNames.add(reportName);
+      }
+      if (_isMichellesShow &&
+          !reportNames.contains('michelles_special_report')) {
+        reportNames.add('michelles_special_report');
       }
     }
     reportNames.sort();
@@ -3923,6 +3956,12 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
         ..sort();
 
   Future<void> _queueSelectedReport() async {
+    final selectedReportName = _selectedReportName;
+    if (_operationalReportKeys.contains(selectedReportName)) {
+      await _generateOperationalReport(selectedReportName!);
+      return;
+    }
+
     final artifact = _selectedArtifact;
     if (artifact == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -3971,6 +4010,126 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Unable to queue this report: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _queueingSelectedReport = false);
+    }
+  }
+
+  Future<void> _generateOperationalReport(String reportName) async {
+    setState(() => _queueingSelectedReport = true);
+    ReportArtifactSummary? artifact;
+    try {
+      final sectionRows = await _supabase
+          .from('show_sections')
+          .select('id')
+          .eq('show_id', widget.showId)
+          .eq('is_enabled', true);
+      final sectionIds =
+          (sectionRows as List)
+              .map((row) => (row as Map)['id']?.toString().trim() ?? '')
+              .where((id) => id.isNotEmpty)
+              .toList()
+            ..sort();
+
+      if (sectionIds.isEmpty) {
+        throw StateError('Add at least one enabled show section first.');
+      }
+
+      artifact = _selectedArtifact;
+      if (artifact == null) {
+        final inserted = await _supabase
+            .from('show_report_artifacts')
+            .insert({
+              'show_id': widget.showId,
+              'report_name': reportName,
+              'artifact_status': 'queued',
+              'is_current': true,
+              'scope_key': 'operational',
+              'section_ids': sectionIds,
+              'metadata': {
+                'operational_report': true,
+                'scope_key': 'operational',
+                'scope_label': 'Operational report',
+                'section_ids': sectionIds,
+              },
+            })
+            .select(
+              'id, show_id, finalize_run_id, report_name, artifact_status, '
+              'file_name, storage_bucket, storage_path, generated_at, '
+              'is_current, scope_key, section_ids, generation, created_at, '
+              'error_count, metadata',
+            )
+            .single();
+        artifact = ReportArtifactSummary.fromJson(
+          Map<String, dynamic>.from(inserted),
+        );
+      } else {
+        await _supabase
+            .from('show_report_artifacts')
+            .update({
+              'artifact_status': 'queued',
+              'error_count': 0,
+              'warning_count': 0,
+            })
+            .eq('id', artifact.id);
+      }
+
+      final request = ReportRequest(
+        showId: widget.showId,
+        reportName: reportName,
+        // Operational reports intentionally have no closeout version. This
+        // stable storage key permits regeneration before or after finalizing.
+        finalizeRunId: 'operational',
+        artifactId: artifact.id,
+        sectionIds: sectionIds,
+        showName: widget.showName,
+      );
+
+      final file = switch (reportName) {
+        'entered_exhibitors_list_report' =>
+          await EnteredExhibitorsListReportPdf(assets: _reportAssets).buildFile(
+            await EnteredExhibitorsListReportLoader(_supabase).load(request),
+            request,
+          ),
+        'michelles_special_report' =>
+          await MichellesSpecialReportCsvBuilder().buildFile(
+            await MichellesSpecialReportLoader(_supabase).load(request),
+            request,
+          ),
+        _ => throw StateError('This report is not an operational report.'),
+      };
+
+      final uploadService = ReportUploadService(_supabase);
+      final storagePath = await uploadService.upload(
+        showId: widget.showId,
+        showName: widget.showName,
+        finalizeRunId: 'operational',
+        artifactId: artifact.id,
+        file: file,
+      );
+      await uploadService.markGenerated(
+        artifactId: artifact.id,
+        storagePath: storagePath,
+        file: file,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${_friendlyReportName(reportName)} generated.'),
+        ),
+      );
+      await _loadArtifacts();
+    } catch (error) {
+      if (artifact != null) {
+        await ReportUploadService(
+          _supabase,
+        ).markFailed(artifactId: artifact.id, error: error);
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to generate this report: $error')),
       );
     } finally {
       if (mounted) setState(() => _queueingSelectedReport = false);
