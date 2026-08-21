@@ -3,12 +3,19 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/reporting_core/assets/flutter_report_asset_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/csv/builders/michelles_special_report_csv.dart';
+import 'package:ringmaster_show/screens/admin/closeout/data/closeout_repository.dart';
+import 'package:ringmaster_show/screens/admin/closeout/data/loaders/entered_exhibitors_contact_report_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/entered_exhibitors_list_report_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/michelles_special_report_loader.dart';
+import 'package:ringmaster_show/screens/admin/closeout/data/loaders/paid_exhibitor_report_loader.dart';
+import 'package:ringmaster_show/screens/admin/closeout/data/loaders/unpaid_balances_report_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/models/base/report_request.dart';
 import 'package:ringmaster_show/screens/admin/closeout/models/arba_report_presentation.dart';
 import 'package:ringmaster_show/screens/admin/closeout/models/report_artifact_summary.dart';
+import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/entered_exhibitors_contact_report_pdf.dart';
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/entered_exhibitors_list_report_pdf.dart';
+import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/paid_exhibitor_report_pdf.dart';
+import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/unpaid_balances_report_pdf.dart';
 import 'package:ringmaster_show/screens/admin/closeout/services/report_upload_service.dart';
 import 'package:ringmaster_show/screens/admin/closeout/widgets/closeout_scope_widgets.dart';
 import 'package:ringmaster_show/screens/admin/closeout/results_entry_fix_launcher.dart';
@@ -3746,6 +3753,9 @@ class _LiveReportDownloads extends StatefulWidget {
 class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
   static const _michellesSecretaryId = '96d62792-7aad-49da-a27a-4fb496289176';
   static const _operationalReportKeys = <String>{
+    'unpaid_balances_report',
+    'paid_exhibitor_report',
+    'entered_exhibitors_contact_report',
     'entered_exhibitors_list_report',
     'michelles_special_report',
   };
@@ -3913,6 +3923,20 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
       .where((artifact) => artifact.reportName == _selectedReportName)
       .toList();
 
+  /// V1 permits these reports before closeout is finalized. Keep their
+  /// operational copy separate from report artifacts generated for a
+  /// finalized scope so a pre-show refresh never overwrites historical output.
+  ReportArtifactSummary? _operationalArtifactFor(String reportName) {
+    for (final artifact in _artifacts) {
+      if (artifact.reportName == reportName &&
+          artifact.isCurrent &&
+          (artifact.finalizeRunId ?? '').trim().isEmpty) {
+        return artifact;
+      }
+    }
+    return null;
+  }
+
   List<ReportArtifactSummary> get _filteredReportArtifacts =>
       _selectedReportArtifacts
           .where(
@@ -4036,7 +4060,7 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
         throw StateError('Add at least one enabled show section first.');
       }
 
-      artifact = _selectedArtifact;
+      artifact = _operationalArtifactFor(reportName);
       if (artifact == null) {
         final inserted = await _supabase
             .from('show_report_artifacts')
@@ -4071,6 +4095,15 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
               'artifact_status': 'queued',
               'error_count': 0,
               'warning_count': 0,
+              'scope_key': 'operational',
+              'section_ids': sectionIds,
+              'metadata': {
+                ...artifact.metadata,
+                'operational_report': true,
+                'scope_key': 'operational',
+                'scope_label': 'Operational report',
+                'section_ids': sectionIds,
+              },
             })
             .eq('id', artifact.id);
       }
@@ -4087,6 +4120,31 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
       );
 
       final file = switch (reportName) {
+        'unpaid_balances_report' =>
+          await (await UnpaidBalancesReportPdfBuilder.fromAssets(
+            _reportAssets,
+          )).buildFile(
+            await UnpaidBalancesReportLoader(
+              CloseoutRepository(_supabase),
+            ).load(request),
+            request,
+          ),
+        'paid_exhibitor_report' =>
+          await (await PaidExhibitorReportPdfBuilder.fromAssets(
+            _reportAssets,
+          )).buildFile(
+            await PaidExhibitorReportLoader(
+              CloseoutRepository(_supabase),
+            ).load(request),
+            request,
+          ),
+        'entered_exhibitors_contact_report' =>
+          await EnteredExhibitorsContactReportPdf(
+            assets: _reportAssets,
+          ).buildFile(
+            await EnteredExhibitorsContactReportLoader(_supabase).load(request),
+            request,
+          ),
         'entered_exhibitors_list_report' =>
           await EnteredExhibitorsListReportPdf(assets: _reportAssets).buildFile(
             await EnteredExhibitorsListReportLoader(_supabase).load(request),
