@@ -4110,11 +4110,13 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
                               iconEnabledColor: AppColors.text,
                               decoration: InputDecoration(
                                 labelText: 'Judge for this variety',
-                                labelStyle: TextStyle(
-                                  color: Colors.white.withValues(alpha: .9),
+                                labelStyle: const TextStyle(
+                                  color: AppColors.text,
+                                  fontWeight: FontWeight.w600,
                                 ),
                                 floatingLabelStyle: const TextStyle(
-                                  color: Colors.white,
+                                  color: AppColors.text,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                               items: [
