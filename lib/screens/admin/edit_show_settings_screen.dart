@@ -1377,7 +1377,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.warning_amber_rounded, color: Colors.orange.shade900),
+              const Icon(Icons.warning_amber_rounded, color: Color(0xFFFFC928)),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
@@ -1386,7 +1386,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                     Text(
                       'Stripe account needs attention',
                       style: TextStyle(
-                        color: Colors.orange.shade900,
+                        color: const Color(0xFFFFC928),
                         fontWeight: FontWeight.w800,
                         fontSize: 15,
                       ),
@@ -1394,7 +1394,10 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                     const SizedBox(height: 4),
                     const Text(
                       'Online payments may not work for exhibitors until this is resolved. Open Show Fees & Payments, continue Stripe setup if needed, then refresh the status.',
-                      style: TextStyle(fontWeight: FontWeight.w500),
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ],
                 ),
@@ -1405,7 +1408,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
             const SizedBox(height: 10),
             Text(
               'Current issue${issues.length == 1 ? '' : 's'}: ${issues.join(', ')}.',
-              style: const TextStyle(fontSize: 13),
+              style: const TextStyle(color: Colors.white, fontSize: 13),
             ),
           ],
           const SizedBox(height: 12),
@@ -1424,6 +1427,10 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                     : _refreshStripeStatusFromBanner,
                 icon: const Icon(Icons.refresh),
                 label: const Text('Refresh Stripe Status'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: const BorderSide(color: Colors.white70),
+                ),
               ),
             ],
           ),

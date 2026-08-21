@@ -260,15 +260,12 @@ async function handleFailed(
   ) {
     throw new Error("Failed payment intent does not match the saved attempt");
   }
-  await markPaymentAttemptTerminal(backend, {
-    paymentSessionId,
-    provider: "stripe",
-    status: "failed",
-    failureCode: paymentIntent.last_payment_error?.code ?? "payment_failed",
-    failureMessage: paymentIntent.last_payment_error?.message ??
-      "Payment failed.",
-    providerPaymentId: paymentIntent.id,
-  });
+
+  // A Checkout Session can retry the same PaymentIntent (notably Link / 3DS
+  // authentication) after Stripe emits payment_intent.payment_failed.  That
+  // event is therefore not terminal while the Checkout Session remains open.
+  // Keep the attempt eligible for checkout.session.completed; expiration is
+  // what definitively marks an unfinished checkout as terminal.
 }
 
 async function loadAttempt(id: string): Promise<SavedAttempt> {
