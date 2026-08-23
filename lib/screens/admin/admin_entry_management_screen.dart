@@ -4795,8 +4795,10 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
           'updated_at': DateTime.now().toUtc().toIso8601String(),
         };
 
-        // Main class entry (always non-fur)
-        if (!existingFlags.regular) {
+        // A commercial class is a separate entry from the rabbit's regular
+        // class entry. The duplicate check above permits one entry per
+        // commercial class, so an existing regular entry must not suppress it.
+        if (isCommercialEntry || !existingFlags.regular) {
           rows.add({
             ...baseRow,
             'is_fur': false,
@@ -4849,7 +4851,9 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
             .where((row) => row['is_fur'] == true)
             .length;
 
-        final expectedRegularCount = existingFlags.regular ? 0 : 1;
+        final expectedRegularCount = isCommercialEntry
+            ? 1
+            : (existingFlags.regular ? 0 : 1);
         final expectedFurCount = _isFur && !existingFlags.fur ? 1 : 0;
 
         if (regularCount != expectedRegularCount ||

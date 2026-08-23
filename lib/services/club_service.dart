@@ -1,71 +1,52 @@
 // lib/services/club_service.dart
 
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'license_service.dart';
+import 'app_session.dart';
 
 final supabase = Supabase.instance.client;
 
 class ClubService {
   static Future<List<Map<String, dynamic>>> loadMyClubs() async {
-    final user = supabase.auth.currentUser;
-    if (user == null) return [];
+    final userId = AppSession.effectiveUserId;
+    if (userId == null || userId.isEmpty) return [];
 
-    final rows = await supabase
-        .from('club_members')
-        .select(
-          'club_id, role, clubs!club_members_club_id_fkey(id, name, is_active)',
-        )
-        .eq('user_id', user.id)
-        .eq('is_active', true);
-
-    final list = <Map<String, dynamic>>[];
-
-    for (final row in (rows as List).cast<Map<String, dynamic>>()) {
-      final club = row['clubs'];
-
-      if (club is Map<String, dynamic>) {
-        if (club['is_active'] == true) {
-          list.add({
-            'id': club['id'],
-            'name': club['name'],
-            'role': row['role'],
-          });
-        }
-      } else if (club is Map) {
-        final mapped = club.map(
-          (key, value) => MapEntry(key.toString(), value),
-        );
-
-        if (mapped['is_active'] == true) {
-          list.add({
-            'id': mapped['id'],
-            'name': mapped['name'],
-            'role': row['role'],
-          });
-        }
-      }
-    }
-
-    list.sort(
-      (a, b) => (a['name'] ?? '').toString().toLowerCase().compareTo(
-        (b['name'] ?? '').toString().toLowerCase(),
-      ),
+    final rows = await supabase.rpc(
+      'get_hosting_clubs_for_user',
+      params: {'p_user_id': userId},
     );
 
-    return list;
+    return (rows as List)
+        .cast<Map<String, dynamic>>()
+        .map(Map<String, dynamic>.from)
+        .toList();
+  }
+
+  static bool canManageClubRecord(Map<String, dynamic> club) {
+    final role = (club['role'] ?? '').toString().trim().toLowerCase();
+    return role == 'owner' || role == 'manager';
   }
 
   static Future<bool> canSwitchHostingClub() async {
-    return LicenseService.canSwitchHostingClub();
+    final userId = AppSession.effectiveUserId;
+    if (userId == null || userId.isEmpty) return false;
+
+    return await supabase.rpc(
+          'has_active_secretary_license_for_user',
+          params: {'p_user_id': userId},
+        ) ==
+        true;
   }
 
   static Future<bool> canManageHostingClubs() async {
     final clubs = await loadMyClubs();
-    if (clubs.isEmpty) return true;
-    return canSwitchHostingClub();
+    return clubs.isEmpty || clubs.any(canManageClubRecord);
   }
 
   static Future<Map<String, dynamic>> createClub({required String name}) async {
+    if (AppSession.isSupportMode) {
+      throw Exception('Club management is unavailable in support mode.');
+    }
+
     final user = supabase.auth.currentUser;
     if (user == null) {
       throw Exception('Not signed in.');
@@ -96,11 +77,18 @@ class ClubService {
     required String clubId,
     required String name,
   }) async {
+    if (AppSession.isSupportMode) {
+      throw Exception('Club management is unavailable in support mode.');
+    }
+
     final trimmed = name.trim();
     if (trimmed.isEmpty) {
       throw Exception('Club name is required.');
     }
 
-    await supabase.from('clubs').update({'name': trimmed}).eq('id', clubId);
+    await supabase.rpc(
+      'rename_hosting_club',
+      params: {'p_club_id': clubId, 'p_name': trimmed},
+    );
   }
 }

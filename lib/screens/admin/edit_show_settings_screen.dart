@@ -318,12 +318,13 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
     try {
       final clubs = await ClubService.loadMyClubs();
       final canSwitch = await ClubService.canSwitchHostingClub();
-      final canManage = clubs.isEmpty ? true : canSwitch;
+      final canManage =
+          clubs.isEmpty || clubs.any(ClubService.canManageClubRecord);
 
       if (!mounted) return;
       setState(() {
         _clubs = clubs;
-        _canSwitchHostingClub = canSwitch;
+        _canSwitchHostingClub = canSwitch && canManage;
         _canManageHostingClubs = canManage;
 
         if ((_selectedClubId == null || _selectedClubId!.isEmpty) &&
@@ -488,7 +489,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   Future<void> _showManageClubsDialog() async {
     final renamedValues = <String, TextEditingController>{};
 
-    for (final club in _clubs) {
+    for (final club in _clubs.where(ClubService.canManageClubRecord)) {
       final id = club['id']?.toString() ?? '';
       final name = (club['name'] ?? '').toString();
       renamedValues[id] = TextEditingController(text: name);
@@ -509,7 +510,9 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
               });
 
               try {
-                for (final club in _clubs) {
+                for (final club in _clubs.where(
+                  ClubService.canManageClubRecord,
+                )) {
                   final id = club['id']?.toString() ?? '';
                   final originalName = (club['name'] ?? '').toString();
                   final updatedName = renamedValues[id]!.text.trim();
@@ -1764,6 +1767,9 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                   ..._clubs.map((club) {
                                     return DropdownMenuItem<String>(
                                       value: club['id'].toString(),
+                                      enabled: ClubService.canManageClubRecord(
+                                        club,
+                                      ),
                                       child: Text(
                                         (club['name'] ?? 'Club').toString(),
                                       ),
@@ -1780,8 +1786,10 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                         ],
                                       ),
                                     ),
-                                  if (_canSwitchHostingClub &&
-                                      _clubs.isNotEmpty)
+                                  if (_canManageHostingClubs &&
+                                      _clubs.any(
+                                        ClubService.canManageClubRecord,
+                                      ))
                                     const DropdownMenuItem<String>(
                                       value: _manageClubsActionValue,
                                       child: Row(

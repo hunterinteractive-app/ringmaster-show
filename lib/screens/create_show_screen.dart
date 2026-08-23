@@ -80,12 +80,15 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
 
     try {
       final clubs = await ClubService.loadMyClubs();
+      final manageableClubs = clubs
+          .where(ClubService.canManageClubRecord)
+          .toList();
       final canSwitch = await ClubService.canSwitchHostingClub();
 
       if (!mounted) return;
       setState(() {
-        _clubs = clubs;
-        _canSwitchHostingClub = canSwitch;
+        _clubs = manageableClubs;
+        _canSwitchHostingClub = canSwitch && manageableClubs.isNotEmpty;
 
         if (_clubs.isNotEmpty) {
           _hasLockedHostingClub = true;
@@ -296,36 +299,8 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
     return _nationalShowSectionItems().any((item) => item.value == key);
   }
 
-  Future<Map<String, dynamic>> _createFirstClubForUser({
-    required String userId,
-    required String clubName,
-  }) async {
-    final created = await supabase
-        .from('clubs')
-        .insert({
-          'name': clubName.trim(),
-          'created_by': userId,
-          'is_active': true,
-        })
-        .select()
-        .single();
-
-    final clubId = created['id'].toString();
-
-    await supabase.from('club_members').insert({
-      'club_id': clubId,
-      'user_id': userId,
-      'role': 'owner',
-      'is_active': true,
-    });
-
-    return Map<String, dynamic>.from(created);
-  }
-
   Future<void> _create() async {
     if (!_validate()) return;
-
-    final userId = AppSession.effectiveUserId!;
 
     setState(() {
       _saving = true;
@@ -337,9 +312,8 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
       String? clubName = _selectedClubName;
 
       if (!_hasLockedHostingClub) {
-        final createdClub = await _createFirstClubForUser(
-          userId: userId,
-          clubName: _hostingClubName.text.trim(),
+        final createdClub = await ClubService.createClub(
+          name: _hostingClubName.text.trim(),
         );
 
         clubId = createdClub['id']?.toString();
