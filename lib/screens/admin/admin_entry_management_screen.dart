@@ -3663,6 +3663,12 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
       }
     }
 
+    for (final exhibitor in _directoryExhibitors) {
+      if ((exhibitor['id'] ?? '').toString() == id) {
+        return exhibitor;
+      }
+    }
+
     return null;
   }
 
@@ -4230,10 +4236,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
       return;
     }
 
-    final exhibitor = _exhibitors.firstWhere(
-      (e) => e['id'].toString() == _exhibitorId,
-      orElse: () => <String, dynamic>{},
-    );
+    final exhibitor = _selectedExhibitor() ?? <String, dynamic>{};
 
     final ownerUserId = (exhibitor['owner_user_id'] ?? '').toString().trim();
     final exhibitorId = (exhibitor['id'] ?? '').toString().trim();
