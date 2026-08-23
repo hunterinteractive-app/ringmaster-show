@@ -2865,35 +2865,38 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
         )
         .toList();
 
-    if (rabbits.isEmpty) {
-      setState(() {
-        _msg =
-            'This exhibitor has no saved rabbits to use for '
-            '${_commercialLabel(classCode)}.';
-      });
-      return;
-    }
-
     final selected = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text('Select Rabbit for ${_commercialLabel(classCode)}'),
         content: SizedBox(
           width: 440,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: rabbits.length,
-            itemBuilder: (_, index) {
-              final rabbit = rabbits[index];
-              return ListTile(
-                leading: const Icon(Icons.pets),
-                title: Text(_animalLabel(rabbit)),
-                onTap: () => Navigator.pop(dialogContext, rabbit),
-              );
-            },
-          ),
+          child: rabbits.isEmpty
+              ? const Text(
+                  'No saved rabbits were found for this exhibitor. '
+                  'Add one below to enter this commercial class.',
+                )
+              : ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: rabbits.length,
+                  itemBuilder: (_, index) {
+                    final rabbit = rabbits[index];
+                    return ListTile(
+                      leading: const Icon(Icons.pets),
+                      title: Text(_animalLabel(rabbit)),
+                      onTap: () => Navigator.pop(dialogContext, rabbit),
+                    );
+                  },
+                ),
         ),
         actions: [
+          OutlinedButton.icon(
+            onPressed: () => Navigator.pop(dialogContext, <String, dynamic>{
+              '_add_new_rabbit': true,
+            }),
+            icon: const Icon(Icons.add),
+            label: const Text('Add New Rabbit'),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
@@ -2903,6 +2906,27 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     );
 
     if (selected == null || !mounted) return;
+    if (selected['_add_new_rabbit'] == true) {
+      setState(() {
+        _useLocalAnimal = true;
+        _animal = null;
+        _species = 'rabbit';
+        _animalName.clear();
+        _tattoo.clear();
+        _breed.clear();
+        _variety.clear();
+        _breedId = null;
+        _sexValue = null;
+        _sex.clear();
+        _classValue = 'commercial:$classCode';
+        _className.clear();
+        _isFur = false;
+        _msg =
+            'Enter the rabbit details below, then save the commercial entry.';
+      });
+      await _loadBreedsForSpecies();
+      return;
+    }
     setState(() {
       _useLocalAnimal = false;
       _animal = selected;
@@ -3000,6 +3024,8 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     final tattoo2 = TextEditingController();
     final tattoo3 = TextEditingController();
     String? error;
+    const inputTextStyle = TextStyle(color: AppColors.text);
+    const inputLabelStyle = TextStyle(color: AppColors.muted);
 
     try {
       await showDialog<void>(
@@ -3018,27 +3044,52 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                   const SizedBox(height: 12),
                   TextField(
                     controller: breed,
-                    decoration: const InputDecoration(labelText: 'Breed'),
+                    style: inputTextStyle,
+                    decoration: const InputDecoration(
+                      labelText: 'Breed',
+                      labelStyle: inputLabelStyle,
+                      floatingLabelStyle: inputLabelStyle,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   TextField(
                     controller: variety,
-                    decoration: const InputDecoration(labelText: 'Variety'),
+                    style: inputTextStyle,
+                    decoration: const InputDecoration(
+                      labelText: 'Variety',
+                      labelStyle: inputLabelStyle,
+                      floatingLabelStyle: inputLabelStyle,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   TextField(
                     controller: tattoo1,
-                    decoration: const InputDecoration(labelText: 'Tattoo 1'),
+                    style: inputTextStyle,
+                    decoration: const InputDecoration(
+                      labelText: 'Tattoo 1',
+                      labelStyle: inputLabelStyle,
+                      floatingLabelStyle: inputLabelStyle,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   TextField(
                     controller: tattoo2,
-                    decoration: const InputDecoration(labelText: 'Tattoo 2'),
+                    style: inputTextStyle,
+                    decoration: const InputDecoration(
+                      labelText: 'Tattoo 2',
+                      labelStyle: inputLabelStyle,
+                      floatingLabelStyle: inputLabelStyle,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   TextField(
                     controller: tattoo3,
-                    decoration: const InputDecoration(labelText: 'Tattoo 3'),
+                    style: inputTextStyle,
+                    decoration: const InputDecoration(
+                      labelText: 'Tattoo 3',
+                      labelStyle: inputLabelStyle,
+                      floatingLabelStyle: inputLabelStyle,
+                    ),
                   ),
                   if (error != null) ...[
                     const SizedBox(height: 10),

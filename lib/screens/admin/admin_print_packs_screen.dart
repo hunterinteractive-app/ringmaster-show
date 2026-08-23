@@ -5,6 +5,7 @@ import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:ringmaster_show/services/app_session.dart';
+import 'package:ringmaster_show/services/show_role_contact_defaults.dart';
 
 import 'print_packs/check_in_generator_sheet.dart';
 import 'print_packs/control_sheets_generator_sheet.dart';
@@ -122,19 +123,24 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
     });
 
     try {
-      final showRow = await supabase
-          .from('shows')
-          .select(
-            'id, entry_close_at, auto_email_checkin_sheets, checkin_sheets_auto_emailed_at, checkin_sheets_auto_email_error, secretary_name, secretary_address, secretary_phone, secretary_email',
-          )
-          .eq('id', widget.showId)
-          .maybeSingle();
-
-      final rows = await supabase
-          .from('show_sections')
-          .select('id,letter,display_name,kind,is_enabled,sort_order')
-          .eq('show_id', widget.showId)
-          .eq('is_enabled', true);
+      final results = await Future.wait<dynamic>([
+        supabase
+            .from('shows')
+            .select(
+              'id, entry_close_at, auto_email_checkin_sheets, checkin_sheets_auto_emailed_at, checkin_sheets_auto_email_error, secretary_name, secretary_address, secretary_phone, secretary_email',
+            )
+            .eq('id', widget.showId)
+            .maybeSingle(),
+        supabase
+            .from('show_sections')
+            .select('id,letter,display_name,kind,is_enabled,sort_order')
+            .eq('show_id', widget.showId)
+            .eq('is_enabled', true),
+        ShowRoleContactDefaults.load(widget.showId),
+      ]);
+      final showRow = results[0] as Map<String, dynamic>?;
+      final rows = results[1] as List;
+      final roleDefaults = results[2] as ShowRoleContactDefaults?;
 
       final show = showRow ?? <String, dynamic>{};
       final rawEntryCloseAt = (show['entry_close_at'] ?? '').toString();
@@ -155,9 +161,9 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
         _checkInSheetsAutoEmailError = null;
       }
 
-      _autoFillSecretaryInfoFromShow(show);
+      _autoFillSecretaryInfoFromShow(show, roleDefaults);
 
-      _sections = (rows as List).cast<Map<String, dynamic>>();
+      _sections = rows.cast<Map<String, dynamic>>();
       _sortSections();
 
       if (_sections.isNotEmpty) {
@@ -183,13 +189,29 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
     }
   }
 
-  void _autoFillSecretaryInfoFromShow(Map<String, dynamic> show) {
-    final secretaryName = (show['secretary_name'] ?? '').toString().trim();
-    final secretaryAddress = (show['secretary_address'] ?? '')
-        .toString()
-        .trim();
-    final secretaryPhone = (show['secretary_phone'] ?? '').toString().trim();
-    final secretaryEmail = (show['secretary_email'] ?? '').toString().trim();
+  void _autoFillSecretaryInfoFromShow(
+    Map<String, dynamic> show,
+    ShowRoleContactDefaults? roleDefaults,
+  ) {
+    String savedOrDefault(String saved, String? fallback) =>
+        saved.isNotEmpty ? saved : (fallback ?? '');
+
+    final secretaryName = savedOrDefault(
+      (show['secretary_name'] ?? '').toString().trim(),
+      roleDefaults?.secretaryName,
+    );
+    final secretaryAddress = savedOrDefault(
+      (show['secretary_address'] ?? '').toString().trim(),
+      roleDefaults?.secretaryAddress,
+    );
+    final secretaryPhone = savedOrDefault(
+      (show['secretary_phone'] ?? '').toString().trim(),
+      roleDefaults?.secretaryPhone,
+    );
+    final secretaryEmail = savedOrDefault(
+      (show['secretary_email'] ?? '').toString().trim(),
+      roleDefaults?.secretaryEmail,
+    );
 
     _secretaryNameController.text = secretaryName;
     _secretaryAddressController.text = secretaryAddress;

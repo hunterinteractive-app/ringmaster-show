@@ -22,6 +22,7 @@ import 'package:ringmaster_show/screens/admin/closeout/results_entry_fix_launche
 import 'package:ringmaster_show/screens/admin/show_checkin_roster_screen.dart';
 import 'package:ringmaster_show/services/locked_show_data_export.dart';
 import 'package:ringmaster_show/services/report_email_service.dart';
+import 'package:ringmaster_show/services/show_role_contact_defaults.dart';
 import 'package:ringmaster_show/utils/file_download.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -556,37 +557,51 @@ class _ArbaDetailsPreviewPanelState extends State<_ArbaDetailsPreviewPanel> {
             .select('exhibitor_emails_sent_at, club_reports_sent_at')
             .eq('show_id', widget.showId)
             .maybeSingle(),
+        ShowRoleContactDefaults.load(widget.showId),
       ]);
       if (!mounted) return;
       final show = Map<String, dynamic>.from(results[0] as Map? ?? {});
       final arba = Map<String, dynamic>.from(results[1] as Map? ?? {});
       final closeout = Map<String, dynamic>.from(results[2] as Map? ?? {});
-      String first(Object? primary, Object? fallback) {
-        final value = primary?.toString().trim() ?? '';
-        return value.isNotEmpty ? value : (fallback?.toString().trim() ?? '');
+      final roleDefaults = results[3] as ShowRoleContactDefaults?;
+      String first(Iterable<Object?> values) {
+        for (final candidate in values) {
+          final value = candidate?.toString().trim() ?? '';
+          if (value.isNotEmpty) return value;
+        }
+        return '';
       }
 
       setState(() {
         _values = {
-          'Show Secretary Name': first(
+          'Show Secretary Name': first([
             show['secretary_name'],
             arba['secretary_name'],
-          ),
-          'Secretary Address': first(
+            roleDefaults?.secretaryName,
+          ]),
+          'Secretary Address': first([
             show['secretary_address'],
             arba['secretary_address'],
-          ),
-          'Secretary Email': first(
+            roleDefaults?.secretaryAddress,
+          ]),
+          'Secretary Email': first([
             show['secretary_email'],
             arba['secretary_email'],
-          ),
-          'Secretary Phone': first(
+            roleDefaults?.secretaryEmail,
+          ]),
+          'Secretary Phone': first([
             show['secretary_phone'],
             arba['secretary_phone'],
-          ),
-          'Superintendent Name': arba['superintendent_name']?.toString() ?? '',
-          'Superintendent ARBA Number':
-              arba['superintendent_arba_number']?.toString() ?? '',
+            roleDefaults?.secretaryPhone,
+          ]),
+          'Superintendent Name': first([
+            arba['superintendent_name'],
+            roleDefaults?.superintendentName,
+          ]),
+          'Superintendent ARBA Number': first([
+            arba['superintendent_arba_number'],
+            roleDefaults?.superintendentArbaNumber,
+          ]),
           'Date Reports Were Sent to Exhibitors': _formatDate(
             closeout['exhibitor_emails_sent_at'],
           ),
