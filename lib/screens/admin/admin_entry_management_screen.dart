@@ -3171,6 +3171,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     final exhibitor = _selectedExhibitor();
     final ownerUserId = (exhibitor?['owner_user_id'] ?? '').toString().trim();
     final now = DateTime.now().toUtc().toIso8601String();
+    final commercialLabel = _commercialLabel('meat_pen');
     await supabase.from('entries').insert([
       for (final sectionId in sections)
         {
@@ -3181,10 +3182,12 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
           'animal_id': null,
           'species': 'rabbit',
           'tattoo': tattoos.join(' / '),
-          'breed': breed,
-          'variety': variety,
+          // A Meat Pen is entered as a commercial class, not as its rabbits'
+          // underlying breed and variety.
+          'breed': 'Commercial',
+          'variety': commercialLabel,
           'sex': null,
-          'class_name': 'Meat Pen',
+          'class_name': commercialLabel,
           'is_fur': false,
           'status': 'entered',
           'created_at': now,
