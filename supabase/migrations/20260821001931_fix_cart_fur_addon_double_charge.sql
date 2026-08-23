@@ -9,7 +9,19 @@ begin
   )
   into v_definition;
 
+  -- A production hotfix may already have applied the same change before this
+  -- migration is recorded in the migration history.  Treat that exact,
+  -- already-correct definition as a successful no-op; retain the guard for
+  -- genuinely unknown function versions.
   if position('count(*)::integer as entry_count' in v_definition) = 0 then
+    if position(
+      'count(*) filter (where not pi.is_fur)::integer as entry_count'
+      in v_definition
+    ) > 0 then
+      raise notice 'calculate_entry_cart_balance_internal already excludes Fur/Wool rows';
+      return;
+    end if;
+
     raise exception
       'calculate_entry_cart_balance_internal no longer matches the expected definition';
   end if;

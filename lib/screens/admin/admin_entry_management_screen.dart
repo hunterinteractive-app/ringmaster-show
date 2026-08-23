@@ -1,5 +1,7 @@
 // lib/screens/admin/admin_entry_management_screen.dart
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:flutter/services.dart';
@@ -2678,6 +2680,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
   String? _msg;
 
   List<Map<String, dynamic>> _exhibitors = [];
+  List<Map<String, dynamic>> _directoryExhibitors = [];
   List<Map<String, dynamic>> _animals = [];
   final Set<String> _savedSectionIdsDuringSession = <String>{};
 
@@ -2698,6 +2701,8 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
   final _arbaNumber = TextEditingController();
   final _exhibitorSearch = TextEditingController();
   final _exhibitorSearchFocus = FocusNode();
+  Timer? _directorySearchDebounce;
+  int _directorySearchRequest = 0;
   final _addressLine1 = TextEditingController();
   final _addressLine2 = TextEditingController();
   final _city = TextEditingController();
@@ -2784,6 +2789,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     _firstName.addListener(_autoFillShowingName);
     _lastName.addListener(_autoFillShowingName);
     _exhibitorSearch.addListener(() {
+      _scheduleDirectoryExhibitorSearch(_exhibitorSearch.text);
       if (mounted) setState(() {});
     });
 
@@ -3144,6 +3150,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     _arbaNumber.dispose();
     _exhibitorSearch.dispose();
     _exhibitorSearchFocus.dispose();
+    _directorySearchDebounce?.cancel();
     _addressLine1.dispose();
     _addressLine2.dispose();
     _city.dispose();
@@ -3165,30 +3172,79 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
 
   List<Map<String, dynamic>> _filteredExhibitors([String? searchText]) {
     final query = (searchText ?? _exhibitorSearch.text).trim().toLowerCase();
-    if (query.isEmpty) return _exhibitors;
+    final exhibitorsById = <String, Map<String, dynamic>>{
+      for (final exhibitor in _exhibitors)
+        (exhibitor['id'] ?? '').toString(): exhibitor,
+      for (final exhibitor in _directoryExhibitors)
+        (exhibitor['id'] ?? '').toString(): exhibitor,
+    }..remove('');
+    final candidates = exhibitorsById.values;
+    if (query.isEmpty) return candidates.toList();
 
-    return _exhibitors.where((e) {
-      final haystack =
-          [
-                _exhibitorName(e),
-                _exhibitorLabel(e),
-                e['first_name'],
-                e['last_name'],
-                e['showing_name'],
-                e['display_name'],
-                e['email'],
-                e['phone'],
-                e['arba_number'],
-                e['city'],
-                e['state'],
-                e['zip'],
-              ]
-              .where((v) => v != null)
-              .map((v) => v.toString().toLowerCase())
-              .join(' ');
+    final matches =
+        candidates.where((e) {
+          final haystack =
+              [
+                    _exhibitorName(e),
+                    _exhibitorLabel(e),
+                    e['first_name'],
+                    e['last_name'],
+                    e['showing_name'],
+                    e['display_name'],
+                    e['email'],
+                    e['phone'],
+                    e['arba_number'],
+                    e['city'],
+                    e['state'],
+                    e['zip'],
+                  ]
+                  .where((v) => v != null)
+                  .map((v) => v.toString().toLowerCase())
+                  .join(' ');
 
-      return haystack.contains(query);
-    }).toList();
+          return haystack.contains(query);
+        }).toList()..sort(
+          (a, b) => _exhibitorName(
+            a,
+          ).toLowerCase().compareTo(_exhibitorName(b).toLowerCase()),
+        );
+    return matches;
+  }
+
+  void _scheduleDirectoryExhibitorSearch(String rawQuery) {
+    _directorySearchDebounce?.cancel();
+    final query = rawQuery.trim();
+    if (query.length < 2) {
+      if (_directoryExhibitors.isNotEmpty && mounted) {
+        setState(() => _directoryExhibitors = []);
+      }
+      return;
+    }
+
+    _directorySearchDebounce = Timer(
+      const Duration(milliseconds: 250),
+      () => _searchRegisteredExhibitors(query),
+    );
+  }
+
+  Future<void> _searchRegisteredExhibitors(String query) async {
+    final request = ++_directorySearchRequest;
+    try {
+      final rows = await supabase.rpc(
+        'search_registered_exhibitors_for_show',
+        params: {'p_show_id': widget.showId, 'p_search': query},
+      );
+      if (!mounted || request != _directorySearchRequest) return;
+      setState(() {
+        _directoryExhibitors = (rows as List)
+            .whereType<Map>()
+            .map((row) => Map<String, dynamic>.from(row))
+            .toList();
+      });
+    } catch (_) {
+      // Keep current-show and local exhibitors available if the optional
+      // directory search cannot be loaded.
+    }
   }
 
   void _selectExhibitor(Map<String, dynamic> exhibitor) {
@@ -3563,8 +3619,19 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     final state = (e['state'] ?? '').toString().trim().toUpperCase();
     final location = [city, state].where((s) => s.isNotEmpty).join(', ');
 
-    if (location.isEmpty) return name;
-    return '$name — $location';
+    final type = (e['type'] ?? '').toString().trim().toLowerCase();
+    final typeLabel = switch (type) {
+      'youth' => 'Youth',
+      'adult' => 'Open',
+      'group' => 'Group',
+      _ => '',
+    };
+    final details = [
+      location,
+      typeLabel,
+    ].where((s) => s.isNotEmpty).join(' • ');
+    if (details.isEmpty) return name;
+    return '$name — $details';
   }
 
   Map<String, dynamic>? _selectedExhibitor() {
