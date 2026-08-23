@@ -2685,6 +2685,10 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
   final Set<String> _savedSectionIdsDuringSession = <String>{};
 
   String? _exhibitorId;
+  // Directory search results are intentionally transient. Keep the selected
+  // record separately so an async refresh cannot turn a visibly selected
+  // exhibitor back into an unselected one.
+  Map<String, dynamic>? _selectedExhibitorRecord;
   String? _sectionId;
   final Set<String> _selectedSectionIds = <String>{};
   Map<String, dynamic>? _animal;
@@ -3272,6 +3276,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
 
     setState(() {
       _exhibitorId = id;
+      _selectedExhibitorRecord = Map<String, dynamic>.from(exhibitor);
       _exhibitorSearch.text = _exhibitorLabel(exhibitor);
       _animal = null;
       _animals = [];
@@ -3656,6 +3661,11 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
   Map<String, dynamic>? _selectedExhibitor() {
     final id = _exhibitorId;
     if (id == null || id.isEmpty) return null;
+
+    final selected = _selectedExhibitorRecord;
+    if (selected != null && (selected['id'] ?? '').toString() == id) {
+      return selected;
+    }
 
     for (final exhibitor in _exhibitors) {
       if ((exhibitor['id'] ?? '').toString() == id) {
@@ -4484,10 +4494,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
         resolvedExhibitorId = _exhibitorId!;
       }
 
-      final exhibitor = _exhibitors.firstWhere(
-        (e) => e['id'].toString() == resolvedExhibitorId,
-        orElse: () => <String, dynamic>{},
-      );
+      final exhibitor = _selectedExhibitor() ?? <String, dynamic>{};
 
       final exhibitorOwnerUserId = (exhibitor['owner_user_id'] ?? '')
           .toString()
@@ -4965,6 +4972,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                               _addNewExhibitor = v;
                               _useLocalAnimal = v;
                               _exhibitorId = null;
+                              _selectedExhibitorRecord = null;
                               _animal = null;
                               _animals = [];
                               _exhibitorSearch.clear();
@@ -5190,6 +5198,8 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                                                 setState(() {
                                                   textEditingController.clear();
                                                   _exhibitorId = null;
+                                                  _selectedExhibitorRecord =
+                                                      null;
                                                   _animal = null;
                                                   _animals = [];
                                                   _msg = null;
@@ -5213,6 +5223,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                                     value != _exhibitorLabel(selected)) {
                                   setState(() {
                                     _exhibitorId = null;
+                                    _selectedExhibitorRecord = null;
                                     _animal = null;
                                     _animals = [];
                                     _msg = null;
