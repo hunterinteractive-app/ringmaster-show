@@ -4714,19 +4714,32 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
       for (final sectionId in entrySectionIds) {
         final duplicateRows = await supabase
             .from('entries')
-            .select('id,is_fur')
+            .select('id,is_fur,breed,class_name')
             .eq('show_id', widget.showId)
             .eq('section_id', sectionId)
             .eq('animal_id', animalId);
 
         final duplicateList = duplicateRows as List;
+        final hasMatchingCommercialEntry =
+            isCommercialEntry &&
+            duplicateList.any((raw) {
+              final row = Map<String, dynamic>.from(raw as Map);
+              return (row['breed'] ?? '').toString().trim().toLowerCase() ==
+                      'commercial' &&
+                  (row['class_name'] ?? '').toString().trim().toLowerCase() ==
+                      selectedClass.toLowerCase();
+            });
         final hasRegular = duplicateList.any((raw) {
           final row = Map<String, dynamic>.from(raw as Map);
-          return row['is_fur'] != true;
+          return row['is_fur'] != true &&
+              (row['breed'] ?? '').toString().trim().toLowerCase() !=
+                  'commercial';
         });
         final hasFur = duplicateList.any((raw) {
           final row = Map<String, dynamic>.from(raw as Map);
-          return row['is_fur'] == true;
+          return row['is_fur'] == true &&
+              (row['breed'] ?? '').toString().trim().toLowerCase() !=
+                  'commercial';
         });
 
         existingEntryFlagsBySection[sectionId] = (
@@ -4734,7 +4747,14 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
           fur: hasFur,
         );
 
-        if ((!_isFur && hasRegular) || (_isFur && hasRegular && hasFur)) {
+        if (hasMatchingCommercialEntry) {
+          throw Exception(
+            'Animal already entered in $selectedClass in ${_sectionDisplayLabelById(sectionId)}',
+          );
+        }
+
+        if (!isCommercialEntry &&
+            ((!_isFur && hasRegular) || (_isFur && hasRegular && hasFur))) {
           throw Exception(
             'Animal already entered in ${_sectionDisplayLabelById(sectionId)}',
           );
