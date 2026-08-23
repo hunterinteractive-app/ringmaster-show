@@ -5126,6 +5126,14 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                     ),
                   ] else ...[
                     RawAutocomplete<Map<String, dynamic>>(
+                      // The registered-exhibitor directory search completes
+                      // asynchronously. Recreate the autocomplete overlay when
+                      // that result arrives so its visible options match the
+                      // updated match count, rather than retaining the options
+                      // from before the lookup completed.
+                      key: ValueKey(
+                        'exhibitor-autocomplete-$_directorySearchRequest',
+                      ),
                       textEditingController: _exhibitorSearch,
                       focusNode: _exhibitorSearchFocus,
                       displayStringForOption: _exhibitorLabel,
