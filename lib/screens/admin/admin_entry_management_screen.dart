@@ -2703,6 +2703,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
   final _exhibitorSearchFocus = FocusNode();
   Timer? _directorySearchDebounce;
   int _directorySearchRequest = 0;
+  bool _refreshingExhibitorAutocomplete = false;
   final _addressLine1 = TextEditingController();
   final _addressLine2 = TextEditingController();
   final _city = TextEditingController();
@@ -2789,7 +2790,9 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     _firstName.addListener(_autoFillShowingName);
     _lastName.addListener(_autoFillShowingName);
     _exhibitorSearch.addListener(() {
-      _scheduleDirectoryExhibitorSearch(_exhibitorSearch.text);
+      if (!_refreshingExhibitorAutocomplete) {
+        _scheduleDirectoryExhibitorSearch(_exhibitorSearch.text);
+      }
       if (mounted) setState(() {});
     });
 
@@ -3240,6 +3243,22 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
             .whereType<Map>()
             .map((row) => Map<String, dynamic>.from(row))
             .toList();
+      });
+
+      // RawAutocomplete recomputes its option overlay when its text controller
+      // notifies listeners. Trigger that refresh after the directory response,
+      // without replacing the widget (which would discard keyboard focus).
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _exhibitorSearch.text.trim() != query) return;
+        _refreshingExhibitorAutocomplete = true;
+        final currentValue = _exhibitorSearch.value;
+        final nextComposing = currentValue.composing == TextRange.empty
+            ? const TextRange(start: 0, end: 0)
+            : TextRange.empty;
+        _exhibitorSearch.value = currentValue.copyWith(
+          composing: nextComposing,
+        );
+        _refreshingExhibitorAutocomplete = false;
       });
     } catch (_) {
       // Keep current-show and local exhibitors available if the optional
@@ -5126,14 +5145,6 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                     ),
                   ] else ...[
                     RawAutocomplete<Map<String, dynamic>>(
-                      // The registered-exhibitor directory search completes
-                      // asynchronously. Recreate the autocomplete overlay when
-                      // that result arrives so its visible options match the
-                      // updated match count, rather than retaining the options
-                      // from before the lookup completed.
-                      key: ValueKey(
-                        'exhibitor-autocomplete-$_directorySearchRequest',
-                      ),
                       textEditingController: _exhibitorSearch,
                       focusNode: _exhibitorSearchFocus,
                       displayStringForOption: _exhibitorLabel,
