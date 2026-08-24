@@ -4665,7 +4665,12 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
             .select('id')
             .eq('tattoo', normalizedTattoo)
             .eq('breed', animalBreed)
-            .eq('species', entrySpecies);
+            .eq('species', entrySpecies)
+            // A tattoo is not an animal identifier by itself. In particular,
+            // a buck and doe may legitimately share one. Keep their saved
+            // animal IDs distinct so the entry-level duplicate check remains
+            // based on animal_id, not tattoo text.
+            .eq('sex', _sexValue!.trim());
 
         if (exhibitorOwnerUserId.isNotEmpty) {
           existingAnimalQuery = existingAnimalQuery.eq(
