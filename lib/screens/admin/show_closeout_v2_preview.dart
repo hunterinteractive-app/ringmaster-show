@@ -877,7 +877,8 @@ class _MustFixPanel extends StatefulWidget {
 class _MustFixPanelState extends State<_MustFixPanel> {
   bool _loading = true;
   String? _error;
-  List<_PlacementIssue> _issues = const [];
+  List<_ResultsReadinessIssue> _issues = const [];
+  Map<String, dynamic> _readiness = const {};
 
   @override
   void initState() {
@@ -891,42 +892,80 @@ class _MustFixPanelState extends State<_MustFixPanel> {
       _error = null;
     });
     try {
-      final rows = await Supabase.instance.client.rpc(
-        'report_results_entry_rows',
-        params: {
-          'p_show_id': widget.showId,
-          'p_section_id': null,
-          'p_show_letter': null,
-        },
+      final sections = await Supabase.instance.client
+          .from('show_sections')
+          .select('id')
+          .eq('show_id', widget.showId)
+          .eq('is_enabled', true)
+          .order('sort_order')
+          .order('letter');
+      final sectionIds =
+          (sections as List)
+              .map((row) => (row as Map)['id']?.toString().trim() ?? '')
+              .where((id) => id.isNotEmpty)
+              .toList()
+            ..sort();
+      if (sectionIds.isEmpty) {
+        throw StateError('No enabled show sections found.');
+      }
+      final values = await Future.wait<Object?>([
+        Supabase.instance.client.rpc(
+          'report_results_entry_rows',
+          params: {
+            'p_show_id': widget.showId,
+            'p_section_id': null,
+            'p_show_letter': null,
+          },
+        ),
+        Supabase.instance.client.rpc(
+          'get_closeout_dashboard_scoped_for_species',
+          params: {
+            'p_show_id': widget.showId,
+            'p_scope_key': '${widget.showId}:${sectionIds.join(',')}',
+            'p_section_ids': sectionIds,
+            'p_artifact_limit': 1,
+            'p_artifact_offset': 0,
+            'p_species_filter': null,
+          },
+        ),
+      ]);
+      final rows = values[0] as List;
+      final dashboard = Map<String, dynamic>.from(values[1] as Map);
+      final readiness = Map<String, dynamic>.from(
+        dashboard['results_readiness'] as Map? ?? const {},
       );
-      final issues = <_PlacementIssue>[];
-      for (final raw in rows as List) {
+      final issues = <_ResultsReadinessIssue>[];
+      for (final raw in rows) {
         final row = Map<String, dynamic>.from(raw as Map);
-        final status =
-            '${row['result_status'] ?? row['status'] ?? ''} ${row['disqualified_reason'] ?? ''}'
-                .toLowerCase();
-        final eligible =
-            (row['scratched_at'] ?? '').toString().trim().isEmpty &&
-            row['is_shown'] != false &&
-            row['is_disqualified'] != true &&
-            !const [
-              'no show',
-              'scratch',
-              'disqual',
-              'wrong sex',
-              'wrong variety',
-              'wrong class',
-              'overweight',
-              'unworthy',
-            ].any(status.contains);
+        final eligible = _isResultsEligible(row);
         if (eligible && (row['placement'] ?? '').toString().trim().isEmpty) {
-          issues.add(_PlacementIssue.fromRow(row));
+          issues.add(
+            _ResultsReadinessIssue.fromRow(
+              row,
+              type: _ResultsReadinessIssueType.missingPlacement,
+            ),
+          );
+        }
+        if (eligible &&
+            (row['judged_by_show_judge_id'] ?? '').toString().trim().isEmpty) {
+          issues.add(
+            _ResultsReadinessIssue.fromRow(
+              row,
+              type: _ResultsReadinessIssueType.missingJudge,
+            ),
+          );
         }
       }
-      issues.sort((a, b) => a.description.compareTo(b.description));
+      issues.sort((a, b) {
+        final description = a.description.compareTo(b.description);
+        return description != 0
+            ? description
+            : a.type.index.compareTo(b.type.index);
+      });
       if (!mounted) return;
       setState(() {
         _issues = issues;
+        _readiness = readiness;
         _loading = false;
       });
       await widget.onChanged();
@@ -939,7 +978,49 @@ class _MustFixPanelState extends State<_MustFixPanel> {
     }
   }
 
-  Future<void> _fix(_PlacementIssue issue) async {
+  bool _isResultsEligible(Map<String, dynamic> row) {
+    final status = (row['result_status'] ?? row['status'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase()
+        .replaceAll('_', ' ');
+    return (row['scratched_at'] ?? '').toString().trim().isEmpty &&
+        row['is_shown'] == true &&
+        row['is_disqualified'] != true &&
+        status != 'no show' &&
+        status != 'unworthy of award' &&
+        !status.startsWith('disqualified');
+  }
+
+  int _readinessCount(String key) =>
+      int.tryParse(_readiness[key]?.toString() ?? '') ?? 0;
+
+  List<String> get _otherBlockers {
+    final blockers = <String>[];
+    final missingFinalAwards = _readinessCount('missing_final_award_count');
+    final duplicatePlacements = _readinessCount(
+      'duplicate_placement_group_count',
+    );
+    final duplicateFinalAwards = _readinessCount('duplicate_final_award_count');
+    if (missingFinalAwards > 0) {
+      blockers.add(
+        '$missingFinalAwards missing final award${missingFinalAwards == 1 ? '' : 's'}',
+      );
+    }
+    if (duplicatePlacements > 0) {
+      blockers.add(
+        '$duplicatePlacements duplicate placement group${duplicatePlacements == 1 ? '' : 's'}',
+      );
+    }
+    if (duplicateFinalAwards > 0) {
+      blockers.add(
+        '$duplicateFinalAwards duplicate final award${duplicateFinalAwards == 1 ? '' : 's'}',
+      );
+    }
+    return blockers;
+  }
+
+  Future<void> _fix(_ResultsReadinessIssue issue) async {
     if (issue.entryId.isEmpty) return;
     await openResultsEntryFix(
       context,
@@ -953,7 +1034,7 @@ class _MustFixPanelState extends State<_MustFixPanel> {
   @override
   Widget build(BuildContext context) => _PreviewCard(
     title: 'Needs Fixed',
-    subtitle: 'Please correct any issues listed before continuing.',
+    subtitle: 'Everything currently blocking report generation is shown here.',
     children: [
       if (_loading)
         const Center(
@@ -966,7 +1047,7 @@ class _MustFixPanelState extends State<_MustFixPanel> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Unable to load placement issues: $_error'),
+            Text('Unable to load results readiness: $_error'),
             OutlinedButton.icon(
               onPressed: _loadIssues,
               icon: const Icon(Icons.refresh),
@@ -974,38 +1055,79 @@ class _MustFixPanelState extends State<_MustFixPanel> {
             ),
           ],
         )
-      else if (_issues.isEmpty)
-        const Text('No missing eligible placements found.')
-      else
-        ..._issues.map(
-          (issue) => ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.error_outline, color: Colors.red),
-            title: Text(issue.tattoo.isEmpty ? '(No ear #)' : issue.tattoo),
-            subtitle: Text(issue.description),
-            trailing: TextButton.icon(
-              onPressed: issue.entryId.isEmpty ? null : () => _fix(issue),
-              icon: const Icon(Icons.build_outlined),
-              label: const Text('Fix now'),
+      else ...[
+        if (_issues.isEmpty && _otherBlockers.isEmpty)
+          const Text('No results issues are blocking report generation.')
+        else ...[
+          if (_otherBlockers.isNotEmpty)
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.amber.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Additional results issues need review',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(_otherBlockers.join(' • ')),
+                  const SizedBox(height: 4),
+                  const Text('Open Results Entry to correct these items.'),
+                ],
+              ),
+            ),
+          ..._issues.map(
+            (issue) => ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.error_outline, color: Colors.red),
+              title: Text(
+                '${issue.label}: ${issue.tattoo.isEmpty ? '(No ear #)' : issue.tattoo}',
+              ),
+              subtitle: Text(issue.description),
+              trailing: TextButton.icon(
+                onPressed: issue.entryId.isEmpty ? null : () => _fix(issue),
+                icon: const Icon(Icons.build_outlined),
+                label: const Text('Fix now'),
+              ),
             ),
           ),
-        ),
+        ],
+      ],
     ],
   );
 }
 
-class _PlacementIssue {
+enum _ResultsReadinessIssueType { missingPlacement, missingJudge }
+
+class _ResultsReadinessIssue {
   final String entryId;
   final String tattoo;
   final String description;
-  const _PlacementIssue({
+  final _ResultsReadinessIssueType type;
+  const _ResultsReadinessIssue({
     required this.entryId,
     required this.tattoo,
     required this.description,
+    required this.type,
   });
-  factory _PlacementIssue.fromRow(Map<String, dynamic> row) {
+
+  String get label => switch (type) {
+    _ResultsReadinessIssueType.missingPlacement => 'Missing placement',
+    _ResultsReadinessIssueType.missingJudge => 'Missing judge assignment',
+  };
+
+  factory _ResultsReadinessIssue.fromRow(
+    Map<String, dynamic> row, {
+    required _ResultsReadinessIssueType type,
+  }) {
     String value(String key) => row[key]?.toString().trim() ?? '';
-    return _PlacementIssue(
+    return _ResultsReadinessIssue(
       entryId: value('entry_id'),
       tattoo: value('tattoo'),
       description: [
@@ -1017,6 +1139,7 @@ class _PlacementIssue {
         value('sex'),
         value('exhibitor_label'),
       ].where((part) => part.isNotEmpty).join(' • '),
+      type: type,
     );
   }
 }
