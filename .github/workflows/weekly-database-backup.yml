@@ -1,0 +1,78 @@
+name: Back up Supabase database to Backblaze B2
+
+on:
+  schedule:
+    # Every Sunday at 06:17 UTC. GitHub Actions schedules can be delayed.
+    - cron: '17 6 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: weekly-database-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+      AWS_DEFAULT_REGION: ${{ secrets.B2_REGION }}
+      B2_BUCKET: ${{ secrets.B2_BUCKET }}
+      B2_ENDPOINT: ${{ secrets.B2_ENDPOINT }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Validate backup configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          for secret in SUPABASE_DB_URL BACKUP_PASSPHRASE AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_DEFAULT_REGION B2_BUCKET B2_ENDPOINT; do
+            test -n "${!secret}" || { echo "Missing required secret: $secret"; exit 1; }
+          done
+
+      - name: Create logical database backup
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p backup
+          supabase db dump --db-url "$SUPABASE_DB_URL" --role-only --file backup/roles.sql
+          supabase db dump --db-url "$SUPABASE_DB_URL" --file backup/schema.sql
+          supabase db dump --db-url "$SUPABASE_DB_URL" --data-only --use-copy \
+            --exclude storage.buckets_vectors --exclude storage.vector_indexes \
+            --file backup/data.sql
+          date -u +%Y-%m-%dT%H:%M:%SZ > backup/created-at.txt
+          sha256sum backup/roles.sql backup/schema.sql backup/data.sql > backup/SHA256SUMS
+
+      - name: Encrypt backup
+        id: archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive_name="ringmaster-show-db-$(date -u +%Y-%m-%dT%H-%M-%SZ).tar.gz.gpg"
+          tar -C backup -czf - . | gpg --batch --yes --pinentry-mode loopback \
+            --passphrase "$BACKUP_PASSPHRASE" --symmetric --cipher-algo AES256 \
+            --output "$archive_name"
+          sha256sum "$archive_name" > "$archive_name.sha256"
+          echo "archive_name=$archive_name" >> "$GITHUB_OUTPUT"
+
+      - name: Upload encrypted backup to Backblaze B2
+        shell: bash
+        run: |
+          set -euo pipefail
+          aws s3 cp "${{ steps.archive.outputs.archive_name }}" \
+            "s3://$B2_BUCKET/ringmaster-show/database/${{ steps.archive.outputs.archive_name }}" \
+            --endpoint-url "$B2_ENDPOINT" --no-progress
+          aws s3 cp "${{ steps.archive.outputs.archive_name }}.sha256" \
+            "s3://$B2_BUCKET/ringmaster-show/database/${{ steps.archive.outputs.archive_name }}.sha256" \
+            --endpoint-url "$B2_ENDPOINT" --no-progress
