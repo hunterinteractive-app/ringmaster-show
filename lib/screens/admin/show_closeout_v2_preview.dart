@@ -2510,48 +2510,65 @@ class _PublishResultsPanelState extends State<_PublishResultsPanel> {
     try {
       final emailService = ReportEmailService();
       var successful = 0;
+      var attempted = 0;
+      final failedRecipients = <String>[];
       for (final entry in groups.entries) {
         final recipient = _recipientEmail(entry.value.first, clubs: clubs);
         if (recipient == null) continue;
-        if (clubs) {
-          await emailService.sendClubReportEmail(
-            showId: widget.showId,
-            artifactIds: entry.value.map((artifact) => artifact.id).toList(),
-            to: recipient,
-            subject: '${widget.showName} - Club Reports',
-            message: additionalMessage,
-            // A secretary note changes the content of a prior package, so it
-            // must not be absorbed by the recipient/subject duplicate check.
-            forceResend: additionalMessage.isNotEmpty,
-          );
-        } else {
-          await emailService.sendExhibitorReportEmail(
-            showId: widget.showId,
-            artifactIds: entry.value.map((artifact) => artifact.id).toList(),
-            to: recipient,
-            subject: '${widget.showName} - Exhibitor Reports',
-            message: additionalMessage,
-            allowLegs: true,
-            forceResend: additionalMessage.isNotEmpty,
-          );
+        attempted++;
+        try {
+          if (clubs) {
+            await emailService.sendClubReportEmail(
+              showId: widget.showId,
+              artifactIds: entry.value.map((artifact) => artifact.id).toList(),
+              to: recipient,
+              subject: '${widget.showName} - Club Reports',
+              message: additionalMessage,
+              // A secretary note changes the content of a prior package, so it
+              // must not be absorbed by the recipient/subject duplicate check.
+              forceResend: additionalMessage.isNotEmpty,
+            );
+          } else {
+            await emailService.sendExhibitorReportEmail(
+              showId: widget.showId,
+              artifactIds: entry.value.map((artifact) => artifact.id).toList(),
+              to: recipient,
+              subject: '${widget.showName} - Exhibitor Reports',
+              message: additionalMessage,
+              allowLegs: true,
+              forceResend: additionalMessage.isNotEmpty,
+            );
+          }
+          successful++;
+        } catch (_) {
+          // A bad address or provider failure for one recipient must not stop
+          // later recipients from receiving their already-generated reports.
+          failedRecipients.add(recipient);
         }
-        successful++;
         _activeDeliveryProgress.value = _ActiveDeliveryProgress(
           recipientType: clubs ? 'club' : 'exhibitor',
           totalBatches: groups.length,
-          completedBatches: successful,
+          completedBatches: attempted,
         );
       }
-      await Supabase.instance.client.from('show_closeout_state').upsert({
-        'show_id': widget.showId,
-        clubs ? 'club_reports_sent_at' : 'exhibitor_emails_sent_at':
-            DateTime.now().toUtc().toIso8601String(),
-      });
+      // Record the delivery attempt as soon as at least one batch was handed
+      // off successfully. Individual failures remain visible in delivery
+      // history and do not erase the date required by final closeout.
+      if (successful > 0) {
+        await Supabase.instance.client.from('show_closeout_state').upsert({
+          'show_id': widget.showId,
+          clubs ? 'club_reports_sent_at' : 'exhibitor_emails_sent_at':
+              DateTime.now().toUtc().toIso8601String(),
+        });
+      }
       if (!mounted) return;
+      final recipientLabel = clubs ? 'club' : 'exhibitor';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '$successful ${clubs ? 'club' : 'exhibitor'} email batch${successful == 1 ? '' : 'es'} sent.',
+            failedRecipients.isEmpty
+                ? '$successful $recipientLabel email batch${successful == 1 ? '' : 'es'} sent.'
+                : '$successful $recipientLabel email batch${successful == 1 ? '' : 'es'} sent; ${failedRecipients.length} failed. Review Report Delivery History.',
           ),
         ),
       );
