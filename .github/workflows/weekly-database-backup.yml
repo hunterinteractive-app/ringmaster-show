@@ -70,9 +70,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          aws s3 cp "${{ steps.archive.outputs.archive_name }}" \
-            "s3://$B2_BUCKET/ringmaster-show/database/${{ steps.archive.outputs.archive_name }}" \
-            --endpoint-url "$B2_ENDPOINT" --no-progress
-          aws s3 cp "${{ steps.archive.outputs.archive_name }}.sha256" \
-            "s3://$B2_BUCKET/ringmaster-show/database/${{ steps.archive.outputs.archive_name }}.sha256" \
-            --endpoint-url "$B2_ENDPOINT" --no-progress
+          aws s3api put-object --bucket "$B2_BUCKET" \
+            --key "ringmaster-show/database/${{ steps.archive.outputs.archive_name }}" \
+            --body "${{ steps.archive.outputs.archive_name }}" \
+            --endpoint-url "$B2_ENDPOINT"
+          aws s3api put-object --bucket "$B2_BUCKET" \
+            --key "ringmaster-show/database/${{ steps.archive.outputs.archive_name }}.sha256" \
+            --body "${{ steps.archive.outputs.archive_name }}.sha256" \
+            --endpoint-url "$B2_ENDPOINT"
