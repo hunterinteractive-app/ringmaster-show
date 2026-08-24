@@ -100,6 +100,15 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
           'timezone,is_locked,locked_at,finalized_at,owner_user_id',
         );
 
+    // Superadmins must never be narrowed by the caller's cached show-ID list.
+    // That list is intentionally scoped for secretaries and other show staff.
+    // Keep this check after resolving the effective user so support-mode
+    // impersonation continues to reflect the person being viewed.
+    if (isSuperAdmin) {
+      final res = await query.order('start_date').order('location_name');
+      return (res as List).cast<Map<String, dynamic>>();
+    }
+
     // If the previous screen already calculated allowed shows, trust that list.
     // This avoids losing secretary access if this screen's fallback role query is
     // narrower or blocked by RLS.
@@ -175,11 +184,6 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
       } catch (_) {
         // Some older show records may not have owner_user_id available to this user.
       }
-    }
-
-    if (isSuperAdmin) {
-      final res = await query.order('start_date').order('location_name');
-      return (res as List).cast<Map<String, dynamic>>();
     }
 
     if (allowedShowIds.isEmpty) {
