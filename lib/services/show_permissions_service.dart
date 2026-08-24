@@ -53,7 +53,9 @@ class ShowPermissionsService {
       return ShowPermissions.none;
     }
 
-    final isSuperAdmin = await _isSuperAdmin(user.id);
+    // Resolve this using the effective user so support mode reflects the
+    // person being viewed, not the support agent's own global access.
+    final isSuperAdmin = await _isSuperAdmin(effectiveUserId);
 
     if (isSuperAdmin && !isSupportMode) {
       return const ShowPermissions(
@@ -93,15 +95,29 @@ class ShowPermissionsService {
   }
 
   static Future<bool> _isSuperAdmin(String userId) async {
+    // Some established accounts still live in the legacy super_admins table,
+    // while newer accounts use role_assignments.  Permission checks must use
+    // both sources, just like the show list does.
     try {
-      final result = await _client
+      final legacySuperAdmin = await _client
+          .from('super_admins')
+          .select('user_id')
+          .eq('user_id', userId)
+          .maybeSingle();
+      if (legacySuperAdmin != null) return true;
+    } catch (_) {
+      // Continue to the current role source if the legacy lookup is blocked.
+    }
+
+    try {
+      final roleRows = await _client
           .from('role_assignments')
           .select('id')
           .eq('user_id', userId)
           .eq('role', 'super_admin')
           .limit(1);
 
-      return result.isNotEmpty;
+      return (roleRows as List).isNotEmpty;
     } catch (_) {
       return false;
     }
@@ -115,10 +131,7 @@ class ShowPermissionsService {
     try {
       final result = await _client.rpc(
         functionName,
-        params: {
-          'p_show_id': showId,
-          'p_user_id': effectiveUserId,
-        },
+        params: {'p_show_id': showId, 'p_user_id': effectiveUserId},
       );
 
       return result == true;
