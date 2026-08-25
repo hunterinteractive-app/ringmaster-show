@@ -995,6 +995,32 @@ class _MustFixPanelState extends State<_MustFixPanel> {
   int _readinessCount(String key) =>
       int.tryParse(_readiness[key]?.toString() ?? '') ?? 0;
 
+  List<String> _finalAwardDetails(String key, {bool includeReason = false}) {
+    final rawAwards = _readiness[key];
+    if (rawAwards is! List) return const [];
+
+    return rawAwards
+        .whereType<Map>()
+        .map((award) {
+          final row = Map<String, dynamic>.from(award);
+          final section = (row['section_label'] ?? 'This section').toString();
+          final awardLabel =
+              (row['award_label'] ?? row['award_code'] ?? 'Final award')
+                  .toString();
+          final reason = (row['reason'] ?? '').toString().trim();
+          return includeReason && reason.isNotEmpty
+              ? '$section — $awardLabel: $reason'
+              : '$section — $awardLabel';
+        })
+        .toList(growable: false);
+  }
+
+  List<String> get _missingFinalAwardDetails =>
+      _finalAwardDetails('missing_final_awards');
+
+  List<String> get _invalidFinalAwardDetails =>
+      _finalAwardDetails('invalid_final_awards', includeReason: true);
+
   List<String> get _otherBlockers {
     final blockers = <String>[];
     final missingFinalAwards = _readinessCount('missing_final_award_count');
@@ -1002,6 +1028,7 @@ class _MustFixPanelState extends State<_MustFixPanel> {
       'duplicate_placement_group_count',
     );
     final duplicateFinalAwards = _readinessCount('duplicate_final_award_count');
+    final invalidFinalAwards = _readinessCount('invalid_final_award_count');
     if (missingFinalAwards > 0) {
       blockers.add(
         '$missingFinalAwards missing final award${missingFinalAwards == 1 ? '' : 's'}',
@@ -1015,6 +1042,11 @@ class _MustFixPanelState extends State<_MustFixPanel> {
     if (duplicateFinalAwards > 0) {
       blockers.add(
         '$duplicateFinalAwards duplicate final award${duplicateFinalAwards == 1 ? '' : 's'}',
+      );
+    }
+    if (invalidFinalAwards > 0) {
+      blockers.add(
+        '$invalidFinalAwards invalid final award${invalidFinalAwards == 1 ? '' : 's'}',
       );
     }
     return blockers;
@@ -1077,6 +1109,28 @@ class _MustFixPanelState extends State<_MustFixPanel> {
                   ),
                   const SizedBox(height: 4),
                   Text(_otherBlockers.join(' • ')),
+                  if (_missingFinalAwardDetails.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Required final awards:',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 2),
+                    ..._missingFinalAwardDetails.map(
+                      (detail) => Text('• $detail'),
+                    ),
+                  ],
+                  if (_invalidFinalAwardDetails.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Invalid final award selections:',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 2),
+                    ..._invalidFinalAwardDetails.map(
+                      (detail) => Text('• $detail'),
+                    ),
+                  ],
                   const SizedBox(height: 4),
                   const Text('Open Results Entry to correct these items.'),
                 ],
@@ -2198,6 +2252,7 @@ class _ReportGenerationState {
       'duplicate_placement_group_count': 'duplicate placements',
       'missing_final_award_count': 'missing final awards',
       'duplicate_final_award_count': 'duplicate final awards',
+      'invalid_final_award_count': 'invalid final awards',
     }.entries) {
       final count = number(readiness, entry.key);
       if (count > 0) problems.add('$count ${entry.value}');
@@ -3408,6 +3463,7 @@ class _FinalCloseoutReadiness {
       'duplicate_placement_group_count': 'duplicate placements',
       'missing_final_award_count': 'missing final awards',
       'duplicate_final_award_count': 'duplicate final awards',
+      'invalid_final_award_count': 'invalid final awards',
     }.entries) {
       final count = number(results, entry.key);
       if (count > 0) blocking.add('$count ${entry.value}');

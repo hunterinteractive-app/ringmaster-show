@@ -33,6 +33,12 @@ class RabbitResultsRules implements ResultsRules {
           'best of breed': 'BOB',
           'bosb': 'BOSB',
           'best opposite sex of breed': 'BOSB',
+          'b4c': 'Best 4-Class',
+          'best 4 class': 'Best 4-Class',
+          'best 4-class': 'Best 4-Class',
+          'b6c': 'Best 6-Class',
+          'best 6 class': 'Best 6-Class',
+          'best 6-class': 'Best 6-Class',
           'bis': 'BIS',
           'best in show': 'Best In Show',
           'ris': 'RIS',
@@ -181,7 +187,9 @@ class RabbitResultsRules implements ResultsRules {
         if (className.contains('senior')) awards.add('Best Senior');
       }
     }
-    if (finalAwardMode == 'bis_ris') {
+    if (finalAwardMode == 'four_six_bis') {
+      awards.addAll(['Best 4-Class', 'Best 6-Class', 'Best In Show']);
+    } else if (finalAwardMode == 'bis_ris') {
       awards.addAll(['Best In Show', 'Reserve In Show']);
     } else if (finalAwardMode == 'bis_1ris_2ris') {
       awards.addAll(['Best In Show', '1RIS', '2RIS']);
@@ -219,14 +227,6 @@ class RabbitResultsRules implements ResultsRules {
         'Rabbit variety awards are incompatible with this rabbit breed structure.',
       );
     }
-    if (awards.intersection(const {
-      'Best 4-Class',
-      'Best 6-Class',
-    }).isNotEmpty) {
-      return const AwardCompatibilityResult.invalid(
-        'Best 4-Class and Best 6-Class are not rabbit result awards.',
-      );
-    }
     for (final breedAward in const ['BOB', 'BOSB']) {
       if (!awards.contains(breedAward)) continue;
       final sources = _breedSources(entry, breedAward);
@@ -245,6 +245,22 @@ class RabbitResultsRules implements ResultsRules {
     return value != 'no show' &&
         value != 'unworthy of award' &&
         !value.startsWith('disqualified');
+  }
+
+  bool _isFourClass(String classSystem) {
+    final normalized = normalizeResultsRuleKey(classSystem);
+    return normalized == 'four' ||
+        normalized == '4' ||
+        normalized == 'four class' ||
+        normalized == '4 class';
+  }
+
+  bool _isSixClass(String classSystem) {
+    final normalized = normalizeResultsRuleKey(classSystem);
+    return normalized == 'six' ||
+        normalized == '6' ||
+        normalized == 'six class' ||
+        normalized == '6 class';
   }
 
   @override
@@ -291,9 +307,21 @@ class RabbitResultsRules implements ResultsRules {
       final sources = _breedSources(entry, code);
       return sources.isEmpty || selected.intersection(sources).isNotEmpty;
     }
-    if (code == 'Best 4-Class' || code == 'Best 6-Class') return false;
+    if (code == 'Best 4-Class') {
+      return finalAwardMode == 'four_six_bis' &&
+          selected.contains('BOB') &&
+          _isFourClass(classSystem);
+    }
+    if (code == 'Best 6-Class') {
+      return finalAwardMode == 'four_six_bis' &&
+          selected.contains('BOB') &&
+          _isSixClass(classSystem);
+    }
     if (code == 'Best In Show') {
-      return selected.contains('BOB');
+      return finalAwardMode == 'four_six_bis'
+          ? selected.contains('Best 4-Class') ||
+                selected.contains('Best 6-Class')
+          : selected.contains('BOB');
     }
     if (code == 'Reserve In Show') {
       return finalAwardMode == 'bis_ris' &&
@@ -327,6 +355,15 @@ class RabbitResultsRules implements ResultsRules {
     if (const {'BOG', 'BOSG'}.contains(code)) {
       return 'Only rabbit breeds with configured group awards use this award.';
     }
+    if (code == 'Best 4-Class') {
+      return 'Requires Best of Breed from a 4-class rabbit breed first.';
+    }
+    if (code == 'Best 6-Class') {
+      return 'Requires Best of Breed from a 6-class rabbit breed first.';
+    }
+    if (code == 'Best In Show') {
+      return 'Requires Best 4-Class or Best 6-Class first.';
+    }
     if (const {'BOB', 'BOSB'}.contains(code)) {
       final sources = _breedSources(entry, code);
       return sources.isEmpty
@@ -355,6 +392,9 @@ class RabbitResultsRules implements ResultsRules {
     'BOSG' => 'Best Opposite Sex of Rabbit Group',
     'BOB' => 'Best of Breed',
     'BOSB' => 'Best Opposite Sex of Breed',
+    'Best 4-Class' => 'Best 4-Class',
+    'Best 6-Class' => 'Best 6-Class',
+    'Best In Show' => 'Best In Show',
     final value => value,
   };
 

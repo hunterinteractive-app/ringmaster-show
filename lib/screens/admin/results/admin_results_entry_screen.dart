@@ -2289,8 +2289,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
         }
       }
 
-      if (_isCavyEntry(e) &&
-          _finalAwardMode == 'four_six_bis' &&
+      if (_finalAwardMode == 'four_six_bis' &&
           _awardListContains(a, 'Best In Show')) {
         if (!(_awardListContains(a, 'Best 4-Class') ||
             _awardListContains(a, 'Best 6-Class'))) {

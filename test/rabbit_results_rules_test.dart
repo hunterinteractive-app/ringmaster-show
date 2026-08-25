@@ -181,6 +181,151 @@ void main() {
     expect(rules.normalizeStoredAwards(['BOV', 'BOSV']), {'BOV', 'BOSV'});
   });
 
+  test('four/six finals require matching BOB hierarchy', () {
+    final entry = rabbit(usesGroups: false, usesVarieties: false);
+    final options = rules.buildAwardOptions(
+      entry: entry,
+      classSystem: 'four',
+      finalAwardMode: 'four_six_bis',
+    );
+    expect(
+      options,
+      containsAll(['Best 4-Class', 'Best 6-Class', 'Best In Show']),
+    );
+
+    expect(
+      rules.canUseAward(
+        entry: entry,
+        award: 'Best 4-Class',
+        selectedAwards: {'BOB'},
+        effectiveStatus: 'Shown',
+        effectivePlacement: '1',
+        classSystem: 'four',
+        finalAwardMode: 'four_six_bis',
+      ),
+      isTrue,
+    );
+    expect(
+      rules.canUseAward(
+        entry: entry,
+        award: 'Best 6-Class',
+        selectedAwards: {'BOB'},
+        effectiveStatus: 'Shown',
+        effectivePlacement: '1',
+        classSystem: 'four',
+        finalAwardMode: 'four_six_bis',
+      ),
+      isFalse,
+    );
+    expect(
+      rules.canUseAward(
+        entry: entry,
+        award: 'Best In Show',
+        selectedAwards: {'BOB'},
+        effectiveStatus: 'Shown',
+        effectivePlacement: '1',
+        classSystem: 'four',
+        finalAwardMode: 'four_six_bis',
+      ),
+      isFalse,
+    );
+    expect(
+      rules.canUseAward(
+        entry: entry,
+        award: 'Best In Show',
+        selectedAwards: {'BOB', 'Best 4-Class'},
+        effectiveStatus: 'Shown',
+        effectivePlacement: '1',
+        classSystem: 'four',
+        finalAwardMode: 'four_six_bis',
+      ),
+      isTrue,
+    );
+    expect(
+      rules.canUseAward(
+        entry: entry,
+        award: 'Best 6-Class',
+        selectedAwards: {'BOB'},
+        effectiveStatus: 'Shown',
+        effectivePlacement: '1',
+        classSystem: 'six',
+        finalAwardMode: 'four_six_bis',
+      ),
+      isTrue,
+    );
+    expect(
+      rules
+          .validateAwardSelection(
+            entry: entry,
+            selectedAwards: {'BOB', 'Best 4-Class'},
+          )
+          .valid,
+      isTrue,
+    );
+  });
+
+  test('BIS/RIS mode remains independent from four/six final awards', () {
+    final entry = rabbit(usesGroups: false, usesVarieties: false);
+    final options = rules.buildAwardOptions(
+      entry: entry,
+      classSystem: 'four',
+      finalAwardMode: 'bis_ris',
+    );
+
+    expect(options, containsAll(['Best In Show', 'Reserve In Show']));
+    expect(options, isNot(contains('Best 4-Class')));
+    expect(options, isNot(contains('Best 6-Class')));
+
+    expect(
+      rules.canUseAward(
+        entry: entry,
+        award: 'Best In Show',
+        selectedAwards: {'BOB'},
+        effectiveStatus: 'Shown',
+        effectivePlacement: '1',
+        classSystem: 'four',
+        finalAwardMode: 'bis_ris',
+      ),
+      isTrue,
+    );
+    expect(
+      rules.canUseAward(
+        entry: entry,
+        award: 'Reserve In Show',
+        selectedAwards: {'BOB'},
+        effectiveStatus: 'Shown',
+        effectivePlacement: '1',
+        classSystem: 'four',
+        finalAwardMode: 'bis_ris',
+      ),
+      isTrue,
+    );
+    expect(
+      rules.canUseAward(
+        entry: entry,
+        award: 'Reserve In Show',
+        selectedAwards: {'BOB', 'Best In Show'},
+        effectiveStatus: 'Shown',
+        effectivePlacement: '1',
+        classSystem: 'four',
+        finalAwardMode: 'bis_ris',
+      ),
+      isFalse,
+    );
+    expect(
+      rules.canUseAward(
+        entry: entry,
+        award: 'Best 4-Class',
+        selectedAwards: {'BOB'},
+        effectiveStatus: 'Shown',
+        effectivePlacement: '1',
+        classSystem: 'four',
+        finalAwardMode: 'bis_ris',
+      ),
+      isFalse,
+    );
+  });
+
   test(
     'Himalayan specialty awards use breed-level junior and senior awards',
     () {
