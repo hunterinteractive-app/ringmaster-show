@@ -920,7 +920,10 @@ class _AdminEntryManagementScreenState
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 80),
                     child: Center(
-                      child: Text('No entries found for this filter.'),
+                      child: Text(
+                        'No entries found for this filter.',
+                        style: TextStyle(color: AppColors.headerForeground),
+                      ),
                     ),
                   )
                 else

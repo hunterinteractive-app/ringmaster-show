@@ -1372,6 +1372,7 @@ class _CartScreenState extends State<CartScreen> {
                       child: Text(
                         'Your cart is empty.',
                         textAlign: TextAlign.center,
+                        style: TextStyle(color: AppColors.headerForeground),
                       ),
                     ),
                   )
