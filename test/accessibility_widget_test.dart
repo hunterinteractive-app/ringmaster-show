@@ -80,11 +80,23 @@ void main() {
     }
   });
 
-  test('animal entry controls include animal context for assistive technology', () {
-    final source = File('lib/screens/enter_show_screen.dart').readAsStringSync();
+  test(
+    'animal entry controls include animal context for assistive technology',
+    () {
+      final source = File(
+        'lib/screens/enter_show_screen.dart',
+      ).readAsStringSync();
 
-    expect(source, contains("label: 'Select \${_displayAnimalTitle(a)}'"));
-    expect(source, contains("label: 'Class for \${_displayAnimalTitle(a)}'"));
+      expect(source, contains("label: 'Select \${_displayAnimalTitle(a)}'"));
+      expect(source, contains("label: 'Class for \${_displayAnimalTitle(a)}'"));
+    },
+  );
+
+  test('login screen offers an accessibility support contact', () {
+    final source = File('lib/screens/login_screen.dart').readAsStringSync();
+
+    expect(source, contains('Accessibility help: support@ringmasterone.com'));
+    expect(source, contains("path: 'support@ringmasterone.com'"));
   });
 
   test(
