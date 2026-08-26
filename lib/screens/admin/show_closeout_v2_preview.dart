@@ -24,6 +24,7 @@ import 'package:ringmaster_show/services/locked_show_data_export.dart';
 import 'package:ringmaster_show/services/report_email_service.dart';
 import 'package:ringmaster_show/services/show_role_contact_defaults.dart';
 import 'package:ringmaster_show/utils/file_download.dart';
+import 'package:ringmaster_show/widgets/accessible_icon_button.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 final _activeDeliveryProgress = ValueNotifier<_ActiveDeliveryProgress?>(null);
@@ -2968,13 +2969,15 @@ class _DeliveryStatusPanelState extends State<_DeliveryStatusPanel> {
               children: [
                 Text('Page ${currentPage + 1} of $pageCount'),
                 const Spacer(),
-                IconButton(
+                AccessibleIconButton(
+                  tooltip: 'Previous page',
                   onPressed: currentPage == 0
                       ? null
                       : () => setState(() => _page = currentPage - 1),
                   icon: const Icon(Icons.chevron_left),
                 ),
-                IconButton(
+                AccessibleIconButton(
+                  tooltip: 'Next page',
                   onPressed: currentPage >= pageCount - 1
                       ? null
                       : () => setState(() => _page = currentPage + 1),

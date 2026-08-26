@@ -1829,7 +1829,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                   ? 'Select the class for this animal.'
                   : 'Projected class selected.',
               helperStyle: TextStyle(
-                color: needsValidation ? Colors.red : null,
+                color: needsValidation ? AppColors.danger : null,
                 fontWeight: needsValidation ? FontWeight.w600 : null,
               ),
               border: const OutlineInputBorder(),
@@ -1972,7 +1972,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                         : 'Conflicts with existing $conflictLabel')
                   : 'Already in cart',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.red,
+                color: AppColors.danger,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -2129,7 +2129,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                     Text(
                       localError!,
                       style: const TextStyle(
-                        color: Colors.red,
+                        color: AppColors.danger,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -2788,16 +2788,18 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                                 width: double.infinity,
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: Colors.red.withValues(alpha: .08),
+                                  color: AppColors.dangerBg,
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
-                                    color: Colors.red.withValues(alpha: .25),
+                                    color: AppColors.danger.withValues(
+                                      alpha: .35,
+                                    ),
                                   ),
                                 ),
                                 child: Text(
                                   _msg!,
                                   style: const TextStyle(
-                                    color: Colors.red,
+                                    color: AppColors.danger,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
@@ -3246,7 +3248,7 @@ class _MeatPenDialogState extends State<_MeatPenDialog> {
                 Text(
                   _msg!,
                   style: const TextStyle(
-                    color: Colors.red,
+                    color: AppColors.danger,
                     fontWeight: FontWeight.w600,
                   ),
                 ),

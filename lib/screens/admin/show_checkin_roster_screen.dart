@@ -208,6 +208,7 @@ class _ShowCheckinRosterScreenState extends State<ShowCheckinRosterScreen> {
       title: const Text('Check-In Roster'),
       actions: [
         IconButton(
+          tooltip: 'Refresh check-in roster',
           onPressed: _loading ? null : _load,
           icon: const Icon(Icons.refresh),
         ),
@@ -229,6 +230,7 @@ class _ShowCheckinRosterScreenState extends State<ShowCheckinRosterScreen> {
                       labelText: 'Search exhibitor name or number',
                       prefixIcon: const Icon(Icons.search),
                       suffixIcon: IconButton(
+                        tooltip: 'Search exhibitors',
                         onPressed: _load,
                         icon: const Icon(Icons.arrow_forward),
                       ),

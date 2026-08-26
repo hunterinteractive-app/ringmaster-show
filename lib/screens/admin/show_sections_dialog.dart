@@ -890,6 +890,7 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
                   children: [
                     Image.asset(
                       'assets/images/RingMaster_One_Show_Transparent.png',
+                      excludeFromSemantics: true,
                       height: 38,
                     ),
                     const SizedBox(width: 12),
@@ -901,7 +902,6 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
                           fontWeight: FontWeight.w700,
                           fontSize: 20,
                         ),
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     IconButton(

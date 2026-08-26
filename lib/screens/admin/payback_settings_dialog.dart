@@ -730,6 +730,11 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
           ),
         ),
         const SizedBox(height: 8),
+        Text(
+          'Scroll horizontally to view all table columns.',
+          style: _onPurpleBodyStyle,
+        ),
+        const SizedBox(height: 8),
         Expanded(
           child: SingleChildScrollView(
             child: SingleChildScrollView(
@@ -895,6 +900,11 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
           style: _onPurpleBodyStyle,
         ),
         const SizedBox(height: 12),
+        Text(
+          'Scroll horizontally to view all table columns.',
+          style: _onPurpleBodyStyle,
+        ),
+        const SizedBox(height: 8),
         Expanded(
           child: SingleChildScrollView(
             child: SingleChildScrollView(

@@ -714,25 +714,24 @@ class _AdminEntryManagementScreenState
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: isSuccess
-              ? Colors.green.withValues(alpha: .08)
-              : Colors.red.withValues(alpha: .08),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isSuccess
-                ? Colors.green.withValues(alpha: .25)
-                : Colors.red.withValues(alpha: .25),
+      child: Semantics(
+        liveRegion: true,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isSuccess ? AppColors.successBg : AppColors.dangerBg,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSuccess ? AppColors.success : AppColors.danger,
+            ),
           ),
-        ),
-        child: Text(
-          _msg!,
-          style: TextStyle(
-            color: isSuccess ? Colors.green.shade700 : Colors.red,
-            fontWeight: FontWeight.w600,
+          child: Text(
+            _msg!,
+            style: TextStyle(
+              color: isSuccess ? AppColors.success : AppColors.danger,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ),
@@ -1809,11 +1808,14 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: Colors.red.withValues(alpha: .25)),
                 ),
-                child: Text(
-                  _msg!,
-                  style: const TextStyle(
-                    color: Colors.red,
-                    fontWeight: FontWeight.w600,
+                child: Semantics(
+                  liveRegion: true,
+                  child: Text(
+                    _msg!,
+                    style: const TextStyle(
+                      color: AppColors.danger,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),
@@ -2339,11 +2341,14 @@ class _EditExhibitorSheetState extends State<_EditExhibitorSheet> {
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: Colors.red.withValues(alpha: .25)),
                 ),
-                child: Text(
-                  _msg!,
-                  style: const TextStyle(
-                    color: Colors.red,
-                    fontWeight: FontWeight.w600,
+                child: Semantics(
+                  liveRegion: true,
+                  child: Text(
+                    _msg!,
+                    style: const TextStyle(
+                      color: AppColors.danger,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),
@@ -2607,11 +2612,14 @@ class _MoveEntrySheetState extends State<_MoveEntrySheet> {
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: Colors.red.withValues(alpha: .25)),
                 ),
-                child: Text(
-                  _msg!,
-                  style: const TextStyle(
-                    color: Colors.red,
-                    fontWeight: FontWeight.w600,
+                child: Semantics(
+                  liveRegion: true,
+                  child: Text(
+                    _msg!,
+                    style: const TextStyle(
+                      color: AppColors.danger,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),
@@ -4969,11 +4977,16 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                               : Colors.red.withValues(alpha: .25),
                         ),
                       ),
-                      child: Text(
-                        _msg!,
-                        style: TextStyle(
-                          color: isSuccess ? Colors.green.shade700 : Colors.red,
-                          fontWeight: FontWeight.w600,
+                      child: Semantics(
+                        liveRegion: true,
+                        child: Text(
+                          _msg!,
+                          style: TextStyle(
+                            color: isSuccess
+                                ? AppColors.success
+                                : AppColors.danger,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ),
@@ -5352,22 +5365,36 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                                       phone,
                                     ].where((s) => s.isNotEmpty).join(' • ');
 
-                                    return ListTile(
-                                      dense: true,
-                                      title: Text(
-                                        _exhibitorLabel(option),
-                                        overflow: TextOverflow.ellipsis,
-                                        style: _entrySheetDropdownTextStyle,
-                                      ),
-                                      subtitle: subtitle.isEmpty
-                                          ? null
-                                          : Text(
-                                              subtitle,
-                                              overflow: TextOverflow.ellipsis,
-                                              style:
-                                                  _entrySheetDropdownSubtitleStyle,
-                                            ),
-                                      onTap: () => onSelected(option),
+                                    return Builder(
+                                      builder: (context) {
+                                        final isHighlighted =
+                                            AutocompleteHighlightedOption.of(
+                                              context,
+                                            ) ==
+                                            index;
+                                        return ListTile(
+                                          dense: true,
+                                          tileColor: isHighlighted
+                                              ? AppColors.primaryButton
+                                                    .withValues(alpha: .24)
+                                              : null,
+                                          title: Text(
+                                            _exhibitorLabel(option),
+                                            overflow: TextOverflow.ellipsis,
+                                            style: _entrySheetDropdownTextStyle,
+                                          ),
+                                          subtitle: subtitle.isEmpty
+                                              ? null
+                                              : Text(
+                                                  subtitle,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style:
+                                                      _entrySheetDropdownSubtitleStyle,
+                                                ),
+                                          onTap: () => onSelected(option),
+                                        );
+                                      },
                                     );
                                   },
                                 ),

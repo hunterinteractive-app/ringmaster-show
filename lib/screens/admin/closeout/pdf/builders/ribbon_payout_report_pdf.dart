@@ -20,7 +20,14 @@ class RibbonPayoutReportPdf {
     RibbonPayoutReportData data,
     ReportRequest req,
   ) async {
-    final pdf = pw.Document(theme: await buildReportPdfTheme(assets));
+    final pdf = pw.Document(
+      theme: await buildReportPdfTheme(assets),
+      title: 'Ribbon Payout Report',
+      author: 'RingMaster Show',
+      creator: 'RingMaster Show',
+      subject: 'Ribbon payout amounts and recipients.',
+      keywords: 'RingMaster Show, ribbons, payouts, exhibitors',
+    );
 
     int exhibitorNumberSortValue(String value) {
       final trimmed = value.trim();

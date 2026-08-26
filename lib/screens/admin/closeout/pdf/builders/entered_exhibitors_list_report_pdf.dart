@@ -18,7 +18,14 @@ class EnteredExhibitorsListReportPdf {
     EnteredExhibitorsListReportData data,
     ReportRequest req,
   ) async {
-    final pdf = pw.Document(theme: await buildReportPdfTheme(assets));
+    final pdf = pw.Document(
+      theme: await buildReportPdfTheme(assets),
+      title: 'Entered Exhibitors List',
+      author: 'RingMaster Show',
+      creator: 'RingMaster Show',
+      subject: 'List of exhibitors entered in the show.',
+      keywords: 'RingMaster Show, exhibitors, entries',
+    );
 
     pdf.addPage(
       pw.MultiPage(

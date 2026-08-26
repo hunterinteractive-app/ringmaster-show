@@ -784,79 +784,97 @@ class _EntriesByBreedSectionTableState
   }
 
   Widget _classTable(_VarietyGroup variety) {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: DataTable(
-          headingRowHeight: 46,
-          dataRowMinHeight: 44,
-          dataRowMaxHeight: 54,
-          columnSpacing: 18,
-          headingRowColor: WidgetStatePropertyAll(
-            AppColors.navy.withValues(alpha: 0.06),
+    return Semantics(
+      label: 'Class counts table. Scroll horizontally to view all columns.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(bottom: 6),
+            child: Text(
+              'Scroll horizontally to view all columns.',
+              style: TextStyle(color: AppColors.muted, fontSize: 12),
+            ),
           ),
-          columns: [
-            const DataColumn(
-              label: Text(
-                'Age / Sex Class',
-                style: TextStyle(fontWeight: FontWeight.w700),
-              ),
+          Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
             ),
-            ..._sections.map(
-              (s) => DataColumn(
-                label: Text(
-                  widget.showExhibitorCounts
-                      ? '${_sectionHeader(s)} (R/E)'
-                      : '${_sectionHeader(s)} Showing',
-                  style: const TextStyle(fontWeight: FontWeight.w700),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                headingRowHeight: 46,
+                dataRowMinHeight: 44,
+                dataRowMaxHeight: 54,
+                columnSpacing: 18,
+                headingRowColor: WidgetStatePropertyAll(
+                  AppColors.navy.withValues(alpha: 0.06),
                 ),
-              ),
-            ),
-            const DataColumn(
-              label: Text(
-                'Rabbit/Cavy',
-                style: TextStyle(fontWeight: FontWeight.w700),
-              ),
-            ),
-            if (widget.showExhibitorCounts)
-              const DataColumn(
-                label: Text(
-                  'Exhibitors',
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
-              ),
-          ],
-          rows: variety.classes.map((c) {
-            return DataRow(
-              cells: [
-                DataCell(Text(c.label)),
-                ..._sections.map((s) {
-                  final sid = s['id'].toString();
-                  final rabbits = _countForSection(c.countsBySection, sid);
-                  final exhibitors = _exhibitorsForSection(
-                    c.exhibitorsBySection,
-                    sid,
+                columns: [
+                  const DataColumn(
+                    label: Text(
+                      'Age / Sex Class',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  ..._sections.map(
+                    (s) => DataColumn(
+                      label: Text(
+                        widget.showExhibitorCounts
+                            ? '${_sectionHeader(s)} (R/E)'
+                            : '${_sectionHeader(s)} Showing',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ),
+                  const DataColumn(
+                    label: Text(
+                      'Rabbit/Cavy',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  if (widget.showExhibitorCounts)
+                    const DataColumn(
+                      label: Text(
+                        'Exhibitors',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                ],
+                rows: variety.classes.map((c) {
+                  return DataRow(
+                    cells: [
+                      DataCell(Text(c.label)),
+                      ..._sections.map((s) {
+                        final sid = s['id'].toString();
+                        final rabbits = _countForSection(
+                          c.countsBySection,
+                          sid,
+                        );
+                        final exhibitors = _exhibitorsForSection(
+                          c.exhibitorsBySection,
+                          sid,
+                        );
+                        final text = widget.showExhibitorCounts
+                            ? ((rabbits == 0 && exhibitors == 0)
+                                  ? '-'
+                                  : '$rabbits/$exhibitors')
+                            : (rabbits == 0 ? '-' : rabbits.toString());
+                        return DataCell(Text(text));
+                      }),
+                      DataCell(Text(c.rabbitCount.toString())),
+                      if (widget.showExhibitorCounts)
+                        DataCell(Text(c.exhibitorCount.toString())),
+                    ],
                   );
-                  final text = widget.showExhibitorCounts
-                      ? ((rabbits == 0 && exhibitors == 0)
-                            ? '-'
-                            : '$rabbits/$exhibitors')
-                      : (rabbits == 0 ? '-' : rabbits.toString());
-                  return DataCell(Text(text));
-                }),
-                DataCell(Text(c.rabbitCount.toString())),
-                if (widget.showExhibitorCounts)
-                  DataCell(Text(c.exhibitorCount.toString())),
-              ],
-            );
-          }).toList(),
-        ),
+                }).toList(),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

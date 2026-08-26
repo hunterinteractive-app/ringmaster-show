@@ -310,6 +310,7 @@ class _ShowPaymentSettingsDialogState
                   children: [
                     Image.asset(
                       'assets/images/RingMaster_One_Show_Transparent.png',
+                      excludeFromSemantics: true,
                       height: 38,
                     ),
                     const SizedBox(width: 12),
@@ -321,7 +322,6 @@ class _ShowPaymentSettingsDialogState
                           fontWeight: FontWeight.w700,
                           fontSize: 20,
                         ),
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     IconButton(

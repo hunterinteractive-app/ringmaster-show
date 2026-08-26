@@ -53,7 +53,14 @@ class ExhibitorReportPdfBuilder {
     ReportRequest request,
   ) async {
     final theme = await _buildTheme();
-    final pdf = pw.Document(theme: theme);
+    final pdf = pw.Document(
+      theme: theme,
+      title: 'Exhibitor Report',
+      author: 'RingMaster Show',
+      creator: 'RingMaster Show',
+      subject: 'Exhibitor entries and results.',
+      keywords: 'RingMaster Show, exhibitor, entries, results',
+    );
     final logoImage = pw.MemoryImage(logoBytes);
 
     pdf.addPage(

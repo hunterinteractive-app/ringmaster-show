@@ -1100,10 +1100,13 @@ class _ExhibitorCheckinPortalScreenState
         ),
         if (_message != null) ...[
           const SizedBox(height: 14),
-          Text(
-            _message!,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.red),
+          Semantics(
+            liveRegion: true,
+            child: Text(
+              _message!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.danger),
+            ),
           ),
         ],
         const SizedBox(height: 20),
@@ -1467,13 +1470,16 @@ class _ExhibitorCheckinPortalScreenState
         ),
         if (_message != null) ...[
           const SizedBox(height: 12),
-          Text(
-            _message!,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: _message!.contains('Could not')
-                  ? Colors.red
-                  : Colors.green,
+          Semantics(
+            liveRegion: true,
+            child: Text(
+              _message!,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: _message!.contains('Could not')
+                    ? AppColors.danger
+                    : AppColors.success,
+              ),
             ),
           ),
         ],

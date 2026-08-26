@@ -1162,41 +1162,44 @@ class _CartScreenState extends State<CartScreen> {
                 if (_msg != null)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.red.withValues(alpha: .08),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: Colors.red.withValues(alpha: .25),
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _msg!,
-                            style: const TextStyle(
-                              color: Colors.red,
-                              fontWeight: FontWeight.w600,
-                            ),
+                    child: Semantics(
+                      liveRegion: true,
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.dangerBg,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: AppColors.danger.withValues(alpha: .35),
                           ),
-                          if (_checkoutUrl != null) ...[
-                            const SizedBox(height: 10),
-                            OutlinedButton.icon(
-                              onPressed: () {
-                                launchUrl(
-                                  Uri.parse(_checkoutUrl!),
-                                  mode: LaunchMode.platformDefault,
-                                  webOnlyWindowName: '_self',
-                                );
-                              },
-                              icon: const Icon(Icons.open_in_new),
-                              label: const Text('Open Payment Page'),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _msg!,
+                              style: const TextStyle(
+                                color: AppColors.danger,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
+                            if (_checkoutUrl != null) ...[
+                              const SizedBox(height: 10),
+                              OutlinedButton.icon(
+                                onPressed: () {
+                                  launchUrl(
+                                    Uri.parse(_checkoutUrl!),
+                                    mode: LaunchMode.platformDefault,
+                                    webOnlyWindowName: '_self',
+                                  );
+                                },
+                                icon: const Icon(Icons.open_in_new),
+                                label: const Text('Open Payment Page'),
+                              ),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
                     ),
                   ),
@@ -1225,7 +1228,7 @@ class _CartScreenState extends State<CartScreen> {
                               : 'Entry deadline: ${formatLocalDateTime(_show?['entry_close_at']?.toString())}',
                           style: TextStyle(
                             color: _deadlinePassed()
-                                ? Colors.red
+                                ? AppColors.danger
                                 : Colors.black87,
                             fontWeight: FontWeight.w600,
                           ),
@@ -1282,17 +1285,23 @@ class _CartScreenState extends State<CartScreen> {
                                     const SizedBox(height: 8),
                                     const LinearProgressIndicator(),
                                     const SizedBox(height: 6),
-                                    const Text(
-                                      'Calculating online payment total…',
+                                    Semantics(
+                                      liveRegion: true,
+                                      child: Text(
+                                        'Calculating online payment total…',
+                                      ),
                                     ),
                                   ],
                                   if (_quotePreviewError != null) ...[
                                     const SizedBox(height: 8),
-                                    Text(
-                                      _quotePreviewError!,
-                                      style: const TextStyle(
-                                        color: Colors.red,
-                                        fontWeight: FontWeight.w600,
+                                    Semantics(
+                                      liveRegion: true,
+                                      child: Text(
+                                        _quotePreviewError!,
+                                        style: const TextStyle(
+                                          color: AppColors.danger,
+                                          fontWeight: FontWeight.w600,
+                                        ),
                                       ),
                                     ),
                                   ],

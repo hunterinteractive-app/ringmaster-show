@@ -10854,8 +10854,6 @@ class _ReportDeliveryHistoryDialog extends StatelessWidget {
                                 const SizedBox(height: 4),
                                 Text(
                                   item.errorMessage!,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
                                     color: Color(0xFFFFC1C1),
                                   ),

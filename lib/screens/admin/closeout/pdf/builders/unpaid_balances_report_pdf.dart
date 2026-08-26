@@ -54,7 +54,14 @@ class UnpaidBalancesReportPdfBuilder {
     ReportRequest request,
   ) async {
     final theme = await _buildTheme();
-    final pdf = pw.Document(theme: theme);
+    final pdf = pw.Document(
+      theme: theme,
+      title: 'Unpaid Balances Report',
+      author: 'RingMaster Show',
+      creator: 'RingMaster Show',
+      subject: 'Exhibitors with unpaid balances.',
+      keywords: 'RingMaster Show, exhibitors, payments, balances',
+    );
     final logoImage = pw.MemoryImage(logoBytes);
 
     pdf.addPage(

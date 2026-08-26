@@ -1002,6 +1002,7 @@ class _AdminShowsAppBar extends StatelessWidget implements PreferredSizeWidget {
         children: [
           Image.asset(
             'assets/images/RingMaster_One_Show_Transparent.png',
+            excludeFromSemantics: true,
             height: width < 500 ? 58 : 80,
             width: width < 500 ? 96 : 128,
             fit: BoxFit.contain,
@@ -1015,8 +1016,6 @@ class _AdminShowsAppBar extends StatelessWidget implements PreferredSizeWidget {
               children: [
                 Text(
                   'RingMaster Show',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     color: AppColors.headerText,
                     fontSize: width < 500 ? 20 : 28,
@@ -1026,8 +1025,6 @@ class _AdminShowsAppBar extends StatelessWidget implements PreferredSizeWidget {
                 const SizedBox(height: 2),
                 Text(
                   demoMode ? 'Demo Secretary View' : 'Show Secretary',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: AppColors.headerText.withValues(alpha: .82),
                     fontSize: width < 500 ? 13 : 15,
@@ -1078,29 +1075,32 @@ class _TopBarOverflowMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PopupMenuButton<int>(
-      tooltip: 'More',
-      icon: const Icon(
-        Icons.more_vert,
-        color: AppColors.headerText,
-        size: _TopBarActionData.iconSize,
-      ),
-      onSelected: (index) => actions[index].onTap?.call(),
-      itemBuilder: (context) => [
-        for (var index = 0; index < actions.length; index++)
-          PopupMenuItem<int>(
-            value: index,
-            enabled: actions[index].onTap != null,
-            child: ListTile(
-              dense: true,
-              leading: Icon(
-                actions[index].icon,
-                size: _TopBarActionData.menuIconSize,
+    return Theme(
+      data: AppTheme.menuFocusTheme(Theme.of(context)),
+      child: PopupMenuButton<int>(
+        tooltip: 'More',
+        icon: const Icon(
+          Icons.more_vert,
+          color: AppColors.headerText,
+          size: _TopBarActionData.iconSize,
+        ),
+        onSelected: (index) => actions[index].onTap?.call(),
+        itemBuilder: (context) => [
+          for (var index = 0; index < actions.length; index++)
+            PopupMenuItem<int>(
+              value: index,
+              enabled: actions[index].onTap != null,
+              child: ListTile(
+                dense: true,
+                leading: Icon(
+                  actions[index].icon,
+                  size: _TopBarActionData.menuIconSize,
+                ),
+                title: Text(actions[index].label),
               ),
-              title: Text(actions[index].label),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 }

@@ -56,6 +56,11 @@ class CoopCardsReportPdfBuilder {
     final document = pw.Document(
       compress: true,
       theme: pw.ThemeData.withFont(base: regularFont, bold: boldFont),
+      title: 'Coop Cards',
+      author: 'RingMaster Show',
+      creator: 'RingMaster Show',
+      subject: 'Coop cards for entered animals.',
+      keywords: 'RingMaster Show, coop cards, entries',
     );
 
     if (data.cards.isEmpty) {

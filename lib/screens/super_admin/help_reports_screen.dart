@@ -559,6 +559,8 @@ class _HelpReportDetailsDialogState extends State<_HelpReportDetailsDialog> {
                         maxScale: 4,
                         child: Image.network(
                           effectiveScreenshotUrl,
+                          semanticLabel:
+                              'Screenshot submitted with this help report',
                           fit: BoxFit.contain,
                           loadingBuilder: (context, child, loadingProgress) {
                             if (loadingProgress == null) return child;

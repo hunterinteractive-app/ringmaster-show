@@ -741,6 +741,14 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
             ],
           ),
         ),
+        if (rows.isNotEmpty)
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(
+              'Scroll horizontally to view all table columns.',
+              style: TextStyle(fontSize: 12),
+            ),
+          ),
         Expanded(
           child: rows.isEmpty
               ? _statusCard(

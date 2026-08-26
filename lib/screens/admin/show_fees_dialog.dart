@@ -2052,6 +2052,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
                 children: [
                   Image.asset(
                     'assets/images/RingMaster_One_Show_Transparent.png',
+                    excludeFromSemantics: true,
                     height: 36,
                   ),
                   const SizedBox(width: 12),
@@ -2068,6 +2069,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
                     ),
                   ),
                   IconButton(
+                    tooltip: 'Close show fees and payments',
                     onPressed:
                         (_saving || _connectingStripe || _connectingSquare)
                         ? null

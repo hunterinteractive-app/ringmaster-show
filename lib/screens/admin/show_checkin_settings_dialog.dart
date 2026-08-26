@@ -473,21 +473,25 @@ class _ShowCheckinSettingsDialogState
                                 ),
                               ),
                               const SizedBox(height: 6),
-                              TextField(
-                                controller: _feeControllers[entry.key],
-                                enabled: !disabled,
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                      decimal: true,
+                              Semantics(
+                                label: '${entry.value} fee',
+                                textField: true,
+                                child: TextField(
+                                  controller: _feeControllers[entry.key],
+                                  enabled: !disabled,
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.allow(
+                                      RegExp(r'^\d{0,6}(\.\d{0,2})?'),
                                     ),
-                                inputFormatters: [
-                                  FilteringTextInputFormatter.allow(
-                                    RegExp(r'^\d{0,6}(\.\d{0,2})?'),
+                                  ],
+                                  decoration: const InputDecoration(
+                                    prefixText: '\$',
+                                    border: OutlineInputBorder(),
                                   ),
-                                ],
-                                decoration: const InputDecoration(
-                                  prefixText: '\$',
-                                  border: OutlineInputBorder(),
                                 ),
                               ),
                             ],

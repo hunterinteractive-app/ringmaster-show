@@ -29,7 +29,14 @@ class ExhibitorByBreedReportPdf {
     ReportRequest request,
   ) async {
     final theme = await _theme();
-    final pdf = pw.Document(theme: theme);
+    final pdf = pw.Document(
+      theme: theme,
+      title: 'Exhibitor by Breed Report',
+      author: 'RingMaster Show',
+      creator: 'RingMaster Show',
+      subject: 'Exhibitors organized by breed.',
+      keywords: 'RingMaster Show, exhibitors, breeds, entries',
+    );
 
     pdf.addPage(
       pw.MultiPage(

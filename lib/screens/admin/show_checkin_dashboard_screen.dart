@@ -644,6 +644,7 @@ class _ShowCheckinDashboardScreenState
             ),
           ),
           IconButton(
+            tooltip: 'Refresh check-in dashboard',
             onPressed: _loading ? null : _load,
             icon: const Icon(Icons.refresh),
           ),
@@ -821,6 +822,8 @@ class _ShowCheckinDashboardScreenState
                                   ),
                                 if (row['status'] != 'locked')
                                   PopupMenuButton<String>(
+                                    tooltip:
+                                        'Check-in actions for ${(row['exhibitor_name'] ?? 'exhibitor').toString()}',
                                     onSelected: (value) =>
                                         _changeCheckinStatus(row, value),
                                     itemBuilder: (context) => [

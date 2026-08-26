@@ -1450,6 +1450,7 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                   children: [
                     Image.asset(
                       'assets/images/RingMaster_One_Show_Transparent.png',
+                      excludeFromSemantics: true,
                       height: 38,
                     ),
                     const SizedBox(width: 12),
@@ -1463,7 +1464,6 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                           fontWeight: FontWeight.w700,
                           fontSize: 20,
                         ),
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     IconButton(

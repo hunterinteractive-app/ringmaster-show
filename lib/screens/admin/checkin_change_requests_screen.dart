@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ringmaster_show/widgets/accessible_icon_button.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class CheckinChangeRequestsScreen extends StatefulWidget {
@@ -250,7 +251,8 @@ class _State extends State<CheckinChangeRequestsScreen> {
     appBar: AppBar(
       title: const Text('Check-In Change Requests'),
       actions: [
-        IconButton(
+        AccessibleIconButton(
+          tooltip: 'Refresh change requests',
           onPressed: loading ? null : load,
           icon: const Icon(Icons.refresh),
         ),
@@ -305,19 +307,22 @@ class _State extends State<CheckinChangeRequestsScreen> {
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        IconButton(
+                        AccessibleIconButton(
+                          tooltip: 'Record payment',
                           onPressed: () => recordPayment(r),
                           icon: const Icon(Icons.payments_outlined),
                         ),
                         if (r['status'] == 'submitted' ||
                             r['status'] == 'pending_review')
-                          IconButton(
+                          AccessibleIconButton(
+                            tooltip: 'Approve and apply request',
                             onPressed: () => review(r, true),
                             icon: const Icon(Icons.check),
                           ),
                         if (r['status'] == 'submitted' ||
                             r['status'] == 'pending_review')
-                          IconButton(
+                          AccessibleIconButton(
+                            tooltip: 'Deny request',
                             onPressed: () => review(r, false),
                             icon: const Icon(Icons.close),
                           ),

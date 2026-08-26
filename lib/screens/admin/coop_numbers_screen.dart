@@ -676,8 +676,6 @@ class _AdminCoopNumbersScreenState extends State<AdminCoopNumbersScreen> {
               children: [
                 Text(
                   widget.showName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     color: AppColors.headerForeground,
                     fontWeight: FontWeight.w700,

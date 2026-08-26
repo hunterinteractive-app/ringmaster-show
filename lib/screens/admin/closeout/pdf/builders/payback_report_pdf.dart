@@ -59,7 +59,15 @@ class PaybackReportPdfBuilder {
 
     final theme = pw.ThemeData.withFont(base: regular, bold: bold);
 
-    final doc = pw.Document(theme: theme, compress: true);
+    final doc = pw.Document(
+      theme: theme,
+      compress: true,
+      title: 'Payback Report',
+      author: 'RingMaster Show',
+      creator: 'RingMaster Show',
+      subject: 'Payback amounts and placements for the show.',
+      keywords: 'RingMaster Show, payback, placements',
+    );
 
     doc.addPage(
       pw.MultiPage(

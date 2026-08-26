@@ -602,6 +602,7 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
               children: [
                 Image.asset(
                   'assets/images/RingMaster_One_Show_Transparent.png',
+                  excludeFromSemantics: true,
                   height: 38,
                 ),
                 const SizedBox(width: 12),
@@ -613,7 +614,6 @@ class _ShowJudgesDialogState extends State<ShowJudgesDialog> {
                       fontWeight: FontWeight.w700,
                       fontSize: 20,
                     ),
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 IconButton(

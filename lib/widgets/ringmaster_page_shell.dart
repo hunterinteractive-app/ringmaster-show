@@ -272,8 +272,6 @@ class _SupportModeBanner extends StatelessWidget {
             Expanded(
               child: Text(
                 'Viewing as $displayLabel — support mode',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   color: AppColors.warning,
                   fontWeight: FontWeight.w700,
@@ -343,6 +341,7 @@ class _MobileHeader extends StatelessWidget {
                 child:
                     leading ??
                     IconButton(
+                      tooltip: 'Back',
                       visualDensity: VisualDensity.compact,
                       constraints: const BoxConstraints(
                         minWidth: 40,
@@ -375,8 +374,6 @@ class _MobileHeader extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: foregroundColor,
                         fontSize: titleSize,
@@ -388,8 +385,6 @@ class _MobileHeader extends StatelessWidget {
                       const SizedBox(height: 6),
                       Text(
                         subtitle!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: foregroundColor.withValues(alpha: .82),
                           fontSize: subtitleSize,
@@ -458,6 +453,7 @@ class _WideHeader extends StatelessWidget {
             child:
                 leading ??
                 IconButton(
+                  tooltip: 'Back',
                   icon: Icon(
                     Icons.arrow_back,
                     color: foregroundColor,
@@ -482,8 +478,6 @@ class _WideHeader extends StatelessWidget {
             children: [
               Text(
                 title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: foregroundColor,
                   fontSize: titleSize,
@@ -495,8 +489,6 @@ class _WideHeader extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   subtitle!,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: foregroundColor.withValues(alpha: .82),
                     fontSize: subtitleSize,
@@ -573,31 +565,34 @@ class _HeaderOverflowMenu extends StatelessWidget {
   Widget build(BuildContext context) {
     final menuActions = actions.map(_HeaderMenuAction.fromWidget).toList();
 
-    return PopupMenuButton<int>(
-      tooltip: 'More',
-      icon: Icon(
-        Icons.more_vert,
-        color: foregroundColor,
-        size: _LimitedHeaderActions.actionIconSize,
-      ),
-      onSelected: (index) => menuActions[index].onPressed?.call(),
-      itemBuilder: (context) => [
-        for (var index = 0; index < menuActions.length; index++)
-          PopupMenuItem<int>(
-            value: index,
-            enabled: menuActions[index].onPressed != null,
-            child: Row(
-              children: [
-                IconTheme(
-                  data: const IconThemeData(color: AppColors.text, size: 24),
-                  child: menuActions[index].icon,
-                ),
-                const SizedBox(width: 12),
-                Expanded(child: Text(menuActions[index].label)),
-              ],
+    return Theme(
+      data: AppTheme.menuFocusTheme(Theme.of(context)),
+      child: PopupMenuButton<int>(
+        tooltip: 'More',
+        icon: Icon(
+          Icons.more_vert,
+          color: foregroundColor,
+          size: _LimitedHeaderActions.actionIconSize,
+        ),
+        onSelected: (index) => menuActions[index].onPressed?.call(),
+        itemBuilder: (context) => [
+          for (var index = 0; index < menuActions.length; index++)
+            PopupMenuItem<int>(
+              value: index,
+              enabled: menuActions[index].onPressed != null,
+              child: Row(
+                children: [
+                  IconTheme(
+                    data: const IconThemeData(color: AppColors.text, size: 24),
+                    child: menuActions[index].icon,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text(menuActions[index].label)),
+                ],
+              ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 }

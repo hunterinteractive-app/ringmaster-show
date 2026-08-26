@@ -182,8 +182,11 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
 
     showDialog(
       context: context,
-      builder: (dialogContext) =>
-          Dialog(child: InteractiveViewer(child: Image.network(imageUrl))),
+      builder: (dialogContext) => Dialog(
+        child: InteractiveViewer(
+          child: Image.network(imageUrl, semanticLabel: 'Resource preview'),
+        ),
+      ),
     );
   }
 

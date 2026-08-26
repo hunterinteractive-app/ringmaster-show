@@ -47,7 +47,14 @@ class BreedResultsDetailReportPdf {
     ReportRequest request,
   ) async {
     final theme = await _buildTheme();
-    final pdf = pw.Document(theme: theme);
+    final pdf = pw.Document(
+      theme: theme,
+      title: 'Breed Results Detail Report',
+      author: 'RingMaster Show',
+      creator: 'RingMaster Show',
+      subject: 'Detailed breed results and placements.',
+      keywords: 'RingMaster Show, results, breeds, placements',
+    );
 
     final showName = (request.showName ?? '').trim().isEmpty
         ? 'Unknown Show'

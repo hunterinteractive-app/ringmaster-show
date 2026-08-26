@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - test/ada-accessibility
 
 jobs:
   build-and-deploy:
@@ -25,11 +26,22 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Run accessibility regression tests
+        run: flutter test test/accessibility_widget_test.dart test/accessibility_color_contrast_test.dart
+
       - name: Build Flutter Web
         run: flutter build web --release --pwa-strategy=none
 
       - name: Deploy to Cloudflare Pages
-        run: npx wrangler pages deploy build/web --project-name ringmaster-show
+        run: |
+          if [ "$GITHUB_REF_NAME" = "main" ]; then
+            npx wrangler pages deploy build/web --project-name ringmaster-show
+          else
+            npx wrangler pages deploy build/web --project-name ringmaster-show --branch="$GITHUB_REF_NAME"
+          fi
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

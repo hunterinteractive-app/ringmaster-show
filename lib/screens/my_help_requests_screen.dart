@@ -469,6 +469,8 @@ class _MyHelpRequestDetailsDialogState
                         maxScale: 4,
                         child: Image.network(
                           _signedScreenshotUrl!,
+                          semanticLabel:
+                              'Screenshot submitted with this help request',
                           fit: BoxFit.contain,
                           loadingBuilder: (context, child, loadingProgress) {
                             if (loadingProgress == null) return child;

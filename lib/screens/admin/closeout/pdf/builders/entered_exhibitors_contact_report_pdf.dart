@@ -20,7 +20,14 @@ class EnteredExhibitorsContactReportPdf {
     EnteredExhibitorsContactReportData data,
     ReportRequest req,
   ) async {
-    final pdf = pw.Document(theme: await buildReportPdfTheme(assets));
+    final pdf = pw.Document(
+      theme: await buildReportPdfTheme(assets),
+      title: 'Entered Exhibitor Contact Report',
+      author: 'RingMaster Show',
+      creator: 'RingMaster Show',
+      subject: 'Contact details for exhibitors entered in the show.',
+      keywords: 'RingMaster Show, exhibitors, contacts, entries',
+    );
 
     final rows = [...data.rows]
       ..sort(

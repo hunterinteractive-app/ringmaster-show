@@ -17,7 +17,14 @@ class CheckInSheetReportPdfBuilder {
     ReportRequest request,
   ) async {
     final theme = await buildReportPdfTheme(assets);
-    final doc = pw.Document(theme: theme);
+    final doc = pw.Document(
+      theme: theme,
+      title: 'Check-In Sheet',
+      author: 'RingMaster Show',
+      creator: 'RingMaster Show',
+      subject: 'Exhibitor check-in worksheet.',
+      keywords: 'RingMaster Show, check-in, exhibitors',
+    );
     final entries = data.entries;
 
     if (entries.isEmpty) {

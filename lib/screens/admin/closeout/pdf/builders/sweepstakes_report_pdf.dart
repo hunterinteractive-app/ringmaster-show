@@ -46,7 +46,14 @@ class SweepstakesReportPdf {
     ReportRequest request,
   ) async {
     final theme = await _buildTheme();
-    final pdf = pw.Document(theme: theme);
+    final pdf = pw.Document(
+      theme: theme,
+      title: 'Sweepstakes Report',
+      author: 'RingMaster Show',
+      creator: 'RingMaster Show',
+      subject: 'Sweepstakes standings and points.',
+      keywords: 'RingMaster Show, sweepstakes, standings',
+    );
 
     final showName = (request.showName ?? '').trim().isEmpty
         ? 'Unknown Show'

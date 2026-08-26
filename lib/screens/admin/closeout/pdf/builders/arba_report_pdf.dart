@@ -38,7 +38,13 @@ class ArbaReportPdfBuilder {
     ArbaReportData data,
     ReportRequest request,
   ) async {
-    final pdf = pw.Document();
+    final pdf = pw.Document(
+      title: 'ARBA Report',
+      author: 'RingMaster Show',
+      creator: 'RingMaster Show',
+      subject: 'ARBA show reporting information.',
+      keywords: 'RingMaster Show, ARBA, show report',
+    );
     final theme = await _buildTheme();
     final dynamic d = data;
 

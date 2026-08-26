@@ -56,7 +56,14 @@ class PaidExhibitorReportPdfBuilder {
     ReportRequest request,
   ) async {
     final theme = await _buildTheme();
-    final pdf = pw.Document(theme: theme);
+    final pdf = pw.Document(
+      theme: theme,
+      title: 'Paid Exhibitor Report',
+      author: 'RingMaster Show',
+      creator: 'RingMaster Show',
+      subject: 'Exhibitors with paid entry balances.',
+      keywords: 'RingMaster Show, exhibitors, payments, entries',
+    );
     final logoImage = pw.MemoryImage(logoBytes);
 
     pdf.addPage(

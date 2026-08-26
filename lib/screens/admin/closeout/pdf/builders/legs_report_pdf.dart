@@ -119,7 +119,14 @@ class LegsReportPdfBuilder {
     ReportRequest request,
   ) async {
     final theme = await _buildTheme();
-    final pdf = pw.Document(theme: theme);
+    final pdf = pw.Document(
+      theme: theme,
+      title: 'Legs Report',
+      author: 'RingMaster Show',
+      creator: 'RingMaster Show',
+      subject: 'Show legs earned by exhibitors.',
+      keywords: 'RingMaster Show, legs, exhibitors, results',
+    );
 
     String cleanFilePart(String input) {
       return input

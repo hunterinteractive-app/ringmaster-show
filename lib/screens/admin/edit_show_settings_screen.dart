@@ -1466,6 +1466,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
             const SizedBox(width: 12),
             Image.asset(
               'assets/images/RingMaster_One_Show_Transparent.png',
+              excludeFromSemantics: true,
               height: 42,
             ),
             const SizedBox(width: 12),
@@ -1476,7 +1477,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                   fontWeight: FontWeight.w600,
                   fontSize: 18,
                 ),
-                overflow: TextOverflow.ellipsis,
+                maxLines: 2,
               ),
             ),
           ],

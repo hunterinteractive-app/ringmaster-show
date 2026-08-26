@@ -2617,21 +2617,22 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                 if (_msg != null)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.red.withValues(alpha: .08),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: Colors.red.withValues(alpha: .20),
+                    child: Semantics(
+                      liveRegion: true,
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.dangerBg,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: AppColors.danger),
                         ),
-                      ),
-                      child: Text(
-                        _msg!,
-                        style: const TextStyle(
-                          color: Colors.red,
-                          fontWeight: FontWeight.w600,
+                        child: Text(
+                          _msg!,
+                          style: const TextStyle(
+                            color: AppColors.danger,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ),
@@ -3456,13 +3457,16 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
                           const SizedBox(height: 12),
                           Align(
                             alignment: Alignment.centerLeft,
-                            child: Text(
-                              _msg!,
-                              style: TextStyle(
-                                color: _msg == 'Judge updated.'
-                                    ? Colors.green
-                                    : Colors.red,
-                                fontWeight: FontWeight.w600,
+                            child: Semantics(
+                              liveRegion: true,
+                              child: Text(
+                                _msg!,
+                                style: TextStyle(
+                                  color: _msg == 'Judge updated.'
+                                      ? AppColors.success
+                                      : AppColors.danger,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
                           ),
@@ -3949,13 +3953,16 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
                           const SizedBox(height: 12),
                           Align(
                             alignment: Alignment.centerLeft,
-                            child: Text(
-                              _msg!,
-                              style: TextStyle(
-                                color: _msg == 'Judge updated.'
-                                    ? Colors.green
-                                    : Colors.red,
-                                fontWeight: FontWeight.w600,
+                            child: Semantics(
+                              liveRegion: true,
+                              child: Text(
+                                _msg!,
+                                style: TextStyle(
+                                  color: _msg == 'Judge updated.'
+                                      ? AppColors.success
+                                      : AppColors.danger,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
                           ),
@@ -4709,13 +4716,16 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
                           const SizedBox(height: 12),
                           Align(
                             alignment: Alignment.centerLeft,
-                            child: Text(
-                              _msg!,
-                              style: TextStyle(
-                                color: _msg == 'Judge updated.'
-                                    ? Colors.green
-                                    : Colors.red,
-                                fontWeight: FontWeight.w600,
+                            child: Semantics(
+                              liveRegion: true,
+                              child: Text(
+                                _msg!,
+                                style: TextStyle(
+                                  color: _msg == 'Judge updated.'
+                                      ? AppColors.success
+                                      : AppColors.danger,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
                           ),
@@ -6129,15 +6139,18 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
                           const SizedBox(height: 12),
                           Align(
                             alignment: Alignment.centerLeft,
-                            child: Text(
-                              _msg!,
-                              style: TextStyle(
-                                color:
-                                    _msg == 'Judge updated.' ||
-                                        _msg == 'Results updated.'
-                                    ? Colors.green
-                                    : Colors.red,
-                                fontWeight: FontWeight.w600,
+                            child: Semantics(
+                              liveRegion: true,
+                              child: Text(
+                                _msg!,
+                                style: TextStyle(
+                                  color:
+                                      _msg == 'Judge updated.' ||
+                                          _msg == 'Results updated.'
+                                      ? AppColors.success
+                                      : AppColors.danger,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
                           ),
@@ -7342,21 +7355,22 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
               ),
               const SizedBox(height: 8),
               if (_msg != null)
-                Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.red.withValues(alpha: .08),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: Colors.red.withValues(alpha: .20),
+                Semantics(
+                  liveRegion: true,
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.dangerBg,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.danger),
                     ),
-                  ),
-                  child: Text(
-                    _msg!,
-                    style: const TextStyle(
-                      color: Colors.red,
-                      fontWeight: FontWeight.w600,
+                    child: Text(
+                      _msg!,
+                      style: const TextStyle(
+                        color: AppColors.danger,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ),

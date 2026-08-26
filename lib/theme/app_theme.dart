@@ -63,6 +63,13 @@ class AppSpacing {
 }
 
 class AppTheme {
+  /// Gives keyboard-focused popup menu rows a clear, high-contrast surface.
+  static ThemeData menuFocusTheme(ThemeData base) {
+    return base.copyWith(
+      focusColor: AppColors.primaryButton.withValues(alpha: .42),
+    );
+  }
+
   static Widget gradientTextScope(
     BuildContext context, {
     required Widget child,
@@ -228,6 +235,9 @@ class AppTheme {
 
     return base.copyWith(
       scaffoldBackgroundColor: AppColors.bg,
+      // Applies a clearly visible overlay to keyboard-focused InkWell controls
+      // such as list rows, menu items, and icon buttons.
+      focusColor: AppColors.primaryButton.withValues(alpha: .42),
       scrollbarTheme: ScrollbarThemeData(
         thumbColor: WidgetStateProperty.all(Colors.black),
         trackColor: WidgetStateProperty.all(
@@ -286,29 +296,55 @@ class AppTheme {
         bodySmall: base.textTheme.bodySmall?.copyWith(color: AppColors.muted),
       ),
       filledButtonTheme: FilledButtonThemeData(
-        style: FilledButton.styleFrom(
-          backgroundColor: AppColors.primaryButton,
-          foregroundColor: AppColors.primaryButtonText,
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.lg,
-            vertical: 14,
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.sm),
-          ),
-        ),
+        style:
+            FilledButton.styleFrom(
+              backgroundColor: AppColors.primaryButton,
+              foregroundColor: AppColors.primaryButtonText,
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.lg,
+                vertical: 14,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+              ),
+            ).copyWith(
+              overlayColor: WidgetStateProperty.resolveWith((states) {
+                return states.contains(WidgetState.focused)
+                    ? AppColors.secondaryButton.withValues(alpha: .22)
+                    : null;
+              }),
+            ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.secondaryButton,
-          side: const BorderSide(color: AppColors.secondaryButton, width: 1.4),
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.lg,
-            vertical: 14,
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.sm),
-          ),
+        style:
+            OutlinedButton.styleFrom(
+              foregroundColor: AppColors.secondaryButton,
+              side: const BorderSide(
+                color: AppColors.secondaryButton,
+                width: 1.4,
+              ),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.lg,
+                vertical: 14,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+              ),
+            ).copyWith(
+              overlayColor: WidgetStateProperty.resolveWith((states) {
+                return states.contains(WidgetState.focused)
+                    ? AppColors.primaryButton.withValues(alpha: .42)
+                    : null;
+              }),
+            ),
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: ButtonStyle(
+          overlayColor: WidgetStateProperty.resolveWith((states) {
+            return states.contains(WidgetState.focused)
+                ? AppColors.primaryButton.withValues(alpha: .42)
+                : null;
+          }),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
@@ -329,7 +365,7 @@ class AppTheme {
           borderRadius: BorderRadius.circular(AppRadius.sm),
           borderSide: const BorderSide(
             color: AppColors.secondaryButton,
-            width: 1.5,
+            width: 3,
           ),
         ),
       ),

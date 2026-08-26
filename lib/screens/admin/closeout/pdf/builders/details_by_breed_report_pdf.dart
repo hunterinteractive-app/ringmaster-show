@@ -29,7 +29,14 @@ class DetailsByBreedReportPdf {
     ReportRequest request,
   ) async {
     final theme = await _theme();
-    final pdf = pw.Document(theme: theme);
+    final pdf = pw.Document(
+      theme: theme,
+      title: 'Details by Breed Report',
+      author: 'RingMaster Show',
+      creator: 'RingMaster Show',
+      subject: 'Show details organized by breed.',
+      keywords: 'RingMaster Show, breeds, entries',
+    );
 
     pdf.addPage(
       pw.MultiPage(

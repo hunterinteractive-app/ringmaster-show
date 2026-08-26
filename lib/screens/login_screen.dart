@@ -1027,6 +1027,7 @@ class _PublicShowsCardState extends State<_PublicShowsCard> {
                       suffixIcon: _searchQuery.isEmpty
                           ? null
                           : IconButton(
+                              tooltip: 'Clear show search',
                               icon: const Icon(Icons.clear),
                               onPressed: () {
                                 setState(() {
@@ -1220,6 +1221,7 @@ class _LogoBlock extends StatelessWidget {
       children: [
         Image.asset(
           'assets/images/RingMaster_One_Show_Transparent.png',
+          semanticLabel: 'RingMaster Show logo',
           height: 280,
           width: 480,
           fit: BoxFit.contain,

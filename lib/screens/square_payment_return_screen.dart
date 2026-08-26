@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ringmaster_show/theme/app_theme.dart';
 
 import '../services/square_checkout_service.dart';
 import '../widgets/ringmaster_page_shell.dart';
@@ -129,21 +130,30 @@ class _SquarePaymentReturnScreenState extends State<SquarePaymentReturnScreen> {
                       size: 52,
                     ),
                     const SizedBox(height: 12),
-                    const Text(
-                      'Payment confirmed. Your entries were submitted successfully.',
-                      textAlign: TextAlign.center,
+                    Semantics(
+                      liveRegion: true,
+                      child: Text(
+                        'Payment confirmed. Your entries were submitted successfully.',
+                        textAlign: TextAlign.center,
+                      ),
                     ),
                   ] else if (terminal) ...[
-                    const Icon(
-                      Icons.error_outline,
-                      color: Colors.red,
-                      size: 52,
+                    Semantics(
+                      liveRegion: true,
+                      child: Icon(
+                        Icons.error_outline,
+                        color: AppColors.danger,
+                        size: 52,
+                      ),
                     ),
                     const SizedBox(height: 12),
-                    Text(
-                      status?.failureMessage ??
-                          'This Square payment was not completed. Your cart remains available.',
-                      textAlign: TextAlign.center,
+                    Semantics(
+                      liveRegion: true,
+                      child: Text(
+                        status?.failureMessage ??
+                            'This Square payment was not completed. Your cart remains available.',
+                        textAlign: TextAlign.center,
+                      ),
                     ),
                     const SizedBox(height: 16),
                     FilledButton(
@@ -151,13 +161,19 @@ class _SquarePaymentReturnScreenState extends State<SquarePaymentReturnScreen> {
                       child: const Text('Return to Cart'),
                     ),
                   ] else if (_error != null) ...[
-                    const Icon(
-                      Icons.error_outline,
-                      color: Colors.red,
-                      size: 52,
+                    Semantics(
+                      liveRegion: true,
+                      child: Icon(
+                        Icons.error_outline,
+                        color: AppColors.danger,
+                        size: 52,
+                      ),
                     ),
                     const SizedBox(height: 12),
-                    Text(_error!, textAlign: TextAlign.center),
+                    Semantics(
+                      liveRegion: true,
+                      child: Text(_error!, textAlign: TextAlign.center),
+                    ),
                     const SizedBox(height: 16),
                     OutlinedButton(
                       onPressed: _poll,

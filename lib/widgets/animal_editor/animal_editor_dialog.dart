@@ -518,9 +518,15 @@ class _AnimalEditorDialogState extends State<AnimalEditorDialog> {
                   const SizedBox(height: 6),
                   Align(
                     alignment: Alignment.centerLeft,
-                    child: Text(
-                      invalidBreedWarning,
-                      style: const TextStyle(fontSize: 12, color: Colors.red),
+                    child: Semantics(
+                      liveRegion: true,
+                      child: Text(
+                        invalidBreedWarning,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.danger,
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -565,9 +571,15 @@ class _AnimalEditorDialogState extends State<AnimalEditorDialog> {
                   const SizedBox(height: 6),
                   Align(
                     alignment: Alignment.centerLeft,
-                    child: Text(
-                      invalidVarietyWarning,
-                      style: const TextStyle(fontSize: 12, color: Colors.red),
+                    child: Semantics(
+                      liveRegion: true,
+                      child: Text(
+                        invalidVarietyWarning,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.danger,
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -602,9 +614,15 @@ class _AnimalEditorDialogState extends State<AnimalEditorDialog> {
                   const SizedBox(height: 6),
                   Align(
                     alignment: Alignment.centerLeft,
-                    child: Text(
-                      invalidSexWarning,
-                      style: const TextStyle(fontSize: 12, color: Colors.red),
+                    child: Semantics(
+                      liveRegion: true,
+                      child: Text(
+                        invalidSexWarning,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.danger,
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -655,7 +673,13 @@ class _AnimalEditorDialogState extends State<AnimalEditorDialog> {
                 ),
                 if (_msg != null) ...[
                   const SizedBox(height: 8),
-                  Text(_msg!, style: const TextStyle(color: Colors.red)),
+                  Semantics(
+                    liveRegion: true,
+                    child: Text(
+                      _msg!,
+                      style: const TextStyle(color: AppColors.danger),
+                    ),
+                  ),
                 ],
               ],
             ),

@@ -57,6 +57,7 @@ class _ShowCheckinActivityScreenState extends State<ShowCheckinActivityScreen> {
       title: const Text('Check-In Activity'),
       actions: [
         IconButton(
+          tooltip: 'Refresh check-in activity',
           onPressed: _loading ? null : _load,
           icon: const Icon(Icons.refresh),
         ),

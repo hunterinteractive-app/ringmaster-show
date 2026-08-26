@@ -2266,6 +2266,7 @@ class _ResponsiveShowAppBar extends StatelessWidget
             children: [
               Image.asset(
                 'assets/images/RingMaster_One_Show_Transparent.png',
+                excludeFromSemantics: true,
                 height: logoSize,
                 width: logoSize * 1.6,
                 fit: BoxFit.contain,
@@ -2346,28 +2347,31 @@ class _TopBarOverflowMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PopupMenuButton<int>(
-      tooltip: 'More',
-      icon: const Icon(
-        Icons.more_vert,
-        color: AppColors.headerText,
-        size: _TopBarActionData.iconSize,
-      ),
-      onSelected: (index) => actions[index].onTap(),
-      itemBuilder: (context) => [
-        for (var index = 0; index < actions.length; index++)
-          PopupMenuItem<int>(
-            value: index,
-            child: ListTile(
-              dense: true,
-              leading: Icon(
-                actions[index].icon,
-                size: _TopBarActionData.menuIconSize,
+    return Theme(
+      data: AppTheme.menuFocusTheme(Theme.of(context)),
+      child: PopupMenuButton<int>(
+        tooltip: 'More',
+        icon: const Icon(
+          Icons.more_vert,
+          color: AppColors.headerText,
+          size: _TopBarActionData.iconSize,
+        ),
+        onSelected: (index) => actions[index].onTap(),
+        itemBuilder: (context) => [
+          for (var index = 0; index < actions.length; index++)
+            PopupMenuItem<int>(
+              value: index,
+              child: ListTile(
+                dense: true,
+                leading: Icon(
+                  actions[index].icon,
+                  size: _TopBarActionData.menuIconSize,
+                ),
+                title: Text(actions[index].label),
               ),
-              title: Text(actions[index].label),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 }
