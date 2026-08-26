@@ -5,7 +5,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../theme/app_theme.dart';
 import '../utils/date_time_utils.dart';
@@ -15,6 +14,7 @@ import 'show_list_screen.dart';
 import 'admin/admin_shows_screen.dart';
 import 'legal/terms_screen.dart';
 import 'legal/privacy_policy_screen.dart';
+import 'legal/accessibility_statement_screen.dart';
 
 //dev backdoor
 import 'package:flutter/foundation.dart';
@@ -1472,12 +1472,15 @@ class _LoginCard extends StatelessWidget {
                   child: const Text('Privacy Policy'),
                 ),
                 TextButton(
-                  onPressed: () => launchUrl(
-                    Uri(scheme: 'mailto', path: 'support@ringmasterone.com'),
-                  ),
-                  child: const Text(
-                    'Accessibility help: support@ringmasterone.com',
-                  ),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const AccessibilityStatementScreen(),
+                      ),
+                    );
+                  },
+                  child: const Text('Accessibility Statement'),
                 ),
               ],
             ),

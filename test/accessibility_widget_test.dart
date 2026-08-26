@@ -92,12 +92,22 @@ void main() {
     },
   );
 
-  test('login screen offers an accessibility support contact', () {
-    final source = File('lib/screens/login_screen.dart').readAsStringSync();
+  test(
+    'login screen links to the accessibility statement and support contact',
+    () {
+      final loginSource = File(
+        'lib/screens/login_screen.dart',
+      ).readAsStringSync();
+      final statementSource = File(
+        'lib/screens/legal/accessibility_statement_screen.dart',
+      ).readAsStringSync();
 
-    expect(source, contains('Accessibility help: support@ringmasterone.com'));
-    expect(source, contains("path: 'support@ringmasterone.com'"));
-  });
+      expect(loginSource, contains('Accessibility Statement'));
+      expect(loginSource, contains('AccessibilityStatementScreen'));
+      expect(statementSource, contains('WCAG) 2.2 Level AA'));
+      expect(statementSource, contains('support@ringmasterone.com'));
+    },
+  );
 
   test(
     'dense data and picker controls retain keyboard and reflow guidance',
