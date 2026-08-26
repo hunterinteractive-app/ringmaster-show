@@ -80,6 +80,13 @@ void main() {
     }
   });
 
+  test('animal entry controls include animal context for assistive technology', () {
+    final source = File('lib/screens/enter_show_screen.dart').readAsStringSync();
+
+    expect(source, contains("label: 'Select \${_displayAnimalTitle(a)}'"));
+    expect(source, contains("label: 'Class for \${_displayAnimalTitle(a)}'"));
+  });
+
   test(
     'dense data and picker controls retain keyboard and reflow guidance',
     () {

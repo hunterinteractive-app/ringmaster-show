@@ -1803,11 +1803,14 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     final needsValidation = selectedClass == null || selectedClass.isEmpty;
 
     final tile = ListTile(
-      leading: Checkbox(
-        value: checked,
-        onChanged: (_submitting || disabled)
-            ? null
-            : (v) => _toggleSelected(a, v ?? false),
+      leading: Semantics(
+        label: 'Select ${_displayAnimalTitle(a)}',
+        child: Checkbox(
+          value: checked,
+          onChanged: (_submitting || disabled)
+              ? null
+              : (v) => _toggleSelected(a, v ?? false),
+        ),
       ),
       title: Text(_displayAnimalTitle(a)),
       subtitle: Column(
@@ -1817,44 +1820,47 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
             '${_safeString(a, 'species').toUpperCase()} • ${_safeString(a, 'breed')} • ${_safeString(a, 'variety')} • ${_safeString(a, 'sex')}',
           ),
           const SizedBox(height: 10),
-          DropdownButtonFormField<String>(
-            initialValue: classOptions.contains(selectedClass)
-                ? selectedClass
-                : null,
-            dropdownColor: AppColors.surface,
-            style: const TextStyle(color: AppColors.text),
-            decoration: InputDecoration(
-              labelText: 'Class',
-              helperText: needsValidation
-                  ? 'Select the class for this animal.'
-                  : 'Projected class selected.',
-              helperStyle: TextStyle(
-                color: needsValidation ? AppColors.danger : null,
-                fontWeight: needsValidation ? FontWeight.w600 : null,
+          Semantics(
+            label: 'Class for ${_displayAnimalTitle(a)}',
+            child: DropdownButtonFormField<String>(
+              initialValue: classOptions.contains(selectedClass)
+                  ? selectedClass
+                  : null,
+              dropdownColor: AppColors.surface,
+              style: const TextStyle(color: AppColors.text),
+              decoration: InputDecoration(
+                labelText: 'Class',
+                helperText: needsValidation
+                    ? 'Select the class for this animal.'
+                    : 'Projected class selected.',
+                helperStyle: TextStyle(
+                  color: needsValidation ? AppColors.danger : null,
+                  fontWeight: needsValidation ? FontWeight.w600 : null,
+                ),
+                border: const OutlineInputBorder(),
+                isDense: true,
               ),
-              border: const OutlineInputBorder(),
-              isDense: true,
-            ),
-            items: classOptions
-                .map(
-                  (opt) => DropdownMenuItem<String>(
-                    value: opt,
-                    child: Text(
-                      opt,
-                      style: const TextStyle(color: AppColors.text),
+              items: classOptions
+                  .map(
+                    (opt) => DropdownMenuItem<String>(
+                      value: opt,
+                      child: Text(
+                        opt,
+                        style: const TextStyle(color: AppColors.text),
+                      ),
                     ),
-                  ),
-                )
-                .toList(),
-            onChanged: (_submitting || disabled)
-                ? null
-                : (value) {
-                    if (value == null) return;
-                    setState(() {
-                      _classControllerFor(id).text = value;
-                      _msg = null;
-                    });
-                  },
+                  )
+                  .toList(),
+              onChanged: (_submitting || disabled)
+                  ? null
+                  : (value) {
+                      if (value == null) return;
+                      setState(() {
+                        _classControllerFor(id).text = value;
+                        _msg = null;
+                      });
+                    },
+            ),
           ),
           if (_furEntriesEnabled &&
               _safeString(a, 'species').toLowerCase() == 'rabbit') ...[
