@@ -4427,12 +4427,12 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
     return null;
   }
 
-  List<ReportArtifactSummary> _emailArtifactsFor(
+  Future<List<ReportArtifactSummary>> _emailArtifactsFor(
     ReportArtifactSummary source, {
     required bool allShows,
     required bool includeReports,
     required bool includeLegs,
-  }) {
+  }) async {
     if (!allShows) {
       return [source];
     }
@@ -4443,7 +4443,29 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
       if (includeLegs) 'legs',
       if (!includeReports && !includeLegs) source.reportName,
     };
-    return _artifacts.where((artifact) {
+    // A regeneration supersedes the previous artifacts asynchronously. Fetch
+    // the current rows again here instead of relying on the list that was
+    // loaded when this panel opened, which can still contain those superseded
+    // rows when the user presses Email All Shows.
+    final rows = await _supabase
+        .from('show_report_artifacts')
+        .select(
+          'id, show_id, finalize_run_id, report_name, artifact_status, '
+          'file_name, storage_bucket, storage_path, generated_at, is_current, '
+          'scope_key, section_ids, generation, created_at, error_count, metadata',
+        )
+        .eq('show_id', widget.showId)
+        .eq('is_current', true)
+        .order('generated_at', ascending: false);
+    final currentArtifacts = (rows as List)
+        .map(
+          (row) => ReportArtifactSummary.fromJson(
+            Map<String, dynamic>.from(row as Map),
+          ),
+        )
+        .toList();
+
+    return currentArtifacts.where((artifact) {
       if (!_isGenerated(artifact) ||
           !reportNames.contains(artifact.reportName)) {
         return false;
@@ -4530,7 +4552,7 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
       );
       return;
     }
-    final artifacts = _emailArtifactsFor(
+    final artifacts = await _emailArtifactsFor(
       source,
       allShows: allShows,
       includeReports: includeReports,
