@@ -4456,10 +4456,11 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
             _metadataString(source, 'exhibitor_id');
       }
       if (_needsBreed) {
+        // "Email All Shows" deliberately spans every show letter and scope
+        // for the selected breed.  Limiting this to the selected scope made
+        // the action omit the other Open/Youth report packages.
         return _metadataString(artifact, 'breed_name') ==
-                _metadataString(source, 'breed_name') &&
-            _metadataString(artifact, 'scope').toUpperCase() ==
-                _metadataString(source, 'scope').toUpperCase();
+            _metadataString(source, 'breed_name');
       }
       if (_needsClub) {
         return _metadataString(artifact, 'club_name') ==
