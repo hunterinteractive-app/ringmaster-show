@@ -4558,6 +4558,7 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
       includeReports: includeReports,
       includeLegs: includeLegs,
     );
+    if (!mounted) return;
     if (artifacts.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
