@@ -19,6 +19,19 @@ const Set<String> clubReportNames = {
   ...stateClubReportNames,
 };
 
+const Set<String> exhibitorPackageReportNames = {'exhibitor_report', 'legs'};
+
+Set<String> emailReportNamesFor({
+  required String sourceReportName,
+  required bool includeReports,
+  required bool includeLegs,
+}) {
+  if (!exhibitorPackageReportNames.contains(sourceReportName)) {
+    return {sourceReportName};
+  }
+  return {if (includeReports) 'exhibitor_report', if (includeLegs) 'legs'};
+}
+
 bool isClubReportName(String reportName) =>
     clubReportNames.contains(reportName);
 

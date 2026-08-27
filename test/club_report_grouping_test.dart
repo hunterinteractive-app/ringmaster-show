@@ -2,6 +2,30 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ringmaster_show/screens/admin/closeout/utils/club_report_grouping.dart';
 
 void main() {
+  group('emailReportNamesFor', () {
+    test('keeps a club report selected when includeReports is true', () {
+      expect(
+        emailReportNamesFor(
+          sourceReportName: 'sweepstakes_report',
+          includeReports: true,
+          includeLegs: false,
+        ),
+        {'sweepstakes_report'},
+      );
+    });
+
+    test('combines exhibitor reports and legs when requested', () {
+      expect(
+        emailReportNamesFor(
+          sourceReportName: 'exhibitor_report',
+          includeReports: true,
+          includeLegs: true,
+        ),
+        {'exhibitor_report', 'legs'},
+      );
+    });
+  });
+
   group('club report grouping', () {
     test('normalizes cavy breed club artifacts to one Cavy target', () {
       final metadata = normalizedClubReportMetadata(

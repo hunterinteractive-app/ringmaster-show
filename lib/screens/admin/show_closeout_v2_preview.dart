@@ -17,6 +17,7 @@ import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/entered_exhi
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/paid_exhibitor_report_pdf.dart';
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/unpaid_balances_report_pdf.dart';
 import 'package:ringmaster_show/screens/admin/closeout/services/report_upload_service.dart';
+import 'package:ringmaster_show/screens/admin/closeout/utils/club_report_grouping.dart';
 import 'package:ringmaster_show/screens/admin/closeout/widgets/closeout_scope_widgets.dart';
 import 'package:ringmaster_show/screens/admin/closeout/results_entry_fix_launcher.dart';
 import 'package:ringmaster_show/screens/admin/show_checkin_roster_screen.dart';
@@ -4438,11 +4439,12 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
     }
     final recipient = _recipientFor(source);
     if (recipient == null) return const [];
-    final reportNames = <String>{
-      if (includeReports) 'exhibitor_report',
-      if (includeLegs) 'legs',
-      if (!includeReports && !includeLegs) source.reportName,
-    };
+    final reportNames = emailReportNamesFor(
+      sourceReportName: source.reportName,
+      includeReports: includeReports,
+      includeLegs: includeLegs,
+    );
+
     // A regeneration supersedes the previous artifacts asynchronously. Fetch
     // the current rows again here instead of relying on the list that was
     // loaded when this panel opened, which can still contain those superseded
