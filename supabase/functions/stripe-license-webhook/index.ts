@@ -14,9 +14,18 @@ const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") ?? "", {
   apiVersion: "2023-10-16" as Stripe.LatestApiVersion,
 });
 
-const PAYMENT_LINK_SINGLE_SHOW_ID = "plink_1TJgcCLAhl5IBJ5kAjGbfWQ1";
-const PAYMENT_LINK_FOUR_SHOWS_ID = "plink_1TJgh0LAhl5IBJ5kqxW3kFyG";
-const PAYMENT_LINK_UNLIMITED_ID = "plink_1TJghzLAhl5IBJ5kgZHyciA2";
+const PAYMENT_LINK_SINGLE_SHOW_IDS = new Set([
+  "plink_1TJgcCLAhl5IBJ5kAjGbfWQ1",
+  "plink_1T8AUlLAhl5IBJ5keevfZsgC",
+]);
+const PAYMENT_LINK_FOUR_SHOWS_IDS = new Set([
+  "plink_1TJgh0LAhl5IBJ5kqxW3kFyG",
+  "plink_1T8AZ0LAhl5IBJ5k0juABLKy",
+]);
+const PAYMENT_LINK_UNLIMITED_IDS = new Set([
+  "plink_1TJghzLAhl5IBJ5kgZHyciA2",
+  "plink_1T8AW1LAhl5IBJ5kEpmoJxvU",
+]);
 const PAYMENT_LINK_MULTI_CLUB_ID = "plink_1TFHLcLAhl5IBJ5kj7bzFfuh";
 
 type AdminClient = ReturnType<typeof createClient<any>>;
@@ -38,13 +47,13 @@ function resolvePlanFromPaymentLink(
   let unlimitedExpiresAt: string | null = null;
   let matchedPlan = "";
 
-  if (paymentLinkId === PAYMENT_LINK_SINGLE_SHOW_ID) {
+  if (paymentLinkId && PAYMENT_LINK_SINGLE_SHOW_IDS.has(paymentLinkId)) {
     addShowDays = 1;
     matchedPlan = "single_show";
-  } else if (paymentLinkId === PAYMENT_LINK_FOUR_SHOWS_ID) {
+  } else if (paymentLinkId && PAYMENT_LINK_FOUR_SHOWS_IDS.has(paymentLinkId)) {
     addShowDays = 4;
     matchedPlan = "four_shows";
-  } else if (paymentLinkId === PAYMENT_LINK_UNLIMITED_ID) {
+  } else if (paymentLinkId && PAYMENT_LINK_UNLIMITED_IDS.has(paymentLinkId)) {
     setUnlimitedAccess = true;
     matchedPlan = "unlimited";
 
