@@ -1052,6 +1052,15 @@ class _AdminEntryManagementScreenState
                               final variety = (e['variety'] ?? '').toString();
                               final furVariety = (e['fur_variety'] ?? '')
                                   .toString();
+                              final className = displayClassNameForSpecies(
+                                species: e['species'],
+                                className: e['class_name'],
+                              );
+                              final sex = displaySexForSpecies(
+                                species: e['species'],
+                                sex: e['sex'],
+                                className: e['class_name'],
+                              );
                               final notes = (e['notes'] ?? '').toString();
                               final scratchedAt = e['scratched_at']?.toString();
                               final status = (e['status'] ?? '')
@@ -1062,13 +1071,6 @@ class _AdminEntryManagementScreenState
                                   (scratchedAt != null &&
                                       scratchedAt.isNotEmpty) ||
                                   status == 'scratched';
-
-                              final section = e['show_sections'];
-                              final letter =
-                                  (section is Map
-                                          ? (section['letter'] ?? '')
-                                          : '')
-                                      .toString();
 
                               final titleLeft =
                                   animalName.isNotEmpty && tattoo.isNotEmpty
@@ -1084,17 +1086,18 @@ class _AdminEntryManagementScreenState
                               final subtitle = [
                                 if (breed.isNotEmpty) 'Breed: $breed',
                                 if (variety.isNotEmpty) 'Variety: $variety',
+                                if (className.isNotEmpty) 'Class: $className',
+                                if (sex.isNotEmpty) 'Sex: $sex',
                                 if (isFur)
                                   furVariety.isNotEmpty
                                       ? 'Fur/Wool: $furVariety'
                                       : 'Fur/Wool',
-                                if (letter.isNotEmpty) 'Show: $letter',
                                 if (isScratched)
                                   scratchedAt != null && scratchedAt.isNotEmpty
                                       ? 'SCRATCHED: ${_dateOnly(scratchedAt)}'
                                       : 'SCRATCHED',
                                 if (notes.isNotEmpty) 'Notes: $notes',
-                              ].join(' • ');
+                              ].join(' | ');
 
                               return ListTile(
                                 title: Text(
