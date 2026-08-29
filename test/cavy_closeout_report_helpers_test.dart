@@ -115,6 +115,25 @@ void main() {
       expect(normalizeBreedResultsDetailClassName('Junior Sow'), 'Jr Sows');
     });
 
+    test('renders legacy cavy Buck and Doe labels as Boars and Sows', () {
+      expect(
+        breedResultsDetailSexLabel({
+          'species': 'cavy',
+          'sex': 'Buck',
+          'class_name': 'Senior Buck',
+        }),
+        'Boars',
+      );
+      expect(
+        breedResultsDetailSexLabel({
+          'species': 'cavy',
+          'sex': 'Doe',
+          'class_name': 'Junior Doe',
+        }),
+        'Sows',
+      );
+    });
+
     test('recognizes fur detail rows from canonical entry fields', () {
       expect(
         breedResultsDetailIsFurOrWoolRow({

@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:ringmaster_show/utils/entry_class_name.dart';
+import 'package:ringmaster_show/utils/species_sex.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:pdf/pdf.dart';
@@ -619,8 +620,15 @@ class _ControlSheetsGeneratorSheetState
           'breed': row['breed'],
           'variety': row['variety'],
           'group_name': '',
-          'sex': row['sex'],
-          'class_name': row['class_name'],
+          'sex': displaySexForSpecies(
+            species: row['species'],
+            sex: row['sex'],
+            className: row['class_name'],
+          ),
+          'class_name': displayClassNameForSpecies(
+            species: row['species'],
+            className: row['class_name'],
+          ),
           'species': row['species'],
           'is_fur': row['is_fur'],
           'is_wool': false,
@@ -636,6 +644,7 @@ class _ControlSheetsGeneratorSheetState
     final byEntryId = <String, Map<String, dynamic>>{};
 
     for (final row in raw) {
+      normalizeSpeciesSexPresentation(row);
       final entryId = _safe(row, 'entry_id').isNotEmpty
           ? _safe(row, 'entry_id')
           : _safe(row, 'id');
@@ -986,12 +995,13 @@ class _ControlSheetsGeneratorSheetState
         }
 
         final isFurOrWool = _isFurOrWoolRow(first);
-        final judgeNames = groupRows
-            .map((row) => _safe(row, 'judge_name'))
-            .where((name) => name.isNotEmpty)
-            .toSet()
-            .toList()
-          ..sort();
+        final judgeNames =
+            groupRows
+                .map((row) => _safe(row, 'judge_name'))
+                .where((name) => name.isNotEmpty)
+                .toSet()
+                .toList()
+              ..sort();
 
         allPages.add({
           'sectionId': _safe(first, 'section_id'),
@@ -1709,12 +1719,13 @@ class _ControlSheetsGeneratorSheetState
     for (final sectionGroup in sortedSectionGroups) {
       final sectionTitle = sectionGroup.key;
       final pages = sectionGroup.value;
-      final sectionJudgeNames = pages
-          .map((page) => (page['judgeName'] ?? '').toString().trim())
-          .where((name) => name.isNotEmpty)
-          .toSet()
-          .toList()
-        ..sort();
+      final sectionJudgeNames =
+          pages
+              .map((page) => (page['judgeName'] ?? '').toString().trim())
+              .where((name) => name.isNotEmpty)
+              .toSet()
+              .toList()
+            ..sort();
       final headerJudgeName = sectionJudgeNames.length == 1
           ? sectionJudgeNames.single
           : sectionJudgeNames.length > 1

@@ -7,6 +7,7 @@ import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/utils/csv_exporter.dart';
 import 'package:ringmaster_show/services/app_session.dart';
+import 'package:ringmaster_show/utils/species_sex.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -91,6 +92,9 @@ class _EntriesByBreedSectionTableState
       final entryRows = (json['rows'] as List? ?? const [])
           .map((e) => Map<String, dynamic>.from(e as Map))
           .toList();
+      for (final row in entryRows) {
+        normalizeSpeciesSexPresentation(row);
+      }
 
       _sections = sectionRows;
 

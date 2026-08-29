@@ -1,6 +1,7 @@
 // lib/screens/admin/closeout/data/loaders/exhibitor_report_loader.dart
 
 import 'package:ringmaster_show/utils/cavy/cavy_awards.dart';
+import 'package:ringmaster_show/utils/species_sex.dart';
 
 import '../../models/base/report_request.dart';
 import '../../models/exhibitor/exhibitor_report_data.dart';
@@ -60,9 +61,10 @@ class ExhibitorReportLoader {
 
       for (final raw in (rows as List)) {
         final row = Map<String, dynamic>.from(raw as Map);
+        final rowSpecies = legSpeciesFromResultRow(row);
 
         if ((requestedSpecies == 'rabbit' || requestedSpecies == 'cavy') &&
-            legSpeciesFromResultRow(row) != requestedSpecies) {
+            rowSpecies != requestedSpecies) {
           continue;
         }
 
@@ -71,6 +73,8 @@ class ExhibitorReportLoader {
         // Keep DQ / No Show / Wrong Class / Wrong Sex rows on the exhibitor report.
         // Only omit truly scratched entries.
         if (scratchedAt.isNotEmpty) continue;
+
+        normalizeSpeciesSexPresentation(row, speciesOverride: rowSpecies);
 
         row['resolved_show_letter'] = showLetter;
         row['resolved_section_kind'] = sectionKind;

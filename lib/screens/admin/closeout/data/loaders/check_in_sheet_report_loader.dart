@@ -1,4 +1,5 @@
 import 'package:supabase/supabase.dart';
+import 'package:ringmaster_show/utils/species_sex.dart';
 
 import '../../models/base/report_request.dart';
 import '../../models/exhibitor/check_in_sheet_report_data.dart';
@@ -45,6 +46,10 @@ class CheckInSheetReportLoader {
       coopNumberingMode: (showContact['coop_numbering_mode'] ?? 'separate')
           .toString(),
     );
+
+    for (final entry in entries) {
+      normalizeSpeciesSexPresentation(entry);
+    }
 
     entries.sort(_compareEntries);
 

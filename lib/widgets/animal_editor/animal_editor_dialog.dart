@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/services/app_session.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
+import 'package:ringmaster_show/utils/species_sex.dart';
 import 'animal_breed_service.dart';
 
 import 'focus_open_autocomplete.dart';
@@ -61,10 +62,8 @@ class _AnimalEditorDialogState extends State<AnimalEditorDialog> {
       if (s.startsWith('d')) return 'Doe';
       return null;
     } else {
-      if (s == 'boar') return 'Boar';
-      if (s == 'sow') return 'Sow';
-      if (s.startsWith('b')) return 'Boar';
-      if (s.startsWith('s')) return 'Sow';
+      final display = displaySexForSpecies(species: species, sex: raw);
+      if (_sexOptions.contains(display)) return display;
       return null;
     }
   }

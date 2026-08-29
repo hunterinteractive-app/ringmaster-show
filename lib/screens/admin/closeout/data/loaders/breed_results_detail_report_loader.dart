@@ -1,6 +1,7 @@
 // lib/screens/admin/closeout/data/loaders/breed_results_detail_report_loader.dart
 
 import 'package:ringmaster_show/utils/cavy/cavy_awards.dart';
+import 'package:ringmaster_show/utils/species_sex.dart';
 
 import '../../models/base/report_request.dart';
 import '../../models/clubs/breed_results_detail_report_data.dart';
@@ -268,6 +269,13 @@ class BreedResultsDetailReportLoader {
             overallRows: overallRows,
             breedName: breedName,
           );
+
+    for (final row in reportRows) {
+      normalizeSpeciesSexPresentation(row, speciesOverride: species);
+    }
+    for (final row in overallRows) {
+      normalizeSpeciesSexPresentation(row, speciesOverride: species);
+    }
 
     if (species == 'rabbit' && breedName.isNotEmpty) {
       reportRows = await _withRabbitCatalogJudgingOrder(
@@ -2176,6 +2184,20 @@ String breedResultsDetailTopSectionName(
 }
 
 String breedResultsDetailSexLabel(Map<String, dynamic> row) {
+  final species = normalizeClubReportSpecies(
+    (row['species'] ?? row['animal_species'] ?? row['entry_species'] ?? '')
+        .toString(),
+  );
+  if (species == 'cavy') {
+    final cavySex = displaySexForSpecies(
+      species: species,
+      sex: row['sex'],
+      className: row['class_name'],
+    );
+    if (cavySex == 'Boar') return 'Boars';
+    if (cavySex == 'Sow') return 'Sows';
+  }
+
   final sex = _detailSafe(row['sex']).toLowerCase();
   final className = _detailSafe(row['class_name']).toLowerCase();
 

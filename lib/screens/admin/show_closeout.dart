@@ -30,6 +30,7 @@ import 'package:ringmaster_show/screens/admin/closeout/widgets/closeout_scope_wi
 import 'package:ringmaster_show/services/report_email_service.dart';
 import 'package:ringmaster_show/services/app_session.dart';
 import 'package:ringmaster_show/utils/file_download.dart';
+import 'package:ringmaster_show/utils/species_sex.dart';
 
 import 'results/admin_results_entry_screen.dart';
 
@@ -1820,6 +1821,9 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       final page = (response as List)
           .map((raw) => Map<String, dynamic>.from(raw as Map))
           .toList();
+      for (final row in page) {
+        normalizeSpeciesSexPresentation(row);
+      }
       rows.addAll(page);
       if (page.length < pageSize) break;
       from += pageSize;

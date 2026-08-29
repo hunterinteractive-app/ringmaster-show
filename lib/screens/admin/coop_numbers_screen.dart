@@ -1,6 +1,7 @@
 // lib/screens/admin/coop_numbers_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:ringmaster_show/utils/species_sex.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:ringmaster_show/theme/app_theme.dart';
@@ -221,7 +222,11 @@ class _AdminCoopNumbersScreenState extends State<AdminCoopNumbersScreen> {
             coopNumber: (assignment['coop_number'] ?? '').toString(),
             variety: (representative?['variety'] ?? '').toString(),
             className: (representative?['class_name'] ?? '').toString(),
-            sex: (representative?['sex'] ?? '').toString(),
+            sex: displaySexForSpecies(
+              species: representative?['species'],
+              sex: representative?['sex'],
+              className: representative?['class_name'],
+            ),
             tattoo: (representative?['tattoo'] ?? '').toString(),
             showLetters: sectionLabels
                 .map((row) => (row['label'] ?? '').toString())

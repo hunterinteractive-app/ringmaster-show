@@ -360,9 +360,15 @@ class CoopCardsReportPdfBuilder {
       children: [
         pw.Row(
           children: [
-            _selectorChip('Buck', _matchesSex(card, 'buck')),
+            _selectorChip(
+              card.isCavy ? 'Boar' : 'Buck',
+              _matchesSex(card, card.isCavy ? 'boar' : 'buck'),
+            ),
             pw.SizedBox(width: 4),
-            _selectorChip('Doe', _matchesSex(card, 'doe')),
+            _selectorChip(
+              card.isCavy ? 'Sow' : 'Doe',
+              _matchesSex(card, card.isCavy ? 'sow' : 'doe'),
+            ),
             pw.SizedBox(width: 6),
             _selectorChip('Sr.', _matchesClass(card, 'senior')),
             pw.SizedBox(width: 4),
@@ -408,8 +414,12 @@ class CoopCardsReportPdfBuilder {
 
   bool _matchesSex(CoopCardRow card, String target) {
     final sex = card.sex.trim().toLowerCase();
-    if (target == 'buck') return sex.startsWith('b') || sex.contains('boar');
-    if (target == 'doe') return sex.startsWith('d') || sex.contains('sow');
+    if (target == 'buck' || target == 'boar') {
+      return sex.startsWith('b') || sex.contains('boar');
+    }
+    if (target == 'doe' || target == 'sow') {
+      return sex.startsWith('d') || sex.contains('sow');
+    }
     return false;
   }
 

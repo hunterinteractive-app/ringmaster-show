@@ -1,6 +1,7 @@
 import 'package:supabase/supabase.dart';
 
 import '../../models/base/report_request.dart';
+import 'package:ringmaster_show/utils/species_sex.dart';
 import '../../models/judge/judge_report_data.dart';
 
 class JudgeReportLoader {
@@ -187,8 +188,15 @@ class JudgeReportLoader {
               species: _string(row['species']),
               breed: _string(row['breed']),
               variety: _string(row['variety']),
-              className: _string(row['class_name']),
-              sex: _string(row['sex']),
+              className: displayClassNameForSpecies(
+                species: row['species'],
+                className: row['class_name'],
+              ),
+              sex: displaySexForSpecies(
+                species: row['species'],
+                sex: row['sex'],
+                className: row['class_name'],
+              ),
               tattoo: _string(row['tattoo']),
               exhibitorName: _exhibitorName(
                 row,

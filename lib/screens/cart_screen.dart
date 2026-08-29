@@ -9,6 +9,7 @@ import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
 import '../utils/date_time_utils.dart';
 import '../utils/section_breed_scope.dart';
+import '../utils/species_sex.dart';
 import '../services/app_session.dart';
 import '../services/stripe_connect_service.dart';
 import '../services/show_payment_configuration_service.dart';
@@ -690,7 +691,11 @@ class _CartScreenState extends State<CartScreen> {
       final label = (item['class_name'] ?? item['variety'] ?? 'Commercial')
           .toString()
           .trim();
-      final sex = (item['sex'] ?? '').toString().trim();
+      final sex = displaySexForSpecies(
+        species: item['species'],
+        sex: item['sex'],
+        className: item['class_name'],
+      );
 
       if (sex.isNotEmpty) {
         return 'Commercial • $label • $sex';
@@ -698,8 +703,13 @@ class _CartScreenState extends State<CartScreen> {
       return 'Commercial • $label';
     }
 
+    final sex = displaySexForSpecies(
+      species: item['species'],
+      sex: item['sex'],
+      className: item['class_name'],
+    );
     final animalLabel =
-        '${(item['breed'] ?? '').toString()} • ${(item['variety'] ?? '').toString()} • ${(item['sex'] ?? '').toString()}';
+        '${(item['breed'] ?? '').toString()} • ${(item['variety'] ?? '').toString()} • $sex';
 
     final furDisplay = _buildFurDisplay(item);
 

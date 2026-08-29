@@ -14,6 +14,7 @@ import 'package:ringmaster_show/services/results/results_rules.dart';
 import 'package:ringmaster_show/services/results/results_rules_router.dart';
 import 'package:ringmaster_show/services/results/rabbit_results_validation.dart';
 import 'package:ringmaster_show/services/results/cavy_results_validation.dart';
+import 'package:ringmaster_show/utils/species_sex.dart';
 import 'package:ringmaster_show/screens/admin/admin_entry_management_screen.dart'
     show showAdminEntryEditSheet;
 
@@ -1342,6 +1343,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
 
       _attachCavySopVarietyMetadata(e);
       _attachRabbitCatalogMetadata(e);
+      normalizeSpeciesSexPresentation(e);
 
       final normalizedGroup =
           (e['group_name'] ??

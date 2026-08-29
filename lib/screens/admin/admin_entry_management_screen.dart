@@ -12,6 +12,7 @@ import 'package:ringmaster_show/services/app_session.dart';
 import 'package:ringmaster_show/policies/manual_exhibitor_information_policy.dart';
 import 'package:ringmaster_show/screens/admin/entry_management_search.dart';
 import 'package:ringmaster_show/utils/section_breed_scope.dart';
+import 'package:ringmaster_show/utils/species_sex.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -1595,7 +1596,11 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
         .toLowerCase();
     if (_species != 'cavy') _species = 'rabbit';
 
-    final initialSex = _sex.text.trim();
+    final initialSex = displaySexForSpecies(
+      species: _species,
+      sex: _sex.text,
+      className: _className.text,
+    );
     _sexValue = _sexOptions.contains(initialSex)
         ? initialSex
         : _sexOptions.first;
@@ -3863,7 +3868,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     final tattoo = (a['tattoo'] ?? '').toString().trim().toUpperCase();
     final breed = (a['breed'] ?? '').toString().trim();
     final variety = (a['variety'] ?? '').toString().trim();
-    final sex = (a['sex'] ?? '').toString().trim();
+    final sex = displaySexForSpecies(species: a['species'], sex: a['sex']);
     final name = (a['name'] ?? '').toString().trim();
 
     final parts = <String>[];
@@ -3885,7 +3890,10 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     final tattoo = (animal['tattoo'] ?? '').toString().trim().toUpperCase();
     final breed = (animal['breed'] ?? '').toString().trim();
     final variety = (animal['variety'] ?? '').toString().trim();
-    final sex = (animal['sex'] ?? '').toString().trim();
+    final sex = displaySexForSpecies(
+      species: animal['species'],
+      sex: animal['sex'],
+    );
     final birthDate = (animal['birth_date'] ?? '').toString().trim();
     final dobUnknown = animal['is_dob_unknown'] == true;
     final selectedClass = (_classValue ?? _className.text).trim();
@@ -4841,7 +4849,11 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                     : (_animal!['name'] ?? '').toString().trim()),
           'breed': entryBreed,
           'variety': entryVariety.isEmpty ? null : entryVariety,
-          'sex': _useLocalAnimal ? _sexValue : _animal!['sex'],
+          'sex': displaySexForSpecies(
+            species: _useLocalAnimal ? _species : _animal!['species'],
+            sex: _useLocalAnimal ? _sexValue : _animal!['sex'],
+            className: selectedClass,
+          ),
           'class_name': selectedClass,
           'status': 'entered',
           'created_at': DateTime.now().toUtc().toIso8601String(),
@@ -5481,9 +5493,10 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                             ? null
                             : (v) => setState(() {
                                 _animal = v;
-                                final savedSex = (v?['sex'] ?? '')
-                                    .toString()
-                                    .trim();
+                                final savedSex = displaySexForSpecies(
+                                  species: v?['species'],
+                                  sex: v?['sex'],
+                                );
                                 if (savedSex.isNotEmpty) {
                                   _sexValue = savedSex;
                                   _sex.text = savedSex;

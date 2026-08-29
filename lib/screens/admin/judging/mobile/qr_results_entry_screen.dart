@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
+import 'package:ringmaster_show/utils/species_sex.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:ringmaster_show/screens/admin/results/admin_results_entry_screen.dart';
@@ -485,7 +486,11 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
 
   String _classSexLabelFromEntry(Map<String, dynamic> e) {
     final rawClass = (e['class_name'] ?? '').toString().trim();
-    final sex = (e['sex'] ?? '').toString().trim();
+    final sex = displaySexForSpecies(
+      species: e['species'],
+      sex: e['sex'],
+      className: e['class_name'],
+    );
 
     String ageClassOnly(String raw) {
       final s = raw.trim();
@@ -751,7 +756,11 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
 
   String _classSexLabelFromEntry(Map<String, dynamic> e) {
     final rawClass = (e['class_name'] ?? '').toString().trim();
-    final sex = (e['sex'] ?? '').toString().trim();
+    final sex = displaySexForSpecies(
+      species: e['species'],
+      sex: e['sex'],
+      className: e['class_name'],
+    );
 
     String ageClassOnly(String raw) {
       final s = raw.trim();

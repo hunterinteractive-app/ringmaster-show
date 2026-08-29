@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/services/app_session.dart';
+import 'package:ringmaster_show/utils/species_sex.dart';
 
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -247,6 +248,7 @@ class _CheckInGeneratorSheetState extends State<CheckInGeneratorSheet> {
       entry['coop_number'] = animalId.isEmpty || scope.isEmpty
           ? ''
           : (coopNumberByAnimalAndScope['$animalId|$scope'] ?? '');
+      normalizeSpeciesSexPresentation(entry);
     }
 
     int toInt(dynamic value, [int fallback = 9999]) {

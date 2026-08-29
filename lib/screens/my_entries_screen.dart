@@ -14,6 +14,7 @@ import '../services/app_session.dart';
 import '../theme/app_theme.dart';
 import '../utils/date_time_utils.dart';
 import '../utils/entry_class_name.dart';
+import '../utils/species_sex.dart';
 import '../widgets/rm_widgets.dart';
 
 final supabase = Supabase.instance.client;
@@ -979,8 +980,8 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
           <td>${esc(e['tattoo'])}</td>
           <td>${esc(e['breed'])}</td>
           <td>${esc(e['variety'])}</td>
-          <td>${esc(e['class_name'])}</td>
-          <td>${esc(e['sex'])}</td>
+          <td>${esc(displayClassNameForSpecies(species: e['species'], className: e['class_name']))}</td>
+          <td>${esc(displaySexForSpecies(species: e['species'], sex: e['sex'], className: e['class_name']))}</td>
           <td$statusClass>${esc(status)}</td>
         </tr>
 ''');
@@ -1311,8 +1312,21 @@ class _ShowExpansionCard extends StatelessWidget {
     for (final e in sorted) {
       final breed = _safeLabel(e['breed'], '(No Breed)');
       final variety = _safeLabel(e['variety'], '(No Variety)');
-      final className = _safeLabel(e['class_name'], '(No Class)');
-      final sex = _safeLabel(e['sex'], '(No Sex)');
+      final className = _safeLabel(
+        displayClassNameForSpecies(
+          species: e['species'],
+          className: e['class_name'],
+        ),
+        '(No Class)',
+      );
+      final sex = _safeLabel(
+        displaySexForSpecies(
+          species: e['species'],
+          sex: e['sex'],
+          className: e['class_name'],
+        ),
+        '(No Sex)',
+      );
 
       grouped.putIfAbsent(breed, () => {});
       grouped[breed]!.putIfAbsent(variety, () => {});
@@ -1903,7 +1917,7 @@ class _EditEntryDialogV2State extends State<_EditEntryDialogV2> {
     final name = (a['name'] ?? '').toString().trim();
     final breed = (a['breed'] ?? '').toString().trim();
     final variety = (a['variety'] ?? '').toString().trim();
-    final sex = (a['sex'] ?? '').toString().trim();
+    final sex = displaySexForSpecies(species: a['species'], sex: a['sex']);
     final top = tattoo.isNotEmpty
         ? tattoo
         : (name.isNotEmpty ? name : (a['id'] ?? '').toString());

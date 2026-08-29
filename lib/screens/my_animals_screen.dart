@@ -10,6 +10,7 @@ import 'account_settings_screen.dart';
 
 import '../theme/app_theme.dart';
 import '../services/app_session.dart';
+import '../utils/species_sex.dart';
 
 import '../widgets/rm_widgets.dart';
 
@@ -187,7 +188,10 @@ class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
               final species = (a['species'] ?? '').toString();
               final breed = (a['breed'] ?? '').toString();
               final variety = (a['variety'] ?? '').toString();
-              final sex = (a['sex'] ?? '').toString();
+              final sex = displaySexForSpecies(
+                species: a['species'],
+                sex: a['sex'],
+              );
               final tattoo = (a['tattoo'] ?? '')
                   .toString()
                   .trim()

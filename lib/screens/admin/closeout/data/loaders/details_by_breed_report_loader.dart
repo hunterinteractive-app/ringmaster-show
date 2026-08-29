@@ -1,4 +1,5 @@
 import 'package:intl/intl.dart';
+import 'package:ringmaster_show/utils/species_sex.dart';
 
 import '../../models/base/report_request.dart';
 import '../../models/clubs/details_by_breed_report_data.dart';
@@ -49,6 +50,9 @@ class DetailsByBreedReportLoader {
         .toList();
 
     rows = await _filterRowsBySpecies(request.showId, rows, species);
+    for (final row in rows) {
+      normalizeSpeciesSexPresentation(row, speciesOverride: species);
+    }
 
     final judgeIdsByEntryId = await _loadJudgeIdsByEntryId(
       request.showId,

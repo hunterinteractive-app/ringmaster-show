@@ -1,5 +1,7 @@
 // lib/screens/admin/closeout/data/loaders/legs_report_loader.dart
 
+import 'package:ringmaster_show/utils/species_sex.dart';
+
 import '../../models/base/report_request.dart';
 import '../../models/legs/legs_certificate_data.dart';
 import '../../utils/club_report_grouping.dart';
@@ -254,6 +256,7 @@ class LegsReportLoader {
 
       final species = _str(entry['species']).toLowerCase();
       if (species != 'rabbit' && species != 'cavy') continue;
+      normalizeSpeciesSexPresentation(entry, speciesOverride: species);
       // Treat null as shown. Older rows may not have is_shown explicitly set,
       // and report_results_entry_rows treats null as shown as well.
       if (entry['is_shown'] == false) continue;
@@ -631,6 +634,10 @@ class LegsReportLoader {
 
         row['resolved_section_id'] = sectionId;
         row['resolved_section_letter'] = showLetter;
+        normalizeSpeciesSexPresentation(
+          row,
+          speciesOverride: legSpeciesFromResultRow(row),
+        );
         allRows.add(row);
       }
     }
@@ -969,6 +976,7 @@ class LegsReportLoader {
     if (compact == 'D' ||
         compact == 'F' ||
         compact.contains('DOE') ||
+        compact.contains('SOW') ||
         compact.contains('FEMALE')) {
       return 'doe';
     }
@@ -976,6 +984,7 @@ class LegsReportLoader {
     if (compact == 'B' ||
         compact == 'M' ||
         compact.contains('BUCK') ||
+        compact.contains('BOAR') ||
         compact.contains('MALE')) {
       return 'buck';
     }

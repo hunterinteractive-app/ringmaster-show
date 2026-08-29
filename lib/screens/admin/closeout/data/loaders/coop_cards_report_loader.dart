@@ -1,6 +1,7 @@
 // lib/screens/admin/closeout/data/loaders/coop_cards_report_loader.dart
 
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/utils/species_sex.dart';
 
 import '../../models/coop_cards/coop_cards_report_data.dart';
 
@@ -171,7 +172,11 @@ class CoopCardsReportLoader {
               : _safe(first, 'variety_name'),
           groupName: _safe(first, 'group_name'),
           className: _displayAgeClassOnly(_safe(first, 'class_name')),
-          sex: _safe(first, 'sex'),
+          sex: displaySexForSpecies(
+            species: first['species'],
+            sex: first['sex'],
+            className: first['class_name'],
+          ),
           exhibitorId: _safe(first, 'exhibitor_id'),
           exhibitorName: _safe(first, 'exhibitor_label'),
           exhibitorCity: _safe(first, 'city'),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../theme/app_theme.dart';
+import '../../utils/species_sex.dart';
 import 'admin_entry_management_screen.dart';
 
 /// Staff-facing entry review used while completing an exhibitor's check-in.
@@ -87,8 +88,15 @@ class _SecretaryCheckinEntryReviewScreenState
         [
               entry['breed'],
               entry['variety'],
-              entry['class_name'],
-              entry['sex'],
+              displayClassNameForSpecies(
+                species: entry['species'],
+                className: entry['class_name'],
+              ),
+              displaySexForSpecies(
+                species: entry['species'],
+                sex: entry['sex'],
+                className: entry['class_name'],
+              ),
               if (entry['is_fur'] == true) 'Fur / Wool',
             ]
             .map((value) => (value ?? '').toString().trim())
