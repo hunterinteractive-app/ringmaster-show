@@ -1061,6 +1061,9 @@ class _AdminEntryManagementScreenState
                                 sex: e['sex'],
                                 className: e['class_name'],
                               );
+                              final coopNumber = (e['coop_number'] ?? '')
+                                  .toString()
+                                  .trim();
                               final notes = (e['notes'] ?? '').toString();
                               final scratchedAt = e['scratched_at']?.toString();
                               final status = (e['status'] ?? '')
@@ -1088,6 +1091,7 @@ class _AdminEntryManagementScreenState
                                 if (variety.isNotEmpty) 'Variety: $variety',
                                 if (className.isNotEmpty) 'Class: $className',
                                 if (sex.isNotEmpty) 'Sex: $sex',
+                                if (coopNumber.isNotEmpty) 'Coop: $coopNumber',
                                 if (isFur)
                                   furVariety.isNotEmpty
                                       ? 'Fur/Wool: $furVariety'
