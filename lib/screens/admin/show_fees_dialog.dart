@@ -1839,10 +1839,9 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
     final color = _statusColor(status);
     final label = _statusLabel(status);
 
-    final showPaymentAccount =
-        _stripeStatus?['show_payment_account'] as Map<String, dynamic>?;
-    final providerAccountId = (showPaymentAccount?['provider_account_id'] ?? '')
-        .toString();
+    final providerAccountId = StripeConnectService.connectedAccountId(
+      _stripeStatus,
+    );
 
     final chargesEnabled = _stripeStatus?['charges_enabled'] == true;
     final payoutsEnabled = _stripeStatus?['payouts_enabled'] == true;
@@ -2030,7 +2029,8 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context).size;
-    final success = _msg == 'Saved.';
+    final success =
+        _msg == 'Saved.' || _msg == 'Stripe status refreshed from Stripe.';
 
     return Dialog(
       insetPadding: const EdgeInsets.all(16),

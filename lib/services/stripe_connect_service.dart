@@ -10,6 +10,22 @@ class StripeConnectService {
   /// Expose client if needed elsewhere
   static SupabaseClient get supabase => _supabase;
 
+  /// Returns the connected Stripe account identifier from a status response.
+  ///
+  /// Legacy Stripe links store the identifier in `stripe_account_id`, while
+  /// provider-neutral links may use `provider_account_id`.
+  static String connectedAccountId(Map<String, dynamic>? status) {
+    final rawAccount = status?['show_payment_account'];
+    if (rawAccount is! Map) return '';
+
+    for (final key in const ['provider_account_id', 'stripe_account_id']) {
+      final value = (rawAccount[key] ?? '').toString().trim();
+      if (value.isNotEmpty) return value;
+    }
+
+    return '';
+  }
+
   // ============================================================
   // 🚀 MAIN ENTRY POINT (Connect / Continue Setup)
   // ============================================================
