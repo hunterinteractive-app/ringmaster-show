@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/services/show_lock_service.dart';
 import 'package:ringmaster_show/services/app_session.dart';
 import 'package:ringmaster_show/policies/manual_exhibitor_information_policy.dart';
+import 'package:ringmaster_show/screens/admin/entry_management_search.dart';
 import 'package:ringmaster_show/utils/section_breed_scope.dart';
 
 final supabase = Supabase.instance.client;
@@ -298,6 +299,16 @@ class _AdminEntryManagementScreenState
   }
 
   Future<void> _loadEntries() async {
+    final show = await supabase
+        .from('shows')
+        .select('coop_numbering_mode')
+        .eq('id', widget.showId)
+        .single();
+    final coopNumberingMode = (show['coop_numbering_mode'] ?? 'separate')
+        .toString()
+        .trim()
+        .toLowerCase();
+
     var q = supabase
         .from('entries')
         .select(
@@ -314,6 +325,44 @@ class _AdminEntryManagementScreenState
     }
     final res = await q.order('created_at', ascending: true);
     _entries = (res as List).cast<Map<String, dynamic>>();
+
+    final animalIds = _entries
+        .map((entry) => (entry['animal_id'] ?? '').toString().trim())
+        .where((animalId) => animalId.isNotEmpty)
+        .toSet()
+        .toList();
+    final coopNumberByAnimalAndScope = <String, String>{};
+    const coopPageSize = 200;
+    for (var start = 0; start < animalIds.length; start += coopPageSize) {
+      final end = start + coopPageSize < animalIds.length
+          ? start + coopPageSize
+          : animalIds.length;
+      final coopRows = await supabase
+          .from('show_animal_coop_numbers')
+          .select('animal_id,scope,coop_number')
+          .eq('show_id', widget.showId)
+          .inFilter('animal_id', animalIds.sublist(start, end));
+      for (final raw in coopRows as List) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        final animalId = (row['animal_id'] ?? '').toString().trim();
+        final scope = (row['scope'] ?? '').toString().trim().toLowerCase();
+        final coopNumber = (row['coop_number'] ?? '').toString().trim();
+        if (animalId.isEmpty || scope.isEmpty || coopNumber.isEmpty) continue;
+        coopNumberByAnimalAndScope['$animalId|$scope'] = coopNumber;
+      }
+    }
+
+    for (final entry in _entries) {
+      final animalId = (entry['animal_id'] ?? '').toString().trim();
+      final section = entry['show_sections'];
+      final sectionKind = section is Map
+          ? (section['kind'] ?? 'open').toString().trim().toLowerCase()
+          : 'open';
+      final scope = coopNumberingMode == 'combined' ? 'all' : sectionKind;
+      entry['coop_number'] = animalId.isEmpty
+          ? ''
+          : (coopNumberByAnimalAndScope['$animalId|$scope'] ?? '');
+    }
   }
 
   String _sectionLabel(Map<String, dynamic> s) {
@@ -500,26 +549,11 @@ class _AdminEntryManagementScreenState
   }
 
   bool _matchesSearch(Map<String, dynamic> e, String query) {
-    if (query.isEmpty) return true;
-    final q = query.toLowerCase();
-
-    final exhibitorName = _exhibitorDisplayName(e).toLowerCase();
-
-    final fields = <String>[
-      exhibitorName,
-      (e['animal_name'] ?? '').toString(),
-      (e['tattoo'] ?? '').toString(),
-      (e['breed'] ?? '').toString(),
-      (e['variety'] ?? '').toString(),
-      (e['fur_variety'] ?? '').toString(),
-      (e['sex'] ?? '').toString(),
-      (e['class_name'] ?? '').toString(),
-      (e['notes'] ?? '').toString(),
-      (e['species'] ?? '').toString(),
-      ((e['is_fur'] == true) ? 'fur wool fur/wool' : ''),
-    ].join(' ').toLowerCase();
-
-    return fields.contains(q);
+    return entryManagementSearchMatches(
+      entry: e,
+      exhibitorName: _exhibitorDisplayName(e),
+      query: query,
+    );
   }
 
   Future<void> _toggleScratch(Map<String, dynamic> entry) async {
@@ -847,7 +881,7 @@ class _AdminEntryManagementScreenState
                         decoration: const InputDecoration(
                           labelText: 'Search entries (includes exhibitor name)',
                           hintText:
-                              'Exhibitor, tattoo, breed, variety, sex, class, notes…',
+                              'Exhibitor, coop number, tattoo, breed, variety, sex, class, notes…',
                           prefixIcon: Icon(Icons.search),
                           border: OutlineInputBorder(),
                         ),
