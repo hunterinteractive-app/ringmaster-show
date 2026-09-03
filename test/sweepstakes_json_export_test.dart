@@ -49,7 +49,7 @@ void main() {
                 exhibitorsJudged: 3,
               ),
             ],
-            sexSections: const [],
+            sexSections: [],
           ),
         ],
       ),
