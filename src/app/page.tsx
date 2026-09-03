@@ -680,6 +680,10 @@ function Shows({
     value: ReportProgress;
   } | null>(null);
   const [message, setMessage] = useState("");
+  const [readyDownloads, setReadyDownloads] = useState<{
+    key: string;
+    downloads: PortalReport[];
+  } | null>(null);
   const [reportsToView, setReportsToView] = useState<{
     title: string;
     downloads: PortalReport[];
@@ -742,26 +746,17 @@ function Shows({
     const key = keyFor(show);
     setLoadingKey(key);
     setMessage("");
+    setReadyDownloads((current) => (current?.key === key ? null : current));
     try {
       const downloads = await getFreshReports(show);
-      // Safari commonly discards additional programmatic downloads fired in the
-      // same event loop. Space these out so every report for the section starts.
-      for (const [index, download] of downloads.entries()) {
-        const link = document.createElement("a");
-        link.href = download.url;
-        link.download = download.name;
-        link.rel = "noreferrer";
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        if (index < downloads.length - 1) {
-          await new Promise((resolve) => window.setTimeout(resolve, 650));
-        }
-      }
+      // Safari blocks downloads fired after an asynchronous report render,
+      // because they are no longer a direct user action. Keep the signed,
+      // attachment URLs visible so each file is downloaded from a real click.
+      setReadyDownloads({ key, downloads });
       setMessage(
         downloads.length > 1
-          ? `${downloads.length} reports are downloading.`
-          : "Your report is downloading.",
+          ? `${downloads.length} reports are ready. Select each file to download it.`
+          : "Your report is ready. Select the file below to download it.",
       );
     } catch (error) {
       setMessage(
@@ -937,19 +932,35 @@ function Shows({
                         : "Not ready"}
                 </div>
                 <div className="report-actions">
-                  <button
-                    className={ready ? "download-button" : "row-action"}
-                    disabled={!ready || loadingKey === key}
-                    onClick={() => void downloadReports(show)}
-                  >
-                    {ready
-                      ? loadingKey === key
-                        ? "Preparing…"
-                        : "Download ↓"
-                      : noAnimals
-                        ? "No report needed"
-                        : "Report pending"}
-                  </button>
+                  {readyDownloads?.key === key ? (
+                    <div className="ready-downloads">
+                      <strong>Files ready</strong>
+                      {readyDownloads.downloads.map((download) => (
+                        <a
+                          key={download.url}
+                          href={download.url}
+                          download={download.name}
+                          rel="noreferrer"
+                        >
+                          Download {download.name} ↓
+                        </a>
+                      ))}
+                    </div>
+                  ) : (
+                    <button
+                      className={ready ? "download-button" : "row-action"}
+                      disabled={!ready || loadingKey === key}
+                      onClick={() => void downloadReports(show)}
+                    >
+                      {ready
+                        ? loadingKey === key
+                          ? "Preparing…"
+                          : "Download ↓"
+                        : noAnimals
+                          ? "No report needed"
+                          : "Report pending"}
+                    </button>
+                  )}
                   {ready && (
                     <button
                       className="view-button"

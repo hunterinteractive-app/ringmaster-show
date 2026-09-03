@@ -312,10 +312,34 @@ class BreedResultsDetailReportLoader {
             },
           );
 
-    final awardRows = (awardsResponse as List)
+    var awardRows = (awardsResponse as List)
         .map((e) => Map<String, dynamic>.from(e as Map))
         .where((row) => breedResultsDetailRowMatchesSpecies(row, species))
         .toList();
+
+    // The JSON export relies on this same data as the PDF.  Older deployed
+    // databases can have a stale breed-awards RPC even though entry_awards
+    // contains the finalized winners.  Recover from that safely instead of
+    // producing an apparently successful export with empty award arrays.
+    if (awardRows.isEmpty && breedName.isNotEmpty) {
+      final directAwards = await _loadOverallAwardRows(
+        showId: showId,
+        scope: scope,
+        showLetter: showLetter,
+      );
+      final requestedBreedKey = breedName.toLowerCase();
+      awardRows = directAwards
+          .where(
+            (row) =>
+                _firstNonEmpty([
+                  _safe(row['breed_name']),
+                  _safe(row['breed']),
+                ]).toLowerCase() ==
+                requestedBreedKey,
+          )
+          .where((row) => breedResultsDetailRowMatchesSpecies(row, species))
+          .toList();
+    }
     final groupByBreed = species == 'cavy' && breedName.isEmpty;
 
     final judgeName = _deriveJudgeName(reportRows);

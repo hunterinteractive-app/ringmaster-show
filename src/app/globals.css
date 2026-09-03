@@ -796,6 +796,26 @@ input:focus {
   display: grid;
   gap: 6px;
 }
+.ready-downloads {
+  display: grid;
+  gap: 5px;
+  min-width: 210px;
+  padding: 8px 9px;
+  border: 1px solid #c9dfd3;
+  border-radius: 6px;
+  background: #f2fbf5;
+}
+.ready-downloads strong {
+  color: #287c46;
+  font-size: 12px;
+}
+.ready-downloads a {
+  color: var(--purple);
+  font-size: 12px;
+  font-weight: bold;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
 .report-progress {
   min-width: 180px;
   margin-top: 3px;

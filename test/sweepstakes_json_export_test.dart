@@ -34,7 +34,24 @@ void main() {
             exhibitorsJudged: 3,
           ),
         ],
-        varieties: [],
+        varieties: [
+          VarietySection(
+            varietyName: 'Frosty',
+            awards: [
+              BreedAward(
+                award: 'Best of Variety',
+                animal: 'SNOW',
+                className: 'Senior',
+                exhibitorName: 'Alex Example',
+                sex: 'Doe',
+                variety: 'Frosty',
+                animalsJudged: 9,
+                exhibitorsJudged: 3,
+              ),
+            ],
+            sexSections: const [],
+          ),
+        ],
       ),
       sweepstakes: const SweepstakesReportData(
         showId: 'show-id',
@@ -69,6 +86,19 @@ void main() {
     expect(json['version'], 1);
     expect(json['breed'], 'Czech Frosty');
     expect((json['show'] as Map)['letter'], 'A');
+    expect((json['show'] as Map)['awards'], [
+      containsPair('award', 'Best of Breed'),
+    ]);
+    expect(((json['show'] as Map)['varieties'] as List).single['awards'], [
+      allOf([
+        containsPair('award', 'Best of Variety'),
+        containsPair('animal', 'SNOW'),
+        containsPair('exhibitor', 'Alex Example'),
+        containsPair('variety', 'Frosty'),
+        containsPair('class', 'Senior'),
+        containsPair('sex', 'Doe'),
+      ]),
+    ]);
     expect((json['sweepstakes'] as Map)['exhibitors'], hasLength(1));
   });
 }

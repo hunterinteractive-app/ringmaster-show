@@ -33,7 +33,7 @@ const groupedSpecialtyBreedScopes = <GroupedSpecialtyBreedScope>[
       'New Zealand',
       'Satin',
       'Silver Fox',
-      "Champagne d'Argente",
+      "Champagne d'Argent",
       "Creme d'Argente",
       'Palomino',
       'American Chinchilla',
@@ -54,6 +54,7 @@ const groupedSpecialtyBreedScopes = <GroupedSpecialtyBreedScope>[
       'Britannia Petite',
       'Polish',
       'Dwarf Hotot',
+      'Jersey Wooly'
     ],
   ),
   GroupedSpecialtyBreedScope(

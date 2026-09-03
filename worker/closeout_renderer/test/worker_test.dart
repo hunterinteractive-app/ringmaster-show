@@ -56,6 +56,46 @@ void main() {
       expect(() => _artifact().validateFor(_task()), returnsNormally);
     });
 
+    test('accepts a canonical sweepstakes JSON export scope', () {
+      final metadata = _scopeMetadata(species: 'rabbit', breedName: 'Rex')
+        ..addAll(const <String, dynamic>{
+          'club_name': 'National Rex Rabbit Club',
+          'sanctioning_body': 'NATIONAL CLUB',
+          'delivery_type': 'club',
+        });
+      final scopeKey = ArtifactScope.canonicalKey(
+        showId: 'show-1',
+        reportName: 'sweepstakes_json_export',
+        sectionIds: const ['section-1'],
+        metadata: metadata,
+      );
+      metadata['scope_key'] = scopeKey;
+      final task = RenderTask.fromJson({
+        ..._taskJson(),
+        'scope_key': scopeKey,
+        'payload': {
+          'report_name': 'sweepstakes_json_export',
+          'generation': 1,
+          'section_ids': ['section-1'],
+        },
+      });
+      final artifact = RenderArtifact(
+        id: 'artifact-1',
+        showId: 'show-1',
+        finalizeRunId: 'run-1',
+        scopeKey: scopeKey,
+        reportName: 'sweepstakes_json_export',
+        sectionIds: const ['section-1'],
+        metadata: metadata,
+        storageBucket: 'show-files',
+        storagePath:
+            'shows/show-1/reports/versions/run-1/artifacts/artifact-1/generation-1/report.pdf',
+        generation: 1,
+      );
+
+      expect(() => artifact.validateFor(task), returnsNormally);
+    });
+
     test('artifact keys differ across Open and Youth A/B/C sections', () {
       final keys = <String>{};
       for (final scope in ['OPEN', 'YOUTH']) {
@@ -1013,6 +1053,7 @@ final class _FakeQueue implements RenderQueue {
     required String fileName,
     required int byteSize,
     required String checksum,
+    required String mimeType,
   }) async {
     completed++;
   }
@@ -1041,6 +1082,7 @@ final class _FakeQueue implements RenderQueue {
     RenderArtifact artifact,
     Uint8List bytes, {
     required String checksum,
+    required String mimeType,
   }) async {
     if (uploadError case final error?) throw error;
     uploaded++;
