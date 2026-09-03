@@ -2923,6 +2923,9 @@ class _DeliveryStatusPanelState extends State<_DeliveryStatusPanel> {
   Widget build(BuildContext context) {
     final batchProgress = _activeDeliveryProgress.value;
     final groupedDeliveries = groupReportDeliveriesForDisplay(_deliveries);
+    final resolvedFailureKeys = resolvedReportDeliveryFailureKeys(
+      groupedDeliveries,
+    );
     final total = groupedDeliveries.length;
     final sent = groupedDeliveries.where((group) {
       return group.any(
@@ -2953,16 +2956,13 @@ class _DeliveryStatusPanelState extends State<_DeliveryStatusPanel> {
                 .toLowerCase()
                 .contains(query);
           });
-        }).toList()..sort((a, b) {
-          final aSentAt = DateTime.tryParse(
-            '${a.first['sent_at'] ?? a.first['created_at'] ?? ''}',
-          );
-          final bSentAt = DateTime.tryParse(
-            '${b.first['sent_at'] ?? b.first['created_at'] ?? ''}',
-          );
-          final fallback = DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
-          return (bSentAt ?? fallback).compareTo(aSentAt ?? fallback);
-        });
+        }).toList()..sort(
+          (a, b) => compareReportDeliveryGroupsForDisplay(
+            a,
+            b,
+            resolvedFailureKeys: resolvedFailureKeys,
+          ),
+        );
     final pageCount = (filtered.length / _pageSize).ceil().clamp(1, 1 << 20);
     final currentPage = _page.clamp(0, pageCount - 1);
     final pageRows = filtered
@@ -3021,7 +3021,14 @@ class _DeliveryStatusPanelState extends State<_DeliveryStatusPanel> {
             onChanged: (_) => setState(() => _page = 0),
           ),
           const SizedBox(height: 8),
-          ...pageRows.map(_deliveryTile),
+          ...pageRows.map(
+            (group) => _deliveryTile(
+              group,
+              fixedAndResent: resolvedFailureKeys.contains(
+                reportDeliveryGroupKey(group),
+              ),
+            ),
+          ),
           if (filtered.length > _pageSize)
             Row(
               children: [
@@ -3048,7 +3055,10 @@ class _DeliveryStatusPanelState extends State<_DeliveryStatusPanel> {
     );
   }
 
-  Widget _deliveryTile(List<Map<String, dynamic>> packageRows) {
+  Widget _deliveryTile(
+    List<Map<String, dynamic>> packageRows, {
+    required bool fixedAndResent,
+  }) {
     final row = packageRows.first;
     final status = (row['delivery_status'] ?? 'unknown').toString();
     final normalized = status.toLowerCase();
@@ -3063,7 +3073,10 @@ class _DeliveryStatusPanelState extends State<_DeliveryStatusPanel> {
       'sending',
       'processing',
     ].contains(normalized);
-    final color = failed
+    final needsAttention = failed && !fixedAndResent;
+    final color = fixedAndResent
+        ? Colors.grey
+        : failed
         ? Colors.red
         : pending
         ? Colors.orange
@@ -3079,12 +3092,16 @@ class _DeliveryStatusPanelState extends State<_DeliveryStatusPanel> {
     final currentEmail = (currentExhibitor?['email'] ?? '').trim();
     final previousEmail = (row['recipient_email'] ?? '').toString().trim();
     final hasCurrentEmail = currentEmail.contains('@');
-    final addressNote = !failed || !hasCurrentEmail
+    final addressNote = !needsAttention || !hasCurrentEmail
         ? ''
         : currentEmail.toLowerCase() == previousEmail.toLowerCase()
         ? 'Current saved address: $currentEmail.'
         : 'Saved address corrected to $currentEmail. Ready to retry.';
-    final reason = failed
+    final reason = fixedAndResent
+        ? hasCurrentEmail
+              ? 'The report package was successfully resent to $currentEmail.'
+              : 'The corrected report package was successfully resent.'
+        : failed
         ? [
             friendlyDeliveryFailureMessage(rawReason),
             if (addressNote.isNotEmpty) addressNote,
@@ -3107,13 +3124,17 @@ class _DeliveryStatusPanelState extends State<_DeliveryStatusPanel> {
             .toList()
           ..sort();
     return _DeliveryTile(
-      icon: failed
+      icon: fixedAndResent
+          ? Icons.mark_email_read_outlined
+          : failed
           ? Icons.error_outline
           : pending
           ? Icons.schedule_outlined
           : Icons.check_circle_outline,
       color: color,
-      status: '${_deliveryType(row)} • $status — $recipient',
+      status: fixedAndResent
+          ? '${_deliveryType(row)} • Fixed and resent — $recipient'
+          : '${_deliveryType(row)} • $status — $recipient',
       reason: reason.isEmpty
           ? pending
                 ? 'The delivery provider is still processing this message.'
@@ -3123,13 +3144,13 @@ class _DeliveryStatusPanelState extends State<_DeliveryStatusPanel> {
           ? null
           : '${sentAt == null ? 'Created' : 'Sent'}: $timestamp',
       fileNames: fileNames,
-      showRetry: failed,
-      needsResend: failed,
+      showRetry: needsAttention,
+      needsResend: needsAttention,
       retrying: retrying,
       retryTooltip: hasCurrentEmail
           ? 'Send the failed report package to $currentEmail.'
           : 'Correct the exhibitor\'s saved email address before retrying.',
-      onRetry: failed && hasCurrentEmail && !retrying
+      onRetry: needsAttention && hasCurrentEmail && !retrying
           ? () => _retryDelivery(
               packageRows,
               currentEmail,
