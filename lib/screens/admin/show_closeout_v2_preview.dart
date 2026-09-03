@@ -11,7 +11,9 @@ import 'package:ringmaster_show/screens/admin/closeout/data/loaders/paid_exhibit
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/unpaid_balances_report_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/models/base/report_request.dart';
 import 'package:ringmaster_show/screens/admin/closeout/models/arba_report_presentation.dart';
+import 'package:ringmaster_show/screens/admin/closeout/models/delivery_failure_message.dart';
 import 'package:ringmaster_show/screens/admin/closeout/models/report_artifact_summary.dart';
+import 'package:ringmaster_show/screens/admin/closeout/models/report_delivery_grouping.dart';
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/entered_exhibitors_contact_report_pdf.dart';
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/entered_exhibitors_list_report_pdf.dart';
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/paid_exhibitor_report_pdf.dart';
@@ -2786,6 +2788,9 @@ class _DeliveryStatusPanelState extends State<_DeliveryStatusPanel> {
   String? _error;
   List<Map<String, dynamic>> _deliveries = const [];
   Map<String, Map<String, dynamic>> _artifactMetadata = const {};
+  Map<String, String> _artifactFileNames = const {};
+  Map<String, Map<String, String>> _currentExhibitors = const {};
+  final Set<String> _retryingDeliveryKeys = <String>{};
   final _search = TextEditingController();
   int _page = 0;
   static const _pageSize = 10;
@@ -2821,7 +2826,7 @@ class _DeliveryStatusPanelState extends State<_DeliveryStatusPanel> {
         final rows = await Supabase.instance.client
             .from('show_email_deliveries')
             .select(
-              'id,artifact_id,recipient_name,recipient_email,report_name,delivery_status,error_message,sent_at,created_at',
+              'id,artifact_id,recipient_name,recipient_email,report_name,delivery_status,error_message,provider_message_id,subject,sent_at,created_at',
             )
             .eq('show_id', widget.showId)
             .order('created_at', ascending: false)
@@ -2834,8 +2839,45 @@ class _DeliveryStatusPanelState extends State<_DeliveryStatusPanel> {
       }
       final artifacts = await Supabase.instance.client
           .from('show_report_artifacts')
-          .select('id,metadata')
+          .select('id,file_name,metadata')
           .eq('show_id', widget.showId);
+      final artifactRows = (artifacts as List)
+          .map((raw) => Map<String, dynamic>.from(raw as Map))
+          .toList();
+      final exhibitorIds = artifactRows
+          .map(
+            (artifact) =>
+                ((artifact['metadata'] as Map?)?['exhibitor_id'] ?? '')
+                    .toString()
+                    .trim(),
+          )
+          .where((id) => id.isNotEmpty)
+          .toSet()
+          .toList();
+      final currentExhibitors = <String, Map<String, String>>{};
+      if (exhibitorIds.isNotEmpty) {
+        final rows = await Supabase.instance.client
+            .from('exhibitors')
+            .select('id,email,display_name,first_name,last_name')
+            .inFilter('id', exhibitorIds);
+        for (final raw in rows as List) {
+          final row = Map<String, dynamic>.from(raw as Map);
+          final id = (row['id'] ?? '').toString().trim();
+          if (id.isEmpty) continue;
+          final displayName = (row['display_name'] ?? '').toString().trim();
+          final firstName = (row['first_name'] ?? '').toString().trim();
+          final lastName = (row['last_name'] ?? '').toString().trim();
+          currentExhibitors[id] = {
+            'email': (row['email'] ?? '').toString().trim().toLowerCase(),
+            'name': displayName.isNotEmpty
+                ? displayName
+                : [
+                    firstName,
+                    lastName,
+                  ].where((value) => value.isNotEmpty).join(' '),
+          };
+        }
+      }
       if (!mounted) return;
       final deliveries = allRows;
       final active = deliveries.any((row) {
@@ -2847,11 +2889,18 @@ class _DeliveryStatusPanelState extends State<_DeliveryStatusPanel> {
       setState(() {
         _deliveries = deliveries;
         _artifactMetadata = {
-          for (final raw in artifacts as List)
-            (raw as Map)['id']?.toString() ?? '': Map<String, dynamic>.from(
-              (raw['metadata'] as Map?) ?? const {},
+          for (final artifact in artifactRows)
+            artifact['id']?.toString() ?? '': Map<String, dynamic>.from(
+              (artifact['metadata'] as Map?) ?? const {},
             ),
         };
+        _artifactFileNames = {
+          for (final artifact in artifactRows)
+            artifact['id']?.toString() ?? '': (artifact['file_name'] ?? '')
+                .toString()
+                .trim(),
+        }..removeWhere((id, fileName) => id.isEmpty || fileName.isEmpty);
+        _currentExhibitors = currentExhibitors;
         _loading = false;
         _error = null;
       });
@@ -2873,35 +2922,43 @@ class _DeliveryStatusPanelState extends State<_DeliveryStatusPanel> {
   @override
   Widget build(BuildContext context) {
     final batchProgress = _activeDeliveryProgress.value;
-    final total = _deliveries.length;
-    final sent = _deliveries
-        .where(
-          (row) =>
-              (row['delivery_status'] ?? '').toString().toLowerCase() == 'sent',
-        )
-        .length;
-    final active = _deliveries
-        .where(
-          (row) => const [
-            'pending',
-            'sending',
-            'processing',
-          ].contains((row['delivery_status'] ?? '').toString().toLowerCase()),
-        )
-        .length;
+    final groupedDeliveries = groupReportDeliveriesForDisplay(_deliveries);
+    final total = groupedDeliveries.length;
+    final sent = groupedDeliveries.where((group) {
+      return group.any(
+        (row) => const [
+          'sent',
+          'delivered',
+          'opened',
+          'clicked',
+        ].contains((row['delivery_status'] ?? '').toString().toLowerCase()),
+      );
+    }).length;
+    final active = groupedDeliveries.where((group) {
+      return group.any(
+        (row) => const [
+          'pending',
+          'sending',
+          'processing',
+        ].contains((row['delivery_status'] ?? '').toString().toLowerCase()),
+      );
+    }).length;
     final filtered =
-        _deliveries.where((row) {
+        groupedDeliveries.where((group) {
           final query = _search.text.trim().toLowerCase();
           if (query.isEmpty) return true;
-          return '${_deliveryType(row)} ${row['recipient_name'] ?? ''} ${row['recipient_email'] ?? ''} ${row['report_name'] ?? ''}'
-              .toLowerCase()
-              .contains(query);
+          return group.any((row) {
+            final artifactId = (row['artifact_id'] ?? '').toString();
+            return '${_deliveryType(row)} ${row['recipient_name'] ?? ''} ${row['recipient_email'] ?? ''} ${row['report_name'] ?? ''} ${_artifactFileNames[artifactId] ?? ''}'
+                .toLowerCase()
+                .contains(query);
+          });
         }).toList()..sort((a, b) {
           final aSentAt = DateTime.tryParse(
-            '${a['sent_at'] ?? a['created_at'] ?? ''}',
+            '${a.first['sent_at'] ?? a.first['created_at'] ?? ''}',
           );
           final bSentAt = DateTime.tryParse(
-            '${b['sent_at'] ?? b['created_at'] ?? ''}',
+            '${b.first['sent_at'] ?? b.first['created_at'] ?? ''}',
           );
           final fallback = DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
           return (bSentAt ?? fallback).compareTo(aSentAt ?? fallback);
@@ -2916,7 +2973,7 @@ class _DeliveryStatusPanelState extends State<_DeliveryStatusPanel> {
       title: 'Report Delivery Status',
       subtitle: active > 0 || batchProgress != null
           ? 'Delivery is in progress and refreshes every few seconds.'
-          : 'Live delivery history. Retry and resend remain disabled in this preview.',
+          : 'Live delivery history. Correct a recipient address, then retry the failed report package here.',
       children: [
         if (_loading)
           const Center(
@@ -2991,7 +3048,8 @@ class _DeliveryStatusPanelState extends State<_DeliveryStatusPanel> {
     );
   }
 
-  Widget _deliveryTile(Map<String, dynamic> row) {
+  Widget _deliveryTile(List<Map<String, dynamic>> packageRows) {
+    final row = packageRows.first;
     final status = (row['delivery_status'] ?? 'unknown').toString();
     final normalized = status.toLowerCase();
     final failed = const [
@@ -3013,9 +3071,41 @@ class _DeliveryStatusPanelState extends State<_DeliveryStatusPanel> {
     final recipient =
         (row['recipient_name'] ?? row['recipient_email'] ?? 'Recipient')
             .toString();
-    final reason = (row['error_message'] ?? '').toString().trim();
+    final rawReason = (row['error_message'] ?? '').toString().trim();
+    final metadata =
+        _artifactMetadata[row['artifact_id']?.toString()] ?? const {};
+    final exhibitorId = (metadata['exhibitor_id'] ?? '').toString().trim();
+    final currentExhibitor = _currentExhibitors[exhibitorId];
+    final currentEmail = (currentExhibitor?['email'] ?? '').trim();
+    final previousEmail = (row['recipient_email'] ?? '').toString().trim();
+    final hasCurrentEmail = currentEmail.contains('@');
+    final addressNote = !failed || !hasCurrentEmail
+        ? ''
+        : currentEmail.toLowerCase() == previousEmail.toLowerCase()
+        ? 'Current saved address: $currentEmail.'
+        : 'Saved address corrected to $currentEmail. Ready to retry.';
+    final reason = failed
+        ? [
+            friendlyDeliveryFailureMessage(rawReason),
+            if (addressNote.isNotEmpty) addressNote,
+          ].join('\n')
+        : rawReason;
     final sentAt = row['sent_at'];
     final timestamp = _formatDeliveryTime(sentAt ?? row['created_at']);
+    final retryKey = _deliveryRetryKey(row);
+    final retrying = _retryingDeliveryKeys.contains(retryKey);
+    final fileNames =
+        packageRows
+            .map((candidate) {
+              final artifactId = (candidate['artifact_id'] ?? '').toString();
+              final fileName = _artifactFileNames[artifactId]?.trim() ?? '';
+              return fileName.isNotEmpty
+                  ? fileName
+                  : (candidate['report_name'] ?? 'Report').toString();
+            })
+            .toSet()
+            .toList()
+          ..sort();
     return _DeliveryTile(
       icon: failed
           ? Icons.error_outline
@@ -3032,9 +3122,103 @@ class _DeliveryStatusPanelState extends State<_DeliveryStatusPanel> {
       timestamp: timestamp.isEmpty
           ? null
           : '${sentAt == null ? 'Created' : 'Sent'}: $timestamp',
+      fileNames: fileNames,
       showRetry: failed,
       needsResend: failed,
+      retrying: retrying,
+      retryTooltip: hasCurrentEmail
+          ? 'Send the failed report package to $currentEmail.'
+          : 'Correct the exhibitor\'s saved email address before retrying.',
+      onRetry: failed && hasCurrentEmail && !retrying
+          ? () => _retryDelivery(
+              packageRows,
+              currentEmail,
+              currentExhibitor?['name'],
+            )
+          : null,
     );
+  }
+
+  String _deliveryRetryKey(Map<String, dynamic> row) {
+    final providerId = (row['provider_message_id'] ?? '').toString().trim();
+    if (providerId.isNotEmpty) return 'provider:$providerId';
+    return 'delivery:${row['id']}';
+  }
+
+  Future<void> _retryDelivery(
+    List<Map<String, dynamic>> packageRows,
+    String currentEmail,
+    String? currentName,
+  ) async {
+    final row = packageRows.first;
+    final retryKey = _deliveryRetryKey(row);
+    final artifactIds = packageRows
+        .map((candidate) => (candidate['artifact_id'] ?? '').toString().trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+    if (artifactIds.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('The original report package is no longer available.'),
+        ),
+      );
+      return;
+    }
+
+    final oldEmail = (row['recipient_email'] ?? '').toString().trim();
+    final changed = oldEmail.toLowerCase() != currentEmail.toLowerCase();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Retry exhibitor reports?'),
+        content: Text(
+          changed
+              ? 'The saved address was changed from $oldEmail to $currentEmail. Send all ${artifactIds.length} report files to the corrected address?'
+              : 'Send all ${artifactIds.length} report files again to $currentEmail?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Retry Send'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _retryingDeliveryKeys.add(retryKey));
+    try {
+      await ReportEmailService().sendExhibitorReportEmail(
+        showId: widget.showId,
+        artifactIds: artifactIds,
+        to: currentEmail,
+        recipientName: currentName,
+        subject: (row['subject'] ?? '').toString().trim(),
+        allowLegs: packageRows.any(
+          (candidate) => candidate['report_name']?.toString() == 'legs',
+        ),
+        forceResend: true,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Reports resent to $currentEmail.')),
+      );
+      await _load();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to retry this email: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _retryingDeliveryKeys.remove(retryKey));
+      }
+    }
   }
 
   String _formatDeliveryTime(Object? value) {
@@ -3083,16 +3267,24 @@ class _DeliveryTile extends StatelessWidget {
   final String status;
   final String reason;
   final String? timestamp;
+  final List<String> fileNames;
   final bool showRetry;
   final bool needsResend;
+  final bool retrying;
+  final String retryTooltip;
+  final VoidCallback? onRetry;
   const _DeliveryTile({
     required this.icon,
     required this.color,
     required this.status,
     required this.reason,
     required this.timestamp,
+    required this.fileNames,
     required this.showRetry,
     required this.needsResend,
+    required this.retrying,
+    required this.retryTooltip,
+    required this.onRetry,
   });
   @override
   Widget build(BuildContext context) => Container(
@@ -3107,13 +3299,33 @@ class _DeliveryTile extends StatelessWidget {
       contentPadding: const EdgeInsets.symmetric(horizontal: 8),
       leading: Icon(icon, color: color),
       title: Text(status),
-      subtitle: Text(timestamp == null ? reason : '$reason\n$timestamp'),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(reason),
+          const SizedBox(height: 4),
+          Text(
+            '${fileNames.length} file${fileNames.length == 1 ? '' : 's'} in this email:',
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          ...fileNames.map((fileName) => Text('• $fileName')),
+          if (timestamp != null) ...[
+            const SizedBox(height: 4),
+            Text(timestamp!),
+          ],
+        ],
+      ),
       trailing: showRetry
-          ? const Tooltip(
-              message: 'Retry is unavailable for this delivery.',
+          ? Tooltip(
+              message: retryTooltip,
               child: OutlinedButton(
-                onPressed: null,
-                child: Text('Retry / resend'),
+                onPressed: retrying ? null : onRetry,
+                child: retrying
+                    ? const SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Retry / resend'),
               ),
             )
           : null,
