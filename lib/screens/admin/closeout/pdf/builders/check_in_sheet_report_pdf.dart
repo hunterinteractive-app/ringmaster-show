@@ -414,6 +414,13 @@ class CheckInSheetReportPdfBuilder {
 
   String _displayAgeClassOnly(String value) {
     final lower = value.toLowerCase();
+    if (lower.contains('pre-junior') ||
+        lower.contains('pre junior') ||
+        lower.contains('prejunior') ||
+        lower.startsWith('pre jr') ||
+        lower.startsWith('pre-jr')) {
+      return 'Pre-Junior';
+    }
     if (lower.contains('senior')) return 'Senior';
     if (lower.contains('intermediate')) return 'Intermediate';
     if (lower.contains('junior')) return 'Junior';

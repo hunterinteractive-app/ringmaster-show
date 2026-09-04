@@ -541,9 +541,15 @@ class LegsReportPdfBuilder {
 
   String _classCode(String value) {
     final lower = value.toLowerCase();
+    if (lower.contains('pre-junior') ||
+        lower.contains('pre junior') ||
+        lower.contains('prejunior') ||
+        lower.startsWith('pre jr') ||
+        lower.startsWith('pre-jr')) {
+      return 'P';
+    }
     if (lower.contains('intermediate')) return 'I';
     if (lower.contains('junior')) return 'J';
-    if (lower.contains('pre')) return 'P';
     if (lower.contains('senior')) return 'S';
     return value.isEmpty ? 'Z' : value[0];
   }

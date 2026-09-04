@@ -115,6 +115,14 @@ void main() {
       expect(normalizeBreedResultsDetailClassName('Junior Sow'), 'Jr Sows');
     });
 
+    test('does not collapse Pre-Junior into Junior', () {
+      expect(
+        normalizeBreedResultsDetailClassName('Pre-Junior Buck'),
+        'Pre-Jr Bucks',
+      );
+      expect(normalizeBreedResultsDetailClassName('Pre Jr Doe'), 'Pre-Jr Does');
+    });
+
     test('renders legacy cavy Buck and Doe labels as Boars and Sows', () {
       expect(
         breedResultsDetailSexLabel({

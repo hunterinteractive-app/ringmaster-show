@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
+import 'package:ringmaster_show/utils/entry_class_options.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -374,7 +375,20 @@ class _ExhibitorCheckinPortalScreenState
     var varietyOptions = _selectionRows(selectionOptions, 'varieties');
     var selectedBreedId = selectionOptions['selected_breed_id']?.toString();
     var selectedVariety = _selectedOptionName(varietyOptions, variety.text);
-    const classOptions = ['Senior', 'Intermediate', 'Junior', 'Pre-Junior'];
+    List<String> classOptionsForBreed(String? breedId) {
+      if (breedId != selectionOptions['selected_breed_id']?.toString() ||
+          !selectionOptions.containsKey('class_system') ||
+          !selectionOptions.containsKey('has_prejunior')) {
+        return const ['Pre-Junior', 'Junior', 'Intermediate', 'Senior'];
+      }
+      return allowedEntryClassOptions(
+        species: selectionOptions['species'],
+        classSystem: selectionOptions['class_system'],
+        hasPreJunior: selectionOptions['has_prejunior'],
+      );
+    }
+
+    var classOptions = classOptionsForBreed(selectedBreedId);
     var selectedClass = _selectedOption(classOptions, className.text);
     final sexOptions = selectionOptions['species'] == 'cavy'
         ? const ['Boar', 'Sow']
@@ -458,8 +472,14 @@ class _ExhibitorCheckinPortalScreenState
                             'varieties',
                           );
                           setDialogState(() {
+                            selectionOptions = options;
                             selectedBreedId = value;
                             breed.text = (selected['name'] ?? '').toString();
+                            classOptions = classOptionsForBreed(value);
+                            if (!classOptions.contains(selectedClass)) {
+                              selectedClass = null;
+                              className.clear();
+                            }
                             varietyOptions = updatedVarieties;
                             selectedVariety = _selectedOptionName(
                               updatedVarieties,
@@ -861,7 +881,15 @@ class _ExhibitorCheckinPortalScreenState
         'p_breed_id': breedId,
       },
     );
-    return Map<String, dynamic>.from(raw as Map);
+    final options = Map<String, dynamic>.from(raw as Map);
+    final selectedBreedId = options['selected_breed_id']?.toString();
+    if (selectedBreedId == null || selectedBreedId.isEmpty) return options;
+
+    final rawClassMetadata = await _supabase.rpc(
+      'get_exhibitor_checkin_breed_class_metadata',
+      params: {'p_session_token': _sessionToken, 'p_breed_id': selectedBreedId},
+    );
+    return {...options, ...Map<String, dynamic>.from(rawClassMetadata as Map)};
   }
 
   List<Map<String, dynamic>> _selectionRows(
@@ -916,6 +944,9 @@ class _ExhibitorCheckinPortalScreenState
         ),
         const SizedBox(height: 6),
         DropdownButtonFormField<String>(
+          key: ValueKey(
+            '$label-${items.map((item) => item[valueKey]).join('|')}-$validValue',
+          ),
           initialValue: validValue,
           isExpanded: true,
           dropdownColor: AppColors.surface,

@@ -686,6 +686,13 @@ class _CheckInGeneratorSheetState extends State<CheckInGeneratorSheet> {
     final s = raw.trim();
     if (s.isEmpty) return '';
     final lower = s.toLowerCase();
+    if (lower.contains('pre-junior') ||
+        lower.contains('pre junior') ||
+        lower.contains('prejunior') ||
+        lower.startsWith('pre jr') ||
+        lower.startsWith('pre-jr')) {
+      return 'Pre-Junior';
+    }
     if (lower.contains('senior')) return 'Senior';
     if (lower.contains('intermediate')) return 'Intermediate';
     if (lower.contains('junior')) return 'Junior';

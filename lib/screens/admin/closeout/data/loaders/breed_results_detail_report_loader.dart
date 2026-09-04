@@ -2252,6 +2252,14 @@ String breedResultsDetailSexLabel(Map<String, dynamic> row) {
 
 String normalizeBreedResultsDetailClassName(String raw) {
   final r = raw.toLowerCase();
+  final isPreJunior =
+      r.contains('pre-junior') ||
+      r.contains('pre junior') ||
+      r.contains('prejunior') ||
+      r.startsWith('pre jr') ||
+      r.startsWith('pre-jr');
+  if (isPreJunior && r.contains('buck')) return 'Pre-Jr Bucks';
+  if (isPreJunior && r.contains('doe')) return 'Pre-Jr Does';
   if (r.contains('senior') && r.contains('buck')) return 'Sr Bucks';
   if (r.contains('senior') && r.contains('doe')) return 'Sr Does';
   if (r.contains('intermediate') && r.contains('buck')) return 'Int Bucks';

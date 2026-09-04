@@ -13,6 +13,7 @@ import 'package:ringmaster_show/policies/manual_exhibitor_information_policy.dar
 import 'package:ringmaster_show/screens/admin/entry_management_search.dart';
 import 'package:ringmaster_show/utils/section_breed_scope.dart';
 import 'package:ringmaster_show/utils/species_sex.dart';
+import 'package:ringmaster_show/utils/entry_class_options.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -1287,6 +1288,29 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
   List<String> get _sexOptions =>
       _species == 'rabbit' ? const ['Buck', 'Doe'] : const ['Boar', 'Sow'];
 
+  List<String> get _classOptions {
+    if (_breedOptions.isEmpty || _breedId == null) {
+      return _species == 'cavy'
+          ? const ['Junior', 'Intermediate', 'Senior']
+          : const ['Pre-Junior', 'Junior', 'Intermediate', 'Senior'];
+    }
+    final breed = _breedOptions.firstWhere(
+      (row) => (row['id'] ?? '').toString() == _breedId,
+      orElse: () => const <String, dynamic>{},
+    );
+    return allowedEntryClassOptions(
+      species: _species,
+      classSystem: breed['class_system'],
+      hasPreJunior: breed['has_prejunior'],
+    );
+  }
+
+  void _clearInvalidClassSelection() {
+    if (_classValue == null || _classOptions.contains(_classValue)) return;
+    _classValue = null;
+    _className.clear();
+  }
+
   Future<void> _loadBreedsForSpecies({String? initialBreedName}) async {
     if (!mounted) return;
     setState(() => _loadingBreeds = true);
@@ -1295,7 +1319,7 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
       final showId = (widget.entry['show_id'] ?? '').toString();
       final globalBreedsRes = await supabase
           .from('breeds')
-          .select('id,name,species,is_active')
+          .select('id,name,species,class_system,has_prejunior,is_active')
           .eq('species', _species)
           .eq('is_active', true)
           .or('local_show_id.is.null,local_show_id.eq.$showId')
@@ -1306,32 +1330,42 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
 
       final showBreedRes = await supabase
           .from('show_breeds')
-          .select('breed_id,is_enabled')
+          .select('breed_id,is_enabled,class_system_override')
           .eq('show_id', showId);
 
       final showBreedRows = (showBreedRes as List).cast<Map<String, dynamic>>();
 
-      final showBreedMap = <String, bool>{};
+      final showBreedMap = <String, Map<String, dynamic>>{};
       for (final row in showBreedRows) {
         final breedId = (row['breed_id'] ?? '').toString();
         if (breedId.isEmpty) continue;
-        showBreedMap[breedId] = row['is_enabled'] == true;
+        showBreedMap[breedId] = row;
       }
 
       final effective =
-          globalBreeds.where((b) {
-            final id = (b['id'] ?? '').toString();
-
-            if (showBreedMap.containsKey(id)) {
-              return showBreedMap[id] == true;
-            }
-
-            return true;
-          }).toList()..sort(
-            (a, b) => (a['name'] ?? '').toString().toLowerCase().compareTo(
-              (b['name'] ?? '').toString().toLowerCase(),
-            ),
-          );
+          globalBreeds
+              .where((b) {
+                final override = showBreedMap[(b['id'] ?? '').toString()];
+                return override == null || override['is_enabled'] == true;
+              })
+              .map((b) {
+                final override = showBreedMap[(b['id'] ?? '').toString()];
+                final classSystemOverride =
+                    (override?['class_system_override'] ?? '')
+                        .toString()
+                        .trim();
+                return {
+                  ...b,
+                  if (classSystemOverride.isNotEmpty)
+                    'class_system': classSystemOverride,
+                };
+              })
+              .toList()
+            ..sort(
+              (a, b) => (a['name'] ?? '').toString().toLowerCase().compareTo(
+                (b['name'] ?? '').toString().toLowerCase(),
+              ),
+            );
 
       final currentBreedName = (initialBreedName ?? _breed.text)
           .trim()
@@ -1348,6 +1382,7 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
         _breedOptions = effective;
         _loadingBreeds = false;
         _breedId = matchedBreed.isEmpty ? null : matchedBreed['id']?.toString();
+        _clearInvalidClassSelection();
       });
 
       if (_breedId != null && _breedId!.isNotEmpty) {
@@ -1614,7 +1649,7 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
     _sex.text = _sexValue ?? '';
 
     final initialClass = _className.text.trim();
-    const classOptions = ['Senior', 'Intermediate', 'Junior', 'Pre-Junior'];
+    const classOptions = ['Pre-Junior', 'Junior', 'Intermediate', 'Senior'];
     _classValue = classOptions.contains(initialClass) ? initialClass : null;
 
     final initialFurVariety = _furVariety.text.trim();
@@ -1666,6 +1701,9 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
       final furVariety = _furVarietyValue?.trim().isNotEmpty == true
           ? _furVarietyValue!.trim()
           : null;
+      if (_classValue == null || !_classOptions.contains(_classValue)) {
+        throw Exception('Select a class allowed for ${_breed.text.trim()}.');
+      }
       final canonicalVariety = await _canonicalEntryVarietyName(
         species: _species,
         breedName: _breed.text,
@@ -1929,6 +1967,7 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
                         _breed.text = (selected['name'] ?? '').toString();
                         _variety.clear();
                         _varietyOptions = [];
+                        _clearInvalidClassSelection();
                         _msg = null;
                       });
 
@@ -1974,6 +2013,7 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
             ),
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(
+              key: ValueKey('entry-class-${_breedId ?? 'none'}'),
               initialValue: _classValue,
               style: _entrySheetDropdownTextStyle,
               dropdownColor: AppColors.surface,
@@ -1983,30 +2023,14 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
                 labelText: 'Class',
                 border: OutlineInputBorder(),
               ),
-              items: const [
-                DropdownMenuItem(
-                  value: 'Senior',
-                  child: Text('Senior', style: _entrySheetDropdownTextStyle),
-                ),
-                DropdownMenuItem(
-                  value: 'Intermediate',
-                  child: Text(
-                    'Intermediate',
-                    style: _entrySheetDropdownTextStyle,
-                  ),
-                ),
-                DropdownMenuItem(
-                  value: 'Junior',
-                  child: Text('Junior', style: _entrySheetDropdownTextStyle),
-                ),
-                DropdownMenuItem(
-                  value: 'Pre-Junior',
-                  child: Text(
-                    'Pre-Junior',
-                    style: _entrySheetDropdownTextStyle,
-                  ),
-                ),
-              ],
+              items: _classOptions
+                  .map(
+                    (value) => DropdownMenuItem(
+                      value: value,
+                      child: Text(value, style: _entrySheetDropdownTextStyle),
+                    ),
+                  )
+                  .toList(),
               onChanged: _saving
                   ? null
                   : (value) {
@@ -2798,13 +2822,6 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     {'class_code': 'roaster', 'display_name': 'Roasters'},
     {'class_code': 'stewer', 'display_name': 'Stewers'},
     {'class_code': 'meat_pen', 'display_name': 'Meat Pens'},
-  ];
-
-  static const List<String> _regularClassOptions = [
-    'Senior',
-    'Intermediate',
-    'Junior',
-    'Pre-Junior',
   ];
 
   bool _loadingBreeds = false;
@@ -3955,13 +3972,42 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
   List<String> get _sexOptions =>
       _species == 'rabbit' ? const ['Buck', 'Doe'] : const ['Boar', 'Sow'];
 
+  List<String> get _regularClassOptions {
+    final animalSpecies = _useLocalAnimal
+        ? _species
+        : (_animal?['species'] ?? _species).toString().trim().toLowerCase();
+    final breedName = _useLocalAnimal
+        ? _breed.text.trim()
+        : (_animal?['breed'] ?? '').toString().trim();
+    final breed = _breedOptions.firstWhere((row) {
+      if (_useLocalAnimal && _breedId != null) {
+        return (row['id'] ?? '').toString() == _breedId;
+      }
+      return (row['name'] ?? '').toString().trim().toLowerCase() ==
+          breedName.toLowerCase();
+    }, orElse: () => const <String, dynamic>{});
+    return allowedEntryClassOptions(
+      species: animalSpecies,
+      classSystem: breed['class_system'],
+      hasPreJunior: breed['has_prejunior'],
+    );
+  }
+
+  void _clearInvalidRegularClassSelection() {
+    final value = _classValue;
+    if (value == null || value.startsWith('commercial:')) return;
+    if (_regularClassOptions.contains(value)) return;
+    _classValue = null;
+    _className.clear();
+  }
+
   Future<void> _loadBreedsForSpecies() async {
     setState(() => _loadingBreeds = true);
 
     try {
       final globalBreedsRes = await supabase
           .from('breeds')
-          .select('id,name,species,is_active')
+          .select('id,name,species,class_system,has_prejunior,is_active')
           .eq('species', _species)
           .eq('is_active', true)
           .or('local_show_id.is.null,local_show_id.eq.${widget.showId}')
@@ -3972,32 +4018,42 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
 
       final showBreedRes = await supabase
           .from('show_breeds')
-          .select('breed_id,is_enabled')
+          .select('breed_id,is_enabled,class_system_override')
           .eq('show_id', widget.showId);
 
       final showBreedRows = (showBreedRes as List).cast<Map<String, dynamic>>();
 
-      final showBreedMap = <String, bool>{};
+      final showBreedMap = <String, Map<String, dynamic>>{};
       for (final row in showBreedRows) {
         final breedId = (row['breed_id'] ?? '').toString();
         if (breedId.isEmpty) continue;
-        showBreedMap[breedId] = row['is_enabled'] == true;
+        showBreedMap[breedId] = row;
       }
 
       final effective =
-          globalBreeds.where((b) {
-            final id = (b['id'] ?? '').toString();
-
-            if (showBreedMap.containsKey(id)) {
-              return showBreedMap[id] == true;
-            }
-
-            return true;
-          }).toList()..sort(
-            (a, b) => (a['name'] ?? '').toString().toLowerCase().compareTo(
-              (b['name'] ?? '').toString().toLowerCase(),
-            ),
-          );
+          globalBreeds
+              .where((b) {
+                final override = showBreedMap[(b['id'] ?? '').toString()];
+                return override == null || override['is_enabled'] == true;
+              })
+              .map((b) {
+                final override = showBreedMap[(b['id'] ?? '').toString()];
+                final classSystemOverride =
+                    (override?['class_system_override'] ?? '')
+                        .toString()
+                        .trim();
+                return {
+                  ...b,
+                  if (classSystemOverride.isNotEmpty)
+                    'class_system': classSystemOverride,
+                };
+              })
+              .toList()
+            ..sort(
+              (a, b) => (a['name'] ?? '').toString().toLowerCase().compareTo(
+                (b['name'] ?? '').toString().toLowerCase(),
+              ),
+            );
 
       if (!mounted) return;
       setState(() {
@@ -4014,6 +4070,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
           _variety.clear();
           _varietyOptions = [];
         }
+        _clearInvalidRegularClassSelection();
       });
     } catch (e) {
       if (!mounted) return;
@@ -4082,6 +4139,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
       _breed.text = (selected['name'] ?? '').toString();
       _variety.clear();
       _varietyOptions = [];
+      _clearInvalidRegularClassSelection();
       _msg = null;
     });
     await _loadVarietiesForBreed(breedId);
@@ -5508,6 +5566,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                                   _sexValue = savedSex;
                                   _sex.text = savedSex;
                                 }
+                                _clearInvalidRegularClassSelection();
                                 _msg = null;
                               }),
                       ),
@@ -5573,6 +5632,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                                 _varietyOptions = [];
                                 _breed.clear();
                                 _variety.clear();
+                                _clearInvalidRegularClassSelection();
                                 _msg = null;
                               });
 
@@ -5649,6 +5709,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                                 _breedId = null;
                                 _variety.clear();
                                 _varietyOptions = [];
+                                _clearInvalidRegularClassSelection();
                               });
                             },
                             onSubmitted: (_) {

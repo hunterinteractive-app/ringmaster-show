@@ -184,14 +184,16 @@ class _EntriesByBreedSectionTableState
 
   int _ageRank(String age) {
     switch (age.toLowerCase()) {
-      case 'junior':
+      case 'pre-junior':
         return 0;
-      case 'intermediate':
+      case 'junior':
         return 1;
-      case 'senior':
+      case 'intermediate':
         return 2;
-      case 'open':
+      case 'senior':
         return 3;
+      case 'open':
+        return 4;
       default:
         return 99;
     }
@@ -202,6 +204,13 @@ class _EntriesByBreedSectionTableState
     if (s.isEmpty) return '';
     final l = s.toLowerCase();
 
+    if (l.contains('pre-junior') ||
+        l.contains('pre junior') ||
+        l.contains('prejunior') ||
+        l.startsWith('pre jr') ||
+        l.startsWith('pre-jr')) {
+      return 'Pre-Junior';
+    }
     if (l.contains('senior') || l.startsWith('sr')) return 'Senior';
     if (l.contains('intermediate') || l.startsWith('int')) {
       return 'Intermediate';
