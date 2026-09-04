@@ -123,6 +123,7 @@ class AnimalBreedService {
         .from('varieties')
         .select('id,name')
         .eq('breed_id', breedId)
+        .eq('is_active', true)
         .order('name');
 
     final globalVarieties = (globalRows as List)

@@ -3092,6 +3092,7 @@ class _MeatPenDialogState extends State<_MeatPenDialog> {
         .from('varieties')
         .select('id,name')
         .eq('breed_id', breedId)
+        .eq('is_active', true)
         .order('name');
 
     final showVarieties = await supabase
