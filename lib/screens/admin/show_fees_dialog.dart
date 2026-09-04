@@ -8,6 +8,7 @@ import 'package:ringmaster_show/services/app_session.dart';
 import 'package:ringmaster_show/services/show_lock_service.dart';
 
 import '../../services/show_payment_configuration_service.dart';
+import '../../services/role_service.dart';
 import '../../services/square_connect_service.dart';
 import '../../services/stripe_connect_service.dart';
 
@@ -191,7 +192,10 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
                 .eq('feature_key', 'canada_special_discount')
                 .eq('user_id', currentUserId)
                 .maybeSingle();
-      _canManageCanadaSpecial = canadaSpecialAccess != null;
+      final isSuperAdmin = currentUserId == null
+          ? false
+          : await RoleService.isSuperAdmin();
+      _canManageCanadaSpecial = canadaSpecialAccess != null || isSuperAdmin;
 
       await _loadPaymentConfiguration();
 
