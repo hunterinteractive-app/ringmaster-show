@@ -102,7 +102,8 @@ class _CartScreenState extends State<CartScreen> {
             'multi_show_discount_min_entries,multi_show_discount_max_entries,'
             'multi_show_discount_required_shows,'
             'canada_special_discount_enabled,canada_special_discount_type,'
-            'canada_special_discount_value,canada_special_discount_scope',
+            'canada_special_discount_value,canada_special_discount_scope,'
+            'canada_special_show_letters',
           )
           .eq('show_id', widget.showId)
           .maybeSingle();
@@ -461,6 +462,9 @@ class _CartScreenState extends State<CartScreen> {
             .toString()
             .toLowerCase()
             .trim();
+    final canadaSpecialShowLetters = normalizeShowLetters(
+      _feeSettings?['canada_special_show_letters'],
+    );
 
     double entriesSubtotal = 0.0;
     double furSubtotal = 0.0;
@@ -613,6 +617,12 @@ class _CartScreenState extends State<CartScreen> {
         final isEligibleForScope =
             canadaSpecialScope == 'both' || sectionKind == canadaSpecialScope;
         if (!isEligibleForScope) continue;
+        if (!canadaSpecialAppliesToShowLetter(
+          sectionLetter: _sectionById[sectionId]?['letter'],
+          selectedShowLetters: canadaSpecialShowLetters,
+        )) {
+          continue;
+        }
 
         final entryFee = _asDouble(
           _sectionFeeBySectionId[sectionId]?['fee_per_entry'],

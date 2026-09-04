@@ -56,6 +56,37 @@ void main() {
     expect(selectBetterDiscount(-1, 3), 3);
   });
 
+  group('Canada Special show letters', () {
+    test('normalizes saved show-letter arrays', () {
+      expect(normalizeShowLetters([' a ', 'B', '', 'a']), {'A', 'B'});
+      expect(normalizeShowLetters(null), isEmpty);
+    });
+
+    test('matches selected letters and treats an empty set as all letters', () {
+      expect(
+        canadaSpecialAppliesToShowLetter(
+          sectionLetter: 'a',
+          selectedShowLetters: {'A', 'B'},
+        ),
+        isTrue,
+      );
+      expect(
+        canadaSpecialAppliesToShowLetter(
+          sectionLetter: 'C',
+          selectedShowLetters: {'A', 'B'},
+        ),
+        isFalse,
+      );
+      expect(
+        canadaSpecialAppliesToShowLetter(
+          sectionLetter: 'C',
+          selectedShowLetters: <String>{},
+        ),
+        isTrue,
+      );
+    });
+  });
+
   group('isCanadianExhibitorAddress', () {
     test('accepts province codes and names', () {
       expect(isCanadianExhibitorAddress(stateOrProvince: 'ON'), isTrue);

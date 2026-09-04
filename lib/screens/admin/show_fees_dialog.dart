@@ -70,9 +70,11 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
   final _discountRequiredShows = TextEditingController();
 
   bool _canManageCanadaSpecial = false;
+  String _discountEditor = 'volume';
   bool _canadaSpecialEnabled = false;
   String _canadaSpecialType = 'amount';
   String _canadaSpecialScope = 'both';
+  final Set<String> _canadaSpecialShowLetters = <String>{};
   final _canadaSpecialValue = TextEditingController();
 
   String _onlinePaymentFeeMode = 'club_absorbs';
@@ -214,7 +216,8 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
             'canada_special_discount_enabled,'
             'canada_special_discount_type,'
             'canada_special_discount_value,'
-            'canada_special_discount_scope',
+            'canada_special_discount_scope,'
+            'canada_special_show_letters',
           )
           .eq('show_id', widget.showId)
           .maybeSingle();
@@ -271,6 +274,22 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
           .toString();
       _canadaSpecialScope = (feeRow?['canada_special_discount_scope'] ?? 'both')
           .toString();
+      final availableCanadaSpecialLetters = _showLettersForSections(sections);
+      final savedCanadaSpecialLetters =
+          ((feeRow?['canada_special_show_letters'] as List?) ?? <dynamic>[])
+              .map((letter) => letter.toString().trim().toUpperCase())
+              .where(availableCanadaSpecialLetters.contains)
+              .toSet();
+      _canadaSpecialShowLetters
+        ..clear()
+        ..addAll(
+          savedCanadaSpecialLetters.isEmpty
+              ? availableCanadaSpecialLetters
+              : savedCanadaSpecialLetters,
+        );
+      _discountEditor = _canManageCanadaSpecial && _canadaSpecialEnabled
+          ? 'canada'
+          : 'volume';
 
       for (final section in sections) {
         final sectionId = section['id'].toString();
@@ -539,6 +558,14 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
           canadaDiscount > 100) {
         setState(
           () => _msg = 'Canada Special percent discount cannot exceed 100.',
+        );
+        return false;
+      }
+
+      if (_canadaSpecialEnabled && _canadaSpecialShowLetters.isEmpty) {
+        setState(
+          () =>
+              _msg = 'Select at least one show letter for the Canada Special.',
         );
         return false;
       }
@@ -950,6 +977,8 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
             _canadaSpecialValue.text.trim(),
           ),
           'canada_special_discount_scope': _canadaSpecialScope,
+          'canada_special_show_letters': _canadaSpecialShowLetters.toList()
+            ..sort(),
         });
       }
       await StripeConnectService.supabase
@@ -1249,275 +1278,303 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
 
   Widget _buildDiscountSection() {
     return _section('Discounts', [
-      SwitchListTile(
-        contentPadding: EdgeInsets.zero,
-        title: const Text(
-          'Enable entry volume discount',
-          style: TextStyle(fontWeight: FontWeight.w600),
+      if (_canManageCanadaSpecial) ...[
+        DropdownButtonFormField<String>(
+          initialValue: _discountEditor,
+          isExpanded: true,
+          items: const [
+            DropdownMenuItem(
+              value: 'volume',
+              child: Text('Entry volume discount'),
+            ),
+            DropdownMenuItem(value: 'canada', child: Text('Canada Special')),
+          ],
+          onChanged: (_saving || _isReadOnly)
+              ? null
+              : (value) => setState(() => _discountEditor = value ?? 'volume'),
+          decoration: const InputDecoration(
+            labelText: 'Special discount option',
+            helperText: 'Choose the discount rule you want to configure.',
+            border: OutlineInputBorder(),
+          ),
         ),
-        subtitle: const Text(
-          'Offer a discounted entry price when an exhibitor meets the required entry count per show or across multiple show sections.',
+        const SizedBox(height: 14),
+      ],
+      if (!_canManageCanadaSpecial || _discountEditor == 'volume') ...[
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text(
+            'Enable entry volume discount',
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
+          subtitle: const Text(
+            'Offer a discounted entry price when an exhibitor meets the required entry count per show or across multiple show sections.',
+          ),
+          value: _discountEnabled,
+          onChanged: (_saving || _isReadOnly)
+              ? null
+              : (v) => setState(() => _discountEnabled = v),
         ),
-        value: _discountEnabled,
-        onChanged: (_saving || _isReadOnly)
-            ? null
-            : (v) => setState(() => _discountEnabled = v),
-      ),
-      if (_discountEnabled) ...[
-        const SizedBox(height: 10),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final stack = constraints.maxWidth < 620;
+        if (_discountEnabled) ...[
+          const SizedBox(height: 10),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final stack = constraints.maxWidth < 620;
 
-            final basisField = DropdownButtonFormField<String>(
-              initialValue: _discountBasis,
-              isExpanded: true,
-              items: const [
-                DropdownMenuItem(
-                  value: 'each_show',
-                  child: Text(
-                    'Minimum entries per show',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+              final basisField = DropdownButtonFormField<String>(
+                initialValue: _discountBasis,
+                isExpanded: true,
+                items: const [
+                  DropdownMenuItem(
+                    value: 'each_show',
+                    child: Text(
+                      'Minimum entries per show',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                ),
-                DropdownMenuItem(
-                  value: 'cumulative',
-                  child: Text(
-                    'Cumulative entries across shows',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  DropdownMenuItem(
+                    value: 'cumulative',
+                    child: Text(
+                      'Cumulative entries across shows',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                ),
-              ],
-              onChanged: (_saving || _isReadOnly)
-                  ? null
-                  : (v) => setState(() => _discountBasis = v ?? 'each_show'),
-              decoration: const InputDecoration(
-                labelText: 'How exhibitors qualify',
-                border: OutlineInputBorder(),
-              ),
-            );
-
-            final scopeField = DropdownButtonFormField<String>(
-              initialValue: _discountScope,
-              isExpanded: true,
-              items: const [
-                DropdownMenuItem(value: 'both', child: Text('Open and Youth')),
-                DropdownMenuItem(value: 'open', child: Text('Open only')),
-                DropdownMenuItem(value: 'youth', child: Text('Youth only')),
-              ],
-              onChanged: (_saving || _isReadOnly)
-                  ? null
-                  : (v) => setState(() => _discountScope = v ?? 'both'),
-              decoration: const InputDecoration(
-                labelText: 'Applies to',
-                border: OutlineInputBorder(),
-              ),
-            );
-
-            if (stack) {
-              return Column(
-                children: [basisField, const SizedBox(height: 12), scopeField],
-              );
-            }
-
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: basisField),
-                const SizedBox(width: 12),
-                Expanded(child: scopeField),
-              ],
-            );
-          },
-        ),
-        const SizedBox(height: 12),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final stack = constraints.maxWidth < 620;
-
-            final fields = [
-              TextField(
-                controller: _discountMinimumEntries,
-                enabled: !_saving && !_isReadOnly,
-                keyboardType: TextInputType.number,
-                textInputAction: TextInputAction.next,
-                decoration: InputDecoration(
-                  labelText: _discountBasis == 'each_show'
-                      ? 'Minimum entries per show'
-                      : 'Minimum total entries',
-                  helperText: _discountBasis == 'each_show'
-                      ? 'Example: 12 animals in a show'
-                      : 'Example: 36 entries across 3 shows',
-                  helperMaxLines: 2,
-                  border: const OutlineInputBorder(),
-                ),
-              ),
-              TextField(
-                controller: _discountMaximumEntries,
-                enabled: !_saving && !_isReadOnly,
-                keyboardType: TextInputType.number,
-                textInputAction: TextInputAction.next,
-                decoration: InputDecoration(
-                  labelText: _discountBasis == 'each_show'
-                      ? 'Maximum entries per show'
-                      : 'Maximum entries',
-                  helperText: 'Optional; leave blank for no maximum',
-                  helperMaxLines: 2,
-                  border: const OutlineInputBorder(),
-                ),
-              ),
-              TextField(
-                controller: _discountRequiredShows,
-                enabled: !_saving && !_isReadOnly,
-                keyboardType: TextInputType.number,
-                textInputAction: TextInputAction.next,
+                ],
+                onChanged: (_saving || _isReadOnly)
+                    ? null
+                    : (v) => setState(() => _discountBasis = v ?? 'each_show'),
                 decoration: const InputDecoration(
-                  labelText: 'Minimum number of shows',
-                  helperText: 'Example: 3 for a triple show',
-                  helperMaxLines: 2,
+                  labelText: 'How exhibitors qualify',
                   border: OutlineInputBorder(),
                 ),
-              ),
-            ];
+              );
 
-            if (stack) {
-              return Column(
-                children: [
-                  for (final field in fields) ...[
-                    field,
+              final scopeField = DropdownButtonFormField<String>(
+                initialValue: _discountScope,
+                isExpanded: true,
+                items: const [
+                  DropdownMenuItem(
+                    value: 'both',
+                    child: Text('Open and Youth'),
+                  ),
+                  DropdownMenuItem(value: 'open', child: Text('Open only')),
+                  DropdownMenuItem(value: 'youth', child: Text('Youth only')),
+                ],
+                onChanged: (_saving || _isReadOnly)
+                    ? null
+                    : (v) => setState(() => _discountScope = v ?? 'both'),
+                decoration: const InputDecoration(
+                  labelText: 'Applies to',
+                  border: OutlineInputBorder(),
+                ),
+              );
+
+              if (stack) {
+                return Column(
+                  children: [
+                    basisField,
                     const SizedBox(height: 12),
+                    scopeField,
+                  ],
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: basisField),
+                  const SizedBox(width: 12),
+                  Expanded(child: scopeField),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 12),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final stack = constraints.maxWidth < 620;
+
+              final fields = [
+                TextField(
+                  controller: _discountMinimumEntries,
+                  enabled: !_saving && !_isReadOnly,
+                  keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.next,
+                  decoration: InputDecoration(
+                    labelText: _discountBasis == 'each_show'
+                        ? 'Minimum entries per show'
+                        : 'Minimum total entries',
+                    helperText: _discountBasis == 'each_show'
+                        ? 'Example: 12 animals in a show'
+                        : 'Example: 36 entries across 3 shows',
+                    helperMaxLines: 2,
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+                TextField(
+                  controller: _discountMaximumEntries,
+                  enabled: !_saving && !_isReadOnly,
+                  keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.next,
+                  decoration: InputDecoration(
+                    labelText: _discountBasis == 'each_show'
+                        ? 'Maximum entries per show'
+                        : 'Maximum entries',
+                    helperText: 'Optional; leave blank for no maximum',
+                    helperMaxLines: 2,
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+                TextField(
+                  controller: _discountRequiredShows,
+                  enabled: !_saving && !_isReadOnly,
+                  keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: 'Minimum number of shows',
+                    helperText: 'Example: 3 for a triple show',
+                    helperMaxLines: 2,
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ];
+
+              if (stack) {
+                return Column(
+                  children: [
+                    for (final field in fields) ...[
+                      field,
+                      const SizedBox(height: 12),
+                    ],
+                  ],
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (var i = 0; i < fields.length; i++) ...[
+                    Expanded(child: fields[i]),
+                    if (i != fields.length - 1) const SizedBox(width: 12),
                   ],
                 ],
               );
-            }
+            },
+          ),
+          const SizedBox(height: 12),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final stack = constraints.maxWidth < 520;
 
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (var i = 0; i < fields.length; i++) ...[
-                  Expanded(child: fields[i]),
-                  if (i != fields.length - 1) const SizedBox(width: 12),
+              final typeField = DropdownButtonFormField<String>(
+                initialValue: _discountType,
+                isExpanded: true,
+                items: const [
+                  DropdownMenuItem(
+                    value: 'fixed_rate',
+                    child: Text(
+                      'Fixed discounted rate per entry',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  DropdownMenuItem(
+                    value: 'amount',
+                    child: Text(
+                      'Amount off each entry',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  DropdownMenuItem(
+                    value: 'percent',
+                    child: Text(
+                      'Percent off each entry',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                 ],
-              ],
-            );
-          },
-        ),
-        const SizedBox(height: 12),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final stack = constraints.maxWidth < 520;
-
-            final typeField = DropdownButtonFormField<String>(
-              initialValue: _discountType,
-              isExpanded: true,
-              items: const [
-                DropdownMenuItem(
-                  value: 'fixed_rate',
-                  child: Text(
-                    'Fixed discounted rate per entry',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                onChanged: (_saving || _isReadOnly)
+                    ? null
+                    : (v) => setState(() => _discountType = v ?? 'fixed_rate'),
+                decoration: const InputDecoration(
+                  labelText: 'Discount pricing method',
+                  border: OutlineInputBorder(),
                 ),
-                DropdownMenuItem(
-                  value: 'amount',
-                  child: Text(
-                    'Amount off each entry',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                DropdownMenuItem(
-                  value: 'percent',
-                  child: Text(
-                    'Percent off each entry',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-              onChanged: (_saving || _isReadOnly)
-                  ? null
-                  : (v) => setState(() => _discountType = v ?? 'fixed_rate'),
-              decoration: const InputDecoration(
-                labelText: 'Discount pricing method',
-                border: OutlineInputBorder(),
-              ),
-            );
-
-            final valueField = TextField(
-              controller: _discountValue,
-              enabled: !_saving && !_isReadOnly,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              decoration: InputDecoration(
-                labelText: _discountType == 'fixed_rate'
-                    ? 'Discounted rate per entry'
-                    : 'Discount value',
-                prefixText: _discountType == 'percent' ? null : '\$ ',
-                suffixText: _discountType == 'percent' ? '%' : null,
-                helperText: _discountType == 'fixed_rate'
-                    ? 'Example: charge \$3.00 per qualifying entry'
-                    : null,
-                helperMaxLines: 2,
-                border: const OutlineInputBorder(),
-              ),
-            );
-
-            if (stack) {
-              return Column(
-                children: [typeField, const SizedBox(height: 12), valueField],
               );
-            }
 
-            return Row(
-              children: [
-                Expanded(child: typeField),
-                const SizedBox(width: 12),
-                Expanded(child: valueField),
-              ],
-            );
-          },
-        ),
-        const SizedBox(height: 12),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: AppColors.navy.withValues(alpha: .05),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.navy.withValues(alpha: .10)),
+              final valueField = TextField(
+                controller: _discountValue,
+                enabled: !_saving && !_isReadOnly,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: InputDecoration(
+                  labelText: _discountType == 'fixed_rate'
+                      ? 'Discounted rate per entry'
+                      : 'Discount value',
+                  prefixText: _discountType == 'percent' ? null : '\$ ',
+                  suffixText: _discountType == 'percent' ? '%' : null,
+                  helperText: _discountType == 'fixed_rate'
+                      ? 'Example: charge \$3.00 per qualifying entry'
+                      : null,
+                  helperMaxLines: 2,
+                  border: const OutlineInputBorder(),
+                ),
+              );
+
+              if (stack) {
+                return Column(
+                  children: [typeField, const SizedBox(height: 12), valueField],
+                );
+              }
+
+              return Row(
+                children: [
+                  Expanded(child: typeField),
+                  const SizedBox(width: 12),
+                  Expanded(child: valueField),
+                ],
+              );
+            },
           ),
-          child: Text(
-            _discountBasis == 'each_show'
-                ? 'Example: require 12 or more entries in each of 3 ${_discountScope == 'both'
-                      ? 'Open or Youth'
-                      : _discountScope == 'open'
-                      ? 'Open'
-                      : 'Youth'} shows, then apply the discount to qualifying entries.'
-                : 'Example: require 36 total entries across 3 ${_discountScope == 'both'
-                      ? 'Open or Youth'
-                      : _discountScope == 'open'
-                      ? 'Open'
-                      : 'Youth'} shows, then apply the selected discount to qualifying entries.',
-            style: const TextStyle(fontWeight: FontWeight.w500),
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.navy.withValues(alpha: .05),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.navy.withValues(alpha: .10)),
+            ),
+            child: Text(
+              _discountBasis == 'each_show'
+                  ? 'Example: require 12 or more entries in each of 3 ${_discountScope == 'both'
+                        ? 'Open or Youth'
+                        : _discountScope == 'open'
+                        ? 'Open'
+                        : 'Youth'} shows, then apply the discount to qualifying entries.'
+                  : 'Example: require 36 total entries across 3 ${_discountScope == 'both'
+                        ? 'Open or Youth'
+                        : _discountScope == 'open'
+                        ? 'Open'
+                        : 'Youth'} shows, then apply the selected discount to qualifying entries.',
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
           ),
-        ),
+        ],
       ],
-      if (_canManageCanadaSpecial) ...[
-        const SizedBox(height: 18),
-        const Divider(),
-        const SizedBox(height: 10),
+      if (_canManageCanadaSpecial && _discountEditor == 'canada')
         _buildCanadaSpecialControls(),
-      ],
     ], icon: Icons.discount_outlined);
   }
 
   Widget _buildCanadaSpecialControls() {
     final disabled = _saving || _isReadOnly;
+    final availableShowLetters = _showLettersForSections(_sections).toList();
 
     return Container(
       width: double.infinity,
@@ -1552,10 +1609,46 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
             value: _canadaSpecialEnabled,
             onChanged: disabled
                 ? null
-                : (value) => setState(() => _canadaSpecialEnabled = value),
+                : (value) => setState(() {
+                    _canadaSpecialEnabled = value;
+                    if (value && _canadaSpecialShowLetters.isEmpty) {
+                      _canadaSpecialShowLetters.addAll(availableShowLetters);
+                    }
+                  }),
           ),
           if (_canadaSpecialEnabled) ...[
             const SizedBox(height: 10),
+            const Text(
+              'Show letters',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              'Choose one or more show letters that receive this discount.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: availableShowLetters.map((letter) {
+                final selected = _canadaSpecialShowLetters.contains(letter);
+                return FilterChip(
+                  label: Text(letter),
+                  selected: selected,
+                  onSelected: disabled
+                      ? null
+                      : (value) => setState(() {
+                          if (value) {
+                            _canadaSpecialShowLetters.add(letter);
+                          } else if (_canadaSpecialShowLetters.length > 1) {
+                            _canadaSpecialShowLetters.remove(letter);
+                          }
+                        }),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 14),
             LayoutBuilder(
               builder: (context, constraints) {
                 final stack = constraints.maxWidth < 620;
@@ -1651,6 +1744,16 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
         ],
       ),
     );
+  }
+
+  Set<String> _showLettersForSections(Iterable<Map<String, dynamic>> sections) {
+    return sections
+        .map(
+          (section) =>
+              (section['letter'] ?? '').toString().trim().toUpperCase(),
+        )
+        .where((letter) => letter.isNotEmpty)
+        .toSet();
   }
 
   Widget _buildOnlinePaymentFeeSection() {

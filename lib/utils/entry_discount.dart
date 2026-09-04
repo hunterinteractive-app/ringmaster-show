@@ -22,6 +22,27 @@ double selectBetterDiscount(double first, double second) {
   return safeFirst > safeSecond ? safeFirst : safeSecond;
 }
 
+Set<String> normalizeShowLetters(Object? value) {
+  if (value is! Iterable) return <String>{};
+
+  return value
+      .map((letter) => letter.toString().trim().toUpperCase())
+      .where((letter) => letter.isNotEmpty)
+      .toSet();
+}
+
+bool canadaSpecialAppliesToShowLetter({
+  required Object? sectionLetter,
+  required Set<String> selectedShowLetters,
+}) {
+  if (selectedShowLetters.isEmpty) return true;
+  final normalizedLetter = (sectionLetter ?? '')
+      .toString()
+      .trim()
+      .toUpperCase();
+  return selectedShowLetters.contains(normalizedLetter);
+}
+
 bool isCanadianExhibitorAddress({Object? stateOrProvince, Object? postalCode}) {
   final province = (stateOrProvince ?? '').toString().toUpperCase().replaceAll(
     RegExp(r'[^A-Z]'),

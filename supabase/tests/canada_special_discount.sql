@@ -4,7 +4,7 @@
 
 begin;
 
-select plan(8);
+select plan(9);
 
 create temporary table canada_special_test_context (
   show_id uuid not null,
@@ -18,7 +18,8 @@ declare
   v_owner uuid := gen_random_uuid();
   v_show uuid := gen_random_uuid();
   v_cart uuid := gen_random_uuid();
-  v_section uuid := gen_random_uuid();
+  v_section_a uuid := gen_random_uuid();
+  v_section_b uuid := gen_random_uuid();
   v_canadian uuid := gen_random_uuid();
   v_us uuid := gen_random_uuid();
 begin
@@ -40,7 +41,9 @@ begin
 
   insert into public.show_sections (
     id, show_id, kind, letter, display_name
-  ) values (v_section, v_show, 'open', 'A', 'Open A');
+  ) values
+    (v_section_a, v_show, 'open', 'A', 'Open A'),
+    (v_section_b, v_show, 'open', 'B', 'Open B');
 
   insert into public.show_fee_settings (
     show_id, currency,
@@ -49,24 +52,34 @@ begin
     multi_show_discount_scope, multi_show_discount_min_entries,
     multi_show_discount_required_shows,
     canada_special_discount_enabled, canada_special_discount_type,
-    canada_special_discount_value, canada_special_discount_scope
+    canada_special_discount_value, canada_special_discount_scope,
+    canada_special_show_letters
   ) values (
     v_show, 'USD',
     true, 'amount', 1, 'each_show', 'both', 1, 1,
-    true, 'amount', 3, 'both'
+    true, 'amount', 3, 'both', array['A']::text[]
   );
 
   insert into public.show_section_fee_settings (
     section_id, fee_per_entry, fee_per_show, fur_fee
-  ) values (v_section, 10, 0, 0);
+  ) values
+    (v_section_a, 10, 0, 0),
+    (v_section_b, 10, 0, 0)
+  on conflict (section_id) do update
+  set
+    fee_per_entry = excluded.fee_per_entry,
+    fee_per_show = excluded.fee_per_show,
+    fur_fee = excluded.fur_fee;
 
   insert into public.exhibitors (
-    id, owner_user_id, type, display_name, state, zip, is_active,
+    id, owner_user_id, type, display_name, email, state, zip, is_active,
     is_local_only, created_for_show_id, is_test
   ) values
-    (v_canadian, v_owner, 'adult', 'Canadian Exhibitor', 'ON', 'K1A 0B1',
+    (v_canadian, v_owner, 'adult', 'Canadian Exhibitor',
+      'canadian-' || v_canadian || '@example.invalid', 'ON', 'K1A 0B1',
       true, true, v_show, true),
-    (v_us, v_owner, 'adult', 'US Exhibitor', 'IN', '46204',
+    (v_us, v_owner, 'adult', 'US Exhibitor',
+      'us-' || v_us || '@example.invalid', 'IN', '46204',
       true, true, v_show, true);
 
   insert into public.entry_carts (id, user_id, show_id)
@@ -76,9 +89,11 @@ begin
     cart_id, section_id, species, tattoo, breed, variety, sex,
     class_name, exhibitor_id, is_fur
   ) values
-    (v_cart, v_section, 'rabbit', 'CAN-1', 'Test Breed', 'Test Variety',
+    (v_cart, v_section_a, 'rabbit', 'CAN-1', 'Test Breed', 'Test Variety',
       'Buck', 'Senior', v_canadian, false),
-    (v_cart, v_section, 'rabbit', 'USA-1', 'Test Breed', 'Test Variety',
+    (v_cart, v_section_b, 'rabbit', 'CAN-2', 'Test Breed', 'Test Variety',
+      'Doe', 'Senior', v_canadian, false),
+    (v_cart, v_section_a, 'rabbit', 'USA-1', 'Test Breed', 'Test Variety',
       'Doe', 'Senior', v_us, false);
 
   insert into canada_special_test_context
@@ -112,7 +127,7 @@ select is(
       )
   ),
   300,
-  'Canadian exhibitor receives the better Canada Special discount'
+  'Canada Special applies only to the selected show letter'
 );
 select is(
   (
@@ -138,6 +153,32 @@ select is(
 );
 
 update public.show_fee_settings
+set canada_special_show_letters = '{}'::text[]
+where show_id = (select show_id from canada_special_test_context);
+
+do $$
+begin
+  perform 1
+  from public.calculate_entry_cart_balance_internal(
+    (select cart_id from canada_special_test_context)
+  );
+end;
+$$;
+
+select is(
+  (
+    select discount_cents
+    from public.show_exhibitor_balances
+    where entry_cart_id = (select cart_id from canada_special_test_context)
+      and exhibitor_id = (
+        select canadian_exhibitor_id from canada_special_test_context
+      )
+  ),
+  600,
+  'an empty show-letter selection remains backwards compatible with all letters'
+);
+
+update public.show_fee_settings
 set canada_special_discount_value = 0.50
 where show_id = (select show_id from canada_special_test_context);
 
@@ -159,7 +200,7 @@ select is(
         select canadian_exhibitor_id from canada_special_test_context
       )
   ),
-  100,
+  200,
   'volume discount wins when it is better than Canada Special'
 );
 select is(
