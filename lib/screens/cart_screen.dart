@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
 import '../utils/date_time_utils.dart';
+import '../utils/entry_discount.dart';
 import '../utils/section_breed_scope.dart';
 import '../utils/species_sex.dart';
 import '../services/app_session.dart';
@@ -62,6 +63,7 @@ class _CartScreenState extends State<CartScreen> {
       'This show charges an Online Payment Fee for electronic payments. This fee helps cover payment processing costs, payment provider charges, and online entry services.';
 
   final Map<String, String> _exhibitorLabelById = {};
+  final Set<String> _canadianExhibitorIds = {};
 
   @override
   void initState() {
@@ -98,7 +100,9 @@ class _CartScreenState extends State<CartScreen> {
             'multi_show_discount_enabled,multi_show_discount_type,multi_show_discount_value,'
             'multi_show_discount_basis,multi_show_discount_scope,'
             'multi_show_discount_min_entries,multi_show_discount_max_entries,'
-            'multi_show_discount_required_shows',
+            'multi_show_discount_required_shows,'
+            'canada_special_discount_enabled,canada_special_discount_type,'
+            'canada_special_discount_value,canada_special_discount_scope',
           )
           .eq('show_id', widget.showId)
           .maybeSingle();
@@ -216,6 +220,7 @@ class _CartScreenState extends State<CartScreen> {
     List<Map<String, dynamic>> items,
   ) async {
     _exhibitorLabelById.clear();
+    _canadianExhibitorIds.clear();
 
     final ids = <String>{};
     for (final it in items) {
@@ -227,7 +232,7 @@ class _CartScreenState extends State<CartScreen> {
 
     final rows = await supabase
         .from('exhibitors')
-        .select('id,showing_name,display_name,first_name,last_name')
+        .select('id,showing_name,display_name,first_name,last_name,state,zip')
         .inFilter('id', ids.toList());
 
     for (final r in (rows as List).cast<Map<String, dynamic>>()) {
@@ -244,6 +249,12 @@ class _CartScreenState extends State<CartScreen> {
                 : [fn, ln].where((x) => x.isNotEmpty).join(' ').trim());
 
       _exhibitorLabelById[id] = label.isEmpty ? 'Exhibitor' : label;
+      if (isCanadianExhibitorAddress(
+        stateOrProvince: r['state'],
+        postalCode: r['zip'],
+      )) {
+        _canadianExhibitorIds.add(id);
+      }
     }
   }
 
@@ -435,6 +446,21 @@ class _CartScreenState extends State<CartScreen> {
         (_feeSettings?['multi_show_discount_required_shows'] as num?)
             ?.toInt() ??
         0;
+    final canadaSpecialEnabled =
+        _feeSettings?['canada_special_discount_enabled'] == true;
+    final canadaSpecialType =
+        (_feeSettings?['canada_special_discount_type'] ?? 'amount')
+            .toString()
+            .toLowerCase()
+            .trim();
+    final canadaSpecialValue = _asDouble(
+      _feeSettings?['canada_special_discount_value'],
+    );
+    final canadaSpecialScope =
+        (_feeSettings?['canada_special_discount_scope'] ?? 'both')
+            .toString()
+            .toLowerCase()
+            .trim();
 
     double entriesSubtotal = 0.0;
     double furSubtotal = 0.0;
@@ -471,7 +497,8 @@ class _CartScreenState extends State<CartScreen> {
       furCount += 1;
     }
 
-    double discountAmount = 0.0;
+    final volumeDiscountByExhibitor = <String, double>{};
+    final canadaDiscountByExhibitor = <String, double>{};
     int qualifyingEntryCount = 0;
     int qualifyingShowCount = 0;
 
@@ -500,7 +527,9 @@ class _CartScreenState extends State<CartScreen> {
             .add(item);
       }
 
-      for (final exhibitorItems in itemsByExhibitor.values) {
+      for (final exhibitorEntry in itemsByExhibitor.entries) {
+        final exhibitorId = exhibitorEntry.key;
+        final exhibitorItems = exhibitorEntry.value;
         final itemsBySection = <String, List<Map<String, dynamic>>>{};
 
         for (final item in exhibitorItems) {
@@ -556,21 +585,63 @@ class _CartScreenState extends State<CartScreen> {
           final sectionFee = _sectionFeeBySectionId[sectionId];
           final regularEntryFee = _asDouble(sectionFee?['fee_per_entry']);
 
-          double itemDiscount = 0.0;
-          if (discountType == 'fixed_rate') {
-            itemDiscount = regularEntryFee - discountValue;
-          } else if (discountType == 'percent') {
-            final percent = discountValue > 1
-                ? discountValue / 100.0
-                : discountValue;
-            itemDiscount = regularEntryFee * percent;
-          } else if (discountType == 'amount') {
-            itemDiscount = discountValue;
-          }
-
-          itemDiscount = itemDiscount.clamp(0.0, regularEntryFee).toDouble();
-          discountAmount += itemDiscount;
+          final itemDiscount = calculatePerEntryDiscount(
+            entryFee: regularEntryFee,
+            discountType: discountType,
+            discountValue: discountValue,
+          );
+          volumeDiscountByExhibitor.update(
+            exhibitorId,
+            (current) => current + itemDiscount,
+            ifAbsent: () => itemDiscount,
+          );
         }
+      }
+    }
+
+    if (canadaSpecialEnabled && regularItems.isNotEmpty) {
+      for (final item in regularItems) {
+        final exhibitorId = (item['exhibitor_id'] ?? '__unassigned__')
+            .toString();
+        if (!_canadianExhibitorIds.contains(exhibitorId)) continue;
+
+        final sectionId = (item['section_id'] ?? '').toString();
+        final sectionKind = (_sectionById[sectionId]?['kind'] ?? '')
+            .toString()
+            .trim()
+            .toLowerCase();
+        final isEligibleForScope =
+            canadaSpecialScope == 'both' || sectionKind == canadaSpecialScope;
+        if (!isEligibleForScope) continue;
+
+        final entryFee = _asDouble(
+          _sectionFeeBySectionId[sectionId]?['fee_per_entry'],
+        );
+        final itemDiscount = calculatePerEntryDiscount(
+          entryFee: entryFee,
+          discountType: canadaSpecialType,
+          discountValue: canadaSpecialValue,
+        );
+        canadaDiscountByExhibitor.update(
+          exhibitorId,
+          (current) => current + itemDiscount,
+          ifAbsent: () => itemDiscount,
+        );
+      }
+    }
+
+    final discountedExhibitorIds = <String>{
+      ...volumeDiscountByExhibitor.keys,
+      ...canadaDiscountByExhibitor.keys,
+    };
+    double discountAmount = 0;
+    var canadaSpecialApplied = false;
+    for (final exhibitorId in discountedExhibitorIds) {
+      final volumeDiscount = volumeDiscountByExhibitor[exhibitorId] ?? 0;
+      final canadaDiscount = canadaDiscountByExhibitor[exhibitorId] ?? 0;
+      discountAmount += selectBetterDiscount(volumeDiscount, canadaDiscount);
+      if (canadaDiscount > volumeDiscount && canadaDiscount > 0) {
+        canadaSpecialApplied = true;
       }
     }
 
@@ -594,6 +665,7 @@ class _CartScreenState extends State<CartScreen> {
       'discount_minimum_shows': minimumShows,
       'qualifying_entry_count': qualifyingEntryCount,
       'qualifying_show_count': qualifyingShowCount,
+      'canada_special_applied': canadaSpecialApplied,
       'discount_amount': discountAmount,
       'total': total < 0 ? 0.0 : total,
     };
@@ -1014,9 +1086,7 @@ class _CartScreenState extends State<CartScreen> {
     }
 
     if (discountAmount > 0) {
-      parts.add(
-        'Volume discount: -${_money(discountAmount, currency: currency)}',
-      );
+      parts.add('Discount: -${_money(discountAmount, currency: currency)}');
     }
 
     parts.add('= ${_money(total, currency: currency)}');
@@ -1280,8 +1350,7 @@ class _CartScreenState extends State<CartScreen> {
                                     Padding(
                                       padding: const EdgeInsets.only(top: 4),
                                       child: Text(
-                                        'Multi-show volume discount '
-                                        '(${overallFee['qualifying_entry_count']} qualifying entries): '
+                                        'Discount: '
                                         '-${_money(overallFee['discount_amount'] as double, currency: currency)}',
                                       ),
                                     ),

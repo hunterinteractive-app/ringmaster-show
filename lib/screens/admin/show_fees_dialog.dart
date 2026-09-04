@@ -68,6 +68,12 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
   final _discountMaximumEntries = TextEditingController();
   final _discountRequiredShows = TextEditingController();
 
+  bool _canManageCanadaSpecial = false;
+  bool _canadaSpecialEnabled = false;
+  String _canadaSpecialType = 'amount';
+  String _canadaSpecialScope = 'both';
+  final _canadaSpecialValue = TextEditingController();
+
   String _onlinePaymentFeeMode = 'club_absorbs';
   String _paymentTimingMode = 'pay_at_show_only';
   String? _defaultOnlineProvider;
@@ -119,6 +125,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
     _discountMinimumEntries.dispose();
     _discountMaximumEntries.dispose();
     _discountRequiredShows.dispose();
+    _canadaSpecialValue.dispose();
 
     for (final c in _feePerEntryBySection.values) {
       c.dispose();
@@ -175,6 +182,17 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
           ? 'pass_to_exhibitor'
           : 'club_absorbs';
 
+      final currentUserId = StripeConnectService.supabase.auth.currentUser?.id;
+      final canadaSpecialAccess = currentUserId == null
+          ? null
+          : await StripeConnectService.supabase
+                .from('secretary_feature_access')
+                .select('feature_key')
+                .eq('feature_key', 'canada_special_discount')
+                .eq('user_id', currentUserId)
+                .maybeSingle();
+      _canManageCanadaSpecial = canadaSpecialAccess != null;
+
       await _loadPaymentConfiguration();
 
       final feeRow = await StripeConnectService.supabase
@@ -188,7 +206,11 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
             'multi_show_discount_scope,'
             'multi_show_discount_min_entries,'
             'multi_show_discount_max_entries,'
-            'multi_show_discount_required_shows',
+            'multi_show_discount_required_shows,'
+            'canada_special_discount_enabled,'
+            'canada_special_discount_type,'
+            'canada_special_discount_value,'
+            'canada_special_discount_scope',
           )
           .eq('show_id', widget.showId)
           .maybeSingle();
@@ -237,6 +259,14 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
           : feeRow!['multi_show_discount_max_entries'].toString();
       _discountRequiredShows.text =
           (feeRow?['multi_show_discount_required_shows'] ?? 3).toString();
+      _canadaSpecialEnabled =
+          feeRow?['canada_special_discount_enabled'] == true;
+      _canadaSpecialType = (feeRow?['canada_special_discount_type'] ?? 'amount')
+          .toString();
+      _canadaSpecialValue.text = (feeRow?['canada_special_discount_value'] ?? 0)
+          .toString();
+      _canadaSpecialScope = (feeRow?['canada_special_discount_scope'] ?? 'both')
+          .toString();
 
       for (final section in sections) {
         final sectionId = section['id'].toString();
@@ -484,6 +514,27 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
         setState(
           () => _msg =
               'Minimum number of shows cannot exceed the number of enabled $scopeLabel sections ($eligibleSectionCount).',
+        );
+        return false;
+      }
+    }
+
+    if (_canManageCanadaSpecial) {
+      final canadaDiscount = _parseMoney(_canadaSpecialValue.text);
+      if (canadaDiscount == null) {
+        setState(
+          () => _msg = _canadaSpecialType == 'fixed_rate'
+              ? 'Canada Special discounted entry rate must be 0 or greater.'
+              : 'Canada Special discount must be 0 or greater.',
+        );
+        return false;
+      }
+
+      if (_canadaSpecialEnabled &&
+          _canadaSpecialType == 'percent' &&
+          canadaDiscount > 100) {
+        setState(
+          () => _msg = 'Canada Special percent discount cannot exceed 100.',
         );
         return false;
       }
@@ -868,7 +919,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
                 StripeConnectService.supabase.auth.currentUser?.id,
           })
           .eq('id', widget.showId);
-      await StripeConnectService.supabase.from('show_fee_settings').upsert({
+      final feeSettings = <String, dynamic>{
         'show_id': widget.showId,
         'multi_show_discount_enabled': _discountEnabled,
         'multi_show_discount_type': _discountType,
@@ -886,7 +937,20 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
             ? int.parse(_discountRequiredShows.text.trim())
             : null,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
-      });
+      };
+      if (_canManageCanadaSpecial) {
+        feeSettings.addAll({
+          'canada_special_discount_enabled': _canadaSpecialEnabled,
+          'canada_special_discount_type': _canadaSpecialType,
+          'canada_special_discount_value': double.parse(
+            _canadaSpecialValue.text.trim(),
+          ),
+          'canada_special_discount_scope': _canadaSpecialScope,
+        });
+      }
+      await StripeConnectService.supabase
+          .from('show_fee_settings')
+          .upsert(feeSettings);
 
       final sectionRows = _sections.map((section) {
         final sectionId = section['id'].toString();
@@ -1439,7 +1503,150 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
           ),
         ),
       ],
+      if (_canManageCanadaSpecial) ...[
+        const SizedBox(height: 18),
+        const Divider(),
+        const SizedBox(height: 10),
+        _buildCanadaSpecialControls(),
+      ],
     ], icon: Icons.discount_outlined);
+  }
+
+  Widget _buildCanadaSpecialControls() {
+    final disabled = _saving || _isReadOnly;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.navy.withValues(alpha: .035),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.navy.withValues(alpha: .12)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Canada Special',
+            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Internal rule for Canadian exhibitors. Exhibitors see only a generic “Discount” label. If they also qualify for the volume discount, the larger discount is applied and the two never stack.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 8),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text(
+              'Enable for Canadian exhibitors',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            subtitle: const Text(
+              'Eligibility uses the province or Canadian postal code saved on each exhibitor.',
+            ),
+            value: _canadaSpecialEnabled,
+            onChanged: disabled
+                ? null
+                : (value) => setState(() => _canadaSpecialEnabled = value),
+          ),
+          if (_canadaSpecialEnabled) ...[
+            const SizedBox(height: 10),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final stack = constraints.maxWidth < 620;
+                final scopeField = DropdownButtonFormField<String>(
+                  initialValue: _canadaSpecialScope,
+                  isExpanded: true,
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'both',
+                      child: Text('Open and Youth'),
+                    ),
+                    DropdownMenuItem(value: 'open', child: Text('Open only')),
+                    DropdownMenuItem(value: 'youth', child: Text('Youth only')),
+                  ],
+                  onChanged: disabled
+                      ? null
+                      : (value) => setState(
+                          () => _canadaSpecialScope = value ?? 'both',
+                        ),
+                  decoration: const InputDecoration(
+                    labelText: 'Applies to',
+                    border: OutlineInputBorder(),
+                  ),
+                );
+                final typeField = DropdownButtonFormField<String>(
+                  initialValue: _canadaSpecialType,
+                  isExpanded: true,
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'fixed_rate',
+                      child: Text('Fixed discounted rate per entry'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'amount',
+                      child: Text('Amount off each entry'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'percent',
+                      child: Text('Percent off each entry'),
+                    ),
+                  ],
+                  onChanged: disabled
+                      ? null
+                      : (value) => setState(
+                          () => _canadaSpecialType = value ?? 'amount',
+                        ),
+                  decoration: const InputDecoration(
+                    labelText: 'Discount pricing method',
+                    border: OutlineInputBorder(),
+                  ),
+                );
+                final valueField = TextField(
+                  controller: _canadaSpecialValue,
+                  enabled: !disabled,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: InputDecoration(
+                    labelText: _canadaSpecialType == 'fixed_rate'
+                        ? 'Discounted rate per entry'
+                        : 'Discount value',
+                    prefixText: _canadaSpecialType == 'percent' ? null : r'$ ',
+                    suffixText: _canadaSpecialType == 'percent' ? '%' : null,
+                    border: const OutlineInputBorder(),
+                  ),
+                );
+
+                if (stack) {
+                  return Column(
+                    children: [
+                      scopeField,
+                      const SizedBox(height: 12),
+                      typeField,
+                      const SizedBox(height: 12),
+                      valueField,
+                    ],
+                  );
+                }
+
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: scopeField),
+                    const SizedBox(width: 12),
+                    Expanded(child: typeField),
+                    const SizedBox(width: 12),
+                    Expanded(child: valueField),
+                  ],
+                );
+              },
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   Widget _buildOnlinePaymentFeeSection() {
