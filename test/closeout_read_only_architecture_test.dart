@@ -181,6 +181,38 @@ void main() {
       expect(pdfViewMigration, contains("in ('v2', 'cavy-fixed-v1')"));
     });
 
+    test(
+      'cavy-fixed-v2 is the canonical cavy calculation and report version',
+      () {
+        final migration = File(
+          'supabase/migrations/20260905233405_make_cavy_fixed_v2_canonical.sql',
+        ).readAsStringSync();
+
+        expect(
+          migration,
+          contains('calculate_cavy_sweepstakes_for_section_baseline'),
+        );
+        expect(
+          migration,
+          contains('calculate_cavy_sweepstakes_for_section_unlocked'),
+        );
+        expect(migration, contains('pg_advisory_xact_lock'));
+        expect(migration, contains("'cavy-fixed-v2'"));
+        expect(migration, contains("in ('v2', 'cavy-fixed-v2')"));
+        expect(migration, contains("sr.calculation_version = 'cavy-fixed-v2'"));
+        expect(migration, contains("when 'BOB' then 50"));
+        expect(migration, contains("when 'BOV' then 25"));
+        expect(migration, isNot(contains("'cavy-fixed-v1'")));
+
+        final loader = File(
+          'lib/screens/admin/closeout/data/loaders/sweepstakes_report_loader.dart',
+        ).readAsStringSync();
+        expect(loader, contains("species == 'cavy'"));
+        expect(loader, contains('cavyClubReportBreedName'));
+        expect(loader, contains('shownEntryCount'));
+      },
+    );
+
     test('regeneration reuses the finalize-run artifact identity owner', () {
       final createBody = methodBody(
         'Future<ReportArtifactSummary> _createManualReportArtifact({',

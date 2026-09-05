@@ -11,7 +11,7 @@ import '../../models/base/report_request.dart';
 import '../../models/clubs/sweepstakes_report_data.dart';
 
 /// Bump when the Sweepstakes PDF template or scoring presentation changes.
-const String sweepstakesReportVersion = '0.6.2';
+const String sweepstakesReportVersion = '0.6.3';
 
 class SweepstakesReportPdf {
   final Uint8List? logoBytes;
@@ -72,6 +72,7 @@ class SweepstakesReportPdf {
               verificationStatus: data.verificationStatus,
               engineType: data.engineType,
               rows: data.rows,
+              shownEntryCount: data.shownEntryCount,
             ),
           ];
 
@@ -107,7 +108,12 @@ class SweepstakesReportPdf {
             ],
 
             if (isNoResults)
-              _buildNoResultsBox(_noResultsMessage(data))
+              _buildNoResultsBox(
+                sweepstakesNoResultsMessage(
+                  data,
+                  shownEntryCount: section.shownEntryCount,
+                ),
+              )
             else ...[
               _buildResultsTable(
                 rows: section.rows,
@@ -148,14 +154,6 @@ class SweepstakesReportPdf {
       mimeType: 'application/pdf',
       bytes: bytes,
     );
-  }
-
-  String _noResultsMessage(SweepstakesReportData data) {
-    final species = data.species.trim().toLowerCase();
-    if (species == 'cavy' || data.breedName.trim().toLowerCase() == 'cavy') {
-      return 'No cavies were shown in this Show.';
-    }
-    return 'No rabbits of this breed were shown in this Show.';
   }
 
   String _buildFileName({
@@ -612,4 +610,20 @@ class SweepstakesReportPdf {
     }
     return value.toStringAsFixed(2);
   }
+}
+
+String sweepstakesNoResultsMessage(
+  SweepstakesReportData data, {
+  required int shownEntryCount,
+}) {
+  final species = data.species.trim().toLowerCase();
+  if (species == 'cavy' || data.breedName.trim().toLowerCase() == 'cavy') {
+    if (shownEntryCount > 0) {
+      return '$shownEntryCount cavies were shown, but no sweepstakes points '
+          'were calculated. Review the cavy scoring configuration and '
+          'regenerate this report.';
+    }
+    return 'No cavies were shown in this Show.';
+  }
+  return 'No rabbits of this breed were shown in this Show.';
 }

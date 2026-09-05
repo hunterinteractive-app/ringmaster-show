@@ -80,11 +80,14 @@ class SweepstakesReportLoader {
       }
     }
 
-    final breedSanctionNumber = breedName.isEmpty
+    final sanctionBreedName = species == 'cavy'
+        ? cavyClubReportBreedName
+        : breedName;
+    final breedSanctionNumber = sanctionBreedName.isEmpty
         ? ''
         : await _loadBreedSanctionNumber(
             showId: showId,
-            breedName: breedName,
+            breedName: sanctionBreedName,
             clubName: clubName,
             scope: scope,
             showLetter: showLetter,
@@ -144,6 +147,14 @@ class SweepstakesReportLoader {
           species: species,
           breedName: breedName,
         );
+        final shownEntryCount = rows.isEmpty && species == 'cavy'
+            ? await _loadShownEntryCountForSpecies(
+                showId: showId,
+                scope: scope,
+                showLetter: letter,
+                species: species,
+              )
+            : 0;
 
         var headerQuery = repo.supabase
             .from('v_sweepstakes_pdf_rows')
@@ -185,6 +196,7 @@ class SweepstakesReportLoader {
             engineType: (header['engine_type'] ?? 'NO_RESULTS').toString(),
             rows: rows,
             noResultsFound: rows.isEmpty,
+            shownEntryCount: shownEntryCount,
           ),
         );
       }
@@ -236,6 +248,10 @@ class SweepstakesReportLoader {
         rows: const [],
         sections: sections,
         noResultsFound: sections.every((s) => s.noResultsFound),
+        shownEntryCount: sections.fold(
+          0,
+          (total, section) => total + section.shownEntryCount,
+        ),
       );
     }
 
@@ -264,6 +280,14 @@ class SweepstakesReportLoader {
       species: species,
       breedName: breedName,
     );
+    final shownEntryCount = rows.isEmpty && species == 'cavy'
+        ? await _loadShownEntryCountForSpecies(
+            showId: showId,
+            scope: scope,
+            showLetter: showLetter,
+            species: species,
+          )
+        : 0;
 
     var headerQuery = repo.supabase
         .from('v_sweepstakes_pdf_rows')
@@ -334,6 +358,7 @@ class SweepstakesReportLoader {
       rows: rows,
       sections: const [],
       noResultsFound: rows.isEmpty,
+      shownEntryCount: shownEntryCount,
     );
   }
 
@@ -463,6 +488,60 @@ class SweepstakesReportLoader {
 
     return breeds.toList()
       ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+  }
+
+  Future<int> _loadShownEntryCountForSpecies({
+    required String showId,
+    required String scope,
+    required String showLetter,
+    required String species,
+  }) async {
+    final sectionResponse = await repo.supabase
+        .from('show_sections')
+        .select('id')
+        .eq('show_id', showId)
+        .eq('is_enabled', true)
+        .eq('kind', scope.toLowerCase())
+        .eq('letter', showLetter);
+
+    final sectionIds = (sectionResponse as List)
+        .map((row) => (row['id'] ?? '').toString().trim())
+        .where((id) => id.isNotEmpty)
+        .toList(growable: false);
+    if (sectionIds.isEmpty) return 0;
+
+    final entryIds = <String>{};
+    for (final sectionId in sectionIds) {
+      final response = await repo.supabase
+          .from('entries')
+          .select('id, breed, species, is_shown, scratched_at, is_disqualified')
+          .eq('show_id', showId)
+          .eq('section_id', sectionId);
+
+      for (final raw in (response as List)) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        final breedName = (row['breed'] ?? '').toString();
+        final rowSpecies = normalizeClubReportSpecies(
+          (row['species'] ?? '').toString(),
+        );
+        final matchesSpecies =
+            rowSpecies == species ||
+            (rowSpecies.isEmpty &&
+                species == 'cavy' &&
+                isKnownCavyBreed(breedName));
+        if (!matchesSpecies ||
+            row['is_shown'] == false ||
+            row['scratched_at'] != null ||
+            row['is_disqualified'] == true) {
+          continue;
+        }
+
+        final entryId = (row['id'] ?? '').toString().trim();
+        if (entryId.isNotEmpty) entryIds.add(entryId);
+      }
+    }
+
+    return entryIds.length;
   }
 
   List<SweepstakesReportRow> _normalizeRowsForReport(

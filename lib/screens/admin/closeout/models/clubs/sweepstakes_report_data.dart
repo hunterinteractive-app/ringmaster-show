@@ -25,6 +25,7 @@ class SweepstakesReportData {
   final List<SweepstakesTopBreedRow> topBreedRows;
   final bool noResultsFound;
   final bool isNationalShow;
+  final int shownEntryCount;
 
   const SweepstakesReportData({
     required this.showId,
@@ -49,6 +50,7 @@ class SweepstakesReportData {
     this.topBreedRows = const [],
     this.noResultsFound = false,
     this.isNationalShow = false,
+    this.shownEntryCount = 0,
   });
 
   bool get isProvisional =>
@@ -76,6 +78,7 @@ class SweepstakesReportSection {
   final String engineType;
   final List<SweepstakesReportRow> rows;
   final bool noResultsFound;
+  final int shownEntryCount;
 
   const SweepstakesReportSection({
     required this.showLetter,
@@ -84,6 +87,7 @@ class SweepstakesReportSection {
     required this.engineType,
     required this.rows,
     this.noResultsFound = false,
+    this.shownEntryCount = 0,
   });
 }
 
