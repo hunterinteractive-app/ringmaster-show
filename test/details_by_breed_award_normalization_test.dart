@@ -4,6 +4,24 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/details_by_breed_report_loader.dart';
 
 void main() {
+  test('details by breed treats verbose best in show as BIS', () {
+    expect(
+      normalizeDetailsByBreedAwardCodes([
+        'BIS',
+        'Best in Show',
+        'Best in Show Rabbit',
+      ]),
+      {'BIS'},
+    );
+  });
+
+  test('details by breed preserves cavy best in show separately', () {
+    expect(
+      normalizeDetailsByBreedAwardCodes(['BIS-Cavy', 'Best in Show Cavy']),
+      {'BIS-CAVY'},
+    );
+  });
+
   test('details by breed treats first reserve as standard RIS', () {
     expect(
       normalizeDetailsByBreedAwardCodes([

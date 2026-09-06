@@ -915,6 +915,21 @@ Set<String> normalizeDetailsByBreedAwardCodes(Iterable<Object?> awards) {
     final compact = code.replaceAll(RegExp(r'[^A-Z0-9]+'), '');
 
     if (const {
+      'BIS',
+      'BESTINSHOW',
+      'BISRABBIT',
+      'BESTINSHOWRABBIT',
+    }.contains(compact)) {
+      normalized.add('BIS');
+      continue;
+    }
+
+    if (const {'BISCAVY', 'BESTINSHOWCAVY'}.contains(compact)) {
+      normalized.add('BIS-CAVY');
+      continue;
+    }
+
+    if (const {
       '2RIS',
       '2NDRIS',
       'SECONDRIS',
