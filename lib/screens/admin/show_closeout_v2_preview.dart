@@ -22,6 +22,7 @@ import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/paid_exhibit
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/unpaid_balances_report_pdf.dart';
 import 'package:ringmaster_show/screens/admin/closeout/services/report_upload_service.dart';
 import 'package:ringmaster_show/screens/admin/closeout/utils/club_report_grouping.dart';
+import 'package:ringmaster_show/screens/admin/closeout/utils/closeout_sent_date.dart';
 import 'package:ringmaster_show/screens/admin/closeout/widgets/closeout_scope_widgets.dart';
 import 'package:ringmaster_show/screens/admin/closeout/results_entry_fix_launcher.dart';
 import 'package:ringmaster_show/screens/admin/show_checkin_roster_screen.dart';
@@ -599,6 +600,8 @@ class _ArbaDetailsPreviewPanelState extends State<_ArbaDetailsPreviewPanel> {
   bool _saving = false;
   String? _error;
   Map<String, String> _values = const {};
+  bool _exhibitorSentDateChanged = false;
+  bool _clubSentDateChanged = false;
 
   @override
   void initState() {
@@ -674,12 +677,11 @@ class _ArbaDetailsPreviewPanelState extends State<_ArbaDetailsPreviewPanel> {
             arba['superintendent_arba_number'],
             roleDefaults?.superintendentArbaNumber,
           ]),
-          'Date Reports Were Sent to Exhibitors': _formatDate(
+          'Date Reports Were Sent to Exhibitors': formatCloseoutSentDate(
             closeout['exhibitor_emails_sent_at'],
           ),
-          'Date Sweepstakes Reports Were Filed with Clubs': _formatDate(
-            closeout['club_reports_sent_at'],
-          ),
+          'Date Sweepstakes Reports Were Filed with Clubs':
+              formatCloseoutSentDate(closeout['club_reports_sent_at']),
           'Affected Sweepstakes Club':
               arba['sweepstakes_club']?.toString() ?? '',
         };
@@ -698,19 +700,37 @@ class _ArbaDetailsPreviewPanelState extends State<_ArbaDetailsPreviewPanel> {
     }
   }
 
-  String _formatDate(Object? value) {
-    final date = DateTime.tryParse(value?.toString() ?? '')?.toLocal();
-    if (date == null) return '';
-    return '${date.month}/${date.day}/${date.year}';
-  }
-
   void _setValue(String key, String value) =>
       setState(() => _values = {..._values, key: value});
+
+  void _setSentDate(String key, String value) {
+    setState(() {
+      _values = {..._values, key: value};
+      if (key == 'Date Reports Were Sent to Exhibitors') {
+        _exhibitorSentDateChanged = true;
+      } else {
+        _clubSentDateChanged = true;
+      }
+    });
+  }
 
   Future<void> _save() async {
     setState(() => _saving = true);
     try {
       final client = Supabase.instance.client;
+      final closeoutUpdate = <String, dynamic>{'show_id': widget.showId};
+      if (_exhibitorSentDateChanged) {
+        closeoutUpdate['exhibitor_emails_sent_at'] = closeoutSentDateToIso8601(
+          _values['Date Reports Were Sent to Exhibitors'],
+          fieldLabel: 'Date Reports Were Sent to Exhibitors',
+        );
+      }
+      if (_clubSentDateChanged) {
+        closeoutUpdate['club_reports_sent_at'] = closeoutSentDateToIso8601(
+          _values['Date Sweepstakes Reports Were Filed with Clubs'],
+          fieldLabel: 'Date Sweepstakes Reports Were Filed with Clubs',
+        );
+      }
       await client
           .from('shows')
           .update({
@@ -737,6 +757,9 @@ class _ArbaDetailsPreviewPanelState extends State<_ArbaDetailsPreviewPanel> {
         'official_protest': _officialProtest,
         'arba_report_filed': _officialProtest ? _arbaReportFiled : null,
       });
+      if (closeoutUpdate.length > 1) {
+        await client.from('show_closeout_state').upsert(closeoutUpdate);
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('ARBA closeout information saved.')),
@@ -810,15 +833,23 @@ class _ArbaDetailsPreviewPanelState extends State<_ArbaDetailsPreviewPanel> {
         const SizedBox(height: 12),
         _ArbaPreviewTextField(
           label: 'Date Reports Were Sent to Exhibitors',
-          hintText: 'Recorded from the first successful send',
+          hintText: 'M/D/YYYY (auto-filled after the first successful send)',
           initialValue: _values['Date Reports Were Sent to Exhibitors'],
+          keyboardType: TextInputType.datetime,
+          onChanged: (value) =>
+              _setSentDate('Date Reports Were Sent to Exhibitors', value),
         ),
         const SizedBox(height: 12),
         _ArbaPreviewTextField(
           label: 'Date Sweepstakes Reports Were Filed with Clubs',
-          hintText: 'Recorded from the first successful send',
+          hintText: 'M/D/YYYY (auto-filled after the first successful send)',
           initialValue:
               _values['Date Sweepstakes Reports Were Filed with Clubs'],
+          keyboardType: TextInputType.datetime,
+          onChanged: (value) => _setSentDate(
+            'Date Sweepstakes Reports Were Filed with Clubs',
+            value,
+          ),
         ),
         const SizedBox(height: 16),
         _ArbaQuestion(
