@@ -189,12 +189,8 @@ class _ShowCloseoutV2PreviewPageState extends State<ShowCloseoutV2PreviewPage> {
             )
             .eq('show_id', widget.showId),
         client.rpc(
-          'report_results_entry_rows',
-          params: {
-            'p_show_id': widget.showId,
-            'p_section_id': null,
-            'p_show_letter': null,
-          },
+          'show_results_blocking_entry_issues_scoped',
+          params: {'p_show_id': widget.showId, 'p_section_ids': null},
         ),
         client
             .from('show_report_artifacts')
@@ -228,8 +224,8 @@ class _ShowCloseoutV2PreviewPageState extends State<ShowCloseoutV2PreviewPage> {
       final sanctions = (values[3] as List)
           .map((row) => Map<String, dynamic>.from(row as Map))
           .toList();
-      final placementRows = (values[4] as List).map(
-        (row) => Map<String, dynamic>.from(row as Map),
+      final blockingEntryIssues = Map<String, dynamic>.from(
+        values[4] as Map? ?? const {},
       );
       final artifacts = (values[5] as List)
           .map((row) => Map<String, dynamic>.from(row as Map))
@@ -253,26 +249,20 @@ class _ShowCloseoutV2PreviewPageState extends State<ShowCloseoutV2PreviewPage> {
           (arba['official_protest'] == true &&
               arba['arba_report_filed'] != true);
 
-      final hasPlacementIssue = placementRows.any((row) {
-        final status =
-            '${row['result_status'] ?? row['status'] ?? ''} ${row['disqualified_reason'] ?? ''}'
-                .toLowerCase();
-        final eligible =
-            (row['scratched_at'] ?? '').toString().trim().isEmpty &&
-            row['is_shown'] != false &&
-            row['is_disqualified'] != true &&
-            !const [
-              'no show',
-              'scratch',
-              'disqual',
-              'wrong sex',
-              'wrong variety',
-              'wrong class',
-              'overweight',
-              'unworthy',
-            ].any(status.contains);
-        return eligible && (row['placement'] ?? '').toString().trim().isEmpty;
-      });
+      final hasResultsIssue =
+          (int.tryParse(
+                    blockingEntryIssues['missing_placement_count']
+                            ?.toString() ??
+                        '',
+                  ) ??
+                  0) >
+              0 ||
+          (int.tryParse(
+                    blockingEntryIssues['missing_judge_count']?.toString() ??
+                        '',
+                  ) ??
+                  0) >
+              0;
 
       final hasWarning =
           sections.any((section) {
@@ -332,7 +322,7 @@ class _ShowCloseoutV2PreviewPageState extends State<ShowCloseoutV2PreviewPage> {
       setState(() {
         _cubeStatus = _CloseoutCubeStatus(
           arbaDetailsIncomplete: arbaDetailsIncomplete,
-          placementIssues: hasPlacementIssue,
+          placementIssues: hasResultsIssue,
           warnings: hasWarning,
           reportsReadyToSend:
               reportsGenerated && reportsWaitingToSend && !reportsSent,
@@ -992,12 +982,8 @@ class _MustFixPanelState extends State<_MustFixPanel> {
       }
       final values = await Future.wait<Object?>([
         Supabase.instance.client.rpc(
-          'report_results_entry_rows',
-          params: {
-            'p_show_id': widget.showId,
-            'p_section_id': null,
-            'p_show_letter': null,
-          },
+          'show_results_blocking_entry_issues_scoped',
+          params: {'p_show_id': widget.showId, 'p_section_ids': sectionIds},
         ),
         Supabase.instance.client.rpc(
           'get_closeout_dashboard_scoped_for_species',
@@ -1011,7 +997,10 @@ class _MustFixPanelState extends State<_MustFixPanel> {
           },
         ),
       ]);
-      final rows = values[0] as List;
+      final blockingEntryIssues = Map<String, dynamic>.from(
+        values[0] as Map? ?? const {},
+      );
+      final rows = blockingEntryIssues['items'] as List? ?? const [];
       final dashboard = Map<String, dynamic>.from(values[1] as Map);
       final readiness = Map<String, dynamic>.from(
         dashboard['results_readiness'] as Map? ?? const {},
@@ -1019,23 +1008,13 @@ class _MustFixPanelState extends State<_MustFixPanel> {
       final issues = <_ResultsReadinessIssue>[];
       for (final raw in rows) {
         final row = Map<String, dynamic>.from(raw as Map);
-        final eligible = _isResultsEligible(row);
-        if (eligible && (row['placement'] ?? '').toString().trim().isEmpty) {
-          issues.add(
-            _ResultsReadinessIssue.fromRow(
-              row,
-              type: _ResultsReadinessIssueType.missingPlacement,
-            ),
-          );
-        }
-        if (eligible &&
-            (row['judged_by_show_judge_id'] ?? '').toString().trim().isEmpty) {
-          issues.add(
-            _ResultsReadinessIssue.fromRow(
-              row,
-              type: _ResultsReadinessIssueType.missingJudge,
-            ),
-          );
+        final type = switch (row['issue_type']?.toString()) {
+          'missing_placement' => _ResultsReadinessIssueType.missingPlacement,
+          'missing_judge' => _ResultsReadinessIssueType.missingJudge,
+          _ => null,
+        };
+        if (type != null) {
+          issues.add(_ResultsReadinessIssue.fromRow(row, type: type));
         }
       }
       issues.sort((a, b) {
@@ -1058,20 +1037,6 @@ class _MustFixPanelState extends State<_MustFixPanel> {
         _loading = false;
       });
     }
-  }
-
-  bool _isResultsEligible(Map<String, dynamic> row) {
-    final status = (row['result_status'] ?? row['status'] ?? '')
-        .toString()
-        .trim()
-        .toLowerCase()
-        .replaceAll('_', ' ');
-    return (row['scratched_at'] ?? '').toString().trim().isEmpty &&
-        row['is_shown'] == true &&
-        row['is_disqualified'] != true &&
-        status != 'no show' &&
-        status != 'unworthy of award' &&
-        !status.startsWith('disqualified');
   }
 
   int _readinessCount(String key) =>
