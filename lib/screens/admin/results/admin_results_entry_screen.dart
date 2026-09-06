@@ -14,6 +14,7 @@ import 'package:ringmaster_show/services/results/results_rules.dart';
 import 'package:ringmaster_show/services/results/results_rules_router.dart';
 import 'package:ringmaster_show/services/results/rabbit_results_validation.dart';
 import 'package:ringmaster_show/services/results/cavy_results_validation.dart';
+import 'package:ringmaster_show/services/results/final_award_readiness.dart';
 import 'package:ringmaster_show/utils/species_sex.dart';
 import 'package:ringmaster_show/screens/admin/admin_entry_management_screen.dart'
     show showAdminEntryEditSheet;
@@ -690,6 +691,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
 
   List<Map<String, dynamic>> _entries = [];
   List<Map<String, dynamic>> _judges = [];
+  Map<String, dynamic> _sectionReadiness = const {};
 
   final Map<String, String> _breedClassSystems = {};
   final Map<String, bool> _breedUsesGroupAwards = {};
@@ -1517,11 +1519,24 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
   }
 
   Future<void> _loadEntries() async {
-    _entries = await _fetchHydratedEntries(
-      sectionId: (_selectedSectionId == null || _selectedSectionId!.isEmpty)
-          ? null
-          : _selectedSectionId,
+    final sectionId =
+        (_selectedSectionId == null || _selectedSectionId!.isEmpty)
+        ? null
+        : _selectedSectionId;
+    _entries = await _fetchHydratedEntries(sectionId: sectionId);
+    if (sectionId == null) {
+      _sectionReadiness = const {};
+      return;
+    }
+
+    final response = await supabase.rpc(
+      'show_results_readiness_scoped',
+      params: {
+        'p_show_id': widget.showId,
+        'p_section_ids': [sectionId],
+      },
     );
+    _sectionReadiness = Map<String, dynamic>.from(response as Map? ?? const {});
   }
 
   String _classSexLabelFromEntry(Map<String, dynamic> e) {
@@ -2391,6 +2406,10 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
 
   void _openValidationSheet() {
     final issues = _buildValidationIssues();
+    final finalAwardIssues = blockingFinalAwardReadinessIssues(
+      _sectionReadiness,
+    );
+    final issueCount = issues.length + finalAwardIssues.length;
 
     showModalBottomSheet(
       context: context,
@@ -2431,15 +2450,15 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                       Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
-                          issues.isEmpty
+                          issueCount == 0
                               ? 'No validation issues found.'
-                              : '${issues.length} validation issue${issues.length == 1 ? '' : 's'} found.',
+                              : '$issueCount validation issue${issueCount == 1 ? '' : 's'} found.',
                           style: const TextStyle(color: AppColors.text),
                         ),
                       ),
                       const SizedBox(height: 12),
                       Expanded(
-                        child: issues.isEmpty
+                        child: issueCount == 0
                             ? const Align(
                                 alignment: Alignment.topLeft,
                                 child: Text(
@@ -2449,11 +2468,35 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                               )
                             : ListView.separated(
                                 controller: scrollController,
-                                itemCount: issues.length,
+                                itemCount: issueCount,
                                 separatorBuilder: (_, _) =>
                                     const Divider(height: 1),
                                 itemBuilder: (context, i) {
-                                  final issue = issues[i];
+                                  if (i < finalAwardIssues.length) {
+                                    final issue = finalAwardIssues[i];
+                                    return ListTile(
+                                      leading: const Icon(
+                                        Icons.emoji_events_outlined,
+                                        color: Colors.orange,
+                                      ),
+                                      title: Text(
+                                        issue.title,
+                                        style: const TextStyle(
+                                          color: AppColors.text,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      subtitle: Text(
+                                        issue.message,
+                                        style: const TextStyle(
+                                          color: AppColors.muted,
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                  final localIndex =
+                                      i - finalAwardIssues.length;
+                                  final issue = issues[localIndex];
                                   return ListTile(
                                     leading: const Icon(
                                       Icons.warning_amber_rounded,
@@ -2528,6 +2571,10 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
       });
 
     final issues = _buildValidationIssues();
+    final finalAwardIssues = blockingFinalAwardReadinessIssues(
+      _sectionReadiness,
+    );
+    final validationIssueCount = issues.length + finalAwardIssues.length;
 
     return RingMasterPageShell(
       title: 'RingMaster Show',
@@ -2691,27 +2738,27 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                             const SizedBox(height: 14),
                             Container(
                               decoration: BoxDecoration(
-                                color: issues.isEmpty
+                                color: validationIssueCount == 0
                                     ? Colors.green.withValues(alpha: .08)
                                     : Colors.orange.withValues(alpha: .10),
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(
-                                  color: issues.isEmpty
+                                  color: validationIssueCount == 0
                                       ? Colors.green.withValues(alpha: .20)
                                       : Colors.orange.withValues(alpha: .22),
                                 ),
                               ),
                               child: ListTile(
                                 leading: Icon(
-                                  issues.isEmpty
+                                  validationIssueCount == 0
                                       ? Icons.check_circle_outline
                                       : Icons.warning_amber_rounded,
-                                  color: issues.isEmpty
+                                  color: validationIssueCount == 0
                                       ? Colors.green
                                       : Colors.orange,
                                 ),
                                 title: Text(
-                                  issues.isEmpty
+                                  validationIssueCount == 0
                                       ? 'Validation looks good'
                                       : 'Validation issues found',
                                   style: const TextStyle(
@@ -2720,9 +2767,9 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                                   ),
                                 ),
                                 subtitle: Text(
-                                  issues.isEmpty
+                                  validationIssueCount == 0
                                       ? 'No current award/result conflicts found.'
-                                      : '${issues.length} issue${issues.length == 1 ? '' : 's'} to review.',
+                                      : '$validationIssueCount issue${validationIssueCount == 1 ? '' : 's'} to review.',
                                   style: const TextStyle(
                                     color: AppColors.muted,
                                   ),
