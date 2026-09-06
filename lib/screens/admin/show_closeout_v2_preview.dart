@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/reporting_core/assets/flutter_report_asset_loader.dart';
@@ -13,6 +14,7 @@ import 'package:ringmaster_show/screens/admin/closeout/models/base/report_reques
 import 'package:ringmaster_show/screens/admin/closeout/models/arba_report_presentation.dart';
 import 'package:ringmaster_show/screens/admin/closeout/models/delivery_failure_message.dart';
 import 'package:ringmaster_show/screens/admin/closeout/models/report_artifact_summary.dart';
+import 'package:ringmaster_show/screens/admin/closeout/models/report_distribution_selection.dart';
 import 'package:ringmaster_show/screens/admin/closeout/models/report_delivery_grouping.dart';
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/entered_exhibitors_contact_report_pdf.dart';
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/entered_exhibitors_list_report_pdf.dart';
@@ -28,6 +30,7 @@ import 'package:ringmaster_show/services/report_email_service.dart';
 import 'package:ringmaster_show/services/show_role_contact_defaults.dart';
 import 'package:ringmaster_show/utils/file_download.dart';
 import 'package:ringmaster_show/widgets/accessible_icon_button.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 final _activeDeliveryProgress = ValueNotifier<_ActiveDeliveryProgress?>(null);
@@ -82,11 +85,78 @@ class _ShowCloseoutV2PreviewPageState extends State<ShowCloseoutV2PreviewPage> {
 
   int _selectedStep = 0;
   _CloseoutCubeStatus _cubeStatus = const _CloseoutCubeStatus();
+  final _pageScrollController = ScrollController();
+  final _liveReportsKey = GlobalKey<_LiveReportDownloadsState>();
+  Timer? _scrollSaveDebounce;
 
   @override
   void initState() {
     super.initState();
+    _pageScrollController.addListener(_scheduleScrollPositionSave);
+    unawaited(_restoreSelectedStep());
+    unawaited(_restoreScrollPosition());
     _refreshCubeStatus();
+  }
+
+  String get _scrollPreferenceKey =>
+      'closeout_v2_scroll_position_${widget.showId}';
+  String get _stepPreferenceKey => 'closeout_v2_selected_step_${widget.showId}';
+
+  Future<void> _restoreSelectedStep() async {
+    final preferences = await SharedPreferences.getInstance();
+    final savedStep = preferences.getInt(_stepPreferenceKey);
+    if (!mounted || savedStep == null || savedStep >= _steps.length) return;
+    setState(() => _selectedStep = savedStep.clamp(0, _steps.length - 1));
+  }
+
+  Future<void> _saveSelectedStep(int step) async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setInt(_stepPreferenceKey, step);
+  }
+
+  void _scheduleScrollPositionSave() {
+    _scrollSaveDebounce?.cancel();
+    _scrollSaveDebounce = Timer(const Duration(milliseconds: 250), () {
+      if (_pageScrollController.hasClients) {
+        unawaited(_saveScrollPosition(_pageScrollController.offset));
+      }
+    });
+  }
+
+  Future<void> _saveScrollPosition(double offset) async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setDouble(_scrollPreferenceKey, offset);
+  }
+
+  Future<void> _restoreScrollPosition() async {
+    final preferences = await SharedPreferences.getInstance();
+    final savedOffset = preferences.getDouble(_scrollPreferenceKey);
+    if (savedOffset == null || savedOffset <= 0) return;
+
+    for (var attempt = 0; attempt < 6; attempt += 1) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      if (!mounted) return;
+      if (!_pageScrollController.hasClients) continue;
+      final position = _pageScrollController.position;
+      final target = savedOffset.clamp(0.0, position.maxScrollExtent);
+      _pageScrollController.jumpTo(target);
+      if (position.maxScrollExtent >= savedOffset) return;
+    }
+  }
+
+  void _refreshReportsAfterGeneration() {
+    _liveReportsKey.currentState?.refreshPreservingSelection();
+    unawaited(_refreshCubeStatus());
+  }
+
+  @override
+  void dispose() {
+    _scrollSaveDebounce?.cancel();
+    if (_pageScrollController.hasClients) {
+      unawaited(_saveScrollPosition(_pageScrollController.offset));
+    }
+    _pageScrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _refreshCubeStatus() async {
@@ -289,6 +359,8 @@ class _ShowCloseoutV2PreviewPageState extends State<ShowCloseoutV2PreviewPage> {
     return Scaffold(
       appBar: AppBar(title: Text('${widget.showName} • Close Show/Reports V2')),
       body: ListView(
+        controller: _pageScrollController,
+        key: PageStorageKey<String>('closeout-v2-${widget.showId}'),
         padding: const EdgeInsets.all(16),
         children: [
           _CloseoutStepper(
@@ -297,6 +369,7 @@ class _ShowCloseoutV2PreviewPageState extends State<ShowCloseoutV2PreviewPage> {
             status: _cubeStatus,
             onSelected: (index) {
               setState(() => _selectedStep = index);
+              unawaited(_saveSelectedStep(index));
               _refreshCubeStatus();
             },
           ),
@@ -304,8 +377,10 @@ class _ShowCloseoutV2PreviewPageState extends State<ShowCloseoutV2PreviewPage> {
           _buildSelectedPanel(),
           const SizedBox(height: 24),
           _LiveReportDownloads(
+            key: _liveReportsKey,
             showId: widget.showId,
             showName: widget.showName,
+            onArtifactsLoaded: () => unawaited(_restoreScrollPosition()),
           ),
         ],
       ),
@@ -330,7 +405,10 @@ class _ShowCloseoutV2PreviewPageState extends State<ShowCloseoutV2PreviewPage> {
       case 3:
         return _FinancialPayoutReviewPanel(showId: widget.showId);
       case 4:
-        return _GenerateReportsPanel(showId: widget.showId);
+        return _GenerateReportsPanel(
+          showId: widget.showId,
+          onGenerationComplete: _refreshReportsAfterGeneration,
+        );
       case 5:
         return _PublishResultsPanel(
           showId: widget.showId,
@@ -1880,8 +1958,12 @@ class _FinancialReviewItem {
 
 class _GenerateReportsPanel extends StatefulWidget {
   final String showId;
+  final VoidCallback? onGenerationComplete;
 
-  const _GenerateReportsPanel({required this.showId});
+  const _GenerateReportsPanel({
+    required this.showId,
+    this.onGenerationComplete,
+  });
 
   @override
   State<_GenerateReportsPanel> createState() => _GenerateReportsPanelState();
@@ -1895,6 +1977,7 @@ class _GenerateReportsPanelState extends State<_GenerateReportsPanel> {
   _ReportGenerationState? _state;
   DateTime? _startedAt;
   int _initialReportTotal = 0;
+  bool _awaitingGenerationCompletion = false;
 
   @override
   void initState() {
@@ -1994,6 +2077,10 @@ class _GenerateReportsPanelState extends State<_GenerateReportsPanel> {
         _error = null;
       });
       _updatePolling(next.isActive);
+      if (_awaitingGenerationCompletion && !next.isActive) {
+        _awaitingGenerationCompletion = false;
+        widget.onGenerationComplete?.call();
+      }
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -2046,6 +2133,7 @@ class _GenerateReportsPanelState extends State<_GenerateReportsPanel> {
               : 'Closeout queue request failed.',
         );
       }
+      _awaitingGenerationCompletion = true;
       _startedAt = DateTime.now();
       _initialReportTotal = 0;
       await _refresh();
@@ -4191,8 +4279,14 @@ class _ComingSoonPanel extends StatelessWidget {
 class _LiveReportDownloads extends StatefulWidget {
   final String showId;
   final String showName;
+  final VoidCallback? onArtifactsLoaded;
 
-  const _LiveReportDownloads({required this.showId, required this.showName});
+  const _LiveReportDownloads({
+    super.key,
+    required this.showId,
+    required this.showName,
+    this.onArtifactsLoaded,
+  });
 
   @override
   State<_LiveReportDownloads> createState() => _LiveReportDownloadsState();
@@ -4225,6 +4319,7 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
   bool _queueingSelectedReport = false;
   bool _sendingSelectedReport = false;
   bool _isMichellesShow = false;
+  bool _hasLoadedArtifacts = false;
   final _additionalMessageController = TextEditingController();
 
   static const _groupOrder = ['arba', 'exhibitor', 'club', 'other'];
@@ -4245,6 +4340,92 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
     _loadArtifacts();
   }
 
+  String get _selectionPreferenceKey =>
+      'closeout_v2_report_selection_${widget.showId}';
+
+  CloseoutReportSelection get _currentSelection => CloseoutReportSelection(
+    group: _selectedGroup,
+    reportName: _selectedReportName,
+    arbaArtifactId: _selectedArbaArtifactId,
+    exhibitorId: _selectedExhibitorId,
+    breedName: _selectedBreedName,
+    clubName: _selectedClubName,
+    showLetter: _selectedShowLetter,
+    scope: _selectedScope,
+  );
+
+  Future<CloseoutReportSelection> _savedSelection() async {
+    final preferences = await SharedPreferences.getInstance();
+    final encoded = preferences.getString(_selectionPreferenceKey);
+    if (encoded == null || encoded.isEmpty) {
+      return const CloseoutReportSelection();
+    }
+    try {
+      return CloseoutReportSelection.fromJson(
+        Map<String, dynamic>.from(jsonDecode(encoded) as Map),
+      );
+    } catch (_) {
+      return const CloseoutReportSelection();
+    }
+  }
+
+  Future<void> _persistSelection() async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setString(
+      _selectionPreferenceKey,
+      jsonEncode(_currentSelection.toJson()),
+    );
+  }
+
+  void _updateSelection(VoidCallback update) {
+    setState(update);
+    unawaited(_persistSelection());
+  }
+
+  void _applySelection(CloseoutReportSelection selection) {
+    _selectedGroup = selection.group;
+    _selectedReportName = selection.reportName;
+    _selectedArbaArtifactId = selection.arbaArtifactId;
+    _selectedExhibitorId = selection.exhibitorId;
+    _selectedBreedName = selection.breedName;
+    _selectedClubName = selection.clubName;
+    _selectedShowLetter = selection.showLetter;
+    _selectedScope = selection.scope;
+  }
+
+  CloseoutReportSelection _reconcileSelection(
+    CloseoutReportSelection preferred,
+  ) {
+    final reportNamesByGroup = <String, List<String>>{
+      for (final group in _groupOrder) group: _reportNamesFor(group),
+    };
+    final metadataByReport = <String, Map<String, List<String>>>{};
+    for (final reportNames in reportNamesByGroup.values) {
+      for (final reportName in reportNames) {
+        metadataByReport[reportName] = {
+          for (final key in const [
+            'exhibitor_id',
+            'breed_name',
+            'club_name',
+            'show_letter',
+            'scope',
+          ])
+            key: _metadataValuesFor(reportName, key),
+        };
+      }
+    }
+    return preferred.reconcile(
+      groupOrder: _groupOrder,
+      reportNamesByGroup: reportNamesByGroup,
+      arbaArtifactIds: _arbaArtifacts.map((artifact) => artifact.id),
+      metadataByReport: metadataByReport,
+    );
+  }
+
+  void refreshPreservingSelection() {
+    unawaited(_loadArtifacts());
+  }
+
   @override
   void dispose() {
     _additionalMessageController.dispose();
@@ -4252,8 +4433,12 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
   }
 
   Future<void> _loadArtifacts() async {
+    final preferred = _hasLoadedArtifacts
+        ? _currentSelection
+        : await _savedSelection();
+    if (!mounted) return;
     setState(() {
-      _loading = true;
+      if (!_hasLoadedArtifacts) _loading = true;
       _error = null;
     });
     try {
@@ -4288,14 +4473,12 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
         _isMichellesShow =
             (show['created_by'] ?? '').toString().trim() ==
             _michellesSecretaryId;
-        _selectedGroup = _groupOrder.first;
-        final reportNames = _reportNamesFor(_selectedGroup);
-        _selectedReportName = reportNames.isEmpty ? null : reportNames.first;
-        _selectedArbaArtifactId = _arbaArtifacts.isEmpty
-            ? null
-            : _arbaArtifacts.first.id;
+        _applySelection(_reconcileSelection(preferred));
+        _hasLoadedArtifacts = true;
         _loading = false;
       });
+      unawaited(_persistSelection());
+      widget.onArtifactsLoaded?.call();
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -4423,6 +4606,16 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
       _selectedReportArtifacts
           .map((a) => a.metadata[key]?.toString().trim() ?? '')
           .where((value) => value.isNotEmpty)
+          .toSet()
+          .toList()
+        ..sort();
+
+  List<String> _metadataValuesFor(String reportName, String key) =>
+      _artifacts
+          .where((artifact) => artifact.reportName == reportName)
+          .map((artifact) => artifact.metadata[key]?.toString().trim() ?? '')
+          .where((value) => value.isNotEmpty)
+          .map((value) => key == 'scope' ? value.toUpperCase() : value)
           .toSet()
           .toList()
         ..sort();
@@ -5026,7 +5219,7 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
           onChanged: (group) {
             if (group == null) return;
             final reportNames = _reportNamesFor(group);
-            setState(() {
+            _updateSelection(() {
               _selectedGroup = group;
               _selectedReportName = reportNames.isEmpty
                   ? null
@@ -5062,8 +5255,9 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
                 .toList(),
             onChanged: _arbaArtifacts.isEmpty
                 ? null
-                : (artifactId) =>
-                      setState(() => _selectedArbaArtifactId = artifactId),
+                : (artifactId) => _updateSelection(
+                    () => _selectedArbaArtifactId = artifactId,
+                  ),
           )
         else
           DropdownButtonFormField<String>(
@@ -5081,7 +5275,7 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
                   ),
                 )
                 .toList(),
-            onChanged: (reportName) => setState(() {
+            onChanged: (reportName) => _updateSelection(() {
               _selectedReportName = reportName;
               _selectedExhibitorId = null;
               _selectedBreedName = null;
@@ -5102,7 +5296,8 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
               );
               return (artifact.metadata['exhibitor_name'] ?? id).toString();
             },
-            onChanged: (value) => setState(() => _selectedExhibitorId = value),
+            onChanged: (value) =>
+                _updateSelection(() => _selectedExhibitorId = value),
           ),
         ],
         if (_needsBreed || _needsClub) ...[
@@ -5111,14 +5306,15 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
             label: 'Show Letter',
             value: _selectedShowLetter,
             values: _metadataValues('show_letter'),
-            onChanged: (value) => setState(() => _selectedShowLetter = value),
+            onChanged: (value) =>
+                _updateSelection(() => _selectedShowLetter = value),
           ),
           const SizedBox(height: 12),
           _metadataDropdown(
             label: _needsBreed ? 'Breed Name' : 'Club Name',
             value: _needsBreed ? _selectedBreedName : _selectedClubName,
             values: _metadataValues(_needsBreed ? 'breed_name' : 'club_name'),
-            onChanged: (value) => setState(() {
+            onChanged: (value) => _updateSelection(() {
               if (_needsBreed) {
                 _selectedBreedName = value;
               } else {
@@ -5133,7 +5329,8 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
             values: _metadataValues(
               'scope',
             ).map((v) => v.toUpperCase()).toSet().toList(),
-            onChanged: (value) => setState(() => _selectedScope = value),
+            onChanged: (value) =>
+                _updateSelection(() => _selectedScope = value),
           ),
         ],
         const SizedBox(height: 16),
