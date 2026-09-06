@@ -21,6 +21,7 @@ import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/entered_exhi
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/paid_exhibitor_report_pdf.dart';
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/unpaid_balances_report_pdf.dart';
 import 'package:ringmaster_show/screens/admin/closeout/services/closeout_dashboard_poller.dart';
+import 'package:ringmaster_show/screens/admin/closeout/services/closeout_status_error_message.dart';
 import 'package:ringmaster_show/screens/admin/closeout/services/report_upload_service.dart';
 import 'package:ringmaster_show/screens/admin/closeout/utils/club_report_grouping.dart';
 import 'package:ringmaster_show/screens/admin/closeout/utils/closeout_sent_date.dart';
@@ -2032,7 +2033,7 @@ class _GenerateReportsPanelState extends State<_GenerateReportsPanel> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = _statusErrorMessage(error);
+        _error = closeoutReportStatusErrorMessage(error);
       });
     }
   }
@@ -2107,21 +2108,13 @@ class _GenerateReportsPanelState extends State<_GenerateReportsPanel> {
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _progressWarning = _isStatementTimeout(error)
+        _progressWarning = isCloseoutStatusStatementTimeout(error)
             ? 'The latest progress check took too long. Report generation is still running on the server, and this page will try again automatically.'
             : 'The latest progress check could not be loaded. Report generation continues on the server, and this page will try again automatically.';
       });
       _updatePolling(true);
     }
   }
-
-  bool _isStatementTimeout(Object error) =>
-      (error is PostgrestException && error.code == '57014') ||
-      error.toString().contains('statement timeout');
-
-  String _statusErrorMessage(Object error) => _isStatementTimeout(error)
-      ? 'The report status check took too long. If generation is already running, it will continue on the server. Select Retry to check progress again.'
-      : error.toString();
 
   void _updatePolling(bool active) {
     _poller.update(active: active, visible: true);
@@ -2167,7 +2160,7 @@ class _GenerateReportsPanelState extends State<_GenerateReportsPanel> {
       await _refresh();
     } catch (error) {
       if (!mounted) return;
-      setState(() => _error = error.toString());
+      setState(() => _error = closeoutReportStatusErrorMessage(error));
     } finally {
       if (mounted) setState(() => _starting = false);
     }
@@ -2190,7 +2183,10 @@ class _GenerateReportsPanelState extends State<_GenerateReportsPanel> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Unable to load report generation status: $_error'),
+            Text(
+              'Unable to load report generation status: '
+              '${closeoutReportStatusErrorMessage(_error!)}',
+            ),
             OutlinedButton.icon(
               onPressed: () => unawaited(_refresh()),
               icon: const Icon(Icons.refresh),
