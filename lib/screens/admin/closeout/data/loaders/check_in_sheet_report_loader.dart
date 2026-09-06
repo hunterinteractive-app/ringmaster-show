@@ -69,31 +69,25 @@ class CheckInSheetReportLoader {
     const pageSize = 1000;
     final list = <Map<String, dynamic>>[];
 
-    for (final sectionId in sectionIds) {
-      for (var from = 0; ; from += pageSize) {
-        final to = from + pageSize - 1;
-        final rows = await supabase
-            .rpc(
-              'report_checkin_entries',
-              params: {
-                'p_show_id': showId,
-                'p_section_id': sectionId,
-                'p_include_scratched': false,
-              },
-            )
-            .range(from, to);
+    for (var from = 0; ; from += pageSize) {
+      final to = from + pageSize - 1;
+      final rows = await supabase
+          .rpc(
+            'report_closeout_checkin_entries',
+            params: {
+              'p_show_id': showId,
+              'p_exhibitor_id': exhibitorId,
+              'p_section_ids': sectionIds,
+              'p_include_scratched': false,
+            },
+          )
+          .range(from, to);
 
-        final page = (rows as List)
-            .map((raw) => Map<String, dynamic>.from(raw as Map))
-            .where(
-              (row) =>
-                  (row['exhibitor_id'] ?? '').toString().trim() == exhibitorId,
-            )
-            .toList();
-
-        list.addAll(page);
-        if (rows.length < pageSize) break;
-      }
+      final page = (rows as List)
+          .map((raw) => Map<String, dynamic>.from(raw as Map))
+          .toList();
+      list.addAll(page);
+      if (rows.length < pageSize) break;
     }
 
     return list;

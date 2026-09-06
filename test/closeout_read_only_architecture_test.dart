@@ -6,6 +6,12 @@ void main() {
   final closeoutSource = File(
     'lib/screens/admin/show_closeout.dart',
   ).readAsStringSync();
+  final closeoutPreviewSource = File(
+    'lib/screens/admin/show_closeout_v2_preview.dart',
+  ).readAsStringSync();
+  final checkInSheetLoaderSource = File(
+    'lib/screens/admin/closeout/data/loaders/check_in_sheet_report_loader.dart',
+  ).readAsStringSync();
   final closeoutWidgetsSource = File(
     'lib/screens/admin/closeout/widgets/closeout_scope_widgets.dart',
   ).readAsStringSync();
@@ -48,6 +54,9 @@ void main() {
   final closeoutReadinessOptimizationMigration = File(
     'supabase/migrations/20260809201258_optimize_closeout_readiness.sql',
   ).readAsStringSync();
+  final closeoutProgressOptimizationMigration = File(
+    'supabase/migrations/20260906123722_optimize_closeout_report_progress_and_checkin_reads.sql',
+  ).readAsStringSync();
   final edgeFunction = File(
     'supabase/functions/run-closeout/index.ts',
   ).readAsStringSync();
@@ -65,6 +74,54 @@ void main() {
   }
 
   group('read-only Closeout query path', () {
+    test('report generation polls lightweight non-overlapping progress', () {
+      expect(closeoutPreviewSource, contains('CloseoutDashboardPoller('));
+      expect(
+        closeoutPreviewSource,
+        contains("'get_closeout_report_generation_progress'"),
+      );
+      expect(closeoutPreviewSource, contains("'p_finalize_run_id': null"));
+      expect(closeoutPreviewSource, isNot(contains('_loadAllQueueTasks')));
+      expect(
+        closeoutPreviewSource,
+        contains('Report generation is still running on the server'),
+      );
+      expect(
+        closeoutProgressOptimizationMigration,
+        contains("task_status = 'failed'::public.show_task_status"),
+      );
+      expect(
+        closeoutProgressOptimizationMigration,
+        contains('attempt_count < max_attempts'),
+      );
+    });
+
+    test('closeout check-in report loading is read-only and scoped once', () {
+      expect(
+        checkInSheetLoaderSource,
+        contains("'report_closeout_checkin_entries'"),
+      );
+      expect(
+        checkInSheetLoaderSource,
+        contains("'p_exhibitor_id': exhibitorId"),
+      );
+      expect(checkInSheetLoaderSource, contains("'p_section_ids': sectionIds"));
+      expect(
+        closeoutProgressOptimizationMigration,
+        contains(
+          'create or replace function public.report_closeout_checkin_entries',
+        ),
+      );
+      expect(
+        closeoutProgressOptimizationMigration,
+        contains('language sql\nstable\nsecurity invoker'),
+      );
+      expect(
+        closeoutProgressOptimizationMigration,
+        isNot(contains('report_show_exhibitor_balances(p_show_id)')),
+      );
+    });
+
     test('manual report generation retains canonical run identity', () {
       expect(closeoutSource, isNot(contains("'manual-run'")));
 

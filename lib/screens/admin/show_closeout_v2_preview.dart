@@ -20,6 +20,7 @@ import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/entered_exhi
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/entered_exhibitors_list_report_pdf.dart';
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/paid_exhibitor_report_pdf.dart';
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/unpaid_balances_report_pdf.dart';
+import 'package:ringmaster_show/screens/admin/closeout/services/closeout_dashboard_poller.dart';
 import 'package:ringmaster_show/screens/admin/closeout/services/report_upload_service.dart';
 import 'package:ringmaster_show/screens/admin/closeout/utils/club_report_grouping.dart';
 import 'package:ringmaster_show/screens/admin/closeout/utils/closeout_sent_date.dart';
@@ -1966,10 +1967,11 @@ class _GenerateReportsPanel extends StatefulWidget {
 }
 
 class _GenerateReportsPanelState extends State<_GenerateReportsPanel> {
-  Timer? _poller;
+  late final CloseoutDashboardPoller _poller;
   bool _loading = true;
   bool _starting = false;
   String? _error;
+  String? _progressWarning;
   _ReportGenerationState? _state;
   DateTime? _startedAt;
   int _initialReportTotal = 0;
@@ -1978,38 +1980,27 @@ class _GenerateReportsPanelState extends State<_GenerateReportsPanel> {
   @override
   void initState() {
     super.initState();
-    _refresh();
+    _poller = CloseoutDashboardPoller(
+      onRefresh: _refreshProgress,
+      interval: const Duration(seconds: 5),
+    );
+    unawaited(_refresh());
   }
 
   @override
   void dispose() {
-    _poller?.cancel();
+    _poller.dispose();
     super.dispose();
-  }
-
-  Future<List<Map<String, dynamic>>> _loadAllQueueTasks(
-    String finalizeRunId,
-  ) async {
-    const batchSize = 100;
-    final tasks = <Map<String, dynamic>>[];
-    for (var from = 0; ; from += batchSize) {
-      final rows = await Supabase.instance.client
-          .from('show_task_queue')
-          .select('task_status')
-          .eq('show_id', widget.showId)
-          .eq('finalize_run_id', finalizeRunId)
-          .order('created_at')
-          .range(from, from + batchSize - 1);
-      final batch = (rows as List)
-          .map((row) => Map<String, dynamic>.from(row as Map))
-          .toList();
-      tasks.addAll(batch);
-      if (batch.length < batchSize) return tasks;
-    }
   }
 
   Future<void> _refresh() async {
     try {
+      final latestProgress = await _loadLatestProgress();
+      if (latestProgress != null && latestProgress.isActive) {
+        _acceptState(latestProgress);
+        return;
+      }
+
       final sectionsRaw = await Supabase.instance.client
           .from('show_sections')
           .select('id')
@@ -2042,57 +2033,106 @@ class _GenerateReportsPanelState extends State<_GenerateReportsPanel> {
         sectionIds: sectionIds,
       );
       if (next.finalizeRunId.isNotEmpty) {
-        final liveRows = await Future.wait<dynamic>([
-          _loadAllQueueTasks(next.finalizeRunId),
-          Supabase.instance.client
-              .from('show_report_artifacts')
-              .select('artifact_status,report_name')
-              .eq('show_id', widget.showId)
-              .eq('finalize_run_id', next.finalizeRunId)
-              .eq('is_current', true)
-              .neq('report_name', 'arba_report'),
-        ]);
-        next = next.withLiveQueue(
-          tasks: liveRows[0] as List,
-          artifacts: liveRows[1] as List,
-        );
+        next = await _loadProgress(next);
       }
-      if (!mounted) return;
-      if (_startedAt == null && next.isActive) {
-        _startedAt = DateTime.now();
-      }
-      final observedTotal = next.reportTotal > 0
-          ? next.reportTotal
-          : next.taskTotal;
-      if (observedTotal > _initialReportTotal) {
-        _initialReportTotal = observedTotal;
-      }
-      setState(() {
-        _state = next;
-        _loading = false;
-        _error = null;
-      });
-      _updatePolling(next.isActive);
-      if (_awaitingGenerationCompletion && !next.isActive) {
-        _awaitingGenerationCompletion = false;
-        widget.onGenerationComplete?.call();
-      }
+      _acceptState(next);
     } catch (error) {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = error.toString();
+        _error = _statusErrorMessage(error);
       });
     }
   }
 
-  void _updatePolling(bool active) {
-    if (active) {
-      _poller ??= Timer.periodic(const Duration(seconds: 3), (_) => _refresh());
-    } else {
-      _poller?.cancel();
-      _poller = null;
+  Future<_ReportGenerationState?> _loadLatestProgress() async {
+    final progress = await Supabase.instance.client.rpc(
+      'get_closeout_report_generation_progress',
+      params: {'p_show_id': widget.showId, 'p_finalize_run_id': null},
+    );
+    final json = Map<String, dynamic>.from(progress as Map);
+    final finalizeRunId = '${json['finalize_run_id'] ?? ''}'.trim();
+    if (finalizeRunId.isEmpty) return null;
+    return _ReportGenerationState.fromProgress(json);
+  }
+
+  void _acceptState(_ReportGenerationState next) {
+    if (!mounted) return;
+    if (_startedAt == null && next.isActive) {
+      _startedAt = DateTime.now();
     }
+    final observedTotal = next.reportTotal > 0
+        ? next.reportTotal
+        : next.taskTotal;
+    if (observedTotal > _initialReportTotal) {
+      _initialReportTotal = observedTotal;
+    }
+    setState(() {
+      _state = next;
+      _loading = false;
+      _error = null;
+      _progressWarning = null;
+    });
+    _updatePolling(next.isActive);
+    if (_awaitingGenerationCompletion && !next.isActive) {
+      _awaitingGenerationCompletion = false;
+      widget.onGenerationComplete?.call();
+    }
+  }
+
+  Future<_ReportGenerationState> _loadProgress(
+    _ReportGenerationState current,
+  ) async {
+    final progress = await Supabase.instance.client.rpc(
+      'get_closeout_report_generation_progress',
+      params: {
+        'p_show_id': widget.showId,
+        'p_finalize_run_id': current.finalizeRunId,
+      },
+    );
+    return current.withProgress(Map<String, dynamic>.from(progress as Map));
+  }
+
+  Future<void> _refreshProgress() async {
+    final current = _state;
+    if (current == null || current.finalizeRunId.isEmpty) {
+      await _refresh();
+      return;
+    }
+
+    try {
+      final next = await _loadProgress(current);
+      if (!mounted) return;
+      final generationFinished = current.isActive && !next.isActive;
+      setState(() {
+        _state = next;
+        _progressWarning = null;
+      });
+      _updatePolling(next.isActive);
+      if (generationFinished) {
+        await _refresh();
+      }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _progressWarning = _isStatementTimeout(error)
+            ? 'The latest progress check took too long. Report generation is still running on the server, and this page will try again automatically.'
+            : 'The latest progress check could not be loaded. Report generation continues on the server, and this page will try again automatically.';
+      });
+      _updatePolling(true);
+    }
+  }
+
+  bool _isStatementTimeout(Object error) =>
+      (error is PostgrestException && error.code == '57014') ||
+      error.toString().contains('statement timeout');
+
+  String _statusErrorMessage(Object error) => _isStatementTimeout(error)
+      ? 'The report status check took too long. If generation is already running, it will continue on the server. Select Retry to check progress again.'
+      : error.toString();
+
+  void _updatePolling(bool active) {
+    _poller.update(active: active, visible: true);
   }
 
   Future<void> _start() async {
@@ -2160,7 +2200,7 @@ class _GenerateReportsPanelState extends State<_GenerateReportsPanel> {
           children: [
             Text('Unable to load report generation status: $_error'),
             OutlinedButton.icon(
-              onPressed: _refresh,
+              onPressed: () => unawaited(_refresh()),
               icon: const Icon(Icons.refresh),
               label: const Text('Retry'),
             ),
@@ -2172,6 +2212,26 @@ class _GenerateReportsPanelState extends State<_GenerateReportsPanel> {
           startedAt: _startedAt,
           initialReportTotal: _initialReportTotal,
         ),
+        if (_progressWarning != null) ...[
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.amber.shade50,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.amber.shade300),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.info_outline, color: Colors.amber.shade900),
+                const SizedBox(width: 8),
+                Expanded(child: Text(_progressWarning!)),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 16),
         FilledButton.icon(
           onPressed: !_state!.ready || _state!.isActive || _starting
@@ -2215,9 +2275,12 @@ class _GenerationProgressPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final total = state.reportTotal > 0 ? state.reportTotal : state.taskTotal;
+    final failureCount = state.failed > state.reportFailed
+        ? state.failed
+        : state.reportFailed;
     final complete = state.reportTotal > 0
-        ? state.generated + state.reportFailed
-        : state.completed + state.failed;
+        ? state.generated + failureCount
+        : state.completed + failureCount;
     final progress = total == 0 ? 0.0 : (complete / total).clamp(0.0, 1.0);
     final eta = _eta(
       total: initialReportTotal > 0 ? initialReportTotal : total,
@@ -2247,7 +2310,7 @@ class _GenerationProgressPanel extends StatelessWidget {
           LinearProgressIndicator(value: progress),
           const SizedBox(height: 8),
           Text(
-            '$complete of $total reports complete • ${state.queued} queued • ${state.running} running • ${state.failed + state.reportFailed} failed',
+            '$complete of $total reports complete • ${state.queued} queued • ${state.running} running • $failureCount failed${state.retrying > 0 ? ' • ${state.retrying} retrying' : ''}',
           ),
           if (eta != null)
             Text('Estimated time remaining: ${_formatDuration(eta)}'),
@@ -2298,6 +2361,7 @@ class _ReportGenerationState {
   final int running;
   final int completed;
   final int failed;
+  final int retrying;
   final int reportTotal;
   final int generated;
   final int reportFailed;
@@ -2312,6 +2376,7 @@ class _ReportGenerationState {
     required this.running,
     required this.completed,
     required this.failed,
+    required this.retrying,
     required this.reportTotal,
     required this.generated,
     required this.reportFailed,
@@ -2358,60 +2423,62 @@ class _ReportGenerationState {
       running: number(tasks, 'running'),
       completed: number(tasks, 'completed'),
       failed: number(tasks, 'failed'),
+      retrying: number(tasks, 'retryable_failed'),
       reportTotal: number(artifacts, 'total'),
       generated: number(artifacts, 'generated'),
       reportFailed: number(artifacts, 'failed'),
     );
   }
 
+  factory _ReportGenerationState.fromProgress(Map<String, dynamic> json) {
+    final sectionIds = (json['section_ids'] as List? ?? const [])
+        .map((value) => value.toString())
+        .where((value) => value.isNotEmpty)
+        .toList(growable: false);
+    return _ReportGenerationState(
+      sectionIds: sectionIds,
+      scopeKey: '${json['scope_key'] ?? ''}',
+      finalizeRunId: '${json['finalize_run_id'] ?? ''}'.trim(),
+      ready: true,
+      readinessMessage: '',
+      queued: 0,
+      running: 0,
+      completed: 0,
+      failed: 0,
+      retrying: 0,
+      reportTotal: 0,
+      generated: 0,
+      reportFailed: 0,
+    ).withProgress(json);
+  }
+
   int get taskTotal => queued + running + completed + failed;
   bool get isActive => queued > 0 || running > 0;
   bool get hasFailures => failed > 0 || reportFailed > 0;
 
-  _ReportGenerationState withLiveQueue({
-    required List tasks,
-    required List artifacts,
-  }) {
-    int countStatus(List rows, String field, String value) => rows
-        .where((row) => (row as Map)[field]?.toString().toLowerCase() == value)
-        .length;
-    int countAnyStatus(List rows, String field, Set<String> values) => rows
-        .where(
-          (row) =>
-              values.contains((row as Map)[field]?.toString().toLowerCase()),
-        )
-        .length;
-
-    // The task feed is eventually consistent while the renderer works. The
-    // artifact rows are created with the run and therefore give Step 5 an
-    // authoritative view of reports still waiting to be rendered.
-    final taskQueued = countStatus(tasks, 'task_status', 'queued');
-    final taskRunning = countStatus(tasks, 'task_status', 'running');
-    final artifactQueued = countAnyStatus(artifacts, 'artifact_status', {
-      'queued',
-      'pending',
-      'claimed',
-    });
-    final artifactRunning = countAnyStatus(artifacts, 'artifact_status', {
-      'running',
-      'processing',
-      'rendering',
-      'uploading',
-      'generating',
-    });
+  _ReportGenerationState withProgress(Map<String, dynamic> json) {
+    final tasks = Map<String, dynamic>.from(
+      json['task_counts'] as Map? ?? const {},
+    );
+    final artifacts = Map<String, dynamic>.from(
+      json['artifact_counts'] as Map? ?? const {},
+    );
+    int number(Map<String, dynamic> map, String key) =>
+        (map[key] as num?)?.toInt() ?? int.tryParse('${map[key] ?? 0}') ?? 0;
     return _ReportGenerationState(
       sectionIds: sectionIds,
       scopeKey: scopeKey,
       finalizeRunId: finalizeRunId,
       ready: ready,
       readinessMessage: readinessMessage,
-      queued: taskQueued > artifactQueued ? taskQueued : artifactQueued,
-      running: taskRunning > artifactRunning ? taskRunning : artifactRunning,
-      completed: countStatus(tasks, 'task_status', 'completed'),
-      failed: countStatus(tasks, 'task_status', 'failed'),
-      reportTotal: artifacts.length,
-      generated: countStatus(artifacts, 'artifact_status', 'generated'),
-      reportFailed: countStatus(artifacts, 'artifact_status', 'failed'),
+      queued: number(tasks, 'queued'),
+      running: number(tasks, 'running'),
+      completed: number(tasks, 'completed'),
+      failed: number(tasks, 'failed'),
+      retrying: number(tasks, 'retryable_failed'),
+      reportTotal: number(artifacts, 'total'),
+      generated: number(artifacts, 'generated'),
+      reportFailed: number(artifacts, 'failed'),
     );
   }
 }
