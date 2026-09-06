@@ -55,7 +55,7 @@ void main() {
     'supabase/migrations/20260809201258_optimize_closeout_readiness.sql',
   ).readAsStringSync();
   final closeoutProgressOptimizationMigration = File(
-    'supabase/migrations/20260906123722_optimize_closeout_report_progress_and_checkin_reads.sql',
+    'supabase/migrations/20260906130153_optimize_closeout_report_progress_and_checkin_reads.sql',
   ).readAsStringSync();
   final edgeFunction = File(
     'supabase/functions/run-closeout/index.ts',
