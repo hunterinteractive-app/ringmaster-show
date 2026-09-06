@@ -1018,24 +1018,16 @@ class _MustFixPanelState extends State<_MustFixPanel> {
           params: {'p_show_id': widget.showId, 'p_section_ids': sectionIds},
         ),
         Supabase.instance.client.rpc(
-          'get_closeout_dashboard_scoped_for_species',
-          params: {
-            'p_show_id': widget.showId,
-            'p_scope_key': '${widget.showId}:${sectionIds.join(',')}',
-            'p_section_ids': sectionIds,
-            'p_artifact_limit': 1,
-            'p_artifact_offset': 0,
-            'p_species_filter': null,
-          },
+          'show_results_readiness_scoped',
+          params: {'p_show_id': widget.showId, 'p_section_ids': sectionIds},
         ),
       ]);
       final blockingEntryIssues = Map<String, dynamic>.from(
         values[0] as Map? ?? const {},
       );
       final rows = blockingEntryIssues['items'] as List? ?? const [];
-      final dashboard = Map<String, dynamic>.from(values[1] as Map);
       final readiness = Map<String, dynamic>.from(
-        dashboard['results_readiness'] as Map? ?? const {},
+        values[1] as Map? ?? const {},
       );
       final issues = <_ResultsReadinessIssue>[];
       for (final raw in rows) {

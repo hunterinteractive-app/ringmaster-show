@@ -22,8 +22,14 @@ void main() {
       panelSource,
       contains("'show_results_blocking_entry_issues_scoped'"),
     );
+    expect(panelSource, contains("'show_results_readiness_scoped'"));
+    expect(
+      panelSource,
+      isNot(contains("'get_closeout_dashboard_scoped_for_species'")),
+    );
     expect(panelSource, isNot(contains("'report_results_entry_rows'")));
     expect(panelSource, contains("blockingEntryIssues['items']"));
+    expect(panelSource, contains('values[1] as Map? ?? const {}'));
   });
 
   test('blocking issue RPC returns one JSON document', () {
