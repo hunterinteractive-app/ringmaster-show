@@ -697,7 +697,7 @@ class _ArbaDetailsPreviewPanelState extends State<_ArbaDetailsPreviewPanel> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = error.toString();
+        _error = closeoutReportStatusErrorMessage(error);
       });
     }
   }
@@ -792,7 +792,10 @@ class _ArbaDetailsPreviewPanelState extends State<_ArbaDetailsPreviewPanel> {
           ),
         )
       else if (_error != null)
-        Text('Unable to load saved ARBA closeout details: $_error')
+        Text(
+          'Unable to load saved ARBA closeout details: '
+          '${closeoutReportStatusErrorMessage(_error!)}',
+        )
       else ...[
         _ArbaPreviewTextField(
           label: 'Show Secretary Name',
@@ -1058,7 +1061,7 @@ class _MustFixPanelState extends State<_MustFixPanel> {
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _error = error.toString();
+        _error = closeoutReportStatusErrorMessage(error);
         _loading = false;
       });
     }
@@ -1151,7 +1154,10 @@ class _MustFixPanelState extends State<_MustFixPanel> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Unable to load results readiness: $_error'),
+            Text(
+              'Unable to load results readiness: '
+              '${closeoutReportStatusErrorMessage(_error!)}',
+            ),
             OutlinedButton.icon(
               onPressed: _loadIssues,
               icon: const Icon(Icons.refresh),
@@ -1470,7 +1476,7 @@ class _ReviewWarningsPanelState extends State<_ReviewWarningsPanel> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = error.toString();
+        _error = closeoutReportStatusErrorMessage(error);
       });
     }
   }
@@ -1515,7 +1521,10 @@ class _ReviewWarningsPanelState extends State<_ReviewWarningsPanel> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Unable to load closeout warnings: $_error'),
+            Text(
+              'Unable to load closeout warnings: '
+              '${closeoutReportStatusErrorMessage(_error!)}',
+            ),
             OutlinedButton.icon(
               onPressed: _loadWarnings,
               icon: const Icon(Icons.refresh),
@@ -1627,7 +1636,7 @@ class _FinancialPayoutReviewPanelState
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = error.toString();
+        _error = closeoutReportStatusErrorMessage(error);
       });
     }
   }
@@ -1680,7 +1689,10 @@ class _FinancialPayoutReviewPanelState
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Unable to load financial closeout data: $_error'),
+            Text(
+              'Unable to load financial closeout data: '
+              '${closeoutReportStatusErrorMessage(_error!)}',
+            ),
             OutlinedButton.icon(
               onPressed: _loadSummary,
               icon: const Icon(Icons.refresh),
@@ -2578,7 +2590,7 @@ class _PublishResultsPanelState extends State<_PublishResultsPanel> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = error.toString();
+        _error = closeoutReportStatusErrorMessage(error);
       });
     }
   }
@@ -2820,7 +2832,10 @@ class _PublishResultsPanelState extends State<_PublishResultsPanel> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Unable to load publish results: $_error'),
+              Text(
+                'Unable to load publish results: '
+                '${closeoutReportStatusErrorMessage(_error!)}',
+              ),
               OutlinedButton.icon(
                 onPressed: _loadArtifacts,
                 icon: const Icon(Icons.refresh),
@@ -3053,7 +3068,7 @@ class _DeliveryStatusPanelState extends State<_DeliveryStatusPanel> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = error.toString();
+        _error = closeoutReportStatusErrorMessage(error);
       });
     }
   }
@@ -3125,7 +3140,10 @@ class _DeliveryStatusPanelState extends State<_DeliveryStatusPanel> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Unable to load delivery status: $_error'),
+              Text(
+                'Unable to load delivery status: '
+                '${closeoutReportStatusErrorMessage(_error!)}',
+              ),
               OutlinedButton.icon(
                 onPressed: _load,
                 icon: const Icon(Icons.refresh),
@@ -3628,7 +3646,7 @@ class _FinalCloseoutPreviewPanelState
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = error.toString();
+        _error = closeoutReportStatusErrorMessage(error);
       });
     }
   }
@@ -3726,7 +3744,10 @@ class _FinalCloseoutPreviewPanelState
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Unable to load final closeout readiness: $_error'),
+            Text(
+              'Unable to load final closeout readiness: '
+              '${closeoutReportStatusErrorMessage(_error!)}',
+            ),
             OutlinedButton.icon(
               onPressed: _load,
               icon: const Icon(Icons.refresh),
@@ -4533,7 +4554,7 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _error = error.toString();
+        _error = closeoutReportStatusErrorMessage(error);
         _loading = false;
       });
     }
@@ -5242,7 +5263,10 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Unable to load generated reports: $_error'),
+            Text(
+              'Unable to load generated reports: '
+              '${closeoutReportStatusErrorMessage(_error!)}',
+            ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: _loadArtifacts,
