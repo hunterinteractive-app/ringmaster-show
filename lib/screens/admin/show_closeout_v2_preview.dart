@@ -4706,6 +4706,40 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
           .toList()
         ..sort();
 
+  Map<String, String> get _exhibitorNames {
+    final names = <String, String>{};
+    for (final artifact in _selectedReportArtifacts) {
+      final id = artifact.metadata['exhibitor_id']?.toString().trim() ?? '';
+      if (id.isEmpty) continue;
+      final name = artifact.metadata['exhibitor_name']?.toString().trim() ?? '';
+      names.putIfAbsent(id, () => name.isEmpty ? id : name);
+    }
+    return names;
+  }
+
+  List<String> _exhibitorsByLastName(Map<String, String> names) {
+    String normalized(String name) =>
+        name.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
+
+    String lastName(String name) {
+      final fullName = normalized(name);
+      if (fullName.contains(',')) return fullName.split(',').first.trim();
+      final words = fullName.split(' ');
+      const suffixes = {'jr', 'jr.', 'sr', 'sr.', 'ii', 'iii', 'iv', 'v'};
+      while (words.length > 1 && suffixes.contains(words.last)) {
+        words.removeLast();
+      }
+      return words.last;
+    }
+
+    return names.keys.toList()..sort((a, b) {
+      final surname = lastName(names[a]!).compareTo(lastName(names[b]!));
+      if (surname != 0) return surname;
+      final fullName = normalized(names[a]!).compareTo(normalized(names[b]!));
+      return fullName != 0 ? fullName : a.compareTo(b);
+    });
+  }
+
   List<String> _metadataValuesFor(String reportName, String key) =>
       _artifacts
           .where((artifact) => artifact.reportName == reportName)
@@ -5484,13 +5518,8 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
           _metadataDropdown(
             label: 'Exhibitor',
             value: _selectedExhibitorId,
-            values: _metadataValues('exhibitor_id'),
-            display: (id) {
-              final artifact = _selectedReportArtifacts.firstWhere(
-                (a) => a.metadata['exhibitor_id']?.toString() == id,
-              );
-              return (artifact.metadata['exhibitor_name'] ?? id).toString();
-            },
+            values: _exhibitorsByLastName(_exhibitorNames),
+            display: (id) => _exhibitorNames[id] ?? id,
             onChanged: (value) =>
                 _updateSelection(() => _selectedExhibitorId = value),
           ),
