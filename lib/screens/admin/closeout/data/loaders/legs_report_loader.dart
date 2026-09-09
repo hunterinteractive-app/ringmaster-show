@@ -76,6 +76,14 @@ bool legShowScopeMatchesResultRow(
   return candidateSpecies == targetSpecies;
 }
 
+/// A leg belongs to the day its show section was judged. The show start date
+/// remains a compatibility fallback for artifacts created before sections had
+/// their own judging date.
+DateTime? resolveLegJudgingDate(
+  DateTime? sectionJudgingDate,
+  DateTime? showStartDate,
+) => sectionJudgingDate ?? showStartDate;
+
 String _legTextFromFirstKey(Map<String, dynamic> row, List<String> keys) {
   for (final key in keys) {
     final value = row[key]?.toString().trim() ?? '';
@@ -118,7 +126,7 @@ class LegsReportLoader {
     final sanctionNumbersBySection = await _loadSanctionNumbersBySection(
       showId,
     );
-    final showDate = _tryParseDate(show['start_date']);
+    final defaultShowDate = _tryParseDate(show['start_date']);
 
     final location = [
       _str(show['location_name']),
@@ -225,7 +233,7 @@ class LegsReportLoader {
               ctx,
               sanctionNumbersBySection,
             ),
-            showDate: showDate,
+            showDate: resolveLegJudgingDate(ctx.judgingDate, defaultShowDate),
             location: location,
             secretaryName: secretaryName,
             secretaryEmail: secretaryEmail,
@@ -322,7 +330,7 @@ class LegsReportLoader {
               ctx,
               sanctionNumbersBySection,
             ),
-            showDate: showDate,
+            showDate: resolveLegJudgingDate(ctx.judgingDate, defaultShowDate),
             location: location,
             secretaryName: secretaryName,
             secretaryEmail: secretaryEmail,
@@ -597,7 +605,7 @@ class LegsReportLoader {
   }) async {
     final sectionRows = await repo.supabase
         .from('show_sections')
-        .select('id, letter, kind, sort_order')
+        .select('id, letter, kind, sort_order, judging_date')
         .eq('show_id', showId)
         .eq('is_enabled', true)
         .order('sort_order');
@@ -609,6 +617,7 @@ class LegsReportLoader {
       final requested = sectionIds?.toSet() ?? const <String>{};
       if (requested.isNotEmpty && !requested.contains(sectionId)) continue;
       final showLetter = _str(rawSection['letter']).toUpperCase();
+      final judgingDate = _str(rawSection['judging_date']);
 
       final rows = await repo.supabase.rpc(
         'report_results_entry_rows',
@@ -634,6 +643,7 @@ class LegsReportLoader {
 
         row['resolved_section_id'] = sectionId;
         row['resolved_section_letter'] = showLetter;
+        row['resolved_judging_date'] = judgingDate;
         normalizeSpeciesSexPresentation(
           row,
           speciesOverride: legSpeciesFromResultRow(row),
@@ -843,6 +853,7 @@ class LegsReportLoader {
       byEntryId[entryId] = _EntryLegContext(
         sectionId: sectionId,
         sectionLetter: sectionLetter,
+        judgingDate: _tryParseDate(row['resolved_judging_date']),
         varietyDisplay: varietyDisplay,
         groupName: groupName,
         usesGroupAwards: usesGroupAwards,
@@ -1449,6 +1460,7 @@ class _LegRuleMatch {
 class _EntryLegContext {
   final String sectionId;
   final String sectionLetter;
+  final DateTime? judgingDate;
   final String varietyDisplay;
   final String groupName;
   final bool usesGroupAwards;
@@ -1497,6 +1509,7 @@ class _EntryLegContext {
   const _EntryLegContext({
     required this.sectionId,
     required this.sectionLetter,
+    required this.judgingDate,
     required this.varietyDisplay,
     required this.groupName,
     required this.usesGroupAwards,

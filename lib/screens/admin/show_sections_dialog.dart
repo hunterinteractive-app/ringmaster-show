@@ -42,8 +42,14 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
   String? _msg;
   bool _isLocked = false;
   bool _isFinalized = false;
+  DateTime? _showStartDate;
+  DateTime? _showEndDate;
 
   bool get _isReadOnly => _isLocked || _isFinalized;
+  bool get _isSingleDayShow =>
+      _showStartDate != null &&
+      _showEndDate != null &&
+      _sameDate(_showStartDate!, _showEndDate!);
 
   final List<_EditableSection> _sections = [];
   final Set<String> _deletedIds = <String>{};
@@ -84,12 +90,14 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
     try {
       final show = await supabase
           .from('shows')
-          .select('is_locked,finalized_at')
+          .select('is_locked,finalized_at,start_date,end_date')
           .eq('id', widget.showId)
           .single();
 
       _isLocked = show['is_locked'] == true;
       _isFinalized = (show['finalized_at'] ?? '').toString().trim().isNotEmpty;
+      _showStartDate = _parseDate(show['start_date']);
+      _showEndDate = _parseDate(show['end_date']);
 
       await Future.wait([_loadBreeds(), _loadSections()]);
 
@@ -130,7 +138,7 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
       final res = await supabase
           .from('show_sections')
           .select(
-            'id, show_id, kind, letter, display_name, is_enabled, sort_order, breed_scope, allowed_breed_ids, allow_meat_classes',
+            'id, show_id, kind, letter, display_name, judging_date, is_enabled, sort_order, breed_scope, allowed_breed_ids, allow_meat_classes',
           )
           .eq('show_id', widget.showId);
 
@@ -174,7 +182,9 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
       _deletedIds.clear();
 
       for (final row in rows) {
-        _sections.add(_EditableSection.fromDb(row));
+        _sections.add(
+          _EditableSection.fromDb(row, fallbackDate: _showStartDate),
+        );
       }
 
       _normalizeSortOrder();
@@ -244,6 +254,7 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
         _EditableSection.newRow(
           kind: kind,
           displayName: _defaultDisplayNameForKind(kind),
+          judgingDate: _showStartDate,
         ),
       );
       _normalizeSortOrder();
@@ -313,6 +324,20 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
         return false;
       }
 
+      final judgingDate = s.judgingDate;
+      final startDate = _showStartDate;
+      final endDate = _showEndDate;
+      if (judgingDate == null || startDate == null || endDate == null) {
+        setState(() => _msg = '$name needs a judging date.');
+        return false;
+      }
+      if (judgingDate.isBefore(startDate) || judgingDate.isAfter(endDate)) {
+        setState(
+          () => _msg = '$name must use a date within the show date range.',
+        );
+        return false;
+      }
+
       if (s.breedScope == 'single' && s.allowedBreedIds.length != 1) {
         setState(
           () => _msg =
@@ -370,6 +395,7 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
           'kind': s.kind,
           'letter': s.letterCtrl.text.trim(),
           'display_name': s.displayNameCtrl.text.trim(),
+          'judging_date': _dateToIso(s.judgingDate!),
           'is_enabled': s.isEnabled,
           'sort_order': s.sortOrder,
           'breed_scope': s.breedScope,
@@ -464,6 +490,59 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
           color: fgColor,
           fontWeight: FontWeight.w700,
           fontSize: 12,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickJudgingDate(_EditableSection section) async {
+    final startDate = _showStartDate;
+    final endDate = _showEndDate;
+    if (_saving || _isReadOnly || _isSingleDayShow) return;
+    if (startDate == null || endDate == null) return;
+
+    final initialDate =
+        section.judgingDate == null ||
+            section.judgingDate!.isBefore(startDate) ||
+            section.judgingDate!.isAfter(endDate)
+        ? startDate
+        : section.judgingDate!;
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: startDate,
+      lastDate: endDate,
+      helpText: 'Select the day this section is judged',
+    );
+    if (selected == null || !mounted) return;
+    setState(() => section.judgingDate = _dateOnly(selected));
+  }
+
+  Widget _buildJudgingDateField(_EditableSection section) {
+    final date = section.judgingDate;
+    final enabled = !_saving && !_isReadOnly && !_isSingleDayShow;
+    final label = date == null
+        ? 'Select a date'
+        : MaterialLocalizations.of(context).formatMediumDate(date);
+
+    return Semantics(
+      button: enabled,
+      label: 'Judging date, $label',
+      child: InkWell(
+        onTap: enabled ? () => _pickJudgingDate(section) : null,
+        borderRadius: BorderRadius.circular(4),
+        child: InputDecorator(
+          decoration: InputDecoration(
+            labelText: 'Date this section is judged',
+            helperText: _isSingleDayShow
+                ? 'Locked to the show date for this one-day show.'
+                : 'Only dates within the show are available.',
+            border: const OutlineInputBorder(),
+            isDense: true,
+            enabled: enabled,
+            suffixIcon: const Icon(Icons.calendar_today_outlined),
+          ),
+          child: Text(label),
         ),
       ),
     );
@@ -825,6 +904,8 @@ class _ShowSectionsDialogState extends State<_ShowSectionsDialog> {
                 ],
               ),
               const SizedBox(height: 12),
+              _buildJudgingDateField(s),
+              const SizedBox(height: 12),
               _buildBreedScopeSelector(s),
               const SizedBox(height: 10),
               _buildAllowedBreedSummary(s),
@@ -1078,6 +1159,7 @@ class _EditableSection {
   int sortOrder;
   String breedScope;
   List<String> allowedBreedIds;
+  DateTime? judgingDate;
   final TextEditingController letterCtrl;
   final TextEditingController displayNameCtrl;
 
@@ -1089,11 +1171,15 @@ class _EditableSection {
     required this.sortOrder,
     required this.breedScope,
     required this.allowedBreedIds,
+    required this.judgingDate,
     required this.letterCtrl,
     required this.displayNameCtrl,
   });
 
-  factory _EditableSection.fromDb(Map<String, dynamic> row) {
+  factory _EditableSection.fromDb(
+    Map<String, dynamic> row, {
+    DateTime? fallbackDate,
+  }) {
     final rawAllowed = row['allowed_breed_ids'];
     final allowed = <String>[];
 
@@ -1111,6 +1197,7 @@ class _EditableSection {
       sortOrder: int.tryParse((row['sort_order'] ?? '').toString()) ?? 0,
       breedScope: (row['breed_scope'] ?? 'all').toString().trim().toLowerCase(),
       allowedBreedIds: allowed,
+      judgingDate: _parseDate(row['judging_date']) ?? fallbackDate,
       letterCtrl: TextEditingController(text: (row['letter'] ?? '').toString()),
       displayNameCtrl: TextEditingController(
         text: (row['display_name'] ?? '').toString(),
@@ -1121,6 +1208,7 @@ class _EditableSection {
   factory _EditableSection.newRow({
     required String kind,
     required String displayName,
+    required DateTime? judgingDate,
   }) {
     return _EditableSection(
       id: null,
@@ -1130,6 +1218,7 @@ class _EditableSection {
       sortOrder: 0,
       breedScope: 'all',
       allowedBreedIds: <String>[],
+      judgingDate: judgingDate,
       letterCtrl: TextEditingController(),
       displayNameCtrl: TextEditingController(text: displayName),
     );
@@ -1139,4 +1228,22 @@ class _EditableSection {
     letterCtrl.dispose();
     displayNameCtrl.dispose();
   }
+}
+
+DateTime? _parseDate(dynamic value) {
+  final parsed = DateTime.tryParse((value ?? '').toString().trim());
+  return parsed == null ? null : _dateOnly(parsed);
+}
+
+DateTime _dateOnly(DateTime value) =>
+    DateTime(value.year, value.month, value.day);
+
+bool _sameDate(DateTime a, DateTime b) =>
+    a.year == b.year && a.month == b.month && a.day == b.day;
+
+String _dateToIso(DateTime value) {
+  final date = _dateOnly(value);
+  final month = date.month.toString().padLeft(2, '0');
+  final day = date.day.toString().padLeft(2, '0');
+  return '${date.year}-$month-$day';
 }

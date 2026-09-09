@@ -156,6 +156,7 @@ create table if not exists public.show_sections (
   id uuid primary key default extensions.gen_random_uuid(),
   show_id uuid not null references public.shows(id) on delete cascade,
   kind text not null, letter text not null, display_name text,
+  judging_date date,
   breed_scope text not null default 'all_breed',
   allowed_breed_ids uuid[], is_enabled boolean not null default true,
   sort_order integer not null default 0,

@@ -6,6 +6,14 @@ import 'package:ringmaster_show/screens/admin/closeout/models/clubs/sweepstakes_
 
 void main() {
   group('cavy closeout report helpers', () {
+    test('uses the section judging date before the show start date', () {
+      final showStart = DateTime(2026, 9, 4);
+      final sectionDate = DateTime(2026, 9, 6);
+
+      expect(resolveLegJudgingDate(sectionDate, showStart), sectionDate);
+      expect(resolveLegJudgingDate(null, showStart), showStart);
+    });
+
     test('keeps cavy rows out of rabbit detail reports without species', () {
       expect(
         breedResultsDetailRowMatchesSpecies(const {
