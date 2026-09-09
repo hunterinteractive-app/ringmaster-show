@@ -181,7 +181,7 @@ create table if not exists public.exhibitors (
 create table if not exists public.animals (
   id uuid primary key default extensions.gen_random_uuid(),
   owner_user_id uuid, species text, tattoo text, name text, breed text,
-  variety text, sex text, class_name text
+  variety text, sex text, class_name text, deleted_at timestamptz
 );
 create table if not exists public.entries (
   id uuid primary key default extensions.gen_random_uuid(),

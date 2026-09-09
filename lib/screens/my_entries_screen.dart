@@ -396,6 +396,7 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
         .from('animals')
         .select(selectColumns)
         .eq('owner_user_id', userId)
+        .isFilter('deleted_at', null)
         .order('created_at', ascending: false);
 
     for (final row in (ownedRows as List).cast<Map<String, dynamic>>()) {
@@ -408,6 +409,7 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
           .from('animals')
           .select(selectColumns)
           .inFilter('exhibitor_id', myExhibitorIds.toList())
+          .isFilter('deleted_at', null)
           .order('created_at', ascending: false);
 
       for (final row
@@ -425,6 +427,8 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
     );
 
     if (existingId.isNotEmpty && !alreadyLoaded) {
+      // Preserve an existing entry's animal selection even if the saved animal
+      // was later deleted. New selections above only include active animals.
       final currentRows = await supabase
           .from('animals')
           .select(selectColumns)

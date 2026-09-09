@@ -4438,7 +4438,8 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
           .from('animals')
           .select(
             'id,owner_user_id,exhibitor_id,name,tattoo,breed,variety,sex,species,birth_date,is_dob_unknown',
-          );
+          )
+          .isFilter('deleted_at', null);
 
       if (ownerUserId.isNotEmpty) {
         query = query.eq('owner_user_id', ownerUserId);
@@ -4788,7 +4789,8 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
             // a buck and doe may legitimately share one. Keep their saved
             // animal IDs distinct so the entry-level duplicate check remains
             // based on animal_id, not tattoo text.
-            .eq('sex', _sexValue!.trim());
+            .eq('sex', _sexValue!.trim())
+            .isFilter('deleted_at', null);
 
         if (exhibitorOwnerUserId.isNotEmpty) {
           existingAnimalQuery = existingAnimalQuery.eq(

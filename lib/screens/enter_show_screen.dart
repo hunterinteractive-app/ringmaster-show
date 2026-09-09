@@ -906,6 +906,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
           'id,species,name,tattoo,breed,variety,sex,birth_date,is_dob_unknown',
         )
         .eq('owner_user_id', userId)
+        .isFilter('deleted_at', null)
         .order('created_at', ascending: false);
 
     return (res as List).cast<Map<String, dynamic>>();

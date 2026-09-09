@@ -36,15 +36,36 @@ class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
           'id,species,name,tattoo,breed,variety,sex,birth_date,is_dob_unknown,created_at',
         )
         .eq('owner_user_id', userId)
+        .isFilter('deleted_at', null)
         .order('created_at', ascending: false);
 
     return (res as List).cast<Map<String, dynamic>>();
   }
 
   Future<void> _deleteAnimal(String id) async {
-    await supabase.from('animals').delete().eq('id', id);
-    if (!mounted) return;
-    setState(() {});
+    try {
+      final rows = await supabase
+          .from('animals')
+          .update({'deleted_at': DateTime.now().toUtc().toIso8601String()})
+          .eq('id', id)
+          .isFilter('deleted_at', null)
+          .select('id');
+
+      if ((rows as List).isEmpty) {
+        throw Exception('The animal was not found or was already deleted.');
+      }
+
+      if (!mounted) return;
+      setState(() {});
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Animal deleted.')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Delete failed: $e')));
+    }
   }
 
   Future<void> _confirmDeleteAnimal(Map<String, dynamic> animal) async {
