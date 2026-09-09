@@ -413,6 +413,8 @@ class _ShowCloseoutV2PreviewPageState extends State<ShowCloseoutV2PreviewPage> {
         return _FinalCloseoutPreviewPanel(
           showId: widget.showId,
           showName: widget.showName,
+          onArbaReportsChanged: () =>
+              _liveReportsKey.currentState?.refreshPreservingSelection(),
         );
       default:
         return _ComingSoonPanel(title: _steps[_selectedStep]);
@@ -3514,10 +3516,12 @@ class _DeliveryTile extends StatelessWidget {
 class _FinalCloseoutPreviewPanel extends StatefulWidget {
   final String showId;
   final String showName;
+  final VoidCallback onArbaReportsChanged;
 
   const _FinalCloseoutPreviewPanel({
     required this.showId,
     required this.showName,
+    required this.onArbaReportsChanged,
   });
 
   @override
@@ -3764,7 +3768,10 @@ class _FinalCloseoutPreviewPanelState
           reports: _readiness!.arbaReports,
           exhibitorReportsSentAt: _readiness!.exhibitorReportsSentAt,
           clubReportsSentAt: _readiness!.clubReportsSentAt,
-          onChanged: _load,
+          onChanged: () async {
+            await _load();
+            widget.onArbaReportsChanged();
+          },
         ),
         const SizedBox(height: 20),
         Text('Lock Show', style: Theme.of(context).textTheme.titleLarge),
@@ -4391,6 +4398,7 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
   bool _queueingSelectedReport = false;
   bool _sendingSelectedReport = false;
   bool _isMichellesShow = false;
+  bool _arbaReportsHaveBeenSent = false;
   bool _hasLoadedArtifacts = false;
   final _additionalMessageController = TextEditingController();
 
@@ -4528,12 +4536,20 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
             .select('created_by')
             .eq('id', widget.showId)
             .maybeSingle(),
+        _supabase
+            .from('show_email_deliveries')
+            .select('sent_at,provider_message_id')
+            .eq('show_id', widget.showId)
+            .eq('report_name', 'arba_report'),
       ]);
       if (!mounted) return;
       final rows = values[0] as List;
       final show = Map<String, dynamic>.from(
         values[1] as Map? ?? const <String, dynamic>{},
       );
+      final arbaDeliveries = (values[2] as List)
+          .map((row) => Map<String, dynamic>.from(row as Map))
+          .toList();
       setState(() {
         _artifacts = rows
             .map(
@@ -4545,6 +4561,14 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
         _isMichellesShow =
             (show['created_by'] ?? '').toString().trim() ==
             _michellesSecretaryId;
+        _arbaReportsHaveBeenSent = arbaDeliveries.any(
+          (delivery) =>
+              (delivery['sent_at'] ?? '').toString().trim().isNotEmpty &&
+              (delivery['provider_message_id'] ?? '')
+                  .toString()
+                  .trim()
+                  .isNotEmpty,
+        );
         _applySelection(_reconcileSelection(preferred));
         _hasLoadedArtifacts = true;
         _loading = false;
@@ -4924,6 +4948,102 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
       if (value.isNotEmpty) return value;
     }
     return null;
+  }
+
+  Future<String?> _loadArbaEmailTarget() async {
+    final rows = await _supabase
+        .from('show_sanctions')
+        .select('sweepstakes_email')
+        .eq('show_id', widget.showId)
+        .ilike('sanctioning_body', 'ARBA');
+    for (final raw in rows as List) {
+      final email = (raw as Map)['sweepstakes_email']?.toString().trim() ?? '';
+      if (email.isNotEmpty) return email;
+    }
+    return null;
+  }
+
+  Future<void> _emailSelectedArbaReportAgain() async {
+    final artifact = _selectedArtifact;
+    if (artifact == null ||
+        artifact.reportName != 'arba_report' ||
+        !_isGenerated(artifact) ||
+        !_arbaReportsHaveBeenSent ||
+        _sendingSelectedReport) {
+      return;
+    }
+
+    final recipient = await _loadArbaEmailTarget();
+    if (!mounted) return;
+    if (recipient == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No ARBA email is configured. Add the ARBA sweepstakes email to the ARBA sanction record first.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final sectionLabel = arbaSectionDisplayName(metadata: artifact.metadata);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Email This ARBA Report Again?'),
+        content: Text(
+          'This will send only the $sectionLabel ARBA report to $recipient. Any optional message entered above will be included.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Email Report Again'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _sendingSelectedReport = true);
+    _activeDeliveryProgress.value = const _ActiveDeliveryProgress(
+      recipientType: 'ARBA',
+      totalBatches: 1,
+      completedBatches: 0,
+    );
+    try {
+      await ReportEmailService().sendArbaReportEmail(
+        showId: widget.showId,
+        artifactIds: [artifact.id],
+        to: recipient,
+        subject: '${widget.showName} - ARBA Show Report - $sectionLabel',
+        message: _additionalMessageController.text.trim(),
+        forceResend: true,
+      );
+      if (!mounted) return;
+      _activeDeliveryProgress.value = const _ActiveDeliveryProgress(
+        recipientType: 'ARBA',
+        totalBatches: 1,
+        completedBatches: 1,
+      );
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$sectionLabel ARBA report resent to $recipient.'),
+        ),
+      );
+      await _loadArtifacts();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to resend this ARBA report: $error')),
+      );
+    } finally {
+      _activeDeliveryProgress.value = null;
+      if (mounted) setState(() => _sendingSelectedReport = false);
+    }
   }
 
   Future<List<ReportArtifactSummary>> _emailArtifactsFor(
@@ -5458,6 +5578,13 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
                   includeReports: true,
                   includeLegs: true,
                 ),
+          onEmailArbaAgain:
+              _selectedReportName == 'arba_report' &&
+                  _selectedArtifact != null &&
+                  _isGenerated(_selectedArtifact!) &&
+                  _arbaReportsHaveBeenSent
+              ? _emailSelectedArbaReportAgain
+              : null,
         ),
       ],
     ],
@@ -5476,6 +5603,7 @@ class _SelectedReportStatus extends StatelessWidget {
   final VoidCallback? onEmailThisShow;
   final VoidCallback? onEmailAllShows;
   final VoidCallback? onEmailReportsAndLegs;
+  final VoidCallback? onEmailArbaAgain;
 
   const _SelectedReportStatus({
     required this.artifact,
@@ -5489,6 +5617,7 @@ class _SelectedReportStatus extends StatelessWidget {
     required this.onEmailThisShow,
     required this.onEmailAllShows,
     required this.onEmailReportsAndLegs,
+    required this.onEmailArbaAgain,
   });
 
   @override
@@ -5581,11 +5710,25 @@ class _SelectedReportStatus extends StatelessWidget {
     if (reportName == 'arba_report') {
       return [
         Tooltip(
-          message: 'Send ARBA reports from Step 8 after each has been viewed.',
+          message: onEmailArbaAgain == null
+              ? 'Send all ARBA reports from Step 8 first.'
+              : 'Resend only the selected ARBA report and include the optional message above.',
           child: OutlinedButton.icon(
-            onPressed: null,
-            icon: Icon(Icons.email_outlined),
-            label: Text('Email All to ARBA'),
+            onPressed: sending ? null : onEmailArbaAgain,
+            icon: sending
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.email_outlined),
+            label: Text(
+              sending
+                  ? 'Sending…'
+                  : onEmailArbaAgain == null
+                  ? 'Email All to ARBA'
+                  : 'Email This ARBA Report Again',
+            ),
           ),
         ),
       ];
