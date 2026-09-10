@@ -7,6 +7,35 @@ from print_pack import merge_pdfs, verify_sources, SourceChangedError
 
 
 class PrintPackTests(unittest.TestCase):
+    def test_omits_only_empty_leg_pages_and_their_bookmarks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            sources = []
+            for index, (report_name, texts) in enumerate([
+                ('exhibitor_report', ['No leg certificates earned.']),
+                ('legs', ['No leg certificates earned.']),
+                ('legs', ['Actual leg certificate', 'No leg certificates earned.']),
+            ]):
+                writer = PdfWriter()
+                for text in texts:
+                    page = writer.add_blank_page(width=612, height=792)
+                    font = DictionaryObject({NameObject('/Type'): NameObject('/Font'),
+                        NameObject('/Subtype'): NameObject('/Type1'),
+                        NameObject('/BaseFont'): NameObject('/Helvetica')})
+                    page[NameObject('/Resources')] = DictionaryObject({
+                        NameObject('/Font'): DictionaryObject({NameObject('/F1'): writer._add_object(font)})})
+                    content = DecodedStreamObject()
+                    content.set_data(f'BT /F1 12 Tf 20 20 Td ({text}) Tj ET'.encode())
+                    page[NameObject('/Contents')] = writer._add_object(content)
+                path = Path(directory) / f'{index}.pdf'
+                writer.write(path)
+                sources.append({'file': path, 'label': str(index), 'report_name': report_name})
+            output = Path(directory) / 'combined.pdf'
+            self.assertEqual(merge_pdfs(sources, output), 2)
+            reader = PdfReader(output)
+            self.assertEqual([p.extract_text() for p in reader.pages],
+                             ['No leg certificates earned.', 'Actual leg certificate'])
+            self.assertEqual([b.title for b in reader.outline], ['0', '2'])
+
     def test_repeated_artwork_with_different_resource_names_is_losslessly_shared(self):
         with tempfile.TemporaryDirectory() as directory:
             sources = []

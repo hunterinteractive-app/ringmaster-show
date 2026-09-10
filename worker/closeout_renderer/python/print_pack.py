@@ -24,8 +24,16 @@ def merge_pdfs(sources, destination):
             reader = PdfReader(stream)
             if reader.is_encrypted or not reader.pages:
                 raise ValueError('Source PDF is encrypted or empty')
-            expected_pages += len(reader.pages)
-            writer.append(reader, outline_item=source['label'], import_outline=False)
+            pages = [index for index, page in enumerate(reader.pages)
+                     if not (source.get('report_name') == 'legs'
+                             and ' '.join((page.extract_text() or '').split()).casefold().rstrip('.')
+                             == 'no leg certificates earned')]
+            if not pages:
+                continue
+            expected_pages += len(pages)
+            writer.append(reader, pages=pages, outline_item=source['label'], import_outline=False)
+    if not expected_pages:
+        raise ValueError('No printable report pages remain')
     writer.add_metadata({
         '/Title': 'Exhibitor Reports & Legs Print Pack',
         '/Author': 'RingMaster Show',
@@ -143,7 +151,7 @@ def run_once(api):
                     raise SourceChangedError()
                 local = Path(directory) / f'{index}.pdf'
                 local.write_bytes(content)
-                return {'file': local, 'label': source['label']}
+                return {'file': local, 'label': source['label'], 'report_name': source['report_name']}
             # Bounded downloads avoid hundreds of sequential TLS round trips;
             # map preserves the manifest's exhibitor/report order.
             with ThreadPoolExecutor(max_workers=4) as executor:

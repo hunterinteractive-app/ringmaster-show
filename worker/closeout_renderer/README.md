@@ -63,6 +63,8 @@ claims one pack and merges its current source PDFs with pinned `pypdf`.
 The manifest is checked before and after merging; changed or unfinished sources
 require a new request. Each exhibitor's report precedes their legs, and bookmarks
 retain the source labels. Pages and images are preserved without rasterizing.
+Placeholder pages containing only "No leg certificates earned." are omitted
+from legs PDFs in the pack; exhibitor reports and actual certificates remain.
 
 Only account IDs in `exhibitor_print_pack_accounts` can request or download
 packs, subject to their existing show permissions. Account access is administered
