@@ -56,3 +56,20 @@ Build from the repository root:
 ```sh
 docker build -f worker/closeout_renderer/Dockerfile -t closeout-renderer:local .
 ```
+
+Restricted exhibitor print packs use a separate `exhibitor_print_packs` queue
+and private Storage bucket. When the ordinary queue is idle, the container
+claims one pack and merges its current source PDFs with pinned `pypdf`.
+The manifest is checked before and after merging; changed or unfinished sources
+require a new request. Each exhibitor's report precedes their legs, and bookmarks
+retain the source labels. Pages and images are preserved without rasterizing.
+
+Only account IDs in `exhibitor_print_pack_accounts` can request or download
+packs, subject to their existing show permissions. Account access is administered
+through trusted database operations, never client writes. Packs do not enter
+the email delivery queue. Regenerate a pack after regenerating source reports.
+
+Python tests: `python -m unittest discover -s worker/closeout_renderer/python -v`
+from the repository root, with `python/requirements.txt` installed in a venv.
+The SQL fixture and security test in `supabase/tests/exhibitor_print_pack_*`
+are for an isolated PostgreSQL database only; run fixture, migration, then test.

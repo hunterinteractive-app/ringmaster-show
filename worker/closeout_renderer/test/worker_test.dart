@@ -268,6 +268,38 @@ void main() {
       expect(result.claimed, 0);
     });
 
+    test('print packs run only when ordinary report queue is idle', () async {
+      var calls = 0;
+      Future<void> printPack() async {
+        calls++;
+      }
+
+      await _worker(
+        queue: _FakeQueue([_task()]),
+        processPrintPack: printPack,
+      ).workOnce();
+      expect(calls, 0);
+      await _worker(
+        queue: _FakeQueue([]),
+        processPrintPack: printPack,
+      ).workOnce();
+      expect(calls, 1);
+    });
+
+    test(
+      'print pack failure does not break ordinary queue processing',
+      () async {
+        final result = await _worker(
+          queue: _FakeQueue([]),
+          processPrintPack: () async {
+            throw StateError('merger unavailable');
+          },
+        ).workOnce();
+        expect(result.failed, 0);
+        expect(result.claimed, 0);
+      },
+    );
+
     test('stale recovery runs before claim', () async {
       final queue = _FakeQueue([])..recovered = 2;
       expect((await _worker(queue: queue).workOnce()).recovered, 2);
@@ -847,11 +879,13 @@ CloseoutWorker _worker({
   required _FakeQueue queue,
   _FakeRenderer? renderer,
   StructuredLog? log,
+  Future<void> Function()? processPrintPack,
 }) => CloseoutWorker(
   config: _config(),
   queue: queue,
   renderer: renderer ?? _FakeRenderer(),
   log: log ?? StructuredLog(workerId: 'worker', sink: (_) {}),
+  processPrintPack: processPrintPack,
 );
 
 WorkerConfig _config({

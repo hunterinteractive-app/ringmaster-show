@@ -36,12 +36,14 @@ final class CloseoutWorker {
     required this.queue,
     required this.renderer,
     required this.log,
+    this.processPrintPack,
   });
 
   final WorkerConfig config;
   final RenderQueue queue;
   final ArtifactRenderer renderer;
   final StructuredLog log;
+  final Future<void> Function()? processPrintPack;
   bool _stopping = false;
   bool _working = false;
   final Completer<void> _stopSignal = Completer<void>();
@@ -76,6 +78,17 @@ final class CloseoutWorker {
         final outcomes = await Future.wait(batch.map(_process));
         completed += outcomes.where((value) => value).length;
         failed += outcomes.where((value) => !value).length;
+      }
+      // Print packs have a separate restricted queue and never enter delivery
+      // workflows. Prioritize normal reports and avoid overlapping PDF memory.
+      if (tasks.isEmpty && !_stopping && processPrintPack != null) {
+        try {
+          await processPrintPack!();
+        } catch (error) {
+          log.event('print_pack_process_failed', {
+            'type': error.runtimeType.toString(),
+          });
+        }
       }
       return WorkResult(
         claimed: tasks.length,

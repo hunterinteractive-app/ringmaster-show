@@ -47,6 +47,24 @@ Future<void> main(List<String> arguments) async {
     queue: SupabaseRenderQueue(client),
     renderer: renderer,
     log: log,
+    processPrintPack: () async {
+      final process = await Process.start('/app/venv/bin/python', [
+        '/app/print_pack.py',
+      ]);
+      final output = process.stdout.transform(utf8.decoder).join();
+      // Python logs only job IDs, counts, and error types; never document data.
+      final errors = process.stderr.drain<void>();
+      final code = await process.exitCode.timeout(
+        const Duration(minutes: 10),
+        onTimeout: () {
+          process.kill(ProcessSignal.sigkill);
+          return -1;
+        },
+      );
+      stdout.write(await output);
+      await errors;
+      if (code != 0) throw StateError('Print pack process exited $code');
+    },
   );
 
   final shutdown = Completer<void>();

@@ -4376,6 +4376,9 @@ class _LiveReportDownloads extends StatefulWidget {
 }
 
 class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
+  static const _printPackReportName = 'exhibitor_print_pack';
+  bool _canAccessPrintPack = false;
+  Timer? _printPackPoller;
   static const _michellesSecretaryId = '96d62792-7aad-49da-a27a-4fb496289176';
   static const _operationalReportKeys = <String>{
     'exhibitor_mailing_labels',
@@ -4518,6 +4521,7 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
 
   @override
   void dispose() {
+    _printPackPoller?.cancel();
     _additionalMessageController.dispose();
     super.dispose();
   }
@@ -4560,7 +4564,30 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
       final arbaDeliveries = (values[2] as List)
           .map((row) => Map<String, dynamic>.from(row as Map))
           .toList();
+      final canAccessPrintPack =
+          await _supabase.rpc(
+            'can_access_exhibitor_print_pack',
+            params: {'p_show_id': widget.showId},
+          ) ==
+          true;
+      final printPacks = canAccessPrintPack
+          ? await _supabase
+                .from('exhibitor_print_packs')
+                .select(
+                  'id,show_id,artifact_status,is_current,storage_bucket,storage_path,file_name,generated_at,created_at,error_message,page_count',
+                )
+                .eq('show_id', widget.showId)
+                .eq('is_current', true)
+          : <Map<String, dynamic>>[];
+      if (!mounted) return;
+      _printPackPoller?.cancel();
+      if (printPacks.any(
+        (p) => const ['queued', 'running'].contains(p['artifact_status']),
+      )) {
+        _printPackPoller = Timer(const Duration(seconds: 5), _loadArtifacts);
+      }
       setState(() {
+        _canAccessPrintPack = canAccessPrintPack;
         _artifacts = rows
             .map(
               (row) => ReportArtifactSummary.fromJson(
@@ -4568,6 +4595,18 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
               ),
             )
             .toList();
+        _artifacts.addAll(
+          printPacks.map(
+            (p) => ReportArtifactSummary.fromJson({
+              ...p,
+              'report_name': _printPackReportName,
+              'metadata': {
+                'error_message': p['error_message'],
+                'page_count': p['page_count'],
+              },
+            }),
+          ),
+        );
         _isMichellesShow =
             (show['created_by'] ?? '').toString().trim() ==
             _michellesSecretaryId;
@@ -4606,6 +4645,9 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
             .toList()
           ..sort();
     if (group == 'other') {
+      if (_canAccessPrintPack && !reportNames.contains(_printPackReportName)) {
+        reportNames.add(_printPackReportName);
+      }
       for (final reportName in _manualOtherReports) {
         if (!reportNames.contains(reportName)) reportNames.add(reportName);
       }
@@ -4773,6 +4815,25 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
 
   Future<void> _queueSelectedReport() async {
     final selectedReportName = _selectedReportName;
+    if (selectedReportName == _printPackReportName) {
+      setState(() => _queueingSelectedReport = true);
+      try {
+        await _supabase.rpc(
+          'queue_exhibitor_print_pack',
+          params: {'p_show_id': widget.showId},
+        );
+        await _loadArtifacts();
+      } catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Unable to generate print pack: $error')),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _queueingSelectedReport = false);
+      }
+      return;
+    }
     if (_operationalReportKeys.contains(selectedReportName)) {
       await _generateOperationalReport(selectedReportName!);
       return;
@@ -5361,6 +5422,7 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
   }
 
   String _friendlyReportName(String reportName) => switch (reportName) {
+    _printPackReportName => 'Exhibitor Reports & Legs Print Pack',
     'exhibitor_mailing_labels' => 'Exhibitor Labels',
     'arba_report' => 'ARBA Report',
     'entered_exhibitors_list_report' => 'Exhibitor Number Lookup Report',
@@ -5670,6 +5732,16 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
           ),
         ],
         const SizedBox(height: 16),
+        if (_selectedReportName == _printPackReportName) ...[
+          const Text(
+            'One PDF for this show, sorted by exhibitor last name. Each exhibitor’s report is followed by their legs. Finish Step 5 first, and regenerate this pack after changing the source reports. Generation runs in the background; you can leave this page.',
+          ),
+          if (_selectedArtifact?.metadata['page_count'] != null)
+            Text('${_selectedArtifact!.metadata['page_count']} pages'),
+          if (_selectedArtifact?.metadata['error_message'] != null)
+            Text(_selectedArtifact!.metadata['error_message'].toString()),
+          const SizedBox(height: 12),
+        ],
         _SelectedReportStatus(
           artifact: _selectedArtifact,
           reportName: _selectedReportName,
@@ -5777,8 +5849,10 @@ class _SelectedReportStatus extends StatelessWidget {
           Text('Status: $status'),
           if (artifact == null && selectedReportName != null) ...[
             const SizedBox(height: 4),
-            const Text(
-              'No report artifact exists for this exact selection. This usually means the selected section has no eligible shown entries.',
+            Text(
+              selectedReportName == 'exhibitor_print_pack'
+                  ? 'Generate the print pack to prepare one downloadable PDF.'
+                  : 'No report artifact exists for this exact selection. This usually means the selected section has no eligible shown entries.',
             ),
           ],
           if (artifact?.generatedAt?.isNotEmpty == true) ...[
@@ -5825,6 +5899,7 @@ class _SelectedReportStatus extends StatelessWidget {
   }
 
   List<Widget> _emailButtons(String? reportName) {
+    if (reportName == 'exhibitor_print_pack') return const [];
     final labels = switch (reportName) {
       'arba_report' => const ['Email All to ARBA'],
       'exhibitor_report' => const [
