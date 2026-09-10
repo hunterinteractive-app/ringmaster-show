@@ -19,6 +19,10 @@ class BreedAwardsOverviewPdf {
       theme: await buildReportPdfTheme(assets),
       title: 'Breed Awards Overview',
       author: 'RingMaster Show',
+      creator: 'RingMaster Show',
+      subject:
+          'Breed, variety, and group award winners by show section, with animal and exhibitor details.',
+      keywords: 'RingMaster Show, breed awards, BOB, BOS, BOV, BOSV, BOG, BOSG',
     );
     final sections = <String, List<BreedAwardOverviewRow>>{};
     for (final row in data.rows) {

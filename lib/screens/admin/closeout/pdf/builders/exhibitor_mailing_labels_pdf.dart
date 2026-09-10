@@ -45,6 +45,11 @@ class ExhibitorMailingLabelsPdf {
       theme: await buildReportPdfTheme(assets),
       title: 'Exhibitor Mailing Labels — Avery 5160/8160',
       author: 'RingMaster Show',
+      creator: 'RingMaster Show',
+      subject:
+          'Exhibitor names with mailing addresses or exhibitor numbers, formatted for Avery 5160/8160 labels.',
+      keywords:
+          'RingMaster Show, exhibitors, mailing labels, Avery 5160, Avery 8160',
     );
     for (var offset = 0; offset < rows.length; offset += Avery5160.perPage) {
       final page = rows.skip(offset).take(Avery5160.perPage).toList();
