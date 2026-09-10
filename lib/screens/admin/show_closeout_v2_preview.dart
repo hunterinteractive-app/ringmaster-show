@@ -1,5 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:ringmaster_show/screens/admin/closeout/data/loaders/exhibitor_mailing_labels_loader.dart';
+import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/exhibitor_mailing_labels_pdf.dart';
+import 'package:ringmaster_show/screens/admin/closeout/data/loaders/breed_awards_overview_loader.dart';
+import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/breed_awards_overview_pdf.dart';
 
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/reporting_core/assets/flutter_report_asset_loader.dart';
@@ -4374,6 +4378,8 @@ class _LiveReportDownloads extends StatefulWidget {
 class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
   static const _michellesSecretaryId = '96d62792-7aad-49da-a27a-4fb496289176';
   static const _operationalReportKeys = <String>{
+    'exhibitor_mailing_labels',
+    'breed_awards_overview',
     'unpaid_balances_report',
     'paid_exhibitor_report',
     'entered_exhibitors_contact_report',
@@ -4396,6 +4402,8 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
   String? _selectedShowLetter;
   String? _selectedScope;
   bool _queueingSelectedReport = false;
+  MailingLabelMode _mailingLabelMode = MailingLabelMode.address;
+  MailingLabelSort _mailingLabelSort = MailingLabelSort.lastName;
   bool _sendingSelectedReport = false;
   bool _isMichellesShow = false;
   bool _arbaReportsHaveBeenSent = false;
@@ -4404,6 +4412,8 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
 
   static const _groupOrder = ['arba', 'exhibitor', 'club', 'other'];
   static const _manualOtherReports = {
+    'exhibitor_mailing_labels',
+    'breed_awards_overview',
     'unpaid_balances_report',
     'paid_exhibitor_report',
     'entered_exhibitors_contact_report',
@@ -4604,7 +4614,11 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
         reportNames.add('michelles_special_report');
       }
     }
-    reportNames.sort();
+    reportNames.sort(
+      (a, b) => _friendlyReportName(
+        a,
+      ).toLowerCase().compareTo(_friendlyReportName(b).toLowerCase()),
+    );
     return reportNames;
   }
 
@@ -4628,6 +4642,13 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
     }
     final matches = _filteredReportArtifacts.toList()
       ..sort(compareCloseoutReportArtifacts);
+    if (reportName == 'exhibitor_mailing_labels') {
+      matches.removeWhere(
+        (artifact) =>
+            artifact.metadata['label_mode'] != _mailingLabelMode.name ||
+            artifact.metadata['label_sort'] != _mailingLabelSort.name,
+      );
+    }
     return matches.isEmpty ? null : matches.first;
   }
 
@@ -4843,6 +4864,10 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
               'scope_key': 'operational',
               'section_ids': sectionIds,
               'metadata': {
+                if (reportName == 'exhibitor_mailing_labels') ...{
+                  'label_mode': _mailingLabelMode.name,
+                  'label_sort': _mailingLabelSort.name,
+                },
                 'operational_report': true,
                 'scope_key': 'operational',
                 'scope_label': 'Operational report',
@@ -4870,6 +4895,10 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
               'section_ids': sectionIds,
               'metadata': {
                 ...artifact.metadata,
+                if (reportName == 'exhibitor_mailing_labels') ...{
+                  'label_mode': _mailingLabelMode.name,
+                  'label_sort': _mailingLabelSort.name,
+                },
                 'operational_report': true,
                 'scope_key': 'operational',
                 'scope_label': 'Operational report',
@@ -4891,6 +4920,18 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
       );
 
       final file = switch (reportName) {
+        'exhibitor_mailing_labels' =>
+          await ExhibitorMailingLabelsPdf(assets: _reportAssets).buildFile(
+            await ExhibitorMailingLabelsLoader(_supabase).load(request),
+            request,
+            mode: _mailingLabelMode,
+            sort: _mailingLabelSort,
+          ),
+        'breed_awards_overview' =>
+          await BreedAwardsOverviewPdf(assets: _reportAssets).buildFile(
+            await BreedAwardsOverviewLoader(_supabase).load(request),
+            request,
+          ),
         'unpaid_balances_report' =>
           await (await UnpaidBalancesReportPdfBuilder.fromAssets(
             _reportAssets,
@@ -4946,7 +4987,11 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${_friendlyReportName(reportName)} generated.'),
+          content: Text(
+            reportName == 'exhibitor_mailing_labels'
+                ? '${file.metadata['label_count']} labels generated. ${file.metadata['skipped_count']} exhibitors omitted because required label details are missing.'
+                : '${_friendlyReportName(reportName)} generated.',
+          ),
         ),
       );
       await _loadArtifacts();
@@ -5567,6 +5612,62 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
             border: OutlineInputBorder(),
           ),
         ),
+        if (_selectedReportName == 'exhibitor_mailing_labels') ...[
+          const SizedBox(height: 12),
+          DropdownButtonFormField<MailingLabelMode>(
+            initialValue: _mailingLabelMode,
+            decoration: const InputDecoration(
+              labelText: 'Label contents',
+              border: OutlineInputBorder(),
+            ),
+            items: const [
+              DropdownMenuItem(
+                value: MailingLabelMode.address,
+                child: Text('Full name and mailing address'),
+              ),
+              DropdownMenuItem(
+                value: MailingLabelMode.exhibitorNumber,
+                child: Text('Full name and exhibitor number'),
+              ),
+            ],
+            onChanged: _queueingSelectedReport
+                ? null
+                : (value) {
+                    if (value != null) {
+                      setState(() => _mailingLabelMode = value);
+                    }
+                  },
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<MailingLabelSort>(
+            initialValue: _mailingLabelSort,
+            decoration: const InputDecoration(
+              labelText: 'Sort labels by',
+              border: OutlineInputBorder(),
+            ),
+            items: const [
+              DropdownMenuItem(
+                value: MailingLabelSort.lastName,
+                child: Text('Last name'),
+              ),
+              DropdownMenuItem(
+                value: MailingLabelSort.exhibitorNumber,
+                child: Text('Exhibitor number'),
+              ),
+            ],
+            onChanged: _queueingSelectedReport
+                ? null
+                : (value) {
+                    if (value != null) {
+                      setState(() => _mailingLabelSort = value);
+                    }
+                  },
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Avery 5160/8160 · 30 labels per US Letter sheet. Print at Actual size / 100%, with scaling disabled. Generate again after changing options. Exhibitors missing required address or number details are omitted.',
+          ),
+        ],
         const SizedBox(height: 16),
         _SelectedReportStatus(
           artifact: _selectedArtifact,
