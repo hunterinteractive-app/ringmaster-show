@@ -1,5 +1,6 @@
 import 'package:supabase/supabase.dart';
 
+import '../report_data_reader.dart';
 import '../../models/base/report_request.dart';
 import '../../models/other/michelles_special_report_data.dart';
 
@@ -9,7 +10,8 @@ class MichellesSpecialReportLoader {
   final SupabaseClient supabase;
 
   Future<MichellesSpecialReportData> load(ReportRequest request) async {
-    final rows = await supabase.rpc(
+    final rows = await loadReportRpcRows(
+      supabase,
       'michelles_special_report_rows',
       params: {'p_show_id': request.showId},
     );

@@ -4,6 +4,7 @@ import 'package:supabase/supabase.dart';
 
 import '../../models/base/report_request.dart';
 import '../../models/exhibitor/entered_exhibitors_contact_report_data.dart';
+import '../report_data_reader.dart';
 
 class EnteredExhibitorsContactReportLoader {
   final SupabaseClient supabase;
@@ -17,9 +18,10 @@ class EnteredExhibitorsContactReportLoader {
         'Entered exhibitors report requires scoped section IDs.',
       );
     }
-    final rows = await supabase
-        .from('entries')
-        .select('''
+    final rows = await readAllReportPages(
+      (from, to) => supabase
+          .from('entries')
+          .select('''
           exhibitor_id,
           exhibitors!entries_exhibitor_id_fkey (
             id,
@@ -35,8 +37,11 @@ class EnteredExhibitorsContactReportLoader {
             zip
           )
         ''')
-        .eq('show_id', req.showId)
-        .inFilter('section_id', sectionIds);
+          .eq('show_id', req.showId)
+          .inFilter('section_id', sectionIds)
+          .order('id', ascending: true)
+          .range(from, to),
+    );
 
     final Map<String, EnteredExhibitorsContactRow> map = {};
 

@@ -3,6 +3,7 @@
 import 'package:ringmaster_show/utils/cavy/cavy_awards.dart';
 import 'package:ringmaster_show/utils/species_sex.dart';
 
+import '../report_data_reader.dart';
 import '../../models/base/report_request.dart';
 import '../../models/clubs/breed_results_detail_report_data.dart';
 import '../../utils/club_report_grouping.dart';
@@ -232,7 +233,8 @@ class BreedResultsDetailReportLoader {
             scope: scope,
             showLetter: showLetter,
           )
-        : await repo.supabase.rpc(
+        : await loadReportRpcRows(
+            repo.supabase,
             'report_results_entry_rows_for_breed_detail',
             params: {
               'p_show_id': showId,
@@ -302,7 +304,8 @@ class BreedResultsDetailReportLoader {
             scope: scope,
             showLetter: showLetter,
           )
-        : await repo.supabase.rpc(
+        : await loadReportRpcRows(
+            repo.supabase,
             'report_results_awards_for_breed_detail',
             params: {
               'p_show_id': showId,
@@ -422,13 +425,17 @@ class BreedResultsDetailReportLoader {
           : start + chunkSize;
       final chunk = entryIds.sublist(start, end);
 
-      final entryRows = await repo.supabase
-          .from('entries')
-          .select(
-            'id, scratched_at, status, is_shown, is_disqualified, disqualified_reason, is_fur, fur_variety, fur_placement',
-          )
-          .eq('show_id', showId)
-          .inFilter('id', chunk);
+      final entryRows = await readAllReportPages(
+        (from, to) => repo.supabase
+            .from('entries')
+            .select(
+              'id, scratched_at, status, is_shown, is_disqualified, disqualified_reason, is_fur, fur_variety, fur_placement',
+            )
+            .eq('show_id', showId)
+            .inFilter('id', chunk)
+            .order('id', ascending: true)
+            .range(from, to),
+      );
 
       for (final raw in entryRows as List) {
         final entry = Map<String, dynamic>.from(raw as Map);
@@ -1441,9 +1448,10 @@ class BreedResultsDetailReportLoader {
       final sectionId = _safe(section['id']);
       if (sectionId.isEmpty) continue;
 
-      final response = await repo.supabase
-          .from('entry_awards')
-          .select('''
+      final response = await readAllReportPages(
+        (from, to) => repo.supabase
+            .from('entry_awards')
+            .select('''
             award_code,
             entry_id,
             entries!entry_awards_entry_id_fkey!inner(
@@ -1461,8 +1469,11 @@ class BreedResultsDetailReportLoader {
               exhibitors!entries_exhibitor_id_fkey(first_name, last_name)
             )
           ''')
-          .eq('show_id', showId)
-          .eq('entries.section_id', sectionId);
+            .eq('show_id', showId)
+            .eq('entries.section_id', sectionId)
+            .order('id', ascending: true)
+            .range(from, to),
+      );
 
       for (final raw in response as List) {
         final award = Map<String, dynamic>.from(raw as Map);
@@ -1575,7 +1586,8 @@ class BreedResultsDetailReportLoader {
       final sectionId = _safe(section['id']);
       if (sectionId.isEmpty) continue;
 
-      final response = await repo.supabase.rpc(
+      final response = await loadReportRpcRows(
+        repo.supabase,
         'report_results_entry_rows',
         params: {
           'p_show_id': showId,
@@ -1637,11 +1649,15 @@ class BreedResultsDetailReportLoader {
 
     for (var i = 0; i < uniqueEntryIds.length; i += 100) {
       final chunk = uniqueEntryIds.skip(i).take(100).toList();
-      final rows = await repo.supabase
-          .from('sweepstakes_entry_results')
-          .select()
-          .eq('show_id', showId)
-          .inFilter('entry_id', chunk);
+      final rows = await readAllReportPages(
+        (from, to) => repo.supabase
+            .from('sweepstakes_entry_results')
+            .select()
+            .eq('show_id', showId)
+            .inFilter('entry_id', chunk)
+            .order('id', ascending: true)
+            .range(from, to),
+      );
 
       rowsOut.addAll(
         (rows as List).map((e) => Map<String, dynamic>.from(e as Map)),

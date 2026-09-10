@@ -31,6 +31,16 @@ insert into public.show_managers (
   can_manage_settings = true,
   can_finalize = true;
 
+-- Current authorization uses role_assignments. Keep the legacy fixture row
+-- above for finalize compatibility, and give the same test manager its real
+-- show-scoped role. The non-manager remains unassigned.
+insert into auth.users(id,aud,role,email,encrypted_password)
+values ('60000000-0000-0000-0000-000000000001','authenticated','authenticated',
+        'local-financial-manager@example.invalid','') on conflict(id) do nothing;
+insert into public.role_assignments(show_id,user_id,role)
+values ('20000000-0000-0000-0000-000000000004',
+        '60000000-0000-0000-0000-000000000001','admin');
+
 -- The anonymous role has no EXECUTE grant at all.
 do $$
 begin

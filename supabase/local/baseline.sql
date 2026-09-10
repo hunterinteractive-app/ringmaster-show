@@ -49,6 +49,8 @@ create table if not exists public.shows (
   club_id uuid,
   coop_numbering_mode text not null default 'separate',
   created_by uuid,
+  owner_user_id uuid,
+  is_published boolean not null default false,
   is_national_show boolean not null default false,
   national_show_section_id uuid,
   is_test boolean not null default false,
@@ -116,15 +118,15 @@ create table if not exists public.show_managers (
   primary key (show_id, user_id)
 );
 
-create or replace function public.user_can_manage_entries(p_show_id uuid)
+create or replace function public.user_can_manage_entries(p_show_id uuid, p_user_id uuid default null)
 returns boolean language sql stable security invoker set search_path = '' as $$
   select exists(select 1 from public.show_managers m
-    where m.show_id=p_show_id and m.user_id=auth.uid() and m.can_manage_entries)
+    where m.show_id=p_show_id and m.user_id=coalesce(p_user_id,auth.uid()) and m.can_manage_entries)
 $$;
-create or replace function public.user_can_manage_show_settings(p_show_id uuid)
+create or replace function public.user_can_manage_show_settings(p_show_id uuid, p_user_id uuid default auth.uid())
 returns boolean language sql stable security invoker set search_path = '' as $$
   select exists(select 1 from public.show_managers m
-    where m.show_id=p_show_id and m.user_id=auth.uid() and m.can_manage_settings)
+    where m.show_id=p_show_id and m.user_id=p_user_id and m.can_manage_settings)
 $$;
 create or replace function public.user_can_finalize_show(p_show_id uuid, p_user_id uuid)
 returns boolean language sql stable security invoker set search_path = '' as $$
@@ -137,6 +139,8 @@ create table if not exists public.breeds (
   name text not null, species text not null,
   sort_order integer not null default 0,
   has_varieties boolean not null default true,
+  uses_group_awards boolean not null default false,
+  uses_variety_awards boolean not null default true,
   created_at timestamptz not null default now()
 );
 create table if not exists public.variety_groups (
@@ -157,7 +161,7 @@ create table if not exists public.show_sections (
   show_id uuid not null references public.shows(id) on delete cascade,
   kind text not null, letter text not null, display_name text,
   judging_date date,
-  breed_scope text not null default 'all_breed',
+  breed_scope text not null default 'all',
   allowed_breed_ids uuid[], is_enabled boolean not null default true,
   sort_order integer not null default 0,
   unique(show_id, kind, letter, display_name)
@@ -210,6 +214,7 @@ create table if not exists public.entry_awards (
   show_id uuid references public.shows(id) on delete cascade,
   entry_id uuid not null references public.entries(id) on delete cascade,
   award_code text not null, award text, points numeric,
+  updated_at timestamptz not null default now(),
   created_at timestamptz not null default now()
 );
 
@@ -500,25 +505,25 @@ begin
   end if;
 
   for v_exhibitor_id in
-    select distinct i.exhibitor_id from public.entry_cart_items i
-    where i.cart_id=p_cart_id and i.exhibitor_id is not null
+    select distinct pi.exhibitor_id from public.entry_cart_items pi
+    where pi.cart_id=p_cart_id and pi.exhibitor_id is not null
   loop
-    select count(*)::integer,
-      count(*) filter(where i.is_fur)::integer,
-      coalesce(round(sum(coalesce(f.fee_per_entry,0)*100)),0)::integer,
-      coalesce(round(sum(case when i.is_fur then coalesce(f.fur_fee,0)*100 else 0 end)),0)::integer
+    select count(*) filter (where not pi.is_fur)::integer as entry_count,
+      count(*) filter(where pi.is_fur)::integer,
+      coalesce(round(sum(case when not pi.is_fur then coalesce(f.fee_per_entry,0)*100 else 0 end)),0)::integer,
+      coalesce(round(sum(case when pi.is_fur then coalesce(f.fur_fee,0)*100 else 0 end)),0)::integer
     into v_entry_count,v_fur_count,v_entries_cents,v_fur_cents
-    from public.entry_cart_items i
-    left join public.show_section_fee_settings f on f.section_id=i.section_id
-    where i.cart_id=p_cart_id and i.exhibitor_id=v_exhibitor_id;
+    from public.entry_cart_items pi
+    left join public.show_section_fee_settings f on f.section_id=pi.section_id
+    where pi.cart_id=p_cart_id and pi.exhibitor_id=v_exhibitor_id;
 
     select coalesce(round(sum(x.fee_per_show*100)),0)::integer
     into v_show_fee_cents
     from (
-      select distinct i.section_id,coalesce(f.fee_per_show,0) fee_per_show
-      from public.entry_cart_items i
-      left join public.show_section_fee_settings f on f.section_id=i.section_id
-      where i.cart_id=p_cart_id and i.exhibitor_id=v_exhibitor_id
+      select distinct pi.section_id,coalesce(f.fee_per_show,0) fee_per_show
+      from public.entry_cart_items pi
+      left join public.show_section_fee_settings f on f.section_id=pi.section_id
+      where pi.cart_id=p_cart_id and pi.exhibitor_id=v_exhibitor_id
     ) x;
 
     select coalesce(jsonb_agg(jsonb_build_object(
@@ -528,15 +533,15 @@ begin
     ) order by x.section_id),'[]'::jsonb)
     into v_breakdown
     from (
-      select i.section_id,count(*)::integer entry_count,
-        count(*) filter(where i.is_fur)::integer fur_count,
-        coalesce(round(sum(coalesce(f.fee_per_entry,0)*100)),0)::integer entries_cents,
-        coalesce(round(sum(case when i.is_fur then coalesce(f.fur_fee,0)*100 else 0 end)),0)::integer fur_cents,
+      select pi.section_id,count(*) filter (where not pi.is_fur)::integer as entry_count,
+        count(*) filter(where pi.is_fur)::integer fur_count,
+        coalesce(round(sum(case when not pi.is_fur then coalesce(f.fee_per_entry,0)*100 else 0 end)),0)::integer entries_cents,
+        coalesce(round(sum(case when pi.is_fur then coalesce(f.fur_fee,0)*100 else 0 end)),0)::integer fur_cents,
         coalesce(round(max(coalesce(f.fee_per_show,0))*100),0)::integer show_fee_cents
-      from public.entry_cart_items i
-      left join public.show_section_fee_settings f on f.section_id=i.section_id
-      where i.cart_id=p_cart_id and i.exhibitor_id=v_exhibitor_id
-      group by i.section_id
+      from public.entry_cart_items pi
+      left join public.show_section_fee_settings f on f.section_id=pi.section_id
+      where pi.cart_id=p_cart_id and pi.exhibitor_id=v_exhibitor_id
+      group by pi.section_id
     ) x;
 
     v_total_cents:=v_entries_cents+v_fur_cents+v_show_fee_cents;
@@ -849,6 +854,58 @@ create table if not exists public.show_payback_settings (
 );
 create table if not exists public.show_ribbon_payout_settings (
   show_id uuid primary key, enabled boolean default false, settings jsonb default '{}'
+);
+
+-- Legacy directory and role foundations referenced by the July migrations.
+-- These tables predate tracked migrations; synthetic seeds supply any data.
+do $$ begin
+  create type public.app_role as enum ('super_admin','admin','exhibitor','judge','clerk','superintendent','reporting_clerk');
+exception when duplicate_object then null; end $$;
+create table public.super_admins (
+  user_id uuid primary key references auth.users(id) on delete cascade
+);
+create table public.role_assignments (
+  id uuid primary key default extensions.gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  show_id uuid references public.shows(id) on delete cascade,
+  role public.app_role not null, created_at timestamptz not null default now()
+);
+create table public.show_admins (
+  show_id uuid references public.shows(id) on delete cascade,
+  user_id uuid references auth.users(id) on delete cascade,
+  primary key(show_id,user_id)
+);
+create table public.show_role_assignments (
+  id uuid primary key default extensions.gen_random_uuid(),
+  show_id uuid not null references public.shows(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  role text not null
+);
+create table public.breed_clubs (
+  id uuid primary key default extensions.gen_random_uuid(),
+  sanctioning_body text, club_name text, breed_name text, website text,
+  notes text, is_active boolean not null default true, club_type text, state_code text
+);
+create table public.breed_club_sanction_links (
+  id uuid primary key default extensions.gen_random_uuid(),
+  breed_club_id uuid not null references public.breed_clubs(id) on delete cascade,
+  link_type text not null, label text, url text not null, notes text,
+  is_active boolean not null default true, last_verified_at timestamptz,
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now()
+);
+create table public.breed_club_link_reports (
+  id uuid primary key default extensions.gen_random_uuid(),
+  breed_club_id uuid references public.breed_clubs(id) on delete cascade,
+  sanction_link_id uuid references public.breed_club_sanction_links(id) on delete cascade,
+  show_id uuid references public.shows(id) on delete cascade,
+  reported_by_user_id uuid references auth.users(id), reason text, notes text,
+  status text not null default 'open', created_at timestamptz not null default now(),
+  resolved_at timestamptz, resolved_by_user_id uuid references auth.users(id)
+);
+create table public.cavy_sop_variety_order (
+  breed_name text not null, variety_name text not null,
+  breed_sort_order integer not null, variety_sort_order integer not null,
+  primary key(breed_name,variety_name)
 );
 
 alter table public.shows enable row level security;

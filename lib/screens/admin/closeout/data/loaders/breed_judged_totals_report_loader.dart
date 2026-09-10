@@ -75,7 +75,7 @@ class BreedJudgedTotalsReportLoader {
     const pageSize = 1000;
     final allRows = <Map<String, dynamic>>[];
 
-    for (var from = 0; ; from += pageSize) {
+    for (var from = 0; ; from = allRows.length) {
       final to = from + pageSize - 1;
 
       final page = await _supabase
@@ -96,7 +96,7 @@ class BreedJudgedTotalsReportLoader {
 
       allRows.addAll(rows);
 
-      if (rows.length < pageSize) break;
+      if (rows.isEmpty) break;
     }
 
     return allRows;

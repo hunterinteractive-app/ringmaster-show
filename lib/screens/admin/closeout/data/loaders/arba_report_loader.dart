@@ -1,5 +1,6 @@
 // lib/screens/admin/closeout/data/loaders/arba_report_loader.dart
 
+import '../report_data_reader.dart';
 import '../../models/arba/arba_report_data.dart';
 import '../../models/base/report_request.dart';
 import '../closeout_repository.dart';
@@ -294,7 +295,9 @@ class ArbaReportLoader {
         query = query.eq('section_id', sectionId.trim());
       }
 
-      final rows = await query;
+      final rows = await readAllReportPages(
+        (from, to) => query.order('id', ascending: true).range(from, to),
+      );
 
       final judgeIds = List<Map<String, dynamic>>.from(rows)
           .map((e) => _str(e['judged_by_show_judge_id']))
@@ -313,12 +316,16 @@ class ArbaReportLoader {
             : start + chunkSize;
         final chunk = judgeIds.sublist(start, end);
 
-        final rows = await repo.supabase
-            .from('judges')
-            .select(
-              'id, name, display_name, first_name, last_name, arba_judge_number',
-            )
-            .inFilter('id', chunk);
+        final rows = await readAllReportPages(
+          (from, to) => repo.supabase
+              .from('judges')
+              .select(
+                'id, name, display_name, first_name, last_name, arba_judge_number',
+              )
+              .inFilter('id', chunk)
+              .order('id', ascending: true)
+              .range(from, to),
+        );
 
         judgeRows.addAll(List<Map<String, dynamic>>.from(rows));
       }
@@ -760,7 +767,9 @@ class ArbaReportLoader {
         query = query.eq('section_id', targetSectionId);
       }
 
-      final rows = await query;
+      final rows = await readAllReportPages(
+        (from, to) => query.order('id', ascending: true).range(from, to),
+      );
 
       final entries = (rows as List)
           .map((e) => Map<String, dynamic>.from(e as Map))
@@ -779,10 +788,14 @@ class ArbaReportLoader {
       final awardRows = <Map<String, dynamic>>[];
       for (var i = 0; i < entryIds.length; i += 100) {
         final chunk = entryIds.skip(i).take(100).toList();
-        final chunkRows = await repo.supabase
-            .from('entry_awards')
-            .select('entry_id, award_code')
-            .inFilter('entry_id', chunk);
+        final chunkRows = await readAllReportPages(
+          (from, to) => repo.supabase
+              .from('entry_awards')
+              .select('entry_id, award_code')
+              .inFilter('entry_id', chunk)
+              .order('id', ascending: true)
+              .range(from, to),
+        );
 
         awardRows.addAll(List<Map<String, dynamic>>.from(chunkRows as List));
       }
@@ -833,6 +846,7 @@ class ArbaReportLoader {
         earNumber: _str(entry['tattoo']),
       );
     } catch (e) {
+      if (!isReportSchemaCompatibilityError(e)) rethrow;
       // ignore: avoid_print
       print('Failed loading ARBA best award for section $sectionId: $e');
       return const _ArbaBestAwardInfo.empty();
@@ -937,6 +951,7 @@ class ArbaReportLoader {
         ),
       ]);
     } catch (e) {
+      if (!isReportSchemaCompatibilityError(e)) rethrow;
       // ignore: avoid_print
       print('Failed loading ARBA exhibitor address for $exhibitorId: $e');
       return '';
@@ -979,6 +994,7 @@ class ArbaReportLoader {
         ),
       ]);
     } catch (e) {
+      if (!isReportSchemaCompatibilityError(e)) rethrow;
       // ignore: avoid_print
       print('Failed loading ARBA exhibitor address by entry $id: $e');
       return '';

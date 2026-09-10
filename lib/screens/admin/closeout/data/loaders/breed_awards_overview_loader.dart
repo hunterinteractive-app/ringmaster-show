@@ -39,7 +39,7 @@ class BreedAwardsOverviewLoader {
         .eq('id', request.showId)
         .single();
     final awards = <Map<String, dynamic>>[];
-    for (var offset = 0; ; offset += 1000) {
+    for (var offset = 0; ; offset = awards.length) {
       final page = await supabase
           .from('entry_awards')
           .select('''
@@ -56,10 +56,10 @@ class BreedAwardsOverviewLoader {
           .order('id')
           .range(offset, offset + 999);
       awards.addAll(page);
-      if (page.length < 1000) break;
+      if (page.isEmpty) break;
     }
     final coops = <Map<String, dynamic>>[];
-    for (var offset = 0; ; offset += 1000) {
+    for (var offset = 0; ; offset = coops.length) {
       final page = await supabase
           .from('show_animal_coop_numbers')
           .select('animal_id,scope,coop_number')
@@ -68,7 +68,7 @@ class BreedAwardsOverviewLoader {
           .order('scope')
           .range(offset, offset + 999);
       coops.addAll(page);
-      if (page.length < 1000) break;
+      if (page.isEmpty) break;
     }
     return BreedAwardsOverviewData(
       _text(show['name']),

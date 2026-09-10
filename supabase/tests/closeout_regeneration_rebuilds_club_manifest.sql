@@ -4,7 +4,7 @@
 create extension if not exists pgtap with schema extensions;
 
 begin;
-select plan(10);
+select plan(11);
 
 insert into public.show_finalize_runs (
   id,
@@ -104,6 +104,7 @@ with resolved as (
       'delivery_type', 'club'
     )
   )
+)
 insert into public.show_report_artifacts (
   id,
   show_id,

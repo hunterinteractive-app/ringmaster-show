@@ -1,9 +1,69 @@
 import 'package:supabase/supabase.dart';
+import 'report_data_reader.dart';
+
+/// Shared only within one report load (including its leg eligibility check).
+/// Never cached across reports, so a later edit is read on the next request.
+class ReportResultSnapshot {
+  ReportResultSnapshot({
+    required this.showId,
+    required this.sections,
+    required this.rowsBySection,
+  });
+  final String showId;
+  final ReportRows sections;
+  final Map<String, ReportRows> rowsBySection;
+}
 
 class CloseoutRepository {
   CloseoutRepository(this.supabase);
 
   final SupabaseClient supabase;
+
+  Future<ReportResultSnapshot> loadResultSnapshot(
+    String showId, {
+    List<String>? sectionIds,
+  }) async {
+    final requested = sectionIds?.toSet() ?? const <String>{};
+    final sections = await readAllReportPages(
+      (from, to) => supabase
+          .from('show_sections')
+          .select('id,kind,letter,sort_order,judging_date')
+          .eq('show_id', showId)
+          .eq('is_enabled', true)
+          .order('sort_order', ascending: true)
+          .order('id', ascending: true)
+          .range(from, to),
+    );
+    sections.removeWhere(
+      (s) => requested.isNotEmpty && !requested.contains(s['id'].toString()),
+    );
+    final rowsBySection = <String, ReportRows>{};
+    for (final section in sections) {
+      final id = section['id'].toString();
+      final letter = (section['letter'] ?? '').toString().trim().toUpperCase();
+      // This legacy RPC defines the result ordering. Do not replace its
+      // row shape or domain rules with a direct entries-table query.
+      rowsBySection[id] = await readAllReportPages(
+        (from, to) async => List<Map<String, dynamic>>.from(
+          await supabase
+              .rpc(
+                'report_results_entry_rows',
+                params: {
+                  'p_show_id': showId,
+                  'p_section_id': id,
+                  'p_show_letter': letter.isEmpty ? null : letter,
+                },
+              )
+              .range(from, to),
+        ),
+      );
+    }
+    return ReportResultSnapshot(
+      showId: showId,
+      sections: sections,
+      rowsBySection: rowsBySection,
+    );
+  }
 
   Future<List<Map<String, dynamic>>> _selectAll(
     String table,
@@ -23,17 +83,19 @@ class CloseoutRepository {
                 .select(columns)
                 .eq(filterColumn, filterValue)
                 .order(orderColumn)
+                .order('id')
                 .range(from, from + pageSize - 1)
           : await supabase
                 .from(table)
                 .select(columns)
                 .eq(filterColumn, filterValue)
+                .order('id')
                 .range(from, from + pageSize - 1);
       final batch = List<Map<String, dynamic>>.from(rows);
       allRows.addAll(batch);
 
-      if (batch.length < pageSize) break;
-      from += pageSize;
+      if (batch.isEmpty) break;
+      from = allRows.length;
     }
 
     return allRows;
@@ -65,12 +127,12 @@ class CloseoutRepository {
   }
 
   Future<List<Map<String, dynamic>>> loadResults(String showId) async {
-    final rows = await supabase
-        .from('results')
-        .select('id,entry_id,placing_label,award')
-        .eq('show_id', showId);
-
-    return List<Map<String, dynamic>>.from(rows);
+    return _selectAll(
+      'results',
+      'id,entry_id,placing_label,award',
+      filterColumn: 'show_id',
+      filterValue: showId,
+    );
   }
 
   // ---------------------------
@@ -148,7 +210,7 @@ class CloseoutRepository {
     const pageSize = 1000;
     final allRows = <Map<String, dynamic>>[];
 
-    for (var from = 0; ; from += pageSize) {
+    for (var from = 0; ; from = allRows.length) {
       final to = from + pageSize - 1;
       final rows = await supabase
           .rpc(
@@ -160,7 +222,7 @@ class CloseoutRepository {
       final batch = List<Map<String, dynamic>>.from(rows);
       allRows.addAll(batch);
 
-      if (batch.length < pageSize) break;
+      if (batch.isEmpty) break;
     }
 
     if (requireExactAllocation) {
@@ -209,7 +271,7 @@ class CloseoutRepository {
     const pageSize = 1000;
     final allRows = <Map<String, dynamic>>[];
 
-    for (var from = 0; ; from += pageSize) {
+    for (var from = 0; ; from = allRows.length) {
       final to = from + pageSize - 1;
       final rows = await supabase
           .rpc(
@@ -225,7 +287,7 @@ class CloseoutRepository {
       final batch = List<Map<String, dynamic>>.from(rows);
       allRows.addAll(batch);
 
-      if (batch.length < pageSize) break;
+      if (batch.isEmpty) break;
     }
 
     return allRows
@@ -256,24 +318,12 @@ class CloseoutRepository {
   Future<List<Map<String, dynamic>>> loadExhibitorsByIds(
     List<String> exhibitorIds,
   ) async {
-    if (exhibitorIds.isEmpty) return [];
-
-    final allRows = <Map<String, dynamic>>[];
-    const chunkSize = 500;
-
-    for (var i = 0; i < exhibitorIds.length; i += chunkSize) {
-      final chunk = exhibitorIds.skip(i).take(chunkSize).toList();
-      final rows = await supabase
-          .from('exhibitors')
-          .select(
-            'id,showing_name,display_name,first_name,last_name,phone,type',
-          )
-          .inFilter('id', chunk);
-
-      allRows.addAll(List<Map<String, dynamic>>.from(rows));
-    }
-
-    return allRows;
+    return loadReportRowsByIds(
+      supabase,
+      table: 'exhibitors',
+      columns: 'id,showing_name,display_name,first_name,last_name,phone,type',
+      ids: exhibitorIds,
+    );
   }
 }
 

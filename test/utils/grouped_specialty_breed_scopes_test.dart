@@ -25,7 +25,19 @@ void main() {
     };
     expect(counts['grouped_wool'], 7);
     expect(counts['grouped_commercial'], 16);
-    expect(counts['grouped_under_3_5'], 4);
+    expect(counts['grouped_under_3_5'], 5);
+    expect(
+      groupedSpecialtyBreedScopes
+          .singleWhere((preset) => preset.value == 'grouped_under_3_5')
+          .catalogBreedNames,
+      unorderedEquals([
+        'Netherland Dwarf',
+        'Britannia Petite',
+        'Polish',
+        'Dwarf Hotot',
+        'Jersey Wooly',
+      ]),
+    );
     expect(counts['grouped_marked'], 8);
     expect(counts['grouped_full_arch'], 6);
     expect(counts['grouped_semi_arch'], 5);

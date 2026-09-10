@@ -1,3 +1,4 @@
+import '../report_data_reader.dart';
 import '../../models/base/report_request.dart';
 import '../../models/clubs/exhibitor_by_breed_report_data.dart';
 import '../closeout_repository.dart';
@@ -24,7 +25,8 @@ class ExhibitorByBreedReportLoader {
         ? request.sectionId!.trim()
         : await _loadSectionId(request.showId, scope, showLetter);
 
-    final resultsResponse = await repo.supabase.rpc(
+    final resultsResponse = await loadReportRpcRows(
+      repo.supabase,
       'report_results_entry_rows',
       params: {
         'p_show_id': request.showId,
@@ -87,14 +89,18 @@ class ExhibitorByBreedReportLoader {
       );
     }
 
-    final pointsResponse = await repo.supabase
-        .from('v_sweepstakes_pdf_rows')
-        .select()
-        .eq('show_id', request.showId)
-        .eq('scope', scope)
-        .eq('show_letter', showLetter)
-        .order('breed_name')
-        .order('rank');
+    final pointsResponse = await readAllReportPages(
+      (from, to) => repo.supabase
+          .from('v_sweepstakes_pdf_rows')
+          .select()
+          .eq('show_id', request.showId)
+          .eq('scope', scope)
+          .eq('show_letter', showLetter)
+          .order('breed_name')
+          .order('rank')
+          .order('exhibitor_id')
+          .range(from, to),
+    );
 
     final sectionMap = <String, _SectionAccumulator>{};
 
@@ -413,11 +419,15 @@ class ExhibitorByBreedReportLoader {
           : start + chunkSize;
       final chunk = ids.sublist(start, end);
 
-      final entryRows = await repo.supabase
-          .from('entries')
-          .select('id, species')
-          .eq('show_id', showId)
-          .inFilter('id', chunk);
+      final entryRows = await readAllReportPages(
+        (from, to) => repo.supabase
+            .from('entries')
+            .select('id, species')
+            .eq('show_id', showId)
+            .inFilter('id', chunk)
+            .order('id', ascending: true)
+            .range(from, to),
+      );
 
       allRows.addAll(
         (entryRows as List).map((raw) => Map<String, dynamic>.from(raw as Map)),

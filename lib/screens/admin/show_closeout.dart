@@ -4729,21 +4729,18 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
             metadata
           ''')
         .eq('show_id', widget.showId)
-        .eq('report_name', reportName);
-    final identityOwners = resolvedFinalizeRunId == null
-        ? await identityOwnersQuery.isFilter('finalize_run_id', null).limit(200)
+        .eq('report_name', reportName)
+        .eq('artifact_key', artifactKey);
+    final identityOwner = resolvedFinalizeRunId == null
+        ? await identityOwnersQuery
+              .isFilter('finalize_run_id', null)
+              .order('generation', ascending: false)
+              .order('id')
+              .limit(1)
+              .maybeSingle()
         : await identityOwnersQuery
               .eq('finalize_run_id', resolvedFinalizeRunId)
-              .limit(200);
-    Map<String, dynamic>? identityOwner;
-    for (final raw in identityOwners as List) {
-      final row = Map<String, dynamic>.from(raw as Map);
-      final rowArtifactKey = (row['artifact_key'] ?? '').toString();
-      if (rowArtifactKey == artifactKey) {
-        identityOwner = row;
-        break;
-      }
-    }
+              .maybeSingle();
 
     if (identityOwner != null) {
       final reused = await supabase

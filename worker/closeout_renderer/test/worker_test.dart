@@ -809,18 +809,19 @@ void main() {
       }
     });
 
-    test('balance loaders pass the exact artifact section scope', () {
-      for (final path in const [
+    test('paid balances use artifact scope and unpaid balances cover the show', () {
+      final paid = File(
         '../../lib/screens/admin/closeout/data/loaders/paid_exhibitor_report_loader.dart',
+      ).readAsStringSync();
+      final unpaid = File(
         '../../lib/screens/admin/closeout/data/loaders/unpaid_balances_report_loader.dart',
-      ]) {
-        final source = File(path).readAsStringSync();
-        expect(
-          source,
-          contains('sectionIds: request.sectionIds'),
-          reason: path,
-        );
+      ).readAsStringSync();
+      expect(paid, contains('sectionIds: request.sectionIds'));
+      expect(unpaid, contains('repo.loadShowExhibitorBalancesReport(showId)'));
+      expect(unpaid, isNot(contains('sectionIds: request.sectionIds')));
+      for (final source in [paid, unpaid]) {
         expect(source, isNot(contains("'report_show_exhibitor_balances'")));
+        expect(source, contains('loadShowExhibitorBalancesReport'));
       }
     });
 

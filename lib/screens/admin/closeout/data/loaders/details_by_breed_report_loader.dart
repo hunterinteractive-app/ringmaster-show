@@ -1,6 +1,7 @@
 import 'package:intl/intl.dart';
 import 'package:ringmaster_show/utils/species_sex.dart';
 
+import '../report_data_reader.dart';
 import '../../models/base/report_request.dart';
 import '../../models/clubs/details_by_breed_report_data.dart';
 import '../closeout_repository.dart';
@@ -27,7 +28,8 @@ class DetailsByBreedReportLoader {
         ? request.sectionId!.trim()
         : await _loadSectionId(request.showId, scope, showLetter);
 
-    final response = await repo.supabase.rpc(
+    final response = await loadReportRpcRows(
+      repo.supabase,
       'report_results_entry_rows',
       params: {
         'p_show_id': request.showId,
@@ -475,11 +477,15 @@ class DetailsByBreedReportLoader {
           : entryIds.length;
       final chunk = entryIds.sublist(start, end);
 
-      final response = await repo.supabase
-          .from('entries')
-          .select('id, judged_by_show_judge_id')
-          .eq('show_id', showId)
-          .inFilter('id', chunk);
+      final response = await readAllReportPages(
+        (from, to) => repo.supabase
+            .from('entries')
+            .select('id, judged_by_show_judge_id')
+            .eq('show_id', showId)
+            .inFilter('id', chunk)
+            .order('id', ascending: true)
+            .range(from, to),
+      );
 
       for (final raw in (response as List)) {
         final row = Map<String, dynamic>.from(raw as Map);
@@ -612,10 +618,14 @@ class DetailsByBreedReportLoader {
           : entryIds.length;
       final chunk = entryIds.sublist(start, end);
 
-      final response = await repo.supabase
-          .from('entry_awards')
-          .select()
-          .inFilter('entry_id', chunk);
+      final response = await readAllReportPages(
+        (from, to) => repo.supabase
+            .from('entry_awards')
+            .select()
+            .inFilter('entry_id', chunk)
+            .order('id', ascending: true)
+            .range(from, to),
+      );
 
       for (final raw in (response as List)) {
         final row = Map<String, dynamic>.from(raw as Map);
@@ -875,11 +885,15 @@ class DetailsByBreedReportLoader {
           : start + chunkSize;
       final chunk = ids.sublist(start, end);
 
-      final entryRows = await repo.supabase
-          .from('entries')
-          .select('id, species')
-          .eq('show_id', showId)
-          .inFilter('id', chunk);
+      final entryRows = await readAllReportPages(
+        (from, to) => repo.supabase
+            .from('entries')
+            .select('id, species')
+            .eq('show_id', showId)
+            .inFilter('id', chunk)
+            .order('id', ascending: true)
+            .range(from, to),
+      );
 
       allRows.addAll(
         (entryRows as List).map((raw) => Map<String, dynamic>.from(raw as Map)),

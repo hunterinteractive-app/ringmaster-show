@@ -2,6 +2,7 @@ import 'package:supabase/supabase.dart';
 
 import '../../models/base/report_request.dart';
 import '../../models/exhibitor/entered_exhibitors_list_report_data.dart';
+import '../report_data_reader.dart';
 
 class EnteredExhibitorsListReportLoader {
   final SupabaseClient supabase;
@@ -14,9 +15,10 @@ class EnteredExhibitorsListReportLoader {
       throw StateError('Entered exhibitors list requires scoped section IDs.');
     }
 
-    final rows = await supabase
-        .from('entries')
-        .select('''
+    final rows = await readAllReportPages(
+      (from, to) => supabase
+          .from('entries')
+          .select('''
           exhibitor_id,
           exhibitors!entries_exhibitor_id_fkey (
             exhibitor_number,
@@ -25,8 +27,11 @@ class EnteredExhibitorsListReportLoader {
             last_name
           )
         ''')
-        .eq('show_id', req.showId)
-        .inFilter('section_id', sectionIds);
+          .eq('show_id', req.showId)
+          .inFilter('section_id', sectionIds)
+          .order('id', ascending: true)
+          .range(from, to),
+    );
 
     final exhibitors = <String, EnteredExhibitorsListRow>{};
     for (final raw in rows as List) {

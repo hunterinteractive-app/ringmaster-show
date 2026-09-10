@@ -1,6 +1,7 @@
 import 'package:supabase/supabase.dart';
 import 'package:ringmaster_show/utils/species_sex.dart';
 
+import '../report_data_reader.dart';
 import '../../models/base/report_request.dart';
 import '../../models/exhibitor/check_in_sheet_report_data.dart';
 
@@ -69,7 +70,7 @@ class CheckInSheetReportLoader {
     const pageSize = 1000;
     final list = <Map<String, dynamic>>[];
 
-    for (var from = 0; ; from += pageSize) {
+    for (var from = 0; ; from = list.length) {
       final to = from + pageSize - 1;
       final rows = await supabase
           .rpc(
@@ -87,7 +88,7 @@ class CheckInSheetReportLoader {
           .map((raw) => Map<String, dynamic>.from(raw as Map))
           .toList();
       list.addAll(page);
-      if (rows.length < pageSize) break;
+      if (rows.isEmpty) break;
     }
 
     return list;
@@ -140,31 +141,23 @@ class CheckInSheetReportLoader {
 
     final animalIdByEntryId = <String, String>{};
     final furByEntryId = <String, bool>{};
-    const pageSize = 500;
-
-    for (var i = 0; i < entryIds.length; i += pageSize) {
-      final chunk = entryIds.skip(i).take(pageSize).toList();
-      if (chunk.isEmpty) continue;
-
-      final rows = await supabase
-          .from('entries')
-          .select('id, animal_id, is_fur, class_name')
-          .inFilter('id', chunk);
-
-      for (final raw in (rows as List).cast<Map<String, dynamic>>()) {
-        final entryId = (raw['id'] ?? '').toString().trim();
-        if (entryId.isEmpty) continue;
-
-        final animalId = (raw['animal_id'] ?? '').toString().trim();
-        if (animalId.isNotEmpty) animalIdByEntryId[entryId] = animalId;
-
-        final className = (raw['class_name'] ?? '')
-            .toString()
-            .trim()
-            .toLowerCase();
-        furByEntryId[entryId] =
-            _truthy(raw['is_fur']) || className.contains('fur');
-      }
+    final rows = await loadReportRowsByIds(
+      supabase,
+      table: 'entries',
+      columns: 'id, animal_id, is_fur, class_name',
+      ids: entryIds,
+    );
+    for (final raw in rows) {
+      final entryId = (raw['id'] ?? '').toString().trim();
+      if (entryId.isEmpty) continue;
+      final animalId = (raw['animal_id'] ?? '').toString().trim();
+      if (animalId.isNotEmpty) animalIdByEntryId[entryId] = animalId;
+      final className = (raw['class_name'] ?? '')
+          .toString()
+          .trim()
+          .toLowerCase();
+      furByEntryId[entryId] =
+          _truthy(raw['is_fur']) || className.contains('fur');
     }
 
     for (final entry in entries) {
@@ -192,25 +185,21 @@ class CheckInSheetReportLoader {
         .toList();
 
     final coopNumberByAnimalAndScope = <String, String>{};
-    const pageSize = 500;
-
-    for (var i = 0; i < animalIds.length; i += pageSize) {
-      final chunk = animalIds.skip(i).take(pageSize).toList();
-      if (chunk.isEmpty) continue;
-
-      final rows = await supabase
-          .from('show_animal_coop_numbers')
-          .select('animal_id, scope, coop_number')
-          .eq('show_id', showId)
-          .inFilter('animal_id', chunk);
-
-      for (final raw in (rows as List).cast<Map<String, dynamic>>()) {
-        final animalId = (raw['animal_id'] ?? '').toString().trim();
-        final scope = (raw['scope'] ?? '').toString().trim().toLowerCase();
-        final coopNumber = (raw['coop_number'] ?? '').toString().trim();
-        if (animalId.isEmpty || scope.isEmpty) continue;
-        coopNumberByAnimalAndScope['$animalId|$scope'] = coopNumber;
-      }
+    final rows = await loadReportRowsByIds(
+      supabase,
+      table: 'show_animal_coop_numbers',
+      columns: 'animal_id, scope, coop_number',
+      ids: animalIds,
+      idColumn: 'animal_id',
+      filters: {'show_id': showId},
+      orderColumns: ['animal_id', 'scope', 'coop_number'],
+    );
+    for (final raw in rows) {
+      final animalId = (raw['animal_id'] ?? '').toString().trim();
+      final scope = (raw['scope'] ?? '').toString().trim().toLowerCase();
+      final coopNumber = (raw['coop_number'] ?? '').toString().trim();
+      if (animalId.isEmpty || scope.isEmpty) continue;
+      coopNumberByAnimalAndScope['$animalId|$scope'] = coopNumber;
     }
 
     final mode = coopNumberingMode.trim().toLowerCase();

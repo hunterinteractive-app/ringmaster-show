@@ -16,7 +16,7 @@ class RibbonPayoutReportLoader {
     const pageSize = 1000;
     final allRows = <Map<String, dynamic>>[];
 
-    for (var from = 0; ; from += pageSize) {
+    for (var from = 0; ; from = allRows.length) {
       final to = from + pageSize - 1;
       final page = await repository.supabase
           .rpc(
@@ -35,7 +35,7 @@ class RibbonPayoutReportLoader {
 
       allRows.addAll(pageRows);
 
-      if (pageRows.length < pageSize) {
+      if (pageRows.isEmpty) {
         break;
       }
     }

@@ -6,6 +6,8 @@ import 'package:ringmaster_show/utils/species_sex.dart';
 import '../../models/base/report_request.dart';
 import '../../models/exhibitor/exhibitor_report_data.dart';
 import '../closeout_repository.dart';
+import '../report_data_reader.dart';
+import '../report_population_index.dart';
 import 'legs_report_loader.dart';
 
 class ExhibitorReportLoader {
@@ -27,20 +29,11 @@ class ExhibitorReportLoader {
     final show = await repo.loadShowBasics(showId);
     final arbaDetails = await _loadArbaDetails(showId);
 
-    final enabledSectionsRaw = await repo.supabase
-        .from('show_sections')
-        .select('id, kind, letter, sort_order')
-        .eq('show_id', showId)
-        .eq('is_enabled', true)
-        .order('sort_order');
-
-    final enabledSections =
-        List<Map<String, dynamic>>.from(enabledSectionsRaw as List)
-          ..removeWhere((section) {
-            final requested = request.sectionIds?.toSet() ?? const <String>{};
-            return requested.isNotEmpty &&
-                !requested.contains(_str(section['id']));
-          });
+    final snapshot = await repo.loadResultSnapshot(
+      showId,
+      sectionIds: request.sectionIds,
+    );
+    final enabledSections = snapshot.sections;
 
     final allEligibleRows = <Map<String, dynamic>>[];
     final rowList = <Map<String, dynamic>>[];
@@ -50,14 +43,7 @@ class ExhibitorReportLoader {
       final showLetter = _str(section['letter']).toUpperCase();
       final sectionKind = _str(section['kind']).toUpperCase();
 
-      final rows = await repo.supabase.rpc(
-        'report_results_entry_rows',
-        params: {
-          'p_show_id': showId,
-          'p_section_id': sectionId,
-          'p_show_letter': showLetter.isEmpty ? null : showLetter,
-        },
-      );
+      final rows = snapshot.rowsBySection[sectionId]!;
 
       for (final raw in (rows as List)) {
         final row = Map<String, dynamic>.from(raw as Map);
@@ -108,7 +94,10 @@ class ExhibitorReportLoader {
 
     final awardsByEntryId = await _loadAwardsByEntryId(showId, entryIds);
     final judgeNamesByRef = await _loadJudgeNamesByShowJudgeId(judgeRefs);
-    final contextByEntryId = _buildEntryContextByShow(allEligibleRows);
+    final contextByEntryId = _buildEntryContextByShow(
+      allEligibleRows,
+      targetRows: rowList,
+    );
     final displayPlacementByEntryId = _buildDisplayPlacementByEntryId(
       allEligibleRows,
     );
@@ -197,6 +186,7 @@ class ExhibitorReportLoader {
         scopeLabel: request.scopeLabel,
         sectionIds: request.sectionIds,
       ),
+      resultSnapshot: snapshot,
     );
 
     for (final cert in legCertificates) {
@@ -315,6 +305,7 @@ class ExhibitorReportLoader {
         ),
       );
     } catch (e) {
+      if (!isReportSchemaCompatibilityError(e)) rethrow;
       // ignore: avoid_print
       print('Failed loading exhibitor report address for $exhibitorId: $e');
       return const _ExhibitorAddress.empty();
@@ -358,11 +349,15 @@ class ExhibitorReportLoader {
       for (var i = 0; i < uniqueEntryIds.length; i += 100) {
         final chunk = uniqueEntryIds.skip(i).take(100).toList();
 
-        final rows = await repo.supabase
-            .from('sweepstakes_entry_results')
-            .select('entry_id, points')
-            .eq('show_id', showId)
-            .inFilter('entry_id', chunk);
+        final rows = await readAllReportPages(
+          (from, to) => repo.supabase
+              .from('sweepstakes_entry_results')
+              .select('entry_id, points')
+              .eq('show_id', showId)
+              .inFilter('entry_id', chunk)
+              .order('id', ascending: true)
+              .range(from, to),
+        );
 
         for (final row in List<Map<String, dynamic>>.from(rows as List)) {
           final entryId = _str(row['entry_id']);
@@ -375,6 +370,7 @@ class ExhibitorReportLoader {
 
       return map;
     } catch (e) {
+      if (!isReportSchemaCompatibilityError(e)) rethrow;
       // ignore: avoid_print
       print('Failed loading exhibitor sweepstakes points for show $showId: $e');
       return {};
@@ -399,41 +395,22 @@ class ExhibitorReportLoader {
     String showId,
     List<String> entryIds,
   ) async {
-    if (entryIds.isEmpty) return {};
-
-    try {
-      final ids = entryIds.toSet().where((id) => id.isNotEmpty).toList();
-      if (ids.isEmpty) return {};
-
-      const chunkSize = 100;
-      final rows = <Map<String, dynamic>>[];
-
-      for (var start = 0; start < ids.length; start += chunkSize) {
-        final end = start + chunkSize > ids.length
-            ? ids.length
-            : start + chunkSize;
-        final chunk = ids.sublist(start, end);
-
-        final chunkRows = await repo.supabase
-            .from('entry_awards')
-            .select('entry_id, award_code')
-            .eq('show_id', showId)
-            .inFilter('entry_id', chunk);
-
-        rows.addAll(List<Map<String, dynamic>>.from(chunkRows));
-      }
-
-      final map = <String, Set<String>>{};
-      for (final row in rows) {
-        final entryId = _str(row['entry_id']);
-        final awardCode = _str(row['award_code']);
-        if (entryId.isEmpty || awardCode.isEmpty) continue;
-        map.putIfAbsent(entryId, () => <String>{}).add(awardCode);
-      }
-      return map;
-    } catch (_) {
-      return {};
+    final rows = await loadReportRowsByIds(
+      repo.supabase,
+      table: 'entry_awards',
+      columns: 'show_id,entry_id,award_code',
+      ids: entryIds,
+      idColumn: 'entry_id',
+    );
+    final map = <String, Set<String>>{};
+    for (final row in rows) {
+      if (_str(row['show_id']) != showId) continue;
+      final entryId = _str(row['entry_id']);
+      final awardCode = _str(row['award_code']);
+      if (entryId.isEmpty || awardCode.isEmpty) continue;
+      map.putIfAbsent(entryId, () => <String>{}).add(awardCode);
     }
+    return map;
   }
 
   Map<String, String> _buildDisplayPlacementByEntryId(
@@ -452,7 +429,8 @@ class ExhibitorReportLoader {
 
       if (entryId.isEmpty || showLetter.isEmpty) continue;
 
-      final key = '$showLetter|$breed|$variety|$className|$sex';
+      final key =
+          '${_str(row['section_id'])}|$showLetter|$breed|$variety|$className|$sex';
       grouped.putIfAbsent(key, () => <Map<String, dynamic>>[]).add(row);
     }
 
@@ -599,10 +577,14 @@ class ExhibitorReportLoader {
           : start + chunkSize;
       final chunk = filteredIds.sublist(start, end);
 
-      final chunkRows = await repo.supabase
-          .from(tableName)
-          .select(columns)
-          .inFilter('id', chunk);
+      final chunkRows = await readAllReportPages(
+        (from, to) => repo.supabase
+            .from(tableName)
+            .select(columns)
+            .inFilter('id', chunk)
+            .order('id')
+            .range(from, to),
+      );
 
       rows.addAll(List<Map<String, dynamic>>.from(chunkRows));
     }
@@ -628,139 +610,83 @@ class ExhibitorReportLoader {
   }
 
   Map<String, _EntryLegContext> _buildEntryContextByShow(
-    List<Map<String, dynamic>> rows,
-  ) {
-    final byEntryIdAndShow = <String, _EntryLegContext>{};
-
-    // Match the class-size rules used for points and leg eligibility.
-    // Exclude No Shows and disqualifications for Wrong Sex, Wrong Variety,
-    // Wrong Class, or Overweight. Disqualified - Other, Unworthy of Award,
-    // and normal shown entries still count as animals judged.
-    final judgedRows = rows.where(_countsAsJudgedAnimal).toList();
-
-    // Build each section independently so Open A, Open B, Open C, Youth A,
-    // etc. can never share counts. Also de-duplicate by entry within a section
-    // in case the reporting RPC returns more than one result row for an animal
-    // (for example, a separate fur/wool result row).
-    final judgedRowsBySection = <String, List<Map<String, dynamic>>>{};
-
-    for (final row in judgedRows) {
-      final sectionId = _str(row['section_id']);
-      final entryId = _str(row['entry_id']);
-      if (sectionId.isEmpty || entryId.isEmpty) continue;
-
-      final sectionRows = judgedRowsBySection.putIfAbsent(
-        sectionId,
-        () => <Map<String, dynamic>>[],
-      );
-
-      final alreadyAdded = sectionRows.any(
-        (existing) => _str(existing['entry_id']) == entryId,
-      );
-      if (!alreadyAdded) {
-        sectionRows.add(row);
-      }
-    }
-
+    List<Map<String, dynamic>> rows, {
+    required List<Map<String, dynamic>> targetRows,
+  }) {
+    final counts = ReportPopulationIndex();
+    final seen = <(String, String)>{};
     for (final row in rows) {
-      final entryId = _str(row['entry_id']);
-      final sectionId = _str(row['section_id']);
-      final showLetter = _str(row['resolved_show_letter']).toUpperCase();
-
-      if (entryId.isEmpty || sectionId.isEmpty || showLetter.isEmpty) continue;
-
-      final scopedRows =
-          judgedRowsBySection[sectionId] ?? const <Map<String, dynamic>>[];
-
+      if (!_countsAsJudgedAnimal(row)) continue;
+      final section = _str(row['section_id']);
+      final entry = _str(row['entry_id']);
+      if (section.isEmpty || entry.isEmpty || !seen.add((section, entry))) {
+        continue;
+      }
+      final exhibitor = _str(row['exhibitor_id']);
       final breed = _str(row['breed_name']);
       final variety = _str(row['variety_name']);
-      final groupName = _str(row['group_name']);
-      final usesGroupAwards = row['uses_group_awards'] == true;
-      final className = _str(row['class_name']);
+      final group = _str(row['group_name']);
       final sex = _str(row['sex']);
-
-      final showAnimals = scopedRows.length;
-      final showExhibitors = scopedRows
-          .map((e) => _str(e['exhibitor_id']))
-          .where((e) => e.isNotEmpty)
-          .toSet()
-          .length;
-
-      final breedRows = scopedRows
-          .where((e) => _str(e['breed_name']) == breed)
-          .toList();
-      final breedAnimals = breedRows.length;
-      final breedExhibitors = breedRows
-          .map((e) => _str(e['exhibitor_id']))
-          .where((e) => e.isNotEmpty)
-          .toSet()
-          .length;
-      final breedSameSexAnimals = breedRows
-          .where((e) => _str(e['sex']) == sex)
-          .length;
-
-      final varietyRows = scopedRows.where((e) {
-        return _str(e['breed_name']) == breed &&
-            _str(e['variety_name']) == variety;
-      }).toList();
-      final varietyAnimals = varietyRows.length;
-      final varietyExhibitors = varietyRows
-          .map((e) => _str(e['exhibitor_id']))
-          .where((e) => e.isNotEmpty)
-          .toSet()
-          .length;
-      final varietySameSexAnimals = varietyRows
-          .where((e) => _str(e['sex']) == sex)
-          .length;
-
-      final groupRows = usesGroupAwards && groupName.isNotEmpty
-          ? scopedRows.where((e) {
-              return e['uses_group_awards'] == true &&
-                  _str(e['group_name']) == groupName;
-            }).toList()
-          : <Map<String, dynamic>>[];
-      final groupAnimals = groupRows.length;
-      final groupExhibitors = groupRows
-          .map((e) => _str(e['exhibitor_id']))
-          .where((e) => e.isNotEmpty)
-          .toSet()
-          .length;
-      final groupSameSexAnimals = groupRows
-          .where((e) => _str(e['sex']) == sex)
-          .length;
-
-      final classRows = scopedRows.where((e) {
-        return _str(e['breed_name']) == breed &&
-            _str(e['variety_name']) == variety &&
-            _str(e['class_name']) == className &&
-            _str(e['sex']) == sex;
-      }).toList();
-      final classAnimals = classRows.length;
-      final classExhibitors = classRows
-          .map((e) => _str(e['exhibitor_id']))
-          .where((e) => e.isNotEmpty)
-          .toSet()
-          .length;
-
-      byEntryIdAndShow['$entryId|$sectionId'] = _EntryLegContext(
-        classCount: classAnimals,
-        exhibitorCount: classExhibitors,
-        breedAnimals: breedAnimals,
-        breedExhibitors: breedExhibitors,
-        breedSameSexAnimals: breedSameSexAnimals,
-        varietyAnimals: varietyAnimals,
-        varietyExhibitors: varietyExhibitors,
-        varietySameSexAnimals: varietySameSexAnimals,
-        groupAnimals: groupAnimals,
-        groupExhibitors: groupExhibitors,
-        groupSameSexAnimals: groupSameSexAnimals,
-        classAnimals: classAnimals,
-        classExhibitors: classExhibitors,
-        showAnimals: showAnimals,
-        showExhibitors: showExhibitors,
-      );
+      final className = _str(row['class_name']);
+      counts.add(('show', section), exhibitor);
+      counts.add(('breed', section, breed), exhibitor);
+      counts.add(('breedSex', section, breed, sex), exhibitor);
+      counts.add(('variety', section, breed, variety), exhibitor);
+      counts.add(('varietySex', section, breed, variety, sex), exhibitor);
+      if (row['uses_group_awards'] == true && group.isNotEmpty) {
+        counts.add(('group', section, group), exhibitor);
+        counts.add(('groupSex', section, group, sex), exhibitor);
+      }
+      counts.add(('class', section, breed, variety, className, sex), exhibitor);
     }
 
+    final byEntryIdAndShow = <String, _EntryLegContext>{};
+    for (final row in targetRows) {
+      final entryId = _str(row['entry_id']);
+      final section = _str(row['section_id']);
+      if (entryId.isEmpty ||
+          section.isEmpty ||
+          _str(row['resolved_show_letter']).isEmpty) {
+        continue;
+      }
+      final breed = _str(row['breed_name']);
+      final variety = _str(row['variety_name']);
+      final group = row['uses_group_awards'] == true
+          ? _str(row['group_name'])
+          : '';
+      final sex = _str(row['sex']);
+      final showCount = counts[('show', section)];
+      final breedCount = counts[('breed', section, breed)];
+      final varietyCount = counts[('variety', section, breed, variety)];
+      final groupCount = counts[('group', section, group)];
+      final classCount =
+          counts[(
+            'class',
+            section,
+            breed,
+            variety,
+            _str(row['class_name']),
+            sex,
+          )];
+      byEntryIdAndShow['$entryId|$section'] = _EntryLegContext(
+        classCount: classCount.animals,
+        exhibitorCount: classCount.exhibitors,
+        breedAnimals: breedCount.animals,
+        breedExhibitors: breedCount.exhibitors,
+        breedSameSexAnimals: counts[('breedSex', section, breed, sex)].animals,
+        varietyAnimals: varietyCount.animals,
+        varietyExhibitors: varietyCount.exhibitors,
+        varietySameSexAnimals:
+            counts[('varietySex', section, breed, variety, sex)].animals,
+        groupAnimals: groupCount.animals,
+        groupExhibitors: groupCount.exhibitors,
+        groupSameSexAnimals: counts[('groupSex', section, group, sex)].animals,
+        classAnimals: classCount.animals,
+        classExhibitors: classCount.exhibitors,
+        showAnimals: showCount.animals,
+        showExhibitors: showCount.exhibitors,
+      );
+    }
     return byEntryIdAndShow;
   }
 

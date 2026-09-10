@@ -129,22 +129,27 @@ void main() {
         'Future<ReportArtifactSummary> _createManualReportArtifact({',
         'List<String> _metadataSectionIds(',
       );
-      expect(createBody, contains('_finalizeRunIdForSelectedScope'));
-      expect(createBody, contains("'finalize_run_id': finalizeRunId"));
+      expect(
+        createBody,
+        contains('final resolvedFinalizeRunId = finalizeRunId?.trim()'),
+      );
+      expect(createBody, contains("isFilter('finalize_run_id', null)"));
+      expect(createBody, contains("'finalize_run_id': resolvedFinalizeRunId"));
 
       final generateBody = methodBody(
         'Future<void> _generateReportByName(',
         'Future<void> _downloadReportByName(',
       );
-      expect(
-        generateBody,
-        contains('.where((r) => r.finalizeRunId == finalizeRunId)'),
-      );
+      expect(generateBody, contains('r.finalizeRunId == finalizeRunId'));
       expect(
         generateBody,
         contains('r.scopeKey == _resolvedCloseoutScope.stableScopeKey'),
       );
-      expect(generateBody, contains('finalizeRunId: finalizeRunId'));
+      expect(generateBody, contains('isPreShowReport'));
+      expect(
+        generateBody,
+        contains('finalizeRunId.isEmpty ? null : finalizeRunId'),
+      );
     });
 
     test('bulk regeneration and dashboards preserve species scope', () {
@@ -232,7 +237,7 @@ void main() {
       );
 
       final pdfViewMigration = File(
-        'supabase/migrations/20260718234217_include_cavy_sweepstakes_rows_in_pdf_view.sql',
+        'supabase/migrations/20260718234316_include_cavy_sweepstakes_rows_in_pdf_view.sql',
       ).readAsStringSync();
       expect(pdfViewMigration, contains('with (security_invoker = true)'));
       expect(pdfViewMigration, contains("in ('v2', 'cavy-fixed-v1')"));
@@ -277,8 +282,13 @@ void main() {
       );
       expect(createBody, contains("'closeout_artifact_identity'"));
       expect(createBody, contains("'p_metadata': scopedMetadata"));
-      expect(createBody, contains(".eq('finalize_run_id', finalizeRunId)"));
+      expect(
+        createBody,
+        contains(".eq('finalize_run_id', resolvedFinalizeRunId)"),
+      );
       expect(createBody, contains(".eq('report_name', reportName)"));
+      expect(createBody, contains(".eq('artifact_key', artifactKey)"));
+      expect(createBody, isNot(contains('.limit(200)')));
       expect(createBody, contains('if (identityOwner != null)'));
       expect(createBody, contains(".eq('id', identityOwner['id'])"));
       expect(
@@ -411,7 +421,7 @@ void main() {
     test('duplicate-award details cannot overwrite readiness blockers', () {
       final body = methodBody(
         'Future<void> _loadDuplicateFinalAwards()',
-        'Future<void> _sendExhibitorArtifactsEmail({',
+        'Future<ReportEmailSendResult> _sendExhibitorArtifactsEmail({',
       );
 
       expect(body, contains('selectedSectionIds'));
@@ -429,7 +439,7 @@ void main() {
       expect(body, contains('await _ensureResultsReadyForReports()'));
       expect(
         body.indexOf('await _ensureResultsReadyForReports()'),
-        lessThan(body.indexOf("functions.invoke(\n        'run-closeout'")),
+        lessThan(body.indexOf('supabase.functions.invoke(')),
       );
     });
 
@@ -581,7 +591,7 @@ void main() {
         );
         final artifactQueue = methodBody(
           'Future<void> _queueExistingArtifacts',
-          'Duration _reportGenerationTimeoutFor',
+          'Future<void> _logArtifactQueueRequest',
         );
 
         for (final body in [queue, finalize, artifactQueue]) {
@@ -597,7 +607,7 @@ void main() {
     );
 
     test('queue completion language does not imply rendering finished', () {
-      expect(closeoutSource, contains('reports queued for generation'));
+      expect(closeoutSource, contains('queued for generation'));
       expect(closeoutSource, isNot(contains('reports processed')));
     });
   });
@@ -623,7 +633,7 @@ void main() {
         contains(
           'if (isArbaReport ||\n'
           '            uiStatus != CloseoutReportUiStatus.generated ||\n'
-          '            _selectedGroupAllowsRegeneration)',
+          '            _selectedGroupAllowsRegeneration ||',
         ),
       );
       expect(
@@ -644,7 +654,10 @@ void main() {
       expect(
         body,
         contains(
-          'if ((stateClubSpeciesCard || isArbaReport) &&\n'
+          'if ((canRegenerateThisArtifact ||\n'
+          '                            stateClubSpeciesCard ||\n'
+          '                            isArbaReport ||\n'
+          '                            _selectedReportIsBreedClub) &&\n'
           '                        artifact != null)',
         ),
       );
@@ -658,10 +671,7 @@ void main() {
         'Future<void> _generateReportArtifact(',
         'Future<void> _queueReportByName(',
       );
-      expect(
-        body,
-        contains('_queueExistingArtifacts(artifactId: artifact.id)'),
-      );
+      expect(body, contains("'requeue_single_closeout_artifact'"));
       expect(
         body,
         contains(
@@ -672,6 +682,9 @@ void main() {
         body,
         contains('_queueExistingArtifacts(reportName: artifact.reportName)'),
       );
+      expect(body, contains("'p_artifact_id': artifact.id"));
+      expect(body, contains('artifact.finalizeRunId'));
+      expect(body, contains('artifact.scopeKey'));
       expect(body, contains('_scheduleDashboardPolling()'));
     });
 

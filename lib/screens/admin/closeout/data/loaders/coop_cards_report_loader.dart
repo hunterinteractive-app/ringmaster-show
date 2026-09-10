@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/utils/species_sex.dart';
 
 import '../../models/coop_cards/coop_cards_report_data.dart';
+import '../report_data_reader.dart';
 
 class CoopCardsReportLoader {
   final SupabaseClient supabase;
@@ -12,7 +13,6 @@ class CoopCardsReportLoader {
     : supabase = supabase ?? Supabase.instance.client;
 
   static const int _rpcPageSize = 1000;
-  static const int _queryChunkSize = 500;
 
   Future<CoopCardsReportData> load({
     required String showId,
@@ -230,7 +230,7 @@ class CoopCardsReportLoader {
   Future<List<Map<String, dynamic>>> _loadCheckInRows(String showId) async {
     final rows = <Map<String, dynamic>>[];
 
-    for (var from = 0; ; from += _rpcPageSize) {
+    for (var from = 0; ; from = rows.length) {
       final to = from + _rpcPageSize - 1;
       final result = await supabase
           .rpc(
@@ -246,7 +246,7 @@ class CoopCardsReportLoader {
       final page = List<Map<String, dynamic>>.from(result as List);
       rows.addAll(page);
 
-      if (page.length < _rpcPageSize) break;
+      if (page.isEmpty) break;
     }
 
     return rows;
@@ -264,22 +264,17 @@ class CoopCardsReportLoader {
 
     final animalIdByEntryId = <String, String>{};
 
-    for (var i = 0; i < entryIds.length; i += _queryChunkSize) {
-      final chunk = entryIds.skip(i).take(_queryChunkSize).toList();
-      if (chunk.isEmpty) continue;
-
-      final result = await supabase
-          .from('entries')
-          .select('id,animal_id')
-          .inFilter('id', chunk);
-
-      for (final raw in result as List) {
-        final row = Map<String, dynamic>.from(raw as Map);
-        final entryId = _safe(row, 'id');
-        final animalId = _safe(row, 'animal_id');
-        if (entryId.isNotEmpty && animalId.isNotEmpty) {
-          animalIdByEntryId[entryId] = animalId;
-        }
+    final result = await loadReportRowsByIds(
+      supabase,
+      table: 'entries',
+      columns: 'id,animal_id',
+      ids: entryIds,
+    );
+    for (final row in result) {
+      final entryId = _safe(row, 'id');
+      final animalId = _safe(row, 'animal_id');
+      if (entryId.isNotEmpty && animalId.isNotEmpty) {
+        animalIdByEntryId[entryId] = animalId;
       }
     }
 
@@ -300,20 +295,15 @@ class CoopCardsReportLoader {
 
     final exhibitorById = <String, Map<String, dynamic>>{};
 
-    for (var i = 0; i < exhibitorIds.length; i += _queryChunkSize) {
-      final chunk = exhibitorIds.skip(i).take(_queryChunkSize).toList();
-      if (chunk.isEmpty) continue;
-
-      final result = await supabase
-          .from('exhibitors')
-          .select('id,exhibitor_number,city,state')
-          .inFilter('id', chunk);
-
-      for (final raw in result as List) {
-        final row = Map<String, dynamic>.from(raw as Map);
-        final id = _safe(row, 'id');
-        if (id.isNotEmpty) exhibitorById[id] = row;
-      }
+    final result = await loadReportRowsByIds(
+      supabase,
+      table: 'exhibitors',
+      columns: 'id,exhibitor_number,city,state',
+      ids: exhibitorIds,
+    );
+    for (final row in result) {
+      final id = _safe(row, 'id');
+      if (id.isNotEmpty) exhibitorById[id] = row;
     }
 
     for (final row in rows) {
@@ -343,7 +333,7 @@ class CoopCardsReportLoader {
     final rows = <Map<String, dynamic>>[];
     final normalizedScope = scope?.trim().toLowerCase() ?? '';
 
-    for (var from = 0; ; from += _rpcPageSize) {
+    for (var from = 0; ; from = rows.length) {
       final to = from + _rpcPageSize - 1;
 
       var query = supabase
@@ -355,11 +345,15 @@ class CoopCardsReportLoader {
         query = query.eq('scope', normalizedScope);
       }
 
-      final result = await query.range(from, to);
+      final result = await query
+          .order('animal_id', ascending: true)
+          .order('scope', ascending: true)
+          .order('coop_number', ascending: true)
+          .range(from, to);
       final page = List<Map<String, dynamic>>.from(result);
       rows.addAll(page);
 
-      if (page.length < _rpcPageSize) break;
+      if (page.isEmpty) break;
     }
 
     return rows;
@@ -507,7 +501,9 @@ class CoopCardsReportLoader {
     final lower = raw.toLowerCase();
     if (lower.contains('meat')) return 'Meat Pen';
     if (lower.contains('fryer')) return 'Fryer';
-    if (lower.contains('pre junior') || lower.contains('pre-junior')) {
+    if (lower.contains('pre junior') ||
+        lower.contains('pre-junior') ||
+        lower.contains('prejunior')) {
       return 'Pre-Junior';
     }
     if (lower.contains('senior')) return 'Senior';

@@ -1,3 +1,4 @@
+import '../report_data_reader.dart';
 import '../../models/base/report_request.dart';
 import '../../models/clubs/sweepstakes_report_data.dart';
 import '../closeout_repository.dart';
@@ -137,7 +138,15 @@ class SweepstakesReportLoader {
           rowsQuery = rowsQuery.eq('breed_name', '__NO_MATCH__');
         }
 
-        final rowsResponse = await rowsQuery.order('rank', ascending: true);
+        final rowsResponse = await readAllReportPages(
+          (from, to) => rowsQuery
+              .order('rank', ascending: true)
+              .order('breed_name', ascending: true)
+              .order('exhibitor_id', ascending: true)
+              .order('scope')
+              .order('show_letter')
+              .range(from, to),
+        );
 
         final rawRows = (rowsResponse as List)
             .map((e) => SweepstakesReportRow.fromMap(e as Map<String, dynamic>))
@@ -270,7 +279,15 @@ class SweepstakesReportLoader {
       rowsQuery = rowsQuery.eq('breed_name', '__NO_MATCH__');
     }
 
-    final rowsResponse = await rowsQuery.order('rank', ascending: true);
+    final rowsResponse = await readAllReportPages(
+      (from, to) => rowsQuery
+          .order('rank', ascending: true)
+          .order('breed_name', ascending: true)
+          .order('exhibitor_id', ascending: true)
+          .order('scope')
+          .order('show_letter')
+          .range(from, to),
+    );
 
     final rawRows = (rowsResponse as List)
         .map((e) => SweepstakesReportRow.fromMap(e as Map<String, dynamic>))
@@ -454,7 +471,8 @@ class SweepstakesReportLoader {
       final letter = (section['letter'] ?? '').toString().trim().toUpperCase();
       if (sectionId.isEmpty) continue;
 
-      final response = await repo.supabase.rpc(
+      final response = await loadReportRpcRows(
+        repo.supabase,
         'report_results_entry_rows',
         params: {
           'p_show_id': showId,
@@ -512,11 +530,17 @@ class SweepstakesReportLoader {
 
     final entryIds = <String>{};
     for (final sectionId in sectionIds) {
-      final response = await repo.supabase
-          .from('entries')
-          .select('id, breed, species, is_shown, scratched_at, is_disqualified')
-          .eq('show_id', showId)
-          .eq('section_id', sectionId);
+      final response = await readAllReportPages(
+        (from, to) => repo.supabase
+            .from('entries')
+            .select(
+              'id, breed, species, is_shown, scratched_at, is_disqualified',
+            )
+            .eq('show_id', showId)
+            .eq('section_id', sectionId)
+            .order('id', ascending: true)
+            .range(from, to),
+      );
 
       for (final raw in (response as List)) {
         final row = Map<String, dynamic>.from(raw as Map);

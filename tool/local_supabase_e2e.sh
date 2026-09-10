@@ -16,7 +16,11 @@ mkdir -p "$workdir/supabase/migrations"
 
 cp "$repo_root/supabase/local/baseline.sql" \
   "$workdir/supabase/migrations/00000000000000_ringmaster_baseline.sql"
+cp "$repo_root/supabase/local/legacy_foundation.sql" \
+  "$workdir/supabase/migrations/00000000000001_ringmaster_legacy_foundation.sql"
 cp "$repo_root"/supabase/migrations/*.sql "$workdir/supabase/migrations/"
+cp "$repo_root/supabase/local/readiness_format_compat.sql" \
+  "$workdir/supabase/migrations/20260903002624_local_readiness_format_compat.sql"
 cp "$repo_root/supabase/local/seed.sql" "$workdir/supabase/seed.sql"
 cp -R "$repo_root/supabase/functions" "$workdir/supabase/functions"
 mkdir -p "$workdir/supabase/tests"

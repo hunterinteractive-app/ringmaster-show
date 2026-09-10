@@ -7,6 +7,7 @@ import 'package:supabase/supabase.dart';
 
 import '../../models/base/report_request.dart';
 import '../../models/exhibitor/payback_report_data.dart';
+import '../report_data_reader.dart';
 
 typedef PaybackSectionRowsFetcher =
     Future<List<Map<String, dynamic>>> Function(
@@ -270,13 +271,12 @@ class PaybackReportLoader {
     required String sectionId,
   }) async {
     try {
-      final rows = await supabase.rpc(
+      final rows = await loadReportRpcRows(
+        supabase,
         PaybackSectionLoadException.rpcName,
         params: {'p_show_id': showId, 'p_section_id': sectionId},
       );
-      return (rows as List? ?? [])
-          .map((e) => Map<String, dynamic>.from(e as Map))
-          .toList();
+      return rows;
     } catch (error) {
       final failure = PaybackSectionLoadException(
         showId: showId,

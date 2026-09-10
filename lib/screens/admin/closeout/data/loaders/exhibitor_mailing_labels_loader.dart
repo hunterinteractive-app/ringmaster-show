@@ -27,7 +27,7 @@ class ExhibitorMailingLabelsLoader {
     final sections = request.sectionIds ?? const <String>[];
     if (sections.isEmpty) throw StateError('Select at least one show section.');
     final rows = <Map<String, dynamic>>[];
-    for (var offset = 0; ; offset += 1000) {
+    for (var offset = 0; ; offset = rows.length) {
       final page = await supabase
           .from('entries')
           .select('''
@@ -42,7 +42,7 @@ class ExhibitorMailingLabelsLoader {
           .order('id')
           .range(offset, offset + 999);
       rows.addAll(page);
-      if (page.length < 1000) break;
+      if (page.isEmpty) break;
     }
     return buildExhibitorMailingLabels(rows);
   }

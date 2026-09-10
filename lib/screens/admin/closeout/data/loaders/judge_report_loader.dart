@@ -1,5 +1,6 @@
 import 'package:supabase/supabase.dart';
 
+import '../report_data_reader.dart';
 import '../../models/base/report_request.dart';
 import 'package:ringmaster_show/utils/species_sex.dart';
 import '../../models/judge/judge_report_data.dart';
@@ -226,7 +227,7 @@ class JudgeReportLoader {
     const pageSize = 1000;
     final allRows = <Map<String, dynamic>>[];
 
-    for (var from = 0; ; from += pageSize) {
+    for (var from = 0; ; from = allRows.length) {
       final to = from + pageSize - 1;
 
       final page = await _supabase
@@ -245,7 +246,7 @@ class JudgeReportLoader {
 
       allRows.addAll(rows);
 
-      if (rows.length < pageSize) break;
+      if (rows.isEmpty) break;
     }
 
     return allRows;
@@ -265,10 +266,14 @@ class JudgeReportLoader {
           : start + chunkSize;
       final chunk = entryIds.sublist(start, end);
 
-      final rows = await _supabase
-          .from('entry_awards')
-          .select('entry_id, award_code')
-          .inFilter('entry_id', chunk);
+      final rows = await readAllReportPages(
+        (from, to) => _supabase
+            .from('entry_awards')
+            .select('entry_id, award_code')
+            .inFilter('entry_id', chunk)
+            .order('id', ascending: true)
+            .range(from, to),
+      );
 
       for (final raw in rows as List<dynamic>) {
         final row = Map<String, dynamic>.from(raw as Map);
@@ -300,12 +305,16 @@ class JudgeReportLoader {
           : start + chunkSize;
       final chunk = ids.sublist(start, end);
 
-      final rows = await _supabase
-          .from('exhibitors')
-          .select(
-            'id, display_name, showing_name, first_name, last_name, email',
-          )
-          .inFilter('id', chunk);
+      final rows = await readAllReportPages(
+        (from, to) => _supabase
+            .from('exhibitors')
+            .select(
+              'id, display_name, showing_name, first_name, last_name, email',
+            )
+            .inFilter('id', chunk)
+            .order('id', ascending: true)
+            .range(from, to),
+      );
 
       for (final raw in rows as List<dynamic>) {
         final row = Map<String, dynamic>.from(raw as Map);

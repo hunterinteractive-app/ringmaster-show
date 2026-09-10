@@ -2,6 +2,7 @@
 
 import 'package:supabase/supabase.dart';
 
+import '../report_data_reader.dart';
 import '../../models/base/report_request.dart';
 import '../../models/exhibitor/best_display_report_data.dart';
 
@@ -28,7 +29,8 @@ class BestDisplayReportLoader {
         .eq('id', showId)
         .single();
 
-    final rawStandings = await supabase.rpc(
+    final rawStandings = await loadReportRpcRows(
+      supabase,
       'report_best_display_standings',
       params: {
         'p_show_id': showId,
@@ -38,7 +40,8 @@ class BestDisplayReportLoader {
       },
     );
 
-    final rawEntryRows = await supabase.rpc(
+    final rawEntryRows = await loadReportRpcRows(
+      supabase,
       'report_best_display_entry_rows',
       params: {
         'p_show_id': showId,
