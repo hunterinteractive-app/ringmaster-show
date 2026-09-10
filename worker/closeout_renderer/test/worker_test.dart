@@ -230,6 +230,23 @@ void main() {
       expect(queue.completed, 1);
     });
 
+    test(
+      'retry after upload and lost completion reuses the first file without rendering',
+      () async {
+        final queue = _FakeQueue([_task()])..completionFails = true;
+        expect((await _worker(queue: queue).workOnce()).failed, 1);
+        expect(queue.uploaded, 1);
+        queue.completionFails = false;
+        final retry = await _worker(
+          queue: queue,
+          renderer: _FakeRenderer(error: StateError('must not rerender')),
+        ).workOnce();
+        expect(retry.completed, 1);
+        expect(queue.uploaded, 1);
+        expect(queue.completedChecksum, queue.stored!.checksum);
+      },
+    );
+
     test('upload failure never completes', () async {
       final queue = _FakeQueue([_task()])..uploadError = StateError('storage');
       final result = await _worker(queue: queue).workOnce();
@@ -1065,6 +1082,9 @@ final class _FakeQueue implements RenderQueue {
   int failures = 0;
   int recovered = 0;
   Object? uploadError;
+  bool completionFails = false;
+  UploadedArtifact? stored;
+  String? completedChecksum;
   RenderFailure? lastFailure;
   bool claimGate = false;
   final _claimCompleter = Completer<void>();
@@ -1090,6 +1110,8 @@ final class _FakeQueue implements RenderQueue {
     required String checksum,
     required String mimeType,
   }) async {
+    if (completionFails) throw StateError("completion response lost");
+    completedChecksum = checksum;
     completed++;
   }
 
@@ -1113,13 +1135,24 @@ final class _FakeQueue implements RenderQueue {
   Future<int> recoverStale(int limit) async => recovered;
 
   @override
-  Future<void> upload(
+  Future<UploadedArtifact?> recoverUpload(RenderArtifact artifact) async =>
+      stored;
+
+  @override
+  Future<UploadedArtifact> upload(
     RenderArtifact artifact,
     Uint8List bytes, {
     required String checksum,
     required String mimeType,
+    required String fileName,
   }) async {
     if (uploadError case final error?) throw error;
     uploaded++;
+    return stored = UploadedArtifact(
+      fileName: fileName,
+      byteSize: bytes.length,
+      checksum: checksum,
+      mimeType: mimeType,
+    );
   }
 }

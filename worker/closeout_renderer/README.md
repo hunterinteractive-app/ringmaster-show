@@ -75,3 +75,24 @@ Python tests: `python -m unittest discover -s worker/closeout_renderer/python -v
 from the repository root, with `python/requirements.txt` installed in a venv.
 The SQL fixture and security test in `supabase/tests/exhibitor_print_pack_*`
 are for an isolated PostgreSQL database only; run fixture, migration, then test.
+
+Report rendering now claims at most `min(TASK_BATCH_SIZE,
+MAX_CONCURRENT_RENDERS)` tasks, so claimed jobs start immediately. Each PDF
+build runs in a disposable isolate with a two-minute hard deadline; expiration
+terminates the isolate and records a permanent `render_timeout` requiring
+review. Queue handling and lease heartbeats stay outside the PDF isolate.
+
+Worker result snapshots are shared across simultaneous exhibitor/leg reports
+for at most four scopes, with database revision checks before and after reads.
+Entry, section, exhibitor number, profile, and catalog INSERT/UPDATE/DELETE
+statements invalidate the relevant revision. Interactive repositories do not
+reuse snapshots. Deploy migrations `20260910101746`, `20260910102054`, and `20260910105106` before
+the corresponding app/worker version.
+
+Immutable uploads now atomically store a receipt in Storage object metadata.
+Before rendering, a retry validates the existing object's artifact, run, scope,
+generation, size, MIME type and SHA-256, then completes using that original
+receipt. A duplicate upload also returns the verified original receipt even
+when a new PDF has different timestamps. Objects without a verifiable receipt
+fail visibly; recover those older orphaned uploads through a new artifact
+generation instead of overwriting their immutable paths.

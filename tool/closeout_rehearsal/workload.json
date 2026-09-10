@@ -1,0 +1,27 @@
+{
+  "status": "next_rehearsal_not_run",
+  "animals": 25711,
+  "exhibitors": 2528,
+  "sections": {"open": 1, "youth": 1},
+  "exhibitor_split": {"open": 1855, "youth": 673, "overlap": 0},
+  "phases": [
+    {"name": "check_in", "checkin_sessions": 30, "judging_sessions": 0, "admin_sessions": 10, "superintendent_sessions": 15, "peak_sessions": 55},
+    {"name": "judging_and_closeout", "checkin_sessions": 0, "judging_sessions": 110, "admin_sessions": 10, "superintendent_sessions": 15, "peak_sessions": 135}
+  ],
+  "judging_paths": ["qr", "manual"],
+  "payments": {
+    "primary": "synthetic_online_payments",
+    "secondary": "small_cash_change_fees",
+    "cash_fee_cents_test_assumption": 500,
+    "live_providers": false
+  },
+  "requirements": [
+    "Use a fresh local fixture and retain September 10 diagnostic evidence.",
+    "End check-in before judging begins; admins and superintendents span both phases.",
+    "Exercise QR and manual navigation as well as result saves for all judging tables.",
+    "Vary the QR/manual mix, including all-QR and all-manual peaks.",
+    "Seed and reconcile online payments separately from small cash change fees; the fee amount is an adjustable test assumption.",
+    "Render and reconcile every closeout artifact while judging/admin/superintendent activity continues.",
+    "Measure per-role latency, errors, queue progress, and recovery; do not infer capacity from the focused fix checks."
+  ]
+}

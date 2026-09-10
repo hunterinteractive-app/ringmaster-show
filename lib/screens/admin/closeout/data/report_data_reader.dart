@@ -73,6 +73,38 @@ Future<ReportRows> loadReportRpcRows(
   ),
 );
 
+/// For RPCs that bound work internally and return rows ordered by a stable ID.
+/// Removing earlier rows during check-in must not shift an offset past entries.
+Future<ReportRows> loadReportCursorRows(
+  SupabaseClient client,
+  String function, {
+  required Map<String, dynamic> params,
+  required String cursorParameter,
+  required String idColumn,
+}) async {
+  final rows = <Map<String, dynamic>>[];
+  String? after;
+  while (true) {
+    final page = List<Map<String, dynamic>>.from(
+      await client.rpc(
+        function,
+        params: {...params, cursorParameter: after, 'p_page_size': 1000},
+      ),
+    );
+    if (page.isEmpty) return rows;
+    for (final row in page) {
+      final id = row[idColumn]?.toString() ?? '';
+      if (id.isEmpty || (after != null && id.compareTo(after) <= 0)) {
+        throw StateError(
+          'Cursor pagination did not advance in identity order.',
+        );
+      }
+      after = id;
+      rows.add(row);
+    }
+  }
+}
+
 /// Optional legacy fields may be absent on an older schema. Transport,
 /// authorization, and query failures must not become empty report data.
 bool isReportSchemaCompatibilityError(Object error) =>

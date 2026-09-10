@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:supabase/supabase.dart';
+import 'package:crypto/crypto.dart';
 
 import 'render_task.dart';
 
@@ -15,12 +16,15 @@ abstract interface class RenderQueue {
 
   Future<void> heartbeat(String taskId, String workerId);
 
-  Future<void> upload(
+  Future<UploadedArtifact> upload(
     RenderArtifact artifact,
     Uint8List bytes, {
     required String checksum,
     required String mimeType,
+    required String fileName,
   });
+
+  Future<UploadedArtifact?> recoverUpload(RenderArtifact artifact);
 
   Future<void> complete(
     RenderTask task,
@@ -93,29 +97,79 @@ final class SupabaseRenderQueue implements RenderQueue {
   }
 
   @override
-  Future<void> upload(
+  Future<UploadedArtifact?> recoverUpload(RenderArtifact artifact) async {
+    final bucket = client.storage.from(artifact.storageBucket);
+    final FileObjectV2 info;
+    try {
+      info = await bucket.info(artifact.storagePath);
+    } on StorageException catch (error) {
+      if (error.statusCode == '404' ||
+          (error.statusCode == '400' &&
+              error.message.toLowerCase().contains('not found'))) {
+        return null;
+      }
+      rethrow;
+    }
+    if (info.bucketId != artifact.storageBucket ||
+        info.name != artifact.storagePath) {
+      throw const RenderFailure.permanent(
+        'upload_identity_mismatch',
+        'The stored report does not match this artifact.',
+      );
+    }
+    // Custom metadata and bytes are committed together by Storage. There is
+    // no upload/receipt window, even if the upload response is lost.
+    final receipt = UploadedArtifact.fromMetadata(
+      artifact,
+      info.metadata ?? const {},
+    );
+    final bytes = await bucket.download(artifact.storagePath);
+    receipt.verify(bytes);
+    if (info.size != receipt.byteSize || info.contentType != receipt.mimeType) {
+      throw const RenderFailure.permanent(
+        'upload_metadata_mismatch',
+        'The stored report metadata could not be verified.',
+      );
+    }
+    return receipt;
+  }
+
+  @override
+  Future<UploadedArtifact> upload(
     RenderArtifact artifact,
     Uint8List bytes, {
     required String checksum,
     required String mimeType,
+    required String fileName,
   }) async {
-    final bucket = client.storage.from(artifact.storageBucket);
+    final receipt = UploadedArtifact(
+      fileName: fileName,
+      byteSize: bytes.length,
+      checksum: checksum,
+      mimeType: mimeType,
+    );
+    receipt.verify(bytes);
     try {
-      await bucket.uploadBinary(
-        artifact.storagePath,
-        bytes,
-        fileOptions: FileOptions(
-          cacheControl: '31536000, immutable',
-          contentType: mimeType,
-          upsert: false,
-        ),
-      );
+      await client.storage
+          .from(artifact.storageBucket)
+          .uploadBinary(
+            artifact.storagePath,
+            bytes,
+            fileOptions: FileOptions(
+              cacheControl: '31536000, immutable',
+              contentType: mimeType,
+              upsert: false,
+              metadata: receipt.metadata(artifact),
+            ),
+          );
+      return receipt;
     } on StorageException catch (error) {
-      // Completion can fail after a successful immutable upload. A retry may
-      // reuse that exact object only when its bytes match.
       if (error.statusCode != '409') rethrow;
-      final existing = await bucket.download(artifact.storagePath);
-      if (!_sameBytes(existing, bytes)) rethrow;
+      // The first successful immutable object is authoritative. Verify its
+      // identity and hash instead of comparing it with a nondeterministic PDF.
+      final existing = await recoverUpload(artifact);
+      if (existing == null) rethrow;
+      return existing;
     }
   }
 
@@ -162,12 +216,77 @@ final class SupabaseRenderQueue implements RenderQueue {
       },
     );
   }
+}
 
-  bool _sameBytes(Uint8List left, Uint8List right) {
-    if (left.length != right.length) return false;
-    for (var index = 0; index < left.length; index++) {
-      if (left[index] != right[index]) return false;
+final class UploadedArtifact {
+  const UploadedArtifact({
+    required this.fileName,
+    required this.byteSize,
+    required this.checksum,
+    required this.mimeType,
+  });
+  final String fileName;
+  final int byteSize;
+  final String checksum;
+  final String mimeType;
+
+  Map<String, dynamic> metadata(RenderArtifact artifact) => {
+    'receipt_version': 1,
+    'artifact_id': artifact.id,
+    'finalize_run_id': artifact.finalizeRunId,
+    'show_id': artifact.showId,
+    'generation': artifact.generation,
+    'scope_key': artifact.scopeKey,
+    'file_name': fileName,
+    'byte_size': byteSize,
+    'sha256': checksum,
+    'mime_type': mimeType,
+  };
+
+  factory UploadedArtifact.fromMetadata(
+    RenderArtifact artifact,
+    Map<String, dynamic> metadata,
+  ) {
+    if (metadata['receipt_version'] != 1 ||
+        metadata['artifact_id'] != artifact.id ||
+        metadata['finalize_run_id'] != artifact.finalizeRunId ||
+        metadata['show_id'] != artifact.showId ||
+        metadata['scope_key'] != artifact.scopeKey ||
+        metadata['generation'] != artifact.generation) {
+      throw const RenderFailure.permanent(
+        'upload_receipt_mismatch',
+        'The stored report cannot be verified for this artifact generation.',
+      );
     }
-    return true;
+    final result = UploadedArtifact(
+      fileName: metadata['file_name']?.toString() ?? '',
+      byteSize: int.tryParse('${metadata['byte_size']}') ?? 0,
+      checksum: metadata['sha256']?.toString() ?? '',
+      mimeType: metadata['mime_type']?.toString() ?? '',
+    );
+    if (result.fileName.isEmpty ||
+        result.byteSize <= 0 ||
+        !RegExp(r'^[a-f0-9]{64}$').hasMatch(result.checksum) ||
+        !const {
+          'application/pdf',
+          'text/csv',
+          'application/json',
+        }.contains(result.mimeType)) {
+      throw const RenderFailure.permanent(
+        'invalid_upload_receipt',
+        'The stored report receipt is incomplete.',
+      );
+    }
+    return result;
+  }
+
+  void verify(Uint8List bytes) {
+    if (bytes.length != byteSize ||
+        sha256.convert(bytes).toString() != checksum) {
+      throw const RenderFailure.permanent(
+        'upload_checksum_mismatch',
+        'The stored report failed its integrity check.',
+      );
+    }
   }
 }

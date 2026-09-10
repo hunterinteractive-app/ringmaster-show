@@ -1,8 +1,9 @@
 import 'package:supabase/supabase.dart';
 import 'report_data_reader.dart';
+import 'results_entry_reader.dart';
 
-/// Shared only within one report load (including its leg eligibility check).
-/// Never cached across reports, so a later edit is read on the next request.
+/// Result rows shared only while their database revision is unchanged.
+/// Interactive repositories read afresh by default.
 class ReportResultSnapshot {
   ReportResultSnapshot({
     required this.showId,
@@ -15,11 +16,57 @@ class ReportResultSnapshot {
 }
 
 class CloseoutRepository {
-  CloseoutRepository(this.supabase);
+  CloseoutRepository(this.supabase, {this.reuseResultSnapshots = false});
 
   final SupabaseClient supabase;
+  final bool reuseResultSnapshots;
+  final _snapshots = <String, (String, Future<ReportResultSnapshot>)>{};
+
+  Future<String> loadResultRevision(String showId) async => (await supabase.rpc(
+    'get_report_result_revision',
+    params: {'p_show_id': showId},
+  )).toString();
 
   Future<ReportResultSnapshot> loadResultSnapshot(
+    String showId, {
+    List<String>? sectionIds,
+  }) async {
+    if (!reuseResultSnapshots) {
+      return readResultSnapshot(showId, sectionIds: sectionIds);
+    }
+    final ids = sectionIds?.toSet().toList() ?? <String>[];
+    ids.sort();
+    final key = '$showId:${ids.join(',')}';
+    for (var attempt = 0; attempt < 3; attempt++) {
+      final revision = await loadResultRevision(showId);
+      final cached = _snapshots[key];
+      final Future<ReportResultSnapshot> pending;
+      if (cached != null && cached.$1 == revision) {
+        pending = cached.$2;
+      } else {
+        pending = readResultSnapshot(showId, sectionIds: ids);
+        _snapshots.remove(key);
+        // Bound retained scopes and share concurrent loads of the same scope.
+        while (_snapshots.length >= 4) {
+          _snapshots.remove(_snapshots.keys.first);
+        }
+        _snapshots[key] = (revision, pending);
+      }
+      try {
+        final snapshot = await pending;
+        if (revision == await loadResultRevision(showId)) return snapshot;
+      } catch (_) {
+        if (identical(_snapshots[key]?.$2, pending)) _snapshots.remove(key);
+        rethrow;
+      }
+      if (identical(_snapshots[key]?.$2, pending)) _snapshots.remove(key);
+    }
+    throw StateError(
+      'Results changed during the report read; retry the report.',
+    );
+  }
+
+  Future<ReportResultSnapshot> readResultSnapshot(
     String showId, {
     List<String>? sectionIds,
   }) async {
@@ -43,25 +90,30 @@ class CloseoutRepository {
       final letter = (section['letter'] ?? '').toString().trim().toUpperCase();
       // This legacy RPC defines the result ordering. Do not replace its
       // row shape or domain rules with a direct entries-table query.
-      rowsBySection[id] = await readAllReportPages(
-        (from, to) async => List<Map<String, dynamic>>.from(
-          await supabase
-              .rpc(
-                'report_results_entry_rows',
-                params: {
-                  'p_show_id': showId,
-                  'p_section_id': id,
-                  'p_show_letter': letter.isEmpty ? null : letter,
-                },
-              )
-              .range(from, to),
-        ),
+      rowsBySection[id] = await loadResultsEntryRows(
+        supabase,
+        params: {
+          'p_show_id': showId,
+          'p_section_id': id,
+          'p_show_letter': letter.isEmpty ? null : letter,
+        },
       );
     }
     return ReportResultSnapshot(
       showId: showId,
-      sections: sections,
-      rowsBySection: rowsBySection,
+      sections: List.unmodifiable(
+        sections.map(Map<String, dynamic>.unmodifiable),
+      ),
+      rowsBySection: Map.unmodifiable(
+        rowsBySection.map(
+          (key, rows) => MapEntry(
+            key,
+            List<Map<String, dynamic>>.unmodifiable(
+              rows.map(Map<String, dynamic>.unmodifiable),
+            ),
+          ),
+        ),
+      ),
     );
   }
 

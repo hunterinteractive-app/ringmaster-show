@@ -63,7 +63,11 @@ final class CloseoutWorker {
     _working = true;
     try {
       final recovered = await queue.recoverStale(config.batchSize * 2);
-      final tasks = await queue.claim(config.workerId, config.batchSize);
+      // Do not claim work that would wait without a heartbeat behind a slow job.
+      final claimSize = config.batchSize < config.maxConcurrentRenders
+          ? config.batchSize
+          : config.maxConcurrentRenders;
+      final tasks = await queue.claim(config.workerId, claimSize);
       var completed = 0;
       var failed = 0;
       for (
@@ -122,35 +126,49 @@ final class CloseoutWorker {
       artifact = await queue.loadArtifact(task.artifactId);
       artifact.validateFor(task, configuredBucket: config.storageBucket);
       heartbeat = Timer.periodic(const Duration(minutes: 3), (_) {
-        unawaited(queue.heartbeat(task.id, config.workerId));
+        unawaited(
+          queue.heartbeat(task.id, config.workerId).catchError((Object error) {
+            log.event('heartbeat_failed', {
+              ..._fields(task, artifact),
+              'type': error.runtimeType.toString(),
+            });
+          }),
+        );
       });
       log.event('render_started', _fields(task, artifact));
-      final result = await renderer.render(artifact);
-      await queue.heartbeat(task.id, config.workerId);
-      final uploadWatch = Stopwatch()..start();
-      await queue.upload(
-        artifact,
-        result.bytes,
-        checksum: result.checksum,
-        mimeType: result.mimeType,
-      );
-      uploadWatch.stop();
+      var uploaded = await queue.recoverUpload(artifact);
+      RenderedArtifact? result;
+      final uploadWatch = Stopwatch();
+      if (uploaded == null) {
+        result = await renderer.render(artifact);
+        await queue.heartbeat(task.id, config.workerId);
+        uploadWatch.start();
+        uploaded = await queue.upload(
+          artifact,
+          result.bytes,
+          checksum: result.checksum,
+          mimeType: result.mimeType,
+          fileName: result.fileName,
+        );
+        uploadWatch.stop();
+      }
       await queue.complete(
         task,
         artifact,
         config.workerId,
-        fileName: result.fileName,
-        byteSize: result.bytes.length,
-        checksum: result.checksum,
-        mimeType: result.mimeType,
+        fileName: uploaded.fileName,
+        byteSize: uploaded.byteSize,
+        checksum: uploaded.checksum,
+        mimeType: uploaded.mimeType,
       );
       log.event('render_completed', {
         ..._fields(task, artifact),
-        'data_load_duration_ms': result.dataLoadDuration.inMilliseconds,
-        'render_duration_ms': result.pdfBuildDuration.inMilliseconds,
+        'data_load_duration_ms': result?.dataLoadDuration.inMilliseconds ?? 0,
+        'render_duration_ms': result?.pdfBuildDuration.inMilliseconds ?? 0,
         'upload_duration_ms': uploadWatch.elapsedMilliseconds,
         'duration_ms': stopwatch.elapsedMilliseconds,
-        'byte_size': result.bytes.length,
+        'byte_size': uploaded.byteSize,
+        'recovered_upload': result == null,
       });
       return true;
     } catch (error, stackTrace) {

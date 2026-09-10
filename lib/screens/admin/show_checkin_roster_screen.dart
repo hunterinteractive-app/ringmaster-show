@@ -1,3 +1,4 @@
+import 'closeout/data/report_data_reader.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -24,6 +25,7 @@ class _ShowCheckinRosterScreenState extends State<ShowCheckinRosterScreen> {
   List<Map<String, dynamic>> _rows = const [];
   late String _status;
   bool _loading = true;
+  int _loadGeneration = 0;
   String? _error;
 
   @override
@@ -40,26 +42,39 @@ class _ShowCheckinRosterScreenState extends State<ShowCheckinRosterScreen> {
   }
 
   Future<void> _load() async {
+    final generation = ++_loadGeneration;
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final result = await _db.rpc(
-        'get_show_checkin_roster',
+      final search = _search.text.trim();
+      final status = _status;
+      final result = await loadReportCursorRows(
+        _db,
+        'get_show_checkin_roster_page',
+        cursorParameter: 'p_after_exhibitor_id',
+        idColumn: 'exhibitor_id',
         params: {
           'p_show_id': widget.showId,
-          'p_search': _search.text.trim(),
-          'p_status': _status,
+          'p_search': search,
+          'p_status': status,
         },
       );
-      if (!mounted) return;
+      result.sort(
+        (a, b) => (a['exhibitor_name']?.toString() ?? '')
+            .toLowerCase()
+            .compareTo((b['exhibitor_name']?.toString() ?? '').toLowerCase()),
+      );
+      if (!mounted || generation != _loadGeneration) return;
       setState(() => _rows = List<Map<String, dynamic>>.from(result as List));
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || generation != _loadGeneration) return;
       setState(() => _error = 'We could not load the check-in roster.');
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && generation == _loadGeneration) {
+        setState(() => _loading = false);
+      }
     }
   }
 

@@ -1,3 +1,4 @@
+import 'package:ringmaster_show/screens/admin/closeout/data/results_entry_reader.dart';
 //lib/screens/admin/results/admin_results_entry_screen.dart
 // ignore_for_file: use_build_context_synchronously
 
@@ -1166,10 +1167,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
       'p_show_letter': null,
     };
 
-    final rows = await supabase.rpc(
-      'report_results_entry_rows',
-      params: params,
-    );
+    final rows = await loadResultsEntryRows(supabase, params: params);
 
     final entries = _dedupeResultsEntryRows(
       (rows as List).map((e) => Map<String, dynamic>.from(e as Map)).toList(),
@@ -3195,13 +3193,14 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
 
     if (ids.isEmpty) return;
 
-    final rows = await supabase.rpc(
-      'report_results_entry_rows',
+    final rows = await loadResultsEntryRows(
+      supabase,
       params: {
         'p_show_id': widget.showId,
         'p_section_id': null,
         'p_show_letter': null,
       },
+      entryIds: ids,
     );
 
     final refreshed = (rows as List)
@@ -3800,13 +3799,14 @@ class _ResultsVarietyScreenState extends State<_ResultsVarietyScreen> {
 
     if (ids.isEmpty) return;
 
-    final rows = await supabase.rpc(
-      'report_results_entry_rows',
+    final rows = await loadResultsEntryRows(
+      supabase,
       params: {
         'p_show_id': widget.showId,
         'p_section_id': null,
         'p_show_letter': null,
       },
+      entryIds: ids,
     );
 
     final refreshed = (rows as List)
@@ -4543,13 +4543,14 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
 
     if (ids.isEmpty) return;
 
-    final rows = await supabase.rpc(
-      'report_results_entry_rows',
+    final rows = await loadResultsEntryRows(
+      supabase,
       params: {
         'p_show_id': widget.showId,
         'p_section_id': null,
         'p_show_letter': null,
       },
+      entryIds: ids,
     );
 
     final refreshed = (rows as List)
@@ -5769,13 +5770,14 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
     if (currentIds.isEmpty) return;
 
     try {
-      final rows = await supabase.rpc(
-        'report_results_entry_rows',
+      final rows = await loadResultsEntryRows(
+        supabase,
         params: {
           'p_show_id': widget.showId,
           'p_section_id': null,
           'p_show_letter': null,
         },
+        entryIds: currentIds,
       );
 
       final allRows = (rows as List)

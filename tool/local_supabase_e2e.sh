@@ -41,6 +41,9 @@ cp "$repo_root/supabase/tests/closeout_regeneration_rebuilds_club_manifest.sql" 
 cp "$repo_root/supabase/tests/closeout_readiness_ignores_zero_duplicate_placements.sql" \
   "$workdir/supabase/tests/closeout_readiness_ignores_zero_duplicate_placements.sql"
 
+cp "$repo_root/supabase/tests/closeout_result_pages_and_revisions.sql" \
+  "$workdir/supabase/tests/closeout_result_pages_and_revisions.sql"
+
 # This project ID guarantees different Docker resources from the linked
 # production checkout while retaining the CLI-generated local ports/keys.
 sed -i.bak 's/^project_id = .*/project_id = "ringmaster-show-local-e2e"/' \

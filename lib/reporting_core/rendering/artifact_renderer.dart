@@ -1,3 +1,19 @@
+import 'package:ringmaster_show/screens/admin/closeout/models/unpaid/unpaid_balances_report_data.dart';
+import 'package:ringmaster_show/screens/admin/closeout/models/paid/paid_exhibitor_report_data.dart';
+import 'package:ringmaster_show/screens/admin/closeout/models/other/michelles_special_report_data.dart';
+import 'package:ringmaster_show/screens/admin/closeout/models/legs/legs_certificate_data.dart';
+import 'package:ringmaster_show/screens/admin/closeout/models/judge/judge_report_data.dart';
+import 'package:ringmaster_show/screens/admin/closeout/models/judge/breed_judged_totals_report_data.dart';
+import 'package:ringmaster_show/screens/admin/closeout/models/exhibitor/payback_report_data.dart';
+import 'package:ringmaster_show/screens/admin/closeout/models/exhibitor/ribbon_payout_report_data.dart';
+import 'package:ringmaster_show/screens/admin/closeout/models/exhibitor/best_display_report_data.dart';
+import 'package:ringmaster_show/screens/admin/closeout/models/exhibitor/exhibitor_report_data.dart';
+import 'package:ringmaster_show/screens/admin/closeout/models/exhibitor/entered_exhibitors_list_report_data.dart';
+import 'package:ringmaster_show/screens/admin/closeout/models/exhibitor/entered_exhibitors_contact_report_data.dart';
+import 'package:ringmaster_show/screens/admin/closeout/models/exhibitor/check_in_sheet_report_data.dart';
+import 'package:ringmaster_show/screens/admin/closeout/models/clubs/exhibitor_by_breed_report_data.dart';
+import 'package:ringmaster_show/screens/admin/closeout/models/clubs/details_by_breed_report_data.dart';
+import 'package:ringmaster_show/screens/admin/closeout/models/arba/arba_report_data.dart';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
@@ -48,6 +64,7 @@ import 'package:ringmaster_show/screens/admin/closeout/registry/report_registry.
 import 'package:supabase/supabase.dart';
 
 import 'render_task.dart';
+import 'render_isolate.dart';
 
 final class RenderedArtifact {
   const RenderedArtifact({
@@ -79,13 +96,15 @@ final class RegistryArtifactRenderer implements ArtifactRenderer {
     required this.assets,
     required this.registry,
     required this.repository,
+    this.buildTimeout = const Duration(minutes: 2),
   });
 
   static Future<RegistryArtifactRenderer> create({
     required SupabaseClient client,
     required ReportAssetLoader assets,
+    Duration buildTimeout = const Duration(minutes: 2),
   }) async {
-    final repository = CloseoutRepository(client);
+    final repository = CloseoutRepository(client, reuseResultSnapshots: true);
     final logo = await assets.loadBytes(
       'assets/images/ringmaster_show_logo.png',
     );
@@ -156,6 +175,7 @@ final class RegistryArtifactRenderer implements ArtifactRenderer {
       assets: assets,
       registry: registry,
       repository: repository,
+      buildTimeout: buildTimeout,
     );
   }
 
@@ -163,6 +183,7 @@ final class RegistryArtifactRenderer implements ArtifactRenderer {
   final ReportAssetLoader assets;
   final ReportRegistry registry;
   final CloseoutRepository repository;
+  final Duration buildTimeout;
 
   @override
   Set<String> get supportedReportTypes => {
@@ -239,17 +260,13 @@ final class RegistryArtifactRenderer implements ArtifactRenderer {
     }
     dataWatch.stop();
     final buildWatch = Stopwatch()..start();
-    if (artifact.reportName == 'sweepstakes_json_export') {
-      final export =
-          data as (BreedResultsDetailReportData, SweepstakesReportData);
-      result = const SweepstakesJsonExport().buildFile(
-        results: export.$1,
-        sweepstakes: export.$2,
-        request: request,
-      );
-    } else {
-      result = await registry.get(artifact.reportName).builder(data, request);
-    }
+    // Capture only report data and asset paths, never the client, registry,
+    // queue or worker. A CPU-bound layout cannot block leases in this isolate.
+    final renderAssets = assets;
+    result = await runInRenderIsolate(
+      () => buildReportFile(renderAssets, data, request),
+      timeout: buildTimeout,
+    );
     buildWatch.stop();
     final file = result as ReportFileResult;
     if (file.bytes.isEmpty ||
@@ -309,5 +326,102 @@ final class RegistryArtifactRenderer implements ArtifactRenderer {
             .toString(),
       );
     }
+  }
+}
+
+Future<ReportFileResult> buildReportFile(
+  ReportAssetLoader assets,
+  Object data,
+  ReportRequest request,
+) async {
+  final logo = await assets.loadBytes('assets/images/ringmaster_show_logo.png');
+  switch (request.reportName) {
+    case 'arba_report':
+      return (ArbaReportPdfBuilder(
+        assets: assets,
+      )).buildFile(data as ArbaReportData, request);
+    case 'legs':
+      return (await LegsReportPdfBuilder.fromAssets(
+        assets,
+      )).buildFile(data as List<LegsCertificateData>, request);
+    case 'checkin_sheet':
+      return (CheckInSheetReportPdfBuilder(
+        assets: assets,
+      )).buildFile(data as CheckInSheetReportData, request);
+    case 'exhibitor_report':
+      return (await ExhibitorReportPdfBuilder.fromAssets(
+        assets,
+      )).buildFile(data as ExhibitorReportData, request);
+    case 'sweepstakes_report':
+      return (SweepstakesReportPdf(
+        assets: assets,
+        logoBytes: logo,
+      )).buildFile(data as SweepstakesReportData, request);
+    case 'breed_results_detail_report':
+      return (BreedResultsDetailReportPdf(
+        assets: assets,
+        logoBytes: logo,
+      )).buildFile(data as BreedResultsDetailReportData, request);
+    case 'details_by_breed':
+      return (DetailsByBreedReportPdf(
+        assets: assets,
+        logoBytes: logo,
+      )).buildFile(data as DetailsByBreedReportData, request);
+    case 'exh_by_breed':
+      return (ExhibitorByBreedReportPdf(
+        assets: assets,
+        logoBytes: logo,
+      )).buildFile(data as ExhibitorByBreedReportData, request);
+    case 'unpaid_balances_report':
+      return (await UnpaidBalancesReportPdfBuilder.fromAssets(
+        assets,
+      )).buildFile(data as UnpaidBalancesReportData, request);
+    case 'paid_exhibitor_report':
+      return (await PaidExhibitorReportPdfBuilder.fromAssets(
+        assets,
+      )).buildFile(data as PaidExhibitorReportData, request);
+    case 'entered_exhibitors_contact_report':
+      return (EnteredExhibitorsContactReportPdf(
+        assets: assets,
+      )).buildFile(data as EnteredExhibitorsContactReportData, request);
+    case 'entered_exhibitors_list_report':
+      return (EnteredExhibitorsListReportPdf(
+        assets: assets,
+      )).buildFile(data as EnteredExhibitorsListReportData, request);
+    case 'ribbon_payout_report':
+      return (RibbonPayoutReportPdf(
+        assets: assets,
+      )).buildFile(data as RibbonPayoutReportData, request);
+    case 'payback_report':
+      return (await PaybackReportPdfBuilder.fromAssets(
+        assets,
+      )).buildFile(data as PaybackReportData, request);
+    case 'judge_report':
+      return (JudgeReportPdfBuilder(
+        assets: assets,
+      )).buildFile(data as JudgeReportData, request);
+    case 'breed_judged_totals_report':
+      return (BreedJudgedTotalsReportPdfBuilder(
+        assets: assets,
+      )).buildFile(data as BreedJudgedTotalsReportData, request);
+    case 'best_display_report':
+      return (BestDisplayReportPdfBuilder(
+        assets: assets,
+      )).buildFile(data as BestDisplayReportData, request);
+    case 'michelles_special_report':
+      return (MichellesSpecialReportCsvBuilder()).buildFile(
+        data as MichellesSpecialReportData,
+        request,
+      );
+    case 'sweepstakes_json_export':
+      final export =
+          data as (BreedResultsDetailReportData, SweepstakesReportData);
+      return const SweepstakesJsonExport().buildFile(
+        results: export.$1,
+        sweepstakes: export.$2,
+        request: request,
+      );
+    default:
+      throw StateError('Unsupported report builder: ${request.reportName}');
   }
 }

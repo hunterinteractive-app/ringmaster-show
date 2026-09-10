@@ -1,3 +1,4 @@
+import 'package:ringmaster_show/screens/admin/closeout/data/results_entry_reader.dart';
 // lib/screens/admin/judging/mobile/qr_results_entry_screen.dart
 
 import 'package:flutter/material.dart';
@@ -301,9 +302,13 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
   }
 
   Future<void> _loadEntries() async {
-    final rows = await supabase.rpc(
-      'report_results_entry_rows',
-      params: {'p_show_id': widget.showId, 'p_section_id': widget.sectionId},
+    final rows = await loadResultsEntryRows(
+      supabase,
+      params: {
+        'p_show_id': widget.showId,
+        'p_section_id': widget.sectionId,
+        'p_breed': widget.breedId.trim(),
+      },
     );
 
     var entries = (rows as List)

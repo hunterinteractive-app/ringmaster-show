@@ -40,6 +40,27 @@ class DetailsByBreedReportPdf {
 
     pdf.addPage(
       pw.MultiPage(
+        // A valid large class can span more than the package's default 20
+        // pages. Rows now span at MultiPage level; this bound is proportional
+        // to content, while the worker separately enforces a hard deadline.
+        maxPages:
+            20 +
+            data.overallWinners.length +
+            data.breeds.fold<int>(
+              0,
+              (n, breed) =>
+                  n +
+                  breed.specialAwards.length +
+                  breed.varieties.fold<int>(
+                    0,
+                    (n, variety) =>
+                        n +
+                        variety.classes.fold<int>(
+                          0,
+                          (n, clazz) => n + clazz.placements.length,
+                        ),
+                  ),
+            ),
         pageFormat: PdfPageFormat.letter,
         margin: const pw.EdgeInsets.fromLTRB(24, 24, 24, 28),
         theme: theme,
@@ -56,7 +77,7 @@ class DetailsByBreedReportPdf {
             pw.Text('No eligible animals were shown.')
           else
             for (final breed in data.breeds) ...[
-              _breedSection(breed),
+              ..._breedSection(breed),
               pw.SizedBox(height: 12),
             ],
         ],
@@ -231,139 +252,121 @@ class DetailsByBreedReportPdf {
     );
   }
 
-  pw.Widget _breedSection(DetailsByBreedBreedSection breed) {
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.Container(
-          width: double.infinity,
-          padding: const pw.EdgeInsets.symmetric(horizontal: 7, vertical: 5),
-          decoration: const pw.BoxDecoration(color: PdfColors.grey300),
-          child: pw.Text(
-            '${breed.breedName}  (${breed.animalsShown}/${breed.exhibitorCount})',
-            textAlign: pw.TextAlign.center,
-            style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
-          ),
+  List<pw.Widget> _breedSection(DetailsByBreedBreedSection breed) {
+    return <pw.Widget>[
+      pw.Container(
+        width: double.infinity,
+        padding: const pw.EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+        decoration: const pw.BoxDecoration(color: PdfColors.grey300),
+        child: pw.Text(
+          '${breed.breedName}  (${breed.animalsShown}/${breed.exhibitorCount})',
+          textAlign: pw.TextAlign.center,
+          style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
         ),
-        pw.SizedBox(height: 4),
-        pw.Container(
-          width: double.infinity,
-          padding: const pw.EdgeInsets.symmetric(horizontal: 7, vertical: 5),
-          decoration: pw.BoxDecoration(
-            color: PdfColors.grey100,
-            border: pw.Border.all(color: PdfColors.grey500, width: .55),
-          ),
-          child: pw.Row(
-            children: [
-              pw.Text(
-                'Judge:',
-                style: pw.TextStyle(
-                  fontSize: 8,
-                  fontWeight: pw.FontWeight.bold,
-                ),
-              ),
-              pw.SizedBox(width: 5),
-              pw.Expanded(
-                child: pw.Text(
-                  breed.judgeName.isEmpty ? 'Not assigned' : breed.judgeName,
-                  style: const pw.TextStyle(fontSize: 8),
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (breed.bob != null || breed.bosb != null) ...[
-          pw.SizedBox(height: 4),
-          _breedAwardsTable([
-            if (breed.bob != null) breed.bob!,
-            if (breed.bosb != null) breed.bosb!,
-          ]),
-        ],
-        if (breed.specialAwards.isNotEmpty) ...[
-          pw.SizedBox(height: 5),
-          _specialAwardsBlock(breed.specialAwards),
-        ],
-        for (final variety in breed.varieties) ...[
-          pw.SizedBox(height: 7),
-          pw.Text(
-            variety.varietyName,
-            style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold),
-          ),
-          pw.Container(height: .5, color: PdfColors.grey400),
-          if (variety.bov != null || variety.bosv != null) ...[
-            pw.SizedBox(height: 3),
-            _breedAwardsTable([
-              if (variety.bov != null) variety.bov!,
-              if (variety.bosv != null) variety.bosv!,
-            ]),
-          ],
-          for (final clazz in variety.classes) ...[
-            pw.SizedBox(height: 5),
-            _classPlacements(clazz),
-          ],
-        ],
-      ],
-    );
-  }
-
-  pw.Widget _specialAwardsBlock(List<DetailsByBreedAwardRow> rows) {
-    return pw.Container(
-      width: double.infinity,
-      decoration: pw.BoxDecoration(
-        border: pw.Border.all(color: PdfColors.grey500, width: .55),
       ),
-      child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          pw.Container(
-            width: double.infinity,
-            padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-            color: PdfColors.grey200,
-            child: pw.Text(
-              'Special Awards',
+      pw.SizedBox(height: 4),
+      pw.Container(
+        width: double.infinity,
+        padding: const pw.EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+        decoration: pw.BoxDecoration(
+          color: PdfColors.grey100,
+          border: pw.Border.all(color: PdfColors.grey500, width: .55),
+        ),
+        child: pw.Row(
+          children: [
+            pw.Text(
+              'Judge:',
               style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
             ),
-          ),
-          pw.Table(
-            border: const pw.TableBorder(
-              horizontalInside: pw.BorderSide(
-                color: PdfColors.grey300,
-                width: .35,
+            pw.SizedBox(width: 5),
+            pw.Expanded(
+              child: pw.Text(
+                breed.judgeName.isEmpty ? 'Not assigned' : breed.judgeName,
+                style: const pw.TextStyle(fontSize: 8),
               ),
             ),
-            columnWidths: const {
-              0: pw.FlexColumnWidth(1.15),
-              1: pw.FlexColumnWidth(.85),
-              2: pw.FlexColumnWidth(1.35),
-              3: pw.FlexColumnWidth(1.15),
-              4: pw.FlexColumnWidth(1.8),
-            },
+          ],
+        ),
+      ),
+      if (breed.bob != null || breed.bosb != null) ...[
+        pw.SizedBox(height: 4),
+        _breedAwardsTable([
+          if (breed.bob != null) breed.bob!,
+          if (breed.bosb != null) breed.bosb!,
+        ]),
+      ],
+      if (breed.specialAwards.isNotEmpty) ...[
+        pw.SizedBox(height: 5),
+        ..._specialAwardsBlock(breed.specialAwards),
+      ],
+      for (final variety in breed.varieties) ...[
+        pw.SizedBox(height: 7),
+        pw.Text(
+          variety.varietyName,
+          style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold),
+        ),
+        pw.Container(height: .5, color: PdfColors.grey400),
+        if (variety.bov != null || variety.bosv != null) ...[
+          pw.SizedBox(height: 3),
+          _breedAwardsTable([
+            if (variety.bov != null) variety.bov!,
+            if (variety.bosv != null) variety.bosv!,
+          ]),
+        ],
+        for (final clazz in variety.classes) ...[
+          pw.SizedBox(height: 5),
+          ..._classPlacements(clazz),
+        ],
+      ],
+    ];
+  }
+
+  List<pw.Widget> _specialAwardsBlock(List<DetailsByBreedAwardRow> rows) {
+    return <pw.Widget>[
+      pw.Container(
+        width: double.infinity,
+        padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        color: PdfColors.grey200,
+        child: pw.Text(
+          'Special Awards',
+          style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
+        ),
+      ),
+      pw.Table(
+        border: const pw.TableBorder(
+          horizontalInside: pw.BorderSide(color: PdfColors.grey300, width: .35),
+        ),
+        columnWidths: const {
+          0: pw.FlexColumnWidth(1.15),
+          1: pw.FlexColumnWidth(.85),
+          2: pw.FlexColumnWidth(1.35),
+          3: pw.FlexColumnWidth(1.15),
+          4: pw.FlexColumnWidth(1.8),
+        },
+        children: [
+          pw.TableRow(
+            decoration: const pw.BoxDecoration(color: PdfColors.grey100),
             children: [
-              pw.TableRow(
-                decoration: const pw.BoxDecoration(color: PdfColors.grey100),
-                children: [
-                  _cell('Award', bold: true),
-                  _cell('Ear #', bold: true),
-                  _cell('Variety', bold: true),
-                  _cell('Class', bold: true),
-                  _cell('Exhibitor', bold: true),
-                ],
-              ),
-              for (final row in rows)
-                pw.TableRow(
-                  children: [
-                    _cell(row.award, bold: true),
-                    _cell(row.earNumber),
-                    _cell(row.varietyName),
-                    _cell(_classSex(row.className, row.sex)),
-                    _cell(row.exhibitorName),
-                  ],
-                ),
+              _cell('Award', bold: true),
+              _cell('Ear #', bold: true),
+              _cell('Variety', bold: true),
+              _cell('Class', bold: true),
+              _cell('Exhibitor', bold: true),
             ],
           ),
+          for (final row in rows)
+            pw.TableRow(
+              children: [
+                _cell(row.award, bold: true),
+                _cell(row.earNumber),
+                _cell(row.varietyName),
+                _cell(_classSex(row.className, row.sex)),
+                _cell(row.exhibitorName),
+              ],
+            ),
         ],
       ),
-    );
+    ];
   }
 
   pw.Widget _breedAwardsTable(List<DetailsByBreedAwardRow> rows) {
@@ -399,71 +402,68 @@ class DetailsByBreedReportPdf {
     );
   }
 
-  pw.Widget _classPlacements(DetailsByBreedClassSection clazz) {
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
+  List<pw.Widget> _classPlacements(DetailsByBreedClassSection clazz) {
+    return <pw.Widget>[
+      pw.Text(
+        '${_classSex(clazz.className, clazz.sex)} (${clazz.animalsShown}/${clazz.exhibitorCount})',
+        style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold),
+      ),
+      pw.SizedBox(height: 2),
+      if (clazz.placements.isEmpty)
         pw.Text(
-          '${_classSex(clazz.className, clazz.sex)} (${clazz.animalsShown}/${clazz.exhibitorCount})',
-          style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold),
-        ),
-        pw.SizedBox(height: 2),
-        if (clazz.placements.isEmpty)
-          pw.Text(
-            'No recorded placements.',
-            style: const pw.TextStyle(fontSize: 7),
-          )
-        else
-          pw.Table(
-            columnWidths: const {
-              0: pw.FlexColumnWidth(.45),
-              1: pw.FlexColumnWidth(1),
-              2: pw.FlexColumnWidth(1.5),
-              3: pw.FlexColumnWidth(2),
-              4: pw.FlexColumnWidth(1.1),
-            },
-            children: [
-              for (final row in clazz.placements)
-                pw.TableRow(
-                  decoration: row.awards.isEmpty
-                      ? null
-                      : const pw.BoxDecoration(color: PdfColors.grey100),
-                  children: [
-                    _plainCell(row.placement.toString()),
-                    _plainCell(row.earNumber),
-                    _plainCell(row.animalName),
-                    _plainCell(row.exhibitorName),
-                    row.awards.isEmpty
-                        ? _plainCell('')
-                        : pw.Container(
-                            margin: const pw.EdgeInsets.symmetric(
-                              horizontal: 2,
-                              vertical: 1,
-                            ),
-                            padding: const pw.EdgeInsets.symmetric(
-                              horizontal: 3,
-                              vertical: 1.5,
-                            ),
-                            decoration: pw.BoxDecoration(
-                              border: pw.Border.all(
-                                color: PdfColors.grey600,
-                                width: .45,
-                              ),
-                            ),
-                            child: pw.Text(
-                              row.awards.join(', '),
-                              style: pw.TextStyle(
-                                fontSize: 6.8,
-                                fontWeight: pw.FontWeight.bold,
-                              ),
+          'No recorded placements.',
+          style: const pw.TextStyle(fontSize: 7),
+        )
+      else
+        pw.Table(
+          columnWidths: const {
+            0: pw.FlexColumnWidth(.45),
+            1: pw.FlexColumnWidth(1),
+            2: pw.FlexColumnWidth(1.5),
+            3: pw.FlexColumnWidth(2),
+            4: pw.FlexColumnWidth(1.1),
+          },
+          children: [
+            for (final row in clazz.placements)
+              pw.TableRow(
+                decoration: row.awards.isEmpty
+                    ? null
+                    : const pw.BoxDecoration(color: PdfColors.grey100),
+                children: [
+                  _plainCell(row.placement.toString()),
+                  _plainCell(row.earNumber),
+                  _plainCell(row.animalName),
+                  _plainCell(row.exhibitorName),
+                  row.awards.isEmpty
+                      ? _plainCell('')
+                      : pw.Container(
+                          margin: const pw.EdgeInsets.symmetric(
+                            horizontal: 2,
+                            vertical: 1,
+                          ),
+                          padding: const pw.EdgeInsets.symmetric(
+                            horizontal: 3,
+                            vertical: 1.5,
+                          ),
+                          decoration: pw.BoxDecoration(
+                            border: pw.Border.all(
+                              color: PdfColors.grey600,
+                              width: .45,
                             ),
                           ),
-                  ],
-                ),
-            ],
-          ),
-      ],
-    );
+                          child: pw.Text(
+                            row.awards.join(', '),
+                            style: pw.TextStyle(
+                              fontSize: 6.8,
+                              fontWeight: pw.FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                ],
+              ),
+          ],
+        ),
+    ];
   }
 
   pw.Widget _sectionTitle(String text) => pw.Container(

@@ -4,7 +4,7 @@
 create extension if not exists pgtap with schema extensions;
 
 begin;
-select plan(10);
+select plan(15);
 
 insert into public.show_finalize_runs (
   id, show_id, run_status, scope_key, scope_label, section_ids, summary,
@@ -194,6 +194,27 @@ select is(
   'The report could not be rendered.',
   'review payload exposes metadata error_message separately'
 );
+
+-- Species selection must precede LIMIT/OFFSET, including array metadata.
+update public.show_report_artifacts set metadata = metadata || jsonb_build_object('species',
+  case when id::text like '%000000000001' then '["rabbit", "cavy"]'::jsonb
+       when id::text like '%000000000002' then '"cavy"'::jsonb else '"rabbit"'::jsonb end)
+where finalize_run_id='f2000000-0000-0000-0000-000000000001';
+create temporary table species_pages as
+select n, public.get_closeout_dashboard_scoped_for_species(
+  '20000000-0000-0000-0000-000000000004','dashboard-selected-run',
+  array['21000000-0000-0000-0000-000000000004'::uuid],200,n*200,null,'rabbit') payload
+from generate_series(0,1) n;
+select is((select jsonb_array_length(payload->'reports') from species_pages where n=0),200,
+  'species first page is full even when other species are interspersed');
+select is((select jsonb_array_length(payload->'reports') from species_pages where n=1),4,
+  'species second page contains every remaining matching artifact');
+select ok(not (select (payload#>>'{artifact_page,has_more}')::boolean from species_pages where n=1),
+  'species pagination ends on the actual filtered count');
+select is((select (payload#>>'{artifact_counts,total}')::integer from species_pages where n=0),204,
+  'species count includes array metadata and excludes cavy-only files');
+select is((select count(*)::integer from species_pages p cross join lateral jsonb_array_elements(p.payload->'reports') a
+  where a->>'id'='a2000000-0000-0000-0000-000000000001'),1,'mixed-species artifact occurs exactly once');
 
 select * from finish();
 rollback;
