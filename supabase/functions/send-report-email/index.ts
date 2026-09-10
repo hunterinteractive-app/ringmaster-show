@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { prepareReportEmailFiles } from "../_shared/report_email_files.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -254,29 +255,33 @@ serve(async (req)=>{
     const replyToList = emailList(replyTo);
     // BCC the show secretary or fallback show owner.
     const bccList = replyToList;
-    const attachments = [];
-    for (const artifact of artifacts){
+    const { files, skippedArtifactIds } = await prepareReportEmailFiles(artifacts, async (artifact) => {
       const storageBucket = artifact.storage_bucket;
       const storagePath = artifact.storage_path;
       if (!storageBucket || !storagePath) {
-        return json({
-          error: `Artifact ${artifact.id} has no storage location.`
-        }, 400);
+        throw new Error(`Artifact ${artifact.id} has no storage location.`);
       }
       const { data: fileBytes, error: fileError } = await adminClient.storage.from(storageBucket).download(storagePath);
       if (fileError || !fileBytes) {
-        return json({
-          error: `Failed to download report file ${artifact.id}: ${fileError?.message ?? "unknown error"}`
-        }, 500);
+        throw new Error(`Failed to download report file ${artifact.id}: ${fileError?.message ?? "unknown error"}`);
       }
-      const arrayBuffer = await fileBytes.arrayBuffer();
-      const base64Content = toBase64(new Uint8Array(arrayBuffer));
+      return new Uint8Array(await fileBytes.arrayBuffer());
+    });
+    // No provider request and no sent-delivery record for an empty legs-only email.
+    if (files.length === 0) {
+      return json({ok: true, skipped: true, skip_reason: "no_earned_legs",
+        message: "No email sent; there are no leg certificates to deliver.",
+        artifact_count: 0, skipped_artifact_ids: skippedArtifactIds});
+    }
+    artifacts = files.map((file) => file.artifact);
+    const attachments = files.map(({artifact, bytes}) => {
+      const base64Content = toBase64(bytes);
       const fileName = artifact.file_name?.trim() || `${artifact.report_name}.pdf`;
-      attachments.push({
+      return {
         filename: fileName,
         content: base64Content
-      });
-    }
+      };
+    });
     const artifactList = artifacts.map((artifact)=>{
       const meta = artifact.metadata ?? {};
       const scope = String(meta["scope"] ?? "").trim().toUpperCase();

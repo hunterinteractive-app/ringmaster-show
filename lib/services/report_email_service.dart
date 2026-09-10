@@ -3,11 +3,15 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 final supabase = Supabase.instance.client;
 
 class ReportEmailSendResult {
+  final bool skipped;
+  final int? artifactCount;
   final bool alreadySent;
   final String providerMessageId;
   final DateTime? sentAt;
 
   const ReportEmailSendResult({
+    this.skipped = false,
+    this.artifactCount,
     required this.alreadySent,
     required this.providerMessageId,
     required this.sentAt,
@@ -150,16 +154,20 @@ class ReportEmailService {
     }
 
     final alreadySent = data['already_sent'] == true;
+    final skipped =
+        data['skipped'] == true && data['skip_reason'] == 'no_earned_legs';
     final providerMessageId = (data['provider_message_id'] ?? '')
         .toString()
         .trim();
-    if (!alreadySent && providerMessageId.isEmpty) {
+    if (!alreadySent && !skipped && providerMessageId.isEmpty) {
       throw Exception(
         'The email provider returned success without a message ID.',
       );
     }
 
     return ReportEmailSendResult(
+      skipped: skipped,
+      artifactCount: (data['artifact_count'] as num?)?.toInt(),
       alreadySent: alreadySent,
       providerMessageId: providerMessageId,
       sentAt: DateTime.tryParse((data['sent_at'] ?? '').toString()),

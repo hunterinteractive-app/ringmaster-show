@@ -2726,12 +2726,14 @@ class _PublishResultsPanelState extends State<_PublishResultsPanel> {
     try {
       final emailService = ReportEmailService();
       var successful = 0;
+      var skipped = 0;
       var attempted = 0;
       final failedRecipients = <String>[];
       for (final entry in groups.entries) {
         final recipient = _recipientEmail(entry.value.first, clubs: clubs);
         if (recipient == null) continue;
         attempted++;
+        var skippedEmail = false;
         try {
           if (clubs) {
             await emailService.sendClubReportEmail(
@@ -2745,7 +2747,7 @@ class _PublishResultsPanelState extends State<_PublishResultsPanel> {
               forceResend: additionalMessage.isNotEmpty,
             );
           } else {
-            await emailService.sendExhibitorReportEmail(
+            final result = await emailService.sendExhibitorReportEmail(
               showId: widget.showId,
               artifactIds: entry.value.map((artifact) => artifact.id).toList(),
               to: recipient,
@@ -2754,8 +2756,13 @@ class _PublishResultsPanelState extends State<_PublishResultsPanel> {
               allowLegs: true,
               forceResend: additionalMessage.isNotEmpty,
             );
+            skippedEmail = result.skipped;
           }
-          successful++;
+          if (skippedEmail) {
+            skipped++;
+          } else {
+            successful++;
+          }
         } catch (_) {
           // A bad address or provider failure for one recipient must not stop
           // later recipients from receiving their already-generated reports.
@@ -2783,8 +2790,8 @@ class _PublishResultsPanelState extends State<_PublishResultsPanel> {
         SnackBar(
           content: Text(
             failedRecipients.isEmpty
-                ? '$successful $recipientLabel email batch${successful == 1 ? '' : 'es'} sent.'
-                : '$successful $recipientLabel email batch${successful == 1 ? '' : 'es'} sent; ${failedRecipients.length} failed. Review Report Delivery History.',
+                ? '$successful $recipientLabel email batch${successful == 1 ? '' : 'es'} sent; $skipped skipped.'
+                : '$successful $recipientLabel email batch${successful == 1 ? '' : 'es'} sent; $skipped skipped; ${failedRecipients.length} failed. Review Report Delivery History.',
           ),
         ),
       );
@@ -3377,7 +3384,7 @@ class _DeliveryStatusPanelState extends State<_DeliveryStatusPanel> {
 
     setState(() => _retryingDeliveryKeys.add(retryKey));
     try {
-      await ReportEmailService().sendExhibitorReportEmail(
+      final result = await ReportEmailService().sendExhibitorReportEmail(
         showId: widget.showId,
         artifactIds: artifactIds,
         to: currentEmail,
@@ -3390,7 +3397,13 @@ class _DeliveryStatusPanelState extends State<_DeliveryStatusPanel> {
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Reports resent to $currentEmail.')),
+        SnackBar(
+          content: Text(
+            result.skipped
+                ? 'No email sent; there are no leg certificates to deliver.'
+                : 'Reports resent to $currentEmail.',
+          ),
+        ),
       );
       await _load();
     } catch (error) {
@@ -5384,7 +5397,9 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            result.alreadySent
+            result.skipped
+                ? 'No email sent; there are no leg certificates to deliver.'
+                : result.alreadySent
                 ? 'These reports were already sent to $recipient.'
                 : 'Reports sent to $recipient.',
           ),

@@ -3713,7 +3713,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         }
 
         try {
-          await _sendExhibitorArtifactsEmail(
+          final sendResult = await _sendExhibitorArtifactsEmail(
             artifacts: artifacts,
             to: exhibitor.email,
             subject: '${widget.showName} - Exhibitor Reports',
@@ -3721,7 +3721,11 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                 'Attached are your exhibitor reports and any earned legs from ${widget.showName}.',
             allowLegs: true,
           );
-          sentCount++;
+          if (sendResult.skipped) {
+            skippedCount++;
+          } else {
+            sentCount++;
+          }
         } catch (e) {
           failedCount++;
 
@@ -4208,7 +4212,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         }
 
         try {
-          await _sendExhibitorArtifactsEmail(
+          final sendResult = await _sendExhibitorArtifactsEmail(
             artifacts: [legsReport],
             to: exhibitor.email,
             subject: '${widget.showName} - ARBA Legs',
@@ -4216,7 +4220,11 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                 'Attached are your earned ARBA legs from ${widget.showName}.',
             allowLegs: true,
           );
-          sentCount++;
+          if (sendResult.skipped) {
+            skippedCount++;
+          } else {
+            sentCount++;
+          }
         } catch (e) {
           failedCount++;
 
@@ -6365,7 +6373,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
           ? 'Exhibitor Legs'
           : 'Exhibitor Reports';
 
-      await _sendExhibitorArtifactsEmail(
+      final sendResult = await _sendExhibitorArtifactsEmail(
         artifacts: artifacts,
         to: exhibitor.email,
         subject: '${widget.showName} - $contentLabel - $scope $showLetter',
@@ -6379,7 +6387,13 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
 
       if (!mounted) return;
       _showCloseoutSnack(
-        SnackBar(content: Text('Emailed ${artifacts.length} file(s).')),
+        SnackBar(
+          content: Text(
+            sendResult.skipped
+                ? 'No email sent; there are no leg certificates to deliver.'
+                : 'Emailed ${sendResult.artifactCount ?? artifacts.length} file(s).',
+          ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -6441,7 +6455,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
           ? 'Exhibitor Legs'
           : 'Exhibitor Reports';
 
-      await _sendExhibitorArtifactsEmail(
+      final sendResult = await _sendExhibitorArtifactsEmail(
         artifacts: artifacts,
         to: exhibitor.email,
         subject: '${widget.showName} - $contentLabel - All $scope Shows',
@@ -6455,7 +6469,13 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
 
       if (!mounted) return;
       _showCloseoutSnack(
-        SnackBar(content: Text('Emailed ${artifacts.length} file(s).')),
+        SnackBar(
+          content: Text(
+            sendResult.skipped
+                ? 'No email sent; there are no leg certificates to deliver.'
+                : 'Emailed ${sendResult.artifactCount ?? artifacts.length} file(s).',
+          ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
