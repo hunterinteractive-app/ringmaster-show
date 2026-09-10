@@ -6,8 +6,10 @@ from pathlib import Path
 import tempfile
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 
 from pypdf import PdfReader, PdfWriter
+from pypdf.generic import DictionaryObject
 
 
 class SourceChangedError(Exception):
@@ -30,13 +32,43 @@ def merge_pdfs(sources, destination):
         '/Subject': 'Exhibitor reports and leg certificates in exhibitor order',
         '/Creator': 'RingMaster Show',
     })
-    writer.compress_identical_objects(remove_duplicates=True, remove_unreferenced=True)
+    compact_shared_artwork(writer)
     writer.write(destination)
     writer.close()
     with open(destination, 'rb') as stream:
         if len(PdfReader(stream).pages) != expected_pages:
             raise ValueError('Merged PDF page count does not match source PDFs')
     return expected_pages
+
+
+def compact_shared_artwork(writer):
+    # Resource dictionary keys identify images in page content. The optional,
+    # obsolete /Name inside the image itself is not used for that lookup, but
+    # Dart's generated per-document names prevent identical-image detection.
+    visited = set()
+
+    def visit(value):
+        obj = value.get_object()
+        if not isinstance(obj, DictionaryObject) or id(obj) in visited:
+            return
+        visited.add(id(obj))
+        if obj.get('/Subtype') == '/Image':
+            obj.pop('/Name', None)
+            if '/SMask' in obj:
+                visit(obj['/SMask'])
+        resources = obj.get('/Resources', {})
+        if hasattr(resources, 'get_object'):
+            resources = resources.get_object()
+        if '/XObject' in resources:
+            for image in resources['/XObject'].get_object().values():
+                visit(image)
+
+    for page in writer.pages:
+        visit(page)
+    # First combine masks; then images which reference those masks. The final
+    # pass can combine their resource dictionaries. All stream bytes stay intact.
+    for _ in range(3):
+        writer.compress_identical_objects(remove_duplicates=True, remove_unreferenced=True)
 
 
 class Api:
@@ -102,8 +134,8 @@ def run_once(api):
             raise PermissionError('Print pack access was revoked')
         verify_sources(job['sources'], api.current_sources(job['show_id']))
         with tempfile.TemporaryDirectory(prefix='print-pack-') as directory:
-            local_sources = []
-            for index, source in enumerate(job['sources']):
+            def download_source(item):
+                index, source = item
                 path = '/storage/v1/object/authenticated/' + urllib.parse.quote(
                     source['storage_bucket'] + '/' + source['storage_path'], safe='/')
                 content = api.request(path, binary=True)
@@ -111,7 +143,11 @@ def run_once(api):
                     raise SourceChangedError()
                 local = Path(directory) / f'{index}.pdf'
                 local.write_bytes(content)
-                local_sources.append({'file': local, 'label': source['label']})
+                return {'file': local, 'label': source['label']}
+            # Bounded downloads avoid hundreds of sequential TLS round trips;
+            # map preserves the manifest's exhibitor/report order.
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                local_sources = list(executor.map(download_source, enumerate(job['sources'])))
             output = Path(directory) / 'report.pdf'
             page_count = merge_pdfs(local_sources, output)
             verify_sources(job['sources'], api.current_sources(job['show_id']))

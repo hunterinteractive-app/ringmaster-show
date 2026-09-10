@@ -2,10 +2,44 @@ import tempfile
 import unittest
 from pathlib import Path
 from pypdf import PdfReader, PdfWriter
+from pypdf.generic import DictionaryObject, DecodedStreamObject, NameObject, NumberObject
 from print_pack import merge_pdfs, verify_sources, SourceChangedError
 
 
 class PrintPackTests(unittest.TestCase):
+    def test_repeated_artwork_with_different_resource_names_is_losslessly_shared(self):
+        with tempfile.TemporaryDirectory() as directory:
+            sources = []
+            for index in range(2):
+                writer = PdfWriter()
+                page = writer.add_blank_page(width=612, height=792)
+                mask = DecodedStreamObject()
+                mask.set_data(b'\xff')
+                mask.update({NameObject('/Type'): NameObject('/XObject'),
+                             NameObject('/Subtype'): NameObject('/Image'),
+                             NameObject('/Width'): NumberObject(1),
+                             NameObject('/Height'): NumberObject(1),
+                             NameObject('/BitsPerComponent'): NumberObject(8),
+                             NameObject('/ColorSpace'): NameObject('/DeviceGray'),
+                             NameObject('/Name'): NameObject(f'/Mask{index}')})
+                image = DecodedStreamObject()
+                image.set_data(b'\x10\x20\x30')
+                image.update({**mask, NameObject('/ColorSpace'): NameObject('/DeviceRGB'),
+                              NameObject('/Name'): NameObject(f'/Image{index}'),
+                              NameObject('/SMask'): writer._add_object(mask)})
+                page[NameObject('/Resources')] = DictionaryObject({
+                    NameObject('/XObject'): DictionaryObject({NameObject(f'/Image{index}'): writer._add_object(image)})})
+                path = Path(directory) / f'{index}.pdf'
+                writer.write(path)
+                sources.append({'file': path, 'label': str(index)})
+            output = Path(directory) / 'combined.pdf'
+            merge_pdfs(sources, output)
+            reader = PdfReader(output)
+            images = [next(iter(p['/Resources']['/XObject'].values())) for p in reader.pages]
+            self.assertEqual(images[0].idnum, images[1].idnum)
+            self.assertEqual(images[0].get_object().get_data(), b'\x10\x20\x30')
+            self.assertEqual(images[0].get_object()['/SMask'].get_data(), b'\xff')
+
     def test_merge_preserves_page_order_sizes_and_bookmarks(self):
         with tempfile.TemporaryDirectory() as directory:
             sources = []
